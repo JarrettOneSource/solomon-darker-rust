@@ -1,0 +1,22 @@
+.college-intro-overlay {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.college-intro-cover {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background: #000;
+}
+
+.college-intro-title {
+  position: absolute !important;
+  left: 50%;
+  transform-origin: center;
+}
+
+.college-intro-overlay[hidden], .college-intro-title[hidden] { display: none !important; }

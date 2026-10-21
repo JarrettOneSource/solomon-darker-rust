@@ -1,0 +1,17 @@
+.desktop-update-notice {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid #b59856;
+  border-radius: 4px;
+  color: #f2e6c7;
+  background: #1e1824;
+  font: 14px Georgia, serif;
+}
+.desktop-update-notice button { padding: 6px 10px; border: 1px solid #8b7244; border-radius: 3px; cursor: pointer; }
+.desktop-update-notice button:focus-visible { outline: 2px solid #f2e6c7; }

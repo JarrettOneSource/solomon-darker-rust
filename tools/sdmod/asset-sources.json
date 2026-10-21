@@ -1,0 +1,75 @@
+{
+  "sources": [
+    {
+      "archiveUrl": "https://kenney.nl/media/pages/assets/game-icons/1ebf9c14af-1677661579/kenney_game-icons.zip",
+      "id": "kenney-game-icons-1.0",
+      "landingPage": "https://kenney.nl/assets/game-icons",
+      "license": "CC0-1.0",
+      "licenseFile": "license.txt",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "name": "Game Icons",
+      "publisher": "Kenney",
+      "selectedFiles": [
+        "PNG/White/2x/information.png",
+        "PNG/White/2x/shoppingCart.png",
+        "PNG/White/2x/star.png",
+        "PNG/White/2x/target.png",
+        "PNG/White/2x/zoom.png"
+      ],
+      "sha256": "7a86d8d58e0b851e22004b3c70bf90b003632bbf9ac633424daa3bb17d9e7e4e",
+      "version": "1.0"
+    },
+    {
+      "archiveUrl": "https://kenney.nl/media/pages/assets/rpg-audio/8e99002d76-1677590336/kenney_rpg-audio.zip",
+      "id": "kenney-rpg-audio-1.0",
+      "landingPage": "https://kenney.nl/assets/rpg-audio",
+      "license": "CC0-1.0",
+      "licenseFile": "License.txt",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "name": "RPG Audio",
+      "publisher": "Kenney",
+      "selectedFiles": [
+        "Audio/bookOpen.ogg",
+        "Audio/doorOpen_1.ogg",
+        "Audio/handleCoins.ogg",
+        "Audio/metalClick.ogg"
+      ],
+      "sha256": "6dbeaf8544da958d8f2adcb4a4a4b76c1ade34a05f8ab9edccd327da7375f38b",
+      "version": "1.0"
+    },
+    {
+      "archiveUrl": "https://drive.usercontent.google.com/download?id=1AsBOhJNG_7qMotNbbSU2MSRTDifSVDpX&export=download&confirm=t",
+      "downloadKind": "file",
+      "fileName": "Zombie_Male.blend",
+      "id": "quaternius-ultimate-animated-character-2019-zombie-male",
+      "landingPage": "https://quaternius.com/packs/ultimatedanimatedcharacter.html",
+      "license": "CC0-1.0",
+      "licenseFile": null,
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "name": "Ultimate Animated Character Pack - Zombie Male",
+      "publisher": "Quaternius",
+      "selectedFiles": [
+        "Zombie_Male.blend"
+      ],
+      "sha256": "9fe152e29dfea9c86e76ee13551b4331a99209c4ad4d42243aa7767466dcba7f",
+      "version": "2019-11"
+    },
+    {
+      "archiveUrl": "https://lpc.opengameart.org/sites/default/files/dungeon_ambient_1_0.ogg",
+      "downloadKind": "file",
+      "fileName": "dungeon_ambient_1.ogg",
+      "id": "opengameart-loopable-dungeon-ambience-2014",
+      "landingPage": "https://opengameart.org/content/loopable-dungeon-ambience",
+      "license": "CC0-1.0",
+      "licenseFile": null,
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "name": "Loopable Dungeon Ambience",
+      "publisher": "JaggedStone",
+      "selectedFiles": [
+        "dungeon_ambient_1.ogg"
+      ],
+      "sha256": "df491823e4877371c34dbda4e9321cd83a4a14fa7573cee0ebca1ae423b70e6e",
+      "version": "2014-10-18"
+    }
+  ]
+}

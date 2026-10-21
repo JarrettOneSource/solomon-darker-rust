@@ -1,0 +1,9 @@
+{
+  "name": "solomon-darker-desktop",
+  "private": true,
+  "author": "Solomon Darker contributors",
+  "description": "Solomon Darker offline and peer-hosted game",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "main.mjs"
+}

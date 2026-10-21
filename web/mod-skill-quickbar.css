@@ -1,0 +1,40 @@
+/* Source index.css theme/preflight inherited by ModSkillQuickbar.tsx. */
+.mod-skill-quickbar-host {
+  display: contents;
+  --font-body: 'Alegreya', Georgia, serif;
+  font: 16px/1.5 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+.mod-skill-quickbar, .mod-skill-quickbar * { box-sizing: border-box; }
+.mod-skill-quickbar button { font: inherit; letter-spacing: inherit; border-radius: 0; }
+.mod-skill-quickbar button:focus-visible {
+  outline: 2px solid rgb(65 227 255 / 70%);
+  outline-offset: 2px;
+}
+.mod-skill-quickbar img { display: block; vertical-align: middle; max-width: 100%; }
+
+/* Pinned mod-ui/mod-skill-quickbar.css, with Source's 16px root rem resolved
+   locally: the native page's 14px root must not shrink authored browser UI. */
+.mod-skill-quickbar {
+  position: fixed;
+  z-index: 37;
+  left: 50%;
+  bottom: max(80px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 4px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.mod-skill-quickbar button {
+  position: relative;
+  width: 41.6px;
+  height: 41.6px;
+  padding: 3.2px;
+  border: 1px solid rgb(202 181 126 / 80%);
+  background: rgb(9 10 14 / 90%);
+  color: #f1e6c6;
+}
+
+.mod-skill-quickbar img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.mod-skill-quickbar span { position: absolute; right: 1.92px; bottom: 0; font: 700 9.28px var(--font-body); text-shadow: 0 1px 2px #000; }

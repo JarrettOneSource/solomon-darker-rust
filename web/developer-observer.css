@@ -1,0 +1,71 @@
+/* Pinned DeveloperObserverScene uses HTML typography, rather than stock bitmap text. */
+.developer-observer-scene { position: fixed; inset: 0; z-index: 120; overflow: hidden; pointer-events: none; --font-display: 'Cinzel', 'Times New Roman', serif; --font-narrative: 'IM FELL English', Georgia, serif; }
+.developer-observer-scene[hidden] { display: none; }
+
+.developer-observer-panel {
+  position: absolute;
+  z-index: 120;
+  top: 18px;
+  right: 18px;
+  display: flex;
+  width: min(410px, calc(100% - 36px));
+  max-height: calc(100% - 36px);
+  flex-direction: column;
+  border: 1px solid rgb(207 174 91 / 0.65);
+  color: #d7c89d;
+  background: rgb(8 7 6 / 0.9);
+  box-shadow: 0 8px 30px #000, inset 0 0 24px #000;
+  font: 11px var(--font-display);
+  pointer-events: auto;
+}
+
+.developer-observer-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgb(207 174 91 / 0.35);
+}
+
+.developer-observer-panel > header strong,
+.developer-observer-panel > header span { display: block; }
+.developer-observer-panel > header strong { color: #f0d58a; letter-spacing: 0.12em; }
+.developer-observer-panel > header span { margin-top: 3px; color: #8f856b; font-size: 9px; }
+.developer-observer-panel button {
+  min-height: 32px;
+  border: 1px solid #756238;
+  color: #d3b86f;
+  background: #090806;
+  font: 700 9px var(--font-display);
+}
+
+.developer-observer-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgb(207 174 91 / 0.2);
+}
+.developer-observer-targets > span { align-self: center; margin-right: 4px; color: #8f856b; }
+.developer-observer-targets button { padding: 0 8px; }
+.developer-observer-targets button.selected { color: #c4e6b8; border-color: #9fc893; }
+
+.developer-observer-panel > section {
+  min-height: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-bottom: 1px solid rgb(207 174 91 / 0.2);
+}
+.developer-observer-panel > section h2 { margin: 0 0 6px; color: #b99c5b; font-size: 10px; }
+.developer-observer-panel > section p { margin: 6px 0; color: #756c55; }
+.developer-observer-panel article { margin: 0 0 7px; }
+.developer-observer-panel article strong,
+.developer-observer-panel article span { display: block; }
+.developer-observer-panel article strong { color: #d7c89d; font-size: 9px; }
+.developer-observer-panel article span { margin-top: 2px; color: #aaa080; font: 13px var(--font-narrative); }
+.developer-observer-panel article.resolved span { color: #9fc893; }
+
+@media (max-width: 700px) {
+  .developer-observer-panel { top: 8px; right: 8px; width: min(360px, calc(100% - 16px)); max-height: 55%; }
+}

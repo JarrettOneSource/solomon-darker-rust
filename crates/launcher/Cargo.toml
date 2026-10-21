@@ -1,0 +1,28 @@
+[package]
+name = "solomon-launcher"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+solomon-sim = { workspace = true }
+solomon-protocol = { workspace = true }
+solomon-assets = { workspace = true }
+solomon-modding = { path = "../modding" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+getrandom = "0.4"
+ctrlc = { version = "3.5", features = ["termination"] }
+tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+base64 = "0.23"
+hmac = "0.13"
+sha2 = "0.11"
+subtle = "2.6"
+time = { version = "0.3", features = ["formatting"] }
+ureq = { version = "3.4", default-features = false }
+url = "2.5"
+flate2 = "1.1"
+
+[[bin]]
+name = "solomon-darker"
+path = "src/main.rs"

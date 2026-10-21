@@ -1,0 +1,95 @@
+// Native services use the real Rust economy. This journey checks the browser command
+// boundary as well as the result: gold, addressed storage, owned gear and dialogue state.
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { chromium } = require(path.resolve(process.env.PW));
+const { startNewGame } = require('./menu-journey.cjs');
+const output = process.env.OUT || '/tmp';
+const url = process.env.URL || 'http://127.0.0.1:4185/';
+const settle = page => page.waitForTimeout(500);
+const active = (page, name) => page.locator(`.player-panels:not([hidden]) [data-player-panel="${name}"]`).waitFor();
+const action = (page, name) => page.locator(`[data-panel-action="${name}"]`);
+const screenshot = (page, name) => page.screenshot({path:path.join(output,name)});
+
+(async () => {
+  const browser = await chromium.launch({headless:true,
+    executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+  const errors=[];
+  try {
+    const page = await browser.newPage({viewport:{width:1600,height:900}});
+    page.on('pageerror', error=>errors.push(error.message));
+    page.on('console', message=>{if(message.type()==='error')errors.push(message.text());});
+    page.on('response', response=>{if(response.status()>=400)errors.push(`${response.status()} ${response.url()}`);});
+    await page.goto(url);
+    await page.waitForFunction(()=>window.wasmBindings?.wizard_state().length>0&&!document.querySelector('#status').textContent,null,{timeout:60000});
+    await startNewGame(page,{name:'Felix'});
+    await page.getByRole('button',{name:'Fomentius',exact:true}).click();
+    await active(page,'fomentius'); await settle(page);
+    await screenshot(page,'service-fomentius-rust.png');
+    const buyHealth=page.getByRole('button',{name:'Buy Health Potion for 150 gold',exact:true}).first();
+    await buyHealth.click(); await settle(page);
+    assert.equal(await page.getByRole('button',{name:'Health Potion, quantity 1',exact:true}).count(),1,'first shop activation only selects');
+    await buyHealth.click(); await settle(page);
+    await page.getByRole('button',{name:'Health Potion, quantity 2',exact:true}).waitFor();
+    assert.equal(await page.locator('.panel-gold').textContent(),'350','second activation commits one real purchase');
+    await action(page,'close').first().click(); await page.locator('.player-panels').waitFor({state:'hidden'});
+    await page.getByRole('button',{name:'Luthacus',exact:true}).click();
+    await active(page,'luthacus'); await settle(page);
+    assert.equal(await page.getByRole('button',{name:/sell/i}).count(),0,'native storage has no invented sale');
+    const health=await page.getByRole('button',{name:'Health Potion, quantity 2',exact:true}).boundingBox();
+    const cell=await action(page,'shop-cell').first().boundingBox();
+    await page.mouse.move(health.x+health.width/2,health.y+health.height/2);
+    await page.mouse.down();
+    await page.mouse.move(cell.x+cell.width/2,cell.y+cell.height/2,{steps:12});
+    await page.mouse.up(); await settle(page);
+    const stored=page.locator('[data-panel-action^="storage:"]').first();
+    await stored.waitFor();
+    assert.match(await stored.getAttribute('aria-label'),/Health Potion/);
+    await screenshot(page,'service-luthacus-rust.png');
+    await stored.dblclick(); await settle(page);
+    assert.equal(await page.locator('[data-panel-action^="storage:"]').count(),0,'double activation returns the actual storage item');
+    await page.getByRole('button',{name:'Health Potion, quantity 2',exact:true}).waitFor();
+    await action(page,'close').first().click(); await page.locator('.player-panels').waitFor({state:'hidden'});
+    await page.getByRole('button',{name:'Hagatha',exact:true}).click();
+    await active(page,'hagatha'); await settle(page);
+    await screenshot(page,'service-hagatha-rust.png');
+    await action(page,'hagatha:0').click(); await action(page,'hagatha:0').click(); await settle(page);
+    assert.equal(await page.locator('.player-panel-notice').count(),0,'ordinary insufficient-gold shop rejection has no invented modal');
+    assert.equal(await page.locator('.panel-gold').textContent(),'350');
+    const affordable=await page.locator('[data-panel-action^="hagatha:"]').evaluateAll(nodes=>nodes.map(node=>({action:node.dataset.panelAction,label:node.getAttribute('aria-label')})));
+    assert.equal(affordable.length,27,'canonical Hagatha offers fill the native row-first grid');
+    await action(page,'close').first().click(); await page.locator('.player-panels').waitFor({state:'hidden'});
+    await page.getByRole('button',{name:'Shlorio',exact:true}).click();
+    await active(page,'shlorio'); await settle(page);
+    await screenshot(page,'service-shlorio-rust.png');
+    await action(page,'dowse').click(); await settle(page);
+    await page.getByRole('heading',{name:'NOT ENOUGH GOLD!',exact:true}).waitFor();
+    assert.equal(await page.locator('.panel-gold').textContent(),'350','rejected dowsing leaves actual gold intact');
+    await screenshot(page,'service-dowsing-insufficient-rust.png');
+    await action(page,'notice-okay').click();
+    await action(page,'close').first().click(); await page.locator('.player-panels').waitFor({state:'hidden'});
+    await page.getByRole('button',{name:'Provokatus',exact:true}).click();
+    await active(page,'dialogue'); await settle(page);
+    await screenshot(page,'dialogue-annalist-rust.png');
+    await action(page,'dialogue-next').click(); await settle(page);
+    await screenshot(page,'dialogue-annalist-choices-rust.png');
+    await page.getByRole('button',{name:/boast/i}).click(); await settle(page);
+    await screenshot(page,'selector-boasts-rust.png');
+    const row=page.locator('[data-panel-action="dialogue-selector:0"]');
+    const rowBounds=await row.boundingBox();
+    const frameBounds=await row.locator('.stock-nine-slice').boundingBox();
+    assert.ok(Math.abs(frameBounds.x-rowBounds.x)<1&&Math.abs(frameBounds.y-rowBounds.y)<1,'native selector frame starts at the row origin');
+    const titleBounds=await row.locator('.panel-selector-label').boundingBox();
+    const detailBounds=await row.locator('.panel-boast-detail').boundingBox();
+    assert.ok(titleBounds.y+titleBounds.height<=detailBounds.y,'boast title fits above its description');
+    assert.equal(await page.locator('[data-panel-action^="dialogue-selector:"]').count(),5);
+    await action(page,'dialogue-selector:0').click(); await settle(page);
+    await page.locator('[data-dialogue-key^="ANNAL_"]').waitFor();
+    await action(page,'dialogue-next').click();
+    await page.locator('.player-panels').waitFor({state:'hidden'});
+    assert.equal(await page.locator('.game-menus').getAttribute('data-menu-screen'),'hidden','closing conversation returns directly to play');
+    assert.deepEqual(errors,[]);
+    console.log(JSON.stringify({passed:true,errors,screenshots:output}));
+  } finally {await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

@@ -1,0 +1,256 @@
+//! Source `hub-inventory-notices.ts` variants. One notice owns its content and
+//! presentation branch; result tint/summary do not live in a separate sidecar.
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PlayerPanelNotice {
+    Standard { title: String, body: String },
+    UnforgeConfirmation,
+    UnforgeResult { title: String, body: String, summary: String, outcome_tint: u32 },
+}
+
+use solomon_sim::Vec2;
+use solomon_sim::hud::HudRect;
+use solomon_sim::native_ui_text::messages::{
+    NativeUiMessageDataLineSpec, layout_native_ui_single_action_message,
+};
+use solomon_sim::native_ui_text::{
+    NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec, measure_native_ui_text,
+};
+use web_sys::HtmlElement;
+
+use super::PlayerPanels;
+use super::chrome::{bitmap_text, place};
+use crate::ui::{append, element, message_frame, native_button, style};
+
+impl PlayerPanels {
+    /// `renderer/hub-inventory/notices.ts`: native DataLine boxes and the two
+    /// content-sized Unforge branches share the existing stock frame/glyph painters.
+    pub(crate) fn draw_notice(&self, notice: &PlayerPanelNotice) -> Result<(), String> {
+        let curtain = element(&self.document, "div", "player-panel-notice-curtain")?;
+        append(&self.overlay, &curtain)?;
+        let stage = element(&self.document, "div", "player-panel-notice")?;
+        let width = f64::from(self.viewport_size.0);
+        let height = f64::from(self.viewport_size.1);
+        let scale =
+            if width > 0.0 && height > 0.0 { (width / 1600.0).min(height / 900.0) } else { 1.0 };
+        // MainMenuScene uses a centered fixed 1600x900 stage, including on a phone.
+        // The inventory's local scrolling/pan camera must not move the message box.
+        style(
+            &stage,
+            &format!(
+                "left:{}px;top:{}px;width:1600px;height:900px;transform:scale({scale});transform-origin:0 0",
+                (width - 1600.0 * scale) / 2.0,
+                (height - 900.0 * scale) / 2.0,
+            ),
+        )?;
+        let (title, body, summary) = match notice {
+            PlayerPanelNotice::Standard { title, body } => (title.as_str(), body.as_str(), ""),
+            PlayerPanelNotice::UnforgeConfirmation => (
+                "REALLY UNFORGE THIS?",
+                "Unforging grants you a permanent small bonus to your stats, but utterly destroys the item.",
+                "",
+            ),
+            PlayerPanelNotice::UnforgeResult { title, body, summary, .. } => {
+                (title.as_str(), body.as_str(), summary.as_str())
+            }
+        };
+        let semantic = element(&self.document, "span", "panel-notice-semantic")?;
+        semantic.set_attribute("role", "alert").map_err(|_| "notice announcement")?;
+        semantic.set_text_content(Some(&format!("{title} {summary} {body}")));
+        append(&stage, &semantic)?;
+        match notice {
+            PlayerPanelNotice::Standard { .. } => {
+                let mut lines = vec![NativeUiMessageDataLineSpec {
+                    font: NativeUiFontName::Menu,
+                    text: title,
+                    gap_after: 10.0,
+                    tint: 0xffffff,
+                }];
+                for (index, paragraph) in body.split("\n\n").enumerate() {
+                    if index > 0 {
+                        lines.push(data_line(""));
+                    }
+                    lines.push(data_line(paragraph));
+                }
+                // The source's four standard notice factories retain these authored
+                // anchors and trailing blank DataLines; they are not CSS margins.
+                let clothing = title == "A WIZARD WOULD NEVER REMOVE HIS HAT!"
+                    || title == "A WIZARD WOULD NEVER REMOVE HIS ROBE!";
+                if clothing || title == "NOT ENOUGH GOLD!" {
+                    lines.push(data_line(""));
+                }
+                let layout = layout_native_ui_single_action_message(
+                    Vec2::new(800.0, if clothing { 450.0 } else { 350.0 }),
+                    &lines,
+                )?;
+                self.notice_frame(&stage, layout.frame_bounds)?;
+                for line in layout.lines {
+                    bitmap_text(
+                        &self.document,
+                        &stage,
+                        &NativeUiTextSpec {
+                            align: NativeUiTextAlign::Left,
+                            tint: line.tint,
+                            line_height: Some(line.line_height),
+                            ..NativeUiTextSpec::new(line.font, &line.text, line.x, line.baseline_y)
+                        },
+                    )?;
+                }
+                self.notice_button(
+                    &stage,
+                    "OKAY",
+                    "notice-okay",
+                    layout.action_bounds,
+                    layout.action_text_baseline_y,
+                    true,
+                )?;
+            }
+            PlayerPanelNotice::UnforgeConfirmation => {
+                self.notice_frame(&stage, HudRect::new(539.5, 382.5, 524.0, 336.0))?;
+                self.notice_text(
+                    &stage,
+                    NativeUiFontName::Menu,
+                    title,
+                    Vec2::new(614.0, 478.0),
+                    0xffffff,
+                )?;
+                bitmap_text(
+                    &self.document,
+                    &stage,
+                    &NativeUiTextSpec {
+                        align: NativeUiTextAlign::Left,
+                        line_height: Some(17.0),
+                        max_width: Some(376.0),
+                        ..NativeUiTextSpec::new(NativeUiFontName::Medium, body, 614.0, 511.0)
+                    },
+                )?;
+                self.notice_button(
+                    &stage,
+                    "UNFORGE",
+                    "unforge-confirm",
+                    HudRect::new(595.0, 573.0, 197.0, 69.0),
+                    618.0,
+                    true,
+                )?;
+                self.notice_button(
+                    &stage,
+                    "CANCEL",
+                    "unforge-cancel",
+                    HudRect::new(811.0, 573.0, 197.0, 69.0),
+                    618.0,
+                    false,
+                )?;
+            }
+            PlayerPanelNotice::UnforgeResult { outcome_tint, .. } => {
+                let line_width = measure_native_ui_text(title, NativeUiFontName::Menu, 1.0)
+                    .max(measure_native_ui_text(summary, NativeUiFontName::Medium, 1.0))
+                    .max(measure_native_ui_text(body, NativeUiFontName::Medium, 1.0));
+                let inner_width = line_width + 141.0;
+                let left = 801.5 - inner_width / 2.0;
+                self.notice_frame(
+                    &stage,
+                    HudRect::new(left - 5.0, 391.5, inner_width + 10.0, 318.0),
+                )?;
+                self.notice_text(
+                    &stage,
+                    NativeUiFontName::Menu,
+                    title,
+                    Vec2::new(left + 70.5, 485.0),
+                    0xffffff,
+                )?;
+                self.notice_text(
+                    &stage,
+                    NativeUiFontName::Medium,
+                    summary,
+                    Vec2::new(left + 70.5, 520.0),
+                    0xd9ba70,
+                )?;
+                self.notice_text(
+                    &stage,
+                    NativeUiFontName::Medium,
+                    body,
+                    Vec2::new(left + 70.5, 537.0),
+                    *outcome_tint,
+                )?;
+                self.notice_button(
+                    &stage,
+                    "OKAY",
+                    "notice-okay",
+                    HudRect::new(703.0, 564.0, 197.0, 69.0),
+                    609.0,
+                    true,
+                )?;
+            }
+        }
+        append(&self.overlay, &stage)
+    }
+
+    fn notice_frame(&self, stage: &HtmlElement, bounds: HudRect) -> Result<(), String> {
+        let frame = message_frame(&self.document, &self.ui, bounds.width, bounds.height)?;
+        place(&frame, bounds)?;
+        append(stage, &frame)
+    }
+
+    fn notice_text(
+        &self,
+        stage: &HtmlElement,
+        font: NativeUiFontName,
+        text: &str,
+        position: Vec2,
+        tint: u32,
+    ) -> Result<(), String> {
+        bitmap_text(
+            &self.document,
+            stage,
+            &NativeUiTextSpec {
+                align: NativeUiTextAlign::Left,
+                tint,
+                ..NativeUiTextSpec::new(font, text, position.x, position.y)
+            },
+        )?;
+        Ok(())
+    }
+
+    fn notice_button(
+        &self,
+        stage: &HtmlElement,
+        label: &str,
+        action: &str,
+        bounds: HudRect,
+        baseline: f64,
+        default_focus: bool,
+    ) -> Result<(), String> {
+        let button = native_button(&self.document, label, "panel-notice-action")?;
+        button.set_attribute("data-panel-action", action).map_err(|_| "notice action")?;
+        if default_focus {
+            button.set_attribute("data-game-default-focus", "true").map_err(|_| "notice focus")?;
+        }
+        if action == "unforge-cancel" {
+            button.set_attribute("data-game-back", "true").map_err(|_| "notice back action")?;
+        }
+        place(&button, bounds)?;
+        let glyphs = button
+            .query_selector(".native-button-glyphs")
+            .map_err(|_| "notice button glyph selector")?
+            .ok_or("native button has no glyph pen")?;
+        glyphs
+            .set_attribute(
+                "style",
+                &format!(
+                    "position:absolute;left:50%;top:{}px;width:0;height:0",
+                    baseline - bounds.y,
+                ),
+            )
+            .map_err(|_| "notice button baseline")?;
+        append(stage, &button)
+    }
+}
+
+fn data_line(text: &str) -> NativeUiMessageDataLineSpec<'_> {
+    NativeUiMessageDataLineSpec {
+        font: NativeUiFontName::Medium,
+        gap_after: 0.0,
+        text,
+        tint: 0xffffff,
+    }
+}

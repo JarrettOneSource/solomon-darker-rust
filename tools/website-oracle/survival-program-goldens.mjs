@@ -1,0 +1,129 @@
+#!/usr/bin/env node
+// Retains every generated Boneyard's native boss, spider and portal program as typed data.
+import { writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { loadKernel, root, writeFixture } from './oracle.mjs'
+import { rustFlag, rustFloat, rustRecipe, rustString } from './rust-enemy-data.mjs'
+
+const { NATIVE_SURVIVAL_BOSS_SOURCES } = await loadKernel('core-kernels/native-survival-boss-catalog.ts')
+const heart = await loadKernel('core-kernels/native-survival-heartmonger.ts')
+const faculty = await loadKernel('core-kernels/native-survival-faculty.ts')
+const discorporeal = await loadKernel('core-kernels/native-survival-discorporeal.ts')
+const skeleton = await loadKernel('core-kernels/native-survival-skeleton-bosses.ts')
+const slumpgut = await loadKernel('core-kernels/native-survival-slumpgut.ts')
+const portal = await loadKernel('core-kernels/native-survival-portal.ts')
+const spider = await loadKernel('core-kernels/native-spider-wave-program.ts')
+const spiderData = await loadKernel('core-kernels/native-spider-wave-data.ts')
+const boss = await loadKernel('core-kernels/native-survival-boss-encounter.ts')
+
+function positionPolicy(policy) {
+  const name = { dark: 'Dark', light: 'Light', direct: 'Direct', edge: 'Edge', offscreen: 'Offscreen' }[policy]
+  if (!name) throw new Error(`unknown placement policy ${policy}`)
+  return `SpawnPositionPolicy::${name}`
+}
+
+function command(value) {
+  const simple = { pause: 'Pause', unpause: 'Unpause', advance: 'Advance', 'spawn-offscreen': 'SpawnOffscreen', 'end-repeat': 'EndRepeat', 'end-if': 'EndIf', label: 'Label' }
+  if (simple[value.kind]) return `SpiderCommand::${simple[value.kind]}`
+  switch (value.kind) {
+    case 'repeat': return `SpiderCommand::Repeat { count: ${value.count} }`
+    case 'spawn': return `SpiderCommand::Spawn { flags: vec![${value.flags.map(rustFlag)}] }`
+    case 'sleep': return `SpiderCommand::Sleep { ticks: ${value.ticks} }`
+    case 'if-monsters': return `SpiderCommand::IfMonsters { next: ${value.next} }`
+    case 'jump': return `SpiderCommand::Jump { next: ${value.next} }`
+    default: throw new Error(`unknown Spider command ${value.kind}`)
+  }
+}
+
+const data = []
+const arms = []
+for (const source of NATIVE_SURVIVAL_BOSS_SOURCES) {
+  const sha = source.sourceSha256
+  const bosses = [
+    { kind: 'Heartmonger', definition: source.heartmonger, recipes: [heart.nativeHeartmongerRecipe(sha)] },
+    { kind: 'Faculty', definition: source.faculty, recipes: ['Dire Sirmin', 'Dire Lucritius', 'Dire Aliss'].map(name => faculty.nativeFacultyRecipe(sha, name)) },
+    { kind: 'Discorporeal', definition: source.discorporeal, recipes: [discorporeal.nativeDiscorporealRecipe(sha)] },
+  ]
+  const ironmaw = { waveOrdinal: source.ironmaw.waveOrdinal, recipe: skeleton.nativeSkeletonBossRecipe(sha, 'Ironmaw') }
+  const foulshaft = { waveOrdinal: source.foulshaft.waveOrdinal, recipe: skeleton.nativeSkeletonBossRecipe(sha, 'Foulshaft') }
+  const spiders = spiderData.nativeSpiderWaveDefinitions(sha)
+  const portals = portal.nativePortalProgram(sha)
+  const slumpgutRecipe = slumpgut.nativeSlumpgutRecipe(sha)
+  data.push({ sourceSha256: sha, bosses, ironmaw, foulshaft, spiders, portals, slumpgutRecipe })
+  const bossLiterals = bosses.map(value => `BossDefinition { kind: BossKind::${value.kind}, wave_ordinal: ${value.definition.waveOrdinal}, completion_skeletons: ${value.definition.completionSkeletons}, recipes: vec![${value.recipes.map(rustRecipe)}] }`)
+  const spiderLiterals = spiders.map(value => `SpiderDefinition { name: ${rustString(value.name)}.into(), trigger_uid: ${value.triggerUid}, script_uid: ${value.scriptUid}, start_wave: ${value.startWave}, commands: vec![${value.commands.map(command)}] }`)
+  const portalLiterals = portals.phases.map(value => `PortalDefinition {
+    frequency: ${value.frequency}, maximum_health: ${rustFloat(value.maximumHealth)}, name: ${rustString(value.name)}.into(), recipe_uid: ${value.recipeUid},
+    placement_policy: ${positionPolicy(value.placementPolicy)}, script_uid: ${value.scriptUid}, spawn_count: ${value.spawnCount}, start_wave: ${value.startWave}, trigger_uid: ${value.triggerUid}, recipe: ${rustRecipe(portal.nativePortalRecipe(value))},
+  }`)
+  arms.push(`${rustString(sha)} => Some(SurvivalPrograms {
+    source_sha256: ${rustString(sha)}.into(), bosses: vec![${bossLiterals}],
+    ironmaw: SkeletonBossDefinition { wave_ordinal: ${ironmaw.waveOrdinal}, recipe: ${rustRecipe(ironmaw.recipe)} },
+    foulshaft: SkeletonBossDefinition { wave_ordinal: ${foulshaft.waveOrdinal}, recipe: ${rustRecipe(foulshaft.recipe)} },
+    slumpgut_recipe: ${rustRecipe(slumpgutRecipe)}, spiders: vec![${spiderLiterals}],
+    portal_timeline_uid: ${portals.timelineUid === null ? 'None' : `Some(${portals.timelineUid})`}, portals: vec![${portalLiterals}],
+  })`)
+}
+writeFileSync(resolve(root, 'crates/sim/src/boneyard/waves/native_programs.rs'), `//! Generated by tools/website-oracle/survival-program-goldens.mjs from all twelve
+//! pinned generated Boneyards' native survival programs and authored recipes.
+
+use crate::enemies::{EnemyFlag, SpawnPositionPolicy};
+use crate::enemies::config::{AuthoredEnemyFamily, AuthoredEnemyRecipe, ArrowType, EnemyClassification, EnemyLootPolicies, FacultyAppearance, SkeletonWeapon};
+use super::programs::*;
+
+#[must_use]
+pub fn native_survival_programs(source_sha256: &str) -> Option<SurvivalPrograms> {
+  match source_sha256 { ${arms.join(',\n')}, _ => None }
+}\n`)
+
+const bossCases = []
+const skeletonCases = []
+const spiderCases = []
+for (const source of NATIVE_SURVIVAL_BOSS_SOURCES) {
+  const sha = source.sourceSha256
+  for (const kind of ['heartmonger', 'faculty', 'discorporeal']) {
+    let state = boss.createNativeBossEncounter(sha, kind)
+    const records = []
+    for (let tick = 0; tick < 8000; tick++) {
+      const liveBossCount = tick < 450 ? 1 : 0
+      const step = boss.stepNativeBossEncounter(state, source[kind].waveOrdinal, liveBossCount)
+      if (tick % 25 === 0 || step.birth || step.releaseWave || step.state.phase !== state.phase) {
+        records.push({ tick, liveBossCount, ...step })
+      }
+      state = step.state
+      if (state.phase === 'retired') break
+    }
+    bossCases.push({ sourceSha256: sha, kind, waveOrdinal: source[kind].waveOrdinal, records })
+  }
+  let state = skeleton.createNativeSkeletonBossProgram(sha)
+  const records = []
+  for (let tick = 0; tick < 4000; tick++) {
+    const waveOrdinal = tick === 0 ? source.ironmaw.waveOrdinal : source.foulshaft.waveOrdinal
+    const liveBossCount = tick < 1200 ? 1 : 0
+    const step = skeleton.stepNativeSkeletonBossProgram(state, waveOrdinal, liveBossCount)
+    if (tick % 25 === 0 || step.births.length || step.releaseWave || step.state.foulshaftPhase !== state.foulshaftPhase) {
+      records.push({ tick, waveOrdinal, liveBossCount, ...step })
+    }
+    state = step.state
+    if (state.foulshaftPhase === 'retired') break
+  }
+  skeletonCases.push({ sourceSha256: sha, records })
+  for (const [definitionIndex, definition] of spiderData.nativeSpiderWaveDefinitions(sha).entries()) {
+    let state = spider.createNativeSpiderWaveState()
+    const records = []
+    for (let tick = 0; tick < 4000; tick++) {
+      const monsterCount = tick < 450 ? 2 : 0
+      const step = spider.stepNativeSpiderWaves(state, [definition], definition.startWave, monsterCount)
+      if (tick % 25 === 0 || step.births.length || step.advanceWave || step.state.timelinePaused !== state.timelinePaused || step.state.phaseIndex !== state.phaseIndex) {
+        records.push({ tick, monsterCount, ...step })
+      }
+      state = step.state
+      if (state.phaseIndex === 1) break
+    }
+    spiderCases.push({ sourceSha256: sha, definitionIndex, waveOrdinal: definition.startWave, records })
+  }
+}
+writeFixture('survival-program-goldens.json', 'tools/website-oracle/survival-program-goldens.mjs',
+  'Website/frontend/src/game/core-kernels/native-survival-{boss-encounter,skeleton-bosses,portal,slumpgut,heartmonger,faculty,discorporeal}.ts and native-spider-wave-program.ts',
+  { data, bossCases, skeletonCases, spiderCases })
+console.log(`retained ${data.length} complete generated survival programs`)

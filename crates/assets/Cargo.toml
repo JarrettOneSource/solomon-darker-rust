@@ -1,0 +1,15 @@
+[package]
+name = "solomon-assets"
+description = "Readers for the stock Solomon Dark asset containers"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+solomon-sim = { workspace = true, features = ["persistence"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ryu-js = "1.0.3"
+base64 = "0.23.1"
+miniz_oxide = "0.8.9"
+sha2 = "0.11"

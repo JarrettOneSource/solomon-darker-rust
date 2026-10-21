@@ -1,0 +1,398 @@
+# Rust game parity and release
+
+Current Website behavior is implemented and its complete local parity gates pass.
+Repository publication, final release artifacts and public staging acceptance are in progress.
+The target is the current Website's behavior and existing user data. The requested result is a separately published Rust game repository, removal of
+the replaced game implementation from the Website repository, a WASM embed in that Website,
+and a verified `/game-stg` deployment. Current reference code is in
+`../website-rust-current`; the older `../Website` checkout is retained historical evidence.
+Its earlier fixture and standalone receipts do not qualify subsequently added behavior.
+
+The implementation reuses the existing kernels, stock assets and dependencies. Canonical
+Session state owns gameplay; presentation copies cannot advance authority, save state or
+consume gameplay randomness. Source references and focused differential fixtures document
+the translated behavior. Read [CLIENT-PRESENTATION.md](CLIENT-PRESENTATION.md) for the
+accepted-state/display boundary.
+
+## Acceptance boundaries
+
+The current source inventory and removal dependencies are recorded in the task evidence
+`current-main-delta-map.md` under `/Users/jarrett/codex-runs/solomon-rust-parity-20261021/`.
+
+| Work | Owner and implementation boundary | Acceptance |
+| --- | --- | --- |
+| Current simulation and saves | Rooms, NPCs, visuals; root owns save adapters | Current enemy/effect lifetimes, protection and resource rules, permanent unlocks, creation choices, three hotbar banks, shared flashes, Flame history and supported earlier saves reproduce current Source state and continuation. |
+| Complete interface and authored content | HUD, NPCs and visuals | Current title/Create/settings, social cards, inventory/book/painting, bank controls, authored shops/skills/audio, input and rendering pass focused source fixtures and ordinary browser journeys. |
+| Hosted runtime | Runtime; root owns browser receive/save lifecycle | Global/private worlds, Party/social/bots, Memorial, run diagnostics, large welcome/save transfers, recovery and disposable editor tests preserve their actual ownership and failure behavior. |
+| Website separation | Root | Account save tools, editor Test, authoring CLI, build/validation and deployment consume the Rust game artifact with no remaining TS game authority/client import closure. Website API, storage and game asset/revision mounts have explicit independent owners. |
+| Repository publication | Root; Rooms owns lossless large-fixture compression | Publish the reviewed game tree with declared build inputs and reproducible artifacts; preserve local development history and evidence. Existing desktop delivery behavior remains covered by the artifact/shell integration. |
+| Staging publication | Root | Isolated Linux services and `/game-stg` pass actual account, existing-save, party, authored-content, editor, score and deployment journeys without altering production state. |
+
+Preserve valid earlier receipts for unchanged behavior. Changed families require focused
+source fixtures and observable integration checks. Final acceptance requires the complete
+repository gates, a reviewed feature inventory, current device documentation and post-push
+cleanup of task-owned worktrees on every device. Missing enabled behavior cannot be
+reclassified as a completed direct-host limitation.
+
+## Current focused verification
+
+The current save corpus passes all **217** cases: current whole-state continuations,
+supported historical migrations and invalid-state rejection. It includes both quality
+settings, retained Flame births, shared flashes, rescue protection, precise headings,
+three hotbar banks, death weapons, Golem fragments and Ether Drain references. Saved
+wave tables survive restore without recompilation. Two positive current-source saves also
+preserve decoded Terrain UID, profile samples and side sign through whole-state restore,
+re-encode and retirement (`gates-20261021T181931Z/current-save-terrain.log`). The fresh wave compiler/director
+fixtures, actual Session rescue/modal casts and Account portability cases also pass.
+These results are in `hosted-browser/gates-20261021T154009Z/`; they qualify these boundaries,
+not the unfinished live browser cutover. The independent Account WASM facade passes all
+12 real-browser ABI checks with no game canvas or socket. The actual mounted Website
+Register/Account journey previews and imports an existing save, commits it to the cloud,
+and exports ZIP through this facade. Evidence: `hosted-browser/save-tools-4935b027/` and
+`hosted-browser/website-embed-41cae2b2/`.
+
+The disposable editor Test iframe keeps one stable DOM parent while the React draft stays
+mounted. Actual cancellation after HTTP admission claims and closes the authority, disposes
+the hidden iframe, and preserves the cloud revision/document, resume state and editor draft.
+The playable custom-scene journey reproduced a missing per-geometry render asset. The
+replacement compiler now uses one Rust scene path for stock and authored maps, with
+catalog-backed placement and native Canvas2D terrain/walls. Current scenery and lighting
+fixtures pass; the actual compiled editor play/return and hidden-frame resume checks pass
+in the complete nine-group `authoring-shelf-69d-04/` journey.
+Flame client/history validation, display timeline and the shared camera/flash lane pass
+the focused `gates-20261021T155931Z` checks. Current dialogue and native authoring fixtures
+also pass; the extracted Website gates and mounted account/editor journeys pass.
+
+As of 2026-10-21, the canonical V8 numeric corrections pass 7,697 atan2 cases,
+20,100 native sine/cosine pairs, 40,200 WASM scalar results and 17,431 exact powers on
+both native and WASM. The power correction is used at the measured Fire envelope
+divergence; its retained C++ discriminator and WASM receipt are in `wasm-math/` and
+`pow-{contract,no-contract}.json` under the parity evidence directory. Five independent
+world journeys cover 5,200 ticks, including the original template-9 witness and
+1,032 every-tick Solomon spatial/phase/overlap checks. Discrete state is exact;
+retained general checkpoints have maximum position error `2.28e-13` and heading
+error `1.54e-12`. The same unanchored trajectory tests also pass on Linux.
+
+The actual supervisor passes 34 Source HTTP/WebSocket observations, warm recovered
+Boneyard admission and four admitted-mod receipts through real Lua rules, shop actions
+and terminal saves. The empty-private-world crash was reproduced by removing only its
+teardown while an observer retained the authority; restoring the teardown passes.
+Prepared Lua ownership also retires with the empty private run. The genuine browser ZIP
+imports into its unchanged restored run and advances more than 100 later host ticks.
+The nine Website save suites, native CFG/SAV/ZIP bridge, all ten prepared-save domains
+and canonical mod-effect continuations retain their focused Source receipts.
+
+The prepared host executes actor/control/rule epochs, authored services and casts,
+canonical Session extensions and full engine-state saves. Source fixtures cover actual
+Lua definition/callback/package preparation, status/affix/spells, skills/shops, actors,
+scenes, portals, dynamic effects and projections. Console VM execution passes 53 cases
+plus timeout and memory-failure recovery, and the actual supervisor passes ten Console/bot
+lifecycle observations. The ordinary-browser bot combat journey passes as recorded below. The retained bot model passes exact inference, 26 complete observations,
+7,693 action decisions and eight controller scenarios. Durable shared Memorial storage
+is connected and its codec, persistence and shared-world checks pass. Score eligibility, once-only publication and timestamp
+formatting pass the Source fixtures; actual browser score submission also passes as recorded below.
+
+The unchanged C# Website backend serves isolated local storage through the TLS
+`/game-stg` gateway. The gateway runs the intended public content policy with an external
+WASM bootstrap. Matching client/host `5373106` passes actual mounted Website registration,
+Rust account identity, sign-out and form sign-in; credentials remain scoped to this mount.
+See `hosted-account/report.md`. The accepted two-account social journey includes Global
+chat, cards, invitation decline, consent and a two-member private College. It holds the
+actual save PUT to prove that transfer waits for persistence before the next authority
+hello (`hosted-social/run-9-held-barrier-green/`, build `77ce4f8`).
+
+Actual cheat consent passes Cancel and save-before-leave, then continues the same wizard
+in a private College. Source-inherited prompt stacking and early Global SetCheats defects
+were reproduced before repair. An explicit checkpoint-zero delivery test restores pause,
+continues 25 accepted ticks on the same connection and succeeds on normal Leave retry.
+These receipts are `hosted-browser/cheat-consent-5373106-green/` and
+`hosted-browser/leave-failure-5373106-final/`. A naturally denied Inventory Equip with only
+its optional feedback payload omitted froze the old client. Build `1d682fa` passes that
+same boundary: normal rejection, accepted ticks continue, unchanged inventory and a normal
+retry (`hosted-browser/inventory-rejection-1d682fa-green/`). This is a receiver failure test;
+the separate native prepared-host test owns atomic authored-consume rollback evidence.
+
+The current local gateway serves the complete `ad1ba50b` native/WASM/save-tools artifact.
+All 5,727 packaged files match its SHA256 manifest; the immutable candidate owns served
+assets as well as executables. Exact identities are in `hosted-browser/{host,browser}-build.json`. Signed score publication through the
+unchanged Website API returns HTTP 201; a fresh sign-in sees the persisted row in all four
+Global Hall boards with ordinary pointer controls and no errors. The report is
+`hosted-browser/score-publication-report.md`. Authored shop purchases and Lua stock/state
+changes pass. Gravity Lesson passes all eight groups on matching `4e5db0d4`, including
+actual casts, binding and save/leave disposal. The Apothecary journey now also passes custom icons, rejected consume/drop constraints,
+Sack movement, Reforge/equip, minimap/audio, Tonic consume/status and actual Save/Continue.
+`authored-browser/accepted-phases.json` retains the exact revision and phase provenance.
+The ordinary-account Console retake passes on `ad1ba50b`: real Lua values, retained state,
+timers, sandbox restrictions, queued gold mutation and timeout recovery, with no errors.
+`authored-browser/run-ad1ba50b-console-final/` owns that separate receipt.
+
+Current effect verification passes actual Ether Drain world/Session, Coffin emergence,
+Golem assembly/death, harmful-contact/Harden damage, Stoneskin lifetimes, dropped death
+weapons, browser settings and Hall v3/v2 migration. The death-weapon replay retains actual
+shared RNG state across Game Over and owner removal. Source Sack motion has 194 exact
+height/frame cases. Focused evidence includes `gates-20261021T171610Z/`,
+`gates-20261021T171728Z/` and `death-weapon-after-adapter.log` under `hosted-browser/`.
+Complete current secondary lifetimes and dynamic authored-scene rendering now pass their
+focused replays and the complete workspace gate.
+
+Two ordinary repeat-run/reload failures are retained in
+`visuals-current-browser/run-41cae2b2/`: readiness stayed cached across a new hosted world,
+and a restored Boneyard welcome rejected numeric scenery-map keys. Readiness now follows
+each accepted runtime snapshot, matching current Source. Both current restored-save wire
+cases plus historical cases pass in `gates-20261021T171406Z/restored-wire-after.log`.
+The hidden Cloud text zero-scale panic also has a Source-based correction. All three fixes
+are included in `4159dc96`; compact Cloud browser checks now pass with no errors. The restored Boneyard retake passes on `69d28dc4` as recorded below. The separate mobile
+frame double-scale correction is integrated and covered by the mounted mobile journeys.
+
+Current Golem attack contacts, native Terrain/bridge surface queries and spectator selection
+plans pass their Source replays. Cold Aura/Water/Hail/Earth values and electric status actor
+births pass after genuine failing witnesses. Frost Missile direct/area/terrain contacts and
+shared Bouncer/Growing effects pass their current recordings. These focused checks are in
+`hosted-browser/gates-20261021T181227Z/`, `gates-20261021T181655Z/`,
+`gates-20261021T181931Z/` and `gates-20261021T182516Z/`. The complete current fixture integration now passes. The remaining actual Flame and
+Storm/spectator GPU journeys retain their own acceptance records.
+
+The ordinary `2073e7ca` Sack journey passes six groups: purchase, contained item movement,
+all three hotbar banks, native open/close motion, Unicode rename and saved Leave, with no
+runtime errors. `hud-sack-current/` owns the actual receipt. Its Canvas2D fallback now uses
+104 Source layout cases. The actual `69d28dc4` retake passes all seven groups with empty
+runtime errors and normal saved Leave: the Unicode caption and wrapped hover match the
+Source Canvas metrics, and the Sack has one accessible rename label.
+`hud-sack-canvas-current/` retains the receipt and inspected screenshots. A resume trace separately proves that Welcome precedes the
+Boneyard metadata by 43 ms and produced a transient missing-scene error. The client now
+retains the frame until matching metadata arrives; `restore-admission-before-2073/` records
+the witness. The actual `69d28dc4` retake passes with the same run, Welcome arriving
+28 ms before its matching scene, an active rendered world, empty runtime errors and normal
+saved Leave. The screenshot and both positive receipts are in
+`hosted-browser/restore-admission-after-69d28dc4/`; the browser is closed.
+
+The same `69d28dc4` artifact passes ordinary repeated painting: one kit paints a nested
+Hat and Robe through the same accepted session, then closes and saves normally
+(`hud-dye-current/dye-receipt.json`). Authenticated mobile layout publication passes five
+groups: real registration, editor drag/Save, HTTP201 publication of the exact saved layout,
+trusted clipboard copy and reload persistence, with no errors
+(`hud-layout-publish-current/receipt.json`).
+
+The actual learned-bot journey passes five groups on `41cae2b2`: 362 accepted Boneyard
+samples include movement, 50 bot-owned Water particles and actual mana use; normal saved
+Leave returns the host to zero humans, bots, parties, runs and sessions. Runtime errors are
+empty. `learned-bot-browser/report.md` and `41ca-attempt12/` retain the precise evidence.
+
+The Rust repository owns the desktop Electron shell and native child authority. The WASM
+client binds the installed preload endpoint, reads the existing Source IndexedDB slot,
+uses Source settings/Hall keys and tracks page playtime, and waits for the canonical durable
+save before close. The actual macOS ARM64 Electron package from `4159dc96` passes offline
+play, saved close, exact-position Continue, settings persistence, two desktop peers entering
+one Boneyard, update-notice dismissal and child-process teardown. The update notice uses
+a declared release-response fixture; gameplay and persistence use the actual package.
+A real IndexedDB revision conflict also passes: the committed document stays unchanged,
+Keep playing retains the same host, participant and socket with accepted movement and no
+Disconnect acknowledgement, and Close without saving exits and reaps the host. Only the
+Electron warning response is automated. `desktop-4159dc96-failed-close-03/` retains the
+complete repeated suite, both warning arguments and inspected screenshots. This is
+functional software-renderer acceptance, not a graphics performance measurement.
+
+The ordinary browser also accepts unchanged Source IndexedDB schema51 saves, camelCase
+settings, Hall v3/v2 records and page playtime. It verifies initial reads without rewriting,
+the real settings controls, periodic/pagehide playtime, actual native Hello, normal Continue,
+two durable Leave cycles and reload. All eight groups pass with no errors in
+`hosted-browser/source-storage-4159dc96-02/`.
+
+The extracted Website keeps account/content/storage/editor ownership and consumes the
+verified Rust artifact. All 63 backend/deployment contracts and backend formatting pass;
+frontend tests, lint, production build and media policy pass. Existing React export warnings
+remain. Evidence is `hosted-browser/website-backend-gates-1742.log` and
+`hosted-browser/website-frontend-gates-1746.log`. The authoring handoff uses a one-use tab token and native
+IndexedDB payload; its actual browser check preserves a 16 MiB document, rejects replay
+and rolls back after a token quota failure. The actual `69d28dc4` shelf passes all nine groups with empty browser/API/runtime errors:
+parent-keyboard routing, desktop/phone layout, New, cloud Save, exported Import, local Edit,
+one-use replay rejection, Delete/Keep focus and both local/cloud Test. Hidden zero-size
+frames resume accepted ticks when shown; Return preserves the editor, restores Test focus
+and closes both admitted sockets. Cloud deletion returns HTTP204 and preserves the local
+draft. `authoring-shelf-69d-04/` retains the complete receipt and inspected screenshots;
+`authoring-shelf-2073-02/` retains the original hidden-layout failure.
+Stock build inputs are Git-owned with complete SHA256 membership and all 233 native audio
+entries checked. `scripts/package-hosted-game.py` successfully built the complete revisioned
+native/client/save-tools artifact and archive. `hosted-browser/package-4159dc96/` owns the
+build receipts. These are development-profile acceptance artifacts, not a final release.
+
+The actual deployment journey passes all five groups on the `69d28dc4` to `07d65e33`
+replacement, with empty browser/API/runtime errors. It holds the cloud-save PUT, proves
+no premature ACK/close, then observes committed save, matching ACK, closed socket and
+a persistent saved overlay. Incorrect publication metadata is ignored; the actual target
+artifact reloads and Continue restores the same wizard. Screenshots were inspected.
+The replacement host must be healthy before publishing its client revision. A coordinator
+retake that exposed the client first correctly received HTTP503; no product change was
+needed. The accepted receipt is `hosted-browser/deployment-69-to-07-ready/`.
+The same candidate passes the actual saved-retirement-to-Create status regression;
+`hud-earned-current/run-07d65e33-01/` retains both empty-status captures.
+
+The complete Linux workspace passed at `433e9e25`: 383 tests, none ignored, formatting and
+strict all-target/all-feature lint (`receipts/20261021T124927Z/` on NFO). Later targeted gates
+pass the actual runtime-event HTTP publisher, native/WASM builds, 49 Memorial codec cases,
+atomic file persistence and both shared-world suites (`receipts/20261021T132303Z/`). The new
+current-behavior implementations need their own affected checks and a final complete gate.
+
+The repository now owns the existing four-platform desktop validation/publication workflow,
+with pinned Rust/Node tools and a separately checksummed Linux Website artifact. Website
+Downloads targets the new game repository. These are prepared delivery changes; no new
+repository or platform workflow run is published yet. The current complete enemy recording
+retains 132 programs, 105,000 ticks and 5,511 states; all 214,267,806 decompressed bytes have
+a recorded SHA256. The complete 25,643,928-byte secondary lifetime recording is also
+losslessly compressed. The complete current audit in
+`hosted-browser/gates-20261021T201705Z/` passes all **531 tests**, with none failed or
+ignored. Formatting, strict native all-target/all-feature Clippy and strict WASM Clippy
+also pass. This includes current Staff ordering, Weld continuation, ML mana costs,
+player contacts, all current/historical saves, snapshot application and complete secondary
+plans. All nine actual supervisor tests pass, including a retained idle College frame
+that proves the archive test selects the actual run. No authority timing change was needed.
+
+The complete enemy replay passes all twelve tests, including all 132 independent programs.
+Fleeing movement uses the Source UID-phase cadence and immediate heading; the nine status
+continuations pass. Four historical Spider view programs retain their ignored-key contract;
+four added current-key programs and 29 Source presenter/animation endpoints cover the actual
+view options. Existing expectations and tolerances remain intact. The focused receipt is
+`hosted-browser/enemy-all-132-endpoints-after.log`.
+
+The final Leviathan comparison at `2325c6ee` matches unchanged current Source pixels in all
+nine normal/simple-hit/complex-hit cases at zoom 0.75, 1 and 1.5: **11,059,200 RGBA bytes,
+zero differences**, with no tolerance or masking. Production-equivalent context attributes,
+actual sample counts, inputs and source hashes are retained in
+`leviathan-gpu/final-2325c6ee/`; runtime errors are empty and GL error is zero.
+The normal release does not expose the optional browser fixture interface.
+
+Ordinary progression earns the real level-up offer, chooses it and observes accepted rank1.
+The paid Shlorio journey earns 655 gold through normal combat, uses Hat38 as its reference,
+pays 650 and receives four offers. Source `hub-economy.ts` draws three or four ordinary
+offers and adds two set offers only when the reference has a set; this starter Hat has none.
+Continue preserves the resulting five gold and all four offers; actual Done clears the roll
+and ordinary Leave saves. No developer currency grant or edited save supplies this result.
+The HUD evidence keeps the paid action and resumed Done/save receipts separate.
+
+A same-epoch ordinary-account witness proves accepted Enable Cheats could leave cached Pause
+rows stale while Settings overlaid that screen. `ad1ba50b` refreshes those existing rows;
+format, strict native/WASM checks and all web tests pass in
+`hosted-browser/gates-20261021T203356Z/`. The actual before/after menu witness and ordinary-account Console retake both pass with
+empty errors on the matching bundle. The moving Storm survives Enhanced Effects true,
+false and true again with the same actor and birth state, no WebGL error and durable Leave
+(`storm-quality-ad1ba50b-01/`). Actual Electric Arc/Flare acceptance remains
+in `electric-gpu-9668b57a-03/`. Both require the normal Solomon entrance and
+Source hotbar bindings. The actual Flame/spectator journey on `ad1ba50b` also passes held/released Ribbon and Fade
+births, retained history/GPU batches, real death, spectator status/follow/target cycling,
+no accidental casts, leader saved Leave and spectator reset. Its surviving peer correctly
+returns to College after the leader leaves; a final cleanup helper wrongly expected a
+Boneyard pause and is recorded separately from those passed assertions. Final release
+packages and public staging acceptance remain required.
+
+NFO holds isolated source/assets, Rust 1.98.1, task-local Trunk and prepared staging service,
+API/account and Caddy artifacts. The candidate Caddy configuration validates. No staging
+service or public route is installed. The current Website API has been published for Linux from `fb042d14` with its native
+SQLite library. Caddy owns the separately built static Website/game files; the API publish
+uses the installed SDK's `StaticWebAssetsEnabled=false`. The final mounted Website build at `fb042d14` passes; all 563 transferred static files
+and all 25 API payload files match their retained SHA256 manifests. Installed Linux/browser
+acceptance remains required.
+
+## Earlier standalone release
+
+The macOS ARM64 release folder and ZIP are in:
+
+```text
+/Users/jarrett/Projects/Solomon Dark/Packages/solomon-darker-macos-arm64-20261020/
+/Users/jarrett/Projects/Solomon Dark/Packages/solomon-darker-macos-arm64-20261020.zip
+```
+
+Double-click `Play Solomon Darker.command`, or run the packaged `solomon-darker` executable.
+It serves the bundled game on loopback port 4188 and opens the system browser. Keep the
+launcher running while playing. Its README explains direct multiplayer and durable saves.
+
+Both native and WebAssembly release builds came from clean
+`96ca53be8b3a41a2b9096963b0e813d9691b6546`. Subsequent receipt, browser-driver and documentation
+edits do not change those game binaries. The archive contains 5,180 files and passes its CRC
+check. Build metadata and SHA-256 digests are retained in `integration-final/package.json`.
+The actual final browser runs independently recorded matching executable and WASM hashes.
+
+## Earlier verified behavior
+
+- New Game, the complete College admission, loadout selection, courtyard, all four private
+  rooms, NPC/student behavior, conversations and services use canonical participant state.
+- Boneyard gameplay composes all thirteen retained scenes, gates, scenery, navigation,
+  enemies, Solomon, waves, all elemental/welded and secondary spells, loot, progression,
+  death and return. Rendering includes lighting, shadows, rain, compact masks, death and
+  level-up effects, with source painter ownership.
+- Menus, inventory, skillbooks, settings, keyboard/controller/touch input and audio operate
+  on the real session. Browser-only saves use IndexedDB; native sessions use the host's
+  atomic durable file. Preferences and resume credentials remain browser-local.
+- Direct native multiplayer supports ordered participants, input acknowledgements, purchases,
+  Party/cards/whispers, accepted chat, shared holds, readiness, fullscreen, reconnect and
+  save/restart. Public party codes/listings and Global chat require the Website's broker and
+  are explicitly unavailable on a direct native host.
+- The renderer samples the source eight-snapshot timeline for camera, actors, lights and
+  painter order. Boneyard interpolation and bounded local College prediction preserve the
+  accepted simulation, integer authoritative clocks and gameplay RNG.
+
+## Verification
+
+Evidence is retained under `/Users/jarrett/codex-runs/solomon-rust-fleet-20261020/`.
+
+| Receipt | Result and scope |
+| --- | --- |
+| `integration-final/gates.json` | All 259 workspace tests passed with none ignored at `63c3976`. The first strict Clippy run identified six mechanical presentation-code issues. |
+| `integration-final/after-clippy/gates.json` | At `96ca53b`, all 24 affected client tests passed, formatting passed, native all-target/all-feature Clippy passed with warnings denied, and WASM Clippy passed with warnings denied. |
+| `integration-final/package.json` and `package-build.log` | Optimized native and WebAssembly builds, clean-source metadata, complete bundle and archive integrity passed. |
+| `integration-final/native-browser-ready/` | The exact package passed fourteen actual two-browser checks on Metal, using an unrelated working directory, an empty command path and isolated native save. All 1,024 requests were bundled; no runtime errors occurred. |
+| `visuals-presentation-final/` | Actual GPU submissions change at a median 16.7 ms while accepted snapshots remain approximately 20 Hz. The genuine Tutorial arrival closely matches the pinned JS capture. Zero browser errors or failed requests. |
+
+The native browser journey covers two complete College admissions, shared movement and input
+acknowledgements, real inventory transactions, chat focus above Inventory and Pause, Party
+roster/card/whisper, old-shop cleanup at run entry, renderer readiness, named shared pause,
+resume countdown, trusted fullscreen, save-before-leave, same-wizard reconnect with token
+rotation, and native-file restart. Real movement then wakes Solomon and reaches combat death.
+The actual Game Over title and Continue readiness are observed before disconnect; its overlay
+leaves with the session. The deliberate final host shutdown causes three refused title-art
+requests, recorded separately from runtime errors because the asset server has been stopped.
+
+The cadence observation uses a 640×360 Metal canvas and real movement. Hub samples have
+121/121 and 120/120 distinct submitted positions; Boneyard has 117/120, all near 60 FPS.
+This verifies projection between messages; it is not a general graphics-speed benchmark.
+The complete-scene pair uses 1600×900 and exactly the same Tutorial arrival position.
+Scenery, player placement, compact ground stamps and rain agree closely; gate and effect
+phases differ with capture time. See `reports/visuals-presentation-final.md`.
+
+Earlier accepted receipts remain valid for their recorded revisions: all rooms and services,
+complete College/Boneyard reload and stale-tab protection, actual audio playback, phone
+inventory/dragging/equipment/services, and a 390×844 Acid Rain tap with no unintended movement.
+The full genuine Tutorial journey completes every lesson, potion use and six-enemy survival,
+ending with 69 kills. It includes restoration of the unchanged genuinely earned stage-13 save
+after a QA helper left combat running; no gameplay values were edited. One unattributed 404
+occurred at that neutral-document restore boundary, with no game-page errors or tracked
+gameplay 4xx. A normal run also verifies six Fire kills, death, Continue and College return.
+These receipts are in `integration-session/`, `integration-services/`, `integration-saves-fixed/`,
+`integration-world-saves-fixed/`, `integration-audio-final/`, `integration-responsive/`,
+`integration-combat/` and `npcs/fullcombat-browser/`.
+
+Source replay additionally covers thirteen public-Game journeys (6,907 ticks, 386 continuation
+checkpoints), five multiplayer journeys (805 inputs, 703 ticks, 127 continuations), and
+36 detached-participant operations with twelve staged projections. Enemy display fixtures
+cover 1,200 endpoints, 420 family brackets, fifteen membership brackets and ninety fractional
+attack samples; secondary fractional fixtures cover seventeen plans and five light boundaries.
+Platform trigonometry limits on long unanchored trajectories remain documented in
+[DECISIONS.md](DECISIONS.md); whole-game bit-identical trajectories are not claimed.
+
+## Source and cleanup
+
+The active source remains on `fleet/integration-20261020` in
+`/Users/jarrett/Projects/Solomon Dark/rust-game-integration-20261020`.
+It is retained separately because `Rust Game` main at `690730d` owns the existing launchd
+preview on port 4180. The standalone release has its own executable and default port 4188.
+There is no Git remote; no push or public deployment occurred.
+
+The five worker worktrees from the earlier standalone release were removed. Their branches and external reports remain.
+The visual lane's copied dependency/root glue was archived before removal under
+`visuals-presentation-final/worktree-cleanup/`. Those standalone browser and test-host processes were stopped. Five new parity workers
+and their isolated acceptance services are active for the current request. The pinned
+Website and baseline preview remain separate.
+
+Jarrett explicitly accepted the M2 for final platform validation on October 20. This receipt
+qualifies macOS ARM64; no Windows or other-platform release is claimed. The earlier local
+standalone checks remain valid for their stated scope. Full parity and the requested staging
+deployment are not yet accepted.

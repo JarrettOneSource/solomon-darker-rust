@@ -1,0 +1,44 @@
+/* Source game-deployment-update.css; hidden page owner uses the native attribute. */
+.game-deployment-update[hidden] { display: none; }
+.game-deployment-update {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: flex;
+  box-sizing: border-box;
+  padding: 24px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: #ead9a4;
+  background: rgb(4 4 6 / 88%);
+}
+
+.game-deployment-update-panel {
+  width: min(520px, 100%);
+  margin: auto;
+  padding: 30px 34px;
+  text-align: center;
+  border: 1px solid #806d3f;
+  background: #0c0b0a;
+  box-shadow: 0 18px 55px #000;
+}
+
+.game-deployment-update-kicker {
+  margin: 0 0 8px;
+  color: #9d8953;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.game-deployment-update h1 {
+  margin: 0 0 14px;
+  color: #f0d98e;
+  font: 32px/1.1 var(--font-narrative);
+}
+
+.game-deployment-update p:last-child {
+  margin: 0;
+  color: #c9bea2;
+  font: 16px/1.55 var(--font-body);
+}

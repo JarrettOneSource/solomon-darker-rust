@@ -1,0 +1,85 @@
+/* Pinned Website play-routing-dialog.css. These dialogs intentionally use browser fonts. */
+.play-routing-backdrop {
+  --font-display: 'Cinzel', 'Times New Roman', serif;
+  --font-narrative: 'IM FELL English', Georgia, serif;
+}
+.play-routing-backdrop[hidden], .play-routing-progress[hidden], .play-routing-error[hidden] { display: none; }
+.play-routing-error { color: #edb09c; }
+/* Flex centring so the dialog's percentage max-height resolves against the backdrop
+   (dialog fit contract, main-menu.css). No vh: Safari measures it without the address
+   bar, which is exactly the band a phone dialog overflows into. */
+.play-routing-backdrop {
+  position: absolute;
+  z-index: 52000;
+  inset: 0;
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgb(0 0 0 / 0.82);
+  pointer-events: auto;
+}
+
+.play-routing-dialog {
+  box-sizing: border-box;
+  width: min(680px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 25px;
+  border: 1px solid #9c8249;
+  background: radial-gradient(circle at 50% 0, #352a16, #090806 72%);
+  box-shadow: 0 18px 60px #000, inset 0 0 35px rgb(0 0 0 / 0.6);
+  color: #ded1ac;
+  font-family: var(--font-narrative);
+}
+
+/* The pinned Source prompt is obscured by Settings (z100000); actual Source and
+   Rust browser hit tests both reproduced it. Its confirmation must own input. */
+.cheat-college-consent-backdrop { z-index: 100001; }
+
+.play-routing-dialog h2 { margin: 0 0 12px; color: #f0d281; font: 700 24px var(--font-display); text-align: center; }
+.play-routing-dialog h3 { margin: 18px 0 6px; color: #cdb574; font: 700 11px var(--font-display); letter-spacing: 0.12em; }
+.play-routing-dialog ul { max-height: 230px; overflow: auto; margin: 0; padding-left: 22px; }
+.play-routing-warning { color: #e1ad87; font: 700 12px var(--font-display); letter-spacing: 0.1em; text-align: center; }
+.play-routing-dialog footer { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 22px; }
+.play-routing-dialog button { min-height: 44px; padding: 9px 16px; border: 1px solid #9c8249; background: linear-gradient(#3a2f1a, #151007); color: #efd68f; cursor: pointer; font: 700 11px var(--font-display); }
+.play-routing-dialog button:disabled { cursor: default; opacity: 0.55; }
+.play-routing-progress { position: relative; height: 30px; margin-top: 16px; overflow: hidden; border: 1px solid #66552f; background: #080704; }
+.play-routing-progress > span { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #4b3919, #b68d3d); }
+.play-routing-progress small { position: relative; z-index: 1; display: grid; height: 100%; place-items: center; color: #fff0bf; text-shadow: 0 1px 2px #000; }
+
+/* Source GameSaveModMismatchDialog is laid out in the centered native stage. */
+.main-menu-native-stage.game-save-mod-mismatch-stage { position:absolute; --font-display:'Cinzel', 'Times New Roman',serif; --font-narrative:'IM FELL English',Georgia,serif; --font-mono:'JetBrains Mono',ui-monospace,monospace; }
+.game-save-mod-mismatch-stage, .game-save-mod-mismatch-stage * { box-sizing: border-box; }
+.main-menu-native-stage.game-save-mod-mismatch-stage {
+  z-index: 40;
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, .82);
+  color: #d7bd78;
+  font-family: var(--font-display);
+}
+
+.game-save-mod-mismatch {
+  width: 720px;
+  max-height: 720px;
+  overflow: auto;
+  padding: 34px 46px;
+  border: 3px solid #c8a75b;
+  background: #0b0a09 url('assets/stock/settings-leather.png') repeat;
+  box-shadow: 0 0 0 10px #050505, 0 20px 70px #000, inset 0 0 60px #000;
+}
+
+.game-save-mod-mismatch h2 { margin: 0; text-align: center; font-size: 27px; }
+.game-save-mod-mismatch > p { color: #c6b990; text-align: center; font: 17px var(--font-narrative); }
+.game-save-mod-mismatch-groups { display: grid; gap: 12px; margin: 24px 0; }
+.game-save-mod-mismatch-groups section { border: 1px solid #4f452e; padding: 12px 16px; background: rgba(0, 0, 0, .45); }
+.game-save-mod-mismatch-groups h3 { margin: 0 0 7px; font-size: 13px; letter-spacing: .16em; }
+.game-save-mod-mismatch-groups ul { margin: 0; padding-left: 18px; color: #eee0bc; font: 14px var(--font-mono); }
+.game-save-mod-mismatch .game-save-mod-mismatch-warning { color: #d5997e; font-size: 15px; }
+.game-save-mod-mismatch-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 25px; }
+.game-save-mod-mismatch-actions button { height: 54px; border: 2px solid #8e773e; color: #d7bd78; background: #090908; font: 700 16px var(--font-display); cursor: pointer; }
+.game-save-mod-mismatch-actions button:last-child { border-color: #74926e; color: #d8efcf; background: #1c2c1c; }

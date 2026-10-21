@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solomon Darker</title>
+  <link rel="stylesheet" href="launcher.css">
+  <script type="module" src="launcher.mjs"></script>
+</head>
+<body>
+  <main>
+    <header><p class="eyebrow">THE DARK IS YOURS</p><h1>Solomon Darker</h1><p>Play offline. Bring your friends.</p></header>
+    <aside id="update" hidden role="status"><div><strong>A new update is available</strong><p>Your saves stay on this device when you replace the app.</p></div><button id="download">Download update</button></aside>
+    <div class="modes">
+      <section><span class="number">I</span><h2>Play solo</h2><p>Enter the College and explore the Boneyards. No account or internet connection needed.</p><button id="solo" class="primary">Play offline</button></section>
+      <section><span class="number">II</span><h2>Host a game</h2><p>Your computer runs the game. Friends connect directly using your invite.</p>
+        <form id="host-form"><label for="host">Your reachable IP or hostname</label><input id="host" required autocomplete="off" spellcheck="false" placeholder="192.168.1.20"><label for="port">TCP port</label><input id="port" type="number" min="1" max="65535" value="27843" required><button type="submit">Host game</button></form>
+      </section>
+      <section><span class="number">III</span><h2>Join a friend</h2><p>Paste an invite from the host. Both of you need the same version of the app.</p>
+        <form id="join-form"><label for="invite">Multiplayer invite</label><textarea id="invite" rows="4" required spellcheck="false" placeholder="solomondarker://…"></textarea><button type="submit">Join game</button></form>
+      </section>
+    </div>
+    <p id="status" role="status" aria-live="polite"></p>
+    <details><summary>Playing with friends</summary><p>On the same network, use your local IP. Over the internet, use a public IP or VPN address. Allow Solomon Darker through your firewall and forward the chosen TCP port to the host when needed.</p><p>After starting a game, choose <strong>Game → Copy multiplayer invite</strong> and send it to your friends. Keep the host app open. To switch modes, choose <strong>Game → Save and return to launcher</strong>.</p></details>
+    <footer><span id="version"></span><div><button id="check" class="text-button">Check for updates</button><button id="website" class="text-button">Website &amp; Dark Cloud</button></div></footer>
+  </main>
+</body>
+</html>

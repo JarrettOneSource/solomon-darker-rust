@@ -1,0 +1,19 @@
+[package]
+name = "solomon-save-tools"
+description = "Explicit browser save import and native archive export for account controls"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+solomon-assets = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+web-sys = { workspace = true, features = ["Blob", "File"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }

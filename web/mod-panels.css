@@ -1,0 +1,26 @@
+/* Source rem values use its 16px html root; the native host page uses 14px. */
+.mod-panels {
+  --font-display: 'Cinzel', 'Times New Roman', serif;
+  position: fixed;
+  z-index: 37;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(80px, env(safe-area-inset-bottom));
+  display: grid;
+  gap: 5.6px;
+  width: min(256px, 42vw);
+  max-height: 40vh;
+  overflow: auto;
+  pointer-events: auto;
+}
+
+.mod-panels button {
+  padding: 7.2px 10.4px;
+  border: 1px solid rgb(210 190 139 / 75%);
+  background: rgb(10 12 17 / 88%);
+  color: #e6d9b2;
+  font: 600 12px/1.2 var(--font-display);
+  text-align: left;
+}
+
+/* Source global preflight, scoped to this body-mounted surface. */
+.mod-panels, .mod-panels * { box-sizing: border-box; }

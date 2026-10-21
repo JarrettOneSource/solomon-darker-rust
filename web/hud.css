@@ -1,0 +1,446 @@
+.game-hud {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 10;
+  transform-origin: top left;
+  pointer-events: none;
+  user-select: none;
+}
+
+.hud-meters, .hud-selected-skills, .hud-belt {
+  position: absolute;
+  inset: 0;
+}
+
+.hud-diagnostics { position:absolute;top:12px;left:50px;display:flex;align-items:center;gap:10px; }
+.hud-fps,.hud-ping { color:#d8d4c8;font:12px/1 'JetBrains Mono',ui-monospace,monospace;text-shadow:0 1px 2px #000,0 0 4px #000; }
+
+.hud-button {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.hud-button:disabled {
+  cursor: default;
+}
+
+.hud-button:focus-visible {
+  outline: 1px solid #dbc594;
+  outline-offset: 3px;
+}
+
+.hud-button:hover:enabled {
+  filter: brightness(1.2);
+}
+
+.hud-menu {
+  left: 11px;
+  top: 7px;
+  width: 31px;
+  height: 33px;
+}
+
+.hud-menu-art {
+  transform-origin: top left;
+}
+
+.hud-help {
+  top: 8px;
+  right: 8px;
+  width: 33px;
+  height: 33px;
+}
+
+.hud-help-art {
+  transform-origin: top left;
+}
+
+.hud-meter {
+  position: absolute;
+  top: 14.5px;
+  height: 20px;
+}
+
+.hud-health {
+  right: calc(50% + 50px);
+}
+
+.hud-mana {
+  left: calc(50% + 50px);
+}
+
+.hud-meter-frame {
+  left: 0;
+  top: 0;
+  mix-blend-mode: plus-lighter;
+}
+
+.hud-meter-fill {
+  top: 5px;
+  left: 5px;
+  mix-blend-mode: plus-lighter;
+}
+
+.hud-mana-reserve {
+  top: 5px;
+  right: 5px;
+  mix-blend-mode: plus-lighter;
+}
+
+.hud-selected-skill {
+  position: absolute !important;
+  top: 25.5px;
+  opacity: 0.75;
+  mix-blend-mode: plus-lighter;
+  transform: translate(-50%, -50%) scale(0.75);
+}
+
+.hud-skill-action {
+  top: -7px;
+  width: 40px;
+  height: 65px;
+}
+
+.hud-backpack, .hud-tome {
+  width: 58px;
+  height: 62px;
+}
+
+.hud-xp {
+  position: absolute;
+  left: calc(50% - 2px);
+  bottom: 16px;
+  width: 12px;
+  height: 56px;
+}
+
+.hud-xp-fill {
+  position: absolute !important;
+  top: 4px;
+  left: 3.5px;
+}
+
+.hud-xp-frame {
+  position: absolute !important;
+  inset: 0;
+}
+
+.hud-belt-slot {
+  left: calc(50% + var(--belt-offset));
+  bottom: 14.5px;
+  width: 53px;
+  height: 53px;
+}
+
+.hud-belt-burst-anchor {
+  position: absolute;
+  display: block;
+  z-index: 4;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+}
+.hud-belt-pull-off-burst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 4;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.hud-belt-burst-member {
+  animation: hud-belt-pull-off var(--belt-burst-duration) linear forwards;
+  filter: brightness(var(--belt-burst-brightness));
+}
+@keyframes hud-belt-pull-off {
+  from {
+    opacity: 1;
+    transform: translate(var(--belt-burst-start-x), var(--belt-burst-start-y)) rotate(0deg)
+      scale(var(--belt-burst-scale-x), var(--belt-burst-scale-y));
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--belt-burst-end-x), var(--belt-burst-end-y)) rotate(var(--belt-burst-rotation))
+      scale(var(--belt-burst-scale-x), var(--belt-burst-scale-y));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud-belt-burst-member { animation-duration: 1ms; }
+}
+
+.hud-belt-skill, .hud-belt-item {
+  position: absolute !important;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.hud-belt-skill {
+  mix-blend-mode: plus-lighter;
+  opacity: 0.75;
+}
+
+.hud-belt-slot[data-unavailable] .hud-belt-skill {
+  filter: brightness(0.25);
+  opacity: 0.375;
+}
+
+.hud-belt-slot[data-unavailable] .hud-belt-item {
+  opacity: 0.35;
+}
+
+.hud-belt-mouse {
+  position: absolute !important;
+  top: 44.5px;
+  left: 15.5px;
+  opacity: 0.6;
+}
+
+.hud-belt-binding {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hud-belt-key-backing, .hud-belt-key-backing > span, .hud-belt-binding-glyphs { position:absolute; display:block; }
+.hud-belt-key-backing { top:53px; height:15px; opacity:.6; }
+.hud-belt-key-backing > span { top:0; width:5px; height:15px; background-repeat:no-repeat; background-size:15px 15px; }
+.hud-belt-binding-glyphs { inset:0; pointer-events:none; }
+.hud-belt-cooldown { position:absolute; top:50%; left:50%; width:53px; height:53px; fill:rgb(50% 10% 10% / 75%); transform:translate(-50%,-50%); pointer-events:none; }
+
+.hud-belt-count {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  color: #f4e5b4;
+  font: 12px/1 Georgia, serif;
+  text-shadow: 1px 1px #000;
+}
+
+.hud-shortcut {
+  right: 5px;
+  width: 95px;
+  height: 93px;
+}
+
+.hud-portrait {
+  filter: drop-shadow(0 2px 2px #000c);
+}
+
+.hud-map {
+  right: 17px;
+  bottom: 16px;
+  width: 121px;
+  height: 118px;
+}
+
+.hud-map-art {
+  position: absolute !important;
+  inset: 0;
+}
+
+.movement-joystick {
+  box-sizing: border-box;
+  position: fixed;
+  z-index: 20;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  display: none;
+  width: 237.5px;
+  height: 237.5px;
+  border: 3px solid #e2d8b57a;
+  border-radius: 50%;
+  background: radial-gradient(circle, #0d12181f 0 34%, #090d127a 36% 100%);
+  box-shadow: inset 0 0 18px #000b, 0 4px 14px #0007;
+  touch-action: none;
+  user-select: none;
+  transform: scale(var(--input-scale, 1));
+  transform-origin: bottom left;
+}
+
+.movement-joystick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100px;
+  height: 100px;
+  border: 2px solid #e8dcb59e;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #6d716b, #252b2c 68%, #111);
+  box-shadow: 0 3px 7px #000c, inset 0 0 8px #fff4cd33;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.movement-joystick-label {
+  position: absolute;
+  bottom: 12%;
+  left: 0;
+  right: 0;
+  font: bold 9px Georgia, serif;
+  color: #d9d2bc;
+  text-align: center;
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 3px #000;
+  pointer-events: none;
+}
+
+.movement-joystick[data-active] {
+  border-color: #e5cc83;
+}
+
+.movement-joystick[data-blocked] {
+  display: none !important;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .hud-diagnostics { top:calc(15px / var(--hud-scale));left:calc(92px / var(--hud-scale));transform:scale(calc(.85 / var(--hud-scale)));transform-origin:top left; }
+  .movement-joystick {
+    display: block;
+    left: calc(48px * var(--input-scale, 1));
+    bottom: calc(56px * var(--input-scale, 1));
+  }
+  .hud-menu {
+    top: calc(4px / var(--hud-scale));
+    left: calc(4px / var(--hud-scale));
+    width: calc(44px / var(--hud-scale));
+    height: calc(44px / var(--hud-scale));
+  }
+  .hud-menu-art {
+    position: absolute !important;
+    left: 4px;
+    top: 4px;
+    transform: scale(calc(1.16 / var(--hud-scale)));
+  }
+  .hud-belt-binding, .hud-belt-mouse {
+    display: none !important;
+  }
+  .hud-backpack {
+    top: auto !important;
+    left: calc(50% - 130px) !important;
+    bottom: 0;
+    width: 130px;
+    height: 130px;
+  }
+  .hud-tome {
+    top: auto !important;
+    left: 50% !important;
+    bottom: 0;
+    width: 130px;
+    height: 130px;
+  }
+  .hud-control-art {
+    position: absolute !important;
+    left: 7px;
+    bottom: 3px;
+    transform: scale(2);
+    transform-origin: bottom left;
+  }
+  .hud-belt-slot {
+    bottom: var(--touch-slot-bottom);
+    width: var(--touch-slot-size);
+    height: var(--touch-slot-size);
+    border: 2px solid rgb(226 216 181 / .42);
+    border-radius: 14px;
+    background: rgb(9 13 18 / .62);
+    box-shadow: inset 0 0 12px rgb(0 0 0 / .72), 0 3px 10px rgb(0 0 0 / .4);
+  }
+  .hud-belt-slot[data-quickbar-bank='left'] {
+    left: var(--touch-slot-inset);
+    right: auto;
+  }
+  .hud-belt-slot[data-quickbar-bank='right'] {
+    right: var(--touch-slot-inset);
+    left: auto;
+  }
+  .hud-belt-slot[data-touch-potion='health'] {
+    left: calc(50% - 230px);
+    right: auto;
+    bottom: 8px;
+    width: 100px;
+    height: 100px;
+  }
+  .hud-belt-slot[data-touch-potion='mana'] {
+    left: calc(50% + 130px);
+    right: auto;
+    bottom: 8px;
+    width: 100px;
+    height: 100px;
+  }
+  .hud-belt-slot :is(.hud-belt-skill,.hud-belt-item) {
+    transform: translate(-50%,-50%);
+  }
+  .hud-backpack,.hud-tome {
+    width: 130px;
+    height: 130px;
+  }
+  .hud-backpack {
+    left: calc(50% - 130px) !important;
+  }
+  .hud-shortcut {
+    display: none;
+  }
+  .hud-map {
+    bottom: auto;
+    top: 55px;
+  }
+}
+.game-hud[data-mode='run'] .hud-shortcut,
+.game-hud[data-mode='run'] .hud-help,
+.game-hud[data-mode='run'] .hud-map { display:none; }
+.primary-joystick { left:auto; right:calc(48px * var(--input-scale,1)); transform-origin:bottom right; }
+.primary-joystick[data-cast-disabled] { display:none!important; }
+.hud-belt-slot[data-controller-selected='true']::after { position:absolute; inset:-4px; border:2px solid #e7c169e6; border-radius:6px; box-shadow:0 0 8px #e7c169a6; content:''; pointer-events:none; }
+
+.hud-help { position:absolute; }
+@media (hover:none) and (pointer:coarse) {
+  .hud-diagnostics[data-mobile-ui-custom='true'] {
+    left:var(--mobile-ui-x);
+    top:var(--mobile-ui-y);
+    right:auto;
+    bottom:auto;
+    transform:translate(-50%,-50%) rotate(var(--mobile-ui-rotation)) scale(calc(.85 / var(--hud-scale) * var(--mobile-ui-scale)));
+    transform-origin:center;
+  }
+  .game-hud :is(.hud-menu,.hud-backpack,.hud-tome,.hud-xp,.hud-belt-slot)[data-mobile-ui-custom='true'] {
+    left:var(--mobile-ui-x) !important;
+    top:var(--mobile-ui-y) !important;
+    right:auto;
+    bottom:auto;
+    transform:translate(-50%,-50%) rotate(var(--mobile-ui-rotation)) scale(var(--mobile-ui-scale));
+    transform-origin:center;
+  }
+  .hud-meters[data-mobile-ui-custom='true'] {
+    inset:auto;
+    left:var(--mobile-ui-x);
+    top:var(--mobile-ui-y);
+    width:0;
+    height:0;
+    transform:translate(-50%,-50%) rotate(var(--mobile-ui-rotation)) scale(var(--mobile-ui-scale));
+    transform-origin:center;
+  }
+  .hud-meters[data-mobile-ui-custom='true'] .hud-meter { top:-10px; }
+  .movement-joystick[data-mobile-ui-custom='true'] {
+    left:var(--mobile-ui-x);
+    top:var(--mobile-ui-y);
+    right:auto;
+    bottom:auto;
+    transform:translate(-50%,-50%) rotate(var(--mobile-ui-rotation)) scale(calc(var(--input-scale,1) * var(--mobile-ui-scale)));
+    transform-origin:center;
+  }
+}
+.game-hud[data-tutorial-combat='false'] :is(.hud-meters,.hud-xp,.hud-menu,.hud-diagnostics),
+.game-hud[data-tutorial-spell='false'] .hud-selected-skills,
+.game-hud[data-tutorial-quickbar='false'] .hud-belt,
+.game-hud[data-tutorial-inventory='false'] .hud-backpack,
+.game-hud[data-tutorial-skills='false'] .hud-tome { display:none; pointer-events:none; }

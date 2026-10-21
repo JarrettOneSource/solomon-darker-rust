@@ -1,0 +1,11 @@
+[build]
+target = "index.html"
+dist = "dist"
+
+[watch]
+watch = ["index.html", "../crates"]
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 4180
+open = false

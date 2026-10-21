@@ -1,0 +1,96 @@
+/* Party menu staging: the stock 1600x900 plan is portaled over the hub scene
+   the same way the inventory surface is, so it escapes the HUD display scale.
+   The overlay carries the curtain so letterboxed edges dim along with the stage. */
+.hub-party-menu-overlay {
+  position: absolute;
+  z-index: 30000;
+  inset: 0;
+  overflow: hidden;
+  background: rgb(0 0 0 / 0.75);
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.hub-party-menu-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1600px;
+  height: 900px;
+  overflow: hidden;
+  pointer-events: auto;
+  touch-action: none;
+  transform-origin: 0 0;
+  user-select: none;
+}
+.native-ui-party-menu {
+  display: block;
+  isolation: isolate;
+  left: 0;
+  position: absolute;
+  top: 0;
+  touch-action: none;
+}
+
+/* Row buttons live at their unclipped positions so keyboard focus can reach
+   every member; the viewport clips them the way the plan clips the rows. */
+.native-ui-party-menu-viewport {
+  overflow: clip;
+  position: absolute;
+  z-index: 1;
+}
+
+.native-ui-party-menu-action {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  color: transparent;
+  font-size: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.native-ui-party-menu-action:disabled { cursor: default; }
+
+.native-ui-party-menu-action:focus-visible {
+  outline: 2px solid rgb(239 209 125 / 0.9);
+  outline-offset: 3px;
+}
+
+/* Reuse the existing PNG native button painter at the source plan's exact body
+   bounds. Source Party changes plate/pen state on press, while hover stays idle. */
+.party-native-button:hover:enabled .native-button-hover,
+.party-native-button:focus-visible .native-button-hover { opacity: 0; }
+.party-native-button:active:enabled .native-button-hover { opacity: 1; }
+.party-native-button:focus-visible { filter: none; outline: 2px solid rgb(239 209 125 / 0.9); }
+
+.native-ui-party-chip {
+  display: block;
+  position: relative;
+}
+
+/* Header, gear, and row hit boxes over the chip plan; the gear button follows the
+   header button in DOM order so it wins the overlap. */
+.native-ui-party-chip-action {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  color: transparent;
+  font-size: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.native-ui-party-chip-action:focus-visible {
+  outline: 2px solid rgb(239 209 125 / 0.9);
+  outline-offset: 3px;
+}

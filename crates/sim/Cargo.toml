@@ -1,0 +1,18 @@
+[package]
+name = "solomon-sim"
+description = "Deterministic Solomon Dark simulation kernels, ported from the native-verified reference"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[features]
+persistence = ["dep:serde"]
+
+[dependencies]
+ryu-js = "1.0.3"
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+miniz_oxide = "0.8.9"
+serde = { workspace = true }
+serde_json = { workspace = true }

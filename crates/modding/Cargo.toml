@@ -1,0 +1,17 @@
+[package]
+name = "solomon-modding"
+description = "Native authored-content compiler and Lua authority for Solomon Dark"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+solomon-assets = { workspace = true }
+solomon-sim = { workspace = true, features = ["persistence"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+icu_collator = "2.3.1"
+icu_locale = "2.3.0"
+sha2 = "0.11"
+base64 = "0.23"
+mlua = { version = "0.12.2", features = ["lua54", "vendored"] }

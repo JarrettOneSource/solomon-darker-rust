@@ -1,0 +1,8 @@
+.tutorial-ui { position:fixed; inset:0; z-index:40; overflow:hidden; pointer-events:none; user-select:none; }
+.tutorial-ui > :is(.tutorial-instructions,.tutorial-callouts,.tutorial-pointers) { position:absolute; inset:0; pointer-events:none; }
+.tutorial-prelude { position:absolute; inset:0; overflow:hidden; }
+.tutorial-prelude-record, .tutorial-prelude-skull { left:50% !important; }
+.tutorial-prelude-record { top:50% !important; }
+.tutorial-instruction-text, .tutorial-callout-text { position:absolute; pointer-events:none; }
+.tutorial-callout { position:absolute; }
+.tutorial-narration, .tutorial-instruction-semantic { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
