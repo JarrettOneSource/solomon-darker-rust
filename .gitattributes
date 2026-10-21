@@ -1,0 +1,2 @@
+# The stock manifest verifies exact bytes on every desktop platform.
+web/assets/stock/** -text
