@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { access } from 'node:fs/promises'
+import { appendFileSync } from 'node:fs'
+import { access, mkdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
 const READINESS_TIMEOUT_MS = 12_000
@@ -11,15 +12,35 @@ export async function startRuntimeService({ applicationRoot, entry, executable, 
   const binary = executable || resolve(process.env.SDR_DESKTOP_NODE || join(applicationRoot, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node'))
   await access(binary)
   if (entry !== undefined) await access(entry)
+  // Diagnostic branch only: retain native process evidence without logging its environment.
+  const diagnosticDirectory = executable ? process.env.SDR_DESKTOP_DIAGNOSTICS : undefined
+  if (diagnosticDirectory) await mkdir(diagnosticDirectory, { recursive: true })
   const child = spawn(binary, entry === undefined ? arguments_ : [entry, ...arguments_], {
     env: {
       ...(process.platform === 'win32' && process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       ...environment,
+      ...(diagnosticDirectory ? { SDR_NATIVE_DIAGNOSTICS: '1', RUST_BACKTRACE: 'full' } : {}),
     },
     stdio: executable ? ['pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe', 'ipc'],
     windowsHide: true,
   })
   let stopping = false
+  if (diagnosticDirectory) {
+    const filename = join(diagnosticDirectory, `native-${child.pid}.jsonl`)
+    const credential = environment.SDR_GAME_BOOTSTRAP_CREDENTIAL
+    const redact = value => credential ? String(value).replaceAll(credential, '[redacted]') : String(value)
+    const record = value => appendFileSync(filename, `${JSON.stringify({ at: new Date().toISOString(), ...value })}\n`)
+    let stderr = ''
+    record({ event: 'spawn', pid: child.pid, parentPid: process.pid })
+    child.stderr.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-32768) })
+    child.on('error', error => record({ event: 'process-error', message: redact(error.message) }))
+    child.once('exit', (code, signal) => record({
+      event: 'exit', pid: child.pid, code, signal, stopping,
+      unsignedExitCode: code === null ? null : code >>> 0,
+      exitCodeHex: code === null ? null : `0x${(code >>> 0).toString(16).padStart(8, '0')}`,
+      stderr: redact(stderr).slice(-8192),
+    }))
+  }
   try {
     const readiness = hostReadiness(child, validate)
     if (configuration !== undefined) child.send(configuration)

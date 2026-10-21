@@ -34,7 +34,8 @@ await mkdir(evidence, {
 const profiles = await mkdtemp(join(tmpdir(), 'solomon-darker-smoke-'));
 const running = new Set();
 const errors = [];
-const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], storageWarnings: [] };
+const imageAbortQueries = [];
+const receipts = { platform: process.platform, revision: manifest.revision, diagnosticNativeExitDialogIntercept: true, clientStartups: [], cancelledMusic: [], storageWarnings: [], failedImageObservations: [] };
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
 const playing = instance => instance.state.frame?.snapshot.boneyard && !instance.state.frame.host.loading_run_id && !instance.state.frame.host.resume_grace && !instance.state.frame.host.pause;
@@ -179,17 +180,32 @@ try {
     evidence
   }));
 } catch (error) {
+  const failedInstances = [];
   for (const instance of running) {
     await instance.page.screenshot({
       path: join(evidence, `${instance.label}-failure.png`)
     }).catch(() => {});
-    console.error(JSON.stringify({
+    const failed = {
       label: instance.label,
       url: instance.page.url(),
       body: (await instance.page.locator('body').innerText().catch(() => '')).slice(0, 2500),
-      errors
-    }));
+      accepted: {
+        playerId: instance.state.id,
+        sequence: instance.state.frame?.sequence,
+        tick: instance.state.frame?.snapshot.ticks,
+        position: position(instance),
+        closedSockets: instance.state.closedSockets,
+        sentDisconnects: instance.state.disconnects,
+      },
+      nativeExitDialogs: await instance.app.evaluate(() => globalThis.__nativeExitDialogs || []).catch(() => []),
+    };
+    failedInstances.push(failed);
+    console.error(JSON.stringify({ ...failed, errors }));
   }
+  await Promise.allSettled(imageAbortQueries);
+  await writeFile(join(evidence, 'failure.json'), `${JSON.stringify({
+    status: 'failed', error: error.stack, ...receipts, instances: failedInstances, errors,
+  }, null, 2)}\n`);
   throw error;
 } finally {
   for (const instance of running) {
@@ -222,6 +238,16 @@ async function launch(label, userData) {
   });
   const page = await app.firstWindow({
     timeout: 30000
+  });
+  // Retain the real child exit notice instead of blocking this diagnostic run on
+  // a native modal dialog that cannot be captured by a renderer screenshot.
+  await app.evaluate(({dialog}) => {
+    const original = dialog.showErrorBox.bind(dialog);
+    globalThis.__nativeExitDialogs = [];
+    dialog.showErrorBox = (title, content) => {
+      if (title !== 'The local game stopped') return original(title, content);
+      globalThis.__nativeExitDialogs.push({at: Date.now(), title, content});
+    };
   });
   app.context().setDefaultTimeout(30000);
   const instance = {
@@ -260,6 +286,26 @@ async function launch(label, userData) {
         && new URL(request.url()).pathname.startsWith('/assets/stock/audio/music/')) {
         receipts.cancelledMusic.push({label, path: new URL(request.url()).pathname});
         return;
+      }
+      if (request.failure()?.errorText === 'net::ERR_ABORTED'
+        && /\.(?:png|jpg|webp)$/.test(new URL(request.url()).pathname)) {
+        const query = page.evaluate(failedUrl => ({
+          menu: document.querySelector('.game-menus')?.dataset.menuScreen,
+          images: [...document.images]
+            .filter(image => image.src === failedUrl || image.currentSrc === failedUrl
+              || /(?:create-hand|menu-solomon-cloak)/.test(image.src))
+            .map(image => ({
+              src: new URL(image.src, location.href).pathname,
+              currentSrc: image.currentSrc ? new URL(image.currentSrc, location.href).pathname : null,
+              stillReferencesFailedRequest: image.src === failedUrl || image.currentSrc === failedUrl,
+              complete: image.complete, naturalWidth: image.naturalWidth, connected: image.isConnected,
+            })),
+        }), request.url()).then(observation => {
+          receipts.failedImageObservations.push({label, failedPath: new URL(request.url()).pathname, ...observation});
+        }).catch(error => {
+          receipts.failedImageObservations.push({label, failedPath: new URL(request.url()).pathname, observationError: error.message});
+        });
+        imageAbortQueries.push(query);
       }
       errors.push(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
     }

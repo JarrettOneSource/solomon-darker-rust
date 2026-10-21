@@ -1,4 +1,4 @@
-name: Diagnose Windows transport
+name: Diagnose packaged Windows authority
 
 on:
   push:
@@ -6,27 +6,61 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   CARGO_INCREMENTAL: '0'
   CARGO_PROFILE_DEV_DEBUG: '0'
   CARGO_PROFILE_TEST_DEBUG: '0'
+  SDR_DESKTOP_DIAGNOSTICS: ${{ github.workspace }}/reports/desktop-smoke/native-child
 
 jobs:
-  windows-transport:
+  windows-native:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --global npm@10.9.2
+      - run: npm ci --no-audit --no-fund
       - name: Install the pinned Rust toolchain
         run: rustup show
-      - name: Observe Windows idle receive and subsequent bidirectional traffic
-        run: |
-          rustc --edition 2024 scripts/windows-tcp-timeout-probe.rs -o windows-tcp-timeout-probe.exe
-          ./windows-tcp-timeout-probe.exe
-      - name: Run the existing real WebSocket transport contracts
+      - name: Download the already accepted platform-independent client
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-linux-x64
+          repository: JarrettOneSource/solomon-darker-rust
+          run-id: 39676774215
+          github-token: ${{ github.token }}
+          path: incoming-linux
+      - name: Verify and extract only its exact client files
+        run: python scripts/windows-desktop-diagnostic.py extract-client incoming-linux diagnostic-client reports/desktop-smoke/reused-client.json
+      - name: Build only the actual Windows release authority
+        run: cargo build --locked --release -p solomon-launcher --bin solomon-darker
+      - name: Record the actual native PE stack reserve
+        run: python scripts/windows-desktop-diagnostic.py pe-header target/release/solomon-darker.exe reports/desktop-smoke/native-pe-header.json
+      - name: Package the native authority with that unchanged client
+        run: npm run package:desktop -- --platform win32 --arch x64 --skip-build --native-host target/release/solomon-darker.exe --client-root diagnostic-client --release-repository "$GITHUB_REPOSITORY"
+      - name: Observe the actual packaged offline and peer journey
+        timeout-minutes: 8
+        run: npm run smoke:desktop
+      - name: Retain native process, transport and actual browser evidence
         if: ${{ always() }}
-        run: cargo test -p solomon-launcher --lib transport::tests -- --nocapture --test-threads=1
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-native-diagnostic-${{ github.run_id }}
+          path: |
+            reports/desktop-smoke
+            target/release/solomon-darker.exe
+            dist-desktop/Solomon Darker-win32-x64/desktop-package-manifest.json
+          if-no-files-found: error
