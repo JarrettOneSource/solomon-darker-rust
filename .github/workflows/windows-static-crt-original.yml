@@ -1,0 +1,95 @@
+name: Qualify static CRT package with unchanged driver
+
+on:
+  push:
+    branches: [diagnostic/windows-capture-control-20261022]
+    paths: [.github/workflows/windows-static-crt-original.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SDR_CAPTURE_PAIR_RUN_ID: '39854803735'
+
+jobs:
+  original:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 5c094aaa962b9ef0b231651f08a91e4330ff4317
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --global npm@10.9.2
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ env.SDR_CAPTURE_PAIR_RUN_ID }}
+          name: windows-capture-pair-${{ env.SDR_CAPTURE_PAIR_RUN_ID }}
+          path: capture-input
+      - name: Obtain only artifact verification and process ownership
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: capture-driver
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            tools/verify-windows-capture-pair.py
+            tools/run-windows-capture-control.mjs
+            tools/inspect-windows-crt.py
+      - name: Verify the actual pair and unchanged acceptance code
+        run: |
+          cp capture-driver/tools/verify-windows-capture-pair.py tools/
+          cp capture-driver/tools/run-windows-capture-control.mjs tools/
+          cp capture-driver/tools/inspect-windows-crt.py tools/
+          python tools/verify-windows-capture-pair.py
+          python tools/inspect-windows-crt.py 'dist-desktop/Solomon Darker-win32-x64/resources/app/authority/solomon-darker.exe' reports/windows-capture-control/native-imports.json static
+          git diff --exit-code -- tools/smoke-desktop-runtime.mjs tools/browser-smoke desktop package.json package-lock.json
+          python - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          def digest(path):
+              return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+          pair = json.loads(pathlib.Path('reports/windows-capture-control/verified-pair.json').read_text())
+          configuration = pair['buildConfiguration']
+          assert configuration['productSourceRevision'] == '5c094aaa962b9ef0b231651f08a91e4330ff4317'
+          assert configuration['configurationSourceRevision'] == '769c16e1ca6b1fcb7adeac914b2fc8d2b0b2b2be'
+          assert configuration['target'] == 'x86_64-pc-windows-msvc'
+          assert configuration['rustflags'] == ['-C', 'target-feature=+crt-static']
+          assert configuration['canonicalConfigSha256'] == '4a073b7201e1f08e0fb029b15413281aa1ea4de56f535ad17747d59fb95be33d'
+          assert configuration['clientRebuilt'] is False
+          assert configuration['pairComparison']['clientBytesIdentical'] is True
+          expected = subprocess.check_output(['git', 'show', 'HEAD:tools/smoke-desktop-runtime.mjs'])
+          driver = pathlib.Path('tools/smoke-desktop-runtime.mjs').read_bytes()
+          assert driver.replace(b'\r\n', b'\n') == expected
+          expected_blob = subprocess.check_output(['git', 'rev-parse', 'HEAD:tools/smoke-desktop-runtime.mjs'], text=True).strip()
+          actual_blob = subprocess.check_output(['git', 'hash-object', '--path=tools/smoke-desktop-runtime.mjs', 'tools/smoke-desktop-runtime.mjs'], text=True).strip()
+          assert actual_blob == expected_blob
+          sdk = digest('node_modules/playwright-core/lib/coreBundle.js')
+          assert sdk == '6be5c2ea035554e9b184b1dbc7aa5e7f1fb428dd1b5c202022858dcfae9bee27'
+          receipt = {'sourceRevision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(), 'driverSha256': digest('tools/smoke-desktop-runtime.mjs'), 'driverGitBlob': actual_blob, 'workingTreeLineEndings': 'CRLF' if b'\r\n' in driver else 'LF', 'playwrightCoreBundleSha256': sdk, 'capturePreflight': False, 'sdkInstrumentation': False, 'originalAssertionLines': sum('assert.' in line for line in driver.decode().splitlines()), 'buildConfiguration': configuration}
+          pathlib.Path('reports/windows-capture-control/unchanged-driver.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt))
+          PY
+          npm run test:desktop
+      - name: Run the original packaged save, peer, capture and close journey
+        timeout-minutes: 15
+        run: node tools/run-windows-capture-control.mjs original-5c original
+      - name: Retain the original acceptance outcome
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-static-crt-original-${{ github.run_id }}
+          path: reports/windows-capture-control
+          if-no-files-found: error
