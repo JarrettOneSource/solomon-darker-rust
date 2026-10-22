@@ -42,6 +42,11 @@ const receipts = { platform: process.platform, revision: manifest.revision, clie
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
 const playing = instance => instance.state.frame?.snapshot.boneyard && !instance.state.frame.host.loading_run_id && !instance.state.frame.host.resume_grace && !instance.state.frame.host.pause;
+const rendererReadinessSent = instance => {
+  const {frame, readyBoneyards, resumeReadies} = instance.state;
+  return frame?.snapshot.boneyard && readyBoneyards.has(frame.snapshot.boneyard.run_id)
+    && (!frame.host.resume_grace || resumeReadies.has(frame.host.resume_grace.sequence));
+};
 try {
   const solo = await launch('solo', join(profiles, 'solo'));
   await solo.page.screenshot({
@@ -166,17 +171,26 @@ try {
     return remaining;
   };
   if (process.platform === 'win32') {
-    // Materialize each real view without competing software renderers. Both
-    // windows return before the original readiness assertion and share its limit.
-    await waitFor(() => host.state.readyBoneyards.has(host.state.frame?.snapshot.boneyard?.run_id),
-      'the actual host renderer Boneyard acknowledgement', remainingReadiness());
+    // Keep one inactive view minimized until both genuine readiness messages and
+    // accepted states arrive. Restoring both must produce fresh accepted frames
+    // before the original readiness assertion, within its same overall limit.
+    await waitFor(() => rendererReadinessSent(host),
+      'the actual host renderer readiness acknowledgements', remainingReadiness());
     await setWindowMinimized(host, true);
     await setWindowMinimized(guest, false);
-    await waitFor(() => guest.state.readyBoneyards.has(guest.state.frame?.snapshot.boneyard?.run_id),
-      'the actual guest renderer Boneyard acknowledgement', remainingReadiness());
+    await waitFor(() => rendererReadinessSent(guest),
+      'the actual guest renderer readiness acknowledgements', remainingReadiness());
+    await waitFor(() => playing(host) && playing(guest),
+      'both accepted Boneyard states', remainingReadiness());
+    const previousSequences = [host.state.frame.sequence, guest.state.frame.sequence];
     await setWindowMinimized(host, false);
+    await waitFor(() => host.state.frame.sequence > previousSequences[0]
+      && guest.state.frame.sequence > previousSequences[1],
+    'fresh accepted peer frames after restoring both windows', remainingReadiness());
   }
   await waitFor(() => playing(host) && playing(guest), 'both actual Boneyard renderers', remainingReadiness());
+  const readiness = {elapsedMs: 120000 - remainingReadiness(),
+    hostSequence: host.state.frame.sequence, guestSequence: guest.state.frame.sequence};
   assert.equal(host.state.frame.snapshot.boneyard.run_id, guest.state.frame.snapshot.boneyard.run_id);
   assert.equal(host.state.frame.snapshot.participant_order.length, 2);
   if (process.platform === 'win32') await setWindowMinimized(guest, true);
@@ -194,6 +208,7 @@ try {
     hostPlayer: host.state.id,
     guestPlayer: guest.state.id,
     guestMovement,
+    readiness,
     sharedBoneyardPlayers: 2
   };
   await close(guest);
@@ -212,7 +227,14 @@ try {
   }));
 } catch (error) {
   const sanitized = sanitizeError(error);
-  const failure = {status: 'failed', ...receipts, error: sanitized.stack, errors};
+  const failure = {status: 'failed', ...receipts, error: sanitized.stack, errors,
+    instances: [...running].map(({label, state}) => ({label, playerId: state.id,
+      sequence: state.frame?.sequence, tick: state.frame?.snapshot.ticks,
+      loadingRunId: state.frame?.host.loading_run_id, resumeGrace: state.frame?.host.resume_grace,
+      boneyardRunId: state.frame?.snapshot.boneyard?.run_id,
+      readyBoneyards: [...state.readyBoneyards], resumeReadies: [...state.resumeReadies],
+      closedSockets: state.closedSockets, sentDisconnects: state.disconnects})),
+  };
   console.error(JSON.stringify(failure));
   await writeFile(join(evidence, 'failure.json'), `${JSON.stringify(failure, null, 2)}\n`);
   for (const instance of running) {
@@ -282,6 +304,7 @@ async function launch(label, userData) {
       disconnects: 0,
       closedSockets: 0,
       readyBoneyards: new Set(),
+      resumeReadies: new Set(),
       expectedStorageConflict: false,
       clientResources: []
     }
@@ -321,6 +344,7 @@ async function launch(label, userData) {
       const message = JSON.parse(payload.toString());
       if (message.type === 'disconnect') instance.state.disconnects++;
       if (message.type === 'ready_boneyard') instance.state.readyBoneyards.add(message.run_id);
+      if (message.type === 'resume_ready') instance.state.resumeReadies.add(message.sequence);
     });
     socket.on('close', () => instance.state.closedSockets++);
     socket.on('framereceived', ({payload}) => {
