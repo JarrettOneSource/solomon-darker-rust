@@ -87,7 +87,7 @@ def print_summary(directory):
     for path in sorted((directory / "native-child").glob("*.jsonl")):
         print(json.dumps({"diagnosticSummary": "native", "file": path.name,
                           "bytes": path.stat().st_size, "tail": tail(path)}), flush=True)
-    for name in ["process-lookups.jsonl", "app-metrics.jsonl", "watchdog-metrics.jsonl",
+    for name in ["process-lookups.jsonl", "client-readiness.jsonl", "app-metrics.jsonl", "watchdog-metrics.jsonl",
                  "original-error.json", "failure.json", "receipt.json"]:
         path = directory / name
         if path.is_file():

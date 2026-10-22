@@ -63,6 +63,9 @@ const heartbeat = setInterval(() => {
     label: instance.label, sequence: instance.state.frame?.sequence, tick: instance.state.frame?.snapshot.ticks,
     position: position(instance), closedSockets: instance.state.closedSockets, sentDisconnects: instance.state.disconnects,
     host: instance.state.frame?.host,
+    boneyardRun: instance.state.frame?.snapshot.boneyard?.run_id,
+    skillBarrier: Boolean(instance.state.frame?.snapshot.level_up_barrier),
+    localPendingOffer: Boolean(instance.state.frame?.snapshot.participants[instance.state.id]?.player.progression.pending_offer),
   }))});
   void recordAppMetrics();
 }, 15000);
@@ -232,13 +235,27 @@ try {
   assert.equal(guest.state.frame.host.authority_player_id, host.state.id);
   progress('guest-movement');
   const guestMovement = await move(guest);
-  if (process.platform === 'win32') await showWindow(host, true);
+  if (process.platform === 'win32') {
+    await showWindow(guest, false);
+    await showWindow(host, true);
+  }
   progress('peer-boneyard');
   await host.page.getByRole('button', {
     name: 'Enter the Boneyard',
     exact: true
   }).click();
-  await waitFor(() => playing(host) && playing(guest), 'both actual Boneyard renderers', 120000);
+  const readyDeadline = Date.now() + 120000;
+  const remainingReadiness = () => Math.max(1, readyDeadline - Date.now());
+  if (process.platform === 'win32') {
+    await waitFor(() => host.state.readyBoneyards.has(host.state.frame?.snapshot.boneyard?.run_id),
+      'the actual host renderer Boneyard acknowledgement', remainingReadiness());
+    await showWindow(host, false);
+    await showWindow(guest, true);
+    await waitFor(() => guest.state.readyBoneyards.has(guest.state.frame?.snapshot.boneyard?.run_id),
+      'the actual guest renderer Boneyard acknowledgement', remainingReadiness());
+    await showWindow(host, true);
+  }
+  await waitFor(() => playing(host) && playing(guest), 'both actual Boneyard renderers', remainingReadiness());
   assert.equal(host.state.frame.snapshot.boneyard.run_id, guest.state.frame.snapshot.boneyard.run_id);
   assert.equal(host.state.frame.snapshot.participant_order.length, 2);
   if (process.platform === 'win32') await showWindow(guest, false);
@@ -317,6 +334,10 @@ try {
         position: position(instance),
         closedSockets: instance.state.closedSockets,
         sentDisconnects: instance.state.disconnects,
+        host: instance.state.frame?.host,
+        readyBoneyards: [...instance.state.readyBoneyards],
+        skillBarrier: Boolean(instance.state.frame?.snapshot.level_up_barrier),
+        localPendingOffer: Boolean(instance.state.frame?.snapshot.participants[instance.state.id]?.player.progression.pending_offer),
       },
       nativeExitDialogs: await bounded(instance.app.evaluate(() => globalThis.__nativeExitDialogs || []), 5000, 'native exit dialogs').catch(error => ({diagnosticError: redact(error.message)})),
     };
@@ -339,13 +360,14 @@ try {
       }
     }), 5000, 'dialog cleanup').catch(() => {});
     const timeout = setTimeout(() => instance.app.process().kill('SIGKILL'), 25000);
-    await instance.app.close().catch(() => {});
+    await bounded(instance.app.close(), 30000, 'failed app cleanup').catch(error =>
+      console.error(JSON.stringify({label: instance.label, diagnosticCleanupError: redact(error.message)})));
     clearTimeout(timeout);
   }
-  await rm(profiles, {
+  await bounded(rm(profiles, {
     recursive: true,
     force: true
-  });
+  }), 5000, 'profile cleanup');
 }
 async function bounded(operation, timeout, label) {
   let timer;
@@ -418,6 +440,8 @@ async function launch(label, userData, graphics = platformGraphics) {
       leaveReceipts: 0,
       disconnects: 0,
       closedSockets: 0,
+      readyBoneyards: new Set(),
+      loggedReadiness: new Set(),
       expectedStorageConflict: false,
       clientResources: []
     }
@@ -474,7 +498,19 @@ async function launch(label, userData, graphics = platformGraphics) {
   page.on('websocket', socket => {
     const readMessage = createNativeMessageReader();
     socket.on('framesent', ({payload}) => {
-      if (JSON.parse(payload.toString()).type === 'disconnect') instance.state.disconnects++;
+      const message = JSON.parse(payload.toString());
+      if (message.type === 'disconnect') instance.state.disconnects++;
+      if (message.type === 'ready_boneyard' || message.type === 'resume_ready') {
+        if (message.type === 'ready_boneyard') instance.state.readyBoneyards.add(message.run_id);
+        const key = `${message.type}:${message.run_id ?? message.sequence}`;
+        if (!instance.state.loggedReadiness.has(key)) {
+          instance.state.loggedReadiness.add(key);
+          const acknowledgement = {at: new Date().toISOString(), label, type: message.type,
+            runId: message.run_id, sequence: message.sequence};
+          appendFileSync(join(evidence, 'client-readiness.jsonl'), `${JSON.stringify(acknowledgement)}\n`);
+          recordPhase({clientReadiness: acknowledgement});
+        }
+      }
     });
     socket.on('close', () => instance.state.closedSockets++);
     socket.on('framereceived', ({payload}) => {
