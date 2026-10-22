@@ -164,6 +164,7 @@ try {
   await enterHub(host, 'PeerHost', 'fire');
   progress('host-process-and-invite');
   const hostChild = await hostProcess(host.app);
+  progress('host-copy-invite');
   const invitation = await host.app.evaluate(({
     Menu,
     clipboard
@@ -171,6 +172,7 @@ try {
     Menu.getApplicationMenu().items.find(row => row.label === 'Game').submenu.items.find(row => row.label === 'Copy multiplayer invite').click();
     return clipboard.readText();
   });
+  progress('host-invite-copied');
   progress('launch-guest');
   const guest = await launch('guest', join(profiles, 'guest'));
   progress('guest-join');
@@ -589,18 +591,33 @@ async function proveFailedClose(instance) {
   };
 }
 async function hostProcess(application) {
+  const label = [...running].find(instance => instance.app === application)?.label || 'app';
+  progress(`${label}-inspect-app-pid`);
   const parent = await application.evaluate(() => process.pid);
+  progress(`${label}-query-native-process`);
   if (process.platform === 'win32') {
-    const raw = execFileSync('powershell.exe', ['-NoProfile', '-Command', `Get-CimInstance Win32_Process -Filter "ParentProcessId=${parent}" | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress`], {
-      encoding: 'utf8'
-    });
-    const value = JSON.parse(raw),
-      child = (Array.isArray(value) ? value : [value]).find(row => row.CommandLine?.includes('--desktop'));
-    assert.ok(child, 'the app owns a separate native authority');
-    return {
-      pid: child.ProcessId,
-      command: child.CommandLine
-    };
+    const started = Date.now();
+    const recordLookup = outcome => appendFileSync(join(evidence, 'process-lookups.jsonl'),
+      `${JSON.stringify({at: new Date().toISOString(), label, parentPid: parent,
+        elapsedMs: Date.now() - started, ...outcome})}\n`);
+    try {
+      const raw = execFileSync('powershell.exe', ['-NoProfile', '-Command', `Get-CimInstance Win32_Process -Filter "ParentProcessId=${parent}" | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress`], {
+        encoding: 'utf8', timeout: 15000,
+      });
+      const value = JSON.parse(raw),
+        child = (Array.isArray(value) ? value : [value]).find(row => row.CommandLine?.includes('--desktop'));
+      assert.ok(child, 'the app owns a separate native authority');
+      recordLookup({outcome: 'ok', childPid: child.ProcessId});
+      progress(`${label}-native-process-query-complete`);
+      return {
+        pid: child.ProcessId,
+        command: child.CommandLine
+      };
+    } catch (error) {
+      recordLookup({outcome: 'failed', code: error.code, signal: error.signal,
+        error: redact(error.message).slice(0, 1000)});
+      throw error;
+    }
   }
   const child = execFileSync('ps', ['-axo', 'pid=,ppid=,command='], {
     encoding: 'utf8'

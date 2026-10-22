@@ -43,12 +43,29 @@ jobs:
           path: incoming-linux
       - name: Verify and extract only its exact client files
         run: python scripts/windows-desktop-diagnostic.py extract-client incoming-linux diagnostic-client reports/desktop-smoke/reused-client.json
-      - name: Install the pinned Rust toolchain
-        run: rustup show
-      - name: Build the fixed Windows authority with operation-only tracing
-        run: cargo build --locked --release -p solomon-launcher --bin solomon-darker
-      - name: Record the actual native PE stack reserve
-        run: python scripts/windows-desktop-diagnostic.py pe-header target/release/solomon-darker.exe reports/desktop-smoke/native-pe-header.json
+      - name: Reuse the exact retained fixed Windows authority
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-fixed-authority-39791414394
+          repository: JarrettOneSource/solomon-darker-rust
+          run-id: 39791414394
+          github-token: ${{ github.token }}
+          path: incoming-fixed-native
+      - name: Verify the exact fixed native bytes before packaging
+        run: |
+          python - <<'PYVERIFY'
+          from pathlib import Path
+          import hashlib
+          import shutil
+          source = Path('incoming-fixed-native/target/release/solomon-darker.exe')
+          actual = hashlib.sha256(source.read_bytes()).hexdigest()
+          assert actual == '3a39ff6580ebe775bd53663b92855a26cff557e40bd5aa431d7a397237dce730', actual
+          target = Path('target/release/solomon-darker.exe')
+          target.parent.mkdir(parents=True, exist_ok=True)
+          shutil.copyfile(source, target)
+          print('Reused exact fixed native executable:', actual)
+          PYVERIFY
+          python scripts/windows-desktop-diagnostic.py pe-header target/release/solomon-darker.exe reports/desktop-smoke/native-pe-header.json
       - name: Retain the exact fixed native authority before launching Electron
         timeout-minutes: 3
         uses: actions/upload-artifact@v4

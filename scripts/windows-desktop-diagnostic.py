@@ -87,7 +87,7 @@ def print_summary(directory):
     for path in sorted((directory / "native-child").glob("*.jsonl")):
         print(json.dumps({"diagnosticSummary": "native", "file": path.name,
                           "bytes": path.stat().st_size, "tail": tail(path)}), flush=True)
-    for name in ["original-error.json", "failure.json", "receipt.json"]:
+    for name in ["process-lookups.jsonl", "original-error.json", "failure.json", "receipt.json"]:
         path = directory / name
         if path.is_file():
             print(json.dumps({"diagnosticSummary": name, "tail": tail(path)}), flush=True)
@@ -98,11 +98,11 @@ param([string]$RecordsPath)
 Get-Content -LiteralPath $RecordsPath | ForEach-Object {
   $record = $_ | ConvertFrom-Json
   $taskPid = [int]$record.pid
-  $taskProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$taskPid"
+  $taskProcess = Get-Process -Id $taskPid -ErrorAction SilentlyContinue
   if ($null -eq $taskProcess) {
     @{ cleanup = 'already-exited'; pid = $taskPid; label = $record.label } | ConvertTo-Json -Compress
-  } elseif ([string]::Equals([IO.Path]::GetFullPath($taskProcess.ExecutablePath), [IO.Path]::GetFullPath($record.executable), [StringComparison]::OrdinalIgnoreCase)) {
-    @{ cleanup = 'owned-tree'; pid = $taskPid; label = $record.label; workingSetBytes = $taskProcess.WorkingSetSize; privateBytes = $taskProcess.PrivatePageCount } | ConvertTo-Json -Compress
+  } elseif ([string]::Equals([IO.Path]::GetFullPath($taskProcess.Path), [IO.Path]::GetFullPath($record.executable), [StringComparison]::OrdinalIgnoreCase)) {
+    @{ cleanup = 'owned-tree'; pid = $taskPid; label = $record.label; workingSetBytes = $taskProcess.WorkingSet64; privateBytes = $taskProcess.PrivateMemorySize64 } | ConvertTo-Json -Compress
     & taskkill.exe /PID $taskPid /T /F 2>&1 | Select-Object -Last 8
   } else {
     @{ cleanup = 'identity-mismatch-skipped'; pid = $taskPid; label = $record.label } | ConvertTo-Json -Compress
@@ -117,12 +117,13 @@ def cleanup_owned(directory):
         return
     script = directory / "cleanup-owned.ps1"
     script.write_text(OWNED_CLEANUP)
-    result = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-NonInteractive", "-File", str(script),
-         "-RecordsPath", str(records)], capture_output=True, timeout=25,
-    )
-    text = (result.stdout + result.stderr)[-16384:].decode("utf-8", errors="replace")
-    print(json.dumps({"diagnosticCleanupExit": result.returncode, "tail": text}), flush=True)
+    output = directory / "cleanup-output.log"
+    with output.open("wb") as stream:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-File", str(script),
+             "-RecordsPath", str(records)], stdout=stream, stderr=subprocess.STDOUT, timeout=25,
+        )
+    print(json.dumps({"diagnosticCleanupExit": result.returncode, "tail": tail(output, 16384)}), flush=True)
 
 
 def smoke(directory, timeout_seconds):
@@ -152,6 +153,7 @@ def smoke(directory, timeout_seconds):
         if expired:
             print(json.dumps({"diagnosticWatchdogExpired": timeout_seconds}), flush=True)
     finally:
+        print_summary(directory)
         try:
             cleanup_owned(directory)
         finally:
