@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { appendFileSync, createReadStream } from 'node:fs';
+import { createReadStream } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
@@ -19,8 +19,6 @@ const {
 const {createNativeMessageReader} = require('./browser-smoke/native-wire.cjs');
 const {observeNativeChildren} = require('./browser-smoke/native-child.cjs');
 const obsoleteMenuImage = require('./browser-smoke/obsolete-menu-image.cjs');
-const softwareGraphics = ['--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--use-angle=swiftshader', '--use-gl=angle'];
-const platformGraphics = process.platform === 'win32' ? [] : softwareGraphics;
 const applicationPath = resolve(process.env.SDR_DESKTOP_APP || `dist-desktop/Solomon Darker-${process.platform}-${process.arch}`);
 const manifest = JSON.parse(await readFile(join(applicationPath, 'desktop-package-manifest.json'), 'utf8'));
 const executable = resolve(applicationPath, manifest.executable);
@@ -38,67 +36,12 @@ const profiles = await mkdtemp(join(tmpdir(), 'solomon-darker-smoke-'));
 const running = new Set();
 const errors = [];
 const resourceChecks = [];
-const imageAbortQueries = [];
-const receipts = { platform: process.platform, revision: manifest.revision, diagnosticNativeExitDialogIntercept: true, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [], failedImageObservations: [] };
-let phase = 'launch-solo';
-let phaseBytes = 0;
-let metricsBytes = 0;
-let collectingMetrics = false;
 const redact = value => String(value).replace(/solomondarker:\/\/[^\s'"<>]+/g, '[redacted-invite]');
-function recordPhase(value) {
-  const line = `${JSON.stringify(value)}\n`;
-  console.log(line.trimEnd());
-  const bytes = Buffer.byteLength(line);
-  if (phaseBytes + bytes <= 128 * 1024) {
-    appendFileSync(join(evidence, 'phases.jsonl'), line);
-    phaseBytes += bytes;
-  }
-}
-function progress(nextPhase) {
-  phase = nextPhase;
-  recordPhase({diagnosticPhase: phase, at: new Date().toISOString()});
-}
-const heartbeat = setInterval(() => {
-  recordPhase({diagnosticPhase: phase, at: new Date().toISOString(), instances: [...running].map(instance => ({
-    label: instance.label, sequence: instance.state.frame?.sequence, tick: instance.state.frame?.snapshot.ticks,
-    networkEventAt: instance.state.networkEventAt, networkDeliveryDelayMs: instance.state.networkDeliveryDelayMs,
-    position: position(instance), closedSockets: instance.state.closedSockets, sentDisconnects: instance.state.disconnects,
-    host: instance.state.frame?.host,
-    boneyardRun: instance.state.frame?.snapshot.boneyard?.run_id,
-    skillBarrier: Boolean(instance.state.frame?.snapshot.level_up_barrier),
-    localPendingOffer: Boolean(instance.state.frame?.snapshot.participants[instance.state.id]?.player.progression.pending_offer),
-  }))});
-  void recordAppMetrics();
-}, 15000);
-async function recordAppMetrics() {
-  if (collectingMetrics || metricsBytes >= 64 * 1024) return;
-  collectingMetrics = true;
-  try {
-    for (const instance of running) {
-      const metrics = await bounded(instance.app.evaluate(({app}) => ({
-        features: app.getGPUFeatureStatus(),
-        processes: app.getAppMetrics().map(row => ({
-          pid: row.pid, type: row.type, cpu: row.cpu, memory: row.memory,
-        })),
-      })), 3000, 'Electron process metrics').catch(error => ({error: redact(error.message)}));
-      const line = `${JSON.stringify({at: new Date().toISOString(), label: instance.label, phase, ...metrics})}\n`;
-      if (metricsBytes + Buffer.byteLength(line) <= 64 * 1024) {
-        appendFileSync(join(evidence, 'app-metrics.jsonl'), line);
-        metricsBytes += Buffer.byteLength(line);
-      }
-    }
-  } finally { collectingMetrics = false; }
-}
+const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [] };
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
 const playing = instance => instance.state.frame?.snapshot.boneyard && !instance.state.frame.host.loading_run_id && !instance.state.frame.host.resume_grace && !instance.state.frame.host.pause;
 try {
-  if (process.platform === 'win32') {
-    progress('inspect-forced-graphics');
-    const control = await launch('forced-graphics-control', join(profiles, 'forced-graphics-control'), softwareGraphics);
-    await close(control);
-  }
-  progress('launch-solo');
   const solo = await launch('solo', join(profiles, 'solo'));
   await solo.page.screenshot({
     path: join(evidence, 'launcher.png')
@@ -106,7 +49,6 @@ try {
   await solo.page.getByRole('button', {
     name: 'Play offline'
   }).click();
-  progress('solo-title-settings');
   await title(solo.page);
   await solo.page.locator('[data-menu-action="settings"]').click();
   const music = solo.page.locator('input[data-setting="music"]');
@@ -117,7 +59,6 @@ try {
   await solo.page.locator('[data-setting="reverse-hotbar"]').click();
   await solo.page.locator('[data-menu-action="settings-back"]').click();
   await solo.page.locator('[data-menu-action="settings-back"]').click();
-  progress('solo-college-admission');
   await enterHub(solo, 'Offline', 'fire');
   const runtime = await solo.page.evaluate(() => ({
     origin: location.origin,
@@ -129,35 +70,20 @@ try {
   const child = await hostProcess(solo.app);
   assert.ok(child.command.includes('--desktop'), 'the app owns the canonical native desktop scope');
   assert.equal(child.command.includes(runtime.endpoint.credential), false);
-  progress('solo-movement');
   const movement = await move(solo);
-  progress('solo-capture');
   await solo.page.screenshot({
     path: join(evidence, 'solo.png')
   });
-  progress('solo-capture-complete');
-  progress('solo-offline-update-check');
   const updateStatus = await solo.page.evaluate(() => window.solomonDarkRuntime.desktop.checkUpdates());
-  progress('solo-offline-update-complete');
   assert.equal(updateStatus.update, null);
   assert.ok(updateStatus.updateError, 'offline update failure does not block play');
-  progress('solo-before-close-observation');
-  await observeClientState(solo);
-  progress('solo-save-close');
   await close(solo);
-  const lifecycle = (await readFile(join(evidence, 'lifecycle-solo.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse);
-  await writeFile(join(evidence, 'solo-close-observation.json'), `${JSON.stringify({
-    leaveReceipts: solo.state.leaveReceipts, disconnects: solo.state.disconnects,
-    closedSockets: solo.state.closedSockets, lifecycle,
-  }, null, 2)}\n`);
   assert.ok(solo.state.leaveReceipts > 0, 'ordinary app close awaited the actual host save receipt');
   await waitForExit(child.pid);
-  progress('launch-resume');
   const resumed = await launch('resume', join(profiles, 'solo'));
   await resumed.page.getByRole('button', {
     name: 'Play offline'
   }).click();
-  progress('resume-title-settings');
   await title(resumed.page);
   const preferences = await resumed.page.evaluate(() =>
     JSON.parse(localStorage.getItem('solomon-dark-game-settings-v1')));
@@ -179,7 +105,6 @@ try {
   assert.ok(locomotion.position.x > movement.before + 10);
   await resumed.page.locator('[data-menu-action="play"]').click();
   await resumed.page.locator('[data-menu-action="continue"]').click();
-  progress('resume-college');
   await readyHub(resumed);
   assert.ok(position(resumed).x > movement.before + 10, 'ordinary Continue restored the committed source document');
   await resumed.page.screenshot({
@@ -193,11 +118,8 @@ try {
     nativeHostExited: true,
     sourceSaveSchema: saved.document.schemaVersion
   };
-  progress('resume-update-prompt');
   receipts.updatePrompt = await proveUpdatePrompt(resumed);
-  progress('resume-failed-close');
   receipts.failedClose = await proveFailedClose(resumed);
-  progress('launch-host');
   const host = await launch('host', join(profiles, 'host'));
   const port = await freePort();
   await host.page.getByLabel('Your reachable IP or hostname').fill('127.0.0.1');
@@ -206,11 +128,8 @@ try {
     name: 'Host game',
     exact: true
   }).click();
-  progress('host-college-admission');
   await enterHub(host, 'PeerHost', 'fire');
-  progress('host-process-and-invite');
   const hostChild = await hostProcess(host.app);
-  progress('host-copy-invite');
   const invitation = await host.app.evaluate(({
     Menu,
     clipboard
@@ -218,29 +137,23 @@ try {
     Menu.getApplicationMenu().items.find(row => row.label === 'Game').submenu.items.find(row => row.label === 'Copy multiplayer invite').click();
     return clipboard.readText();
   });
-  progress('host-invite-copied');
-  if (process.platform === 'win32') await showWindow(host, false);
-  progress('launch-guest');
+  if (process.platform === 'win32') await setWindowMinimized(host, true);
   const guest = await launch('guest', join(profiles, 'guest'));
-  progress('guest-join');
   await guest.page.getByLabel('Multiplayer invite').fill(invitation);
   await guest.page.getByRole('button', {
     name: 'Join game',
     exact: true
   }).click();
-  progress('guest-college-admission');
   await enterHub(guest, 'PeerGuest', 'air');
   await waitFor(() => [host, guest].every(instance => instance.state.frame?.snapshot.participant_order.length === 2), 'both admitted peers');
   assert.notEqual(host.state.id, guest.state.id);
   assert.equal(host.state.frame.host.authority_player_id, host.state.id);
   assert.equal(guest.state.frame.host.authority_player_id, host.state.id);
-  progress('guest-movement');
   const guestMovement = await move(guest);
   if (process.platform === 'win32') {
-    await showWindow(guest, false);
-    await showWindow(host, true);
+    await setWindowMinimized(guest, true);
+    await setWindowMinimized(host, false);
   }
-  progress('peer-boneyard');
   await host.page.getByRole('button', {
     name: 'Enter the Boneyard',
     exact: true
@@ -248,24 +161,26 @@ try {
   const readyDeadline = Date.now() + 120000;
   const remainingReadiness = () => Math.max(1, readyDeadline - Date.now());
   if (process.platform === 'win32') {
+    // Materialize each real view without competing software renderers. Both
+    // windows return before the original readiness assertion and share its limit.
     await waitFor(() => host.state.readyBoneyards.has(host.state.frame?.snapshot.boneyard?.run_id),
       'the actual host renderer Boneyard acknowledgement', remainingReadiness());
-    await showWindow(host, false);
-    await showWindow(guest, true);
+    await setWindowMinimized(host, true);
+    await setWindowMinimized(guest, false);
     await waitFor(() => guest.state.readyBoneyards.has(guest.state.frame?.snapshot.boneyard?.run_id),
       'the actual guest renderer Boneyard acknowledgement', remainingReadiness());
-    await showWindow(host, true);
+    await setWindowMinimized(host, false);
   }
   await waitFor(() => playing(host) && playing(guest), 'both actual Boneyard renderers', remainingReadiness());
   assert.equal(host.state.frame.snapshot.boneyard.run_id, guest.state.frame.snapshot.boneyard.run_id);
   assert.equal(host.state.frame.snapshot.participant_order.length, 2);
-  if (process.platform === 'win32') await showWindow(guest, false);
+  if (process.platform === 'win32') await setWindowMinimized(guest, true);
   await host.page.screenshot({
     path: join(evidence, 'peer-host-boneyard.png')
   });
   if (process.platform === 'win32') {
-    await showWindow(guest, true);
-    await showWindow(host, false);
+    await setWindowMinimized(guest, false);
+    await setWindowMinimized(host, true);
   }
   await guest.page.screenshot({
     path: join(evidence, 'peer-guest-boneyard.png')
@@ -280,7 +195,6 @@ try {
   await close(host);
   await waitForExit(hostChild.pid);
   await Promise.all(resourceChecks);
-  await Promise.allSettled(imageAbortQueries);
   assert.deepEqual(errors, []);
   await writeFile(join(evidence, 'receipt.json'), `${JSON.stringify({
     status: 'ok',
@@ -292,66 +206,23 @@ try {
     evidence
   }));
 } catch (error) {
-  clearInterval(heartbeat);
-  const originalError = redact(error.stack);
-  console.error(JSON.stringify({diagnosticPhase: phase, originalError}));
-  await writeFile(join(evidence, 'original-error.json'), `${JSON.stringify({phase, originalError}, null, 2)}\n`);
-  const failedInstances = [];
+  const failure = {status: 'failed', ...receipts, error: redact(error.stack), errors};
+  console.error(JSON.stringify(failure));
+  await writeFile(join(evidence, 'failure.json'), `${JSON.stringify(failure, null, 2)}\n`);
   for (const instance of running) {
-    const rendererProbes = await Promise.all([
-      ['playwright-main-world', () => instance.page.evaluate(() => 1)],
-      ['electron-renderer-main-world', () => instance.app.evaluate(({BrowserWindow}) =>
-        BrowserWindow.getAllWindows()[0].webContents.executeJavaScript('1'))],
-    ].map(async ([name, operation]) => {
-      const started = Date.now();
-      try {
-        const value = await bounded(operation(), 3000, name);
-        return {name, elapsedMs: Date.now() - started, value};
-      } catch (error) {
-        return {name, elapsedMs: Date.now() - started, error: redact(error.message)};
-      }
-    }));
-    console.error(JSON.stringify({label: instance.label, rendererProbes}));
     await instance.page.screenshot({
-      path: join(evidence, `${instance.label}-failure.png`), timeout: 8000,
-    }).catch(error => console.error(JSON.stringify({label: instance.label, diagnosticScreenshotError: redact(error.message)})));
-    if (instance.page.url() === 'solomon-darker://app/game') {
-      await bounded(instance.app.evaluate(async ({BrowserWindow}) =>
-        (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64')),
-      8000, 'Electron native screenshot').then(bytes =>
-        writeFile(join(evidence, `${instance.label}-native-failure.png`), Buffer.from(bytes, 'base64')))
-        .catch(error => console.error(JSON.stringify({label: instance.label, diagnosticNativeScreenshotError: redact(error.message)})));
-    }
-    const failed = {
+      path: join(evidence, `${instance.label}-failure.png`), timeout: 8000
+    }).catch(() => {});
+    console.error(JSON.stringify({
       label: instance.label,
-      viewport: instance.page.viewportSize(),
-      rendererProbes,
       url: instance.page.url(),
-      body: (await instance.page.locator('body').innerText({timeout: 5000}).catch(() => '')).slice(0, 2500),
-      accepted: {
-        playerId: instance.state.id,
-        sequence: instance.state.frame?.sequence,
-        tick: instance.state.frame?.snapshot.ticks,
-        position: position(instance),
-        closedSockets: instance.state.closedSockets,
-        sentDisconnects: instance.state.disconnects,
-        host: instance.state.frame?.host,
-        readyBoneyards: [...instance.state.readyBoneyards],
-        skillBarrier: Boolean(instance.state.frame?.snapshot.level_up_barrier),
-        localPendingOffer: Boolean(instance.state.frame?.snapshot.participants[instance.state.id]?.player.progression.pending_offer),
-      },
-      nativeExitDialogs: await bounded(instance.app.evaluate(() => globalThis.__nativeExitDialogs || []), 5000, 'native exit dialogs').catch(error => ({diagnosticError: redact(error.message)})),
-    };
-    failedInstances.push(failed);
-    console.error(JSON.stringify({ ...failed, errors, cancelledMenuImages: receipts.cancelledMenuImages }));
+      body: redact(await instance.page.locator('body').innerText({timeout: 5000}).catch(() => '')).slice(0, 2500),
+      errors,
+      cancelledMenuImages: receipts.cancelledMenuImages
+    }));
   }
-  await bounded(Promise.allSettled([...imageAbortQueries, ...resourceChecks]), 5000, 'resource observations').catch(() => {});
-  await writeFile(join(evidence, 'failure.json'), `${JSON.stringify({
-    status: 'failed', phase, error: originalError, ...receipts, instances: failedInstances, errors,
-  }, null, 2)}\n`);
   throw error;
 } finally {
-  clearInterval(heartbeat);
   for (const instance of running) {
     await bounded(instance.app.evaluate(() => {
       const dialog = globalThis.__desktopCloseSmoke;
@@ -359,29 +230,26 @@ try {
         dialog.cleanup = true;
         dialog.answer?.({response: 1, checkboxChecked: false});
       }
-    }), 5000, 'dialog cleanup').catch(() => {});
-    const timeout = setTimeout(() => instance.app.process().kill('SIGKILL'), 25000);
-    await bounded(instance.app.close(), 30000, 'failed app cleanup').catch(error =>
-      console.error(JSON.stringify({label: instance.label, diagnosticCleanupError: redact(error.message)})));
+    }), 5000, `${instance.label} dialog cleanup timed out`).catch(() => {});
+    const timeout = setTimeout(() => {
+      try { process.kill(instance.appPid, 'SIGKILL'); }
+      catch (error) { if (error.code !== 'ESRCH') console.error(redact(error.message)); }
+    }, 25000);
+    await close(instance).catch(error => console.error(redact(error.message)));
     clearTimeout(timeout);
   }
   await bounded(rm(profiles, {
     recursive: true,
     force: true
-  }), 5000, 'profile cleanup');
+  }), 5000, 'Desktop profile cleanup timed out');
 }
-async function bounded(operation, timeout, label) {
-  let timer;
-  try {
-    return await Promise.race([operation, new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`Timed out collecting ${label}`)), timeout);
-    })]);
-  } finally { clearTimeout(timer); }
-}
-async function launch(label, userData, graphics = platformGraphics) {
+async function launch(label, userData) {
   const app = await electron.launch({
     executablePath: executable,
-    args: [...graphics, '--proxy-server=http://127.0.0.1:9'],
+    // Windows' native ANGLE backend avoids the measured SwiftShader CPU stall.
+    args: [...(process.platform === 'win32' ? [] : [
+      '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--use-angle=swiftshader', '--use-gl=angle'
+    ]), '--proxy-server=http://127.0.0.1:9'],
     env: {
       ...process.env,
       SDR_DESKTOP_USER_DATA: userData,
@@ -390,48 +258,14 @@ async function launch(label, userData, graphics = platformGraphics) {
     timeout: 30000
   });
   const nativeChildren = await app.evaluateHandle(observeNativeChildren);
-  const parentPid = await nativeChildren.evaluate(observer => observer.parentPid);
-  for (const pid of new Set([app.process().pid, parentPid])) {
-    appendFileSync(join(evidence, 'owned-processes.jsonl'), `${JSON.stringify({
-      label, pid, executable, recordedAt: new Date().toISOString(),
-    })}\n`);
-  }
+  const appPid = await nativeChildren.evaluate(observer => observer.parentPid);
   const page = await app.firstWindow({
     timeout: 30000
   });
-  // Retain the real child exit notice instead of blocking this diagnostic run on
-  // a native modal dialog that cannot be captured by a renderer screenshot.
-  await app.evaluate(({dialog, app, ipcMain, BrowserWindow}, lifecycle) => {
-    const fs = process.getBuiltinModule('node:fs');
-    let bytes = 0;
-    const record = (event, details = {}) => {
-      const line = `${JSON.stringify({at: new Date().toISOString(), label: lifecycle.label, event, ...details})}\n`;
-      if (bytes + Buffer.byteLength(line) <= 16 * 1024) {
-        fs.appendFileSync(lifecycle.path, line);
-        bytes += Buffer.byteLength(line);
-      }
-    };
-    record('observer-attached');
-    app.on('before-quit', event => record('before-quit', {prevented: event.defaultPrevented}));
-    app.on('will-quit', () => record('will-quit'));
-    app.on('quit', (_event, exitCode) => record('quit', {exitCode}));
-    const window = BrowserWindow.getAllWindows()[0];
-    const contents = window.webContents;
-    window.on('close', event => record('window-close', {prevented: event.defaultPrevented}));
-    ipcMain.on('solomon-dark:saved', (event, result) => record('renderer-save-result', {
-      fromOwnedWindow: event.sender === contents,
-      hasRequestId: typeof result?.id === 'string', error: typeof result?.error === 'string',
-    }));
-    const original = dialog.showErrorBox.bind(dialog);
-    globalThis.__nativeExitDialogs = [];
-    dialog.showErrorBox = (title, content) => {
-      if (title !== 'The local game stopped') return original(title, content);
-      globalThis.__nativeExitDialogs.push({at: Date.now(), title, content});
-    };
-  }, {label, path: join(evidence, `lifecycle-${label}.jsonl`)});
   app.context().setDefaultTimeout(30000);
   const instance = {
     app,
+    appPid,
     nativeChildren,
     page,
     label,
@@ -442,7 +276,6 @@ async function launch(label, userData, graphics = platformGraphics) {
       disconnects: 0,
       closedSockets: 0,
       readyBoneyards: new Set(),
-      loggedReadiness: new Set(),
       expectedStorageConflict: false,
       clientResources: []
     }
@@ -470,26 +303,6 @@ async function launch(label, userData, graphics = platformGraphics) {
         receipts.cancelledMusic.push({label, path: new URL(request.url()).pathname});
         return;
       }
-      if (request.failure()?.errorText === 'net::ERR_ABORTED'
-        && /\.(?:png|jpg|webp)$/.test(new URL(request.url()).pathname)) {
-        const query = page.evaluate(failedUrl => ({
-          menu: document.querySelector('.game-menus')?.dataset.menuScreen,
-          images: [...document.images]
-            .filter(image => image.src === failedUrl || image.currentSrc === failedUrl
-              || /(?:create-hand|menu-solomon-cloak)/.test(image.src))
-            .map(image => ({
-              src: new URL(image.src, location.href).pathname,
-              currentSrc: image.currentSrc ? new URL(image.currentSrc, location.href).pathname : null,
-              stillReferencesFailedRequest: image.src === failedUrl || image.currentSrc === failedUrl,
-              complete: image.complete, naturalWidth: image.naturalWidth, connected: image.isConnected,
-            })),
-        }), request.url()).then(observation => {
-          receipts.failedImageObservations.push({label, failedPath: new URL(request.url()).pathname, ...observation});
-        }).catch(error => {
-          receipts.failedImageObservations.push({label, failedPath: new URL(request.url()).pathname, observationError: error.message});
-        });
-        imageAbortQueries.push(query);
-      }
       resourceChecks.push(obsoleteMenuImage(page, request).then(cancelled => {
         if (cancelled) receipts.cancelledMenuImages.push({label, ...cancelled});
         else errors.push(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
@@ -498,31 +311,10 @@ async function launch(label, userData, graphics = platformGraphics) {
   });
   page.on('websocket', socket => {
     const readMessage = createNativeMessageReader();
-    let sentWallTimeMs;
-    let receivedWallTimeMs;
-    let clockBytes = 0;
-    let previousClockState;
-    let lastClockRecord = 0;
-    // Diagnostic only: the pinned validator instrumentation preserves Chromium's
-    // existing clock across this channel. No second full Network stream is used.
-    socket._channel.prependListener('frameSent', event => { sentWallTimeMs = event.wallTimeMs; });
-    socket._channel.prependListener('frameReceived', event => { receivedWallTimeMs = event.wallTimeMs; });
     socket.on('framesent', ({payload}) => {
       const message = JSON.parse(payload.toString());
       if (message.type === 'disconnect') instance.state.disconnects++;
-      if (message.type === 'ready_boneyard' || message.type === 'resume_ready') {
-        if (message.type === 'ready_boneyard') instance.state.readyBoneyards.add(message.run_id);
-        const key = `${message.type}:${message.run_id ?? message.sequence}`;
-        if (!instance.state.loggedReadiness.has(key)) {
-          instance.state.loggedReadiness.add(key);
-          const acknowledgement = {at: new Date().toISOString(),
-            networkEventAt: new Date(sentWallTimeMs).toISOString(),
-            networkDeliveryDelayMs: Date.now() - sentWallTimeMs, label, type: message.type,
-            runId: message.run_id, sequence: message.sequence};
-          appendFileSync(join(evidence, 'client-readiness.jsonl'), `${JSON.stringify(acknowledgement)}\n`);
-          recordPhase({clientReadiness: acknowledgement});
-        }
-      }
+      if (message.type === 'ready_boneyard') instance.state.readyBoneyards.add(message.run_id);
     });
     socket.on('close', () => instance.state.closedSockets++);
     socket.on('framereceived', ({payload}) => {
@@ -532,28 +324,6 @@ async function launch(label, userData, graphics = platformGraphics) {
         instance.state.id = message.credentials.player_id;
         instance.state.frame = message.frame;
       } else if (message.type === 'snapshot') instance.state.frame = message.frame;else if (message.type === 'hosted' && message.message.kind === 'save_before_leave') instance.state.leaveReceipts++;else if (message.type === 'error') errors.push(`${label} host: ${message.code}: ${message.reason}`);
-      if (message.type === 'welcome' || message.type === 'snapshot') {
-        const now = Date.now();
-        instance.state.networkEventAt = new Date(receivedWallTimeMs).toISOString();
-        instance.state.networkDeliveryDelayMs = now - receivedWallTimeMs;
-        const frame = instance.state.frame;
-        const clockState = JSON.stringify([frame.host.loading_run_id, frame.host.resume_grace,
-          frame.host.pause, Boolean(frame.snapshot.boneyard)]);
-        if (clockState !== previousClockState || now - lastClockRecord >= 5000) {
-          const line = `${JSON.stringify({at: new Date(now).toISOString(), label,
-            networkEventAt: instance.state.networkEventAt,
-            networkDeliveryDelayMs: instance.state.networkDeliveryDelayMs,
-            sequence: frame.sequence, tick: frame.snapshot.ticks,
-            loadingRunId: frame.host.loading_run_id, grace: frame.host.resume_grace,
-            pause: frame.host.pause, boneyardRun: frame.snapshot.boneyard?.run_id})}\n`;
-          if (clockBytes + Buffer.byteLength(line) <= 64 * 1024) {
-            appendFileSync(join(evidence, `network-clock-${label}.jsonl`), line);
-            clockBytes += Buffer.byteLength(line);
-          }
-          previousClockState = clockState;
-          lastClockRecord = now;
-        }
-      }
     });
   });
   await page.getByRole('button', {
@@ -561,11 +331,6 @@ async function launch(label, userData, graphics = platformGraphics) {
   }).waitFor({
     timeout: 30000
   });
-  const gpu = await bounded(app.evaluate(async ({app}) => {
-    const info = await app.getGPUInfo('complete');
-    return {devices: info.gpuDevice, attributes: info.auxAttributes, features: app.getGPUFeatureStatus()};
-  }), 5000, 'GPU backend info').catch(error => ({error: redact(error.message)}));
-  await writeFile(join(evidence, `gpu-${label}.json`), `${JSON.stringify({graphics, ...gpu}, null, 2)}\n`);
   return instance;
 }
 async function title(page) {
@@ -600,14 +365,11 @@ async function title(page) {
   receipts.clientStartups.push({label: instance.label, bootstrap: bootstrap.scripts[0], resources});
 }
 async function enterHub(instance, name, element) {
-  progress(`${instance.label}-title`);
   await title(instance.page);
-  progress(`${instance.label}-start-new-game`);
   await startNewGame(instance.page, {
     name,
     element
   });
-  progress(`${instance.label}-ready-college`);
   await readyHub(instance);
   assert.equal(instance.state.frame.snapshot.participants[instance.state.id].player.selection.name, name);
 }
@@ -616,19 +378,14 @@ async function readyHub(instance) {
   await instance.page.waitForFunction(() => document.querySelector('.game-menus')?.dataset.menuScreen === 'hidden' && window.wasmBindings.wizard_state()[6] === 0 && window.wasmBindings.wizard_state()[7] === -1);
 }
 async function move(instance) {
-  progress(`${instance.label}-movement-front`);
   await instance.page.bringToFront();
   const before = position(instance).x;
-  progress(`${instance.label}-movement-key-down`);
   await instance.page.keyboard.down('KeyD');
-  progress(`${instance.label}-movement-wait`);
   try {
     await waitFor(() => position(instance).x > before + 10, 'accepted movement');
   } finally {
-    progress(`${instance.label}-movement-key-up`);
     await instance.page.keyboard.up('KeyD');
   }
-  progress(`${instance.label}-movement-complete`);
   return {
     before,
     after: position(instance).x
@@ -769,72 +526,10 @@ async function proveFailedClose(instance) {
 }
 async function hostProcess(application) {
   const instance = [...running].find(instance => instance.app === application);
-  const label = instance.label;
-  progress(`${label}-query-native-process`);
-  const started = Date.now();
-  try {
-    const children = await bounded(instance.nativeChildren.evaluate(observer => ({
-      parentPid: observer.parentPid, children: observer.nativeChildren(),
-    })), 15000, 'native child observation');
-    assert.equal(children.children.length, 1, 'the app owns one live separate native authority');
-    const [child] = children.children;
-    if (instance.recordedNativeChild !== child.pid) {
-      instance.recordedNativeChild = child.pid;
-      appendFileSync(join(evidence, 'owned-processes.jsonl'), `${JSON.stringify({
-        label: `${label}-native`, pid: child.pid, executable: child.executable,
-        recordedAt: new Date().toISOString(),
-      })}\n`);
-    }
-    appendFileSync(join(evidence, 'process-lookups.jsonl'), `${JSON.stringify({
-      at: new Date().toISOString(), label, parentPid: children.parentPid,
-      elapsedMs: Date.now() - started, outcome: 'ok', childPid: child.pid,
-      observation: 'node:diagnostics_channel/child_process', executable: child.executable,
-    })}\n`);
-    progress(`${label}-native-process-query-complete`);
-    return {pid: child.pid, command: child.arguments.join(' ')};
-  } catch (error) {
-    appendFileSync(join(evidence, 'process-lookups.jsonl'), `${JSON.stringify({
-      at: new Date().toISOString(), label, elapsedMs: Date.now() - started,
-      outcome: 'failed', error: redact(error.message).slice(0, 1000),
-    })}\n`);
-    throw error;
-  }
-}
-async function observeClientState(instance) {
-  const observed = {
-    label: instance.label, at: new Date().toISOString(),
-    accepted: {playerId: instance.state.id, sequence: instance.state.frame?.sequence,
-      tick: instance.state.frame?.snapshot.ticks, position: position(instance),
-      host: instance.state.frame?.host, leaveReceipts: instance.state.leaveReceipts,
-      closedSockets: instance.state.closedSockets, disconnects: instance.state.disconnects},
-  };
-  observed.renderer = await bounded(instance.page.evaluate(() => ({
-    menu: document.querySelector('.game-menus')?.dataset.menuScreen,
-    status: document.querySelector('#status')?.textContent,
-    wizard: [...window.wasmBindings.wizard_state()],
-    input: [...window.wasmBindings.gameplay_input_state()],
-    visibility: document.visibilityState, focused: document.hasFocus(),
-  })), 5000, 'pre-close renderer state').catch(error => ({error: redact(error.message)}));
-  let session;
-  try {
-    session = await bounded(instance.app.context().newCDPSession(instance.page), 3000, 'pre-close socket observation');
-    const prototype = await bounded(session.send('Runtime.evaluate', {
-      expression: 'WebSocket.prototype', objectGroup: 'desktop-pre-close',
-    }), 3000, 'WebSocket prototype');
-    const sockets = await bounded(session.send('Runtime.queryObjects', {
-      prototypeObjectId: prototype.result.objectId, objectGroup: 'desktop-pre-close',
-    }), 3000, 'live WebSocket objects');
-    const state = await bounded(session.send('Runtime.callFunctionOn', {
-      objectId: sockets.objects.objectId, returnByValue: true,
-      functionDeclaration: 'function() { return Array.from(this, socket => ({readyState: socket.readyState, bufferedAmount: socket.bufferedAmount})); }',
-    }), 3000, 'live WebSocket state');
-    observed.sockets = state.result.value;
-  } catch (error) {
-    observed.socketObservationError = redact(error.message);
-  } finally {
-    if (session) await bounded(session.detach(), 3000, 'socket observation cleanup').catch(() => {});
-  }
-  await writeFile(join(evidence, `before-close-${instance.label}.json`), `${JSON.stringify(observed, null, 2)}\n`);
+  const children = await instance.nativeChildren.evaluate(observer => observer.nativeChildren());
+  assert.equal(children.length, 1, 'the app owns one live separate native authority');
+  const [child] = children;
+  return {pid: child.pid, command: child.arguments.join(' ')};
 }
 async function proveUpdatePrompt(instance) {
   const fixture = {
@@ -890,25 +585,25 @@ async function proveUpdatePrompt(instance) {
   };
 }
 async function close(instance) {
+  await bounded(instance.app.close(), 30000, `${instance.label} did not close after saving`);
+  running.delete(instance);
+}
+async function bounded(operation, timeout, message) {
   let timer;
   try {
-    await Promise.race([instance.app.close(), new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`${instance.label} did not close after saving`)), 30000);
+    await Promise.race([operation, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), timeout);
     })]);
   } finally {
     clearTimeout(timer);
   }
-  running.delete(instance);
 }
-async function showWindow(instance, visible) {
-  progress(`${instance.label}-${visible ? 'restore-window' : 'minimize-window'}`);
-  const window = await bounded(instance.app.evaluate(({BrowserWindow}, visible) => {
+async function setWindowMinimized(instance, minimized) {
+  await instance.app.evaluate(({BrowserWindow}, minimized) => {
     const window = BrowserWindow.getAllWindows()[0];
-    if (visible) { window.restore(); window.show(); window.focus(); }
-    else window.minimize();
-    return {minimized: window.isMinimized(), visible: window.isVisible(), bounds: window.getBounds()};
-  }, visible), 5000, 'native window lifecycle');
-  recordPhase({windowLifecycle: instance.label, at: new Date().toISOString(), ...window});
+    if (minimized) window.minimize();
+    else { window.restore(); window.show(); window.focus(); }
+  }, minimized);
 }
 async function waitForExit(pid) {
   await waitFor(() => {

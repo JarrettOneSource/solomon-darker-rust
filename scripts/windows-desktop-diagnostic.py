@@ -74,32 +74,6 @@ def pe_header(executable, report):
     print(json.dumps(result))
 
 
-def socket_clock(report):
-    """Expose the existing Chromium event clock across the pinned PW validator."""
-    package = Path("node_modules/playwright-core")
-    version = json.loads((package / "package.json").read_text())["version"]
-    if version != "1.61.1":
-        raise ValueError("The diagnostic clock requires the inspected Playwright 1.61.1")
-    bundle = package / "lib/coreBundle.js"
-    before = bundle.read_bytes()
-    text = before.decode()
-    for event in ["WebSocketFrameSentEvent", "WebSocketFrameReceivedEvent"]:
-        original = f"scheme.{event} = tObject({{\n      opcode: tInt,\n      data: tString\n    }});"
-        replacement = f"scheme.{event} = tObject({{\n      opcode: tInt,\n      data: tString,\n      wallTimeMs: tFloat\n    }});"
-        if text.count(original) != 1:
-            raise ValueError(f"The pinned {event} validator no longer matches")
-        text = text.replace(original, replacement)
-    bundle.write_bytes(text.encode())
-    result = {"purpose": "diagnostic-only existing socket event clock; no additional Network stream",
-              "package": "playwright-core", "version": version,
-              "originalSha256": hashlib.sha256(before).hexdigest(),
-              "instrumentedSha256": file_sha256(bundle),
-              "runtimeOrGameplayChanged": False}
-    report.parent.mkdir(parents=True, exist_ok=True)
-    report.write_text(json.dumps(result, indent=2) + "\n")
-    print(json.dumps(result))
-
-
 def tail(path, maximum=8192):
     if not path.is_file():
         return ""
@@ -203,8 +177,6 @@ extract.add_argument("report", type=Path)
 pe = commands.add_parser("pe-header")
 pe.add_argument("executable", type=Path)
 pe.add_argument("report", type=Path)
-clock = commands.add_parser("socket-clock")
-clock.add_argument("report", type=Path)
 watch = commands.add_parser("smoke")
 watch.add_argument("directory", type=Path)
 watch.add_argument("--timeout-seconds", type=int, default=720)
@@ -215,8 +187,6 @@ if args.command == "extract-client":
     extract_client(args.artifact_directory, args.destination, args.report)
 elif args.command == "pe-header":
     pe_header(args.executable, args.report)
-elif args.command == "socket-clock":
-    socket_clock(args.report)
 elif args.command == "smoke":
     raise SystemExit(smoke(args.directory, args.timeout_seconds))
 else:

@@ -12,7 +12,6 @@ env:
   CARGO_INCREMENTAL: '0'
   CARGO_PROFILE_DEV_DEBUG: '0'
   CARGO_PROFILE_TEST_DEBUG: '0'
-  SDR_DESKTOP_DIAGNOSTICS: ${{ github.workspace }}/reports/desktop-smoke/native-child
 
 jobs:
   windows-native:
@@ -33,8 +32,17 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm install --global npm@10.9.2
       - run: npm ci --no-audit --no-fund
-      - name: Preserve only the existing pinned socket event timestamps for diagnosis
-        run: python scripts/windows-desktop-diagnostic.py socket-clock reports/desktop-smoke/socket-clock-instrumentation.json
+      - name: Verify the exact maintained desktop harness before its uninstrumented retake
+        run: |
+          python - <<'PYHARNESS'
+          from pathlib import Path
+          import hashlib, json
+          actual = hashlib.sha256(Path('tools/smoke-desktop-runtime.mjs').read_bytes()).hexdigest()
+          assert actual == 'd94caf162837ac0742730f94c3399b7eb02a92778e144b99d1ec263854f40c6e', actual
+          Path('reports/desktop-smoke').mkdir(parents=True, exist_ok=True)
+          Path('reports/desktop-smoke/maintained-harness.json').write_text(json.dumps({'sha256': actual, 'sourceCommits': ['fc0d28d', '8c0b3f4', 'a591313'], 'dependencyOrProductInstrumentation': False}, indent=2) + '\n')
+          print('Verified exact maintained harness:', actual)
+          PYHARNESS
       - run: node --test tools/browser-smoke/native-child.test.cjs
       - name: Download the already accepted platform-independent client
         uses: actions/download-artifact@v4

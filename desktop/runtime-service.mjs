@@ -1,8 +1,6 @@
 import { spawn } from 'node:child_process'
-import { appendFileSync } from 'node:fs'
-import { access, mkdir } from 'node:fs/promises'
+import { access } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { createInterface } from 'node:readline'
 
 const READINESS_TIMEOUT_MS = 12_000
 const SHUTDOWN_TIMEOUT_MS = 3_000
@@ -13,60 +11,15 @@ export async function startRuntimeService({ applicationRoot, entry, executable, 
   const binary = executable || resolve(process.env.SDR_DESKTOP_NODE || join(applicationRoot, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node'))
   await access(binary)
   if (entry !== undefined) await access(entry)
-  // Diagnostic branch only: retain native process evidence without logging its environment.
-  const diagnosticDirectory = executable ? process.env.SDR_DESKTOP_DIAGNOSTICS : undefined
-  if (diagnosticDirectory) await mkdir(diagnosticDirectory, { recursive: true })
   const child = spawn(binary, entry === undefined ? arguments_ : [entry, ...arguments_], {
     env: {
       ...(process.platform === 'win32' && process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       ...environment,
-      ...(diagnosticDirectory ? { SDR_NATIVE_DIAGNOSTICS: '1', RUST_BACKTRACE: 'full' } : {}),
     },
     stdio: executable ? ['pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe', 'ipc'],
     windowsHide: true,
   })
   let stopping = false
-  if (diagnosticDirectory) {
-    const filename = join(diagnosticDirectory, `native-${child.pid}-${Date.now()}.jsonl`)
-    const credential = environment.SDR_GAME_BOOTSTRAP_CREDENTIAL
-    const redact = value => credential ? String(value).replaceAll(credential, '[redacted]') : String(value)
-    const maximumBytes = 256 * 1024
-    const exitReserve = 64 * 1024
-    let recordedBytes = 0
-    let limited = false
-    const append = line => {
-      recordedBytes += Buffer.byteLength(line)
-      appendFileSync(filename, line)
-    }
-    const record = value => {
-      const line = `${JSON.stringify({ at: new Date().toISOString(), ...value })}\n`
-      const limit = value.event === 'exit' ? maximumBytes : maximumBytes - exitReserve
-      if (recordedBytes + Buffer.byteLength(line) <= limit) {
-        append(line)
-        return
-      }
-      if (!limited) {
-        limited = true
-        const marker = `${JSON.stringify({ event: 'diagnostic-limit', maximumBytes })}\n`
-        if (recordedBytes + Buffer.byteLength(marker) <= maximumBytes) append(marker)
-      }
-    }
-    let stderr = ''
-    record({ event: 'spawn', pid: child.pid, parentPid: process.pid })
-    child.stderr.on('data', chunk => {
-      stderr = `${stderr}${chunk}`.slice(-32768)
-    })
-    createInterface({ input: child.stderr }).on('line', line => {
-      record({ event: 'stderr', pid: child.pid, text: `${redact(line).slice(-8192)}\n` })
-    })
-    child.on('error', error => record({ event: 'process-error', message: redact(error.message) }))
-    child.once('close', (code, signal) => record({
-      event: 'exit', pid: child.pid, code, signal, stopping,
-      unsignedExitCode: code === null ? null : code >>> 0,
-      exitCodeHex: code === null ? null : `0x${(code >>> 0).toString(16).padStart(8, '0')}`,
-      stderr: redact(stderr).slice(-4096),
-    }))
-  }
   try {
     const readiness = hostReadiness(child, validate)
     if (configuration !== undefined) child.send(configuration)
