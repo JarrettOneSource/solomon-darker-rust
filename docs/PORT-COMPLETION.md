@@ -3,8 +3,9 @@
 Current Website behavior is implemented and its complete local parity gates pass.
 The independent repository and Linux game artifact are public. All 44 public acceptance
 groups pass across their recorded revisions, including the actual `/game-stg` replacement
-from `ca728e90` to `d3903095`. Subsequent authoritative DNS failures block normal hostname
-access; known-IP strict-TLS postflight passes. Windows desktop qualification remains open.
+from `ca728e90` to `d3903095`. Subsequent authoritative DNS failures make hostname access
+inconsistent; M2 normal-DNS and known-IP strict-TLS postflight both pass. Desktop release
+qualification remains open.
 The target is the current Website's behavior and existing user data. The requested result is a separately published Rust game repository, removal of
 the replaced game implementation from the Website repository, a WASM embed in that Website,
 and a verified `/game-stg` deployment. The behavioral reference is
@@ -361,13 +362,30 @@ managed Caddy file had been reverted by that worker; keeping the route in its so
 that ownership error.
 
 The retained optimized local macOS ARM64 package passed contracts, packaging, actual
-Electron offline/save/resume/peer/update/failed-close acceptance and archive integrity.
+Electron offline/save/resume/peer/failed-close acceptance and archive integrity. Its update
+notice receipt covered DOM presence and dismissal; later screenshot review found the
+existing notice stylesheet missing from the compiled client. The current HTML includes it,
+and the maintained journey now requires the whole notice inside the viewport before capture.
 On published main `63c5e4d`, run `39784457780` has passing Linux and both macOS desktop
 jobs. Its Windows smoke stalled in the harness's synchronous process lookup and ended
 cancelled; a focused Windows diagnostic separately proves that lookup timeout while the
-native host continues through backpressure. The four-platform desktop release remains
-unqualified pending the corrected harness's complete Windows journey.
+native host continues through backpressure. The maintained observer now records actual
+child-process spawns, and Windows uses its native graphics backend with sequential view
+preparation inside the original shared 120-second peer deadline. Diagnostic run
+`39813783260` passes the full gameplay, saved close/resume, failed-close and shared Boneyard
+journey; its timestamp trace also measures delayed CDP observation. Final clean retake
+`39819252121` passes the same journey without diagnostic instrumentation, including the
+visible notice and fresh snapshots from both restored peer windows inside the original
+shared 120-second deadline. Its 19 desktop tests pass. The missing-style regression has
+separate red/green evidence at `39817440719`; the notice moves from below the viewport to
+its intended top-right position. The four-platform release remains unqualified until the
+configured build matrix passes.
 Earlier platform and diagnostic receipts retain their own source, harness and scope.
+
+The stylesheet addition changes only the desktop notice's presentation. The hosted client
+does not create that notice without the Electron bridge, so installed staging and the
+checksum-pinned `d3903095` Website artifact retain their accepted gameplay scope. The Rust
+kernels, native host and WASM code have not changed in this final acceptance cleanup.
 
 Exact manifests, logs, screenshots, raw failed attempts and successful receipts are under
 `/Users/jarrett/codex-runs/solomon-rust-parity-20261021/release-final/` and NFO's matching
