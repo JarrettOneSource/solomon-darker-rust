@@ -156,16 +156,34 @@ fn a_slow_reader_keeps_ordered_messages_and_receives_the_current_snapshot_after_
     let origin = format!("http://{}", server.local_addr());
     let mut client = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
     let peer = connected(&server);
-    // This exceeds the loopback send buffer. A stopped renderer must retain the
-    // queued frame across I/O deadlines, then resume without loss or duplication.
+    // Windows can accept one whole large frame despite a stopped reader. Keep
+    // additional reliable frames queued so the snapshot is demonstrably unsent.
     let large: Arc<str> = Arc::from("0123456789abcdef".repeat(1024 * 1024));
+    let backlog: Vec<Arc<str>> = (0..3)
+        .map(|index| {
+            let prefix = format!("backpressure-{index}:");
+            Arc::from(format!("{prefix}{}", "x".repeat(large.len() - prefix.len())))
+        })
+        .collect();
     peer.send_reliable(Arc::clone(&large)).unwrap();
     peer.send_reliable(Arc::from("control after the large frame")).unwrap();
+    for payload in &backlog {
+        peer.send_reliable(Arc::clone(payload)).unwrap();
+    }
     peer.replace_snapshot(Arc::from("obsolete snapshot")).unwrap();
     assert!(
         matches!(server.recv_timeout(Duration::from_millis(300)), Err(RecvTimeoutError::Timeout)),
         "a temporary slow reader must not disconnect before the heartbeat deadline"
     );
+    {
+        let outbox = peer.0.outbox.lock().unwrap();
+        assert!(!outbox.reliable.is_empty(), "the stopped reader leaves reliable output queued");
+        assert_eq!(
+            outbox.snapshot.as_deref(),
+            Some("obsolete snapshot"),
+            "the snapshot remains in its replaceable slot until reliable output drains"
+        );
+    }
     peer.replace_snapshot(Arc::from("current snapshot")).unwrap();
 
     let Message::Text(received) = next_message(&mut client) else {
@@ -173,6 +191,12 @@ fn a_slow_reader_keeps_ordered_messages_and_receives_the_current_snapshot_after_
     };
     assert_eq!(received.as_str(), large.as_ref());
     assert_eq!(next_message(&mut client), Message::Text("control after the large frame".into()));
+    for payload in &backlog {
+        let Message::Text(received) = next_message(&mut client) else {
+            panic!("each accepted reliable frame arrives before the current snapshot");
+        };
+        assert_eq!(received.as_str(), payload.as_ref());
+    }
     assert_eq!(next_message(&mut client), Message::Text("current snapshot".into()));
     client.send(Message::Text("input after resuming".into())).unwrap();
     let TransportEvent::Message { peer_id, payload } = next_event(&server) else {

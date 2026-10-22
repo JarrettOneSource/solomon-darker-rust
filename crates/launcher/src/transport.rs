@@ -315,6 +315,8 @@ struct AcceptedConnection {
 /// Shutdown closes the receiver first, waking any worker blocked on critical delivery.
 pub struct NativeServer {
     address: SocketAddr,
+    // Keep the wake address live even if another pending connection stops the acceptor.
+    listener: Option<TcpListener>,
     state: Arc<ServerState>,
     events: Option<Receiver<TransportEvent>>,
     listener_worker: Option<JoinHandle<()>>,
@@ -343,6 +345,7 @@ impl NativeServer {
     ) -> io::Result<Self> {
         config.validate()?;
         let address = listener.local_addr()?;
+        let retained_listener = listener.try_clone()?;
         let (event_sender, events) = mpsc::sync_channel(config.event_capacity);
         let state = Arc::new(ServerState {
             config: Arc::new(config),
@@ -435,6 +438,7 @@ impl NativeServer {
         });
         Ok(Self {
             address,
+            listener: Some(retained_listener),
             state,
             events: Some(events),
             listener_worker: Some(listener_worker),
@@ -523,6 +527,7 @@ impl NativeServer {
         if let Some(worker) = self.listener_worker.take() {
             worker.join().expect("the listener worker does not panic");
         }
+        drop(self.listener.take());
         for worker in self.http_workers.drain(..) {
             worker.join().expect("the HTTP worker does not panic");
         }
