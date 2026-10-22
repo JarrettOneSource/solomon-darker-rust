@@ -136,6 +136,7 @@ try {
     Menu.getApplicationMenu().items.find(row => row.label === 'Game').submenu.items.find(row => row.label === 'Copy multiplayer invite').click();
     return clipboard.readText();
   });
+  if (process.platform === 'win32') await setWindowMinimized(host, true);
   const guest = await launch('guest', join(profiles, 'guest'));
   await guest.page.getByLabel('Multiplayer invite').fill(invitation);
   await guest.page.getByRole('button', {
@@ -148,16 +149,38 @@ try {
   assert.equal(host.state.frame.host.authority_player_id, host.state.id);
   assert.equal(guest.state.frame.host.authority_player_id, host.state.id);
   const guestMovement = await move(guest);
+  if (process.platform === 'win32') {
+    await setWindowMinimized(guest, true);
+    await setWindowMinimized(host, false);
+  }
   await host.page.getByRole('button', {
     name: 'Enter the Boneyard',
     exact: true
   }).click();
-  await waitFor(() => playing(host) && playing(guest), 'both actual Boneyard renderers', 120000);
+  const readyDeadline = Date.now() + 120000;
+  const remainingReadiness = () => Math.max(1, readyDeadline - Date.now());
+  if (process.platform === 'win32') {
+    // Materialize each real view without competing software renderers. Both
+    // windows return before the original readiness assertion and share its limit.
+    await waitFor(() => host.state.readyBoneyards.has(host.state.frame?.snapshot.boneyard?.run_id),
+      'the actual host renderer Boneyard acknowledgement', remainingReadiness());
+    await setWindowMinimized(host, true);
+    await setWindowMinimized(guest, false);
+    await waitFor(() => guest.state.readyBoneyards.has(guest.state.frame?.snapshot.boneyard?.run_id),
+      'the actual guest renderer Boneyard acknowledgement', remainingReadiness());
+    await setWindowMinimized(host, false);
+  }
+  await waitFor(() => playing(host) && playing(guest), 'both actual Boneyard renderers', remainingReadiness());
   assert.equal(host.state.frame.snapshot.boneyard.run_id, guest.state.frame.snapshot.boneyard.run_id);
   assert.equal(host.state.frame.snapshot.participant_order.length, 2);
+  if (process.platform === 'win32') await setWindowMinimized(guest, true);
   await host.page.screenshot({
     path: join(evidence, 'peer-host-boneyard.png')
   });
+  if (process.platform === 'win32') {
+    await setWindowMinimized(guest, false);
+    await setWindowMinimized(host, true);
+  }
   await guest.page.screenshot({
     path: join(evidence, 'peer-guest-boneyard.png')
   });
@@ -216,7 +239,10 @@ try {
 async function launch(label, userData) {
   const app = await electron.launch({
     executablePath: executable,
-    args: ['--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--use-angle=swiftshader', '--use-gl=angle', '--proxy-server=http://127.0.0.1:9'],
+    // Windows' native ANGLE backend avoids the measured SwiftShader CPU stall.
+    args: [...(process.platform === 'win32' ? [] : [
+      '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--use-angle=swiftshader', '--use-gl=angle'
+    ]), '--proxy-server=http://127.0.0.1:9'],
     env: {
       ...process.env,
       SDR_DESKTOP_USER_DATA: userData,
@@ -240,6 +266,7 @@ async function launch(label, userData) {
       leaveReceipts: 0,
       disconnects: 0,
       closedSockets: 0,
+      readyBoneyards: new Set(),
       expectedStorageConflict: false,
       clientResources: []
     }
@@ -276,7 +303,9 @@ async function launch(label, userData) {
   page.on('websocket', socket => {
     const readMessage = createNativeMessageReader();
     socket.on('framesent', ({payload}) => {
-      if (JSON.parse(payload.toString()).type === 'disconnect') instance.state.disconnects++;
+      const message = JSON.parse(payload.toString());
+      if (message.type === 'disconnect') instance.state.disconnects++;
+      if (message.type === 'ready_boneyard') instance.state.readyBoneyards.add(message.run_id);
     });
     socket.on('close', () => instance.state.closedSockets++);
     socket.on('framereceived', ({payload}) => {
@@ -556,6 +585,13 @@ async function close(instance) {
     clearTimeout(timer);
   }
   running.delete(instance);
+}
+async function setWindowMinimized(instance, minimized) {
+  await instance.app.evaluate(({BrowserWindow}, minimized) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (minimized) window.minimize();
+    else { window.restore(); window.show(); window.focus(); }
+  }, minimized);
 }
 async function waitForExit(pid) {
   await waitFor(() => {
