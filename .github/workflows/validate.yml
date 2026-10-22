@@ -33,6 +33,8 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm install --global npm@10.9.2
       - run: npm ci --no-audit --no-fund
+      - name: Preserve only the existing pinned socket event timestamps for diagnosis
+        run: python scripts/windows-desktop-diagnostic.py socket-clock reports/desktop-smoke/socket-clock-instrumentation.json
       - run: node --test tools/browser-smoke/native-child.test.cjs
       - name: Download the already accepted platform-independent client
         uses: actions/download-artifact@v4

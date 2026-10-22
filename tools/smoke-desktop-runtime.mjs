@@ -503,9 +503,8 @@ async function launch(label, userData, graphics = platformGraphics) {
     let clockBytes = 0;
     let previousClockState;
     let lastClockRecord = 0;
-    // Diagnostic only: pinned Playwright 1.61.1 carries Chromium's converted
-    // event timestamp here but omits it from its public frame payload. Reuse the
-    // existing channel rather than subscribing to another full Network stream.
+    // Diagnostic only: the pinned validator instrumentation preserves Chromium's
+    // existing clock across this channel. No second full Network stream is used.
     socket._channel.prependListener('frameSent', event => { sentWallTimeMs = event.wallTimeMs; });
     socket._channel.prependListener('frameReceived', event => { receivedWallTimeMs = event.wallTimeMs; });
     socket.on('framesent', ({payload}) => {
