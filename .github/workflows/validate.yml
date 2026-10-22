@@ -33,6 +33,7 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm install --global npm@10.9.2
       - run: npm ci --no-audit --no-fund
+      - run: node --test tools/browser-smoke/native-child.test.cjs
       - name: Download the already accepted platform-independent client
         uses: actions/download-artifact@v4
         with:

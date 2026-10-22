@@ -2,7 +2,6 @@
 // gameplay; sockets only observe accepted state. The failed-close case advances
 // only the real IndexedDB record revision to represent a concurrent writer.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { appendFileSync, createReadStream } from 'node:fs';
@@ -18,6 +17,7 @@ const {
   startNewGame
 } = require('./browser-smoke/menu-journey.cjs');
 const {createNativeMessageReader} = require('./browser-smoke/native-wire.cjs');
+const {observeNativeChildren} = require('./browser-smoke/native-child.cjs');
 const obsoleteMenuImage = require('./browser-smoke/obsolete-menu-image.cjs');
 const applicationPath = resolve(process.env.SDR_DESKTOP_APP || `dist-desktop/Solomon Darker-${process.platform}-${process.arch}`);
 const manifest = JSON.parse(await readFile(join(applicationPath, 'desktop-package-manifest.json'), 'utf8'));
@@ -294,9 +294,13 @@ async function launch(label, userData) {
     },
     timeout: 30000
   });
-  appendFileSync(join(evidence, 'owned-processes.jsonl'), `${JSON.stringify({
-    label, pid: app.process().pid, executable, recordedAt: new Date().toISOString(),
-  })}\n`);
+  const nativeChildren = await app.evaluateHandle(observeNativeChildren);
+  const parentPid = await nativeChildren.evaluate(observer => observer.parentPid);
+  for (const pid of new Set([app.process().pid, parentPid])) {
+    appendFileSync(join(evidence, 'owned-processes.jsonl'), `${JSON.stringify({
+      label, pid, executable, recordedAt: new Date().toISOString(),
+    })}\n`);
+  }
   const page = await app.firstWindow({
     timeout: 30000
   });
@@ -313,6 +317,7 @@ async function launch(label, userData) {
   app.context().setDefaultTimeout(30000);
   const instance = {
     app,
+    nativeChildren,
     page,
     label,
     state: {
@@ -591,42 +596,30 @@ async function proveFailedClose(instance) {
   };
 }
 async function hostProcess(application) {
-  const label = [...running].find(instance => instance.app === application)?.label || 'app';
-  progress(`${label}-inspect-app-pid`);
-  const parent = await application.evaluate(() => process.pid);
+  const instance = [...running].find(instance => instance.app === application);
+  const label = instance.label;
   progress(`${label}-query-native-process`);
-  if (process.platform === 'win32') {
-    const started = Date.now();
-    const recordLookup = outcome => appendFileSync(join(evidence, 'process-lookups.jsonl'),
-      `${JSON.stringify({at: new Date().toISOString(), label, parentPid: parent,
-        elapsedMs: Date.now() - started, ...outcome})}\n`);
-    try {
-      const raw = execFileSync('powershell.exe', ['-NoProfile', '-Command', `Get-CimInstance Win32_Process -Filter "ParentProcessId=${parent}" | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress`], {
-        encoding: 'utf8', timeout: 15000,
-      });
-      const value = JSON.parse(raw),
-        child = (Array.isArray(value) ? value : [value]).find(row => row.CommandLine?.includes('--desktop'));
-      assert.ok(child, 'the app owns a separate native authority');
-      recordLookup({outcome: 'ok', childPid: child.ProcessId});
-      progress(`${label}-native-process-query-complete`);
-      return {
-        pid: child.ProcessId,
-        command: child.CommandLine
-      };
-    } catch (error) {
-      recordLookup({outcome: 'failed', code: error.code, signal: error.signal,
-        error: redact(error.message).slice(0, 1000)});
-      throw error;
-    }
+  const started = Date.now();
+  try {
+    const children = await bounded(instance.nativeChildren.evaluate(observer => ({
+      parentPid: observer.parentPid, children: observer.nativeChildren(),
+    })), 15000, 'native child observation');
+    assert.equal(children.children.length, 1, 'the app owns one live separate native authority');
+    const [child] = children.children;
+    appendFileSync(join(evidence, 'process-lookups.jsonl'), `${JSON.stringify({
+      at: new Date().toISOString(), label, parentPid: children.parentPid,
+      elapsedMs: Date.now() - started, outcome: 'ok', childPid: child.pid,
+      observation: 'node:diagnostics_channel/child_process', executable: child.executable,
+    })}\n`);
+    progress(`${label}-native-process-query-complete`);
+    return {pid: child.pid, command: child.arguments.join(' ')};
+  } catch (error) {
+    appendFileSync(join(evidence, 'process-lookups.jsonl'), `${JSON.stringify({
+      at: new Date().toISOString(), label, elapsedMs: Date.now() - started,
+      outcome: 'failed', error: redact(error.message).slice(0, 1000),
+    })}\n`);
+    throw error;
   }
-  const child = execFileSync('ps', ['-axo', 'pid=,ppid=,command='], {
-    encoding: 'utf8'
-  }).split('\n').map(line => /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(line)).find(parts => parts && Number(parts[2]) === parent && parts[3].includes('--desktop'));
-  assert.ok(child, 'the app owns a separate native authority');
-  return {
-    pid: Number(child[1]),
-    command: child[3]
-  };
 }
 async function proveUpdatePrompt(instance) {
   const fixture = {
