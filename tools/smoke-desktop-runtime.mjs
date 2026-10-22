@@ -19,6 +19,8 @@ const {
 const {createNativeMessageReader} = require('./browser-smoke/native-wire.cjs');
 const {observeNativeChildren} = require('./browser-smoke/native-child.cjs');
 const obsoleteMenuImage = require('./browser-smoke/obsolete-menu-image.cjs');
+const softwareGraphics = ['--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--use-angle=swiftshader', '--use-gl=angle'];
+const platformGraphics = process.platform === 'win32' ? [] : softwareGraphics;
 const applicationPath = resolve(process.env.SDR_DESKTOP_APP || `dist-desktop/Solomon Darker-${process.platform}-${process.arch}`);
 const manifest = JSON.parse(await readFile(join(applicationPath, 'desktop-package-manifest.json'), 'utf8'));
 const executable = resolve(applicationPath, manifest.executable);
@@ -87,6 +89,12 @@ const storageConflict = 'The saved game changed in another tab. Reload to contin
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
 const playing = instance => instance.state.frame?.snapshot.boneyard && !instance.state.frame.host.loading_run_id && !instance.state.frame.host.resume_grace && !instance.state.frame.host.pause;
 try {
+  if (process.platform === 'win32') {
+    progress('inspect-forced-graphics');
+    const control = await launch('forced-graphics-control', join(profiles, 'forced-graphics-control'), softwareGraphics);
+    await close(control);
+  }
+  progress('launch-solo');
   const solo = await launch('solo', join(profiles, 'solo'));
   await solo.page.screenshot({
     path: join(evidence, 'launcher.png')
@@ -114,9 +122,6 @@ try {
   assert.equal(runtime.origin, 'solomon-darker://app');
   assert.equal(runtime.endpoint.kind, 'localhost');
   assert.equal(runtime.endpoint.sessionKind, 'standalone');
-  appendFileSync(join(evidence, 'authority-endpoints.jsonl'), `${JSON.stringify({
-    label: solo.label, url: runtime.endpoint.url,
-  })}\n`);
   const child = await hostProcess(solo.app);
   assert.ok(child.command.includes('--desktop'), 'the app owns the canonical native desktop scope');
   assert.equal(child.command.includes(runtime.endpoint.credential), false);
@@ -126,11 +131,21 @@ try {
   await solo.page.screenshot({
     path: join(evidence, 'solo.png')
   });
+  progress('solo-capture-complete');
+  progress('solo-offline-update-check');
   const updateStatus = await solo.page.evaluate(() => window.solomonDarkRuntime.desktop.checkUpdates());
+  progress('solo-offline-update-complete');
   assert.equal(updateStatus.update, null);
   assert.ok(updateStatus.updateError, 'offline update failure does not block play');
+  progress('solo-before-close-observation');
+  await observeClientState(solo);
   progress('solo-save-close');
   await close(solo);
+  const lifecycle = (await readFile(join(evidence, 'lifecycle-solo.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse);
+  await writeFile(join(evidence, 'solo-close-observation.json'), `${JSON.stringify({
+    leaveReceipts: solo.state.leaveReceipts, disconnects: solo.state.disconnects,
+    closedSockets: solo.state.closedSockets, lifecycle,
+  }, null, 2)}\n`);
   assert.ok(solo.state.leaveReceipts > 0, 'ordinary app close awaited the actual host save receipt');
   await waitForExit(child.pid);
   progress('launch-resume');
@@ -333,10 +348,10 @@ async function bounded(operation, timeout, label) {
     })]);
   } finally { clearTimeout(timer); }
 }
-async function launch(label, userData) {
+async function launch(label, userData, graphics = platformGraphics) {
   const app = await electron.launch({
     executablePath: executable,
-    args: ['--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--use-angle=swiftshader', '--use-gl=angle', '--proxy-server=http://127.0.0.1:9'],
+    args: [...graphics, '--proxy-server=http://127.0.0.1:9'],
     env: {
       ...process.env,
       SDR_DESKTOP_USER_DATA: userData,
@@ -356,14 +371,34 @@ async function launch(label, userData) {
   });
   // Retain the real child exit notice instead of blocking this diagnostic run on
   // a native modal dialog that cannot be captured by a renderer screenshot.
-  await app.evaluate(({dialog}) => {
+  await app.evaluate(({dialog, app, ipcMain, BrowserWindow}, lifecycle) => {
+    const fs = process.getBuiltinModule('node:fs');
+    let bytes = 0;
+    const record = (event, details = {}) => {
+      const line = `${JSON.stringify({at: new Date().toISOString(), label: lifecycle.label, event, ...details})}\n`;
+      if (bytes + Buffer.byteLength(line) <= 16 * 1024) {
+        fs.appendFileSync(lifecycle.path, line);
+        bytes += Buffer.byteLength(line);
+      }
+    };
+    record('observer-attached');
+    app.on('before-quit', event => record('before-quit', {prevented: event.defaultPrevented}));
+    app.on('will-quit', () => record('will-quit'));
+    app.on('quit', (_event, exitCode) => record('quit', {exitCode}));
+    const window = BrowserWindow.getAllWindows()[0];
+    const contents = window.webContents;
+    window.on('close', event => record('window-close', {prevented: event.defaultPrevented}));
+    ipcMain.on('solomon-dark:saved', (event, result) => record('renderer-save-result', {
+      fromOwnedWindow: event.sender === contents,
+      hasRequestId: typeof result?.id === 'string', error: typeof result?.error === 'string',
+    }));
     const original = dialog.showErrorBox.bind(dialog);
     globalThis.__nativeExitDialogs = [];
     dialog.showErrorBox = (title, content) => {
       if (title !== 'The local game stopped') return original(title, content);
       globalThis.__nativeExitDialogs.push({at: Date.now(), title, content});
     };
-  });
+  }, {label, path: join(evidence, `lifecycle-${label}.jsonl`)});
   app.context().setDefaultTimeout(30000);
   const instance = {
     app,
@@ -449,6 +484,11 @@ async function launch(label, userData) {
   }).waitFor({
     timeout: 30000
   });
+  const gpu = await bounded(app.evaluate(async ({app}) => {
+    const info = await app.getGPUInfo('complete');
+    return {devices: info.gpuDevice, attributes: info.auxAttributes, features: app.getGPUFeatureStatus()};
+  }), 5000, 'GPU backend info').catch(error => ({error: redact(error.message)}));
+  await writeFile(join(evidence, `gpu-${label}.json`), `${JSON.stringify({graphics, ...gpu}, null, 2)}\n`);
   return instance;
 }
 async function title(page) {
@@ -682,6 +722,42 @@ async function hostProcess(application) {
     })}\n`);
     throw error;
   }
+}
+async function observeClientState(instance) {
+  const observed = {
+    label: instance.label, at: new Date().toISOString(),
+    accepted: {playerId: instance.state.id, sequence: instance.state.frame?.sequence,
+      tick: instance.state.frame?.snapshot.ticks, position: position(instance),
+      host: instance.state.frame?.host, leaveReceipts: instance.state.leaveReceipts,
+      closedSockets: instance.state.closedSockets, disconnects: instance.state.disconnects},
+  };
+  observed.renderer = await bounded(instance.page.evaluate(() => ({
+    menu: document.querySelector('.game-menus')?.dataset.menuScreen,
+    status: document.querySelector('#status')?.textContent,
+    wizard: [...window.wasmBindings.wizard_state()],
+    input: [...window.wasmBindings.gameplay_input_state()],
+    visibility: document.visibilityState, focused: document.hasFocus(),
+  })), 5000, 'pre-close renderer state').catch(error => ({error: redact(error.message)}));
+  let session;
+  try {
+    session = await bounded(instance.app.context().newCDPSession(instance.page), 3000, 'pre-close socket observation');
+    const prototype = await bounded(session.send('Runtime.evaluate', {
+      expression: 'WebSocket.prototype', objectGroup: 'desktop-pre-close',
+    }), 3000, 'WebSocket prototype');
+    const sockets = await bounded(session.send('Runtime.queryObjects', {
+      prototypeObjectId: prototype.result.objectId, objectGroup: 'desktop-pre-close',
+    }), 3000, 'live WebSocket objects');
+    const state = await bounded(session.send('Runtime.callFunctionOn', {
+      objectId: sockets.objects.objectId, returnByValue: true,
+      functionDeclaration: 'function() { return Array.from(this, socket => ({readyState: socket.readyState, bufferedAmount: socket.bufferedAmount})); }',
+    }), 3000, 'live WebSocket state');
+    observed.sockets = state.result.value;
+  } catch (error) {
+    observed.socketObservationError = redact(error.message);
+  } finally {
+    if (session) await bounded(session.detach(), 3000, 'socket observation cleanup').catch(() => {});
+  }
+  await writeFile(join(evidence, `before-close-${instance.label}.json`), `${JSON.stringify(observed, null, 2)}\n`);
 }
 async function proveUpdatePrompt(instance) {
   const fixture = {

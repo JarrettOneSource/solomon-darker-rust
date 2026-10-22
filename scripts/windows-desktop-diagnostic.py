@@ -3,7 +3,6 @@
 
 import argparse
 import hashlib
-import http.client
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -13,7 +12,6 @@ import subprocess
 import sys
 import time
 import zipfile
-from urllib.parse import urlsplit
 
 
 def file_sha256(path):
@@ -94,6 +92,9 @@ def print_summary(directory):
         path = directory / name
         if path.is_file():
             print(json.dumps({"diagnosticSummary": name, "tail": tail(path)}), flush=True)
+    for pattern in ["gpu-*.json", "lifecycle-*.jsonl", "before-close-*.json", "*-close-observation.json"]:
+        for path in sorted(directory.glob(pattern)):
+            print(json.dumps({"diagnosticSummary": path.name, "tail": tail(path)}), flush=True)
 
 
 OWNED_CLEANUP = r'''
@@ -137,28 +138,6 @@ def sample_owned(directory):
         sample["processes"] = tail(output, 8192)
     except subprocess.TimeoutExpired:
         sample["processLookupError"] = "Get-Process sample timed out after 5 seconds"
-    endpoints = directory / "authority-endpoints.jsonl"
-    if endpoints.exists():
-        sample["authorityHealth"] = []
-        for line in endpoints.read_text().splitlines():
-            endpoint = json.loads(line)
-            url = urlsplit(endpoint["url"])
-            if url.hostname != "127.0.0.1" or url.scheme != "ws":
-                raise ValueError("Diagnostic health probe must target the actual loopback authority")
-            connection = http.client.HTTPConnection(url.hostname, url.port, timeout=1)
-            started = time.monotonic()
-            health = {"label": endpoint["label"]}
-            try:
-                connection.request("GET", "/health")
-                response = connection.getresponse()
-                health["status"] = response.status
-                health["body"] = response.read(2048).decode("utf-8", errors="replace")
-            except (OSError, http.client.HTTPException) as error:
-                health["error"] = str(error)
-            finally:
-                connection.close()
-                health["elapsedMs"] = round((time.monotonic() - started) * 1000)
-            sample["authorityHealth"].append(health)
     line = json.dumps(sample) + "\n"
     if (report.stat().st_size if report.exists() else 0) + len(line.encode()) <= 64 * 1024:
         with report.open("a") as stream:
