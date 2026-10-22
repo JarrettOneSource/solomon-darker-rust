@@ -86,6 +86,9 @@ jobs:
       - run: npm run test:desktop
       - name: Build standalone app from this revision
         run: npm run package:desktop -- --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --release-repository "$GITHUB_REPOSITORY"
+      - name: Verify the Windows native host needs no external VC++ runtime
+        if: ${{ runner.os == 'Windows' }}
+        run: python tools/inspect-windows-crt.py 'dist-desktop/Solomon Darker-win32-x64/resources/app/authority/solomon-darker.exe' reports/desktop-smoke/native-imports.json static
       - name: Verify packaged offline save and peer gameplay
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
