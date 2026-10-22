@@ -301,13 +301,13 @@ fn drive_peer(
             };
             for payload in outgoing.reliable {
                 if let Err(error) = socket.send(shared_text(payload)) {
-                    return failed_connection(error);
+                    return failed_connection_at(error, "reliable-send");
                 }
             }
             if let Some(payload) = outgoing.snapshot
                 && let Err(error) = socket.send(shared_text(payload))
             {
-                return failed_connection(error);
+                return failed_connection_at(error, "snapshot-send");
             }
             let requested_close = outgoing.close.or_else(|| {
                 if last_ping.elapsed() >= server.config.heartbeat_interval
@@ -324,12 +324,12 @@ fn drive_peer(
             if let Some(close) = requested_close {
                 peer.0.closed.store(true, Ordering::Release);
                 if let Err(error) = socket.close(Some(close_frame(&close))) {
-                    return failed_connection(error);
+                    return failed_connection_at(error, "requested-close");
                 }
                 closing = Some((Instant::now(), close));
             } else if last_ping.elapsed() >= server.config.heartbeat_interval {
                 if let Err(error) = socket.send(Message::Ping(Bytes::new())) {
-                    return failed_connection(error);
+                    return failed_connection_at(error, "heartbeat-send");
                 }
                 missed_pongs += 1;
                 last_ping = Instant::now();
@@ -363,7 +363,7 @@ fn drive_peer(
                     reason: "game transport accepts text messages only".to_owned(),
                 };
                 if let Err(error) = socket.close(Some(close_frame(&close))) {
-                    return failed_connection(error);
+                    return failed_connection_at(error, "binary-rejection-close");
                 }
                 closing = Some((Instant::now(), close));
             }
@@ -397,11 +397,11 @@ fn drive_peer(
             Err(Error::Protocol(_)) => {
                 return reject_frame(&mut socket, 1002, "invalid WebSocket frame");
             }
-            Err(error) => return failed_connection(error),
+            Err(error) => return failed_connection_at(error, "read"),
         }
         // read queues automatic pong and close replies; do not replace them manually.
         if let Err(error) = socket.flush() {
-            return failed_connection(error);
+            return failed_connection_at(error, "flush");
         }
     }
 }
@@ -427,7 +427,10 @@ fn close_frame(close: &TransportClose) -> CloseFrame {
         reason: close.reason.clone().into(),
     }
 }
-fn failed_connection(error: Error) -> TransportClose {
+fn failed_connection_at(error: Error, operation: &str) -> TransportClose {
+    if std::env::var_os("SDR_NATIVE_DIAGNOSTICS").is_some() {
+        eprintln!("native socket operation failed: operation={operation} error={error}");
+    }
     TransportClose { code: None, reason: error.to_string() }
 }
 fn reject_frame(socket: &mut WebSocket<PrefixedStream>, code: u16, reason: &str) -> TransportClose {
