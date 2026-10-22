@@ -7,14 +7,21 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 const [name, mode] = process.argv.slice(2);
-assert.ok(['playwright-1', 'electron', 'playwright-2'].includes(name));
-assert.ok(['playwright', 'electron'].includes(mode));
+assert.ok(['playwright-1', 'electron', 'playwright-2', 'original-5c'].includes(name));
+assert.ok(['playwright', 'electron', 'original'].includes(mode));
 const evidence = resolve('reports/windows-capture-control', name);
 await mkdir(evidence, {recursive: true});
 const started = new Date().toISOString();
+const env = {...process.env, SDR_DESKTOP_EVIDENCE: evidence};
+if (mode === 'original') {
+  delete env.SDR_CAPTURE_MODE;
+  delete env.SDR_CAPTURE_PROTOCOL_LOG;
+} else {
+  env.SDR_CAPTURE_MODE = mode;
+  env.SDR_CAPTURE_PROTOCOL_LOG = join(evidence, 'playwright-stages.jsonl');
+}
 const child = spawn(process.execPath, ['tools/smoke-desktop-runtime.mjs'], {
-  env: {...process.env, SDR_CAPTURE_MODE: mode, SDR_DESKTOP_EVIDENCE: evidence,
-    SDR_CAPTURE_PROTOCOL_LOG: join(evidence, 'playwright-stages.jsonl')},
+  env,
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 const receipt = {name, mode, started, driverPid: child.pid, timedOut: false};
