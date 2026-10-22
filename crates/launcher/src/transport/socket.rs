@@ -211,8 +211,9 @@ pub(super) fn serve_connection(
     };
     let configure = || -> io::Result<()> {
         socket.get_ref().stream.set_nodelay(true)?;
-        socket.get_ref().stream.set_read_timeout(Some(server.config.io_poll_interval))?;
-        socket.get_ref().stream.set_write_timeout(Some(server.config.write_timeout))
+        // Windows blocking send deadlines leave the connection indeterminate.
+        // Established sockets use WouldBlock and Tungstenite's retained frame bytes.
+        socket.get_ref().stream.set_nonblocking(true)
     };
     if let Err(error) = configure() {
         finish_peer(server, &peer);
@@ -269,6 +270,12 @@ fn finish_peer(server: &ServerState, peer: &PeerSender) {
     server.peers.lock().expect("peer bookkeeping does not panic while locked").remove(&peer.id());
 }
 
+struct SocketClose {
+    started: Instant,
+    detail: TransportClose,
+    queued: bool,
+}
+
 fn drive_peer(
     mut socket: WebSocket<PrefixedStream>,
     server: &ServerState,
@@ -276,7 +283,8 @@ fn drive_peer(
 ) -> TransportClose {
     let mut last_ping = Instant::now();
     let mut missed_pongs = 0;
-    let mut closing: Option<(Instant, TransportClose)> = None;
+    let mut closing: Option<SocketClose> = None;
+    let mut write_pending = false;
     loop {
         if server.stopping.load(Ordering::Acquire) {
             return TransportClose { code: None, reason: "native transport stopped".to_owned() };
@@ -285,53 +293,90 @@ fn drive_peer(
             if peer.expire_welcome(Instant::now()) {
                 let _ = peer.close(4000, "game welcome transfer timed out");
             }
-            let outgoing = {
-                let mut outbox =
-                    peer.0.outbox.lock().expect("the peer outbox does not panic while locked");
-                std::mem::take(&mut *outbox)
-            };
-            for payload in outgoing.reliable {
-                if let Err(error) = socket.send(shared_text(payload)) {
-                    return failed_connection(error);
-                }
-            }
-            if let Some(payload) = outgoing.snapshot
-                && let Err(error) = socket.send(shared_text(payload))
+            let requested = peer
+                .0
+                .outbox
+                .lock()
+                .expect("the peer outbox does not panic while locked")
+                .close
+                .take();
+            if let Some(detail) = requested {
+                closing = Some(SocketClose { started: Instant::now(), detail, queued: false });
+            } else if last_ping.elapsed() >= server.config.heartbeat_interval
+                && missed_pongs >= server.config.missed_pong_limit
             {
-                return failed_connection(error);
-            }
-            let requested_close = outgoing.close.or_else(|| {
-                if last_ping.elapsed() >= server.config.heartbeat_interval
-                    && missed_pongs >= server.config.missed_pong_limit
-                {
-                    Some(TransportClose {
+                peer.0.closed.store(true, Ordering::Release);
+                closing = Some(SocketClose {
+                    started: Instant::now(),
+                    detail: TransportClose {
                         code: Some(4000),
                         reason: "connection timed out".to_owned(),
-                    })
-                } else {
-                    None
+                    },
+                    queued: false,
+                });
+            }
+        }
+        if let Some(close) = &closing
+            && close.started.elapsed() >= server.config.close_timeout
+        {
+            return close.detail.clone();
+        }
+        if closing.as_ref().is_none_or(|close| !close.queued) {
+            for _ in 0..=server.config.reliable_message_capacity {
+                if write_pending {
+                    break;
                 }
-            });
-            if let Some(close) = requested_close {
-                peer.0.closed.store(true, Ordering::Release);
-                if let Err(error) = socket.close(Some(close_frame(&close))) {
-                    return failed_connection(error);
+                let payload = {
+                    let mut outbox =
+                        peer.0.outbox.lock().expect("the peer outbox does not panic while locked");
+                    if let Some(payload) = outbox.reliable.pop_front() {
+                        outbox.reliable_bytes -= payload.len();
+                        Some(payload)
+                    } else {
+                        outbox.snapshot.take()
+                    }
+                };
+                let Some(payload) = payload else { break };
+                match socket.send(shared_text(payload)) {
+                    Ok(()) => {}
+                    Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {
+                        // The complete frame, including its remaining byte offset, now
+                        // belongs to Tungstenite. Flush it before accepting another.
+                        write_pending = true;
+                    }
+                    Err(error) => return failed_connection(error),
                 }
-                closing = Some((Instant::now(), close));
+            }
+            if let Some(close) = &mut closing {
+                let reliable_empty = peer
+                    .0
+                    .outbox
+                    .lock()
+                    .expect("the peer outbox does not panic while locked")
+                    .reliable
+                    .is_empty();
+                if !write_pending && reliable_empty {
+                    match socket.close(Some(close_frame(&close.detail))) {
+                        Ok(()) => {}
+                        Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
+                        Err(error) => return failed_connection(error),
+                    }
+                    close.queued = true;
+                }
             } else if last_ping.elapsed() >= server.config.heartbeat_interval {
-                if let Err(error) = socket.send(Message::Ping(Bytes::new())) {
-                    return failed_connection(error);
+                match socket.send(Message::Ping(Bytes::new())) {
+                    Ok(()) => {}
+                    Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
+                    Err(error) => return failed_connection(error),
                 }
                 missed_pongs += 1;
                 last_ping = Instant::now();
             }
         }
-        if let Some((started, close)) = &closing
-            && started.elapsed() >= server.config.close_timeout
-        {
-            return close.clone();
-        }
-        match socket.read() {
+        let received = socket.read();
+        let idle =
+            matches!(&received, Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock);
+        match received {
             Ok(Message::Text(payload)) if closing.is_none() => {
                 if server
                     .events
@@ -353,30 +398,34 @@ fn drive_peer(
                     code: Some(1003),
                     reason: "game transport accepts text messages only".to_owned(),
                 };
-                if let Err(error) = socket.close(Some(close_frame(&close))) {
-                    return failed_connection(error);
+                match socket.close(Some(close_frame(&close))) {
+                    Ok(()) => {}
+                    Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
+                    Err(error) => return failed_connection(error),
                 }
-                closing = Some((Instant::now(), close));
+                closing =
+                    Some(SocketClose { started: Instant::now(), detail: close, queued: true });
             }
             Ok(Message::Pong(_)) => missed_pongs = 0,
             Ok(Message::Close(frame)) => {
-                // Tungstenite queued the close reply. Flush it before releasing TCP.
-                let _ = socket.flush();
-                return closing.map_or_else(
-                    || TransportClose {
+                // Keep the queued reply through WouldBlock until it drains or the
+                // existing close deadline expires, preserving the accepted identity.
+                if let Some(close) = &mut closing {
+                    close.queued = true;
+                } else {
+                    let detail = TransportClose {
                         code: frame.as_ref().map(|frame| frame.code.into()),
                         reason: frame.map_or_else(String::new, |frame| frame.reason.to_string()),
-                    },
-                    |(_, close)| close,
-                );
+                    };
+                    closing = Some(SocketClose { started: Instant::now(), detail, queued: true });
+                }
             }
             Ok(_) => {}
-            Err(Error::Io(error))
-                if matches!(error.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) => {}
+            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
             Err(Error::ConnectionClosed) => {
                 return closing.map_or_else(
                     || TransportClose { code: None, reason: "connection closed".to_owned() },
-                    |(_, close)| close,
+                    |close| close.detail,
                 );
             }
             Err(Error::Capacity(_)) => {
@@ -391,8 +440,19 @@ fn drive_peer(
             Err(error) => return failed_connection(error),
         }
         // read queues automatic pong and close replies; do not replace them manually.
-        if let Err(error) = socket.flush() {
-            return failed_connection(error);
+        write_pending = match socket.flush() {
+            Ok(()) => false,
+            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => true,
+            Err(Error::ConnectionClosed) => {
+                return closing.map_or_else(
+                    || TransportClose { code: None, reason: "connection closed".to_owned() },
+                    |close| close.detail,
+                );
+            }
+            Err(error) => return failed_connection(error),
+        };
+        if idle {
+            thread::sleep(server.config.io_poll_interval);
         }
     }
 }

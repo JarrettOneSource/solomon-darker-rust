@@ -358,6 +358,24 @@ protocol dependency and explicit thread/queue ownership, without an async web fr
 another implementation of RFC 6455. Gameplay credentials, input sequencing, pause/readiness
 and session ownership remain in the host above this transport.
 
+Established WebSockets use nonblocking TCP; HTTP and the upgrade handshake retain their
+blocking deadlines. The real Windows package lost its College connection when a blocking
+send reached its 250 ms deadline while the native process stayed alive. Windows documents
+that a timed-out blocking send leaves the connection indeterminate, so extending or retrying
+that kernel deadline is not the transport contract. The standard library's nonblocking
+mode gives the installed Tungstenite codec `WouldBlock` instead. The codec retains the
+partially written frame; the worker flushes those bytes before taking another message.
+Remaining reliable messages stay in the bounded outbox and its single unsent snapshot
+remains replaceable. Idle polls keep the existing 10 ms cadence, and the existing missed-pong
+and close deadlines still retire stalled readers. No async runtime or new dependency is
+needed. An explicit close starts its deadline when observed, allowing preceding reliable
+bytes to drain within that same deadline even when its close frame cannot yet be queued.
+The actual TCP slow-reader tests require an intact 16 MiB frame exactly once,
+ordered subsequent control, the latest snapshot and resumed input, plus heartbeat expiry
+and explicit-close identity/deadlines when reading never resumes. See the
+[Windows socket contract](https://learn.microsoft.com/en-us/windows/win32/winsock/sol-socket-socket-options)
+and [Rust nonblocking TCP](https://doc.rust-lang.org/std/net/struct.TcpStream.html#method.set_nonblocking).
+
 
 **Native portable profiles use the source attachment and one canonical JSON writer.**
 The import/export bridge retains the original CFG, SAV and opaque slot files with their

@@ -43,7 +43,6 @@ pub struct TransportConfig {
     pub max_message_bytes: usize,
     pub handshake_timeout: Duration,
     pub io_poll_interval: Duration,
-    pub write_timeout: Duration,
     pub heartbeat_interval: Duration,
     pub missed_pong_limit: usize,
     pub close_timeout: Duration,
@@ -63,7 +62,6 @@ impl Default for TransportConfig {
             max_message_bytes,
             handshake_timeout: Duration::from_secs(5),
             io_poll_interval: Duration::from_millis(10),
-            write_timeout: Duration::from_millis(250),
             heartbeat_interval: Duration::from_secs(5),
             missed_pong_limit: 6,
             close_timeout: Duration::from_secs(1),
@@ -81,7 +79,6 @@ impl TransportConfig {
             || self.missed_pong_limit == 0
             || self.handshake_timeout.is_zero()
             || self.io_poll_interval.is_zero()
-            || self.write_timeout.is_zero()
             || self.heartbeat_interval.is_zero()
             || self.close_timeout.is_zero()
         {
