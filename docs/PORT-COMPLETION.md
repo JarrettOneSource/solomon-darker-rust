@@ -336,8 +336,9 @@ of the same wizard. Production and staging API PIDs and Caddy remain unchanged b
 replacement. All public acceptance browsers are closed.
 
 After these journeys, Spaceship's delegated authoritative DNS service began failing.
-Normal hostname-based HTTPS remains unavailable despite occasional EDE3 stale answers;
-known-IP strict-TLS postflight serves `d3903095`. The observed KSK matches the parent DS,
+Hostname access remains inconsistent: M2's ten normal-DNS HTTP/CSP checks now pass, while
+NFO and Google's resolver still fail and one authority returns stale data. Known-IP
+strict-TLS postflight also serves `d3903095`. The observed KSK matches the parent DS,
 and no DNS settings were changed. `release-final/dns-postflight-20261022/` records the
 shared authoritative serving failure and its remaining scope limits.
 
@@ -467,10 +468,17 @@ checkout at `690730d` still owns the M2 launchd preview on port 4180.
 Sixteen completed M2 task trees are removed after their source and evidence were preserved,
 including the Website reference/extraction and Windows transport-fix trees. Their branches
 remain where applicable. The completed M2 acceptance services on ports 5229, 5230, 9449
-and 5383 are stopped; the baseline 4180 remains running. Only the Rust finalization and
-Windows diagnostic task worktrees remain active; the permanent and baseline checkouts
+and 5383 are stopped; the baseline 4180 remains running. Rust finalization and Windows
+acceptance task worktrees remain active; the permanent and baseline checkouts
 and unrelated acceptance worktrees are preserved. The external
 `release-final/worktree-cleanup.json` records exact paths and preservation checks.
+
+The idle M2 task Cargo cache is removed. NFO's clean published checkout, verified earlier
+source snapshot and Cargo/Python caches are also removed. Installed immutable releases,
+state, configuration, rollback material and all acceptance evidence remain; the four NFO
+game/API service PIDs are unchanged. `release-final/task-cache-cleanup.json`,
+`nfo-source-provenance.json` and `nfo-task-cleanup.json` record these checks. Future builds
+recreate their own clean source checkout and cache.
 
 Jarrett explicitly accepted M2 validation on October 20. Each platform's receipt qualifies
 that platform; publication requires the actual configured matrix checks to pass.
