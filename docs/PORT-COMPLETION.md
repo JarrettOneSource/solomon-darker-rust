@@ -1,8 +1,10 @@
 # Rust game parity and release
 
 Current Website behavior is implemented and its complete local parity gates pass.
-The independent repository and Linux game artifact are public. `/game-stg` is installed;
-remaining public journeys and Windows packaged acceptance are in progress.
+The independent repository and Linux game artifact are public. All 44 public acceptance
+groups pass across their recorded revisions, including the actual `/game-stg` replacement
+from `ca728e90` to `d3903095`. Subsequent authoritative DNS failures block normal hostname
+access; known-IP strict-TLS postflight passes. Windows desktop qualification remains open.
 The target is the current Website's behavior and existing user data. The requested result is a separately published Rust game repository, removal of
 the replaced game implementation from the Website repository, a WASM embed in that Website,
 and a verified `/game-stg` deployment. The behavioral reference is
@@ -35,7 +37,10 @@ repository gates, a reviewed feature inventory, current device documentation and
 cleanup of task-owned worktrees on every device. Missing enabled behavior cannot be
 reclassified as a completed direct-host limitation.
 
-## Current focused verification
+## Retained parity verification
+
+These local and development receipts retain their exact revisions. Current publication,
+installed staging and remaining delivery checks are recorded below.
 
 The current save corpus passes all **217** cases: current whole-state continuations,
 supported historical migrations and invalid-state rejection. It includes both quality
@@ -45,8 +50,8 @@ wave tables survive restore without recompilation. Two positive current-source s
 preserve decoded Terrain UID, profile samples and side sign through whole-state restore,
 re-encode and retirement (`gates-20261021T181931Z/current-save-terrain.log`). The fresh wave compiler/director
 fixtures, actual Session rescue/modal casts and Account portability cases also pass.
-These results are in `hosted-browser/gates-20261021T154009Z/`; they qualify these boundaries,
-not the unfinished live browser cutover. The independent Account WASM facade passes all
+These results are in `hosted-browser/gates-20261021T154009Z/`; they qualify their recorded
+behavior and revisions. The independent Account WASM facade passes all
 12 real-browser ABI checks with no game canvas or socket. The actual mounted Website
 Register/Account journey previews and imports an existing save, commits it to the cloud,
 and exports ZIP through this facade. Evidence: `hosted-browser/save-tools-4935b027/` and
@@ -93,9 +98,9 @@ lifecycle observations. The ordinary-browser bot combat journey passes as record
 is connected and its codec, persistence and shared-world checks pass. Score eligibility, once-only publication and timestamp
 formatting pass the Source fixtures; actual browser score submission also passes as recorded below.
 
-The unchanged C# Website backend serves isolated local storage through the TLS
-`/game-stg` gateway. The gateway runs the intended public content policy with an external
-WASM bootstrap. Matching client/host `5373106` passes actual mounted Website registration,
+The unchanged C# Website backend served isolated local storage through the local TLS
+`/game-stg` gateway using the intended public content policy and an external WASM
+bootstrap. Matching client/host `5373106` passes actual mounted Website registration,
 Rust account identity, sign-out and form sign-in; credentials remain scoped to this mount.
 See `hosted-account/report.md`. The accepted two-account social journey includes Global
 chat, cards, invitation decline, consent and a two-member private College. It holds the
@@ -113,8 +118,8 @@ same boundary: normal rejection, accepted ticks continue, unchanged inventory an
 retry (`hosted-browser/inventory-rejection-1d682fa-green/`). This is a receiver failure test;
 the separate native prepared-host test owns atomic authored-consume rollback evidence.
 
-The current local gateway serves the complete `ad1ba50b` native/WASM/save-tools artifact.
-All 5,727 packaged files match its SHA256 manifest; the immutable candidate owns served
+Local acceptance used the complete `ad1ba50b` native/WASM/save-tools artifact.
+All 5,727 packaged files matched its SHA256 manifest; the immutable candidate owned served
 assets as well as executables. Exact identities are in `hosted-browser/{host,browser}-build.json`. Signed score publication through the
 unchanged Website API returns HTTP 201; a fresh sign-in sees the persisted row in all four
 Global Hall boards with ordinary pointer controls and no errors. The report is
@@ -150,8 +155,8 @@ plans pass their Source replays. Cold Aura/Water/Hail/Earth values and electric 
 births pass after genuine failing witnesses. Frost Missile direct/area/terrain contacts and
 shared Bouncer/Growing effects pass their current recordings. These focused checks are in
 `hosted-browser/gates-20261021T181227Z/`, `gates-20261021T181655Z/`,
-`gates-20261021T181931Z/` and `gates-20261021T182516Z/`. The complete current fixture integration now passes. The remaining actual Flame and
-Storm/spectator GPU journeys retain their own acceptance records.
+`gates-20261021T181931Z/` and `gates-20261021T182516Z/`. The complete current fixture integration passes. Actual Flame and
+Storm/spectator GPU journeys also have accepted receipts.
 
 The ordinary `2073e7ca` Sack journey passes six groups: purchase, contained item movement,
 all three hotbar banks, native open/close motion, Unicode rename and saved Leave, with no
@@ -231,13 +236,13 @@ The same candidate passes the actual saved-retirement-to-Create status regressio
 The complete Linux workspace passed at `433e9e25`: 383 tests, none ignored, formatting and
 strict all-target/all-feature lint (`receipts/20261021T124927Z/` on NFO). Later targeted gates
 pass the actual runtime-event HTTP publisher, native/WASM builds, 49 Memorial codec cases,
-atomic file persistence and both shared-world suites (`receipts/20261021T132303Z/`). The new
-current-behavior implementations need their own affected checks and a final complete gate.
+atomic file persistence and both shared-world suites (`receipts/20261021T132303Z/`). These
+earlier receipts precede the complete 531-test qualification recorded below.
 
 The repository now owns the existing four-platform desktop validation/publication workflow,
 with pinned Rust/Node tools and a separately checksummed Linux Website artifact. Website
-Downloads targets the new game repository. These are prepared delivery changes; no new
-repository or platform workflow run is published yet. The current complete enemy recording
+Downloads targets the new game repository. Published artifacts and platform qualification
+are recorded below. The current complete enemy recording
 retains 132 programs, 105,000 ticks and 5,511 states; all 214,267,806 decompressed bytes have
 a recorded SHA256. The complete 25,643,928-byte secondary lifetime recording is also
 losslessly compressed. The complete current audit in
@@ -282,8 +287,7 @@ Source hotbar bindings. The actual Flame/spectator journey on `ad1ba50b` also pa
 births, retained history/GPU batches, real death, spectator status/follow/target cycling,
 no accidental casts, leader saved Leave and spectator reset. Its surviving peer correctly
 returns to College after the leader leaves; a final cleanup helper wrongly expected a
-Boneyard pause and is recorded separately from those passed assertions. Final release
-packages and public staging acceptance remain required.
+Boneyard pause and is recorded separately from those passed assertions.
 
 ## Published repository and staging
 
@@ -294,43 +298,75 @@ Follow-up `65117c8` preserves exact stock bytes during Windows Git checkout. The
 hashes were reproduced as LF-to-CRLF conversion and the stock-only attributes fix restores
 all recorded asset hashes. It changes no gameplay code or source asset bytes.
 
-NFO builds all ten final Linux gates successfully: stock integrity, formatting, strict
+The initial NFO `ca728e90` Linux qualification passed all ten gates: stock integrity, formatting, strict
 native/WASM checks, 531 workspace tests without failures or ignored tests, authored-content
 CLI checks and both optimized game mounts. Each artifact verifies 5,727 payload files.
-The [Linux game release](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/game-ca728e9088c09b829473bd2e0f3728ba69b35fd0)
-contains the production-mount archive with SHA256
-`88d9acb696331c06ef3cc37b4fe76c34335732d0e478aded37e9fe70cab5b6ec`.
-Website repository variables pin its public URL and checksum.
+The original `ca728e90` archive and its checksum remain recorded in
+`release-final/game-release-publication.json`.
+
+The current [Linux game release](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/game-d3903095bdcafbf2fcf2fac9165bd69e9693e803)
+is `d3903095bdcafbf2fcf2fac9165bd69e9693e803`. Its production-mount archive has SHA256
+`3f12af6aa1aa9c5787379fb04fda1d81b08319560889e64751b805708d75d005`; all 5,727 payload
+files, the public checksum and GitHub asset digest match. Website repository variables now
+pin this artifact. `release-final/hosted-d3903095/` owns the archive, publication and pin receipts.
+All ten Linux gates pass for this revision, including 534 workspace tests with no failures
+or ignored tests. Its native transport retains partial nonblocking writes after the proved
+Windows send-timeout failure. Three real TCP regressions cover ordered resumption,
+heartbeat expiry and explicit-close deadlines. Game kernels, stock assets and WASM bytes
+are unchanged from `ca728e90`; `release-final/linux-d3903095/` records this qualification.
 
 The staging artifact at `/opt/solomon-rust-stg/current` serves
 [the public game](https://solomondarker.com/game-stg/) through separate API 5229 and native 5230
-services and isolated state. Website API/static source `fb042d14` has 25/563 verified files.
-Public HTTP checks cover mount/revision metadata, API/account/editor routes and frame/CSP
-boundaries. Public social acceptance passes all eight groups, including a real held-save
-transfer between two registered players. Account import, cloud save and portable ZIP export
-pass through independent Rust WASM. Editor, authored gameplay, score and service-restart
-journeys remain under verification.
+services and isolated state. Its game is now `d3903095`; the unchanged Website API/static
+source `fb042d14` retains its 25/563 verified files. Public acceptance passed 44 groups:
+
+| Public journey | Groups | Receipt under `release-final/` |
+| --- | --- | --- |
+| Registration, native sign-out and form sign-in | 5 | `public-account-03/receipt.json` |
+| Two-human social transfer and eligible score/persisted Hall | 17 | `public-runtime/acceptance-summary.json` |
+| Account WASM import/export, editor lifecycle and authoring shelf | 14 | `public-editor/consolidated-acceptance.json` |
+| Authored package, purchase, consume and Save/Continue | 4 | `public-authored/run-04/receipt.json` |
+| Actual revision replacement and Continue | 4 | `public-replacement-02/receipt.json` |
+
+The first 40 groups retain their accepted `ca728e90` identity. The final four prove the
+actual `ca728e90` to `d3903095` replacement: hold the announced checkpoint's real save PUT,
+observe its commit before the matching ACK and socket close, verify the replacement host
+before publishing its client revision, then observe automatic reload and normal Continue
+of the same wizard. Production and staging API PIDs and Caddy remain unchanged by that
+replacement. All public acceptance browsers are closed.
+
+After these journeys, Spaceship's delegated authoritative DNS service began failing.
+Normal hostname-based HTTPS remains unavailable despite occasional EDE3 stale answers;
+known-IP strict-TLS postflight serves `d3903095`. The observed KSK matches the parent DS,
+and no DNS settings were changed. `release-final/dns-postflight-20261022/` records the
+shared authoritative serving failure and its remaining scope limits.
 
 An ordinary public cold start reached Title in 146.3 seconds with no errors after 438
 resources, including all 233 audio files. The Source also preloads resident audio. Public
 journey startup bounds allow 240 seconds; subsequent behavior retains its separate deadlines.
 This observation is not a general startup-performance claim.
 
-The Website extraction is [PR8](https://github.com/JarrettOneSource/solomon-dark-website/pull/8),
-source `3be55923`. Both Linux CI runs pass the complete 63 backend/deployment contracts and
-frontend checks against the independent game artifact. The PR remains separate from
-production cutover. Website main `093aee99` only adds the tested staging Caddy route and
+The Website extraction remains open in [PR8](https://github.com/JarrettOneSource/solomon-dark-website/pull/8),
+source `2a7b40a0`. Retained Linux CI receipts pass all 63 backend/deployment contracts and
+frontend checks. Both `d3903095`-pinned reruns (`39789137765` and `39789127353`, attempt 2)
+pass and their logs verify the actual artifact revision. Production migration requires manual admission of the accepted
+Rust-aware M5 worker, its configured production artifact and a passing full gate; the
+installed TypeScript worker cannot bootstrap this artifact-layout change. The procedure
+is in Website `ops/local-ci/README.md` and remains separate from staging acceptance.
+Website main `093aee99` only adds the tested staging Caddy route and
 its operations note to the `fa08ae24` behavior. The normal M5 worker deployed it on
 October 21, preserving staging through subsequent reconciliation. Directly editing the
 managed Caddy file had been reverted by that worker; keeping the route in its source fixes
 that ownership error.
 
-The optimized local macOS ARM64 package passes contracts, packaging, actual Electron
-offline/save/resume/peer/update/failed-close acceptance and archive integrity. GitHub run
-`39676774215` independently passes Linux and both macOS desktop jobs plus the game gate.
-Windows checkout and packaging pass, but its actual desktop journey needs a passing
-complete receipt before the four-platform release can publish. Diagnostic runs retain their
-own changed harness and measured results; they are not release qualifications.
+The retained optimized local macOS ARM64 package passed contracts, packaging, actual
+Electron offline/save/resume/peer/update/failed-close acceptance and archive integrity.
+On published main `63c5e4d`, run `39784457780` has passing Linux and both macOS desktop
+jobs. Its Windows smoke stalled in the harness's synchronous process lookup and ended
+cancelled; a focused Windows diagnostic separately proves that lookup timeout while the
+native host continues through backpressure. The four-platform desktop release remains
+unqualified pending the corrected harness's complete Windows journey.
+Earlier platform and diagnostic receipts retain their own source, harness and scope.
 
 Exact manifests, logs, screenshots, raw failed attempts and successful receipts are under
 `/Users/jarrett/codex-runs/solomon-rust-parity-20261021/release-final/` and NFO's matching
@@ -428,11 +464,12 @@ The permanent published checkout is
 `/Users/jarrett/Projects/Solomon Dark/solomon-darker-rust`. The separate legacy `Rust Game`
 checkout at `690730d` still owns the M2 launchd preview on port 4180.
 
-The earlier fleet worktrees, frozen build trees and Windows checkout-fix tree are removed
-after their source and evidence were preserved. Their branches remain. The completed M2
-acceptance services on ports 5229, 5230, 9449 and 5383 are stopped; the baseline 4180 remains
-running. Current finalization and diagnostic trees, plus the Website reference/extraction
-trees, remain while their acceptance and publication work is active. The external
+Sixteen completed M2 task trees are removed after their source and evidence were preserved,
+including the Website reference/extraction and Windows transport-fix trees. Their branches
+remain where applicable. The completed M2 acceptance services on ports 5229, 5230, 9449
+and 5383 are stopped; the baseline 4180 remains running. Only the Rust finalization and
+Windows diagnostic task worktrees remain active; the permanent and baseline checkouts
+and unrelated acceptance worktrees are preserved. The external
 `release-final/worktree-cleanup.json` records exact paths and preservation checks.
 
 Jarrett explicitly accepted M2 validation on October 20. Each platform's receipt qualifies

@@ -9,10 +9,14 @@ const out = path.resolve(process.env.OUT);
 const fixture = JSON.parse(fs.readFileSync(path.resolve(__dirname,
   '../../crates/sim/tests/fixtures/website/current-save-tools-goldens.json'), 'utf8'));
 const mount = base.pathname.replace(/\/$/, '');
+const localTls = process.env.LOCAL_TLS === '1';
+assert.ok(!localTls || ['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname),
+  'LOCAL_TLS is only supported for loopback acceptance');
 const checks = [];
 const errors = [];
 const sockets = [];
 const requests = [];
+const assetStartups = [];
 const account = {
   username: `Embed${Date.now().toString(36)}`,
   email: `embed-${crypto.randomBytes(8).toString('hex')}@example.invalid`,
@@ -51,6 +55,27 @@ async function waitForDisposed(count) {
   assert.equal(await page.locator('.boneyard-workshop').getAttribute('data-editor-active'), 'true');
 }
 
+async function waitForEditorAssets(messageOffset, label, started) {
+  // Every fresh document preloads resident audio. The cancellation route also
+  // disables HTTP cache, so the next iframe cannot assume a warm asset cache.
+  await page.waitForFunction(offset => window.editorTestMessages.slice(offset)
+    .some(message => message.type === 'solomon-editor-test-state'
+      && (message.state === 'error' || (message.state === 'loading'
+        && message.message === 'Starting a private test'))), messageOffset, { timeout: 240000 });
+  const messages = await page.evaluate(offset => window.editorTestMessages.slice(offset), messageOffset);
+  assert.deepEqual(messages.filter(message => message.state === 'error'), []);
+  const frame = page.frames().find(frame => new URL(frame.url()).pathname === `${mount}/editor-test/`);
+  assert.ok(frame);
+  const resources = await frame.evaluate(() => performance.getEntriesByType('resource')
+    .map(entry => ({ path: new URL(entry.name).pathname, initiatorType: entry.initiatorType,
+      duration: entry.duration, transferSize: entry.transferSize,
+      encodedBodySize: entry.encodedBodySize, decodedBodySize: entry.decodedBodySize })));
+  const startup = { label, elapsed_ms: Date.now() - started, messages, resources };
+  assetStartups.push(startup);
+  console.log(JSON.stringify({ asset_ready: label, elapsed_ms: startup.elapsed_ms,
+    resources: resources.length, transferred: resources.filter(entry => entry.transferSize > 0).length }));
+}
+
 (async () => {
   fs.mkdirSync(out, { recursive: true });
   fs.writeFileSync(path.join(out, 'private-account.json'), JSON.stringify(account), { mode: 0o600, flag: 'wx' });
@@ -59,7 +84,7 @@ async function waitForDisposed(count) {
     browser = await chromium.launch({ headless: true,
       executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
-    const context = await browser.newContext({ ignoreHTTPSErrors: true, acceptDownloads: true,
+    const context = await browser.newContext({ ignoreHTTPSErrors: localTls, acceptDownloads: true,
       viewport: { width: 1600, height: 900 } });
     await context.addInitScript(() => {
       window.editorTestMessages = [];
@@ -137,7 +162,10 @@ async function waitForDisposed(count) {
       await new Promise(resolve => { release = resolve; });
       await route.fulfill({ response });
     });
+    let messageOffset = await page.evaluate(() => window.editorTestMessages.length);
+    let startupStarted = Date.now();
     await page.getByRole('button', { name: 'Test Boneyard' }).click();
+    await waitForEditorAssets(messageOffset, 'cancelled-test', startupStarted);
     let admissionTimer;
     try {
       await Promise.race([admission, new Promise((_, reject) => {
@@ -156,7 +184,10 @@ async function waitForDisposed(count) {
     checked('cancellation after admission claims and closes the authority while preserving draft, cloud save and resume');
 
     step = 'play editor test and return';
+    messageOffset = await page.evaluate(() => window.editorTestMessages.length);
+    startupStarted = Date.now();
     await page.getByRole('button', { name: 'Test Boneyard' }).click();
+    await waitForEditorAssets(messageOffset, 'playing-test', startupStarted);
     await page.locator('[data-editor-test-state="playing"]').waitFor();
     const frame = page.frames().find(frame => new URL(frame.url()).pathname === `${mount}/editor-test/`);
     assert.ok(frame);
@@ -187,7 +218,7 @@ async function waitForDisposed(count) {
     }
   } finally {
     if (browser) await browser.close();
-    fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ checks, failure, errors, requests, sockets }, null, 2));
+    fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ target: base.href, tls_verified: !localTls, checks, failure, errors, requests, sockets, assetStartups }, null, 2));
     console.log(JSON.stringify({ checks: checks.length, failure, output: out }));
     if (failure) process.exitCode = 1;
   }

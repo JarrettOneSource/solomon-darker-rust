@@ -233,6 +233,15 @@ primary/quickbar levels, queued belt presses and menu/interact actions. The call
 primary scene admission and the secondary-at-pointer setting, and maps `Retain` to its
 previous world target. `movement()` remains available for movement-only callers; use one
 of these sampling methods per frame. Run HUD context is `Hud::set_mode(HudMode::Run)`.
+
+Mounted Website acceptance uses `hosted-account.cjs` for sign-in/out, `website-embed.cjs`
+for Account save portability and editor cancellation/Test/Return, and `authoring-shelf.cjs`
+for local/cloud library editing, import/export, deletion and Test/Return. Use the same `PW`
+setting, set `URL` to the game mount and `OUT` to a receipt directory. These journeys create ordinary QA
+accounts and content through the UI. TLS verification is enabled by default;
+`LOCAL_TLS=1` is restricted to loopback fixtures. Fresh editor/library game documents
+allow 240 seconds for resident stock assets, followed by the normal behavior deadlines.
+
 ### Native authoritative host
 
 The packaged launcher serves its bundled client and owns one shared `GameSession` at

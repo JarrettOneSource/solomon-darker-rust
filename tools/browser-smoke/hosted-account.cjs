@@ -241,7 +241,9 @@ async function closeBrowser() {
     assert.equal(await accountMenu.getAttribute('aria-label'), `You are signed in as ${account.username}.`);
     await page.screenshot({path: path.join(output, 'registered-cloud.png')});
     await accountMenu.click();
+    const signedOutDocument = page.waitForEvent('framenavigated', frame => frame === page.mainFrame());
     await page.locator('[data-menu-action="cloud-sign-out"]').click();
+    await signedOutDocument;
     await gameTitle(null);
     assert.deepEqual(await storage(), {unscopedAbsent: true, scopedPresent: false});
     await page.screenshot({path: path.join(output, 'signed-out-title.png')});
