@@ -2,6 +2,7 @@
 // gameplay; sockets only observe accepted state. The failed-close case advances
 // only the real IndexedDB record revision to represent a concurrent writer.
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { createReadStream } from 'node:fs';
@@ -18,6 +19,7 @@ const {
 } = require('./browser-smoke/menu-journey.cjs');
 const {createNativeMessageReader} = require('./browser-smoke/native-wire.cjs');
 const {observeNativeChildren} = require('./browser-smoke/native-child.cjs');
+const {redact, sanitizeError} = require('./browser-smoke/desktop-failure.cjs');
 const obsoleteMenuImage = require('./browser-smoke/obsolete-menu-image.cjs');
 const applicationPath = resolve(process.env.SDR_DESKTOP_APP || `dist-desktop/Solomon Darker-${process.platform}-${process.arch}`);
 const manifest = JSON.parse(await readFile(join(applicationPath, 'desktop-package-manifest.json'), 'utf8'));
@@ -36,7 +38,6 @@ const profiles = await mkdtemp(join(tmpdir(), 'solomon-darker-smoke-'));
 const running = new Set();
 const errors = [];
 const resourceChecks = [];
-const redact = value => String(value).replace(/solomondarker:\/\/[^\s'"<>]+/g, '[redacted-invite]');
 const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [] };
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
@@ -159,7 +160,11 @@ try {
     exact: true
   }).click();
   const readyDeadline = Date.now() + 120000;
-  const remainingReadiness = () => Math.max(1, readyDeadline - Date.now());
+  const remainingReadiness = () => {
+    const remaining = readyDeadline - Date.now();
+    if (remaining <= 0) throw new Error('Timed out waiting for both actual Boneyard renderers');
+    return remaining;
+  };
   if (process.platform === 'win32') {
     // Materialize each real view without competing software renderers. Both
     // windows return before the original readiness assertion and share its limit.
@@ -206,7 +211,8 @@ try {
     evidence
   }));
 } catch (error) {
-  const failure = {status: 'failed', ...receipts, error: redact(error.stack), errors};
+  const sanitized = sanitizeError(error);
+  const failure = {status: 'failed', ...receipts, error: sanitized.stack, errors};
   console.error(JSON.stringify(failure));
   await writeFile(join(evidence, 'failure.json'), `${JSON.stringify(failure, null, 2)}\n`);
   for (const instance of running) {
@@ -215,13 +221,13 @@ try {
     }).catch(() => {});
     console.error(JSON.stringify({
       label: instance.label,
-      url: instance.page.url(),
+      url: redact(instance.page.url()),
       body: redact(await instance.page.locator('body').innerText({timeout: 5000}).catch(() => '')).slice(0, 2500),
       errors,
       cancelledMenuImages: receipts.cancelledMenuImages
     }));
   }
-  throw error;
+  throw sanitized;
 } finally {
   for (const instance of running) {
     await bounded(instance.app.evaluate(() => {
@@ -231,12 +237,7 @@ try {
         dialog.answer?.({response: 1, checkboxChecked: false});
       }
     }), 5000, `${instance.label} dialog cleanup timed out`).catch(() => {});
-    const timeout = setTimeout(() => {
-      try { process.kill(instance.appPid, 'SIGKILL'); }
-      catch (error) { if (error.code !== 'ESRCH') console.error(redact(error.message)); }
-    }, 25000);
-    await close(instance).catch(error => console.error(redact(error.message)));
-    clearTimeout(timeout);
+    await cleanupApp(instance.app, instance.appPid);
   }
   await bounded(rm(profiles, {
     recursive: true,
@@ -257,11 +258,16 @@ async function launch(label, userData) {
     },
     timeout: 30000
   });
-  const nativeChildren = await app.evaluateHandle(observeNativeChildren);
-  const appPid = await nativeChildren.evaluate(observer => observer.parentPid);
-  const page = await app.firstWindow({
-    timeout: 30000
-  });
+  let nativeChildren, appPid, page;
+  try {
+    nativeChildren = await app.evaluateHandle(observeNativeChildren);
+    appPid = await nativeChildren.evaluate(observer => observer.parentPid);
+    page = await app.firstWindow({timeout: 30000});
+  } catch (error) {
+    console.error(redact(error.stack));
+    await cleanupApp(app, appPid);
+    throw error;
+  }
   app.context().setDefaultTimeout(30000);
   const instance = {
     app,
@@ -281,14 +287,14 @@ async function launch(label, userData) {
     }
   };
   running.add(instance);
-  page.on('pageerror', error => errors.push(`${label}: ${error.message}`));
+  page.on('pageerror', error => errors.push(redact(`${label}: ${error.message}`)));
   page.on('console', message => {
     if (message.type() === 'warning' && message.text() === storageConflict
       && instance.state.expectedStorageConflict) {
       receipts.storageWarnings.push({label, message: message.text()});
       return;
     }
-    if (message.type() === 'error' && !message.text().includes('ERR_PROXY_CONNECTION_FAILED')) errors.push(`${label}: ${message.text()}`);
+    if (message.type() === 'error' && !message.text().includes('ERR_PROXY_CONNECTION_FAILED')) errors.push(redact(`${label}: ${message.text()}`));
   });
   page.on('response', response => {
     const url = new URL(response.url());
@@ -305,7 +311,7 @@ async function launch(label, userData) {
       }
       resourceChecks.push(obsoleteMenuImage(page, request).then(cancelled => {
         if (cancelled) receipts.cancelledMenuImages.push({label, ...cancelled});
-        else errors.push(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
+        else errors.push(redact(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
       }));
     }
   });
@@ -323,7 +329,7 @@ async function launch(label, userData) {
       if (message.type === 'welcome') {
         instance.state.id = message.credentials.player_id;
         instance.state.frame = message.frame;
-      } else if (message.type === 'snapshot') instance.state.frame = message.frame;else if (message.type === 'hosted' && message.message.kind === 'save_before_leave') instance.state.leaveReceipts++;else if (message.type === 'error') errors.push(`${label} host: ${message.code}: ${message.reason}`);
+      } else if (message.type === 'snapshot') instance.state.frame = message.frame;else if (message.type === 'hosted' && message.message.kind === 'save_before_leave') instance.state.leaveReceipts++;else if (message.type === 'error') errors.push(redact(`${label} host: ${message.code}: ${message.reason}`));
     });
   });
   await page.getByRole('button', {
@@ -569,6 +575,15 @@ async function proveUpdatePrompt(instance) {
   await notice.getByRole('button', {
     name: 'Download update'
   }).waitFor();
+  const bounds = await notice.evaluate(root => {
+    const rectangle = root.getBoundingClientRect();
+    return {left: rectangle.left, top: rectangle.top, right: rectangle.right,
+      bottom: rectangle.bottom, width: rectangle.width, height: rectangle.height,
+      viewportWidth: innerWidth, viewportHeight: innerHeight};
+  });
+  assert.ok(bounds.width > 0 && bounds.height > 0 && bounds.left >= 0 && bounds.top >= 0
+    && bounds.right <= bounds.viewportWidth && bounds.bottom <= bounds.viewportHeight,
+  `the desktop update notice is visible inside the game window: ${JSON.stringify(bounds)}`);
   await instance.page.screenshot({
     path: join(evidence, 'update-prompt.png')
   });
@@ -581,8 +596,28 @@ async function proveUpdatePrompt(instance) {
   assert.ok(instance.state.frame, 'update dismissal leaves the accepted game alive');
   return {
     shown: true,
+    bounds,
     dismissedWithoutRestart: true
   };
+}
+async function cleanupApp(app, appPid) {
+  const child = app.process();
+  const timeout = setTimeout(() => {
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    if (process.platform === 'win32' && appPid === undefined) {
+      // Before inspector initialization, Playwright owns only a Windows cmd
+      // wrapper. The native tree operation includes its actual Electron child.
+      execFile('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'],
+        {timeout: 5000, windowsHide: true}, error => { if (error) console.error(redact(error.message)); });
+      return;
+    }
+    try { process.kill(appPid ?? child.pid, 'SIGKILL'); }
+    catch (error) { if (error.code !== 'ESRCH') console.error(redact(error.message)); }
+  }, 25000);
+  try {
+    await bounded(app.close(), 30000, 'Desktop failure cleanup timed out');
+  } catch (error) { console.error(redact(error.message)); }
+  finally { clearTimeout(timeout); }
 }
 async function close(instance) {
   await bounded(instance.app.close(), 30000, `${instance.label} did not close after saving`);

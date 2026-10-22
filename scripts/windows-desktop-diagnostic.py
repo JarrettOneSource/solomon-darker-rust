@@ -74,6 +74,31 @@ def pe_header(executable, report):
     print(json.dumps(result))
 
 
+def add_notice_style(client, report):
+    index = client / "index.html"
+    before = index.read_bytes()
+    target = client / "desktop-update.css"
+    if target.exists() or before.count(b"</head>") != 1:
+        raise ValueError("The retained old client no longer matches the missing-style control")
+    wasm_hashes = {path.name: file_sha256(path) for path in client.glob("*.wasm")}
+    if not wasm_hashes:
+        raise ValueError("The retained actual client has no WASM")
+    css = subprocess.check_output(["git", "show", "HEAD:web/desktop-update.css"])
+    target.write_bytes(css)
+    index.write_bytes(before.replace(b"</head>",
+        b'<link rel="stylesheet" href="/desktop-update.css">\n</head>', 1))
+    if wasm_hashes != {path.name: file_sha256(path) for path in client.glob("*.wasm")}:
+        raise ValueError("The stylesheet control changed WASM")
+    result = {"purpose": "diagnostic-only stylesheet control; production uses the normal Trunk inclusion",
+              "stylesheetSource": "web/desktop-update.css", "stylesheetSha256": file_sha256(target),
+              "originalIndexSha256": hashlib.sha256(before).hexdigest(),
+              "updatedIndexSha256": file_sha256(index), "existingFilesChanged": ["index.html"],
+              "addedFiles": [target.name], "unchangedWasmSha256": wasm_hashes}
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps(result))
+
+
 def tail(path, maximum=8192):
     if not path.is_file():
         return ""
@@ -136,7 +161,9 @@ def smoke(directory, timeout_seconds):
     directory = directory.resolve()
     directory.mkdir(parents=True, exist_ok=True)
     node = Path(shutil.which("node")).resolve()
-    process = subprocess.Popen([str(node), "tools/smoke-desktop-runtime.mjs"], env=os.environ.copy())
+    environment = os.environ.copy()
+    environment["SDR_DESKTOP_EVIDENCE"] = str(directory)
+    process = subprocess.Popen([str(node), "tools/smoke-desktop-runtime.mjs"], env=environment)
     record = {"label": "smoke-harness", "pid": process.pid, "executable": str(node)}
     with (directory / "owned-processes.jsonl").open("a") as stream:
         stream.write(json.dumps(record) + "\n")
@@ -177,6 +204,12 @@ extract.add_argument("report", type=Path)
 pe = commands.add_parser("pe-header")
 pe.add_argument("executable", type=Path)
 pe.add_argument("report", type=Path)
+style = commands.add_parser("add-notice-style")
+style.add_argument("client", type=Path)
+style.add_argument("report", type=Path)
+red = commands.add_parser("notice-red")
+red.add_argument("directory", type=Path)
+red.add_argument("--timeout-seconds", type=int, default=240)
 watch = commands.add_parser("smoke")
 watch.add_argument("directory", type=Path)
 watch.add_argument("--timeout-seconds", type=int, default=720)
@@ -187,6 +220,17 @@ if args.command == "extract-client":
     extract_client(args.artifact_directory, args.destination, args.report)
 elif args.command == "pe-header":
     pe_header(args.executable, args.report)
+elif args.command == "add-notice-style":
+    add_notice_style(args.client, args.report)
+elif args.command == "notice-red":
+    result = smoke(args.directory, args.timeout_seconds)
+    failure = json.loads((args.directory / "failure.json").read_text())
+    if result != 1 or "the desktop update notice is visible inside the game window" not in failure["error"]:
+        raise ValueError("The old-client control did not fail at the exact notice viewport assertion")
+    receipt = {"status": "expected-regression-reproduced", "nodeExitCode": result,
+               "error": failure["error"], "control": "original accepted client without desktop-update.css"}
+    (args.directory / "expected-failure.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    print(json.dumps(receipt))
 elif args.command == "smoke":
     raise SystemExit(smoke(args.directory, args.timeout_seconds))
 else:

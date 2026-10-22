@@ -37,13 +37,21 @@ jobs:
           python - <<'PYHARNESS'
           from pathlib import Path
           import hashlib, json
-          actual = hashlib.sha256(Path('tools/smoke-desktop-runtime.mjs').read_bytes()).hexdigest()
-          assert actual == 'd94caf162837ac0742730f94c3399b7eb02a92778e144b99d1ec263854f40c6e', actual
+          import subprocess
+          expected = {'tools/smoke-desktop-runtime.mjs': '2949ded763dc7974339ae7e8578e6cfd97e9e1fe643b2ed8e7a2612dd32e5af3', 'tools/browser-smoke/desktop-failure.cjs': '8cbc659f327df3426ef4c70a71f2e5a8f1e8568236b18a4689c4ca232b0c1b82', 'tools/browser-smoke/desktop-failure.test.cjs': '7f1010e30505261a82d55a9dd8d62b6101ae511051ec204164f828a549c5c0a0', 'tools/browser-smoke/native-child.cjs': 'dad8a00c95c27ecd7deaf10852aac782c44fe12806cd8d430a4af37ea7996e09', 'tools/browser-smoke/native-child.test.cjs': '1fd1c039e20a3a25b03a72342bb0163f7b30c7ee80c11fb30b62b8102bd1d0fb', 'package.json': 'd2f4a04ac4045eade4b6905ab5514b2138118f832544abaffcb855bc42c426ef', 'web/index.html': 'a11ba78d910a61546dd70944d335f7e4eb0c0dc63bdea79104a89ad88fe0bf5f', 'web/desktop-update.css': 'c0f11f6098434ec36d89e7d755366bc4ec978415e0e71167224b8e90cb86982a'}
+          observed = []
+          for name, digest in expected.items():
+              raw = Path(name).read_bytes()
+              canonical = raw.replace(b'\r\n', b'\n')
+              actual = hashlib.sha256(canonical).hexdigest()
+              assert actual == digest, (name, actual, digest)
+              assert canonical == subprocess.check_output(['git', 'show', 'HEAD:' + name]), name
+              observed.append({'path': name, 'canonicalSha256': actual, 'checkoutSha256': hashlib.sha256(raw).hexdigest()})
           Path('reports/desktop-smoke').mkdir(parents=True, exist_ok=True)
-          Path('reports/desktop-smoke/maintained-harness.json').write_text(json.dumps({'sha256': actual, 'sourceCommits': ['fc0d28d', '8c0b3f4', 'a591313'], 'dependencyOrProductInstrumentation': False}, indent=2) + '\n')
-          print('Verified exact maintained harness:', actual)
+          Path('reports/desktop-smoke/maintained-harness.json').write_text(json.dumps({'sourceCommit': 'c6e34d1f61586091d0a739b9cdd44c9e880afa40', 'files': observed, 'normalization': 'only Windows CRLF to Git LF', 'dependencyOrProductInstrumentation': False}, indent=2) + '\n')
+          print('Verified exact canonical maintained source for', len(observed), 'files')
           PYHARNESS
-      - run: node --test tools/browser-smoke/native-child.test.cjs
+      - run: npm run test:desktop
       - name: Download the already accepted platform-independent client
         uses: actions/download-artifact@v4
         with:
@@ -89,6 +97,11 @@ jobs:
           if-no-files-found: error
       - name: Package the native authority with that unchanged client
         run: npm run package:desktop -- --platform win32 --arch x64 --skip-build --native-host target/release/solomon-darker.exe --client-root diagnostic-client --release-repository "$GITHUB_REPOSITORY"
+      - name: Prove the original client fails the actual visible-notice regression
+        timeout-minutes: 6
+        run: python scripts/windows-desktop-diagnostic.py notice-red reports/desktop-smoke-red --timeout-seconds 240
+      - name: Add only the existing notice stylesheet and its link to that retained client
+        run: python scripts/windows-desktop-diagnostic.py add-notice-style "dist-desktop/Solomon Darker-win32-x64/resources/app/client" reports/desktop-smoke/desktop-update-css-control.json
       - name: Observe the actual packaged offline and peer journey
         timeout-minutes: 14
         run: python scripts/windows-desktop-diagnostic.py smoke reports/desktop-smoke --timeout-seconds 720
@@ -104,6 +117,7 @@ jobs:
           name: windows-native-diagnostic-${{ github.run_id }}
           path: |
             reports/desktop-smoke
+            reports/desktop-smoke-red
             target/release/solomon-darker.exe
             dist-desktop/Solomon Darker-win32-x64/desktop-package-manifest.json
           if-no-files-found: error
