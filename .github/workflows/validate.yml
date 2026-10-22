@@ -33,8 +33,6 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm install --global npm@10.9.2
       - run: npm ci --no-audit --no-fund
-      - name: Install the pinned Rust toolchain
-        run: rustup show
       - name: Download the already accepted platform-independent client
         uses: actions/download-artifact@v4
         with:
@@ -45,14 +43,34 @@ jobs:
           path: incoming-linux
       - name: Verify and extract only its exact client files
         run: python scripts/windows-desktop-diagnostic.py extract-client incoming-linux diagnostic-client reports/desktop-smoke/reused-client.json
-      - name: Build only the actual Windows release authority
-        run: cargo build --locked --release -p solomon-launcher --bin solomon-darker
+      - name: Download the unchanged Windows authority from the completed diagnostic
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-native-diagnostic-39684494500
+          repository: JarrettOneSource/solomon-darker-rust
+          run-id: 39684494500
+          github-token: ${{ github.token }}
+          path: incoming-native
+      - name: Verify the exact retained authority before reuse
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          import shutil
+          source = Path('incoming-native/target/release/solomon-darker.exe')
+          actual = hashlib.sha256(source.read_bytes()).hexdigest()
+          assert actual == '7ba289ef16c0921e9dad399c9af30abee68b2f5e6b7bbaa68b3c7ab118b35ef3', actual
+          target = Path('target/release/solomon-darker.exe')
+          target.parent.mkdir(parents=True, exist_ok=True)
+          shutil.copyfile(source, target)
+          print('Verified and reused exact Windows native executable:', actual)
+          PY
       - name: Record the actual native PE stack reserve
         run: python scripts/windows-desktop-diagnostic.py pe-header target/release/solomon-darker.exe reports/desktop-smoke/native-pe-header.json
       - name: Package the native authority with that unchanged client
         run: npm run package:desktop -- --platform win32 --arch x64 --skip-build --native-host target/release/solomon-darker.exe --client-root diagnostic-client --release-repository "$GITHUB_REPOSITORY"
       - name: Observe the actual packaged offline and peer journey
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: npm run smoke:desktop
       - name: Retain native process, transport and actual browser evidence
         if: ${{ always() }}

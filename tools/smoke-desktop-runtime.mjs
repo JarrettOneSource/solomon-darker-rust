@@ -36,6 +36,18 @@ const running = new Set();
 const errors = [];
 const imageAbortQueries = [];
 const receipts = { platform: process.platform, revision: manifest.revision, diagnosticNativeExitDialogIntercept: true, clientStartups: [], cancelledMusic: [], storageWarnings: [], failedImageObservations: [] };
+let phase = 'launch-solo';
+const redact = value => String(value).replace(/solomondarker:\/\/[^\s'"<>]+/g, '[redacted-invite]');
+function progress(nextPhase) {
+  phase = nextPhase;
+  console.log(JSON.stringify({diagnosticPhase: phase, at: new Date().toISOString()}));
+}
+const heartbeat = setInterval(() => {
+  console.log(JSON.stringify({diagnosticPhase: phase, at: new Date().toISOString(), instances: [...running].map(instance => ({
+    label: instance.label, sequence: instance.state.frame?.sequence, tick: instance.state.frame?.snapshot.ticks,
+    position: position(instance), closedSockets: instance.state.closedSockets, sentDisconnects: instance.state.disconnects,
+  }))}));
+}, 15000);
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
 const playing = instance => instance.state.frame?.snapshot.boneyard && !instance.state.frame.host.loading_run_id && !instance.state.frame.host.resume_grace && !instance.state.frame.host.pause;
@@ -47,6 +59,7 @@ try {
   await solo.page.getByRole('button', {
     name: 'Play offline'
   }).click();
+  progress('solo-title-settings');
   await title(solo.page);
   await solo.page.locator('[data-menu-action="settings"]').click();
   const music = solo.page.locator('input[data-setting="music"]');
@@ -57,6 +70,7 @@ try {
   await solo.page.locator('[data-setting="reverse-hotbar"]').click();
   await solo.page.locator('[data-menu-action="settings-back"]').click();
   await solo.page.locator('[data-menu-action="settings-back"]').click();
+  progress('solo-college-admission');
   await enterHub(solo, 'Offline', 'fire');
   const runtime = await solo.page.evaluate(() => ({
     origin: location.origin,
@@ -68,6 +82,7 @@ try {
   const child = await hostProcess(solo.app);
   assert.ok(child.command.includes('--desktop'), 'the app owns the canonical native desktop scope');
   assert.equal(child.command.includes(runtime.endpoint.credential), false);
+  progress('solo-movement');
   const movement = await move(solo);
   await solo.page.screenshot({
     path: join(evidence, 'solo.png')
@@ -75,13 +90,16 @@ try {
   const updateStatus = await solo.page.evaluate(() => window.solomonDarkRuntime.desktop.checkUpdates());
   assert.equal(updateStatus.update, null);
   assert.ok(updateStatus.updateError, 'offline update failure does not block play');
+  progress('solo-save-close');
   await close(solo);
   assert.ok(solo.state.leaveReceipts > 0, 'ordinary app close awaited the actual host save receipt');
   await waitForExit(child.pid);
+  progress('launch-resume');
   const resumed = await launch('resume', join(profiles, 'solo'));
   await resumed.page.getByRole('button', {
     name: 'Play offline'
   }).click();
+  progress('resume-title-settings');
   await title(resumed.page);
   const preferences = await resumed.page.evaluate(() =>
     JSON.parse(localStorage.getItem('solomon-dark-game-settings-v1')));
@@ -103,6 +121,7 @@ try {
   assert.ok(locomotion.position.x > movement.before + 10);
   await resumed.page.locator('[data-menu-action="play"]').click();
   await resumed.page.locator('[data-menu-action="continue"]').click();
+  progress('resume-college');
   await readyHub(resumed);
   assert.ok(position(resumed).x > movement.before + 10, 'ordinary Continue restored the committed source document');
   await resumed.page.screenshot({
@@ -116,8 +135,11 @@ try {
     nativeHostExited: true,
     sourceSaveSchema: saved.document.schemaVersion
   };
+  progress('resume-update-prompt');
   receipts.updatePrompt = await proveUpdatePrompt(resumed);
+  progress('resume-failed-close');
   receipts.failedClose = await proveFailedClose(resumed);
+  progress('launch-host');
   const host = await launch('host', join(profiles, 'host'));
   const port = await freePort();
   await host.page.getByLabel('Your reachable IP or hostname').fill('127.0.0.1');
@@ -126,7 +148,9 @@ try {
     name: 'Host game',
     exact: true
   }).click();
+  progress('host-college-admission');
   await enterHub(host, 'PeerHost', 'fire');
+  progress('host-process-and-invite');
   const hostChild = await hostProcess(host.app);
   const invitation = await host.app.evaluate(({
     Menu,
@@ -135,18 +159,23 @@ try {
     Menu.getApplicationMenu().items.find(row => row.label === 'Game').submenu.items.find(row => row.label === 'Copy multiplayer invite').click();
     return clipboard.readText();
   });
+  progress('launch-guest');
   const guest = await launch('guest', join(profiles, 'guest'));
+  progress('guest-join');
   await guest.page.getByLabel('Multiplayer invite').fill(invitation);
   await guest.page.getByRole('button', {
     name: 'Join game',
     exact: true
   }).click();
+  progress('guest-college-admission');
   await enterHub(guest, 'PeerGuest', 'air');
   await waitFor(() => [host, guest].every(instance => instance.state.frame?.snapshot.participant_order.length === 2), 'both admitted peers');
   assert.notEqual(host.state.id, guest.state.id);
   assert.equal(host.state.frame.host.authority_player_id, host.state.id);
   assert.equal(guest.state.frame.host.authority_player_id, host.state.id);
+  progress('guest-movement');
   const guestMovement = await move(guest);
+  progress('peer-boneyard');
   await host.page.getByRole('button', {
     name: 'Enter the Boneyard',
     exact: true
@@ -180,15 +209,19 @@ try {
     evidence
   }));
 } catch (error) {
+  clearInterval(heartbeat);
+  const originalError = redact(error.stack);
+  console.error(JSON.stringify({diagnosticPhase: phase, originalError}));
+  await writeFile(join(evidence, 'original-error.json'), `${JSON.stringify({phase, originalError}, null, 2)}\n`);
   const failedInstances = [];
   for (const instance of running) {
     await instance.page.screenshot({
-      path: join(evidence, `${instance.label}-failure.png`)
-    }).catch(() => {});
+      path: join(evidence, `${instance.label}-failure.png`), timeout: 8000,
+    }).catch(error => console.error(JSON.stringify({label: instance.label, diagnosticScreenshotError: redact(error.message)})));
     const failed = {
       label: instance.label,
       url: instance.page.url(),
-      body: (await instance.page.locator('body').innerText().catch(() => '')).slice(0, 2500),
+      body: (await instance.page.locator('body').innerText({timeout: 5000}).catch(() => '')).slice(0, 2500),
       accepted: {
         playerId: instance.state.id,
         sequence: instance.state.frame?.sequence,
@@ -197,25 +230,26 @@ try {
         closedSockets: instance.state.closedSockets,
         sentDisconnects: instance.state.disconnects,
       },
-      nativeExitDialogs: await instance.app.evaluate(() => globalThis.__nativeExitDialogs || []).catch(() => []),
+      nativeExitDialogs: await bounded(instance.app.evaluate(() => globalThis.__nativeExitDialogs || []), 5000, 'native exit dialogs').catch(error => ({diagnosticError: redact(error.message)})),
     };
     failedInstances.push(failed);
     console.error(JSON.stringify({ ...failed, errors }));
   }
-  await Promise.allSettled(imageAbortQueries);
+  await bounded(Promise.allSettled(imageAbortQueries), 5000, 'image observations').catch(() => {});
   await writeFile(join(evidence, 'failure.json'), `${JSON.stringify({
-    status: 'failed', error: error.stack, ...receipts, instances: failedInstances, errors,
+    status: 'failed', phase, error: originalError, ...receipts, instances: failedInstances, errors,
   }, null, 2)}\n`);
   throw error;
 } finally {
+  clearInterval(heartbeat);
   for (const instance of running) {
-    await instance.app.evaluate(() => {
+    await bounded(instance.app.evaluate(() => {
       const dialog = globalThis.__desktopCloseSmoke;
       if (dialog) {
         dialog.cleanup = true;
         dialog.answer?.({response: 1, checkboxChecked: false});
       }
-    }).catch(() => {});
+    }), 5000, 'dialog cleanup').catch(() => {});
     const timeout = setTimeout(() => instance.app.process().kill('SIGKILL'), 25000);
     await instance.app.close().catch(() => {});
     clearTimeout(timeout);
@@ -224,6 +258,14 @@ try {
     recursive: true,
     force: true
   });
+}
+async function bounded(operation, timeout, label) {
+  let timer;
+  try {
+    return await Promise.race([operation, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`Timed out collecting ${label}`)), timeout);
+    })]);
+  } finally { clearTimeout(timer); }
 }
 async function launch(label, userData) {
   const app = await electron.launch({
@@ -364,11 +406,14 @@ async function title(page) {
   receipts.clientStartups.push({label: instance.label, bootstrap: bootstrap.scripts[0], resources});
 }
 async function enterHub(instance, name, element) {
+  progress(`${instance.label}-title`);
   await title(instance.page);
+  progress(`${instance.label}-start-new-game`);
   await startNewGame(instance.page, {
     name,
     element
   });
+  progress(`${instance.label}-ready-college`);
   await readyHub(instance);
   assert.equal(instance.state.frame.snapshot.participants[instance.state.id].player.selection.name, name);
 }

@@ -32,7 +32,10 @@ export async function startRuntimeService({ applicationRoot, entry, executable, 
     const record = value => appendFileSync(filename, `${JSON.stringify({ at: new Date().toISOString(), ...value })}\n`)
     let stderr = ''
     record({ event: 'spawn', pid: child.pid, parentPid: process.pid })
-    child.stderr.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-32768) })
+    child.stderr.on('data', chunk => {
+      stderr = `${stderr}${chunk}`.slice(-32768)
+      record({ event: 'stderr', pid: child.pid, text: redact(chunk).slice(-8192) })
+    })
     child.on('error', error => record({ event: 'process-error', message: redact(error.message) }))
     child.once('exit', (code, signal) => record({
       event: 'exit', pid: child.pid, code, signal, stopping,
