@@ -2,7 +2,6 @@
 // gameplay; sockets only observe accepted state. The failed-close case advances
 // only the real IndexedDB record revision to represent a concurrent writer.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { createReadStream } from 'node:fs';
@@ -18,6 +17,7 @@ const {
   startNewGame
 } = require('./browser-smoke/menu-journey.cjs');
 const {createNativeMessageReader} = require('./browser-smoke/native-wire.cjs');
+const {observeNativeChildren} = require('./browser-smoke/native-child.cjs');
 const obsoleteMenuImage = require('./browser-smoke/obsolete-menu-image.cjs');
 const applicationPath = resolve(process.env.SDR_DESKTOP_APP || `dist-desktop/Solomon Darker-${process.platform}-${process.arch}`);
 const manifest = JSON.parse(await readFile(join(applicationPath, 'desktop-package-manifest.json'), 'utf8'));
@@ -224,12 +224,14 @@ async function launch(label, userData) {
     },
     timeout: 30000
   });
+  const nativeChildren = await app.evaluateHandle(observeNativeChildren);
   const page = await app.firstWindow({
     timeout: 30000
   });
   app.context().setDefaultTimeout(30000);
   const instance = {
     app,
+    nativeChildren,
     page,
     label,
     state: {
@@ -485,27 +487,11 @@ async function proveFailedClose(instance) {
   };
 }
 async function hostProcess(application) {
-  const parent = await application.evaluate(() => process.pid);
-  if (process.platform === 'win32') {
-    const raw = execFileSync('powershell.exe', ['-NoProfile', '-Command', `Get-CimInstance Win32_Process -Filter "ParentProcessId=${parent}" | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress`], {
-      encoding: 'utf8'
-    });
-    const value = JSON.parse(raw),
-      child = (Array.isArray(value) ? value : [value]).find(row => row.CommandLine?.includes('--desktop'));
-    assert.ok(child, 'the app owns a separate native authority');
-    return {
-      pid: child.ProcessId,
-      command: child.CommandLine
-    };
-  }
-  const child = execFileSync('ps', ['-axo', 'pid=,ppid=,command='], {
-    encoding: 'utf8'
-  }).split('\n').map(line => /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(line)).find(parts => parts && Number(parts[2]) === parent && parts[3].includes('--desktop'));
-  assert.ok(child, 'the app owns a separate native authority');
-  return {
-    pid: Number(child[1]),
-    command: child[3]
-  };
+  const instance = [...running].find(instance => instance.app === application);
+  const children = await instance.nativeChildren.evaluate(observer => observer.nativeChildren());
+  assert.equal(children.length, 1, 'the app owns one live separate native authority');
+  const [child] = children;
+  return {pid: child.pid, command: child.arguments.join(' ')};
 }
 async function proveUpdatePrompt(instance) {
   const fixture = {
