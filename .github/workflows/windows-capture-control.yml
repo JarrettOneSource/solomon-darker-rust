@@ -1,0 +1,95 @@
+name: Compare Windows capture paths on retained pair
+
+on:
+  push:
+    branches: [diagnostic/windows-capture-control-20261022]
+    paths: [.github/workflows/windows-capture-control.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SDR_CAPTURE_PAIR_RUN_ID: '39844938836'
+
+jobs:
+  control:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 5c094aaa962b9ef0b231651f08a91e4330ff4317
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --global npm@10.9.2
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ env.SDR_CAPTURE_PAIR_RUN_ID }}
+          name: windows-capture-pair-${{ env.SDR_CAPTURE_PAIR_RUN_ID }}
+          path: capture-input
+      - name: Obtain only the diagnostic driver source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: capture-driver
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            tools/smoke-desktop-runtime.mjs
+            tools/windows-capture-control.mjs
+            tools/instrument-capture-playwright.py
+            tools/verify-windows-capture-pair.py
+            tools/run-windows-capture-control.mjs
+      - name: Install the test-only controls and verify the immutable package
+        id: prepare
+        run: |
+          cp capture-driver/tools/smoke-desktop-runtime.mjs tools/
+          cp capture-driver/tools/windows-capture-control.mjs tools/
+          cp capture-driver/tools/instrument-capture-playwright.py tools/
+          cp capture-driver/tools/verify-windows-capture-pair.py tools/
+          cp capture-driver/tools/run-windows-capture-control.mjs tools/
+          python tools/verify-windows-capture-pair.py
+          python tools/instrument-capture-playwright.py
+          node --check node_modules/playwright-core/lib/coreBundle.js
+          npm run test:desktop
+      - name: Original Playwright path, first fresh journey
+        id: playwright1
+        continue-on-error: true
+        timeout-minutes: 15
+        run: node tools/run-windows-capture-control.mjs playwright-1 playwright
+      - name: Native Electron path, second fresh journey
+        id: electron
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 15
+        run: node tools/run-windows-capture-control.mjs electron electron
+      - name: Original Playwright path, third fresh journey
+        id: playwright2
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 15
+        run: node tools/run-windows-capture-control.mjs playwright-2 playwright
+      - name: Retain every control outcome
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-capture-control-${{ github.run_id }}
+          path: reports/windows-capture-control
+          if-no-files-found: error
+      - name: Keep failed control paths visible
+        if: ${{ !cancelled() }}
+        run: |
+          [[ '${{ steps.playwright1.outcome }}' == success ]]
+          [[ '${{ steps.electron.outcome }}' == success ]]
+          [[ '${{ steps.playwright2.outcome }}' == success ]]

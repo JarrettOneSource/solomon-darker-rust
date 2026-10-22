@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { _electron as electron } from 'playwright-core';
+import { createWindowsCaptureControl } from './windows-capture-control.mjs';
 const require = createRequire(import.meta.url);
 const {
   startNewGame
@@ -34,6 +35,7 @@ const evidence = resolve(process.env.SDR_DESKTOP_EVIDENCE || 'reports/desktop-sm
 await mkdir(evidence, {
   recursive: true
 });
+const captureControl = createWindowsCaptureControl(evidence);
 const profiles = await mkdtemp(join(tmpdir(), 'solomon-darker-smoke-'));
 const running = new Set();
 const errors = [];
@@ -193,22 +195,21 @@ try {
     hostSequence: host.state.frame.sequence, guestSequence: guest.state.frame.sequence};
   assert.equal(host.state.frame.snapshot.boneyard.run_id, guest.state.frame.snapshot.boneyard.run_id);
   assert.equal(host.state.frame.snapshot.participant_order.length, 2);
+  await captureControl.observePair('before-final-guest-minimize', [host, guest]);
   if (process.platform === 'win32') await setWindowMinimized(guest, true);
-  await host.page.screenshot({
-    path: join(evidence, 'peer-host-boneyard.png')
-  });
+  await captureControl.observePair('after-final-guest-minimize', [host, guest]);
+  const hostCapture = await captureControl.capture(host, 'peer-host-boneyard.png');
   if (process.platform === 'win32') {
     await setWindowMinimized(guest, false);
     await setWindowMinimized(host, true);
   }
-  await guest.page.screenshot({
-    path: join(evidence, 'peer-guest-boneyard.png')
-  });
+  const guestCapture = await captureControl.capture(guest, 'peer-guest-boneyard.png');
   receipts.peer = {
     hostPlayer: host.state.id,
     guestPlayer: guest.state.id,
     guestMovement,
     readiness,
+    captures: [hostCapture, guestCapture],
     sharedBoneyardPlayers: 2
   };
   await close(guest);
