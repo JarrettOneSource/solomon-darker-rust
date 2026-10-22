@@ -19,6 +19,7 @@ const {
 } = require('./browser-smoke/menu-journey.cjs');
 const {createNativeMessageReader} = require('./browser-smoke/native-wire.cjs');
 const {observeNativeChildren} = require('./browser-smoke/native-child.cjs');
+const {redact, sanitizeError} = require('./browser-smoke/desktop-failure.cjs');
 const obsoleteMenuImage = require('./browser-smoke/obsolete-menu-image.cjs');
 const applicationPath = resolve(process.env.SDR_DESKTOP_APP || `dist-desktop/Solomon Darker-${process.platform}-${process.arch}`);
 const manifest = JSON.parse(await readFile(join(applicationPath, 'desktop-package-manifest.json'), 'utf8'));
@@ -37,7 +38,6 @@ const profiles = await mkdtemp(join(tmpdir(), 'solomon-darker-smoke-'));
 const running = new Set();
 const errors = [];
 const resourceChecks = [];
-const redact = value => String(value).replace(/solomondarker:\/\/[^\s'"<>]+/g, '[redacted-invite]');
 const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [] };
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
@@ -211,7 +211,8 @@ try {
     evidence
   }));
 } catch (error) {
-  const failure = {status: 'failed', ...receipts, error: redact(error.stack), errors};
+  const sanitized = sanitizeError(error);
+  const failure = {status: 'failed', ...receipts, error: sanitized.stack, errors};
   console.error(JSON.stringify(failure));
   await writeFile(join(evidence, 'failure.json'), `${JSON.stringify(failure, null, 2)}\n`);
   for (const instance of running) {
@@ -220,13 +221,13 @@ try {
     }).catch(() => {});
     console.error(JSON.stringify({
       label: instance.label,
-      url: instance.page.url(),
+      url: redact(instance.page.url()),
       body: redact(await instance.page.locator('body').innerText({timeout: 5000}).catch(() => '')).slice(0, 2500),
       errors,
       cancelledMenuImages: receipts.cancelledMenuImages
     }));
   }
-  throw error;
+  throw sanitized;
 } finally {
   for (const instance of running) {
     await bounded(instance.app.evaluate(() => {
@@ -286,14 +287,14 @@ async function launch(label, userData) {
     }
   };
   running.add(instance);
-  page.on('pageerror', error => errors.push(`${label}: ${error.message}`));
+  page.on('pageerror', error => errors.push(redact(`${label}: ${error.message}`)));
   page.on('console', message => {
     if (message.type() === 'warning' && message.text() === storageConflict
       && instance.state.expectedStorageConflict) {
       receipts.storageWarnings.push({label, message: message.text()});
       return;
     }
-    if (message.type() === 'error' && !message.text().includes('ERR_PROXY_CONNECTION_FAILED')) errors.push(`${label}: ${message.text()}`);
+    if (message.type() === 'error' && !message.text().includes('ERR_PROXY_CONNECTION_FAILED')) errors.push(redact(`${label}: ${message.text()}`));
   });
   page.on('response', response => {
     const url = new URL(response.url());
@@ -310,7 +311,7 @@ async function launch(label, userData) {
       }
       resourceChecks.push(obsoleteMenuImage(page, request).then(cancelled => {
         if (cancelled) receipts.cancelledMenuImages.push({label, ...cancelled});
-        else errors.push(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
+        else errors.push(redact(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
       }));
     }
   });
@@ -328,7 +329,7 @@ async function launch(label, userData) {
       if (message.type === 'welcome') {
         instance.state.id = message.credentials.player_id;
         instance.state.frame = message.frame;
-      } else if (message.type === 'snapshot') instance.state.frame = message.frame;else if (message.type === 'hosted' && message.message.kind === 'save_before_leave') instance.state.leaveReceipts++;else if (message.type === 'error') errors.push(`${label} host: ${message.code}: ${message.reason}`);
+      } else if (message.type === 'snapshot') instance.state.frame = message.frame;else if (message.type === 'hosted' && message.message.kind === 'save_before_leave') instance.state.leaveReceipts++;else if (message.type === 'error') errors.push(redact(`${label} host: ${message.code}: ${message.reason}`));
     });
   });
   await page.getByRole('button', {
