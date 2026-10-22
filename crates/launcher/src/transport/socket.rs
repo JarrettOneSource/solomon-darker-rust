@@ -233,6 +233,15 @@ pub(super) fn serve_connection(
             return;
         }
         let close = drive_peer(socket, &worker_server, &peer);
+        if std::env::var_os("SDR_NATIVE_DIAGNOSTICS").is_some() {
+            let credential = std::env::var("SDR_GAME_BOOTSTRAP_CREDENTIAL").unwrap_or_default();
+            let reason = if credential.is_empty() {
+                close.reason.clone()
+            } else {
+                close.reason.replace(&credential, "[redacted]")
+            };
+            eprintln!("native socket terminal: peer={id} code={:?} reason={reason:?}", close.code);
+        }
         finish_peer(&worker_server, &peer);
         // The bounded channel may block this socket worker, never the authority. Shutdown
         // drops its receiver first, guaranteeing this critical send can finish or fail.
@@ -343,8 +352,11 @@ fn drive_peer(
                         // The complete frame, including its remaining byte offset, now
                         // belongs to Tungstenite. Flush it before accepting another.
                         write_pending = true;
+                        if std::env::var_os("SDR_NATIVE_DIAGNOSTICS").is_some() {
+                            eprintln!("native socket output retained: peer={}", peer.id());
+                        }
                     }
-                    Err(error) => return failed_connection(error),
+                    Err(error) => return failed_connection_at(error, "reliable-or-snapshot-send"),
                 }
             }
             if let Some(close) = &mut closing {
@@ -359,7 +371,7 @@ fn drive_peer(
                     match socket.close(Some(close_frame(&close.detail))) {
                         Ok(()) => {}
                         Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
-                        Err(error) => return failed_connection(error),
+                        Err(error) => return failed_connection_at(error, "requested-close"),
                     }
                     close.queued = true;
                 }
@@ -367,7 +379,7 @@ fn drive_peer(
                 match socket.send(Message::Ping(Bytes::new())) {
                     Ok(()) => {}
                     Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
-                    Err(error) => return failed_connection(error),
+                    Err(error) => return failed_connection_at(error, "heartbeat-send"),
                 }
                 missed_pongs += 1;
                 last_ping = Instant::now();
@@ -401,7 +413,7 @@ fn drive_peer(
                 match socket.close(Some(close_frame(&close))) {
                     Ok(()) => {}
                     Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
-                    Err(error) => return failed_connection(error),
+                    Err(error) => return failed_connection_at(error, "binary-rejection-close"),
                 }
                 closing =
                     Some(SocketClose { started: Instant::now(), detail: close, queued: true });
@@ -437,9 +449,10 @@ fn drive_peer(
             Err(Error::Protocol(_)) => {
                 return reject_frame(&mut socket, 1002, "invalid WebSocket frame");
             }
-            Err(error) => return failed_connection(error),
+            Err(error) => return failed_connection_at(error, "read"),
         }
         // read queues automatic pong and close replies; do not replace them manually.
+        let was_write_pending = write_pending;
         write_pending = match socket.flush() {
             Ok(()) => false,
             Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => true,
@@ -449,8 +462,14 @@ fn drive_peer(
                     |close| close.detail,
                 );
             }
-            Err(error) => return failed_connection(error),
+            Err(error) => return failed_connection_at(error, "flush"),
         };
+        if was_write_pending
+            && !write_pending
+            && std::env::var_os("SDR_NATIVE_DIAGNOSTICS").is_some()
+        {
+            eprintln!("native socket output resumed: peer={}", peer.id());
+        }
         if idle {
             thread::sleep(server.config.io_poll_interval);
         }
@@ -478,7 +497,10 @@ fn close_frame(close: &TransportClose) -> CloseFrame {
         reason: close.reason.clone().into(),
     }
 }
-fn failed_connection(error: Error) -> TransportClose {
+fn failed_connection_at(error: Error, operation: &str) -> TransportClose {
+    if std::env::var_os("SDR_NATIVE_DIAGNOSTICS").is_some() {
+        eprintln!("native socket operation failed: operation={operation} error={error}");
+    }
     TransportClose { code: None, reason: error.to_string() }
 }
 fn reject_frame(socket: &mut WebSocket<PrefixedStream>, code: u16, reason: &str) -> TransportClose {

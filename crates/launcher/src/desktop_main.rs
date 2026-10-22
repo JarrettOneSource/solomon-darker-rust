@@ -77,7 +77,10 @@ pub fn run(arguments: Vec<OsString>) -> Result<(), String> {
         .spawn(move || {
             // A native child has no Node IPC channel. EOF on the pipe provides
             // the same parent-disconnect lifetime even after an abrupt app exit.
-            let _ = io::copy(&mut io::stdin().lock(), &mut io::sink());
+            let parent_result = io::copy(&mut io::stdin().lock(), &mut io::sink());
+            if std::env::var_os("SDR_NATIVE_DIAGNOSTICS").is_some() {
+                eprintln!("desktop parent pipe finished: {parent_result:?}");
+            }
             parent_closed.store(true, Ordering::Release);
         })
         .map_err(|error| format!("Cannot watch the desktop parent: {error}"))?;
