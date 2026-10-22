@@ -18,6 +18,7 @@ const {
   startNewGame
 } = require('./browser-smoke/menu-journey.cjs');
 const {createNativeMessageReader} = require('./browser-smoke/native-wire.cjs');
+const obsoleteCreateImage = require('./browser-smoke/obsolete-create-image.cjs');
 const applicationPath = resolve(process.env.SDR_DESKTOP_APP || `dist-desktop/Solomon Darker-${process.platform}-${process.arch}`);
 const manifest = JSON.parse(await readFile(join(applicationPath, 'desktop-package-manifest.json'), 'utf8'));
 const executable = resolve(applicationPath, manifest.executable);
@@ -34,7 +35,8 @@ await mkdir(evidence, {
 const profiles = await mkdtemp(join(tmpdir(), 'solomon-darker-smoke-'));
 const running = new Set();
 const errors = [];
-const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], storageWarnings: [] };
+const resourceChecks = [];
+const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledCreateImages: [], storageWarnings: [] };
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
 const playing = instance => instance.state.frame?.snapshot.boneyard && !instance.state.frame.host.loading_run_id && !instance.state.frame.host.resume_grace && !instance.state.frame.host.pause;
@@ -168,6 +170,7 @@ try {
   await close(guest);
   await close(host);
   await waitForExit(hostChild.pid);
+  await Promise.all(resourceChecks);
   assert.deepEqual(errors, []);
   await writeFile(join(evidence, 'receipt.json'), `${JSON.stringify({
     status: 'ok',
@@ -187,7 +190,8 @@ try {
       label: instance.label,
       url: instance.page.url(),
       body: (await instance.page.locator('body').innerText().catch(() => '')).slice(0, 2500),
-      errors
+      errors,
+      cancelledCreateImages: receipts.cancelledCreateImages
     }));
   }
   throw error;
@@ -261,7 +265,10 @@ async function launch(label, userData) {
         receipts.cancelledMusic.push({label, path: new URL(request.url()).pathname});
         return;
       }
-      errors.push(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
+      resourceChecks.push(obsoleteCreateImage(page, request).then(cancelled => {
+        if (cancelled) receipts.cancelledCreateImages.push({label, ...cancelled});
+        else errors.push(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
+      }));
     }
   });
   page.on('websocket', socket => {
