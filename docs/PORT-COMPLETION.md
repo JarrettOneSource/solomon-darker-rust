@@ -382,6 +382,13 @@ its intended top-right position. The four-platform release remains unqualified u
 configured build matrix passes.
 Earlier platform and diagnostic receipts retain their own source, harness and scope.
 
+Run `39820489318` passed the game and Linux desktop gates, but inspection of its actual
+Linux ZIP found Trunk's zero-byte `client/.trunk-lock` build marker. The remaining jobs and
+publication were cancelled. Desktop preparation now removes these locks after successful
+client validation, matching hosted packaging. The fresh/prebuilt regression first failed on
+the retained marker; all 19 desktop tests pass after the correction. Replacement archives
+still require the configured platform checks and archive inspection.
+
 The stylesheet addition changes only the desktop notice's presentation. The hosted client
 does not create that notice without the Electron bridge, so installed staging and the
 checksum-pinned `d3903095` Website artifact retain their accepted gameplay scope. The Rust
@@ -483,11 +490,11 @@ The permanent published checkout is
 `/Users/jarrett/Projects/Solomon Dark/solomon-darker-rust`. The separate legacy `Rust Game`
 checkout at `690730d` still owns the M2 launchd preview on port 4180.
 
-Sixteen completed M2 task trees are removed after their source and evidence were preserved,
-including the Website reference/extraction and Windows transport-fix trees. Their branches
+Eighteen completed M2 task trees are removed after their source and evidence were preserved,
+including the Website reference/extraction and Windows transport/acceptance trees. Their branches
 remain where applicable. The completed M2 acceptance services on ports 5229, 5230, 9449
-and 5383 are stopped; the baseline 4180 remains running. Rust finalization and Windows
-acceptance task worktrees remain active; the permanent and baseline checkouts
+and 5383 are stopped; the baseline 4180 remains running. Only the Rust finalization task
+checkout remains active for release completion; the permanent and baseline checkouts
 and unrelated acceptance worktrees are preserved. The external
 `release-final/worktree-cleanup.json` records exact paths and preservation checks.
 

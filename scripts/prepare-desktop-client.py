@@ -22,17 +22,19 @@ def prepare_desktop_client(dist: Path) -> str:
         document, name, bootstrap = externalize_trunk_bootstrap(document, "/")
         (dist / name).write_text(bootstrap, encoding="utf-8")
         index.write_text(document, encoding="utf-8")
-        return name
-    # A prebuilt desktop distribution may already have been prepared by dev or
-    # packaging. Validate this exact owned initializer instead of rewriting it.
-    scripts = re.findall(r'<script type="module" src="([^"]+)"></script>', document)
-    if len(scripts) != 1 or not re.fullmatch(r"/solomon-boot-[0-9a-f]{16}\.mjs", scripts[0]):
-        raise ValueError("Desktop requires a root Trunk initializer")
-    name = scripts[0][1:]
-    bootstrap = (dist / name).read_text(encoding="utf-8")
-    validate_trunk_bootstrap(bootstrap, "/")
-    if bootstrap_name(bootstrap) != name:
-        raise ValueError("The desktop initializer does not match its content hash")
+    else:
+        # A prebuilt desktop distribution may already have been prepared by dev or
+        # packaging. Validate this exact owned initializer instead of rewriting it.
+        scripts = re.findall(r'<script type="module" src="([^"]+)"></script>', document)
+        if len(scripts) != 1 or not re.fullmatch(r"/solomon-boot-[0-9a-f]{16}\.mjs", scripts[0]):
+            raise ValueError("Desktop requires a root Trunk initializer")
+        name = scripts[0][1:]
+        bootstrap = (dist / name).read_text(encoding="utf-8")
+        validate_trunk_bootstrap(bootstrap, "/")
+        if bootstrap_name(bootstrap) != name:
+            raise ValueError("The desktop initializer does not match its content hash")
+    for lock in dist.rglob(".trunk-lock"):
+        lock.unlink()
     return name
 
 

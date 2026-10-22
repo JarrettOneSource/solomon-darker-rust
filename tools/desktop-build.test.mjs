@@ -30,9 +30,12 @@ async function distribution(context, document) {
 
 test('desktop artifacts externalize the root initializer and retain prepared builds', async context => {
   const root = await distribution(context, trunkDocument());
+  await writeFile(join(root, '.trunk-lock'), '');
   const options = {skipBuild: true, nativeHost: process.execPath, clientRoot: root};
   const artifacts = await desktopArtifacts(options);
   assert.equal(artifacts.client, root);
+  assert.equal((await readdir(root)).includes('.trunk-lock'), false,
+    'a fresh desktop distribution excludes the Trunk build lock');
   const document = await readFile(join(root, 'index.html'), 'utf8');
   assert.equal(document.includes('<script type="module">'), false);
   assert.equal(document.includes('solomon-game-mount'), false);
@@ -41,7 +44,10 @@ test('desktop artifacts externalize the root initializer and retain prepared bui
   const bootstrap = await readFile(join(root, initializer[1]), 'utf8');
   assert.match(bootstrap, /from '\/solomon-web-[a-f0-9]+\.js'/);
   assert.match(bootstrap, /module_or_path: '\/solomon-web-[a-f0-9]+_bg\.wasm'/);
+  await writeFile(join(root, '.trunk-lock'), '');
   await desktopArtifacts(options);
+  assert.equal((await readdir(root)).includes('.trunk-lock'), false,
+    'a prebuilt desktop distribution also excludes the Trunk build lock');
   assert.equal(await readFile(join(root, 'index.html'), 'utf8'), document);
   assert.equal((await readdir(root)).filter(name => name.endsWith('.mjs')).length, 1);
 });
