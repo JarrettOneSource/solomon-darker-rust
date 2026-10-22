@@ -150,6 +150,87 @@ fn game_sockets_bypass_asset_workers_and_keep_text_order_and_close_identity() {
 }
 
 #[test]
+fn a_slow_reader_keeps_ordered_messages_and_receives_the_current_snapshot_after_resuming() {
+    let assets = TestAssets::new();
+    let server = assets.start(TransportConfig::default());
+    let origin = format!("http://{}", server.local_addr());
+    let mut client = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
+    let peer = connected(&server);
+    // This exceeds the loopback send buffer. A stopped renderer must retain the
+    // queued frame across I/O deadlines, then resume without loss or duplication.
+    let large: Arc<str> = Arc::from("0123456789abcdef".repeat(1024 * 1024));
+    peer.send_reliable(Arc::clone(&large)).unwrap();
+    peer.send_reliable(Arc::from("control after the large frame")).unwrap();
+    peer.replace_snapshot(Arc::from("obsolete snapshot")).unwrap();
+    assert!(
+        matches!(server.recv_timeout(Duration::from_millis(300)), Err(RecvTimeoutError::Timeout)),
+        "a temporary slow reader must not disconnect before the heartbeat deadline"
+    );
+    peer.replace_snapshot(Arc::from("current snapshot")).unwrap();
+
+    let Message::Text(received) = next_message(&mut client) else {
+        panic!("the reliable large frame arrives intact after reading resumes");
+    };
+    assert_eq!(received.as_str(), large.as_ref());
+    assert_eq!(next_message(&mut client), Message::Text("control after the large frame".into()));
+    assert_eq!(next_message(&mut client), Message::Text("current snapshot".into()));
+    client.send(Message::Text("input after resuming".into())).unwrap();
+    let TransportEvent::Message { peer_id, payload } = next_event(&server) else {
+        panic!("the same connection still delivers input after output resumes");
+    };
+    assert_eq!(peer_id, peer.id());
+    assert_eq!(payload, "input after resuming");
+}
+
+#[test]
+fn a_stalled_large_frame_still_expires_at_the_existing_heartbeat_deadline() {
+    let assets = TestAssets::new();
+    let server = assets.start(TransportConfig {
+        heartbeat_interval: Duration::from_millis(50),
+        missed_pong_limit: 2,
+        close_timeout: Duration::from_millis(50),
+        ..TransportConfig::default()
+    });
+    let origin = format!("http://{}", server.local_addr());
+    let _silent = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
+    let peer = connected(&server);
+    peer.send_reliable(Arc::from("x".repeat(16 * 1024 * 1024))).unwrap();
+    let TransportEvent::Disconnected { peer_id, close } = next_event(&server) else {
+        panic!("output backpressure cannot suppress the heartbeat timeout");
+    };
+    assert_eq!(peer_id, peer.id());
+    assert_eq!(close.code, Some(4000));
+    assert_eq!(close.reason, "connection timed out");
+}
+
+#[test]
+fn an_explicit_close_during_output_backpressure_keeps_its_own_deadline_and_identity() {
+    let assets = TestAssets::new();
+    let server = assets.start(TransportConfig {
+        close_timeout: Duration::from_millis(50),
+        ..TransportConfig::default()
+    });
+    let origin = format!("http://{}", server.local_addr());
+    let _silent = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
+    let peer = connected(&server);
+    peer.send_reliable(Arc::from("x".repeat(16 * 1024 * 1024))).unwrap();
+    assert!(matches!(
+        server.recv_timeout(Duration::from_millis(300)),
+        Err(RecvTimeoutError::Timeout)
+    ));
+    peer.close(4002, "session replaced").unwrap();
+    let TransportEvent::Disconnected { peer_id, close } = server
+        .recv_timeout(Duration::from_millis(500))
+        .expect("the explicit close deadline remains bounded")
+    else {
+        panic!("the requested close retires the stalled peer");
+    };
+    assert_eq!(peer_id, peer.id());
+    assert_eq!(close.code, Some(4002));
+    assert_eq!(close.reason, "session replaced");
+}
+
+#[test]
 fn upgrade_origin_binary_and_heartbeat_contracts_are_checked_on_real_sockets() {
     let assets = TestAssets::new();
     let server = assets.start(TransportConfig {
