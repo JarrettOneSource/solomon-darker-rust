@@ -5,14 +5,22 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const {createNativeMessageReader} = require('./native-wire.cjs');
+const obsoleteCreateImage = require('./obsolete-create-image.cjs');
 const {chromium} = require(path.resolve(process.env.PW));
 
 const url = new URL(process.env.URL || 'https://127.0.0.1:9449/game-stg/');
 const mount = url.pathname.replace(/\/$/, '');
 const output = path.resolve(process.env.OUT);
+// Only initial asset residency uses this override; later behavior waits are unchanged.
+const coldStartTimeout = Number(process.env.COLD_START_TIMEOUT_MS || 30000);
+assert.ok(Number.isSafeInteger(coldStartTimeout) && coldStartTimeout > 0,
+  'COLD_START_TIMEOUT_MS must be a positive integer');
 const checks = [];
 const errors = [];
 const cancelledMedia = [];
+const cancelledImages = [];
+const resourceChecks = [];
 const apiRequests = [];
 const registrationRequests = [];
 const scoreReceipts = [];
@@ -133,12 +141,18 @@ function observe(page) {
     }
   });
   page.on('requestfailed', request => {
-    const failure = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
-    if (request.resourceType() === 'media' && request.failure()?.errorText === 'net::ERR_ABORTED') {
-      cancelledMedia.push(failure);
-    } else errors.push(redact(failure));
+    const check = (async () => {
+      const cancelled = await obsoleteCreateImage(page, request);
+      if (cancelled) { cancelledImages.push(cancelled); return; }
+      const failure = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
+      if (request.resourceType() === 'media' && request.failure()?.errorText === 'net::ERR_ABORTED') {
+        cancelledMedia.push(failure);
+      } else errors.push(redact(failure));
+    })();
+    resourceChecks.push(check);
   });
   page.on('websocket', socket => {
+    const read = createNativeMessageReader();
     socket.on('framesent', ({payload}) => {
       const message = JSON.parse(payload.toString());
       if (message.type === 'hosted' && message.command.kind === 'hello') {
@@ -153,7 +167,8 @@ function observe(page) {
       }
     });
     socket.on('framereceived', ({payload}) => {
-      const message = JSON.parse(payload.toString());
+      const message = read(JSON.parse(payload.toString()));
+      if (!message) return;
       if (message.type === 'welcome') {
         state.id = message.credentials.player_id;
         welcomes.push({sessionKind: message.hosted.session_kind,
@@ -183,7 +198,7 @@ async function gameTitle(page, username) {
   await page.waitForURL(current => current.origin === url.origin
     && current.pathname === `${mount}/`);
   await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-    && document.querySelector('#status')?.textContent === '');
+    && document.querySelector('#status')?.textContent === '', null, {timeout: coldStartTimeout});
   const prompt = page.locator('.title-prompt:not([hidden])');
   if (await prompt.isVisible()) {
     await prompt.locator('[data-menu-action="prompt-secondary"]').click();
@@ -198,6 +213,15 @@ async function settledAccountForm(page) {
     const reveal = document.querySelector('form')?.closest('.reveal-in');
     return reveal && getComputedStyle(reveal).opacity === '1';
   });
+}
+
+// Current Website forms return to Account; Play opens the independent game artifact.
+// Source: pages/{Register,Login}.tsx and components/Shell.tsx.
+async function returnFromAccount(page) {
+  await page.waitForURL(current => current.origin === url.origin
+    && current.pathname === `${mount}/account`);
+  await page.evaluate(() => document.fonts.ready.then(() => null));
+  await page.getByRole('navigation').getByRole('link', {name: 'Play', exact: true}).click();
 }
 
 async function register(page) {
@@ -227,6 +251,7 @@ async function register(page) {
   assert.equal((await registered).status(), 201);
   assert.deepEqual(registrationRequests, [{usernameMatches: true, emailMatches: true,
     passwordMatches: true, usernameLength: account.username.length}]);
+  await returnFromAccount(page);
   await gameTitle(page, account.username);
   await waitUntil(() => state.userId !== null, 'actual authenticated account ID');
 }
@@ -247,6 +272,7 @@ async function signIn(page) {
     === `${mount}/api/auth/login` && response.request().method() === 'POST');
   await page.getByRole('button', {name: 'Sign in', exact: true}).click();
   assert.equal((await signedIn).status(), 200);
+  await returnFromAccount(page);
   await gameTitle(page, account.username);
   await waitUntil(() => state.userId !== null, 'actual signed-in account ID');
 }
@@ -342,7 +368,7 @@ async function main() {
     driverSha256: digest(fs.readFileSync(__filename)),
     sourceRevision: 'ed0a2d598f1df5ac51f9c335e453c7d7041fcb5a',
     scope: 'Real registration, unmodified hosted gameplay, passive combat death, signed score POST and Global Hall',
-    checks, errors, cancelledMedia, apiRequests, registrationRequests, admissions, welcomes, commands,
+    checks, errors, cancelledMedia, cancelledImages, apiRequests, registrationRequests, admissions, welcomes, commands,
     scoreReceipts, scorePosts, hallRequests, hallActivations, healthSamples};
   let browserServer;
   let browser;
@@ -379,6 +405,7 @@ async function main() {
       checked('a fresh browser signs into the actual account through the unchanged mounted form');
       step = `persisted Global Hall via ordinary ${mode}`;
       await globalHall(page, entry.runId, mode);
+      await Promise.all(resourceChecks);
       assert.deepEqual(errors, []);
       checked(`the persisted run appears on all four Global boards via ordinary ${mode} activation`);
       receipt.passed = true;
@@ -461,6 +488,7 @@ async function main() {
     assert.equal(published.body.accountUsername, account.username);
     assert.equal(published.body.elapsedTicks, receipt.completedScore.elapsed_ticks);
     assert.equal(published.body.awesomeness, receipt.completedScore.awesomeness);
+    await Promise.all(resourceChecks);
     assert.deepEqual(errors, []);
     checked('the real signed completion receipt is POSTed once and the unchanged API returns 201');
 
@@ -480,6 +508,7 @@ async function main() {
     assert.ok(state.leaveReceipts > 0);
     await globalHall(page, runId, 'pointer');
     assert.equal(commands.some(command => command.kind === 'set_cheats'), false);
+    await Promise.all(resourceChecks);
     assert.deepEqual(errors, []);
     checked('normal continuation and save-before-leave reach a Global Hall row backed by the actual API');
     receipt.passed = true;

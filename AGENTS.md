@@ -23,13 +23,14 @@ Everything in `~/Projects/Solomon Dark` is open to read, run and test. Use whate
 the port; the result that matters is this rebuild extended with behaviour that traces to a
 reference, with the source named so the next agent can check it.
 
-- `../website-rust-current`: the current Website reference, including its TypeScript kernels,
-  tests and native-parity ledger. Preserve its behavior and supported saves in this rebuild.
-  The older `../Website` checkout remains historical fixture evidence; do not relabel those
-  recordings as current or use that older checkout to limit the requested behavior.
-- Repository separation keeps the Website account/content/editor control plane and embeds
-  the built Rust WASM artifact. Replace its game imports and deployment consumers before
-  removing the old game implementation. `docs/PORT-COMPLETION.md` owns acceptance.
+- [Website at `fa08ae24`](https://github.com/JarrettOneSource/solomon-dark-website/tree/fa08ae249ff5563570bdb2a653e2ef9358ce7b83):
+  the acceptance reference, including its TypeScript kernels, tests and native-parity ledger.
+  To record new fixtures, check out the required reference revision and set
+  `SOLOMON_WEBSITE_DIR` to that checkout. Existing fixtures retain their actual source
+  revision; normal builds and replay tests use this repository's tracked inputs.
+- This repository owns the game, native authority, WASM client, save tools and desktop shell.
+  The Website owns accounts, content, storage and editing and consumes a verified game
+  artifact. `docs/PORT-COMPLETION.md` owns publication and installed acceptance.
 - `../SolomonDarkAbandonware` (also `../Stock Game 0.72.5`): the retail game with its
   atlases and bundles, and the decompilation outputs beside it in the workspace.
 - `crates/sim/tests/fixtures/native/`: retail recordings with their native contract in each
@@ -49,7 +50,9 @@ cargo test --workspace
 
 and, when `crates/web` or `web/` changed, the browser smoke passes against your own dev
 server (README, "Browser smoke"). Port 4180 belongs to the launchd agent; serve on another
-port and pass it as `URL`.
+port and pass it as `URL`. That M2 service uses the separate legacy `Rust Game` checkout;
+it does not serve this repository. Desktop changes also run `npm run test:desktop` and
+the packaged journey on each affected platform before release publication.
 
 ## The porting loop
 

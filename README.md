@@ -1,9 +1,9 @@
 # Solomon Dark — Rust / WebAssembly rebuild
 
 A Rust rebuild of the Solomon Darker web game: deterministic simulation kernels, a reader for
-the stock sprite bundles, and a WebGL2 browser client compiled to WebAssembly. The Website
-current behavior is the reference. During the cutover, `../website-rust-current` holds that
-reference and `../Website` retains earlier evidence. This standalone repository owns the
+the stock sprite bundles, and a WebGL2 browser client compiled to WebAssembly. The reference
+is [Website `fa08ae24`](https://github.com/JarrettOneSource/solomon-dark-website/tree/fa08ae249ff5563570bdb2a653e2ef9358ce7b83).
+This standalone repository owns the
 game, its native host, WASM client, save tools and desktop packages. The Website owns
 accounts, content and editing, and embeds the built WASM artifact.
 
@@ -181,7 +181,7 @@ With a dev server running (on the M2 the launchd agent owns 4180, so start your 
 `cd web && trunk serve --port 4181` and pass `URL=http://127.0.0.1:4181/`):
 
 ```sh
-PW=../Website/frontend/node_modules/playwright-core node tools/browser-smoke/smoke.cjs
+PW="$PWD/node_modules/playwright-core" URL=http://127.0.0.1:4181/ node tools/browser-smoke/smoke.cjs
 ```
 
 Launches headless Google Chrome (software WebGL), starts a wizard through the title/Create flow, checks the wizard
@@ -194,7 +194,7 @@ keyboard input, validates settled transitions, captures every room and its retur
 on browser errors. Its courtyard route uses the unchanged Website's collision geometry:
 
 ```sh
-PW=../Website/frontend/node_modules/playwright-core URL=http://127.0.0.1:4181/ \
+PW="$PWD/node_modules/playwright-core" URL=http://127.0.0.1:4181/ \
   node --no-warnings --experimental-strip-types tools/browser-smoke/rooms.mjs
 ```
 

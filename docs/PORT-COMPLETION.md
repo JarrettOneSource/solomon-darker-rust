@@ -1,12 +1,13 @@
 # Rust game parity and release
 
 Current Website behavior is implemented and its complete local parity gates pass.
-Repository publication, final release artifacts and public staging acceptance are in progress.
+The independent repository and Linux game artifact are public. `/game-stg` is installed;
+remaining public journeys and Windows packaged acceptance are in progress.
 The target is the current Website's behavior and existing user data. The requested result is a separately published Rust game repository, removal of
 the replaced game implementation from the Website repository, a WASM embed in that Website,
-and a verified `/game-stg` deployment. Current reference code is in
-`../website-rust-current`; the older `../Website` checkout is retained historical evidence.
-Its earlier fixture and standalone receipts do not qualify subsequently added behavior.
+and a verified `/game-stg` deployment. The behavioral reference is
+[Website `fa08ae24`](https://github.com/JarrettOneSource/solomon-dark-website/tree/fa08ae249ff5563570bdb2a653e2ef9358ce7b83).
+Earlier fixture and standalone receipts retain their actual revisions and scope.
 
 The implementation reuses the existing kernels, stock assets and dependencies. Canonical
 Session state owns gameplay; presentation copies cannot advance authority, save state or
@@ -284,13 +285,56 @@ returns to College after the leader leaves; a final cleanup helper wrongly expec
 Boneyard pause and is recorded separately from those passed assertions. Final release
 packages and public staging acceptance remain required.
 
-NFO holds isolated source/assets, Rust 1.98.1, task-local Trunk and prepared staging service,
-API/account and Caddy artifacts. The candidate Caddy configuration validates. No staging
-service or public route is installed. The current Website API has been published for Linux from `fb042d14` with its native
-SQLite library. Caddy owns the separately built static Website/game files; the API publish
-uses the installed SDK's `StaticWebAssetsEnabled=false`. The final mounted Website build at `fb042d14` passes; all 563 transferred static files
-and all 25 API payload files match their retained SHA256 manifests. Installed Linux/browser
-acceptance remains required.
+## Published repository and staging
+
+[The independent repository](https://github.com/JarrettOneSource/solomon-darker-rust) starts
+at `ca728e9088c09b829473bd2e0f3728ba69b35fd0`. All 7,624 initial files match the reviewed
+integration snapshot `678b2404`; local development history remains in the legacy repository.
+Follow-up `65117c8` preserves exact stock bytes during Windows Git checkout. The 21 changed
+hashes were reproduced as LF-to-CRLF conversion and the stock-only attributes fix restores
+all recorded asset hashes. It changes no gameplay code or source asset bytes.
+
+NFO builds all ten final Linux gates successfully: stock integrity, formatting, strict
+native/WASM checks, 531 workspace tests without failures or ignored tests, authored-content
+CLI checks and both optimized game mounts. Each artifact verifies 5,727 payload files.
+The [Linux game release](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/game-ca728e9088c09b829473bd2e0f3728ba69b35fd0)
+contains the production-mount archive with SHA256
+`88d9acb696331c06ef3cc37b4fe76c34335732d0e478aded37e9fe70cab5b6ec`.
+Website repository variables pin its public URL and checksum.
+
+The staging artifact at `/opt/solomon-rust-stg/current` serves
+[the public game](https://solomondarker.com/game-stg/) through separate API 5229 and native 5230
+services and isolated state. Website API/static source `fb042d14` has 25/563 verified files.
+Public HTTP checks cover mount/revision metadata, API/account/editor routes and frame/CSP
+boundaries. Public social acceptance passes all eight groups, including a real held-save
+transfer between two registered players. Account import, cloud save and portable ZIP export
+pass through independent Rust WASM. Editor, authored gameplay, score and service-restart
+journeys remain under verification.
+
+An ordinary public cold start reached Title in 146.3 seconds with no errors after 438
+resources, including all 233 audio files. The Source also preloads resident audio. Public
+journey startup bounds allow 240 seconds; subsequent behavior retains its separate deadlines.
+This observation is not a general startup-performance claim.
+
+The Website extraction is [PR8](https://github.com/JarrettOneSource/solomon-dark-website/pull/8),
+source `3be55923`. Both Linux CI runs pass the complete 63 backend/deployment contracts and
+frontend checks against the independent game artifact. The PR remains separate from
+production cutover. Website main `093aee99` only adds the tested staging Caddy route and
+its operations note to the `fa08ae24` behavior. The normal M5 worker deployed it on
+October 21, preserving staging through subsequent reconciliation. Directly editing the
+managed Caddy file had been reverted by that worker; keeping the route in its source fixes
+that ownership error.
+
+The optimized local macOS ARM64 package passes contracts, packaging, actual Electron
+offline/save/resume/peer/update/failed-close acceptance and archive integrity. GitHub run
+`39676774215` independently passes Linux and both macOS desktop jobs plus the game gate.
+Windows checkout and packaging pass, but its actual desktop journey needs a passing
+complete receipt before the four-platform release can publish. Diagnostic runs retain their
+own changed harness and measured results; they are not release qualifications.
+
+Exact manifests, logs, screenshots, raw failed attempts and successful receipts are under
+`/Users/jarrett/codex-runs/solomon-rust-parity-20261021/release-final/` and NFO's matching
+`receipts/final-release/` directory.
 
 ## Earlier standalone release
 
@@ -380,19 +424,16 @@ Platform trigonometry limits on long unanchored trajectories remain documented i
 
 ## Source and cleanup
 
-The active source remains on `fleet/integration-20261020` in
-`/Users/jarrett/Projects/Solomon Dark/rust-game-integration-20261020`.
-It is retained separately because `Rust Game` main at `690730d` owns the existing launchd
-preview on port 4180. The standalone release has its own executable and default port 4188.
-There is no Git remote; no push or public deployment occurred.
+The permanent published checkout is
+`/Users/jarrett/Projects/Solomon Dark/solomon-darker-rust`. The separate legacy `Rust Game`
+checkout at `690730d` still owns the M2 launchd preview on port 4180.
 
-The five worker worktrees from the earlier standalone release were removed. Their branches and external reports remain.
-The visual lane's copied dependency/root glue was archived before removal under
-`visuals-presentation-final/worktree-cleanup/`. Those standalone browser and test-host processes were stopped. Five new parity workers
-and their isolated acceptance services are active for the current request. The pinned
-Website and baseline preview remain separate.
+The earlier fleet worktrees, frozen build trees and Windows checkout-fix tree are removed
+after their source and evidence were preserved. Their branches remain. The completed M2
+acceptance services on ports 5229, 5230, 9449 and 5383 are stopped; the baseline 4180 remains
+running. Current finalization and diagnostic trees, plus the Website reference/extraction
+trees, remain while their acceptance and publication work is active. The external
+`release-final/worktree-cleanup.json` records exact paths and preservation checks.
 
-Jarrett explicitly accepted the M2 for final platform validation on October 20. This receipt
-qualifies macOS ARM64; no Windows or other-platform release is claimed. The earlier local
-standalone checks remain valid for their stated scope. Full parity and the requested staging
-deployment are not yet accepted.
+Jarrett explicitly accepted M2 validation on October 20. Each platform's receipt qualifies
+that platform; publication requires the actual configured matrix checks to pass.

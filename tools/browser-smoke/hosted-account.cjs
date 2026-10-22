@@ -9,6 +9,10 @@ const {chromium} = require(path.resolve(process.env.PW));
 const url = new URL(process.env.URL || 'https://127.0.0.1:9449/game-stg/');
 const mount = url.pathname.replace(/\/$/, '');
 const output = path.resolve(process.env.OUT);
+// Only initial asset residency uses this override; later behavior waits are unchanged.
+const coldStartTimeout = Number(process.env.COLD_START_TIMEOUT_MS || 30000);
+assert.ok(Number.isSafeInteger(coldStartTimeout) && coldStartTimeout > 0,
+  'COLD_START_TIMEOUT_MS must be a positive integer');
 const checks = [];
 const state = {requests: [], errors: [], cancelledRequests: [], outsideMount: [],
   policyViolations: [], documents: [], auth: [], identities: [], wasm: new Set()};
@@ -100,7 +104,7 @@ async function gameTitle(username) {
   await page.waitForURL(current => current.origin === url.origin
     && current.pathname === `${mount}/`);
   await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-    && document.querySelector('#status')?.textContent === '');
+    && document.querySelector('#status')?.textContent === '', null, {timeout: coldStartTimeout});
   const prompt = page.locator('.title-prompt:not([hidden])');
   if (await prompt.isVisible()) {
     await prompt.locator('[data-menu-action="prompt-secondary"]').click();
@@ -112,6 +116,14 @@ async function gameTitle(username) {
     ?.getAttribute('data-account-username') === expected, username || 'Not logged in');
   state.identities.push({authenticated: Boolean(username),
     matchesExpected: await identity.getAttribute('data-account-username') === (username || 'Not logged in')});
+}
+
+// Current Source forms return to Account; its visible Play link opens the game.
+async function returnFromAccount() {
+  await page.waitForURL(current => current.origin === url.origin
+    && current.pathname === `${mount}/account`);
+  await page.evaluate(() => document.fonts.ready.then(() => null));
+  await page.getByRole('navigation').getByRole('link', {name: 'Play', exact: true}).click();
 }
 
 async function openCloud() {
@@ -214,6 +226,7 @@ async function closeBrowser() {
       === `${mount}/api/auth/register` && response.request().method() === 'POST');
     await page.getByRole('button', {name: 'Create account', exact: true}).click();
     assert.equal((await registered).status(), 201, 'real Source registration form response');
+    await returnFromAccount();
     await gameTitle(account.username);
     assert.deepEqual(await storage(), {unscopedAbsent: true, scopedPresent: true});
     assert.ok(state.auth.some(receipt => receipt.status === 200 && receipt.usernameMatches));
@@ -243,6 +256,7 @@ async function closeBrowser() {
       === `${mount}/api/auth/login` && response.request().method() === 'POST');
     await page.getByRole('button', {name: 'Sign in', exact: true}).click();
     assert.equal((await signedIn).status(), 200, 'real Source login form response');
+    await returnFromAccount();
     await gameTitle(account.username);
     assert.deepEqual(await storage(), {unscopedAbsent: true, scopedPresent: true});
     assert.ok(state.auth.slice(previousAuth).some(receipt => receipt.status === 200 && receipt.usernameMatches));

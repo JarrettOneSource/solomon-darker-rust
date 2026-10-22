@@ -14,18 +14,18 @@ mod content, custom frame/wearable geometry and current shadow behavior are inte
 Their Source fixtures and mounted authored-scene/browser journeys pass; see the acceptance
 record for their evidence.
 
-## Before fan-out
+## Working on a follow-up
 
-- **The parity fleet branches from `96f2d1c`.** Root integrates accepted lane commits on
-  `fleet/integration-20261020`; the main preview remains separate from the delivered package.
-- **Work in a worktree**, one per ticket (`git worktree add ../rust-game-<ticket> -b
-  <ticket>`). The launchd agent serves the main checkout and rebuilds on every edit to it.
+- Use this standalone repository's current main as the base. The earlier fleet commits
+  below describe historical acceptance; their temporary integration worktrees are removed.
+- **Work in a worktree**, one per task (`git worktree add ../rust-game-<task> -b
+  <task>`), and remove it after publication when its work and evidence are preserved.
 - **Stock inputs are tracked**: run `python3 scripts/verify-client-assets.py` in a fresh
   worktree. Asset regeneration is a reviewed source change, not a build prerequisite.
 - **Dev servers use ports 4181 and up** (`cd web && trunk serve --port 4181`); 4180 is the
   service. Pass your port to the smoke as `URL`. Native acceptance uses isolated 4190/4192 hosts.
-- Paths below are relative to `../Website/frontend/src/game/`; line counts are the size of
-  what to read.
+- Historical paths below are relative to the recorded Website revision's
+  `frontend/src/game/`. Set `SOLOMON_WEBSITE_DIR` explicitly when recording new fixtures.
 
 ## Tickets
 

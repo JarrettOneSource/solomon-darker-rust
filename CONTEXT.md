@@ -7,9 +7,9 @@ use these terms exactly; when a new concept earns a name, add it here.
 
 - **Native** (or **retail**): Solomon Dark 0.72.5, the Windows game. The ground truth for every
   behaviour. Its decompilation lives with the workspace.
-- **Website**: the current TypeScript web port in `../website-rust-current/frontend/src/game`.
-  It is the behavioral reference for this rebuild. The older `../Website` checkout supplies
-  historical fixtures; each recording retains its actual source revision.
+- **Website**: the web port whose `fa08ae249ff5563570bdb2a653e2ef9358ce7b83` revision
+  defines the rebuild's accepted behavior. Historical recordings retain their actual source
+  revision. Accounts, cloud content and editing remain Website responsibilities.
 - **Native goldens**: language-neutral JSON captured from the instrumented retail
   executable, committed under `crates/sim/tests/fixtures/native/`; each file carries its
   native contract in its header. The old Mod Loader that first held them is retired.

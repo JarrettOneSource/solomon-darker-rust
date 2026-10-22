@@ -5,10 +5,16 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const {createNativeMessageReader} = require('./native-wire.cjs');
+const obsoleteCreateImage = require('./obsolete-create-image.cjs');
 const {chromium, request} = require(path.resolve(process.env.PW));
 
 const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
 const output = path.resolve(process.env.OUT);
+// Only initial asset residency uses this override; later behavior waits are unchanged.
+const coldStartTimeout = Number(process.env.COLD_START_TIMEOUT_MS || 30000);
+assert.ok(Number.isSafeInteger(coldStartTimeout) && coldStartTimeout > 0,
+  'COLD_START_TIMEOUT_MS must be a positive integer');
 const privateConfig = path.resolve(process.env.PRIVATE_CONFIG);
 const accountFile = process.env.ACCOUNT_FILE || path.join(output, 'private-accounts.json');
 const checks = [];
@@ -73,7 +79,7 @@ async function accounts() {
 function observe(page, label) {
   const state = {label, id: null, frame: null, social: null, welcomes: [], cards: [],
     invitations: [], partyActions: [], chats: [], commands: [], requests: [],
-    errors: [], cancelledMedia: [], wasm: new Set(), sockets: [], trace: []};
+    errors: [], cancelledMedia: [], cancelledImages: [], resourceChecks: [], wasm: new Set(), sockets: [], trace: []};
   page.on('pageerror', error => state.errors.push(error.message));
   page.on('console', message => {
     if (message.type() === 'error') state.errors.push(message.text());
@@ -89,12 +95,18 @@ function observe(page, label) {
     if (response.status() >= 400) state.errors.push(`${response.status()} ${pathname}`);
   });
   page.on('requestfailed', item => {
-    const failure = `${new URL(item.url()).pathname}: ${item.failure()?.errorText}`;
-    if (item.resourceType() === 'media' && item.failure()?.errorText === 'net::ERR_ABORTED') {
-      state.cancelledMedia.push(failure);
-    } else state.errors.push(failure);
+    const check = (async () => {
+      const cancelled = await obsoleteCreateImage(page, item);
+      if (cancelled) { state.cancelledImages.push(cancelled); return; }
+      const failure = `${new URL(item.url()).pathname}: ${item.failure()?.errorText}`;
+      if (item.resourceType() === 'media' && item.failure()?.errorText === 'net::ERR_ABORTED') {
+        state.cancelledMedia.push(failure);
+      } else state.errors.push(failure);
+    })();
+    state.resourceChecks.push(check);
   });
   page.on('websocket', socket => {
+    const read = createNativeMessageReader();
     // No credential/query string or complete socket payload enters the receipt.
     const connection = {path: new URL(socket.url()).pathname, closed: false};
     state.sockets.push(connection);
@@ -109,7 +121,8 @@ function observe(page, label) {
       }
     });
     socket.on('framereceived', ({payload}) => {
-      const message = JSON.parse(payload.toString());
+      const message = read(JSON.parse(payload.toString()));
+      if (!message) return;
       if (message.type === 'welcome') {
         state.id = message.credentials.player_id;
         state.frame = message.frame;
@@ -156,7 +169,7 @@ async function openClient(account, label) {
   clients.push(client);
   await page.goto(url, {waitUntil: 'load'});
   await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-    && document.querySelector('#status')?.textContent === '');
+    && document.querySelector('#status')?.textContent === '', null, {timeout: coldStartTimeout});
   state.authBootstrap = await page.evaluate(() => ({
     unscopedAbsent: localStorage.getItem('sdr.token') === null,
     scopedPresent: Boolean(localStorage.getItem('sdr.token:/game-stg')),
@@ -246,6 +259,7 @@ function publicState(state) {
     invitations: state.invitations, partyActions: state.partyActions,
     chats: state.chats, commands: state.commands, requests: state.requests,
     wasm: [...state.wasm], errors: state.errors, cancelledMedia: state.cancelledMedia,
+    cancelledImages: state.cancelledImages,
     sockets: state.sockets, trace: state.trace, heldCheckpointSave: state.heldCheckpointSave};
 }
 
@@ -406,6 +420,7 @@ async function closeClient(client) {
     await guest.page.getByRole('dialog', {name: 'PARTY', exact: true}).waitFor();
     await guest.page.screenshot({path: path.join(output, 'joined-college-party.png')});
     checked('consent and actual character confirmation join the inviter authority with both connected party members');
+    await Promise.all(clients.flatMap(client => client.state.resourceChecks));
     for (const client of clients) assert.deepEqual(client.state.errors, []);
     checked('both Metal browser clients completed without unexpected browser, API or host errors');
   } catch (error) {
