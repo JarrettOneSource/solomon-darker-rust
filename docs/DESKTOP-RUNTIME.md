@@ -96,6 +96,12 @@ journey additionally requires the external initializer, successful root JS/WASM
 responses, the live game title, accepted input and source-save continuation. The
 small WASM policy probe alone is not full client startup acceptance.
 
+`npm run archive:desktop` checks the final ZIP's CRCs, reviewed stock hashes,
+source-owned shell files, native manifest hash and build residue before writing
+its checksum. CI creates this immutable candidate before acceptance and uploads
+`desktop-*` only after the existing journey passes. A failed Windows job retains
+an `unqualified-desktop-*` candidate, outside the publisher's artifact selection.
+
 `desktop-authority-goldens.mjs` records ten actual Source WebSocket transactions:
 wrong bootstrap, same-capability peer admission, guest Console refusal,
 client-local Cheats, actual Lua mutation, source SaveBeforeLeave, authority

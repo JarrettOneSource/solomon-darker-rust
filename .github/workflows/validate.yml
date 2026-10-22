@@ -86,6 +86,8 @@ jobs:
       - run: npm run test:desktop
       - name: Build standalone app from this revision
         run: npm run package:desktop -- --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --release-repository "$GITHUB_REPOSITORY"
+      - name: Archive and inspect the final standalone app
+        run: node tools/archive-desktop.mjs
       - name: Verify the Windows native launcher contracts
         if: ${{ runner.os == 'Windows' }}
         run: cargo test --release -p solomon-launcher --all-features
@@ -99,8 +101,6 @@ jobs:
           else
             npm run smoke:desktop
           fi
-      - name: Archive standalone app
-        run: node tools/archive-desktop.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
@@ -115,6 +115,16 @@ jobs:
         with:
           name: desktop-evidence-${{ matrix.platform }}-${{ matrix.arch }}
           path: reports/desktop-smoke
+          if-no-files-found: ignore
+      - name: Retain the unqualified Windows candidate on failure
+        if: failure() && matrix.platform == 'win32'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unqualified-desktop-win32-x64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            dist-desktop/*.zip
+            dist-desktop/*.sha256
+            dist-desktop/desktop-release.json
           if-no-files-found: ignore
 
   desktop-release:
