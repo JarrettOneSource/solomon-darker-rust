@@ -36,6 +36,7 @@ const profiles = await mkdtemp(join(tmpdir(), 'solomon-darker-smoke-'));
 const running = new Set();
 const errors = [];
 const resourceChecks = [];
+const redact = value => String(value).replace(/solomondarker:\/\/[^\s'"<>]+/g, '[redacted-invite]');
 const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [] };
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
@@ -205,14 +206,17 @@ try {
     evidence
   }));
 } catch (error) {
+  const failure = {status: 'failed', ...receipts, error: redact(error.stack), errors};
+  console.error(JSON.stringify(failure));
+  await writeFile(join(evidence, 'failure.json'), `${JSON.stringify(failure, null, 2)}\n`);
   for (const instance of running) {
     await instance.page.screenshot({
-      path: join(evidence, `${instance.label}-failure.png`)
+      path: join(evidence, `${instance.label}-failure.png`), timeout: 8000
     }).catch(() => {});
     console.error(JSON.stringify({
       label: instance.label,
       url: instance.page.url(),
-      body: (await instance.page.locator('body').innerText().catch(() => '')).slice(0, 2500),
+      body: redact(await instance.page.locator('body').innerText({timeout: 5000}).catch(() => '')).slice(0, 2500),
       errors,
       cancelledMenuImages: receipts.cancelledMenuImages
     }));
@@ -220,21 +224,24 @@ try {
   throw error;
 } finally {
   for (const instance of running) {
-    await instance.app.evaluate(() => {
+    await bounded(instance.app.evaluate(() => {
       const dialog = globalThis.__desktopCloseSmoke;
       if (dialog) {
         dialog.cleanup = true;
         dialog.answer?.({response: 1, checkboxChecked: false});
       }
-    }).catch(() => {});
-    const timeout = setTimeout(() => instance.app.process().kill('SIGKILL'), 25000);
-    await instance.app.close().catch(() => {});
+    }), 5000, `${instance.label} dialog cleanup timed out`).catch(() => {});
+    const timeout = setTimeout(() => {
+      try { process.kill(instance.appPid, 'SIGKILL'); }
+      catch (error) { if (error.code !== 'ESRCH') console.error(redact(error.message)); }
+    }, 25000);
+    await close(instance).catch(error => console.error(redact(error.message)));
     clearTimeout(timeout);
   }
-  await rm(profiles, {
+  await bounded(rm(profiles, {
     recursive: true,
     force: true
-  });
+  }), 5000, 'Desktop profile cleanup timed out');
 }
 async function launch(label, userData) {
   const app = await electron.launch({
@@ -251,12 +258,14 @@ async function launch(label, userData) {
     timeout: 30000
   });
   const nativeChildren = await app.evaluateHandle(observeNativeChildren);
+  const appPid = await nativeChildren.evaluate(observer => observer.parentPid);
   const page = await app.firstWindow({
     timeout: 30000
   });
   app.context().setDefaultTimeout(30000);
   const instance = {
     app,
+    appPid,
     nativeChildren,
     page,
     label,
@@ -576,15 +585,18 @@ async function proveUpdatePrompt(instance) {
   };
 }
 async function close(instance) {
+  await bounded(instance.app.close(), 30000, `${instance.label} did not close after saving`);
+  running.delete(instance);
+}
+async function bounded(operation, timeout, message) {
   let timer;
   try {
-    await Promise.race([instance.app.close(), new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`${instance.label} did not close after saving`)), 30000);
+    await Promise.race([operation, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), timeout);
     })]);
   } finally {
     clearTimeout(timer);
   }
-  running.delete(instance);
 }
 async function setWindowMinimized(instance, minimized) {
   await instance.app.evaluate(({BrowserWindow}, minimized) => {
