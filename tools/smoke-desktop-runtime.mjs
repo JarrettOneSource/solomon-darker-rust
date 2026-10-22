@@ -215,6 +215,7 @@ try {
     return clipboard.readText();
   });
   progress('host-invite-copied');
+  if (process.platform === 'win32') await showWindow(host, false);
   progress('launch-guest');
   const guest = await launch('guest', join(profiles, 'guest'));
   progress('guest-join');
@@ -231,6 +232,7 @@ try {
   assert.equal(guest.state.frame.host.authority_player_id, host.state.id);
   progress('guest-movement');
   const guestMovement = await move(guest);
+  if (process.platform === 'win32') await showWindow(host, true);
   progress('peer-boneyard');
   await host.page.getByRole('button', {
     name: 'Enter the Boneyard',
@@ -239,9 +241,14 @@ try {
   await waitFor(() => playing(host) && playing(guest), 'both actual Boneyard renderers', 120000);
   assert.equal(host.state.frame.snapshot.boneyard.run_id, guest.state.frame.snapshot.boneyard.run_id);
   assert.equal(host.state.frame.snapshot.participant_order.length, 2);
+  if (process.platform === 'win32') await showWindow(guest, false);
   await host.page.screenshot({
     path: join(evidence, 'peer-host-boneyard.png')
   });
+  if (process.platform === 'win32') {
+    await showWindow(guest, true);
+    await showWindow(host, false);
+  }
   await guest.page.screenshot({
     path: join(evidence, 'peer-guest-boneyard.png')
   });
@@ -822,6 +829,16 @@ async function close(instance) {
     clearTimeout(timer);
   }
   running.delete(instance);
+}
+async function showWindow(instance, visible) {
+  progress(`${instance.label}-${visible ? 'restore-window' : 'minimize-window'}`);
+  const window = await bounded(instance.app.evaluate(({BrowserWindow}, visible) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (visible) { window.restore(); window.show(); window.focus(); }
+    else window.minimize();
+    return {minimized: window.isMinimized(), visible: window.isVisible(), bounds: window.getBounds()};
+  }, visible), 5000, 'native window lifecycle');
+  recordPhase({windowLifecycle: instance.label, at: new Date().toISOString(), ...window});
 }
 async function waitForExit(pid) {
   await waitFor(() => {
