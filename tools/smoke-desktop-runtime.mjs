@@ -258,6 +258,20 @@ try {
   await writeFile(join(evidence, 'original-error.json'), `${JSON.stringify({phase, originalError}, null, 2)}\n`);
   const failedInstances = [];
   for (const instance of running) {
+    const rendererProbes = await Promise.all([
+      ['playwright-main-world', () => instance.page.evaluate(() => 1)],
+      ['electron-renderer-main-world', () => instance.app.evaluate(({BrowserWindow}) =>
+        BrowserWindow.getAllWindows()[0].webContents.executeJavaScript('1'))],
+    ].map(async ([name, operation]) => {
+      const started = Date.now();
+      try {
+        const value = await bounded(operation(), 3000, name);
+        return {name, elapsedMs: Date.now() - started, value};
+      } catch (error) {
+        return {name, elapsedMs: Date.now() - started, error: redact(error.message)};
+      }
+    }));
+    console.error(JSON.stringify({label: instance.label, rendererProbes}));
     await instance.page.screenshot({
       path: join(evidence, `${instance.label}-failure.png`), timeout: 8000,
     }).catch(error => console.error(JSON.stringify({label: instance.label, diagnosticScreenshotError: redact(error.message)})));
@@ -270,6 +284,8 @@ try {
     }
     const failed = {
       label: instance.label,
+      viewport: instance.page.viewportSize(),
+      rendererProbes,
       url: instance.page.url(),
       body: (await instance.page.locator('body').innerText({timeout: 5000}).catch(() => '')).slice(0, 2500),
       accepted: {
