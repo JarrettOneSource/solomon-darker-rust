@@ -2,6 +2,7 @@
 // gameplay; sockets only observe accepted state. The failed-close case advances
 // only the real IndexedDB record revision to represent a concurrent writer.
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { createReadStream } from 'node:fs';
@@ -159,7 +160,11 @@ try {
     exact: true
   }).click();
   const readyDeadline = Date.now() + 120000;
-  const remainingReadiness = () => Math.max(1, readyDeadline - Date.now());
+  const remainingReadiness = () => {
+    const remaining = readyDeadline - Date.now();
+    if (remaining <= 0) throw new Error('Timed out waiting for both actual Boneyard renderers');
+    return remaining;
+  };
   if (process.platform === 'win32') {
     // Materialize each real view without competing software renderers. Both
     // windows return before the original readiness assertion and share its limit.
@@ -231,12 +236,7 @@ try {
         dialog.answer?.({response: 1, checkboxChecked: false});
       }
     }), 5000, `${instance.label} dialog cleanup timed out`).catch(() => {});
-    const timeout = setTimeout(() => {
-      try { process.kill(instance.appPid, 'SIGKILL'); }
-      catch (error) { if (error.code !== 'ESRCH') console.error(redact(error.message)); }
-    }, 25000);
-    await close(instance).catch(error => console.error(redact(error.message)));
-    clearTimeout(timeout);
+    await cleanupApp(instance.app, instance.appPid);
   }
   await bounded(rm(profiles, {
     recursive: true,
@@ -257,11 +257,16 @@ async function launch(label, userData) {
     },
     timeout: 30000
   });
-  const nativeChildren = await app.evaluateHandle(observeNativeChildren);
-  const appPid = await nativeChildren.evaluate(observer => observer.parentPid);
-  const page = await app.firstWindow({
-    timeout: 30000
-  });
+  let nativeChildren, appPid, page;
+  try {
+    nativeChildren = await app.evaluateHandle(observeNativeChildren);
+    appPid = await nativeChildren.evaluate(observer => observer.parentPid);
+    page = await app.firstWindow({timeout: 30000});
+  } catch (error) {
+    console.error(redact(error.stack));
+    await cleanupApp(app, appPid);
+    throw error;
+  }
   app.context().setDefaultTimeout(30000);
   const instance = {
     app,
@@ -569,6 +574,15 @@ async function proveUpdatePrompt(instance) {
   await notice.getByRole('button', {
     name: 'Download update'
   }).waitFor();
+  const bounds = await notice.evaluate(root => {
+    const rectangle = root.getBoundingClientRect();
+    return {left: rectangle.left, top: rectangle.top, right: rectangle.right,
+      bottom: rectangle.bottom, width: rectangle.width, height: rectangle.height,
+      viewportWidth: innerWidth, viewportHeight: innerHeight};
+  });
+  assert.ok(bounds.width > 0 && bounds.height > 0 && bounds.left >= 0 && bounds.top >= 0
+    && bounds.right <= bounds.viewportWidth && bounds.bottom <= bounds.viewportHeight,
+  `the desktop update notice is visible inside the game window: ${JSON.stringify(bounds)}`);
   await instance.page.screenshot({
     path: join(evidence, 'update-prompt.png')
   });
@@ -581,8 +595,28 @@ async function proveUpdatePrompt(instance) {
   assert.ok(instance.state.frame, 'update dismissal leaves the accepted game alive');
   return {
     shown: true,
+    bounds,
     dismissedWithoutRestart: true
   };
+}
+async function cleanupApp(app, appPid) {
+  const child = app.process();
+  const timeout = setTimeout(() => {
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    if (process.platform === 'win32' && appPid === undefined) {
+      // Before inspector initialization, Playwright owns only a Windows cmd
+      // wrapper. The native tree operation includes its actual Electron child.
+      execFile('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'],
+        {timeout: 5000, windowsHide: true}, error => { if (error) console.error(redact(error.message)); });
+      return;
+    }
+    try { process.kill(appPid ?? child.pid, 'SIGKILL'); }
+    catch (error) { if (error.code !== 'ESRCH') console.error(redact(error.message)); }
+  }, 25000);
+  try {
+    await bounded(app.close(), 30000, 'Desktop failure cleanup timed out');
+  } catch (error) { console.error(redact(error.message)); }
+  finally { clearTimeout(timeout); }
 }
 async function close(instance) {
   await bounded(instance.app.close(), 30000, `${instance.label} did not close after saving`);
