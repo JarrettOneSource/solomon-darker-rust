@@ -156,6 +156,12 @@ fn a_slow_reader_keeps_ordered_messages_and_receives_the_current_snapshot_after_
     let origin = format!("http://{}", server.local_addr());
     let mut client = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
     let peer = connected(&server);
+    #[cfg(windows)]
+    if std::env::var_os("SOLOMON_TRANSPORT_CONSTRAIN_BUFFERS").is_some() {
+        diagnostic_socket_buffer(client.get_ref(), 0x1002); // SO_RCVBUF
+        let streams = server.state.connections.lock().unwrap();
+        diagnostic_socket_buffer(streams.get(&peer.id()).unwrap(), 0x1001); // SO_SNDBUF
+    }
     // This exceeds the loopback send buffer. A stopped renderer must retain the
     // queued frame across I/O deadlines, then resume without loss or duplication.
     let large: Arc<str> = Arc::from("0123456789abcdef".repeat(1024 * 1024));
@@ -180,6 +186,54 @@ fn a_slow_reader_keeps_ordered_messages_and_receives_the_current_snapshot_after_
     };
     assert_eq!(peer_id, peer.id());
     assert_eq!(payload, "input after resuming");
+}
+
+#[cfg(windows)]
+fn diagnostic_socket_buffer(stream: &TcpStream, option: i32) {
+    use std::os::windows::io::AsRawSocket;
+    #[link(name = "ws2_32")]
+    unsafe extern "system" {
+        fn setsockopt(socket: usize, level: i32, option: i32, value: *const u8, length: i32)
+        -> i32;
+        fn getsockopt(
+            socket: usize,
+            level: i32,
+            option: i32,
+            value: *mut u8,
+            length: *mut i32,
+        ) -> i32;
+    }
+    let requested = 65536_i32;
+    let mut actual = 0_i32;
+    let mut length = size_of::<i32>() as i32;
+    // SAFETY: these are live borrowed Windows sockets and correctly sized int
+    // buffers for the documented SOL_SOCKET SO_SNDBUF/SO_RCVBUF operations.
+    unsafe {
+        assert_eq!(
+            setsockopt(
+                stream.as_raw_socket() as usize,
+                0xffff,
+                option,
+                (&requested as *const i32).cast(),
+                length
+            ),
+            0
+        );
+        assert_eq!(
+            getsockopt(
+                stream.as_raw_socket() as usize,
+                0xffff,
+                option,
+                (&mut actual as *mut i32).cast(),
+                &mut length
+            ),
+            0
+        );
+    }
+    diagnostic(
+        "socket-buffer",
+        format_args!("option={option} requested={requested} actual={actual}"),
+    );
 }
 
 #[test]

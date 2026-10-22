@@ -330,16 +330,33 @@ fn drive_peer(
                     let mut outbox =
                         peer.0.outbox.lock().expect("the peer outbox does not panic while locked");
                     if let Some(payload) = outbox.reliable.pop_front() {
+                        #[cfg(test)]
+                        super::diagnostic(
+                            "take-reliable",
+                            format_args!("peer={} bytes={}", peer.id(), payload.len()),
+                        );
                         outbox.reliable_bytes -= payload.len();
                         Some(payload)
                     } else {
+                        #[cfg(test)]
+                        if let Some(payload) = &outbox.snapshot {
+                            super::diagnostic(
+                                "take-snapshot",
+                                format_args!("peer={} bytes={}", peer.id(), payload.len()),
+                            );
+                        }
                         outbox.snapshot.take()
                     }
                 };
                 let Some(payload) = payload else { break };
                 match socket.send(shared_text(payload)) {
-                    Ok(()) => {}
+                    Ok(()) => {
+                        #[cfg(test)]
+                        super::diagnostic("send-complete", format_args!("peer={}", peer.id()));
+                    }
                     Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {
+                        #[cfg(test)]
+                        super::diagnostic("send-would-block", format_args!("peer={}", peer.id()));
                         // The complete frame, including its remaining byte offset, now
                         // belongs to Tungstenite. Flush it before accepting another.
                         write_pending = true;
@@ -441,8 +458,18 @@ fn drive_peer(
         }
         // read queues automatic pong and close replies; do not replace them manually.
         write_pending = match socket.flush() {
-            Ok(()) => false,
-            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => true,
+            Ok(()) => {
+                #[cfg(test)]
+                if write_pending {
+                    super::diagnostic("flush-complete", format_args!("peer={}", peer.id()));
+                }
+                false
+            }
+            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {
+                #[cfg(test)]
+                super::diagnostic("flush-would-block", format_args!("peer={}", peer.id()));
+                true
+            }
             Err(Error::ConnectionClosed) => {
                 return closing.map_or_else(
                     || TransportClose { code: None, reason: "connection closed".to_owned() },

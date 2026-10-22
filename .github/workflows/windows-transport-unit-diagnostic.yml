@@ -1,0 +1,82 @@
+name: Inspect Windows transport unit boundaries
+
+on:
+  push:
+    branches: [diagnostic/windows-capture-control-20261022]
+    paths: [.github/workflows/windows-transport-unit-diagnostic.yml]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+
+jobs:
+  inspect:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 5c094aaa962b9ef0b231651f08a91e4330ff4317
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: rustup show
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: diagnostic-source
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            .cargo/config.toml
+            crates/launcher/src/transport.rs
+            crates/launcher/src/transport/socket.rs
+            crates/launcher/src/transport/tests.rs
+            tools/run-windows-transport-units.py
+      - name: Install bounded unit-only tracing and named fixture controls
+        run: |
+          mkdir -p .cargo reports/windows-transport-unit
+          cp diagnostic-source/.cargo/config.toml .cargo/config.toml
+          cp diagnostic-source/crates/launcher/src/transport.rs crates/launcher/src/transport.rs
+          cp diagnostic-source/crates/launcher/src/transport/socket.rs crates/launcher/src/transport/socket.rs
+          cp diagnostic-source/crates/launcher/src/transport/tests.rs crates/launcher/src/transport/tests.rs
+          cp diagnostic-source/tools/run-windows-transport-units.py tools/
+          git diff --binary > reports/windows-transport-unit/unit-only-tracing.patch
+          cp .cargo/config.toml reports/windows-transport-unit/build-config.toml
+      - name: Compile only the diagnostic library test executable
+        run: cargo test --release --target x86_64-pc-windows-msvc -p solomon-launcher --lib --no-run --message-format=json > reports/windows-transport-unit/build.jsonl
+      - name: Locate and identify the exact test binary
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib, shutil
+          reports = pathlib.Path('reports/windows-transport-unit')
+          artifacts = [json.loads(line) for line in (reports / 'build.jsonl').read_text().splitlines()]
+          tests = [row for row in artifacts if row.get('reason') == 'compiler-artifact' and row.get('executable') and row.get('profile', {}).get('test') and row['target']['name'] == 'solomon_launcher']
+          assert len(tests) == 1, tests
+          source = pathlib.Path(tests[0]['executable'])
+          shutil.copy2(source, reports / 'test-binary.exe')
+          receipt = {'productSourceRevision': '5c094aaa962b9ef0b231651f08a91e4330ff4317', 'diagnosticSourceRevision': os.environ['GITHUB_SHA'], 'configurationSourceRevision': '769c16e1ca6b1fcb7adeac914b2fc8d2b0b2b2be', 'testBinarySha256': hashlib.sha256(source.read_bytes()).hexdigest(), 'scope': 'Library test executable only; no product executable/client/package rebuild. Original assertions retained; all logs limited to lengths/queue states/timings.'}
+          (reports / 'test-binary.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt))
+          PY
+      - name: Retain the diagnostic test executable before any test runs
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-transport-unit-native-${{ github.run_id }}
+          path: reports/windows-transport-unit
+          if-no-files-found: error
+      - name: Trace original and explicitly named fixture controls
+        run: python tools/run-windows-transport-units.py
+      - name: Retain every actual test outcome
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-transport-unit-evidence-${{ github.run_id }}
+          path: reports/windows-transport-unit
+          if-no-files-found: error

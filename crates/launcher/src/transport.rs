@@ -27,6 +27,25 @@ pub use http::{HostedHttpRequest, HostedHttpResponse};
 const HTTP_WORKERS: usize = 4;
 const HTTP_QUEUE_CAPACITY: usize = 64;
 
+#[cfg(test)]
+fn diagnostic(stage: &str, detail: fmt::Arguments<'_>) {
+    if std::env::var_os("SOLOMON_TRANSPORT_DIAGNOSTIC").is_none() {
+        return;
+    }
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    static BYTES: AtomicUsize = AtomicUsize::new(0);
+    let elapsed = START.get_or_init(std::time::Instant::now).elapsed().as_micros();
+    let line = format!("SDR_TRANSPORT_DIAGNOSTIC us={elapsed} stage={stage} {detail}");
+    if BYTES
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |bytes| {
+            (bytes + line.len() < 65536).then_some(bytes + line.len())
+        })
+        .is_ok()
+    {
+        eprintln!("{line}");
+    }
+}
+
 /// Opaque connection identity. IDs increase for the lifetime of this transport and are
 /// never reused. The authority assigns stable player identities separately.
 pub type PeerId = u64;
@@ -221,6 +240,17 @@ impl PeerSender {
         if outbox.close.is_some() || self.0.closed.load(Ordering::Acquire) {
             return Err(PeerSendError::Closed);
         }
+        #[cfg(test)]
+        diagnostic(
+            "replace-snapshot",
+            format_args!(
+                "peer={} bytes={} prior={:?} reliable={}",
+                self.id(),
+                payload.len(),
+                outbox.snapshot.as_ref().map(|row| row.len()),
+                outbox.reliable.len()
+            ),
+        );
         outbox.snapshot = Some(payload);
         Ok(())
     }
@@ -395,6 +425,11 @@ impl NativeServer {
         let listener_worker = thread::spawn(move || {
             for accepted in listener.incoming() {
                 if listener_state.stopping.load(Ordering::Acquire) {
+                    #[cfg(test)]
+                    diagnostic(
+                        "listener-stop-after-accept",
+                        format_args!("accepted={}", accepted.is_ok()),
+                    );
                     break;
                 }
                 let stream = match accepted {
@@ -498,7 +533,17 @@ impl NativeServer {
         if self.state.stopping.swap(true, Ordering::AcqRel) {
             return;
         }
+        #[cfg(test)]
+        diagnostic(
+            "shutdown-begin",
+            format_args!(
+                "listener_finished={}",
+                self.listener_worker.as_ref().is_none_or(|row| row.is_finished())
+            ),
+        );
         self.events.take();
+        #[cfg(test)]
+        diagnostic("shutdown-events-dropped", format_args!(""));
         {
             let connections = self
                 .state
@@ -509,6 +554,8 @@ impl NativeServer {
                 let _ = stream.shutdown(Shutdown::Both);
             }
         }
+        #[cfg(test)]
+        diagnostic("shutdown-connections-closed", format_args!(""));
         // Wake the blocking accept without periodic polling or an idle busy loop.
         let wake_address = match self.address.ip() {
             IpAddr::V4(address) if address.is_unspecified() => {
@@ -519,13 +566,56 @@ impl NativeServer {
             }
             _ => self.address,
         };
-        let _ = TcpStream::connect(wake_address);
+        #[cfg(test)]
+        if std::env::var_os("SOLOMON_TRANSPORT_FORCE_EARLY_ACCEPT").is_some() {
+            // Diagnostic fault injection: reproduce a real pending connection waking
+            // the stopped listener before shutdown reaches its own wake connect.
+            let result = TcpStream::connect_timeout(&wake_address, Duration::from_millis(100));
+            diagnostic(
+                "forced-pending-accept",
+                format_args!(
+                    "result={:?}",
+                    result
+                        .as_ref()
+                        .map(|_| ())
+                        .map_err(|error| (error.kind(), error.raw_os_error()))
+                ),
+            );
+            let started = std::time::Instant::now();
+            while self.listener_worker.as_ref().is_some_and(|row| !row.is_finished())
+                && started.elapsed() < Duration::from_secs(1)
+            {
+                thread::yield_now();
+            }
+        }
+        #[cfg(test)]
+        diagnostic(
+            "shutdown-wake-connect-begin",
+            format_args!(
+                "listener_finished={}",
+                self.listener_worker.as_ref().is_none_or(|row| row.is_finished())
+            ),
+        );
+        let result = TcpStream::connect(wake_address);
+        #[cfg(test)]
+        diagnostic(
+            "shutdown-wake-connect-end",
+            format_args!(
+                "result={:?}",
+                result.as_ref().map(|_| ()).map_err(|error| (error.kind(), error.raw_os_error()))
+            ),
+        );
+        let _ = result;
         if let Some(worker) = self.listener_worker.take() {
             worker.join().expect("the listener worker does not panic");
         }
+        #[cfg(test)]
+        diagnostic("shutdown-listener-joined", format_args!(""));
         for worker in self.http_workers.drain(..) {
             worker.join().expect("the HTTP worker does not panic");
         }
+        #[cfg(test)]
+        diagnostic("shutdown-http-joined", format_args!(""));
         let workers = std::mem::take(
             &mut *self
                 .state
@@ -536,6 +626,8 @@ impl NativeServer {
         for worker in workers {
             worker.join().expect("the WebSocket worker does not panic");
         }
+        #[cfg(test)]
+        diagnostic("shutdown-sockets-joined", format_args!(""));
     }
 }
 
