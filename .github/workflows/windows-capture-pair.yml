@@ -1,0 +1,76 @@
+name: Retain unqualified Windows capture pair
+
+on:
+  push:
+    branches: [diagnostic/windows-capture-control-20261022]
+    paths: [.github/workflows/windows-capture-pair.yml]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+
+jobs:
+  retain:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 5c094aaa962b9ef0b231651f08a91e4330ff4317
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --global npm@10.9.2
+      - run: npm ci --no-audit --no-fund
+      - run: rustup show
+      - run: cargo install trunk --locked --version 0.22.0
+      - run: python scripts/verify-client-assets.py
+      - run: npm run test:desktop
+      - name: Build the unchanged normal Windows package
+        run: npm run package:desktop -- --platform win32 --arch x64 --release-repository "$GITHUB_REPOSITORY"
+      - name: Retain the actual pair before any smoke observer runs
+        run: |
+          node tools/archive-desktop.mjs
+          python - <<'PY'
+          import hashlib, json, os, pathlib, shutil, subprocess
+          source = '5c094aaa962b9ef0b231651f08a91e4330ff4317'
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert actual == source, (actual, source)
+          root = pathlib.Path('dist-desktop/Solomon Darker-win32-x64')
+          manifest = json.loads((root / 'desktop-package-manifest.json').read_text())
+          assert manifest['revision'] == source
+          files = []
+          for path in sorted(root.rglob('*')):
+              if path.is_file():
+                  digest = hashlib.file_digest(path.open('rb'), 'sha256').hexdigest()
+                  files.append({'path': path.relative_to(root).as_posix(), 'bytes': path.stat().st_size, 'sha256': digest})
+          native = 'resources/app/' + manifest['nativeAuthority']['executable']
+          assert next(row['sha256'] for row in files if row['path'] == native) == manifest['nativeAuthority']['sha256']
+          receipt = pathlib.Path('reports/windows-capture-pair')
+          receipt.mkdir(parents=True)
+          (receipt / 'pair.json').write_text(json.dumps({'status': 'unqualified-capture-control-input', 'sourceRevision': source, 'workflowRevision': os.environ['GITHUB_SHA'], 'runId': os.environ['GITHUB_RUN_ID'], 'runAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'manifest': manifest, 'files': files}, indent=2) + '\n')
+          shutil.copy2(root / 'desktop-package-manifest.json', receipt)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-capture-pair-${{ github.run_id }}
+          path: |
+            dist-desktop/*.zip
+            dist-desktop/*.sha256
+            dist-desktop/desktop-release.json
+            reports/windows-capture-pair
+          if-no-files-found: error
+      - name: State the qualification boundary
+        run: echo 'The retained exact-5c package is diagnostic input; no smoke qualification or publication is claimed.'
