@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { createReadStream } from 'node:fs';
+import { appendFileSync, createReadStream } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
@@ -39,16 +39,26 @@ const resourceChecks = [];
 const imageAbortQueries = [];
 const receipts = { platform: process.platform, revision: manifest.revision, diagnosticNativeExitDialogIntercept: true, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [], failedImageObservations: [] };
 let phase = 'launch-solo';
+let phaseBytes = 0;
 const redact = value => String(value).replace(/solomondarker:\/\/[^\s'"<>]+/g, '[redacted-invite]');
+function recordPhase(value) {
+  const line = `${JSON.stringify(value)}\n`;
+  console.log(line.trimEnd());
+  const bytes = Buffer.byteLength(line);
+  if (phaseBytes + bytes <= 128 * 1024) {
+    appendFileSync(join(evidence, 'phases.jsonl'), line);
+    phaseBytes += bytes;
+  }
+}
 function progress(nextPhase) {
   phase = nextPhase;
-  console.log(JSON.stringify({diagnosticPhase: phase, at: new Date().toISOString()}));
+  recordPhase({diagnosticPhase: phase, at: new Date().toISOString()});
 }
 const heartbeat = setInterval(() => {
-  console.log(JSON.stringify({diagnosticPhase: phase, at: new Date().toISOString(), instances: [...running].map(instance => ({
+  recordPhase({diagnosticPhase: phase, at: new Date().toISOString(), instances: [...running].map(instance => ({
     label: instance.label, sequence: instance.state.frame?.sequence, tick: instance.state.frame?.snapshot.ticks,
     position: position(instance), closedSockets: instance.state.closedSockets, sentDisconnects: instance.state.disconnects,
-  }))}));
+  }))});
 }, 15000);
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
@@ -282,6 +292,9 @@ async function launch(label, userData) {
     },
     timeout: 30000
   });
+  appendFileSync(join(evidence, 'owned-processes.jsonl'), `${JSON.stringify({
+    label, pid: app.process().pid, executable, recordedAt: new Date().toISOString(),
+  })}\n`);
   const page = await app.firstWindow({
     timeout: 30000
   });

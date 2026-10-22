@@ -17,7 +17,7 @@ env:
 jobs:
   windows-native:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     defaults:
       run:
         shell: bash
@@ -49,13 +49,28 @@ jobs:
         run: cargo build --locked --release -p solomon-launcher --bin solomon-darker
       - name: Record the actual native PE stack reserve
         run: python scripts/windows-desktop-diagnostic.py pe-header target/release/solomon-darker.exe reports/desktop-smoke/native-pe-header.json
+      - name: Retain the exact fixed native authority before launching Electron
+        timeout-minutes: 3
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-fixed-authority-${{ github.run_id }}
+          path: |
+            target/release/solomon-darker.exe
+            reports/desktop-smoke/native-pe-header.json
+            reports/desktop-smoke/reused-client.json
+          if-no-files-found: error
       - name: Package the native authority with that unchanged client
         run: npm run package:desktop -- --platform win32 --arch x64 --skip-build --native-host target/release/solomon-darker.exe --client-root diagnostic-client --release-repository "$GITHUB_REPOSITORY"
       - name: Observe the actual packaged offline and peer journey
-        timeout-minutes: 12
-        run: npm run smoke:desktop
+        timeout-minutes: 14
+        run: python scripts/windows-desktop-diagnostic.py smoke reports/desktop-smoke --timeout-seconds 720
+      - name: Recover only recorded task-owned processes and print bounded evidence
+        if: ${{ always() }}
+        timeout-minutes: 2
+        run: python scripts/windows-desktop-diagnostic.py recover reports/desktop-smoke
       - name: Retain native process, transport and actual browser evidence
         if: ${{ always() }}
+        timeout-minutes: 3
         uses: actions/upload-artifact@v4
         with:
           name: windows-native-diagnostic-${{ github.run_id }}
