@@ -40,6 +40,8 @@ const imageAbortQueries = [];
 const receipts = { platform: process.platform, revision: manifest.revision, diagnosticNativeExitDialogIntercept: true, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [], failedImageObservations: [] };
 let phase = 'launch-solo';
 let phaseBytes = 0;
+let metricsBytes = 0;
+let collectingMetrics = false;
 const redact = value => String(value).replace(/solomondarker:\/\/[^\s'"<>]+/g, '[redacted-invite]');
 function recordPhase(value) {
   const line = `${JSON.stringify(value)}\n`;
@@ -58,8 +60,29 @@ const heartbeat = setInterval(() => {
   recordPhase({diagnosticPhase: phase, at: new Date().toISOString(), instances: [...running].map(instance => ({
     label: instance.label, sequence: instance.state.frame?.sequence, tick: instance.state.frame?.snapshot.ticks,
     position: position(instance), closedSockets: instance.state.closedSockets, sentDisconnects: instance.state.disconnects,
+    host: instance.state.frame?.host,
   }))});
+  void recordAppMetrics();
 }, 15000);
+async function recordAppMetrics() {
+  if (collectingMetrics || metricsBytes >= 64 * 1024) return;
+  collectingMetrics = true;
+  try {
+    for (const instance of running) {
+      const metrics = await bounded(instance.app.evaluate(({app}) => ({
+        features: app.getGPUFeatureStatus(),
+        processes: app.getAppMetrics().map(row => ({
+          pid: row.pid, type: row.type, cpu: row.cpu, memory: row.memory,
+        })),
+      })), 3000, 'Electron process metrics').catch(error => ({error: redact(error.message)}));
+      const line = `${JSON.stringify({at: new Date().toISOString(), label: instance.label, phase, ...metrics})}\n`;
+      if (metricsBytes + Buffer.byteLength(line) <= 64 * 1024) {
+        appendFileSync(join(evidence, 'app-metrics.jsonl'), line);
+        metricsBytes += Buffer.byteLength(line);
+      }
+    }
+  } finally { collectingMetrics = false; }
+}
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
 const playing = instance => instance.state.frame?.snapshot.boneyard && !instance.state.frame.host.loading_run_id && !instance.state.frame.host.resume_grace && !instance.state.frame.host.pause;
@@ -91,11 +114,15 @@ try {
   assert.equal(runtime.origin, 'solomon-darker://app');
   assert.equal(runtime.endpoint.kind, 'localhost');
   assert.equal(runtime.endpoint.sessionKind, 'standalone');
+  appendFileSync(join(evidence, 'authority-endpoints.jsonl'), `${JSON.stringify({
+    label: solo.label, url: runtime.endpoint.url,
+  })}\n`);
   const child = await hostProcess(solo.app);
   assert.ok(child.command.includes('--desktop'), 'the app owns the canonical native desktop scope');
   assert.equal(child.command.includes(runtime.endpoint.credential), false);
   progress('solo-movement');
   const movement = await move(solo);
+  progress('solo-capture');
   await solo.page.screenshot({
     path: join(evidence, 'solo.png')
   });
@@ -234,6 +261,13 @@ try {
     await instance.page.screenshot({
       path: join(evidence, `${instance.label}-failure.png`), timeout: 8000,
     }).catch(error => console.error(JSON.stringify({label: instance.label, diagnosticScreenshotError: redact(error.message)})));
+    if (instance.page.url() === 'solomon-darker://app/game') {
+      await bounded(instance.app.evaluate(async ({BrowserWindow}) =>
+        (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64')),
+      8000, 'Electron native screenshot').then(bytes =>
+        writeFile(join(evidence, `${instance.label}-native-failure.png`), Buffer.from(bytes, 'base64')))
+        .catch(error => console.error(JSON.stringify({label: instance.label, diagnosticNativeScreenshotError: redact(error.message)})));
+    }
     const failed = {
       label: instance.label,
       url: instance.page.url(),
@@ -449,14 +483,19 @@ async function readyHub(instance) {
   await instance.page.waitForFunction(() => document.querySelector('.game-menus')?.dataset.menuScreen === 'hidden' && window.wasmBindings.wizard_state()[6] === 0 && window.wasmBindings.wizard_state()[7] === -1);
 }
 async function move(instance) {
+  progress(`${instance.label}-movement-front`);
   await instance.page.bringToFront();
   const before = position(instance).x;
+  progress(`${instance.label}-movement-key-down`);
   await instance.page.keyboard.down('KeyD');
+  progress(`${instance.label}-movement-wait`);
   try {
     await waitFor(() => position(instance).x > before + 10, 'accepted movement');
   } finally {
+    progress(`${instance.label}-movement-key-up`);
     await instance.page.keyboard.up('KeyD');
   }
+  progress(`${instance.label}-movement-complete`);
   return {
     before,
     after: position(instance).x
@@ -606,6 +645,13 @@ async function hostProcess(application) {
     })), 15000, 'native child observation');
     assert.equal(children.children.length, 1, 'the app owns one live separate native authority');
     const [child] = children.children;
+    if (instance.recordedNativeChild !== child.pid) {
+      instance.recordedNativeChild = child.pid;
+      appendFileSync(join(evidence, 'owned-processes.jsonl'), `${JSON.stringify({
+        label: `${label}-native`, pid: child.pid, executable: child.executable,
+        recordedAt: new Date().toISOString(),
+      })}\n`);
+    }
     appendFileSync(join(evidence, 'process-lookups.jsonl'), `${JSON.stringify({
       at: new Date().toISOString(), label, parentPid: children.parentPid,
       elapsedMs: Date.now() - started, outcome: 'ok', childPid: child.pid,

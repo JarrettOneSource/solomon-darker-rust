@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -12,6 +13,7 @@ import subprocess
 import sys
 import time
 import zipfile
+from urllib.parse import urlsplit
 
 
 def file_sha256(path):
@@ -87,14 +89,15 @@ def print_summary(directory):
     for path in sorted((directory / "native-child").glob("*.jsonl")):
         print(json.dumps({"diagnosticSummary": "native", "file": path.name,
                           "bytes": path.stat().st_size, "tail": tail(path)}), flush=True)
-    for name in ["process-lookups.jsonl", "original-error.json", "failure.json", "receipt.json"]:
+    for name in ["process-lookups.jsonl", "app-metrics.jsonl", "watchdog-metrics.jsonl",
+                 "original-error.json", "failure.json", "receipt.json"]:
         path = directory / name
         if path.is_file():
             print(json.dumps({"diagnosticSummary": name, "tail": tail(path)}), flush=True)
 
 
 OWNED_CLEANUP = r'''
-param([string]$RecordsPath)
+param([string]$RecordsPath, [switch]$SampleOnly)
 Get-Content -LiteralPath $RecordsPath | ForEach-Object {
   $record = $_ | ConvertFrom-Json
   $taskPid = [int]$record.pid
@@ -102,13 +105,64 @@ Get-Content -LiteralPath $RecordsPath | ForEach-Object {
   if ($null -eq $taskProcess) {
     @{ cleanup = 'already-exited'; pid = $taskPid; label = $record.label } | ConvertTo-Json -Compress
   } elseif ([string]::Equals([IO.Path]::GetFullPath($taskProcess.Path), [IO.Path]::GetFullPath($record.executable), [StringComparison]::OrdinalIgnoreCase)) {
-    @{ cleanup = 'owned-tree'; pid = $taskPid; label = $record.label; workingSetBytes = $taskProcess.WorkingSet64; privateBytes = $taskProcess.PrivateMemorySize64 } | ConvertTo-Json -Compress
-    & taskkill.exe /PID $taskPid /T /F 2>&1 | Select-Object -Last 8
+    if ($SampleOnly) {
+      @{ observation = 'owned-process'; pid = $taskPid; label = $record.label; cpuSeconds = $taskProcess.CPU; workingSetBytes = $taskProcess.WorkingSet64; privateBytes = $taskProcess.PrivateMemorySize64 } | ConvertTo-Json -Compress
+    } else {
+      @{ cleanup = 'owned-tree'; pid = $taskPid; label = $record.label; workingSetBytes = $taskProcess.WorkingSet64; privateBytes = $taskProcess.PrivateMemorySize64 } | ConvertTo-Json -Compress
+      & taskkill.exe /PID $taskPid /T /F 2>&1 | Select-Object -Last 8
+    }
   } else {
     @{ cleanup = 'identity-mismatch-skipped'; pid = $taskPid; label = $record.label } | ConvertTo-Json -Compress
   }
 }
 '''
+
+
+def sample_owned(directory):
+    report = directory / "watchdog-metrics.jsonl"
+    if report.exists() and report.stat().st_size >= 64 * 1024:
+        return
+    sample = {"atEpochSeconds": time.time()}
+    script = directory / "cleanup-owned.ps1"
+    script.write_text(OWNED_CLEANUP)
+    output = directory / "process-sample.log"
+    try:
+        with output.open("wb") as stream:
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-File", str(script),
+                 "-RecordsPath", str(directory / "owned-processes.jsonl"), "-SampleOnly"],
+                stdout=stream, stderr=subprocess.STDOUT, timeout=5,
+            )
+        sample["processLookupExit"] = result.returncode
+        sample["processes"] = tail(output, 8192)
+    except subprocess.TimeoutExpired:
+        sample["processLookupError"] = "Get-Process sample timed out after 5 seconds"
+    endpoints = directory / "authority-endpoints.jsonl"
+    if endpoints.exists():
+        sample["authorityHealth"] = []
+        for line in endpoints.read_text().splitlines():
+            endpoint = json.loads(line)
+            url = urlsplit(endpoint["url"])
+            if url.hostname != "127.0.0.1" or url.scheme != "ws":
+                raise ValueError("Diagnostic health probe must target the actual loopback authority")
+            connection = http.client.HTTPConnection(url.hostname, url.port, timeout=1)
+            started = time.monotonic()
+            health = {"label": endpoint["label"]}
+            try:
+                connection.request("GET", "/health")
+                response = connection.getresponse()
+                health["status"] = response.status
+                health["body"] = response.read(2048).decode("utf-8", errors="replace")
+            except (OSError, http.client.HTTPException) as error:
+                health["error"] = str(error)
+            finally:
+                connection.close()
+                health["elapsedMs"] = round((time.monotonic() - started) * 1000)
+            sample["authorityHealth"].append(health)
+    line = json.dumps(sample) + "\n"
+    if (report.stat().st_size if report.exists() else 0) + len(line.encode()) <= 64 * 1024:
+        with report.open("a") as stream:
+            stream.write(line)
 
 
 def cleanup_owned(directory):
@@ -150,6 +204,7 @@ def smoke(directory, timeout_seconds):
             except subprocess.TimeoutExpired:
                 print(json.dumps({"diagnosticWatchdogSeconds": round(time.monotonic() - started),
                                   "phaseTail": tail(directory / "phases.jsonl", 2048)}), flush=True)
+                sample_owned(directory)
         if expired:
             print(json.dumps({"diagnosticWatchdogExpired": timeout_seconds}), flush=True)
     finally:
