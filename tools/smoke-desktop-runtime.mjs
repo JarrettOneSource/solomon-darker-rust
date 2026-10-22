@@ -61,6 +61,7 @@ function progress(nextPhase) {
 const heartbeat = setInterval(() => {
   recordPhase({diagnosticPhase: phase, at: new Date().toISOString(), instances: [...running].map(instance => ({
     label: instance.label, sequence: instance.state.frame?.sequence, tick: instance.state.frame?.snapshot.ticks,
+    networkEventAt: instance.state.networkEventAt, networkDeliveryDelayMs: instance.state.networkDeliveryDelayMs,
     position: position(instance), closedSockets: instance.state.closedSockets, sentDisconnects: instance.state.disconnects,
     host: instance.state.frame?.host,
     boneyardRun: instance.state.frame?.snapshot.boneyard?.run_id,
@@ -497,6 +498,16 @@ async function launch(label, userData, graphics = platformGraphics) {
   });
   page.on('websocket', socket => {
     const readMessage = createNativeMessageReader();
+    let sentWallTimeMs;
+    let receivedWallTimeMs;
+    let clockBytes = 0;
+    let previousClockState;
+    let lastClockRecord = 0;
+    // Diagnostic only: pinned Playwright 1.61.1 carries Chromium's converted
+    // event timestamp here but omits it from its public frame payload. Reuse the
+    // existing channel rather than subscribing to another full Network stream.
+    socket._channel.prependListener('frameSent', event => { sentWallTimeMs = event.wallTimeMs; });
+    socket._channel.prependListener('frameReceived', event => { receivedWallTimeMs = event.wallTimeMs; });
     socket.on('framesent', ({payload}) => {
       const message = JSON.parse(payload.toString());
       if (message.type === 'disconnect') instance.state.disconnects++;
@@ -505,7 +516,9 @@ async function launch(label, userData, graphics = platformGraphics) {
         const key = `${message.type}:${message.run_id ?? message.sequence}`;
         if (!instance.state.loggedReadiness.has(key)) {
           instance.state.loggedReadiness.add(key);
-          const acknowledgement = {at: new Date().toISOString(), label, type: message.type,
+          const acknowledgement = {at: new Date().toISOString(),
+            networkEventAt: new Date(sentWallTimeMs).toISOString(),
+            networkDeliveryDelayMs: Date.now() - sentWallTimeMs, label, type: message.type,
             runId: message.run_id, sequence: message.sequence};
           appendFileSync(join(evidence, 'client-readiness.jsonl'), `${JSON.stringify(acknowledgement)}\n`);
           recordPhase({clientReadiness: acknowledgement});
@@ -520,6 +533,28 @@ async function launch(label, userData, graphics = platformGraphics) {
         instance.state.id = message.credentials.player_id;
         instance.state.frame = message.frame;
       } else if (message.type === 'snapshot') instance.state.frame = message.frame;else if (message.type === 'hosted' && message.message.kind === 'save_before_leave') instance.state.leaveReceipts++;else if (message.type === 'error') errors.push(`${label} host: ${message.code}: ${message.reason}`);
+      if (message.type === 'welcome' || message.type === 'snapshot') {
+        const now = Date.now();
+        instance.state.networkEventAt = new Date(receivedWallTimeMs).toISOString();
+        instance.state.networkDeliveryDelayMs = now - receivedWallTimeMs;
+        const frame = instance.state.frame;
+        const clockState = JSON.stringify([frame.host.loading_run_id, frame.host.resume_grace,
+          frame.host.pause, Boolean(frame.snapshot.boneyard)]);
+        if (clockState !== previousClockState || now - lastClockRecord >= 5000) {
+          const line = `${JSON.stringify({at: new Date(now).toISOString(), label,
+            networkEventAt: instance.state.networkEventAt,
+            networkDeliveryDelayMs: instance.state.networkDeliveryDelayMs,
+            sequence: frame.sequence, tick: frame.snapshot.ticks,
+            loadingRunId: frame.host.loading_run_id, grace: frame.host.resume_grace,
+            pause: frame.host.pause, boneyardRun: frame.snapshot.boneyard?.run_id})}\n`;
+          if (clockBytes + Buffer.byteLength(line) <= 64 * 1024) {
+            appendFileSync(join(evidence, `network-clock-${label}.jsonl`), line);
+            clockBytes += Buffer.byteLength(line);
+          }
+          previousClockState = clockState;
+          lastClockRecord = now;
+        }
+      }
     });
   });
   await page.getByRole('button', {
