@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const {createNativeMessageReader} = require('./native-wire.cjs');
-const obsoleteCreateImage = require('./obsolete-create-image.cjs');
+const obsoleteMenuImage = require('./obsolete-menu-image.cjs');
 const {chromium, request} = require(path.resolve(process.env.PW));
 
 const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
@@ -96,7 +96,7 @@ function observe(page, label) {
   });
   page.on('requestfailed', item => {
     const check = (async () => {
-      const cancelled = await obsoleteCreateImage(page, item);
+      const cancelled = await obsoleteMenuImage(page, item);
       if (cancelled) { state.cancelledImages.push(cancelled); return; }
       const failure = `${new URL(item.url()).pathname}: ${item.failure()?.errorText}`;
       if (item.resourceType() === 'media' && item.failure()?.errorText === 'net::ERR_ABORTED') {

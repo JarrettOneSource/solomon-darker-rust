@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const {createNativeMessageReader} = require('./native-wire.cjs');
-const obsoleteCreateImage = require('./obsolete-create-image.cjs');
+const obsoleteMenuImage = require('./obsolete-menu-image.cjs');
 const {chromium} = require(path.resolve(process.env.PW));
 
 const url = new URL(process.env.URL || 'https://127.0.0.1:9449/game-stg/');
@@ -20,6 +20,8 @@ const checks = [];
 const errors = [];
 const cancelledMedia = [];
 const cancelledImages = [];
+const failedResources = [];
+const pendingPageArt = new Set();
 const resourceChecks = [];
 const apiRequests = [];
 const registrationRequests = [];
@@ -32,8 +34,9 @@ const approach = [];
 const admissions = [];
 const welcomes = [];
 const commands = [];
+const inputSamples = [];
 const wasmFiles = new Set();
-const state = {frame: null, id: null, loaded: null, userId: null, leaveReceipts: 0};
+const state = {frame: null, id: null, loaded: null, userId: null, leaveReceipts: 0, lastInput: null};
 let account;
 let step = 'browser startup';
 let ownedBrowserClosed = false;
@@ -98,6 +101,7 @@ function observeFrame(frame) {
 
 function observe(page) {
   page.on('request', request => {
+    if (['image', 'font'].includes(request.resourceType())) pendingPageArt.add(request);
     if (new URL(request.url()).pathname === `${mount}/api/auth/register`
       && request.method() === 'POST') {
       const submitted = request.postDataJSON();
@@ -107,6 +111,7 @@ function observe(page) {
         usernameLength: submitted.username?.length});
     }
   });
+  page.on('requestfinished', request => pendingPageArt.delete(request));
   page.on('pageerror', error => errors.push(redact(error.message)));
   page.on('console', message => {
     if (message.type() === 'error') errors.push(redact(message.text()));
@@ -141,8 +146,12 @@ function observe(page) {
     }
   });
   page.on('requestfailed', request => {
+    pendingPageArt.delete(request);
+    failedResources.push({path: new URL(request.url()).pathname,
+      type: request.resourceType(), failure: request.failure()?.errorText,
+      step, pagePath: new URL(page.url()).pathname});
     const check = (async () => {
-      const cancelled = await obsoleteCreateImage(page, request);
+      const cancelled = await obsoleteMenuImage(page, request);
       if (cancelled) { cancelledImages.push(cancelled); return; }
       const failure = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
       if (request.resourceType() === 'media' && request.failure()?.errorText === 'net::ERR_ABORTED') {
@@ -164,6 +173,10 @@ function observe(page) {
         commands.push({kind: 'set_cheats', enabled: message.command.enabled});
       } else if (message.type === 'command') {
         commands.push({kind: message.command.kind, sequence: message.sequence});
+      } else if (message.type === 'input') {
+        state.lastInput = {sequence: message.sequence, targetTick: message.target_tick,
+          movement: message.input.movement};
+        inputSamples.push({...state.lastInput, observedAtMs: Date.now()});
       }
     });
     socket.on('framereceived', ({payload}) => {
@@ -206,6 +219,12 @@ async function gameTitle(page, username) {
   await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
   await page.waitForFunction(expected => document.querySelector('.game-account-name-title')
     ?.getAttribute('data-account-username') === expected, username || 'Not logged in');
+  await settlePageArt(page);
+}
+
+async function settlePageArt(page) {
+  await page.evaluate(() => document.fonts.ready.then(() => null));
+  await waitUntil(() => pendingPageArt.size === 0, 'requested page images and fonts');
 }
 
 async function settledAccountForm(page) {
@@ -232,6 +251,8 @@ async function register(page) {
   fs.writeFileSync(privateFile, JSON.stringify(account, null, 2), {mode: 0o600, flag: 'wx'});
   fs.chmodSync(privateFile, 0o600);
   await page.locator('[data-menu-action="explore"]').click();
+  await page.locator('[data-menu-action="cloud-sign-in"]').waitFor({state: 'visible'});
+  await settlePageArt(page);
   await page.locator('[data-menu-action="cloud-sign-in"]').click();
   await page.waitForURL(current => current.pathname === `${mount}/login`);
   await settledAccountForm(page);
@@ -258,6 +279,8 @@ async function register(page) {
 
 async function signIn(page) {
   await page.locator('[data-menu-action="explore"]').click();
+  await page.locator('[data-menu-action="cloud-sign-in"]').waitFor({state: 'visible'});
+  await settlePageArt(page);
   await page.locator('[data-menu-action="cloud-sign-in"]').click();
   await page.waitForURL(current => current.pathname === `${mount}/login`);
   await settledAccountForm(page);
@@ -314,7 +337,6 @@ async function globalHall(page, runId, mode) {
 }
 
 async function approachSolomon(page) {
-  const held = new Set();
   const world = state.frame.snapshot.boneyard;
   const start = participant().wizard.position;
   const gates = new Map();
@@ -339,36 +361,66 @@ async function approachSolomon(page) {
       const target = targets[waypoint];
       const dx = target.x - at.x;
       const dy = target.y - at.y;
-      const close = Math.hypot(dx, dy) < (waypoint === targets.length - 1 ? 90 : 12);
-      const desired = new Set();
-      if (close && waypoint < targets.length - 1) waypoint += 1;
-      // A swung gate can stop the body several units off its center line. Keep
-      // centering until inside rather than treating the old eight-unit slack as clear.
-      const xSlack = waypoint < targets.length - 1 ? 2 : 8;
-      if (!close && Math.abs(dx) > xSlack) desired.add(dx < 0 ? 'KeyA' : 'KeyD');
-      if (!close && Math.abs(dy) > 8) desired.add(dy < 0 ? 'KeyW' : 'KeyS');
-      for (const key of held) {
-        if (!desired.has(key)) {await page.keyboard.up(key); held.delete(key);}
+      const close = waypoint === targets.length - 1
+        ? Math.hypot(dx, dy) < 90 : Math.abs(dx) <= 4 && Math.abs(dy) <= 10;
+      if (close) {
+        if (waypoint < targets.length - 1) waypoint += 1;
+        else await page.waitForTimeout(50);
+        continue;
       }
-      for (const key of desired) {
-        if (!held.has(key)) {await page.keyboard.down(key); held.add(key);}
+      // Recenter outside the swinging leaves if an earlier contact pushed us
+      // beside the opening. Source's entrance navigator separates approach/crossing.
+      if (waypoint === 1 && Math.abs(dx) > 40 && (at.y - gate.y) * direction < 45) {
+        const away = direction > 0 ? 'KeyW' : 'KeyS';
+        await keyPulse(page, away, 160);
+        approach.push({tick: state.frame.snapshot.ticks, position: participant().wizard.position,
+          target: targets[0], waypoint, recovery: 'back away before recentering'});
+        if ((gate.y - participant().wizard.position.y) * direction >= 70) waypoint = 0;
+        continue;
       }
-      approach.push({tick: state.frame.snapshot.ticks, position: at, target, waypoint});
-      await new Promise(resolve => setTimeout(resolve, 50));
+      const horizontal = Math.abs(dx) > (waypoint < targets.length - 1 ? 4 : 8);
+      const distance = Math.abs(horizontal ? dx : dy);
+      const key = horizontal ? (dx < 0 ? 'KeyA' : 'KeyD') : (dy < 0 ? 'KeyW' : 'KeyS');
+      const pulseMs = Math.max(30, Math.min(160, distance / 118.75 * 1000));
+      const pulse = await keyPulse(page, key, pulseMs);
+      approach.push({tick: state.frame.snapshot.ticks, position: participant().wizard.position,
+        target, waypoint, key, pulseMs, ...pulse});
     }
     assert.notEqual(state.frame.snapshot.boneyard.encounter.phase, 'Digging');
   } finally {
-    for (const key of held) await page.keyboard.up(key);
+    for (const key of ['KeyA', 'KeyD', 'KeyW', 'KeyS']) await page.keyboard.up(key);
   }
+}
+
+async function keyPulse(page, key, milliseconds) {
+  const before = state.lastInput?.sequence || 0;
+  const started = Date.now();
+  await page.keyboard.down(key);
+  try {
+    await waitUntil(() => state.lastInput?.sequence > before
+      && (state.lastInput.movement.x !== 0 || state.lastInput.movement.y !== 0),
+    'ordinary keyboard movement sampled by the client');
+    await page.waitForTimeout(Math.max(0, milliseconds - (Date.now() - started)));
+  } finally {
+    await page.keyboard.up(key);
+  }
+  await waitUntil(() => state.lastInput?.sequence > before
+    && state.lastInput.movement.x === 0 && state.lastInput.movement.y === 0,
+  'ordinary key release sampled by the client');
+  const released = state.lastInput.sequence;
+  await waitUntil(() => state.frame.input_acknowledgements[state.id] >= released,
+    'authority observation after the actual key release');
+  return {releasedSequence: released, acknowledgedSequence: state.frame.input_acknowledgements[state.id]};
 }
 
 async function main() {
   fs.mkdirSync(output, {recursive: true});
   const receipt = {passed: false, url: url.href,
     driverSha256: digest(fs.readFileSync(__filename)),
-    sourceRevision: 'ed0a2d598f1df5ac51f9c335e453c7d7041fcb5a',
+    sourceRevision: process.env.SOURCE_REV || 'fa08ae249ff5563570bdb2a653e2ef9358ce7b83',
     scope: 'Real registration, unmodified hosted gameplay, passive combat death, signed score POST and Global Hall',
-    checks, errors, cancelledMedia, cancelledImages, apiRequests, registrationRequests, admissions, welcomes, commands,
+    checks, errors, cancelledMedia, cancelledImages, failedResources, apiRequests, registrationRequests,
+    admissions, welcomes, commands, inputSamples,
     scoreReceipts, scorePosts, hallRequests, hallActivations, healthSamples};
   let browserServer;
   let browser;
@@ -525,12 +577,15 @@ async function main() {
     }
     throw error;
   } finally {
+    receipt.beforeCleanup = {errors: [...errors], pendingPageArt: [...pendingPageArt]
+      .map(request => new URL(request.url()).pathname)};
     receipt.wasmFiles = [...wasmFiles];
     receipt.lastAuthority = state.frame ? {tick: state.frame.snapshot.ticks,
       run: state.frame.snapshot.run, host: state.frame.host,
       position: participant()?.wizard.position} : null;
     fs.writeFileSync(path.join(output, 'solomon-approach.json'), JSON.stringify(approach, null, 2) + '\n');
     fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
+    step = 'browser cleanup';
     if (browser) {
       await bounded(browser.close(), 'browser connection close', 5000).catch(error => {
         receipt.connectionCloseError = error.message;

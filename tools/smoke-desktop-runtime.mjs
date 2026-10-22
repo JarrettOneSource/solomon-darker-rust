@@ -18,7 +18,7 @@ const {
   startNewGame
 } = require('./browser-smoke/menu-journey.cjs');
 const {createNativeMessageReader} = require('./browser-smoke/native-wire.cjs');
-const obsoleteCreateImage = require('./browser-smoke/obsolete-create-image.cjs');
+const obsoleteMenuImage = require('./browser-smoke/obsolete-menu-image.cjs');
 const applicationPath = resolve(process.env.SDR_DESKTOP_APP || `dist-desktop/Solomon Darker-${process.platform}-${process.arch}`);
 const manifest = JSON.parse(await readFile(join(applicationPath, 'desktop-package-manifest.json'), 'utf8'));
 const executable = resolve(applicationPath, manifest.executable);
@@ -36,7 +36,7 @@ const profiles = await mkdtemp(join(tmpdir(), 'solomon-darker-smoke-'));
 const running = new Set();
 const errors = [];
 const resourceChecks = [];
-const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledCreateImages: [], storageWarnings: [] };
+const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [] };
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
 const playing = instance => instance.state.frame?.snapshot.boneyard && !instance.state.frame.host.loading_run_id && !instance.state.frame.host.resume_grace && !instance.state.frame.host.pause;
@@ -191,7 +191,7 @@ try {
       url: instance.page.url(),
       body: (await instance.page.locator('body').innerText().catch(() => '')).slice(0, 2500),
       errors,
-      cancelledCreateImages: receipts.cancelledCreateImages
+      cancelledMenuImages: receipts.cancelledMenuImages
     }));
   }
   throw error;
@@ -265,8 +265,8 @@ async function launch(label, userData) {
         receipts.cancelledMusic.push({label, path: new URL(request.url()).pathname});
         return;
       }
-      resourceChecks.push(obsoleteCreateImage(page, request).then(cancelled => {
-        if (cancelled) receipts.cancelledCreateImages.push({label, ...cancelled});
+      resourceChecks.push(obsoleteMenuImage(page, request).then(cancelled => {
+        if (cancelled) receipts.cancelledMenuImages.push({label, ...cancelled});
         else errors.push(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
       }));
     }
