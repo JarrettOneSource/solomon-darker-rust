@@ -1,0 +1,116 @@
+name: Retain native static CRT Windows package
+
+on:
+  push:
+    branches: [diagnostic/windows-capture-control-20261022]
+    paths: [.github/workflows/windows-static-crt-pair.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  SDR_CAPTURE_PAIR_RUN_ID: '39844938836'
+
+jobs:
+  retain:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 5c094aaa962b9ef0b231651f08a91e4330ff4317
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --global npm@10.9.2
+      - run: npm ci --no-audit --no-fund
+      - run: rustup show
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ env.SDR_CAPTURE_PAIR_RUN_ID }}
+          name: windows-capture-pair-${{ env.SDR_CAPTURE_PAIR_RUN_ID }}
+          path: capture-input
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: capture-driver
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            .cargo/config.toml
+            tools/verify-windows-capture-pair.py
+            tools/inspect-windows-crt.py
+            tools/retain-static-crt-pair.py
+      - name: Verify the retained client and record the only build configuration change
+        run: |
+          cp capture-driver/tools/verify-windows-capture-pair.py tools/
+          cp capture-driver/tools/inspect-windows-crt.py tools/
+          cp capture-driver/tools/retain-static-crt-pair.py tools/
+          python tools/verify-windows-capture-pair.py
+          python tools/inspect-windows-crt.py 'dist-desktop/Solomon Darker-win32-x64/resources/app/authority/solomon-darker.exe' reports/windows-static-crt/old-native-imports.json dynamic
+          mkdir -p .cargo
+          cp capture-driver/.cargo/config.toml .cargo/config.toml
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess, tomllib
+          target = 'x86_64-pc-windows-msvc'
+          flags = ['-C', 'target-feature=+crt-static']
+          config = pathlib.Path('.cargo/config.toml').read_bytes()
+          assert tomllib.loads(config.decode()) == {'target': {target: {'rustflags': flags}}}
+          for name in ['RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS']:
+              assert not os.environ.get(name), name
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == '5c094aaa962b9ef0b231651f08a91e4330ff4317'
+          subprocess.run(['git', 'diff', '--exit-code'], check=True)
+          receipt = {'productSourceRevision': '5c094aaa962b9ef0b231651f08a91e4330ff4317', 'configurationSourceRevision': '769c16e1ca6b1fcb7adeac914b2fc8d2b0b2b2be', 'workflowRevision': os.environ['GITHUB_SHA'], 'target': target, 'rustflags': flags, 'configFile': '.cargo/config.toml', 'configSha256': hashlib.sha256(config).hexdigest(), 'canonicalConfigSha256': hashlib.sha256(config.replace(b'\r\n', b'\n')).hexdigest(), 'rustc': subprocess.check_output(['rustc', '-Vv'], text=True), 'nativeBuildCommand': ['cargo', 'build', '--release', '--target', target, '-p', 'solomon-launcher', '--bin', 'solomon-darker', '--verbose'], 'clientInputRunId': 39844938836, 'clientInputArtifactId': 12457251814, 'clientRebuilt': False}
+          pathlib.Path('reports/windows-static-crt/build-configuration.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt))
+          PY
+      - run: cargo fmt --all -- --check
+      - name: Rebuild only the actual native host with the recorded static CRT default
+        run: cargo build --release --target x86_64-pc-windows-msvc -p solomon-launcher --bin solomon-darker --verbose
+      - name: Retain the rebuilt native before any further checks
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-static-crt-native-${{ github.run_id }}
+          path: |
+            target/x86_64-pc-windows-msvc/release/solomon-darker.exe
+            reports/windows-static-crt/build-configuration.json
+          if-no-files-found: error
+      - name: Verify imports and package the new native with the exact retained client
+        run: |
+          python tools/inspect-windows-crt.py target/x86_64-pc-windows-msvc/release/solomon-darker.exe reports/windows-static-crt/new-native-imports.json static
+          cp -R 'dist-desktop/Solomon Darker-win32-x64/resources/app/client' retained-client
+          npm run package:desktop -- --platform win32 --arch x64 --release-repository "$GITHUB_REPOSITORY" --skip-build --native-host target/x86_64-pc-windows-msvc/release/solomon-darker.exe --client-root retained-client
+          python tools/retain-static-crt-pair.py
+          node tools/archive-desktop.mjs
+      - name: Retain the complete new package before acceptance
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-capture-pair-${{ github.run_id }}
+          path: |
+            dist-desktop/*.zip
+            dist-desktop/*.sha256
+            dist-desktop/desktop-release.json
+            reports/windows-static-crt-pair
+          if-no-files-found: error
+      - name: Run the affected native tests with the same CRT configuration
+        run: cargo test --release --target x86_64-pc-windows-msvc -p solomon-launcher --all-features
+      - run: npm run test:desktop
+      - name: Retain import, configuration and byte-comparison evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-static-crt-build-evidence-${{ github.run_id }}
+          path: reports/windows-static-crt
+          if-no-files-found: ignore

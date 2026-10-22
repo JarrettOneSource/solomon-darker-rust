@@ -39,6 +39,7 @@ receipt = {'status': 'verified-unqualified-control-input', 'sourceRevision': sou
            'pairRunId': pair['runId'], 'pairWorkflowRevision': pair['workflowRevision'],
            'driverRevision': os.environ['GITHUB_SHA'], 'archiveSha256': archive_hash,
            'nativeSha256': manifest['nativeAuthority']['sha256'], 'fileCount': len(pair['files']),
+           'buildConfiguration': pair.get('buildConfiguration'),
            'files': pair['files']}
 reports = pathlib.Path('reports/windows-capture-control')
 reports.mkdir(parents=True, exist_ok=True)
