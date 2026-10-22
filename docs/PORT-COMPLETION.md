@@ -3,9 +3,10 @@
 Current Website behavior is implemented and its complete local parity gates pass.
 The independent repository and Linux game artifact are public. All 44 public acceptance
 groups pass across their recorded revisions, including the actual `/game-stg` replacement
-from `ca728e90` to `d3903095`. Subsequent authoritative DNS failures make hostname access
-inconsistent; M2 normal-DNS and known-IP strict-TLS postflight both pass. Desktop release
-qualification remains open.
+from `ca728e90` to `d3903095`. Normal DNS access recovered after the separately recorded
+authoritative serving failure; both M2 and NFO ordinary HTTPS checks pass. Desktop release
+qualification remains open; the reviewed native fixes pass local checks and await the
+new source-built platform matrix.
 The target is the current Website's behavior and existing user data. The requested result is a separately published Rust game repository, removal of
 the replaced game implementation from the Website repository, a WASM embed in that Website,
 and a verified `/game-stg` deployment. The behavioral reference is
@@ -336,12 +337,14 @@ before publishing its client revision, then observe automatic reload and normal 
 of the same wizard. Production and staging API PIDs and Caddy remain unchanged by that
 replacement. All public acceptance browsers are closed.
 
-After these journeys, Spaceship's delegated authoritative DNS service began failing.
-Hostname access remains inconsistent: M2's ten normal-DNS HTTP/CSP checks now pass, while
-NFO and Google's resolver still fail and one authority returns stale data. Known-IP
-strict-TLS postflight also serves `d3903095`. The observed KSK matches the parent DS,
-and no DNS settings were changed. `release-final/dns-postflight-20261022/` records the
-shared authoritative serving failure and its remaining scope limits.
+After these journeys, Spaceship's delegated authoritative DNS service temporarily failed.
+The October 22 17:52 UTC recheck finds current signed answers from both authorities,
+Google DNSSEC validation, and ordinary HTTPS serving `d3903095` from M2 and NFO. All ten
+normal-DNS HTTP/CSP checks pass. The earlier known-IP strict-TLS postflight retains its
+separate scope. The observed KSK matches the parent DS, and no DNS, DNSSEC, delegation or
+resolver settings were changed. `release-final/dns-postflight-20261022/` and
+`public-http-d3903095.json` retain both the failure and recovery. These bounded checks do
+not establish the provider-side cause or guarantee future availability.
 
 An ordinary public cold start reached Title in 146.3 seconds with no errors after 438
 resources, including all 233 audio files. The Source also preloads resident audio. Public
@@ -361,38 +364,42 @@ October 21, preserving staging through subsequent reconciliation. Directly editi
 managed Caddy file had been reverted by that worker; keeping the route in its source fixes
 that ownership error.
 
-The retained optimized local macOS ARM64 package passed contracts, packaging, actual
-Electron offline/save/resume/peer/failed-close acceptance and archive integrity. Its update
-notice receipt covered DOM presence and dismissal; later screenshot review found the
-existing notice stylesheet missing from the compiled client. The current HTML includes it,
-and the maintained journey now requires the whole notice inside the viewport before capture.
-On published main `63c5e4d`, run `39784457780` has passing Linux and both macOS desktop
-jobs. Its Windows smoke stalled in the harness's synchronous process lookup and ended
-cancelled; a focused Windows diagnostic separately proves that lookup timeout while the
-native host continues through backpressure. The maintained observer now records actual
-child-process spawns, and Windows uses its native graphics backend with sequential view
-preparation inside the original shared 120-second peer deadline. Diagnostic run
-`39813783260` passes the full gameplay, saved close/resume, failed-close and shared Boneyard
-journey; its timestamp trace also measures delayed CDP observation. Final clean retake
-`39819252121` passes the same journey without diagnostic instrumentation, including the
-visible notice and fresh snapshots from both restored peer windows inside the original
-shared 120-second deadline. Its 19 desktop tests pass. The missing-style regression has
-separate red/green evidence at `39817440719`; the notice moves from below the viewport to
-its intended top-right position. The four-platform release remains unqualified until the
-configured build matrix passes.
-Earlier platform and diagnostic receipts retain their own source, harness and scope.
+Desktop acceptance uses actual child-process spawn observations, the native Windows
+graphics backend, and fresh frames from both peer views inside the original shared
+120-second deadline. The update notice includes its existing stylesheet and must fit
+inside the viewport before capture. Earlier process-lookup, missing-style and build-lock
+failures retain their red/green receipts. Desktop preparation removes Trunk build locks
+after successful client validation, and all 19 desktop tests pass.
 
-Run `39820489318` passed the game and Linux desktop gates, but inspection of its actual
-Linux ZIP found Trunk's zero-byte `client/.trunk-lock` build marker. The remaining jobs and
-publication were cancelled. Desktop preparation now removes these locks after successful
-client validation, matching hosted packaging. The fresh/prebuilt regression first failed on
-the retained marker; all 19 desktop tests pass after the correction. Replacement archives
-still require the configured platform checks and archive inspection.
+For source `5c094aaa`, run `39826304375` passes the game gate and the Linux and both macOS
+packaged journeys. All four resulting archives pass full inspection. The retained Windows
+pair independently passes the untouched driver and Playwright in run `39851732754`: all
+51 original assertions, visible notice, exact schema-51 save/resume, both failed-save
+choices, shared Boneyard readiness and native exit. Its earlier combined-job screenshot
+timeouts remain recorded; the capture comparison does not establish a capture API defect.
 
-The stylesheet addition changes only the desktop notice's presentation. The hosted client
-does not create that notice without the Electron bridge, so installed staging and the
-checksum-pinned `d3903095` Website artifact retain their accepted gameplay scope. The Rust
-kernels, native host and WASM code have not changed in this final acceptance cleanup.
+That Windows executable depended on an unbundled `VCRUNTIME140.dll`. The static CRT
+replacement at run `39854803735` passes complete import/archive inspection with all 5,723
+client files unchanged, but its native tests expose two independent failures. The retained
+unit diagnostic `39858878788` reproduces each original failure in six runs. Shutdown's
+listener had already exited before its unconditional wake connection, which spent about
+2.01 seconds returning connection refused; joins then completed immediately. The slow-reader
+fixture had already handed its old snapshot to Tungstenite before trying to replace it,
+even with constrained socket buffers. It had not established the intended unsent backlog.
+
+The clean fixes at `41de8d5` retain the listening socket through wake and acceptor join,
+then close it explicitly. The fixture now queues distinct reliable frames and proves the
+snapshot is still unsent before replacement, retaining its ordering, resumed-input and
+deadline assertions. Windows builds use the standard static CRT target setting, and CI
+checks actual native imports and the affected launcher tests. Local macOS ARM64 validation
+passes all 42 launcher tests, strict native Clippy, formatting and 19 desktop tests.
+The new source-built matrix must establish Windows green and qualify the replacement
+packages. The earlier `5c094aaa` archives retain their own identity and are not relabeled.
+
+The installed staging game and checksum-pinned `d3903095` Website artifact retain their
+recorded public acceptance. These desktop packaging and listener-lifetime changes do not
+change game kernels, stock assets or WASM gameplay behavior. Exact diagnosis and clean
+local gate results are in `windows-release-5c094aaa-39826304375/` under the release evidence.
 
 Exact manifests, logs, screenshots, raw failed attempts and successful receipts are under
 `/Users/jarrett/codex-runs/solomon-rust-parity-20261021/release-final/` and NFO's matching
@@ -490,12 +497,13 @@ The permanent published checkout is
 `/Users/jarrett/Projects/Solomon Dark/solomon-darker-rust`. The separate legacy `Rust Game`
 checkout at `690730d` still owns the M2 launchd preview on port 4180.
 
-Eighteen completed M2 task trees are removed after their source and evidence were preserved,
+Nineteen completed M2 task trees are removed after their source and evidence were preserved,
 including the Website reference/extraction and Windows transport/acceptance trees. Their branches
 remain where applicable. The completed M2 acceptance services on ports 5229, 5230, 9449
-and 5383 are stopped; the baseline 4180 remains running. Only the Rust finalization task
-checkout remains active for release completion; the permanent and baseline checkouts
-and unrelated acceptance worktrees are preserved. The external
+and 5383 are stopped; the baseline 4180 remains running. The Rust finalization, clean
+Windows fix and final ZIP-check task checkouts remain active for
+release completion; the permanent and baseline checkouts and unrelated acceptance
+worktrees are preserved. The external
 `release-final/worktree-cleanup.json` records exact paths and preservation checks.
 
 The idle M2 task Cargo cache is removed. NFO's clean published checkout, verified earlier
