@@ -1,9 +1,6 @@
 //! Stock social chrome painted into the shared GPU frame.
 
-use egui::{
-    Color32, FontFamily, FontId, Id, Painter, Pos2, Rect, Response, RichText, Sense, Ui, Vec2,
-    pos2, vec2,
-};
+use egui::{Color32, FontId, Id, Painter, Pos2, Rect, Response, Sense, Ui, pos2, vec2};
 use solomon_sim::hud::HudRect;
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec};
 
@@ -11,10 +8,6 @@ use crate::gpu_ui::{self, StockAtlas, UiFrame};
 
 pub(crate) const GOLD: Color32 = Color32::from_rgb(217, 186, 112);
 pub(crate) const PALE: Color32 = Color32::from_rgb(232, 220, 185);
-
-pub(crate) fn rich(text: impl Into<String>, size: f32, color: Color32) -> RichText {
-    RichText::new(text).font(FontId::new(size, FontFamily::Name("Georgia".into()))).color(color)
-}
 
 pub(crate) fn browser_text(
     frame: &UiFrame<'_>,
@@ -139,24 +132,4 @@ pub(super) fn brackets(
         )?;
     }
     Ok(())
-}
-
-pub(super) fn browser_button(
-    frame: &mut UiFrame<'_>,
-    ui: &mut Ui,
-    id: &str,
-    label: &str,
-    size: Vec2,
-    enabled: bool,
-) -> Response {
-    let response = ui.add_enabled(
-        enabled,
-        egui::Button::new(rich(label, 14.0, PALE))
-            .fill(Color32::from_rgb(24, 21, 33))
-            .stroke(egui::Stroke::new(1.0, GOLD))
-            .corner_radius(0.0)
-            .min_size(size),
-    );
-    frame.record(&format!("social/{id}"), label, "button", &response);
-    response
 }

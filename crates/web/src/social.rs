@@ -335,7 +335,9 @@ impl SocialUi {
             self.college_visible() || self.party_invitation_visible() || self.surface.is_some();
         if modal {
             let mut close = false;
-            let layer = if self.college_visible() {
+            let college = self.college_visible();
+            let outside_closes = !college && !self.party_invitation_visible();
+            let layer = if college {
                 Self::college_invitation_layer()
             } else if self.party_invitation_visible() {
                 Self::party_invitation_layer()
@@ -352,7 +354,11 @@ impl SocialUi {
                     ui.set_min_size(screen.size());
                     let back =
                         ui.interact(screen, Id::unique("social/backdrop"), egui::Sense::CLICK);
-                    ui.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(178));
+                    ui.painter().rect_filled(
+                        screen,
+                        0.0,
+                        Color32::from_black_alpha(if college { 209 } else { 191 }),
+                    );
                     if self.college_visible() {
                         self.paint_college_invitation(frame, ui)?;
                     } else if self.party_invitation_visible() {
@@ -368,7 +374,7 @@ impl SocialUi {
                             None => {}
                         }
                     }
-                    close = back.clicked()
+                    close = (outside_closes && back.is_pointer_button_down_on())
                         || ui.input_mut(|input| {
                             input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
                         });
@@ -424,10 +430,14 @@ impl SocialUi {
                             ..Default::default()
                         },
                         |frame, painter| {
-                            label.paint(
+                            label.paint_aligned(
                                 frame,
                                 painter,
-                                bounds.min + padding + egui::vec2(1.0, 1.0),
+                                egui::Rect::from_min_size(
+                                    bounds.min + padding + egui::vec2(1.0, 1.0),
+                                    label.size(),
+                                ),
+                                egui::Align::Center,
                                 1.0,
                             )
                         },
