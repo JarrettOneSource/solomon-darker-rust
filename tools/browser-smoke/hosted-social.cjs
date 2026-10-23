@@ -397,8 +397,11 @@ async function closeClient(client) {
       && event.kind === 'hello' && event.connection !== originalGuestPath);
     assert.ok(newHello > savePersisted, 'new authority hello must follow old checkpoint persistence');
     await ui.surface(guest.page,'hidden');
+    await ui.widget(guest.page,'social/party-settings-shortcut');
     await ui.click(guest.page,'social/party');
     await ui.widget(guest.page,'social/party-menu');
+    await ui.widget(guest.page,'social/party-settings');
+    await ui.widget(guest.page,'social/party-settings-shortcut');
     await ui.assertGpuOnly(guest.page);
     await guest.page.screenshot({path: path.join(output, 'joined-college-party.png')});
     checked('consent and actual character confirmation join the inviter authority with both connected party members');
