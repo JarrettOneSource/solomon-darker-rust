@@ -21,13 +21,7 @@ const browser = await chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 })
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
-page.on('pageerror', error => receipt.errors.push(error.message))
-page.on('console', message => {
-  if (message.type() === 'error') receipt.errors.push(message.text())
-})
-page.on('response', response => {
-  if (response.status() >= 400) receipt.errors.push(`${response.status()} ${response.url()}`)
-})
+ui.watchErrors(page, { errors: receipt.errors })
 const state = () => page.evaluate(() => Array.from(window.wasmBindings.wizard_state()))
 const held = new Set()
 
@@ -209,6 +203,7 @@ try {
   receipt.passed=false
   receipt.failure=error.stack
   receipt.state=await state().catch(()=>[])
+  receipt.ui=await ui.readUi(page).catch(failure=>({readError:failure.message}))
   await page.screenshot({path:`${output}/failure.png`})
   process.exitCode=1
 } finally {
