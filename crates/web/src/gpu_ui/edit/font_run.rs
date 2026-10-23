@@ -472,7 +472,13 @@ impl NativeFontRun {
         })
     }
 
-    pub fn paint(&self, painter: &Painter, origin: Pos2, opacity: f32) -> Result<(), String> {
+    pub fn paint(
+        &self,
+        frame: &crate::gpu_ui::UiFrame<'_>,
+        painter: &Painter,
+        origin: Pos2,
+        opacity: f32,
+    ) -> Result<(), String> {
         let pixels = self.pixels;
         let clip = painter.clip_rect().translate(-origin.to_vec2());
         for (index, line) in self.geometry.lines.iter().enumerate() {
@@ -504,10 +510,11 @@ impl NativeFontRun {
                         ((destination.min - whole.min) / size).to_pos2(),
                         ((destination.max - whole.min) / size).to_pos2(),
                     );
-                    painter.image(
+                    frame.managed_image(
+                        painter,
                         handle.id(),
                         destination,
-                        uv,
+                        Some(uv),
                         Color32::WHITE.gamma_multiply(opacity),
                     );
                 }

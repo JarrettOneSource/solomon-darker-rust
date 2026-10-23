@@ -308,7 +308,7 @@ impl<'a> NativeTextEdit<'a> {
                 }
             }
             if let Some(run) = run {
-                run.paint(&painter, origin, if response.enabled() { 1.0 } else { 0.5 })?;
+                run.paint(frame, &painter, origin, if response.enabled() { 1.0 } else { 0.5 })?;
                 if self.text.is_empty() && !self.hint.is_empty() {
                     let EditorFont::Browser(font) = &font else { unreachable!() };
                     font_run(
@@ -318,7 +318,7 @@ impl<'a> NativeTextEdit<'a> {
                         &self.hint,
                         self.multiline.then_some(content.width()),
                     )?
-                    .paint(&painter, origin, 1.0)?;
+                    .paint(frame, &painter, origin, 1.0)?;
                 }
             } else if let EditorFont::NativeName { origin, scale, .. } = &font {
                 paint_native_name(frame, &painter, self.text, *origin, *scale);
