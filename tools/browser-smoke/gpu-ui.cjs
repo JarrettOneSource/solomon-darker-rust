@@ -248,16 +248,32 @@ async function gpuDraws(page) {
   return page.evaluate(() => window.__solomonGpuDraws);
 }
 
-async function observeAnnouncements(page) {
-  await page.addInitScript(() => {
+async function observeAnnouncements(page, {forceFallback = false} = {}) {
+  await page.addInitScript(({forceFallback}) => {
     const announcements = [];
     Object.defineProperty(window, '__solomonAnnouncements', {value:announcements});
+    const nativeAvailable = typeof document.ariaNotify === 'function';
+    Object.defineProperty(window, '__solomonAnnouncementPlatform', {value:{nativeAvailable,forceFallback}});
+    if(forceFallback)for(const type of [Document,Element]) {
+      Object.defineProperty(type.prototype,'ariaNotify',{configurable:true,value:undefined});
+    }
+    const ownership = [];
+    Object.defineProperty(window, '__solomonAnnouncementOwnership', {value:ownership});
+    const active = () => Boolean(window.solomonLoader?.active?.());
+    const sample = () => {
+      const shared = document[Symbol.for('solomon.graphics.announcements')];
+      const current = {owners:shared?.owners??0,loaders:shared?.loaders??0,
+        count:document.querySelectorAll('[data-gpu-announcer]').length};
+      if(JSON.stringify(ownership.at(-1))!==JSON.stringify(current))ownership.push(current);
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
     for (const type of [Document, Element]) {
       const notify = type.prototype.ariaNotify;
       if (typeof notify !== 'function') continue;
       type.prototype.ariaNotify = function (text, options) {
         const result = Reflect.apply(notify, this, [text, options]);
-        announcements.push({source:'ariaNotify',text});
+        announcements.push({source:'ariaNotify',text,loaderActive:active()});
         return result;
       };
     }
@@ -267,14 +283,15 @@ async function observeAnnouncements(page) {
           const element = record.target.nodeType === Node.ELEMENT_NODE
             ? record.target : record.target.parentElement;
           const announcer = element?.closest('[data-gpu-announcer]');
-          if (announcer?.textContent) announcements.push({source:'aria-live',text:announcer.textContent});
+          if (announcer?.textContent) announcements.push({source:'aria-live',text:announcer.textContent,
+            loaderActive:active()});
         }
       });
       observer.observe(document.body, {subtree:true,childList:true,characterData:true});
     };
     if (document.body) observe();
     else document.addEventListener('DOMContentLoaded', observe, {once:true});
-  });
+  }, {forceFallback});
 }
 
 async function announcements(page) {

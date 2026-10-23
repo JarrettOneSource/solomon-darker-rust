@@ -143,10 +143,11 @@ async function collect(page, name, navigate) {
   throw new Error(`${name} did not complete: ${JSON.stringify(samples.at(-1))}`);
 }
 
-async function heldAsset(browser, name, pattern, {wasm=false}={}) {
+async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}) {
   const context=await browser.newContext({viewport:{width:1600,height:900},deviceScaleFactor:1});
   const page=await context.newPage();
   await ui.observeGpu(page);
+  await ui.observeAnnouncements(page,{forceFallback:fallback});
   const observed=ui.watchErrors(page);
   let release;
   const held=new Promise(resolve=>{release=resolve});
@@ -181,6 +182,21 @@ async function heldAsset(browser, name, pattern, {wasm=false}={}) {
       else assert.equal(still.loading.progress,0,'unknown code loading invents no percentage');
     }
     const second=await visual(page,`${name}-still-held`);
+    let heldAnnouncements;
+    if(fallback) {
+      await page.waitForFunction(()=>window.__solomonAnnouncementOwnership
+        .some(row=>row.owners>=2&&row.loaders===1&&row.count===1));
+      heldAnnouncements=await page.evaluate(()=>({
+        events:window.__solomonAnnouncements,
+        owners:window.__solomonAnnouncementOwnership,
+      }));
+      assert.ok(heldAnnouncements.events.length>0,'the actual loader stage is announced');
+      assert.ok(heldAnnouncements.owners.every(row=>row.count<=1),
+        'the tiny loader and main share exactly one nonvisual fallback');
+      assert.ok(heldAnnouncements.events.every(event=>event.loaderActive
+        &&!/(?:, button|, textbox|, tab|, checkbox)/i.test(event.text)),
+      'only visible loader work is announced before the actual handoff');
+    }
     const resizes=[];
     if(wasm) {
       for(const viewport of [{width:1920,height:1080},{width:390,height:844}]) {
@@ -201,10 +217,33 @@ async function heldAsset(browser, name, pattern, {wasm=false}={}) {
     await ui.ready(page);
     await ui.surface(page,'title');
     const handoff=await finishedLoader(page);
+    let announcementHandoff;
+    if(fallback) {
+      await page.waitForFunction(()=>{
+        const shared=document[Symbol.for('solomon.graphics.announcements')];
+        return shared?.owners===1&&shared.loaders===0
+          &&document.querySelectorAll('[data-gpu-announcer]').length===1;
+      });
+      const afterIndex=(await ui.announcements(page)).length;
+      await page.keyboard.press('Tab');
+      const focused=await ui.waitForUi(page,snapshot=>snapshot.widgets.some(widget=>widget.focused),
+        'the actual first focused GPU control after loading');
+      const control=focused.widgets.find(widget=>widget.focused);
+      await ui.announced(page,control.label,{afterIndex});
+      announcementHandoff=await page.evaluate(()=>({
+        events:window.__solomonAnnouncements,
+        owners:window.__solomonAnnouncementOwnership,
+      }));
+      assert.ok(announcementHandoff.owners.every(row=>row.count<=1));
+      assert.ok(announcementHandoff.events.slice(afterIndex).some(event=>!event.loaderActive
+        &&event.text.toLowerCase().includes(control.label.toLowerCase())),
+      'the retained main owner announces real control focus after loader retirement');
+    }
     await ui.assertGpuOnly(page);
     await page.screenshot({path:path.join(output,`${name}-title.png`)});
     assert.deepEqual(observed.errors,[],'delayed successful work has no runtime/asset errors');
-    return {requestUrl,before,still,first,second,resizes,handoff,ready:await ui.readUi(page),...observed};
+    return {requestUrl,before,still,first,second,resizes,handoff,heldAnnouncements,announcementHandoff,
+      ready:await ui.readUi(page),...observed};
   } finally {release();await context.close()}
 }
 
@@ -257,13 +296,24 @@ async function failedAsset(browser) {
     const context=await browser.newContext({viewport:{width:1600,height:900},deviceScaleFactor:1});
     const page=await context.newPage();
     await ui.observeGpu(page);
+    await ui.observeAnnouncements(page);
     receipt.cold=await collect(page,'cold',()=>page.goto(url,{waitUntil:'domcontentloaded'}));
     receipt.warm=await collect(page,'warm',()=>page.reload({waitUntil:'domcontentloaded'}));
+    receipt.announcements=await page.evaluate(()=>({platform:window.__solomonAnnouncementPlatform,
+      ownership:window.__solomonAnnouncementOwnership,events:window.__solomonAnnouncements}));
+    if(receipt.announcements.platform.nativeAvailable) {
+      assert.ok(receipt.announcements.ownership.every(row=>row.count===0),
+        'a supported native ariaNotify path mounts no fallback text node');
+      assert.ok(receipt.announcements.events.some(event=>event.source==='ariaNotify'),
+        'ordinary loader progress uses the actual browser native announcement capability');
+    }
     await context.close();
     receipt.delayedTitle=await heldAsset(browser,'delayed-title','**/assets/stock/Title.png');
     receipt.delayedFont=await heldAsset(browser,'delayed-font','**/assets/stock/fonts/cinzel-latin-500-normal.woff2');
     receipt.delayedWasm=await heldAsset(browser,'delayed-wasm',
       /\/solomon[-_]web(?:-[a-z0-9]+)?(?:_bg)?\.wasm(?:\?.*)?$/,{wasm:true});
+    receipt.delayedResidentMusic=await heldAsset(browser,'delayed-resident-music',
+      '**/assets/stock/audio/music/solomondarktheme.mp3',{fallback:true});
     receipt.failedRequiredTitle=await failedAsset(browser);
     receipt.passed=true;
   } catch(error) {receipt.passed=false;receipt.failure=error.stack;throw error}
