@@ -224,8 +224,9 @@ The Source's browser callbacks commit each event before dispatching the next eve
 owner commits controller actions and refreshes accepted-state models between those batches;
 transport polling, physical gameplay sampling and fixed simulation advancement retain one
 owner per browser frame. World rendering precedes the final UI draw. Texture upload/retirement
-is finalized even when a controller fails. Observer and deployment barriers retain their
-read-only/held semantics. The binding/text-focus batch regressions and actual rapid
+is finalized even when a controller fails. Returning to the editor stops later queued input
+and gameplay work in the same frame while still retiring pending textures. Observer and
+deployment barriers retain their read-only/held semantics. The binding/text-focus batch regressions and actual rapid
 Settings/HUD journeys qualify this seam; the latter remain pending the combined rebuild.
 
 ## Test ownership and stopping checks

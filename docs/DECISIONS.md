@@ -210,11 +210,15 @@ Cost: the browser artifact includes the 1.8 MB geometry bank and a small explici
 supersedes the earlier DOM presentation decision below. Menus, HUD, panels, social/mod
 screens and lifecycle overlays use the existing WebGL2 canvas, stock atlases and native
 layout rules. The shared `gpu_ui` module uses egui for Rust interaction, text/layout and
-tessellation; it does not replace the game loop or simulation. Browser glyph rasterization,
+tessellation; it does not replace the game loop or simulation. Browser font rasterization,
 text composition, clipboard, file access and other platform capabilities remain adapters,
 not a visual HTML/CSS implementation. A CSS interpreter, DOM screenshot renderer, hidden
 legacy UI or synthetic-action test facade would not satisfy this contract. The live migration
 inventory and acceptance state are in `RUST-UI-MIGRATION.md`; implementation is in progress.
+Stock bitmap text keeps its recovered glyph layout. Ordinary system/licensed font glyphs
+use the browser font adapter; Sack names preserve Source's complete font-run shaping and
+wrapping, including Arabic joins and emoji sequences, in bounded egui-owned GPU textures.
+The font adapter paints only text into an unattached canvas, never HTML or game controls.
 
 **Superseded: the HUD used browser DOM with stock atlas sprites and repeated strips.** The world stays
 in WebGL; the screen-space HUD uses the browser's existing layout, hit testing and accessible
@@ -225,7 +229,7 @@ The HUD reads an explicit `HudState`; the local courtyard begins with the Websit
 Ether loadout, and an authoritative runtime can replace those values without DOM ownership.
 
 **Menus emit typed commands; the session owns game state and persistence.** Title/Create,
-pause and settings share stock art and browser hit testing. Create emits `NewGameSelection`,
+pause and settings share stock art and Rust GPU hit testing. Create emits `NewGameSelection`,
 and settings emits `GameSettings`; views never grant ranks or fabricate inventory. Modal
 input is scoped to its active surface and requires a controller-neutral handoff. Cost:
 the host must apply the preferences and supply the actual saved session behind Continue.
