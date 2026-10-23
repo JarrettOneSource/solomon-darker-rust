@@ -487,7 +487,7 @@ async function main() {
     checked('ordinary Settings show Submit Runs enabled and cheats disabled');
 
     step = 'fresh eligible Global admission';
-    await startNewGame(page, {name:'Score Witness', element:'fire', discipline:'arcane'});
+    await startNewGame(page, {name:'ScoreWitness', element:'fire', discipline:'arcane'});
     await waitUntil(() => welcomes.length === 1, 'real Global Welcome');
     await gpu.surface(page, 'hidden');
     assert.equal(admissions.length, 1);
