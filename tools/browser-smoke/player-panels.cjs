@@ -24,7 +24,7 @@ const notice = (page, title) => ui.waitForUi(page, snapshot => {
     page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
     const { errors } = ui.watchErrors(page);
     await page.goto(process.env.URL || 'http://127.0.0.1:4185/'); await ui.ready(page);
-    await startNewGame(page, {name:'Felix'});
+    await startNewGame(page, {name:process.env.GENERATED_NAME==='1'?null:'Felix'});
     await page.keyboard.press('KeyI'); await ui.widget(page, 'panel:surface:inventory');
     const frozen = await state(page);
     await page.keyboard.down('KeyS'); await ui.nextFrame(page); await page.keyboard.up('KeyS');
@@ -71,9 +71,9 @@ const notice = (page, title) => ui.waitForUi(page, snapshot => {
     assert.equal((await ui.readUi(page)).surface,'hidden','panel Escape does not also open pause');
     await page.waitForFunction(tick => window.wasmBindings.wizard_state()[5] > tick,frozen[5]);
     await ui.assertGpuOnly(page); assert.deepEqual(errors,[]);
-    console.log(JSON.stringify({passed:true,errors,screenshots:output}));
+    console.log(JSON.stringify({passed:true,generatedName:process.env.GENERATED_NAME==='1',errors,screenshots:output}));
   } catch(error) {
-    if(page){await shot(page,'player-panels-failure.png');fs.writeFileSync(path.join(output,'player-panels-failure.json'),JSON.stringify({error:error.stack,ui:await ui.readUi(page)},null,2));}
+    if(page){await shot(page,'player-panels-failure.png');fs.writeFileSync(path.join(output,'player-panels-failure.json'),JSON.stringify({error:error.stack,ui:await ui.readUi(page).catch(failure=>({readError:failure.message}))},null,2));}
     throw error;
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

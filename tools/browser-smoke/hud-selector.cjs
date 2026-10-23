@@ -14,7 +14,7 @@ const ui = require('./gpu-ui.cjs');
     const { errors } = ui.watchErrors(page);
     await page.goto(process.env.URL || 'http://127.0.0.1:4185/');
     await ui.ready(page);
-    await startNewGame(page);
+    await startNewGame(page,{name:process.env.GENERATED_NAME==='1'?null:'Helvidius'});
     const open = async () => { await ui.click(page, 'hud:skill-binding:12'); await ui.widget(page, 'panel:skill-selector'); };
     await open();
     assert.equal((await ui.widget(page, 'panel:hud-select-skill:8')).selected, true);
@@ -31,6 +31,6 @@ const ui = require('./gpu-ui.cjs');
     if (process.env.OUT) await page.screenshot({ path: path.join(process.env.OUT, 'phone-hud-primary-selector-rust.png') });
     await ui.tap(page, 'panel:hud-select-skill:8'); await ui.noWidget(page, 'panel:skill-selector');
     await ui.assertGpuOnly(page); assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ passed: true, errors }));
+    console.log(JSON.stringify({ passed: true, generatedName:process.env.GENERATED_NAME==='1', errors }));
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
