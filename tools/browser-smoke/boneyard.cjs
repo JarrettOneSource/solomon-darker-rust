@@ -71,6 +71,7 @@ async function scenery(page,filename) {
       const context=await browser.newContext({viewport:{width:1600,height:900},deviceScaleFactor:1});
       current=await context.newPage();
       const observed=ui.watchErrors(current);
+      await observed.ready;
       currentErrors=observed.errors;
       await ui.observeGpu(current);
       await current.goto(url,{waitUntil:'domcontentloaded'});

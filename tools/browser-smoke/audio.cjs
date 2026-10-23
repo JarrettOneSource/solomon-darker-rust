@@ -19,7 +19,7 @@ const browser = await chromium.launch({headless:true,executablePath:process.env.
 const errors=[];
 try {
 const page=await browser.newPage({viewport:{width:1600,height:900}});
-ui.watchErrors(page,{errors});
+await ui.watchErrors(page,{errors}).ready;
 await page.addInitScript(({files})=>{
   const contexts=[],events=[],gains=[],metadata=new WeakMap(),connections=new WeakMap();
   const media=[];

@@ -38,7 +38,7 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
   try {
     const desktopContext=await browser.newContext({viewport:{width:1600,height:900}});
     const desktop=await desktopContext.newPage();
-    ui.watchErrors(desktop,{errors});
+    await ui.watchErrors(desktop,{errors}).ready;
     await ui.observeGpu(desktop);
     await ready(desktop);
     const bounds=[];
@@ -98,7 +98,7 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
     await desktopContext.close();
 
     const touch=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
-    ui.watchErrors(touch,{errors});
+    await ui.watchErrors(touch,{errors}).ready;
     await ui.observeGpu(touch);
     await ready(touch,{touch:true});
     await touch.setViewportSize({width:390,height:844});

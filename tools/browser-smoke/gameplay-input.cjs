@@ -20,7 +20,7 @@ async function pad(page,buttons=[],axes=[0,0,0,0],analog={}){
   try{
     const context=await browser.newContext({viewport:{width:1600,height:900}});
     const page=await context.newPage();
-    ui.watchErrors(page,{errors});
+    await ui.watchErrors(page,{errors}).ready;
     await ui.observeGpu(page);
     await page.goto(url,{waitUntil:'domcontentloaded'});
     await ui.ready(page);

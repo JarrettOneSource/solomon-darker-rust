@@ -75,6 +75,7 @@ async function walkToFomentius(page) {
   try {
     const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:1});
     const observed=ui.watchErrors(page);
+    await observed.ready;
     await ui.observeGpu(page);
     await page.goto(url,{waitUntil:'domcontentloaded'});
     await ui.ready(page);

@@ -12,7 +12,7 @@ const { startNewGame } = require('./menu-journey.cjs');
   const errors = [];
   const receipt = {errors};
   const page = await browser.newPage({viewport:{width:1600,height:900}});
-  ui.watchErrors(page,{errors});
+  await ui.watchErrors(page,{errors}).ready;
   try {
     await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
     await ui.ready(page);

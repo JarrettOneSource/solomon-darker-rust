@@ -20,7 +20,7 @@ const browser = await chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 })
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
-ui.watchErrors(page, { errors: receipt.errors })
+await ui.watchErrors(page, { errors: receipt.errors }).ready
 const state = () => page.evaluate(() => Array.from(window.wasmBindings.wizard_state()))
 const held = new Set()
 
