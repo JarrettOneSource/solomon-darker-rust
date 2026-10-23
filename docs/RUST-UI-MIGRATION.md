@@ -199,6 +199,17 @@ static hosts answer Range requests with a full 200 response; that is a diagnosed
 limitation, not yet the demonstrated owner of the cancellations. Root owns the media
 trace. No broad cancellation allowance has been added.
 
+`common-browser/58df78d/boneyard/receipt.json` uses ordinary named Felix admission and
+HUD Map. Actual generated native world/source geometry, inward keyboard movement, Pause
+freeze, Leave/Title and Continue at the same position all pass; full current-art entry
+and walking screenshots were reviewed. The next Pause fails the retained exact-save
+barrier: live tick 2923, completed stored tick 2910. `commit_ui` checks the menu-opening
+save edge before `frame_gameplay` handles `GameplayAction::Pause`, so the next commit
+already sees an open menu. Root owns this production save-edge repair; no test timer or
+weaker checkpoint assertion substitutes for it. The actual save and GPU snapshot are
+preserved, and the three independent media aborts remain fatal. A second seed was not
+attempted after this bounded failure.
+
 Family evidence is likewise qualified. `menu-runtime-58df78d/hall` passes its actual
 journey with no browser errors; reviewed native/compact screenshots prompted a header
 gradient/border source correction awaiting rebuild. Settings bindings pass, while real
@@ -223,7 +234,7 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Title/Play; clouds, moon, graves, Solomon animation, logo/art, Continue policy, account/desktop links | menus | `menu/title.rs`, pinned Main Menu; `smoke.cjs`, `menus.cjs`, `menu-input.cjs` | Ordinary Title/Tutorial prompt screenshot reviewed; complete Title variants pending |
 | Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | GPU source integrated; real prompt cancel/focus journey pending complete composed browser proof |
 | College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | 58df78d actual named Helvidius/Ether/Arcane, Felix and blank Genericus variants pass; remaining variants/final media gate pending |
-| Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | 58df78d rapid Play/Escape and Inventory/Escape plus controller neutral handoff pass; complete pause/shared variants and media gate pending |
+| Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | 58df78d rapid inputs/neutral handoff and Boneyard Pausefreeze/Leave/Continue pass; subsequent Escape Pause misses exact saved tick; shared variants/media gate pending |
 | Settings root/cloud/performance; sliders/toggles, permissions, saved preferences, nested account policies, mobile sharing | menus | `menu/settings/**`; `settings-parity.cjs`, `menus.cjs`, `fullscreen.cjs` | 58df78d real keyboard/bind checks pass; slider pointer focus red in settings/slider-focus-receipt.json; queued repair and saved variants pending |
 | Control bindings; every action, duplicate swaps, Escape, modified-key rejection, allowed mouse bindings, reverse hotbar | menus + root input | `menu/settings.rs`, canonical `GameControls`; `menus.cjs`, `gameplay-input.cjs`, `hud-input.cjs` | 58df78d Escape/swap/Back/F2/mouse and gameplay aim/belt/neutral checks pass, exact gamepad reads 8/8; complete HUD/controller variants and media gate pending |
 | Save Transfer; multiple native/JSON/CFG/SAV/ZIP imports, inspected warnings, replace/cancel/busy/error, real export ZIP/download | menus | `menu/settings/transfer.rs`; `save-transfer.cjs`, `save-tools.cjs` | GPU source integrated; native file/confirmation/export journey pending composed browser proof |
@@ -248,7 +259,7 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Cheats/Console/developer observer; permissions, all resource/skill/world/dev controls, Lua submit/history/results/error/clear and bot targets | social | `cheats/**`, `observer.rs`; `authored-content.cjs`, `learned-bot.cjs`, `cheat-consent.cjs` | GPU source integrated; actual authorized Console/observer/bot journey pending composed browser proof |
 | Mobile editor; all six anchors/elements, drag/resize/rotate/snap, zoom/pan/pinch, multi-touch/cancel, undo/redo/reset/pages/dock/presets/save | social | `mobile_editor/**`, `sim/mobile_ui/**`; `mobile-editor.cjs`, `responsive.cjs` | GPU source integrated; actual parent-layer touch/edit/save journey pending composed browser proof |
 | Authored mod surfaces; Cast/Shop/Reforge/Portal, skills/subskills/offers/quickbar, minimap actions, mounted HUD text/image/bar/button, party attributes | social | `mod_panels.rs`, `mod_skills.rs`, `mod_skill_quickbar.rs`, `mod_minimap.rs`, `mod_world_overlays/**`; `authored-content.cjs`, `mod-skills.cjs` | GPU source integrated; actual admitted authored widgets/assets/retirement pending composed browser proof |
-| Match loading; every recovered stage, progress/cancel/failure, host admission/world materialization | root | `match_loading.rs`; `hosted-session.cjs`, `deployment-restart.cjs` | GPU source integrated; actual host/world loading stages and failures pending composed browser proof |
+| Match loading; every recovered stage, progress/cancel/failure, host admission/world materialization | root | `match_loading.rs`; `boneyard.cjs`, `hosted-session.cjs`, `deployment-restart.cjs` | 58df78d actual Map admission/native world/textured render pass, Leave/Continue same run; exact Pause save barrier red, full stages/failure/host variants pending |
 | Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | GPU source integrated; real fullscreen/unsupported/standalone activation pending composed browser proof |
 | Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | GPU source integrated; actual update/close failure plus packaged journey pending composed browser proof |
 | Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | GPU source integrated; native recovery regressions retained; actual update journey pending composed browser proof |
