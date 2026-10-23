@@ -95,7 +95,10 @@ async function joinMenu(visitor) {
   await gpu.useNativeFocus(page);
   await page.bringToFront();
   const surface = (await gpu.readUi(page)).surface;
-  if (surface === 'title') await gpu.click(page,'play');
+  if (surface === 'title') {
+    await gpu.click(page,'play');
+    await gpu.surface(page,'play');
+  }
   if ((await gpu.readUi(page)).surface === 'play') await gpu.click(page,'join-party');
   await gpu.surface(page,'join-party');
 }

@@ -533,7 +533,7 @@ impl ModDetailView {
             let grip =
                 Rect::from_min_size(field.right_bottom() - Vec2::splat(16.0), Vec2::splat(16.0));
             let resize =
-                ui.interact(grip, egui::Id::unique("cloud-comment-resize"), egui::Sense::drag());
+                ui.interact(grip, egui::Id::unique("cloud-comment-resize"), egui::Sense::DRAG);
             if resize.hovered() || resize.dragged() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
             }
@@ -635,8 +635,7 @@ impl ModDetailView {
             false,
         );
         frame.record_value("cloud-gallery-image", &status, None);
-        let swipe =
-            ui.interact(stage, egui::Id::unique("cloud-gallery-swipe"), egui::Sense::drag());
+        let swipe = ui.interact(stage, egui::Id::unique("cloud-gallery-swipe"), egui::Sense::DRAG);
         if swipe.drag_started() {
             self.swiping = ui.input(|i| i.any_touches());
         }
