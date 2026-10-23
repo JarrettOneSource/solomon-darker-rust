@@ -501,6 +501,9 @@ impl Game {
         if self.is_editor_test() {
             return self.editor_test_failed(reason);
         }
+        if let Some(hosted) = &mut self.hosted {
+            hosted.deployment_update.set_session_active(false);
+        }
         self.match_loading = None;
         let create_pending = self.menu.is_create_pending();
         self.cheats.close();
@@ -551,6 +554,11 @@ impl Game {
     }
 
     fn finish_deployment_connection(&mut self) {
+        self.hosted
+            .as_mut()
+            .expect("the deployment owns its hosted session")
+            .deployment_update
+            .transport_retired();
         let native = self.native.as_mut().expect("the deployment owns its native session");
         native.connection = None;
         native.pending_commands.clear();
@@ -686,6 +694,9 @@ impl Game {
         self.pending_cheat_open = false;
         let native = self.native.as_mut().unwrap();
         native.connection = Some(connection);
+        if let Some(hosted) = &mut self.hosted {
+            hosted.deployment_update.set_session_active(true);
+        }
         self.world_overlays.reset();
         native.phase = NativePhase::Joining;
         native.presentation.reset();
@@ -828,6 +839,7 @@ impl Game {
 
     fn reset_native_world_ui(&mut self) -> Result<(), String> {
         self.panels.reset()?;
+        self.book_feedback_scope = None;
         // The host still commits accepted transactions; old surfaces no longer consume
         // their feedback after a world switch (the source scene has unmounted).
         self.native.as_mut().unwrap().pending_commands.retain(|_, feedback| {
@@ -939,6 +951,7 @@ impl Game {
                 self.menu.hide()?;
             }
             self.panels.reset()?;
+            self.book_feedback_scope = None;
             set_status("");
         }
         if let Some(world) = &self.session.boneyard {
@@ -1058,7 +1071,7 @@ impl Game {
         }
         let in_boneyard = self.session.boneyard.is_some();
         let pause = if in_boneyard {
-            match self.panels.panel() {
+            match self.panels.pause_panel() {
                 Some(PlayerPanel::Inventory) => Some(PauseSource::Inventory),
                 Some(PlayerPanel::Skills) => Some(PauseSource::SkillBook),
                 Some(PlayerPanel::SkillSelector(_)) => Some(PauseSource::SkillSelector),

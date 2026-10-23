@@ -1,6 +1,11 @@
 //! Source `deployment-revision.ts` and `GameDeploymentUpdate.tsx`.
-//! This page owner survives the announced transport close and reloads only a new
-//! deployed revision, or the exact announced target when the server requests one.
+//! The page owner survives transport retirement. A publication identity gates the
+//! reload independently of the game revision bound into signed recovery claims.
+
+use std::{cell::RefCell, rc::Rc};
+
+mod state;
+use state::{DeploymentState, Publication};
 
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use wasm_bindgen_futures::{JsFuture, spawn_local};
@@ -16,7 +21,7 @@ pub struct DeploymentUpdate {
     message: Option<&'static str>,
     target_revision: Option<String>,
     mount: WebsiteMount,
-    revision: Option<String>,
+    state: Option<Rc<RefCell<DeploymentState>>>,
     polling: Option<AbortController>,
     restarting: bool,
 }
@@ -27,13 +32,6 @@ impl DeploymentUpdate {
         mount: WebsiteMount,
         watch_server: bool,
     ) -> Result<Self, String> {
-        let mount = match document
-            .query_selector("meta[name='solomon-game-mount']")
-            .map_err(|_| "Could not read the game artifact mount")?
-        {
-            Some(meta) => WebsiteMount::new(&meta.get_attribute("content").unwrap_or_default())?,
-            None => mount,
-        };
         let revision = document
             .query_selector("meta[name='solomon-build-revision']")
             .map_err(|_| "Could not read the game build revision")?
@@ -43,11 +41,11 @@ impl DeploymentUpdate {
             message: None,
             target_revision: None,
             mount,
-            revision,
+            state: revision.map(|revision| Rc::new(RefCell::new(DeploymentState::new(revision)))),
             polling: None,
             restarting: false,
         };
-        update.poll_revision(None)?;
+        update.poll_publication()?;
         Ok(update)
     }
 
@@ -55,23 +53,42 @@ impl DeploymentUpdate {
         self.restarting
     }
 
-    pub fn begin(&mut self, target: &str) -> Result<(), String> {
+    pub fn begin(&mut self, target: &str, deployment_id: &str) -> Result<(), String> {
         if self.restarting {
             return Ok(());
         }
+        let target = normalized_revision(target).ok_or("The deployment target is invalid")?;
+        let deployment_id = normalized_deployment_id(deployment_id)
+            .ok_or("The deployment publication identity is invalid")?;
         self.restarting = true;
+        self.target_revision = Some(target.clone());
+        if let Some(state) = &self.state {
+            state.borrow_mut().begin(target, deployment_id);
+        }
         self.message =
             Some("Saving your game before the update. Solomon Dark will restart automatically.");
-        self.poll_revision(Some(target.to_owned()))
+        self.poll_publication()
     }
 
-    pub fn saved(&mut self) -> Result<(), String> {
+    pub fn saved(&mut self) {
         self.message = Some(
             "Your game is saved. Solomon Dark will restart automatically when the update is ready.",
         );
-        // Source restarts the polling effect when the saved state object changes.
-        let target = self.target_revision.clone();
-        self.poll_revision(target)
+        if let Some(state) = &self.state {
+            state.borrow_mut().saved();
+        }
+    }
+
+    pub fn transport_retired(&mut self) {
+        if let Some(state) = &self.state {
+            state.borrow_mut().transport_retired();
+        }
+    }
+
+    pub fn set_session_active(&mut self, active: bool) {
+        if let Some(state) = &self.state {
+            state.borrow_mut().set_session_active(active);
+        }
     }
 
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
@@ -150,22 +167,18 @@ impl DeploymentUpdate {
         Ok(())
     }
 
-    fn poll_revision(&mut self, target: Option<String>) -> Result<(), String> {
+    fn poll_publication(&mut self) -> Result<(), String> {
         if let Some(previous) = self.polling.take() {
             previous.abort();
         }
-        if let Some(target) = &target {
-            self.target_revision = Some(target.clone());
-        }
-        let Some(current) = self.revision.clone() else { return Ok(()) };
+        let Some(state) = self.state.clone() else { return Ok(()) };
         let controller =
             AbortController::new().map_err(|_| "Could not watch the deployed revision")?;
         let signal = controller.signal();
-        let url = self.mount.path(&format!("/deployment.json?current={current}"));
+        let url = self.mount.path("/api/game/deployment");
         let interval = if self.restarting { 500 } else { 15_000 };
         spawn_local(async move {
-            let result =
-                wait_for_revision(&url, &current, target.as_deref(), interval, &signal).await;
+            let result = wait_for_publication(&url, state, interval, &signal).await;
             if signal.aborted() {
                 return;
             }
@@ -196,10 +209,9 @@ impl Drop for DeploymentUpdate {
     }
 }
 
-async fn wait_for_revision(
+async fn wait_for_publication(
     url: &str,
-    current: &str,
-    target: Option<&str>,
+    state: Rc<RefCell<DeploymentState>>,
     interval: i32,
     signal: &AbortSignal,
 ) -> Result<(), JsValue> {
@@ -213,13 +225,13 @@ async fn wait_for_revision(
         match JsFuture::from(window.fetch_with_request(&request)).await {
             Ok(response) => {
                 let response: Response = response.dyn_into()?;
-                // Invalid/missing deployment documents are ignored by Source, including
+                // Incomplete publication documents never authorize a reload, including
                 // an HTML cache fallback or a JSON body interrupted by a cutover.
                 if response.ok()
                     && let Ok(body) = JsFuture::from(response.text()?).await
                     && let Some(body) = body.as_string()
-                    && let Some(live) = deployment_revision(response.status(), &body)
-                    && should_reload(current, &live, target)
+                    && let Some(publication) = deployment_publication(response.status(), &body)
+                    && state.borrow_mut().observe(&publication)
                 {
                     return Ok(());
                 }
@@ -274,46 +286,47 @@ fn normalized_revision(revision: &str) -> Option<String> {
         .then_some(revision)
 }
 
-fn deployment_revision(status: u16, body: &str) -> Option<String> {
+fn normalized_deployment_id(id: &str) -> Option<String> {
+    let id = id.trim().to_lowercase();
+    (id.len() == 32 && id.bytes().all(|byte| byte.is_ascii_hexdigit())).then_some(id)
+}
+
+fn deployment_publication(status: u16, body: &str) -> Option<Publication> {
     if !(200..300).contains(&status) {
         return None;
     }
     let value: serde_json::Value = serde_json::from_str(body).ok()?;
-    normalized_revision(value.as_object()?.get("revision")?.as_str()?)
-}
-
-fn should_reload(current: &str, live: &str, target: Option<&str>) -> bool {
-    live != current && target.is_none_or(|target| live == target)
+    let value = value.as_object()?;
+    normalized_revision(value.get("revision")?.as_str()?)?;
+    Some(Publication {
+        game_revision: normalized_revision(value.get("gameRevision")?.as_str()?)?,
+        deployment_id: normalized_deployment_id(value.get("deploymentId")?.as_str()?)?,
+        ready: value.get("ready")?.as_bool()?,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::Value;
 
     #[test]
-    fn revision_response_and_exact_target_match_the_source() {
-        let fixture: Value = serde_json::from_str(include_str!(
-            "../../sim/tests/fixtures/website/deployment-revision-goldens.json"
-        ))
-        .unwrap();
-        for row in fixture["responses"].as_array().unwrap() {
-            let actual = deployment_revision(
-                row["status"].as_u64().unwrap() as u16,
-                row["body"].as_str().unwrap(),
-            );
-            assert_eq!(serde_json::to_value(actual).unwrap(), row["expected"], "{row}");
+    fn only_complete_publication_documents_enter_the_lifecycle_barrier() {
+        let game = "a".repeat(40);
+        let id = "b".repeat(32);
+        let publication = serde_json::json!({
+            "revision":"c".repeat(40), "gameRevision":game, "deploymentId":id, "ready":true,
+        });
+        assert!(deployment_publication(200, &publication.to_string()).is_some());
+        assert!(deployment_publication(503, &publication.to_string()).is_none());
+        for field in ["revision", "gameRevision", "deploymentId", "ready"] {
+            let mut incomplete = publication.clone();
+            incomplete.as_object_mut().unwrap().remove(field);
+            assert!(deployment_publication(200, &incomplete.to_string()).is_none(), "{field}");
         }
-        for row in fixture["reloads"].as_array().unwrap() {
-            assert_eq!(
-                should_reload(
-                    row["current"].as_str().unwrap(),
-                    row["live"].as_str().unwrap(),
-                    row["target"].as_str()
-                ),
-                row["expected"].as_bool().unwrap(),
-                "{row}"
-            );
+        for body in
+            ["<html>updating</html>", r#"{"revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#]
+        {
+            assert!(deployment_publication(200, body).is_none());
         }
     }
 }

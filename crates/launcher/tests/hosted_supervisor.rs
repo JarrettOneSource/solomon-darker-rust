@@ -26,6 +26,8 @@ use tungstenite::{Error, Message, WebSocket};
 const SECRET: &str = "runtime-parity-public-entry-test-secret";
 const ORIGIN: &str = "https://rust-parity.invalid";
 
+#[path = "hosted_supervisor/deployment.rs"]
+mod deployment_tests;
 #[path = "hosted_supervisor/desktop.rs"]
 mod desktop_tests;
 #[path = "hosted_supervisor/editor_test.rs"]
@@ -127,12 +129,26 @@ fn request_at(
     body: Value,
     authorized: bool,
 ) -> (u16, Value) {
+    let publication = (path == "/admin/deployments/restart").then_some("d1".repeat(16));
+    request_at_with_deployment(address, method, path, body, authorized, publication.as_deref())
+}
+
+fn request_at_with_deployment(
+    address: SocketAddr,
+    method: &str,
+    path: &str,
+    body: Value,
+    authorized: bool,
+    deployment_id: Option<&str>,
+) -> (u16, Value) {
     let body = if method == "GET" { String::new() } else { body.to_string() };
     let mut stream = TcpStream::connect(address).unwrap();
     stream.set_read_timeout(Some(Duration::from_secs(8))).unwrap();
     let authorization =
         if authorized { format!("Authorization: Bearer {SECRET}\r\n") } else { String::new() };
-    write!(stream,"{method} {path} HTTP/1.1\r\nHost: {address}\r\n{authorization}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
+    let publication =
+        deployment_id.map(|id| format!("X-Solomon-Deployment-Id: {id}\r\n")).unwrap_or_default();
+    write!(stream,"{method} {path} HTTP/1.1\r\nHost: {address}\r\n{authorization}{publication}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
     let mut response = String::new();
     stream.read_to_string(&mut response).unwrap();
     let (headers, body) = response.split_once("\r\n\r\n").unwrap();
@@ -407,6 +423,7 @@ fn console_and_learned_bots_follow_the_actual_source_supervisor_lifecycle() {
     // Each runtime owns its wire protocol; compare the same supervisor health fields.
     assert_eq!(health["protocol"], "solomon-game-v1");
     health.as_object_mut().unwrap().remove("protocol");
+    assert_eq!(health.as_object_mut().unwrap().remove("deploymentProtocol"), Some(json!(2)));
     rows.push(json!({"case":"live-bot-health","health":health}));
     developer.send(ClientMessage::Command {
         sequence: 1,
@@ -993,6 +1010,7 @@ fn supervisor_replays_source_http_colleges_broker_and_party_membership() {
     rows.push(json!({"case":"code-resolution","status":status,"target":body["target"],"intentOpaque":intent.len()==32&&intent.bytes().all(|byte|byte.is_ascii_alphanumeric()||matches!(byte,b'_'|b'-'))}));
     let (_, mut health) = host.request("GET", "/health", Value::Null, true);
     health.as_object_mut().unwrap().remove("protocol");
+    assert_eq!(health.as_object_mut().unwrap().remove("deploymentProtocol"), Some(json!(2)));
     rows.push(json!({"case":"health","body":health}));
     a.send(ClientMessage::Hosted {
         command: HostedCommand::StartMatch { boneyard_id: "default-random".into() },
@@ -1199,12 +1217,14 @@ fn supervisor_replays_source_http_colleges_broker_and_party_membership() {
                 solomon_protocol::hosted::HostedServerMessage::DeploymentRestart {
                     checkpoint_sequence,
                     target_revision: announced_revision,
+                    deployment_id,
                 },
         } = message
         else {
             unreachable!()
         };
         assert_eq!(announced_revision, target_revision);
+        assert_eq!(deployment_id, "d1".repeat(16));
         checkpoint_sequences.push(checkpoint_sequence);
     }
     let mut request = format!("ws://{}/game-hub", host.address).into_client_request().unwrap();
@@ -1237,7 +1257,8 @@ fn supervisor_replays_source_http_colleges_broker_and_party_membership() {
     for index in [0, 1, 2, 4] {
         clients[index].finish_close();
     }
-    let (status, body) = restart.join().unwrap();
+    let (status, mut body) = restart.join().unwrap();
+    assert_eq!(body.as_object_mut().unwrap().remove("deploymentId"), Some(json!("d1".repeat(16))));
     rows.push(json!({"case":"deployment-ready","status":status,"body":body}));
     let (_, health) = host.request("GET", "/health", Value::Null, true);
     rows.push(json!({"case":"deployment-closed-colleges","draining":health["draining"],

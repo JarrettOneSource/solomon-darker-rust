@@ -67,6 +67,57 @@ frame 230 × 54 and fill 192 × 18. The source comparison receipt is
 `startup-baseline/loader-source-assets.json` in the task evidence directory. No composed
 startup acceptance is implied by that input check.
 
+## World notifications recovered before repair
+
+The visual-producer inventory found `crates/web/src/loot/messages.rs` still constructing
+DOM, with no `LootMessages` owner or callers. The pure message clock existed, but the full
+notification surface was absent. Earlier broad UI completion evidence cannot accept this
+unwired system.
+
+The complete boundary is the shared floating text owner, not loot alone. Pinned Website
+`fa08ae249ff5563570bdb2a653e2ef9358ce7b83` sources are `NativeWorldNotifications.tsx`,
+`NativeLootBitmapText.tsx`, `loot-message-presentation.{ts,css,test.ts}`,
+`loot-event-audio.ts`, `skill-book-feedback.ts`, `use-skill-book-feedback.ts`,
+`SkillBookFeedback.tsx`, and their `BoneyardScene.tsx`/`MainMenuScene.tsx` callers. Existing
+Website ledger 100 records native insert/update/draw at `0x005CA7C0`/`0x005D7EF0`/
+`0x005CF000`; ledger 229 confirms Tutorial Sack labels appear only after accepted pickup.
+
+- Membership: local loot text (including active Gold merging and all tint branches),
+  rank-book feedback in College and Boneyard, local same-run secondary `Overloaded Mana!`,
+  and local combat `CHEAT DEATH!`. Rank books use `book:-sequence` and tint `0x8080ff`;
+  loot, combat and secondary IDs may be numerically equal and remain distinct source keys.
+  Other players' notices and non-rank/rejected receipts advance cursors without painting.
+- Ownership: accepted local event lanes own births. Initial/restored scene snapshots seed
+  cursors after retained receipts; repeated display frames never re-consume an event.
+  Session/local-player/world changes, tick rewind, Game Over and loadout reset presentation
+  and baselines. One presentation advances only on accepted integer ticks, never wall time.
+- Clock: initial lifetime `f32(1.5)`, offset `f32(-18)`, one-unit rise while active offset
+  is negative, ordinary lifetime loss `f32(0.005)`. Distinct insertion repeatedly shifts all
+  rows by four until the active row reaches zero, reducing older rows by `f32(0.1)` each
+  shift. The retained older-row pressure rule and float32 boundaries remain exact. Active
+  Gold merges only above lifetime one, resets that lifetime and retains the original key.
+- Current visual projection clamps alpha to lifetime in `[0,1]`; scale first narrows
+  `1-max(offset,0)/250`, then rounds through Source `toFixed(2)` and narrows again.
+  The established loot-only `sample()` API and untouched `ed0a2d59` fixture retain their
+  historical unrounded projection. Production uses the current projection on the same
+  state/clock; no duplicate algorithm or old visual fallback remains.
+- Geometry: center the menu-font bitmap text in the full gameplay viewport. Clip from
+  native Y 50 down; each baseline is `50 + 17 + Math.round(offset)`. Both UI scale and
+  existing gameplay viewport display scale apply. Black shadow is two native units below
+  the same text and shares alpha; message scale affects glyphs, not that shadow offset.
+  These notices do not inherit a centered Inventory/modal-stage transform.
+- Visibility: alive and lethal-pending may show; dying, spectating and absent participants
+  cannot. Boneyard Game Over removes the surface and Tutorial combat-access false hides
+  it. Cursors/clocks still follow accepted state while a visibility gate hides pixels.
+  The existing rank-book result modal is a neighboring panel owner, not a replacement
+  for the missing world text.
+
+Confidence is high for this complete pinned-source contract and the cited recovered native
+geometry/lifecycle. Unknown until measured: composed GPU glyph clipping/blending, actual
+earned-event browser visibility and live hosted event delivery. All members remain
+`recovered-pending-port` until the current fixture/regression, renderer/controller checks
+and genuine browser journey establish their supported final disposition.
+
 ## Acceptance matrix
 
 `Pending` means implementation and/or current composed browser evidence has not been accepted.
@@ -96,6 +147,7 @@ Owner names match the parallel implementation lanes. Scripts are under `tools/br
 | NPC chat/books/boasts/authored choices; history, progressive text/audio/acceleration, selector list drag/wheel/controller, notebox/error | HUD | `player_panels/{dialogue,notebox}.rs`; `hub-dialogue-rooms.mjs`, `menu-journey.cjs` | Pending GPU modal focus and dialogue |
 | Level-up offer sequence; reveal/clocks, cards/insight/weld, responsive detail, choice/reroll/save and rejected-action recovery | HUD | `skill_picker.rs`; `hud-selector.cjs`, actual earned gameplay | Pending earned offer and real selection |
 | Tutorial callouts/arrows; canonical text/narration and live GPU widget anchors; intro title/fade; Game Over riff/prompt/admission | HUD | `tutorial/**`, `college_intro.rs`, `game_over.rs`; `tutorial-text-bounds.cjs`, `solomon-entrance.cjs`, `boneyard.cjs` | Pending GPU anchor and terminal run evidence |
+| World notifications; local loot/Gold coalescing, Hub/Boneyard rank-book notices, Overloaded Mana and CHEAT DEATH; per-run cursors, native clip/rise/fade/shadow, life/Tutorial/Game Over gates and screen-reader text | acceptance | Recovered notification contract below; `sim/boneyard/loot/messages.rs`, `web/loot/messages.rs`; current-source fixture and genuine earned browser events | Recovered-pending-port; old DOM type was entirely unwired |
 | Social Party; collapsed/coarse/expanded, Members/Settings/Mods, roster tags/scroll, privacy, copy/regenerate, Kick/Leave, request/invite Accept/Deny | social | `social/party/**`; `hosted-social.cjs`, `join-party.cjs` | Pending actual two-human host/input |
 | Player cards/private College; Hub actor hit, Message/invite, resolve/decline/failure and owned roster | social | `social/{card,hub_players,hosted}.rs`; `hosted-social.cjs`, `hosted-session.cjs` | Pending private admission/teardown |
 | Chat; Boneyard/Global/Party/Whisper, drafts/unread/fade/channel cycle, IME, author card and disconnect/reset | social | `social/chat.rs`; `hosted-social.cjs` | Pending real text composition and delivery |
