@@ -341,9 +341,26 @@ async function nextFrame(page) {
     requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
+async function useNativeFocus(...pages) {
+  for(const page of pages) {
+    await page.evaluate(()=>{
+      const events=[];
+      Object.defineProperty(window,'__solomonFocusEvents',{value:events});
+      for(const type of ['focus','blur'])addEventListener(type,event=>
+        events.push({type:event.type,trusted:event.isTrusted}));
+    });
+    const client=await page.context().newCDPSession(page);
+    try {
+      // Playwright otherwise forces document.hasFocus() true in background
+      // tabs. Restore Chrome's native focus before switching actual targets.
+      await client.send('Emulation.setFocusEmulationEnabled',{enabled:false});
+    } finally {await client.detach()}
+  }
+}
+
 module.exports = {
   readUi, waitForUi, findWidget, widget, noWidget, byLabel, surface, ready, bounds, center, click, tap,
   fill, value, focused, setSlider, wheel, drag, assertGpuOnly, watchErrors, installController, controller, nextFrame,
   observeGpu, gpuDraws,
-  observeAnnouncements, announcements, announced,
+  observeAnnouncements, announcements, announced, useNativeFocus,
 };
