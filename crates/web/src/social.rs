@@ -8,6 +8,8 @@ mod chat;
 pub(crate) mod gpu;
 mod hosted;
 mod hub_players;
+#[cfg(test)]
+mod layer_tests;
 mod party;
 
 use std::cell::RefCell;
