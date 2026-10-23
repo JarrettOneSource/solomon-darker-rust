@@ -119,6 +119,35 @@ function and matches the retained Hub-region fixture. Actual `58df78d` observes 
 Office target with transition `-1`. Acceptance must assert that completed arrival exactly,
 without broadening a tolerance or adding a fixed settling delay.
 
+## GPU color-filter contract
+
+Pinned Website `fa08ae24` uses image filters as interaction state, including
+`main-menu.css` skull `brightness(1.28)` and name-die `brightness(1.25)`,
+`hall-of-fame.css` row-toggle `brightness(1.35)` with 120ms ease-out, and
+`native-ui/native-ui-settings.css` row hover/focus `brightness(1.16)` and disabled
+`saturate(0.35) brightness(0.62)`. The pre-migration Rust CSS additionally retains
+native-button focus `brightness(1.2)` and Create glyph hover/focus `brightness(1.3)`.
+These values belong to their feature controllers; the shared material supplies the
+filter operation. The existing byte vertex tint cannot express RGB gain above 1, and
+the Arena's separate arithmetic-average saturation is a different operation.
+
+The [Filter Effects 1 specification](https://drafts.csswg.org/filter-effects/)
+defines these CSS functions in sRGB, on non-premultiplied color, with each result
+clamped. The GPU material applies saturation using the specified .213/.715/.072
+matrix, then brightness, before the renderer's blend premultiplication. Alpha is
+preserved. Direct GPU text/outline colors use the same operation through
+`UiFrame::filtered_color`; bitmap text and stock images inherit the scoped material.
+Descriptors are shared through one UI frame's ordered passes and retired at its next
+begin, so animated gains allocate no additional textures or persistent descriptors.
+
+`tools/browser-smoke/gpu-color-filter.cjs` compiles the canonical Rust shader unchanged
+and compares its pixels to native Canvas color filtering. Six cases pass, including
+gain above 1 on translucent pixels, disabled-row saturation/brightness, CSS luminance,
+black/identity alpha and restoration of the ordinary world shader path. The previous
+shader fails the first case by 31 channel bytes. These focused shader results do not
+establish feature-controller wiring or composed hover/focus appearance; those remain
+part of the menu owner's actual browser acceptance.
+
 ## World notifications recovered before repair
 
 The visual-producer inventory found `crates/web/src/loot/messages.rs` still constructing
