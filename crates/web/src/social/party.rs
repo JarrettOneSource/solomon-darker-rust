@@ -3,7 +3,7 @@
 mod interaction;
 mod invitation;
 mod menu;
-pub(super) use interaction::PartyMenuInteraction;
+pub(super) use interaction::{PartyClipboard, PartyMenuInteraction};
 
 use egui::{Color32, Id, Order, Rect, Sense, pos2, vec2};
 use solomon_sim::native_ui_text::{

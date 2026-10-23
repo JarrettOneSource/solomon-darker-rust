@@ -72,6 +72,7 @@ pub struct SocialUi {
     focus_college: bool,
     party_expanded: bool,
     party_ui: party::PartyMenuInteraction,
+    clipboard: party::PartyClipboard,
     shown_party_invitation: Option<String>,
     chat_open: bool,
     chat_draft: String,
@@ -97,6 +98,8 @@ pub struct SocialUi {
 
 impl SocialUi {
     pub async fn attach(document: &Document) -> Result<Self, String> {
+        let intents = Rc::new(RefCell::new(Vec::new()));
+        let clipboard = party::PartyClipboard::new(document, intents.clone())?;
         Ok(Self {
             document: document.clone(),
             ui: StockAtlas::load("UI").await?,
@@ -144,7 +147,8 @@ impl SocialUi {
             focus_chat: false,
             focus_modal: false,
             actions: Vec::new(),
-            intents: Rc::new(RefCell::new(Vec::new())),
+            intents,
+            clipboard,
         })
     }
 
@@ -234,6 +238,7 @@ impl SocialUi {
     }
 
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        self.clipboard.clear();
         if !self.context.visible || self.snapshot.is_none() {
             return Ok(());
         }
@@ -291,6 +296,7 @@ impl SocialUi {
                     frame.record("social/notice", notice, "status", &response);
                 });
         }
+        self.clipboard.finish_frame();
         Ok(())
     }
 

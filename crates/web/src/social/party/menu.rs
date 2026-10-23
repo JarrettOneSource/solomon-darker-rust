@@ -9,9 +9,8 @@ use solomon_sim::social::party_ui::{
     NativePartyMenuTag, clamp_native_party_menu_scroll, plan_native_party_menu, visibility_id,
 };
 use solomon_sim::social::{party_member_display_name, party_menu_leave_label};
-use wasm_bindgen::JsCast;
 
-use super::super::{Intent, PartyTab, SocialUi, gpu};
+use super::super::{PartyTab, SocialUi, gpu};
 use crate::gpu_ui::{UiFrame, message_frame};
 
 impl SocialUi {
@@ -319,6 +318,13 @@ impl SocialUi {
                 self.party_ui.scroll_y =
                     clamp_native_party_menu_scroll(self.party_ui.scroll_y, plan.content_height);
             }
+            if action.id == "copy"
+                && !action.disabled
+                && let Some(code) = &code
+            {
+                self.clipboard.target(response.rect, code.clone());
+                frame.record_value("social/copy", code, None);
+            }
             if response.clicked() && !action.disabled {
                 activated = Some(action.id.clone());
             }
@@ -327,7 +333,7 @@ impl SocialUi {
         if let Some(action) = activated {
             if action == "copy" {
                 if let Some(code) = code {
-                    self.copy_party_code(code);
+                    self.clipboard.copy(code);
                 }
             } else {
                 self.activate(match action.as_str() {
@@ -337,24 +343,5 @@ impl SocialUi {
             }
         }
         Ok(())
-    }
-
-    fn copy_party_code(&mut self, code: String) {
-        let promise = (|| {
-            let navigator = web_sys::window()?.navigator();
-            let clipboard = js_sys::Reflect::get(&navigator, &"clipboard".into()).ok()?;
-            let write: js_sys::Function =
-                js_sys::Reflect::get(&clipboard, &"writeText".into()).ok()?.dyn_into().ok()?;
-            write.call1(&clipboard, &code.clone().into()).ok()?.dyn_into::<js_sys::Promise>().ok()
-        })();
-        let Some(promise) = promise else {
-            self.party_status = Some("Could not copy the party ID.".into());
-            return;
-        };
-        let pending = self.intents.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            let copied = wasm_bindgen_futures::JsFuture::from(promise).await.is_ok();
-            pending.borrow_mut().push(Intent::PartyCopied { code, copied });
-        });
     }
 }

@@ -154,7 +154,7 @@ impl ModSkillsUi {
             } else {
                 vec2(-16.0, ctx.content_rect().height() * 0.12)
             };
-            egui::Area::new(Id::unique("mod/skill-book"))
+            let area = egui::Area::new(Id::unique("mod/skill-book"))
                 .order(Order::Foreground)
                 .anchor(anchor, offset)
                 .show(&ctx, |ui| {
@@ -167,9 +167,9 @@ impl ModSkillsUi {
                         .inner_margin(12.0)
                         .show(ui, |ui| {
                             ui.set_width(if small {
-                                288.0_f32.min(ctx.content_rect().width() - 56.0)
+                                288.0_f32.min(ctx.content_rect().width() - 32.0) - 26.0
                             } else {
-                                288.0_f32.min(ctx.content_rect().width() * 0.42) - 24.0
+                                288.0_f32.min(ctx.content_rect().width() * 0.42) - 26.0
                             });
                             egui::ScrollArea::vertical()
                                 .id_salt("mod/skill-book-scroll")
@@ -185,9 +185,16 @@ impl ModSkillsUi {
                                 });
                         });
                 });
+            frame.record_rect(
+                "mod/skill-book",
+                "Mod skills",
+                "complementary",
+                area.response.rect,
+                true,
+            );
         }
         if !self.choices.is_empty() {
-            egui::Area::new(Id::unique("mod/skill-picker"))
+            let area = egui::Area::new(Id::unique("mod/skill-picker"))
                 .order(Order::Foreground)
                 .anchor(egui::Align2::RIGHT_BOTTOM, vec2(-16.0, if small { -72.0 } else { -16.0 }))
                 .show(&ctx, |ui| {
@@ -199,20 +206,37 @@ impl ModSkillsUi {
                         ))
                         .inner_margin(11.2)
                         .show(ui, |ui| {
-                            ui.set_width(400.0_f32.min(ctx.content_rect().width() - 32.0) - 22.4);
+                            ui.set_width(400.0_f32.min(ctx.content_rect().width() - 32.0) - 24.4);
                             ui.label(copy("Mod skills", 12.8));
                             egui::ScrollArea::vertical()
                                 .id_salt("mod/skill-choices-scroll")
                                 .max_height(ctx.content_rect().height() * 0.4)
                                 .show(ui, |ui| {
-                                    for row in &self.choices {
-                                        if let Some(action) = paint_row(frame, ui, row, true) {
-                                            self.actions.push(action);
-                                        }
+                                    let columns =
+                                        ((ui.available_width() + 6.4) / 126.4).floor().max(1.0)
+                                            as usize;
+                                    ui.spacing_mut().item_spacing = vec2(6.4, 6.4);
+                                    for rows in self.choices.chunks(columns) {
+                                        ui.columns(columns, |cells| {
+                                            for (row, cell) in rows.iter().zip(cells) {
+                                                if let Some(action) =
+                                                    paint_row(frame, cell, row, true)
+                                                {
+                                                    self.actions.push(action);
+                                                }
+                                            }
+                                        });
                                     }
                                 });
                         });
                 });
+            frame.record_rect(
+                "mod/skill-picker",
+                "Mod skill choices",
+                "complementary",
+                area.response.rect,
+                true,
+            );
         }
         Ok(())
     }
@@ -237,7 +261,20 @@ fn paint_row(
         if row.subskill {
             ui.add_space(16.0);
         }
-        let height = if choice { 64.0 } else { 72.0 };
+        let description_height = row.description.as_ref().map_or(0.0, |description| {
+            ui.painter()
+                .layout(
+                    description.clone(),
+                    FontId::new(9.92, FontFamily::Name("Alegreya".into())),
+                    Color32::WHITE,
+                    (ui.available_width() - 52.0).max(1.0),
+                )
+                .size()
+                .y
+        });
+        let height =
+            (16.0 + if row.detail.is_some() { 14.0 } else { 0.0 } + description_height + 12.8)
+                .max(if choice { 51.2 } else { 44.8 });
         let (bounds, response) = ui.allocate_exact_size(
             vec2(ui.available_width(), height),
             if row.action.is_some() && !row.disabled {
@@ -262,13 +299,13 @@ fn paint_row(
         );
         let left = bounds.min + vec2(6.4, 6.4);
         if let Some(url) = &row.icon_url {
-            frame.image(
-                ui.painter(),
-                url,
-                egui::Rect::from_min_size(left, vec2(32.0, 32.0)),
-                None,
-                Color32::WHITE,
-            );
+            let icon = egui::Rect::from_min_size(left, vec2(32.0, 32.0));
+            frame.image(ui.painter(), url, icon, None, Color32::WHITE);
+            let id = format!("mod/skill-icon:{}", row.key);
+            frame.record_rect(&id, &format!("{} icon", row.name), "img", icon, true);
+            if let Some(size) = frame.image_size(url) {
+                frame.record_value(&id, &format!("{}x{} {url}", size.x, size.y), None);
+            }
         }
         let text_rect =
             egui::Rect::from_min_max(left + vec2(39.2, 0.0), bounds.max - vec2(6.4, 6.4));
@@ -290,6 +327,15 @@ fn paint_row(
             &row.name,
             if row.action.is_some() { "button" } else { "article" },
             &response,
+        );
+        frame.record_value(
+            &format!("mod/skill:{}", row.key),
+            &[Some(row.name.as_str()), row.detail.as_deref(), row.description.as_deref()]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join("\n"),
+            None,
         );
         clicked = response.clicked() && !row.disabled;
     });

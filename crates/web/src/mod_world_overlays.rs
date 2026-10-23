@@ -444,7 +444,14 @@ fn paint_sprite(
                 let weight = (-0.5 * ((x * x + y * y) as f32)).exp() / 6.1689;
                 let tint = color.gamma_multiply(weight * alpha);
                 let rect = target.translate(vec2(x as f32, y as f32) * blur / 2.0);
-                frame.image(painter, &sprite.path, rect, Some(uv), tint);
+                frame.image_quad_masked(
+                    painter,
+                    &sprite.path,
+                    [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()],
+                    uv,
+                    tint,
+                    crate::render::BlendMode::Normal,
+                );
             }
         }
     }
