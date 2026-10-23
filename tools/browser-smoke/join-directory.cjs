@@ -182,7 +182,13 @@ async function leavePlayer(owner) {
     await visibility(leader,'public','Public');
     assert.equal((await refresh(visitor,listing,'JOIN')).enabled,true);
     await gpu.click(visitor.page,`join-listing:${listing}`);
-    await gpu.widget(visitor.page,'routing/dialog');
+    const consent=gpu.bounds(await gpu.widget(visitor.page,'routing/dialog'));
+    assert.equal(consent.width,680,'Source keeps its ordinary consent border box');
+    assert.ok(consent.height<300,'the short consent uses its real content height');
+    const back=gpu.bounds(await gpu.widget(visitor.page,'routing-back'));
+    const join=gpu.bounds(await gpu.widget(visitor.page,'routing-continue'));
+    assert.equal(back.y,join.y,'Source keeps the two intrinsic actions in one centered row');
+    assert.ok(back.width<112&&join.width<300,'consent actions retain intrinsic label widths');
     assert.ok(visitor.state.joins.some(row => row.status === 200));
     assert.equal(visitor.state.id,null,'the consent has not admitted a player');
     await visitor.page.screenshot({path:path.join(output,'owned-public-consent.png')});
