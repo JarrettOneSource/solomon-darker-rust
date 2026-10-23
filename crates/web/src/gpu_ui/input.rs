@@ -291,7 +291,23 @@ impl BrowserInput {
                 });
                 queue.events.push(UiEvent::ModifiersChanged(mods));
                 let mapped = key_from_browser(&key.key());
-                if let Some(mapped) = mapped {
+                let active = queue.session.is_some();
+                let native_caret_arrow = active
+                    && matches!(
+                        mapped,
+                        Some(Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown)
+                    )
+                    && !queue.session.as_ref().is_some_and(|session| {
+                        session.descriptor.code_editor
+                            && mods.alt
+                            && matches!(mapped, Some(Key::ArrowUp | Key::ArrowDown))
+                    });
+                // Physical editor arrows own native caret receipts. Controller
+                // arrows are queued separately and retain Source spatial focus;
+                // Console Alt+Up/Down still reaches its actual history owner.
+                if let Some(mapped) = mapped
+                    && !native_caret_arrow
+                {
                     queue.events.push(UiEvent::Key {
                         key: mapped,
                         physical_key: key.code().strip_prefix("Key").and_then(key_from_browser),
@@ -300,7 +316,6 @@ impl BrowserInput {
                         modifiers: mods,
                     });
                 }
-                let active = queue.session.is_some();
                 if active {
                     queue.sync_selection(&textarea);
                 }
