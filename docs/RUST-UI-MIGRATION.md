@@ -763,3 +763,11 @@ ordinary Title YES admission in fresh contexts, preserve the actual intro/save/r
 check the full painted glyph bounds at native and phone landscape sizes, then send real
 keyboard/joystick movement and require the lesson to disappear with accepted displacement.
 Later combat, Inventory/Skills and potion-stage callouts remain separate required gates.
+The retained 58df teacher census failure is a driver ordering error: it stops at
+Regenerate (79), the fifth Source row, and then requires eight observed rows.
+Unchanged fa08 `native-hub-npc.ts::NATIVE_TEACHER_SPELLS` returns the authored order
+72,73,74,75,79,78,77,76, matching the Rust catalog exactly. The driver now traverses
+through Call Comet (76), the actual eighth row, before requiring all eight. It
+keeps real Tab scrolling, full-row visibility, purchase rejection, reopening and
+all 26 librarian rows/one-shot Lace removal. No product catalog or focus behavior
+changes to accommodate the stale target; the original five-row failure remains.
