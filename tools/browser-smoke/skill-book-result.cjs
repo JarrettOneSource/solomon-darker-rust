@@ -135,7 +135,9 @@ async function tick(page) {
           if(value.world==='boneyard')await until(async()=>await tick(page)>pausedTick,'authoritative play resumes after confirmation');
           const notification=await ui.widget(page,`world-notification:book:-${outcome.sequence}`);
           assert.equal(notification.label,expected.text,'the actual accepted rank also paints its native world +1 message');
-          result.reads.push({bookId,skillId:outcome.skillId,sequence:outcome.sequence,dismiss:index===0?'OKAY':'Escape'});
+          await page.screenshot({path:path.join(output,`${value.world}-rank-${index}-notification.png`)});
+          result.reads.push({bookId,skillId:outcome.skillId,sequence:outcome.sequence,
+            dismiss:index===0?'OKAY':'Escape',notification});
         }
         await ui.observeDocumentReplacement(page,()=>page.reload());await ui.ready(page);await ui.click(page,'play');await ui.click(page,'continue');
         result.restoredAdmission=await admitted(page,value,accepted);

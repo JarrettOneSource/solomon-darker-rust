@@ -26,6 +26,14 @@ fn source_book_fixtures_import_owned_books_and_seed_their_retained_receipt() {
         assert_eq!(imported.source, GameSaveImportSource::Browser);
         let restored = website_save::restore(&imported.document).unwrap();
         assert_eq!(restored.session.boneyard.is_some(), case["world"] == "boneyard");
+        if let Some(loaded) = &restored.loaded_boneyard {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../web/assets/navigation")
+                .join(format!("{}.json", loaded.source_sha256));
+            let navigation = std::fs::read_to_string(path)
+                .expect("the browser fixture's real stock world has shipped native navigation");
+            solomon_assets::navigation::decode_navigation(&navigation, loaded).unwrap();
+        }
         let economy = &restored.session.participants[&restored.player_id].player.economy;
         let retained = economy.action_feedback.as_ref();
         assert_eq!(retained.unwrap().sequence, case["retainedSequence"].as_u64().unwrap());
