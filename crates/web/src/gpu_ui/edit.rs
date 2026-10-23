@@ -93,7 +93,7 @@ pub(crate) struct EditorOwner {
 
 #[derive(Clone, Default)]
 struct EditorMounts {
-    active: std::collections::BTreeMap<egui::Id, u64>,
+    active: std::collections::HashMap<egui::Id, u64>,
     next: u64,
 }
 
