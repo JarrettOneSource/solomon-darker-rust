@@ -210,7 +210,52 @@ impl UiFrame<'_> {
     pub fn paint_group(
         &self,
         painter: &Painter,
+        effect: GroupEffect,
+        paint: impl FnOnce(&UiFrame<'_>, &Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_group_output(painter, effect, solomon_graphics::ShadowOutput::Source, paint)
+    }
+
+    /// Source outer box-shadow: paint an opaque rounded GPU caster, never its pixels.
+    pub fn paint_outer_shadow(
+        &self,
+        painter: &Painter,
+        shadow: ImageShadow,
+        caster: impl FnOnce(&Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_box_shadow(painter, shadow, solomon_graphics::ShadowOutput::Outer, caster)
+    }
+
+    /// Source inset box-shadow: the opaque caster is the rounded padding box.
+    pub fn paint_inner_shadow(
+        &self,
+        painter: &Painter,
+        shadow: ImageShadow,
+        caster: impl FnOnce(&Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_box_shadow(painter, shadow, solomon_graphics::ShadowOutput::Inner, caster)
+    }
+
+    fn paint_box_shadow(
+        &self,
+        painter: &Painter,
+        shadow: ImageShadow,
+        output: solomon_graphics::ShadowOutput,
+        caster: impl FnOnce(&Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_group_output(
+            painter,
+            GroupEffect { shadows: vec![shadow], ..Default::default() },
+            output,
+            |_, painter| caster(painter),
+        )
+    }
+
+    fn paint_group_output(
+        &self,
+        painter: &Painter,
         mut effect: GroupEffect,
+        output: solomon_graphics::ShadowOutput,
         paint: impl FnOnce(&UiFrame<'_>, &Painter) -> Result<(), String>,
     ) -> Result<(), String> {
         assert!(effect.opacity.is_finite() && (0.0..=1.0).contains(&effect.opacity));
@@ -222,21 +267,25 @@ impl UiFrame<'_> {
             shadow.blur *= scale;
         }
         effect.opacity *= painter.opacity();
-        let style = effects::Style { effect, filter: self.color_filter, blend: self.blend };
+        let style = effects::Style { effect, filter: self.color_filter, blend: self.blend, output };
         let marker = |boundary| {
             egui::Shape::Callback(egui::epaint::PaintCallback {
                 rect: painter.clip_rect(),
                 callback: std::sync::Arc::new(boundary),
             })
         };
-        painter.add(marker(effects::Boundary::Begin(style)));
+        // Egui drops shapes at opacity0. Keep data markers so reset child opacity
+        // cannot release ungrouped geometry from a fully transparent parent.
+        let mut boundaries = painter.clone();
+        boundaries.set_opacity(1.0);
+        boundaries.add(marker(effects::Boundary::Begin(style)));
         let mut group_painter = painter.clone();
         group_painter.set_clip_rect(Rect::EVERYTHING);
         group_painter.set_opacity(1.0);
         let mut frame = self.with_blend(BlendMode::Normal);
         frame.color_filter = ColorFilter::default();
         let result = paint(&frame, &group_painter);
-        painter.add(marker(effects::Boundary::End));
+        boundaries.add(marker(effects::Boundary::End));
         result
     }
 

@@ -156,7 +156,7 @@ convolves only the selected record's alpha, composites the filtered source over 
 shadow, then applies group opacity. Sampling clamps to the record's texel centers and
 returns transparent outside its bounds, preventing neighboring atlas records from
 entering the blur. It creates no additional texture or persistent effect cache.
-The canonical-shader probe now passes ten cases, including an asymmetric mirrored crop.
+The canonical-shader probe now passes sixteen cases, including an asymmetric mirrored crop.
 Native idle/hover shadow comparisons differ by at most 5/2 channel bytes; the exact
 group-opacity case differs by at most 1 and the mirrored-offset case by at most 6.
 These Gaussian cases allow the specification's finite-kernel implementation variance;
@@ -180,12 +180,38 @@ SourceOver alpha only within these captures, unpremultiplies target samples once
 restores the enclosing framebuffer, projection and native canvas blend factors. No
 HTML/control rasterization is involved. The small graphics `composition_probe` example
 and `gpu-composition.cjs` exercise the actual renderer's nesting and hand-derived pixels;
-their runtime and the authored producer proof remain pending the canonical build.
+the original composition probe passes all framebuffer/projection and pixel checks.
+The authored producer proof remains pending its matched runtime artifact.
 
 Enemy names and authored shop labels request Alegreya600. Pinned `main.tsx` imports
 only its400/500/700 faces, so `Alegreya Semibold` keeps that native CSS600 request
 against the same loaded faces. A browser font-only probe confirms its glyph pixels
 and width exactly match700 and differ from500. No new face or startup resource is added.
+
+Pinned `ModSpellEffects.tsx` and `mod-spell-effects.css` also distinguish rounded
+border-box shadows from sprite alpha shadows. The area uses an opaque circular caster,
+18px blur radius and #9760ee/0.65; the channel uses its rotated rounded capsule,
+12px blur radius and #a670ff/0.75. Gaussian sigma is9/6 respectively. Outer box-shadow
+clips its blurred caster from the original border-box interior, even when that box's
+own gradient is transparent. The existing group capture can supply these opaque GPU
+casters; its shadow-only output needs that interior knockout before the pulse's outer
+opacity. Epaint's filled, linearly feathered `Shadow` does not implement this contract.
+`UiFrame::paint_outer_shadow` captures that opaque GPU geometry in the same target pool
+and emits only blurred alpha times inverse original alpha. The native circle/capsule
+comparisons pass with maximum channel differences3/2 and exact zero interior alpha;
+the prior shader paints unwanted interior alpha10 in the circle case. The actual
+renderer probe also covers the typed outer mode and normal-draw restoration, pending
+the next canonical probe build. Group markers retain their opacity0 parent even when
+egui would discard an ordinary shape at that opacity, preventing child geometry escape.
+
+The observer's pinned `developer-observer.css` adds outer0/8/30px and inset0/0/24px
+black box shadows. `paint_inner_shadow` uses the same opaque caster capture and Gaussian,
+emitting caster alpha times inverse blurred caster alpha. Its padding-box caster and
+clip exclude the1px border; outer shadows precede the background, inner shadows follow
+it and precede border/content, as specified by [CSS Backgrounds3](https://www.w3.org/TR/css-backgrounds-3/#shadow-shape).
+The offset outer rectangle and inset comparison differ by at most7/2 channel bytes,
+with exact zero unwanted interior/exterior alpha. The prior shader differs by223 in
+the inset case. There is one blur kernel, target pool and texture owner for these effects.
 
 ## World notifications recovered before repair
 

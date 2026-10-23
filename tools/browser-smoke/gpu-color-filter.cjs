@@ -120,6 +120,10 @@ const cases = [
         {name:'source and shadow compose before group opacity',sigma:0,offset:[0,0],color:[0,0,0,0.55],opacity:0.78,brightness:1,tolerance:1},
         {name:'mirrored crop preserves screen-space shadow offset',sigma:1,offset:[1,1],color:[0,0,0,1],opacity:1,brightness:1,mirror:true,tolerance:9},
         {name:'independent text shadow excludes the foreground source',sigma:2,offset:[0,1],color:[0,0,0,1],opacity:1,brightness:1,only:true,tolerance:9},
+        {name:'opaque circle outer box shadow excludes its transparent interior',sigma:9,offset:[0,0],color:[151,96,238,0.65],opacity:0.55,brightness:1,outer:'circle',tolerance:9},
+        {name:'opaque capsule outer box shadow excludes its transparent interior',sigma:6,offset:[0,0],color:[166,112,255,0.75],opacity:1,brightness:1,outer:'capsule',tolerance:9},
+        {name:'observer rectangle outer shadow retains its downward offset',sigma:15,offset:[0,8],color:[0,0,0,1],opacity:1,brightness:1,outer:'rect',tolerance:9},
+        {name:'observer inset shadow stays inside its padding box',sigma:12,offset:[0,0],color:[0,0,0,1],opacity:1,brightness:1,inner:'rect',tolerance:9},
       ];
       canvas.width=96;canvas.height=64;gl.viewport(0,0,96,64);
       gl.uniform2f(uniform('u_logical_size'),96,64);
@@ -132,19 +136,43 @@ const cases = [
         const ctx=effect.getContext('2d');
         ctx.filter=`brightness(${test.brightness}) drop-shadow(${test.offset[0]}px ${test.offset[1]}px ${test.sigma}px rgba(${test.color.join(',')}))`;
         let inputSprite=spriteCanvas;
+        if(test.outer||test.inner) {
+          inputSprite=document.createElement('canvas');inputSprite.width=inputSprite.height=8;
+          const caster=inputSprite.getContext('2d');caster.fillStyle='#fff';caster.beginPath();
+          if(test.outer==='circle')caster.arc(4,4,4,0,Math.PI*2);
+          else if(test.outer==='capsule')caster.roundRect(0,2,8,4,2);
+          else caster.rect(0,0,8,8);
+          caster.fill();
+          const pixels=caster.getImageData(0,0,8,8).data;
+          for(let y=0;y<8;y++)for(let x=0;x<8;x++) {
+            atlas.set(pixels.slice((y*8+x)*4,(y*8+x)*4+4),((y+2)*12+x+2)*4);
+          }
+          gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,12,12,0,gl.RGBA,gl.UNSIGNED_BYTE,atlas);
+        }
         if(test.mirror) {
           inputSprite=document.createElement('canvas');inputSprite.width=inputSprite.height=8;
           const mirrorContext=inputSprite.getContext('2d');mirrorContext.translate(8,0);mirrorContext.scale(-1,1);
           mirrorContext.drawImage(spriteCanvas,0,0);
         }
-        if(test.only) {
+        if(test.only||test.outer||test.inner) {
           const alphaMask=document.createElement('canvas');alphaMask.width=alphaMask.height=8;
-          const pixels=new Uint8ClampedArray(sprite);
+          const pixels=new Uint8ClampedArray(inputSprite.getContext('2d').getImageData(0,0,8,8).data);
           for(let index=0;index<pixels.length;index+=4) {
             pixels.set(test.color.slice(0,3),index);pixels[index+3]=Math.round(pixels[index+3]*test.color[3]);
           }
           alphaMask.getContext('2d').putImageData(new ImageData(pixels,8,8),0,0);
-          ctx.filter=`blur(${test.sigma}px)`;ctx.drawImage(alphaMask,32+test.offset[0],24+test.offset[1]);
+          if(test.inner) {
+            ctx.filter='none';ctx.drawImage(alphaMask,32,24);
+            ctx.globalCompositeOperation='destination-out';ctx.filter=`blur(${test.sigma}px)`;
+            ctx.drawImage(inputSprite,32+test.offset[0],24+test.offset[1]);
+            ctx.filter='none';ctx.globalCompositeOperation='source-over';
+          } else {
+            ctx.filter=`blur(${test.sigma}px)`;ctx.drawImage(alphaMask,32+test.offset[0],24+test.offset[1]);
+          }
+          if(test.outer) {
+            ctx.filter='none';ctx.globalCompositeOperation='destination-out';
+            ctx.drawImage(inputSprite,32,24);ctx.globalCompositeOperation='source-over';
+          }
         } else ctx.drawImage(inputSprite,32,24);
         const result=document.createElement('canvas');result.width=96;result.height=64;
         const resultCtx=result.getContext('2d');resultCtx.globalAlpha=test.opacity;resultCtx.drawImage(effect,0,0);
@@ -159,7 +187,7 @@ const cases = [
         gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);
         gl.uniform2f(uniform('u_color_filter'),test.brightness,1);
         gl.uniform2f(uniform('u_shadow_sigma'),test.sigma/12,test.sigma/12);
-        gl.uniform1f(uniform('u_shadow_only'),test.only?1:0);
+        gl.uniform1f(uniform('u_shadow_only'),test.inner?3:test.outer?2:test.only?1:0);
         gl.uniform2f(uniform('u_shadow_offset'),(test.mirror?-1:1)*test.offset[0]/12,test.offset[1]/12);
         gl.uniform4f(uniform('u_shadow_color'),...test.color.map((value,index)=>index===3?value:value/255));
         gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.drawArrays(gl.TRIANGLES,0,6);
@@ -172,7 +200,9 @@ const cases = [
           maximum=Math.max(maximum,delta);total+=delta;
           if(expected||actual[((63-y)*96+x)*4+channel])activeChannels++;
         }
-        rows.push({...test,delta:maximum,meanActiveDelta:total/activeChannels});
+        rows.push({...test,delta:maximum,meanActiveDelta:total/activeChannels,
+          ...(test.outer?{interiorAlpha:actual[((63-28)*96+36)*4+3]}:{}),
+          ...(test.inner?{exteriorAlpha:actual[((63-28)*96+42)*4+3]}:{})});
       }
       const error = gl.getError();
       if (error !== gl.NO_ERROR) throw Error(`WebGL error ${error}`);
@@ -185,6 +215,10 @@ const cases = [
     }
     for (const row of rows) assert.ok(row.delta <= (row.tolerance??1),
       `${row.name}: actual Rust shader matches native colour filtering ${JSON.stringify(row)}`);
+    for (const row of rows.filter(row=>row.outer)) assert.equal(row.interiorAlpha,0,
+      `${row.name}: outer box shadow never paints the caster interior`);
+    for (const row of rows.filter(row=>row.inner)) assert.equal(row.exteriorAlpha,0,
+      `${row.name}: inset box shadow never paints outside the caster`);
     console.log(`${rows.length} canonical GPU colour-filter cases passed`);
   } finally {await browser.close()}
 })().catch(error => {console.error(error); process.exitCode=1});

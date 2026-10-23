@@ -44,6 +44,8 @@ const files = new Map([
     const expected = {
       overlap:[64,128,0,192], border:[128,0,0,128], screen:[64,128,0,208],
       outside:[0,0,0,255], faded:[32,64,0,195],
+      outerInterior:[0,0,0,255], outerExterior:[0,0,255,255], restored:[128,0,0,191],
+      innerLeft:[0,0,255,255], innerClear:[0,0,0,255], innerExterior:[0,0,0,255],
     };
     const receipt = {actual, expected, errors};
     if (process.env.OUT) {

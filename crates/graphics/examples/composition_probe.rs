@@ -3,7 +3,9 @@
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
-    use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode};
+    use solomon_graphics::{
+        AlphaShadow, BlendMode, Renderer, ShadowOutput, Texture, TextureColorMode,
+    };
     use wasm_bindgen::prelude::*;
     use web_sys::WebGl2RenderingContext as Gl;
 
@@ -129,6 +131,64 @@ mod browser {
         );
         renderer.end_frame();
         let faded = pixel(&gl, 2, 2)?;
+        let caster = renderer.upload_rgba(2, 1, &[255, 0, 0, 255, 255, 0, 0, 255])?;
+        renderer.begin_frame(5, 4, [5.0, 4.0]);
+        renderer.draw_image_shadow(
+            AlphaShadow {
+                bounds: [0.0, 0.0, 1.0, 1.0],
+                offset: [0.5, 0.0],
+                sigma: [0.0, 0.0],
+                color: [0.0, 0.0, 1.0, 1.0],
+                output: ShadowOutput::Outer,
+            },
+            |renderer| {
+                quad(
+                    renderer,
+                    &caster,
+                    [0.0, 0.0, 3.0, 1.0],
+                    [1.0, 1.0, 3.0, 1.0],
+                    TextureColorMode::Texture,
+                    1.0,
+                );
+            },
+        );
+        renderer.end_frame();
+        let outer_interior = pixel(&gl, 2, 2)?;
+        let outer_exterior = pixel(&gl, 3, 2)?;
+        renderer.begin_frame(5, 4, [5.0, 4.0]);
+        renderer.draw_image_shadow(
+            AlphaShadow {
+                bounds: [0.0, 0.0, 1.0, 1.0],
+                offset: [0.5, 0.0],
+                sigma: [0.0, 0.0],
+                color: [0.0, 0.0, 1.0, 1.0],
+                output: ShadowOutput::Inner,
+            },
+            |renderer| {
+                quad(
+                    renderer,
+                    &caster,
+                    [0.0, 0.0, 3.0, 1.0],
+                    [1.0, 1.0, 3.0, 1.0],
+                    TextureColorMode::Texture,
+                    1.0,
+                );
+            },
+        );
+        quad(
+            &mut renderer,
+            &red,
+            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
+            TextureColorMode::Texture,
+            1.0,
+        );
+        renderer.end_frame();
+        let inner_left = pixel(&gl, 1, 2)?;
+        let inner_clear = pixel(&gl, 2, 2)?;
+        let inner_exterior = pixel(&gl, 3, 2)?;
+        let restored = pixel(&gl, 0, 3)?;
+        renderer.destroy_texture(&caster);
         renderer.destroy_render_target(&outer);
         renderer.destroy_texture(&red);
         renderer.destroy_texture(&green);
@@ -137,7 +197,7 @@ mod browser {
             return Err(format!("GPU composition error {error}"));
         }
         Ok(format!(
-            "{{\"allocationRestored\":{allocation_restored},\"nestedRestored\":{nested_restored},\"screenRestored\":{screen_restored},\"overlap\":{overlap:?},\"border\":{border:?},\"screen\":{screen:?},\"outside\":{outside:?},\"faded\":{faded:?}}}"
+            "{{\"allocationRestored\":{allocation_restored},\"nestedRestored\":{nested_restored},\"screenRestored\":{screen_restored},\"overlap\":{overlap:?},\"border\":{border:?},\"screen\":{screen:?},\"outside\":{outside:?},\"faded\":{faded:?},\"outerInterior\":{outer_interior:?},\"outerExterior\":{outer_exterior:?},\"innerLeft\":{inner_left:?},\"innerClear\":{inner_clear:?},\"innerExterior\":{inner_exterior:?},\"restored\":{restored:?}}}"
         ))
     }
 }

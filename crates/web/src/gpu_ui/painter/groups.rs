@@ -2,7 +2,7 @@
 
 use egui::{Rect, Vec2, pos2, vec2};
 use solomon_graphics::{
-    BlendMode, ColorFilter, RenderTarget, Renderer, Texture, TextureColorMode, Vertex,
+    BlendMode, ColorFilter, RenderTarget, Renderer, ShadowOutput, Texture, TextureColorMode, Vertex,
 };
 use web_sys::WebGl2RenderingContext;
 
@@ -228,7 +228,7 @@ impl GpuPainter {
                 source,
                 source_uv,
                 style.effect.shadows.first().copied(),
-                false,
+                style.output,
                 style.filter,
                 style.blend,
                 style.effect.opacity,
@@ -250,7 +250,7 @@ impl GpuPainter {
                         source,
                         source_uv,
                         Some(*shadow),
-                        true,
+                        ShadowOutput::Shadow,
                         ColorFilter::default(),
                         BlendMode::Normal,
                         1.0,
@@ -266,7 +266,7 @@ impl GpuPainter {
                     source,
                     source_uv,
                     None,
-                    false,
+                    ShadowOutput::Source,
                     style.filter,
                     BlendMode::Normal,
                     1.0,
@@ -282,7 +282,7 @@ impl GpuPainter {
                 output,
                 target_uv(&composite.texture, output, scale),
                 None,
-                false,
+                ShadowOutput::Source,
                 ColorFilter::default(),
                 style.blend,
                 style.effect.opacity,
@@ -303,7 +303,7 @@ fn draw_texture(
     destination: Rect,
     uv: Rect,
     shadow: Option<crate::gpu_ui::ImageShadow>,
-    only: bool,
+    output: ShadowOutput,
     filter: ColorFilter,
     blend: BlendMode,
     opacity: f32,
@@ -319,7 +319,7 @@ fn draw_texture(
     };
     let (destination, uv, shadow) = if let Some(shadow) = shadow {
         let (destination, uv, mut shadow) = shadow_geometry(uv, destination, shadow);
-        shadow.only = only;
+        shadow.output = output;
         (destination, uv, Some(shadow))
     } else {
         (destination, uv, None)

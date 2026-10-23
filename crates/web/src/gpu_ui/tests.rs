@@ -157,16 +157,59 @@ fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_onc
                     },
                 )
                 .unwrap();
+            frame
+                .paint_outer_shadow(
+                    &painter,
+                    ImageShadow { offset: Vec2::ZERO, blur: 3.0, color: Color32::BLACK },
+                    |caster| {
+                        caster.circle_filled(pos2(50.0, 50.0), 8.0, Color32::WHITE);
+                        Ok(())
+                    },
+                )
+                .unwrap();
+            frame
+                .paint_inner_shadow(
+                    &painter,
+                    ImageShadow { offset: Vec2::ZERO, blur: 12.0, color: Color32::BLACK },
+                    |caster| {
+                        caster.rect_filled(
+                            Rect::from_min_size(pos2(20.0, 20.0), vec2(30.0, 20.0)),
+                            0.0,
+                            Color32::WHITE,
+                        );
+                        Ok(())
+                    },
+                )
+                .unwrap();
+            painter.set_opacity(0.0);
+            frame
+                .paint_group(&painter, GroupEffect::default(), |_, child| {
+                    child.rect_filled(
+                        Rect::from_min_size(pos2(70.0, 70.0), vec2(10.0, 10.0)),
+                        0.0,
+                        Color32::WHITE,
+                    );
+                    Ok(())
+                })
+                .unwrap();
         },
     );
     let nodes =
         effects::parse(ctx.tessellate(output.shapes.clone(), output.pixels_per_point)).unwrap();
     output.drop_without_applying_deltas();
-    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes.len(), 4);
     let effects::Node::Group { style, children, .. } = &nodes[0] else { panic!("GPU group") };
     assert!((style.effect.opacity - 0.2).abs() < 0.00001);
     assert_eq!(style.filter.brightness, 1.2);
+    assert_eq!(style.output, solomon_graphics::ShadowOutput::Source);
     assert!(effects::content_bounds(children).left() < 0.0);
+    let effects::Node::Group { style, .. } = &nodes[1] else { panic!("outer GPU shadow") };
+    assert_eq!(style.output, solomon_graphics::ShadowOutput::Outer);
+    assert!((style.effect.opacity - 0.4).abs() < 0.00001);
+    let effects::Node::Group { style, .. } = &nodes[2] else { panic!("inner GPU shadow") };
+    assert_eq!(style.output, solomon_graphics::ShadowOutput::Inner);
+    let effects::Node::Group { style, .. } = &nodes[3] else { panic!("zero-opacity GPU group") };
+    assert_eq!(style.effect.opacity, 0.0);
 }
 
 fn browser_key(code: &str, key: &str) -> BrowserKey {
