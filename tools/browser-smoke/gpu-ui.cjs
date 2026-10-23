@@ -170,9 +170,12 @@ async function assertGpuOnly(page) {
       if (passive.has(element.tagName)) return false;
       if (element.tagName === 'AUDIO' && element.hidden && !element.controls) return false;
       if (element.hasAttribute('data-gpu-announcer')) {
+        const style = getComputedStyle(element);
         return !['DIV', 'SPAN'].includes(element.tagName) || !nonvisual(element)
           || !['polite', 'assertive'].includes(element.getAttribute('aria-live'))
           || element.children.length !== 0 || element.hasAttribute('tabindex')
+          || element.hidden || element.getAttribute('aria-hidden') === 'true'
+          || style.display === 'none' || style.visibility === 'hidden'
           || element.hasAttribute('data-menu-action') || element.hasAttribute('data-panel-action');
       }
       const textAdapter = element.hasAttribute('data-gpu-text-input')
