@@ -186,7 +186,7 @@ async function approachApothecary(page) {
   await actionByLabel(page,/Apprentice Apothecary · 8 gold/,{prefix:'mod/panel:'});
 }
 async function openInventory(page) {
-  if (!ui.findWidget(await ui.readUi(page),'panel:surface:inventory')) await page.keyboard.press('KeyI');
+  if (!ui.findWidget(await ui.readUi(page),'panel:surface:inventory')) await ui.click(page,'hud:inventory');
   await ui.widget(page,'panel:surface:inventory');
   await ui.waitForUi(page,snapshot => snapshot.widgets.some(widget => widget.id.startsWith('panel:item:') && widget.enabled)
     && !ui.findWidget(snapshot,'panel:inventory-flyby'), 'settled enabled Inventory cells');
