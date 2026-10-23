@@ -177,11 +177,15 @@ async function waitForEditorAssets(messageOffset, label, started) {
         admissionTimer = setTimeout(() => reject(new Error('editor admission did not arrive')), 45000);
       })]);
     } finally { clearTimeout(admissionTimer); }
-    await gpu.settleErrors(page);
-    await page.getByRole('button', { name: 'Return to editing' }).click();
-    assert.equal(await page.locator('iframe.editor-test-frame').getAttribute('hidden'), '');
-    release();
-    await waitForDisposed(1);
+    const cancelledFrame = page.frames().find(frame =>
+      new URL(frame.url()).pathname === `${mount}/editor-test/`);
+    assert.ok(cancelledFrame);
+    await gpu.observeFrameRemoval(page, async () => {
+      await page.getByRole('button', { name: 'Return to editing' }).click();
+      assert.equal(await page.locator('iframe.editor-test-frame').getAttribute('hidden'), '');
+      release();
+      await waitForDisposed(1);
+    }, {frame: cancelledFrame});
     await page.unroute(`**${mount}/api/game/editor-test`);
     assert.equal(sockets.length, 1);
     assert.ok(sockets[0].received > 0 && sockets[0].closed);
@@ -202,9 +206,10 @@ async function waitForEditorAssets(messageOffset, label, started) {
     const firstTick = await frame.evaluate(() => window.wasmBindings.wizard_state()[5]);
     await frame.waitForFunction(tick => window.wasmBindings.wizard_state()[5] > tick + 20, firstTick);
     await page.screenshot({ path: path.join(out, 'editor-playing.png') });
-    await gpu.settleErrors(page);
-    await page.getByRole('button', { name: 'Return to editing' }).click();
-    await waitForDisposed(2);
+    await gpu.observeFrameRemoval(page, async () => {
+      await page.getByRole('button', { name: 'Return to editing' }).click();
+      await waitForDisposed(2);
+    }, {frame});
     assert.equal(sockets.length, 2);
     assert.ok(sockets.every(socket => socket.closed));
     assert.deepEqual(await savedState(), before);
