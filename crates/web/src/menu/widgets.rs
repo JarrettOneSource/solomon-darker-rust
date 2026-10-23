@@ -128,6 +128,8 @@ pub(super) fn submitted_on_enter(response: &Response) -> bool {
     // Single-line TextEdit surrenders focus while processing its Enter event.
     response.lost_focus() && response.ctx.input(|input| input.key_pressed(egui::Key::Enter))
 }
+// Bitmap font, placement and tint are the authored drawing contract.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn native(
     frame: &UiFrame<'_>,
     ui: &Ui,
@@ -375,6 +377,8 @@ pub(super) fn gradient(ui: &Ui, rect: Rect, top: Color32, bottom: Color32) {
     mesh.add_triangle(0, 2, 3);
     ui.painter().add(egui::Shape::mesh(mesh));
 }
+// This field adapter keeps native identity, typography and editing policy explicit.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn edit(
     frame: &UiFrame<'_>,
     ui: &mut Ui,
@@ -435,6 +439,8 @@ pub(crate) fn cloud_button(
     cloud_button_with_label(frame, ui, id, label, label, rect, scale, enabled)
 }
 
+// The stock button separates its accessible name from the authored bitmap label.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn cloud_button_with_label(
     frame: &UiFrame<'_>,
     ui: &Ui,

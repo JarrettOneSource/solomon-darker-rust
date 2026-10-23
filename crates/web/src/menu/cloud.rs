@@ -1406,8 +1406,7 @@ impl CloudView {
                 }
                 if self.tab == Tab::Parties
                     && self.account.as_ref().is_some_and(|a| a.developer_access)
-                {
-                    if let Err(error) = rows::developer_presence(
+                    && let Err(error) = rows::developer_presence(
                         frame,
                         ui,
                         &self.players,
@@ -1418,9 +1417,9 @@ impl CloudView {
                         list.width(),
                         enabled,
                         actions,
-                    ) {
-                        result = Err(error);
-                    }
+                    )
+                {
+                    result = Err(error);
                 }
             });
         result

@@ -220,6 +220,8 @@ impl ModDetailView {
             })
             .collect();
     }
+    // This painter borrows the scene art, image lifetime owner and subscription policy.
+    #[allow(clippy::too_many_arguments)]
     pub fn paint(
         &mut self,
         frame: &mut UiFrame<'_>,
@@ -333,6 +335,8 @@ impl ModDetailView {
         }
         Ok(())
     }
+    // The scroll painter retains the same borrowed scene resources and host policy.
+    #[allow(clippy::too_many_arguments)]
     fn paint_contents(
         &mut self,
         frame: &mut UiFrame<'_>,
@@ -694,6 +698,8 @@ impl ModDetailView {
         }
         Ok(())
     }
+    // The About section paints current subscription state without owning its requests.
+    #[allow(clippy::too_many_arguments)]
     fn paint_about(
         &self,
         frame: &mut UiFrame<'_>,
@@ -846,6 +852,8 @@ fn panel_text(
     ui.painter().galley(r.min + Vec2::splat(14.0), galley, widgets::GOLD);
     Ok(())
 }
+// Control identity, authored bounds and native label placement stay explicit.
+#[allow(clippy::too_many_arguments)]
 fn control(
     frame: &mut UiFrame<'_>,
     ui: &Ui,

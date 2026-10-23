@@ -11,6 +11,8 @@ use solomon_sim::menu::party_directory::{
 };
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
 use solomon_sim::social::{GameSessionKind, PartyVisibility};
+// Bitmap font, placement and tint are the authored drawing contract.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn ink(
     frame: &UiFrame<'_>,
     ui: &Ui,
@@ -57,6 +59,8 @@ pub(super) fn ink(
     }
 }
 
+// The row paints borrowed catalog state and emits actions through the scene owner.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn mod_row(
     frame: &mut UiFrame<'_>,
     ui: &mut Ui,
@@ -291,6 +295,8 @@ pub(super) fn mod_row(
     }
     Ok(())
 }
+// Directory policy and responsive row geometry remain explicit at this painter.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn party_row(
     frame: &mut UiFrame<'_>,
     ui: &mut Ui,
@@ -474,6 +480,8 @@ pub(super) fn party_row(
     }
     Ok(())
 }
+// Presence data and observe admission are borrowed from their existing request owner.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn developer_presence(
     frame: &mut UiFrame<'_>,
     ui: &mut Ui,

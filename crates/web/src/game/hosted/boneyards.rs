@@ -605,6 +605,8 @@ impl BoneyardLibrary {
         }
         Ok(())
     }
+    // Shelf text, source geometry and emitted actions stay explicit at this painter.
+    #[allow(clippy::too_many_arguments)]
     fn paint_row(
         &self,
         frame: &mut UiFrame<'_>,
@@ -739,6 +741,8 @@ fn display_name(name: &str) -> &str {
     let trimmed = name.trim();
     if trimmed.is_empty() { "Untitled Acre" } else { trimmed }
 }
+// Bitmap font, placement and tint are the authored drawing contract.
+#[allow(clippy::too_many_arguments)]
 fn stock_text(
     frame: &UiFrame<'_>,
     ui: &Ui,
