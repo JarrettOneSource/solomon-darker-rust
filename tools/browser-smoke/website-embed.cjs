@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require(path.resolve(process.env.PW));
 const gpu = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const base = new URL(process.env.URL || 'https://127.0.0.1:9449/game-stg/');
 const out = path.resolve(process.env.OUT);
 const fixture = JSON.parse(fs.readFileSync(path.resolve(__dirname,
@@ -27,6 +28,7 @@ const redact = value => String(value).replaceAll(account.password, '[password]')
   .replaceAll(account.email, '[email]')
   .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[token]');
 const checked = name => { checks.push(name); console.log(name); };
+let owned;
 let browser;
 let page;
 let step = 'registration';
@@ -82,9 +84,10 @@ async function waitForEditorAssets(messageOffset, label, started) {
   fs.writeFileSync(path.join(out, 'private-account.json'), JSON.stringify(account), { mode: 0o600, flag: 'wx' });
   let failure;
   try {
-    browser = await chromium.launch({ headless: true,
+    owned = await launchOwnedBrowser(chromium, { headless: true,
       executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
+    browser = owned.browser;
     const context = await browser.newContext({ ignoreHTTPSErrors: localTls, acceptDownloads: true,
       viewport: { width: 1600, height: 900 } });
     await context.addInitScript(() => {
@@ -224,8 +227,15 @@ async function waitForEditorAssets(messageOffset, label, started) {
       await page.screenshot({ path: path.join(out, 'failure.png') }).catch(() => {});
     }
   } finally {
-    if (browser) await browser.close();
-    fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ target: base.href, tls_verified: !localTls, checks, failure, errors, requests, sockets, assetStartups }, null, 2));
+    let cleanup;
+    if (owned) {
+      try {cleanup = await owned.close();}
+      catch (error) {
+        cleanup = error.cleanup || {error: error.stack};
+        failure ||= {step: 'browser cleanup', error: redact(error.stack || error.message)};
+      }
+    }
+    fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ target: base.href, tls_verified: !localTls, checks, failure, errors, requests, sockets, assetStartups, cleanup }, null, 2));
     console.log(JSON.stringify({ checks: checks.length, failure, output: out }));
     if (failure) process.exitCode = 1;
   }

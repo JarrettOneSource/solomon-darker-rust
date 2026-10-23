@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const gpu = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const {startNewGame} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 
@@ -26,11 +27,12 @@ async function waitUntil(predicate, label, timeout = 30000) {
 }
 
 (async () => {
-  const browser = await chromium.launch({
+  const owned = await launchOwnedBrowser(chromium, {
     headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist'],
   });
+  const {browser} = owned;
   const page = await browser.newPage({
     ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
     viewport: {width: 1280, height: 720},
@@ -174,6 +176,13 @@ async function waitUntil(predicate, label, timeout = 30000) {
         wizard: state.frame?.snapshot.participants[state.id]?.wizard, host: state.frame?.host}}, null, 2));
     throw error;
   } finally {
-    await browser.close();
+    try {
+      fs.writeFileSync(path.join(output, 'browser-cleanup.json'),
+        JSON.stringify(await owned.close(), null, 2));
+    } catch (error) {
+      fs.writeFileSync(path.join(output, 'browser-cleanup-failure.json'),
+        JSON.stringify(error.cleanup || {error: error.stack}, null, 2));
+      throw error;
+    }
   }
 })().catch(error => {console.error(error); process.exitCode = 1;});

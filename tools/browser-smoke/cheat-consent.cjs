@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const gpu = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const {startNewGame} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const output = path.resolve(process.env.OUT);
@@ -22,10 +23,10 @@ async function until(predicate, label) {
 
 (async () => {
   fs.mkdirSync(output, {recursive: true});
-  const server = await chromium.launchServer({headless: true, host: '127.0.0.1',
+  const owned = await launchOwnedBrowser(chromium, {headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const {browser} = owned;
   const page = await browser.newPage({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
     viewport: {width: 1280, height: 720}});
   page.setDefaultTimeout(30000);
@@ -146,18 +147,13 @@ async function until(predicate, label) {
     }, null, 2));
     throw error;
   } finally {
-    let timeout;
     try {
-      await browser.close();
-      await Promise.race([server.close(), new Promise((resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error('Chrome close timed out')), 15000);
-      })]);
+      fs.writeFileSync(path.join(output, 'browser-cleanup.json'),
+        JSON.stringify(await owned.close(), null, 2));
     } catch (error) {
-      // This server owns only the browser started by this harness.
-      await server.kill();
       fs.writeFileSync(path.join(output, 'browser-cleanup-failure.json'),
-        JSON.stringify({error:error.stack}, null, 2));
+        JSON.stringify(error.cleanup || {error: error.stack}, null, 2));
       throw error;
-    } finally {clearTimeout(timeout);}
+    }
   }
 })().catch(error => {console.error(error); process.exitCode = 1;});
