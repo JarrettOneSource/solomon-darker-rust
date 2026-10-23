@@ -485,7 +485,7 @@ mod tests {
                 ..Default::default()
             },
             |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+                ctx.root_ui(|ui| {
                     let response = ui.put(
                         Rect::from_min_size(Pos2::new(20.0, 20.0), Vec2::new(240.0, 44.0)),
                         egui::TextEdit::singleline(text).id(Id::unique("native-form-input")),
