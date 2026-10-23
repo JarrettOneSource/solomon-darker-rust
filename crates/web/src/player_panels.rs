@@ -1365,7 +1365,7 @@ impl PlayerPanels {
         );
         let ctx = frame.ctx.clone();
         let mut error = None;
-        chrome::native_area(&ctx, layer, transform).show(&ctx, |ui| {
+        chrome::native_area_in(&ctx, layer, transform, self.body_viewport()).show(&ctx, |ui| {
             ui.set_min_size(egui::vec2(1675.0, 900.0));
             let canvas = chrome::PanelCanvas::new(
                 frame,
@@ -1422,7 +1422,7 @@ impl PlayerPanels {
         self.hits = hits.into_inner();
         self.events.extend(events.into_inner());
         self.collect_gpu_input(&ctx);
-        if self.compact {
+        if self.has_compact_navigation() {
             self.paint_compact_navigation(frame)?;
         }
         if self.dye.is_some() {
@@ -1438,12 +1438,20 @@ impl PlayerPanels {
     }
     fn collect_gpu_input(&mut self, ctx: &egui::Context) {
         if self.input_suspended
+            || self.skill_book_result_open()
             || self.rename_sack.is_some()
             || self.notice.is_some()
             || self.dye.is_some()
         {
+            self.pan_pointer = None;
             return;
         }
+        let viewport = self.body_viewport();
+        let layer = self.layer_id();
+        let owns_position = |pos| viewport.contains(pos) && ctx.layer_id_at(pos) == Some(layer);
+        let mut owns_gesture = self.press.is_some()
+            || self.pressed_npc_selector.is_some()
+            || self.pan_pointer.is_some();
         for event in ctx.input(|input| input.events.clone()) {
             match event {
                 egui::Event::PointerButton {
@@ -1456,8 +1464,12 @@ impl PlayerPanels {
                         (pos.x as f64 - self.stage_origin.x) / self.view_scale,
                         (pos.y as f64 - self.stage_origin.y) / self.view_scale,
                     );
-                    let hit = self.hit_at(point);
+                    let hit = owns_position(pos).then(|| self.hit_at(point)).flatten();
                     if pressed {
+                        if !owns_position(pos) {
+                            continue;
+                        }
+                        owns_gesture = true;
                         if let Some(hit) = hit {
                             self.events.push(PanelEvent::PointerDown(hit.target, point, hit.npc));
                         } else {
@@ -1472,6 +1484,10 @@ impl PlayerPanels {
                             }
                         }
                     } else {
+                        if !owns_gesture {
+                            continue;
+                        }
+                        owns_gesture = false;
                         self.pan_pointer = None;
                         self.events.push(PanelEvent::PointerUp(point, hit.map(|h| h.target)));
                     }
@@ -1487,7 +1503,7 @@ impl PlayerPanels {
                             (pos.x as f64 - self.stage_origin.x) / self.view_scale,
                             (pos.y as f64 - self.stage_origin.y) / self.view_scale,
                         );
-                        let hit = self.hit_at(point);
+                        let hit = owns_position(pos).then(|| self.hit_at(point)).flatten();
                         self.events.push(PanelEvent::PointerMove(
                             point,
                             hit.as_ref().map(|h| h.target),
@@ -1496,10 +1512,14 @@ impl PlayerPanels {
                     }
                 }
                 egui::Event::PointerGone | egui::Event::WindowFocused(false) => {
+                    owns_gesture = false;
                     self.pan_pointer = None;
                     self.events.push(PanelEvent::Cancel);
                 }
                 egui::Event::MouseWheel { delta, .. } => {
+                    if !ctx.input(|input| input.pointer.hover_pos()).is_some_and(owns_position) {
+                        continue;
+                    }
                     if self.panel == Some(PlayerPanel::Dialogue) {
                         self.events.push(PanelEvent::Wheel(-delta.y as f64));
                     } else if self.compact
