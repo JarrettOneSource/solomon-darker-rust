@@ -13,18 +13,21 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 pub(crate) struct BrowserSackName {
     pub size: Vec2,
     pub baseline_offset: f64,
+    pub lines: Vec<String>,
     texture: egui::TextureHandle,
     pixels: egui::Vec2,
     scale: f32,
 }
 impl BrowserSackName {
-    pub fn paint(&self, painter: &egui::Painter, origin: egui::Pos2, scale: f32) {
+    pub fn paint(&self, painter: &egui::Painter, origin: egui::Pos2, scale: f32) -> egui::Rect {
+        let destination = egui::Rect::from_min_size(origin, self.pixels * self.scale * scale);
         painter.image(
             self.texture.id(),
-            egui::Rect::from_min_size(origin, self.pixels * self.scale * scale),
+            destination,
             egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
             egui::Color32::WHITE,
         );
+        destination
     }
 }
 #[derive(Clone, PartialEq, Eq)]
@@ -62,7 +65,7 @@ pub(crate) fn gpu_sack_name(
     if let Some(name) = cached {
         return Ok(name);
     }
-    let (image, size, baseline_offset, scale) = FONT_CANVAS.with(|slot| {
+    let (image, size, baseline_offset, scale, lines) = FONT_CANVAS.with(|slot| {
         let mut slot = slot.borrow_mut();
         if slot.is_none() {
             let document = web_sys::window()
@@ -143,12 +146,13 @@ pub(crate) fn gpu_sack_name(
             Vec2::new(width * scale, height * scale),
             ascent * scale,
             scale as f32,
+            lines,
         ))
     })?;
     let pixels = egui::vec2(image.width() as f32, image.height() as f32);
     let texture =
         frame.ctx.load_texture("Source Sack font run", image, egui::TextureOptions::LINEAR);
-    let name = BrowserSackName { texture, size, baseline_offset, scale, pixels };
+    let name = BrowserSackName { texture, size, baseline_offset, scale, pixels, lines };
     frame.ctx.data_mut(|data| {
         let cache = data.get_temp_mut_or_default::<NameCache>(cache_id);
         cache.0.push_back((key, name.clone()));
