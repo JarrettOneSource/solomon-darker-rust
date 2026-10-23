@@ -70,6 +70,22 @@ records native `MyLoader::Render` at `0x005BCA40`, numerator `0x0081F6A8`, denom
   producer-ordering defect, not an allowed navigation cancellation. Root's repair must
   start empty media, attach handlers, then set src/load together; loadeddata stays required
   and every unexpected request failure remains fatal in the next composed startup.
+- Root's `media-{python,native}-58df78d-create.json` traces distinguish later browser
+  suspension from that duplicate-load defect: one load per resident channel, successful
+  loadeddata, native suspend/NETWORK_IDLE, no media abort/error, then cancelled pending
+  HTTP transfers while the same channels remain resident. Academy subsequently plays.
+  This also occurs on the canonical Range-capable AssetServer, so Range handling does not
+  explain it. The [HTML media loading contract](https://html.spec.whatwg.org/multipage/media.html#concept-media-load-resource)
+  permits suspension after buffering and requires NETWORK_IDLE plus a suspend event.
+  Acceptance must retain raw network failures and await a shared, per-channel ownership
+  classification. Missing readiness, media errors/abort, reload/source changes, removal
+  and unrelated cancellations remain fatal; a URL or ERR_ABORTED match alone is insufficient.
+- Pinned `MainMenuScene.tsx:730` installs pointerdown and keydown audio unlock on window
+  capture. Rust installed them on document bubbling; the GPU canvas owns and stops its
+  pointer event before it reaches that phase. Actual `audio.cjs` on 58df78d times out
+  after the real Play click while waiting for AudioContext running
+  (`common-browser/58df78d/audio-pointer-red/run.log`). Restore the Source capture owner;
+  retain pointer-only activation and the real playback/mixer assertions.
 - Pinned Website also shows truthful stage, whole percentage, pending filename and ready
   item count. Those are explicit browser enhancements; stock per-file order/weighting is
   unknown. The separate match-loading lifecycle is not the startup denominator.
