@@ -879,6 +879,7 @@ pub(crate) fn native_area_in(
 ) -> egui::Area {
     ctx.set_transform_layer(layer, transform);
     egui::Area::new(layer.id)
+        .fade_in(false)
         .order(layer.order)
         .fixed_pos(Pos2::ZERO)
         .constrain_to(transform.inverse() * viewport)

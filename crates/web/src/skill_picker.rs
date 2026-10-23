@@ -734,6 +734,7 @@ impl SkillPicker {
         );
         let mut close = false;
         egui::Area::new(egui::Id::unique("picker-tooltip"))
+            .fade_in(false)
             .order(egui::Order::Tooltip)
             .fixed_pos(egui::Pos2::ZERO)
             .constrain(false)

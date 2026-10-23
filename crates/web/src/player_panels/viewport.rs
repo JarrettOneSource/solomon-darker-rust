@@ -228,6 +228,7 @@ impl PlayerPanels {
         };
         let layer = navigation_layer(frame.ctx, self.layer_id());
         egui::Area::new(layer.id)
+            .fade_in(false)
             .order(layer.order)
             .fixed_pos(egui::Pos2::ZERO)
             .constrain_to(egui::Rect::from_min_size(
