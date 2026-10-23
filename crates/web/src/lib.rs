@@ -137,7 +137,7 @@ fn set_status(text: &str) {
 }
 
 async fn run() -> Result<(), String> {
-    let game = Rc::new(RefCell::new(Game::load().await?));
+    let game = Game::load().await?;
     runtime_ui::completed("runtime", "Game resources ready", 1)?;
     let window = web_sys::window().ok_or("no window")?;
     GAME.with(|slot| *slot.borrow_mut() = Some(game.clone()));

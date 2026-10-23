@@ -220,6 +220,22 @@ selection must still be proved. No downstream surface is accepted from a partial
 | Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | Real input drivers migrated; composed runtime pending complete composed browser proof |
 | No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Joined source producer contract 3/3; complete runtime surface/input proof remains pending |
 
+## Saved-session startup allocation
+
+Ordinary saved Sack and College reloads on58df78d trap first inside the generated
+`PlayerState` JSON deserializer, before later loader diagnostics encounter the damaged stack.
+The natural save, browser IndexedDB state and first stack are retained under
+`reload-58df78d/` and `hud-browser-58df78d/sack-reload-witness/` in the task evidence.
+The actual WASM prologues reserve525,760 bytes for `Game::load` and311,248 for `run`
+before decoding; player deserialization adds66,992 bytes and its map visitor another100,368,
+plus the containing save/participant frames. These overlap the unchanged1 MiB stack.
+
+Resource construction and saved-session admission must be sequential lifecycle phases.
+The constructor returns the permanent shared Game owner; saved-state parsing runs after
+resource-constructor temporaries retire. Simulation/save structures, validation, defaults
+and the WASM stack configuration retain their existing contracts. Real reload/Continue
+with the naturally generated save is the regression witness; a compile alone is insufficient.
+
 ## Ordered UI dispatch
 
 The actual Settings binding journey reproduced a binding click followed by Escape being
