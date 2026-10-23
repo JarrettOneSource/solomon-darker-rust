@@ -4,7 +4,7 @@
 mod scene;
 pub use scene::{ModSceneOverlay, ModSceneOverlayFrame, ModScenePartyMember, ModViewAction};
 
-use crate::gpu_ui::UiFrame;
+use crate::gpu_ui::{GroupEffect, ImageShadow, UiFrame};
 use crate::mod_presentation_assets::ModPresentationAssets;
 use egui::{Color32, FontFamily, FontId, Id, Order, Pos2, Rect, Stroke, pos2, vec2};
 use solomon_sim::Vec2;
@@ -288,47 +288,100 @@ impl ModWorldOverlays {
                     Stroke::new(2.0, Color32::from_rgb(213, 192, 142)),
                 );
             }
-            painter.text(
-                shop.center - vec2(0.0, 7.0),
-                egui::Align2::CENTER_CENTER,
-                &shop.name,
-                FontId::new(11.0, FontFamily::Name("Alegreya".into())),
-                Color32::from_rgb(240, 228, 196),
-            );
+            frame.paint_group(
+                &painter,
+                GroupEffect {
+                    shadows: vec![ImageShadow {
+                        offset: vec2(0.0, 1.0),
+                        blur: 1.5,
+                        color: Color32::BLACK,
+                    }],
+                    ..Default::default()
+                },
+                |frame, painter| {
+                    crate::social::gpu::browser_text(
+                        frame,
+                        painter,
+                        shop.center - vec2(0.0, 7.0),
+                        egui::Align2::CENTER_CENTER,
+                        &shop.name,
+                        FontId::new(11.0, FontFamily::Name("Alegreya Semibold".into())),
+                        Color32::from_rgb(240, 228, 196),
+                    )?;
+                    Ok(())
+                },
+            )?;
             frame.record_rect(&format!("mod/shop:{index}"), &shop.name, "img", image, true);
         }
         for enemy in &self.enemies {
-            let alpha = if enemy.dying { 0.75 } else { 1.0 };
-            paint_sprite(
-                frame,
+            frame.paint_group(
                 &painter,
-                &enemy.sprite,
-                0.72,
-                alpha,
-                Some((enemy.glow, enemy.blur)),
-            );
-            let top = enemy.sprite.center.y - enemy.sprite.size.y * 0.72;
-            painter.text(
-                pos2(enemy.sprite.center.x, top - 6.0),
-                egui::Align2::CENTER_BOTTOM,
-                &enemy.name,
-                FontId::new(10.0, FontFamily::Name("Alegreya Medium".into())),
-                Color32::from_rgb(234, 223, 196).gamma_multiply(alpha),
-            );
-            let rail =
-                Rect::from_min_size(pos2(enemy.sprite.center.x - 22.0, top + 9.0), vec2(44.0, 4.0));
-            painter.rect_filled(rail, 0.0, Color32::from_rgb(36, 22, 26).gamma_multiply(alpha));
-            painter.rect_filled(
-                Rect::from_min_size(rail.min, vec2(rail.width() * enemy.health, rail.height())),
-                0.0,
-                Color32::from_rgb(165, 67, 82).gamma_multiply(alpha),
-            );
-            painter.rect_stroke(
-                rail,
-                0.0,
-                Stroke::new(1.0, Color32::from_black_alpha((204.0 * alpha) as u8)),
-                egui::StrokeKind::Inside,
-            );
+                GroupEffect {
+                    opacity: if enemy.dying { 0.75 } else { 1.0 },
+                    shadows: vec![ImageShadow {
+                        offset: egui::Vec2::ZERO,
+                        blur: enemy.blur,
+                        color: enemy.glow,
+                    }],
+                },
+                |frame, painter| {
+                    paint_sprite(frame, painter, &enemy.sprite, 0.72, 1.0, None);
+                    let top = enemy.sprite.center.y - enemy.sprite.size.y * 0.72;
+                    let name = crate::gpu_ui::font_run_with_options(
+                        frame.ctx,
+                        FontId::new(10.0, FontFamily::Name("Alegreya Semibold".into())),
+                        Color32::from_rgb(234, 223, 196),
+                        &enemy.name,
+                        crate::gpu_ui::FontRunOptions {
+                            line_height: Some(12.0),
+                            ..Default::default()
+                        },
+                    )?;
+                    let name_origin = egui::Align2::CENTER_BOTTOM
+                        .anchor_size(pos2(enemy.sprite.center.x, top), name.size())
+                        .min;
+                    frame.paint_group(
+                        painter,
+                        GroupEffect {
+                            shadows: vec![
+                                ImageShadow {
+                                    offset: vec2(0.0, 1.0),
+                                    blur: 1.0,
+                                    color: Color32::BLACK,
+                                },
+                                ImageShadow {
+                                    offset: egui::Vec2::ZERO,
+                                    blur: 1.5,
+                                    color: Color32::BLACK,
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                        |frame, painter| name.paint(frame, painter, name_origin, 1.0),
+                    )?;
+                    let rail = Rect::from_min_size(
+                        pos2(enemy.sprite.center.x - 22.0, top + 9.0),
+                        vec2(44.0, 4.0),
+                    );
+                    painter.rect_filled(rail, 0.0, Color32::from_rgb(36, 22, 26));
+                    let content = rail.shrink(1.0);
+                    painter.rect_filled(
+                        Rect::from_min_size(
+                            content.min,
+                            vec2(content.width() * enemy.health, content.height()),
+                        ),
+                        0.0,
+                        Color32::from_rgb(165, 67, 82),
+                    );
+                    painter.rect_stroke(
+                        rail,
+                        0.0,
+                        Stroke::new(1.0, Color32::from_black_alpha(204)),
+                        egui::StrokeKind::Inside,
+                    );
+                    Ok(())
+                },
+            )?;
             frame.record_rect(
                 &format!("mod/enemy:{}", enemy.id),
                 &enemy.name,
