@@ -8,6 +8,7 @@ const path = require('node:path');
 const { chromium } = require(path.resolve(process.env.PW));
 const { createNativeMessageReader } = require('./native-wire.cjs');
 const {reachCollegeLoadout}=require('./menu-journey.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const ui=require('./gpu-ui.cjs');
 
 const base = path.resolve(process.env.LOCAL_GATEWAY);
@@ -105,8 +106,10 @@ async function register(page) {
   assert.equal((await registered).status(), 201);
   await page.waitForURL(value => value.pathname === `${mount}/account`);
   await page.waitForLoadState('networkidle');
-  await ui.observeDocumentReplacement(page, () =>
-    page.getByRole('link', { name: 'Play', exact: true }).first().click());
+  await ui.observeDocumentReplacement(page, async () => {
+    await page.getByRole('link', { name: 'Play', exact: true }).first().click();
+    await page.waitForURL(value => value.origin === url.origin && value.pathname === `${mount}/`);
+  });
   await title(page);
 }
 async function adminRestart() {
@@ -121,10 +124,10 @@ async function adminRestart() {
 
 (async () => {
   fs.mkdirSync(out, { recursive: true });
-  const server = await chromium.launchServer({ headless: true, host: '127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, { headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
-  const browser = await chromium.connect(server.wsEndpoint());
+  const browser = browserOwner.browser;
   const page = await browser.newPage({ ignoreHTTPSErrors: true,
     viewport: { width: 1280, height: 720 } });
   await ui.watchRequestFailures(page, {errors}).ready;
@@ -280,9 +283,7 @@ async function adminRestart() {
   } finally {
     releaseSave();
     if (changedManifest) publish(originalPublication);
-    let timer;
-    try { await Promise.race([server.close(), new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error('Chrome close timed out')), 15000);
-    })]); } catch { await server.kill(); } finally { clearTimeout(timer); }
+    fs.writeFileSync(path.join(out, 'browser-cleanup.json'),
+      JSON.stringify(await browserOwner.close(), null, 2));
   }
 })().catch(error => { console.error(redact(error.stack)); process.exitCode = 1; });
