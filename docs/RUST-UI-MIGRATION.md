@@ -576,6 +576,14 @@ three identical 300-gold kits (`rollBound:2`, `quantityOffset:2`). The actual GP
 contains two distinct rows, IDs16/17, and errors[]/graceful exit0. Select its first
 visible kit after requiring that source stock range; keep the real purchase and owned
 inventory quantity assertions instead of weakening the common unique-label helper.
+`responsive-source-dye` then purchases the real kit, opens Fabric Dye and selects
+both swatches; its next failure targets DONE outside the scrolled viewport. The actual
+clipped widget registry correctly excludes it. Established c14068b3
+`web/player-panels.css:98–99` makes the compact dye sheet scroll, and
+`crafting.rs:538,653–658` puts DONE below the item section. Preserve this layout and
+reveal DONE with one genuine upward touch drag inside the actual dye viewport before
+tapping it. The native opacity entrance is 200ms; let the existing post-panel visual
+settle finish before the full-art screenshot, without delaying or repeating activation.
 
 The Tutorial text-bounds helper currently has no executable caller, so its syntax check
 does not qualify Tutorial layout. Pinned fa08 `core-kernels/native-tutorial.ts`

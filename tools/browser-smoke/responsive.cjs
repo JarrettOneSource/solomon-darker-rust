@@ -163,7 +163,23 @@ async function walkToFomentius(page) {
     assert.equal(swatches.length,18);
     await action(page,'dye-swatch:0');await action(page,'dye-swatch:7');
     assert.ok(ui.bounds(await ui.widget(page,'panel:dye-swatch:7')).width>=44);
+    await settle(page);
     await shot(page,'phone-dye-rust.png');
+    const dyeViewport=ui.bounds(await ui.widget(page,'panel:dye'));
+    const scroll=await page.context().newCDPSession(page);
+    const scrollStart={x:dyeViewport.x+dyeViewport.width-20,
+      y:dyeViewport.y+dyeViewport.height-30};
+    await scroll.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...scrollStart,id:1}]});
+    try {
+      for(let step=1;step<=8;step++){
+        await scroll.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{
+          x:scrollStart.x,y:scrollStart.y-step*25,id:1}]});
+        await ui.nextFrame(page);
+      }
+    }finally{
+      await scroll.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      await scroll.detach();
+    }
     await action(page,'dye-cancel');
     await ui.noWidget(page,'panel:dye');
     await page.setViewportSize({width:390,height:844});
