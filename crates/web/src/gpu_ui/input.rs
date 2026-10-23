@@ -243,6 +243,11 @@ impl BrowserInput {
             let adapter: EventTarget = textarea.clone().into();
             listen(document.as_ref(), name, &mut listeners, move |event| {
                 let Some(key) = event.dyn_ref::<KeyboardEvent>() else { return };
+                // A native capture owner (bindings, authored shortcuts, consent)
+                // has already handled this dispatch and its default editing.
+                if key.default_prevented() {
+                    return;
+                }
                 let mut queue = queue.borrow_mut();
                 if key.is_composing() || queue.composing {
                     return;
