@@ -166,61 +166,124 @@ impl SocialUi {
         let details =
             "You will preview its mods and cheat policy before leaving your current session.";
         let busy = self.resolving_college.is_some();
-        let width = (self.size.0 as f32 - 40.0).clamp(220.0, 560.0);
-        let bounds = egui::Rect::from_center_size(
-            frame.ctx.content_rect().center(),
-            egui::vec2(width, 260.0),
-        );
+        let screen = frame.ctx.content_rect();
+        let width = (screen.width() - 36.0).min(680.0);
+        let content_width = width - 52.0;
+        let heading = crate::gpu_ui::font_run(
+            frame.ctx,
+            egui::FontId::new(24.0, egui::FontFamily::Name("Cinzel Bold".into())),
+            egui::Color32::from_rgb(240, 210, 129),
+            "COLLEGE INVITATION",
+            Some(content_width),
+        )?;
+        let message_run = crate::gpu_ui::font_run_with_options(
+            frame.ctx,
+            egui::FontId::new(16.0, egui::FontFamily::Name("IM FELL English".into())),
+            egui::Color32::from_rgb(222, 209, 172),
+            &message,
+            crate::gpu_ui::FontRunOptions {
+                wrap_width: Some(content_width),
+                line_height: Some(24.0),
+                ..Default::default()
+            },
+        )?;
+        let detail_run = crate::gpu_ui::font_run_with_options(
+            frame.ctx,
+            egui::FontId::new(16.0, egui::FontFamily::Name("IM FELL English".into())),
+            egui::Color32::from_rgb(222, 209, 172),
+            details,
+            crate::gpu_ui::FontRunOptions {
+                wrap_width: Some(content_width),
+                line_height: Some(24.0),
+                ..Default::default()
+            },
+        )?;
+        let accept_label = if busy { "RESOLVING…" } else { "VIEW & JOIN" };
+        let button_sizes = [
+            crate::menu::routing::consent_button_size(frame.ctx, "DECLINE")?,
+            crate::menu::routing::consent_button_size(frame.ctx, accept_label)?,
+        ];
+        let wrapped_footer = button_sizes[0].x + button_sizes[1].x + 8.0 > content_width;
+        let footer_height = if wrapped_footer { 96.0 } else { 44.0 };
+        let body_height = heading.size().y + 12.0 + message_run.size().y + detail_run.size().y;
+        let panel_height = (body_height + 22.0 + footer_height + 52.0).min(screen.height() - 36.0);
+        let bounds = egui::Rect::from_center_size(screen.center(), egui::vec2(width, panel_height));
         ui.interact(bounds, egui::Id::unique("social/college-panel-block"), egui::Sense::click());
-        let response = ui
-            .scope_builder(egui::UiBuilder::new().max_rect(bounds), |ui| {
-                egui::Frame::new()
-                    .fill(egui::Color32::from_rgb(12, 13, 20))
-                    .stroke(egui::Stroke::new(1.0, super::gpu::GOLD))
-                    .inner_margin(24.0)
-                    .show(ui, |ui| {
-                        ui.set_min_width(width - 48.0);
-                        ui.label(super::gpu::rich("COLLEGE INVITATION", 21.0, super::gpu::GOLD));
-                        ui.add_space(18.0);
-                        ui.label(super::gpu::rich(&message, 17.0, super::gpu::PALE));
-                        ui.add_space(12.0);
-                        ui.label(super::gpu::rich(details, 15.0, super::gpu::PALE));
-                        ui.add_space(20.0);
-                        let mut action = None;
-                        ui.horizontal(|ui| {
-                            let decline = super::gpu::browser_button(
-                                frame,
-                                ui,
-                                "college-decline",
-                                "DECLINE",
-                                egui::vec2(140.0, 36.0),
-                                !busy,
-                            );
-                            if self.focus_college && !busy {
-                                decline.request_focus();
-                                self.focus_college = false;
-                            }
-                            if decline.clicked() {
-                                action = Some(false);
-                            }
-                            if super::gpu::browser_button(
-                                frame,
-                                ui,
-                                "college-accept",
-                                if busy { "RESOLVING…" } else { "VIEW & JOIN" },
-                                egui::vec2(160.0, 36.0),
-                                !busy,
+        crate::menu::routing::consent_frame(frame, ui, bounds)?;
+        let content = bounds.shrink(26.0);
+        let mut response = None;
+        ui.scope_builder(egui::UiBuilder::new().max_rect(content), |ui| -> Result<(), String> {
+            ui.set_clip_rect(content.intersect(ui.clip_rect()));
+            ui.spacing_mut().item_spacing = egui::Vec2::ZERO;
+            egui::ScrollArea::vertical()
+                .id_salt("social/college-scroll")
+                .max_height(content.height())
+                .min_scrolled_height(0.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| -> Result<(), String> {
+                    let width = ui.available_width();
+                    for (id, text, run, align) in [
+                        ("heading", "COLLEGE INVITATION", &heading, egui::Align::Center),
+                        ("message", message.as_str(), &message_run, egui::Align::Min),
+                        ("details", details, &detail_run, egui::Align::Min),
+                    ] {
+                        let (_, rect) = ui.allocate_space(egui::vec2(width, run.size().y));
+                        run.paint_aligned(frame, ui.painter(), rect, align, 1.0)?;
+                        frame.record_rect(
+                            &format!("social/college-{id}"),
+                            text,
+                            if id == "heading" { "heading" } else { "text" },
+                            rect,
+                            true,
+                        );
+                        if id == "heading" {
+                            ui.add_space(12.0);
+                        }
+                    }
+                    ui.add_space(22.0);
+                    let (_, footer) = ui.allocate_space(egui::vec2(width, footer_height));
+                    let total_width = button_sizes[0].x + 8.0 + button_sizes[1].x;
+                    for (index, (id, label, size)) in [
+                        ("social/college-decline", "DECLINE", button_sizes[0]),
+                        ("social/college-accept", accept_label, button_sizes[1]),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
+                        let origin = if wrapped_footer {
+                            egui::pos2(
+                                footer.center().x - size.x / 2.0,
+                                footer.top() + index as f32 * 52.0,
                             )
-                            .clicked()
-                            {
-                                action = Some(true);
-                            }
-                        });
-                        action
-                    })
-                    .inner
-            })
-            .inner;
+                        } else {
+                            egui::pos2(
+                                footer.center().x - total_width / 2.0
+                                    + if index == 0 { 0.0 } else { button_sizes[0].x + 8.0 },
+                                footer.top(),
+                            )
+                        };
+                        let action = crate::menu::routing::consent_button(
+                            frame,
+                            ui,
+                            id,
+                            label,
+                            egui::Rect::from_min_size(origin, size),
+                            !busy,
+                        )?;
+                        if index == 0 && self.focus_college && !busy && !ui.is_sizing_pass() {
+                            action.request_focus();
+                            self.focus_college = false;
+                        }
+                        if action.clicked() {
+                            response = Some(index == 1);
+                        }
+                    }
+                    Ok(())
+                })
+                .inner?;
+            Ok(())
+        })
+        .inner?;
         frame.record_rect(
             "social/college-invitation",
             "Private College invitation",
