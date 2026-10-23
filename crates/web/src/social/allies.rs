@@ -88,13 +88,15 @@ impl SocialUi {
                         }
                     }
                     painter.circle_stroke(chip.center(), 13.5, Stroke::new(1.0, accent));
-                    painter.text(
+                    super::gpu::browser_text(
+                        frame,
+                        painter,
                         bounds.min + vec2(38.0, 10.0),
                         egui::Align2::LEFT_CENTER,
                         model.accessible_name(),
                         FontId::new(12.0, FontFamily::Name("Georgia".into())),
                         Color32::from_rgb(240, 226, 182),
-                    );
+                    )?;
                     let bar =
                         Rect::from_min_size(bounds.min + vec2(38.0, 22.0), vec2(width - 50.0, 7.0));
                     painter.rect_filled(bar, 4.0, Color32::from_rgb(25, 10, 9));
