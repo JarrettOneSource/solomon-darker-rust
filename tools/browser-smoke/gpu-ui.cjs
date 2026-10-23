@@ -36,6 +36,17 @@ async function noWidget(page, id, options) {
   return waitForUi(page, ui => !findWidget(ui, id), `GPU widget ${id} to close`, options);
 }
 
+async function byLabel(page, label, {role, prefix = '', timeout} = {}) {
+  const matches = snapshot => snapshot.widgets.filter(widget => widget.id.startsWith(prefix)
+    && (!role || widget.role === role)
+    && (typeof label === 'string' ? widget.label === label : label.test(widget.label)));
+  const snapshot = await waitForUi(page, snapshot => matches(snapshot).length > 0,
+    `GPU label ${label}`, {timeout});
+  const found = matches(snapshot);
+  assert.equal(found.length, 1, `GPU label is unambiguous within ${prefix}: ${label}`);
+  return found[0];
+}
+
 async function surface(page, name, options) {
   return waitForUi(page, ui => ui.surface === name, `GPU surface ${name}`, options);
 }
@@ -175,6 +186,34 @@ function watchErrors(page) {
   return { errors, warnings };
 }
 
+// Observe actual WebGL submissions while forwarding the original call unchanged.
+async function observeGpu(page) {
+  await page.addInitScript(() => {
+    const counts = { calls: 0, vertices: 0, canvasCalls: {} };
+    Object.defineProperty(window, '__solomonGpuDraws', { value: counts });
+    for (const type of [WebGLRenderingContext, WebGL2RenderingContext]) {
+      for (const [name, countIndex] of [['drawArrays', 2], ['drawElements', 1]]) {
+        const draw = type.prototype[name];
+        type.prototype[name] = function (...args) {
+          const result = Reflect.apply(draw, this, args);
+          const count = args[countIndex];
+          if (count > 0) {
+            counts.calls += 1;
+            counts.vertices += count;
+            const id = this.canvas.id || '(unattached canvas)';
+            counts.canvasCalls[id] = (counts.canvasCalls[id] || 0) + 1;
+          }
+          return result;
+        };
+      }
+    }
+  });
+}
+
+async function gpuDraws(page) {
+  return page.evaluate(() => window.__solomonGpuDraws);
+}
+
 // Native Gamepad prototypes feed the production navigator adapter, never game commands.
 async function installController(page) {
   await page.evaluate(() => {
@@ -205,6 +244,7 @@ async function nextFrame(page) {
 }
 
 module.exports = {
-  readUi, waitForUi, findWidget, widget, noWidget, surface, ready, bounds, center, click, tap,
+  readUi, waitForUi, findWidget, widget, noWidget, byLabel, surface, ready, bounds, center, click, tap,
   fill, value, focused, wheel, drag, assertGpuOnly, watchErrors, installController, controller, nextFrame,
+  observeGpu, gpuDraws,
 };
