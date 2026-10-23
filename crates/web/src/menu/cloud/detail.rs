@@ -248,6 +248,17 @@ impl ModDetailView {
         };
         let title_top = if phone && !short { 56.0 } else { 12.0 };
         let summary = self.detail.as_ref().map_or(&self.summary, |d| &d.summary);
+        frame.record_rect(
+            "cloud-detail-title",
+            &summary.name,
+            "heading",
+            Rect::from_min_size(
+                rect.min + Vec2::new(0.0, title_top),
+                Vec2::new(rect.width(), 34.0),
+            ),
+            false,
+        );
+        frame.record_value("cloud-detail-title", &summary.name, None);
         widgets::label(
             ui,
             &summary.name,
@@ -356,9 +367,15 @@ impl ModDetailView {
         let gallery_width = if columns { (width - 24.0) * 1.55 / 2.4 } else { width };
         let about_width = if columns { width - gallery_width - 24.0 } else { width };
         let origin = ui.cursor().min;
+        let image_height = (gallery_width * 9.0 / 16.0).clamp(160.0, 360.0);
+        let has_thumbnails =
+            self.detail.as_ref().is_some_and(|detail| detail.screenshots.len() > 1);
         let gallery = Rect::from_min_size(
             origin,
-            Vec2::new(gallery_width, if columns { 480.0 } else { 460.0 }),
+            Vec2::new(
+                gallery_width,
+                30.0 + image_height + 64.0 + if has_thumbnails { 64.0 } else { 0.0 },
+            ),
         );
         self.paint_gallery(frame, ui, art, images, gallery, actions)?;
         let about_origin = if columns {
@@ -442,8 +459,17 @@ impl ModDetailView {
         );
         if self.account.is_none() {
             let (_, r) = ui.allocate_space(Vec2::new(width, 52.0));
-            if control(frame, ui, art, "cloud-sign-in", "SIGN IN TO COMMENT", r, false, true)?
-                .clicked()
+            if control(
+                frame,
+                ui,
+                art,
+                "cloud-detail-signin-comment",
+                "SIGN IN TO COMMENT",
+                r,
+                false,
+                true,
+            )?
+            .clicked()
             {
                 actions.push("cloud-sign-in".to_owned());
             }
@@ -589,6 +615,12 @@ impl ModDetailView {
             stage.shrink(6.0),
             true,
         );
+        frame.record_rect("cloud-gallery-image", &label, "img", stage, false);
+        frame.record_value(
+            "cloud-gallery-image",
+            &format!("{} / {}", self.image_index + 1, screenshots.len()),
+            None,
+        );
         let swipe =
             ui.interact(stage, egui::Id::unique("cloud-gallery-swipe"), egui::Sense::drag());
         if swipe.drag_started() {
@@ -714,7 +746,7 @@ impl ModDetailView {
         };
         heading(frame, ui, &format!("SUBSCRIPTION   {state}"), width);
         let choices = if self.account.is_none() {
-            vec![("SIGN IN TO SUBSCRIBE".to_owned(), "cloud-sign-in".to_owned())]
+            vec![("SIGN IN TO SUBSCRIBE".to_owned(), "cloud-detail-signin-subscribe".to_owned())]
         } else if let Some(s) = subscription {
             vec![
                 (
@@ -727,26 +759,30 @@ impl ModDetailView {
                     }
                     .to_owned(),
                     format!(
-                        "cloud-subscription:{}:{}",
+                        "cloud-detail-subscription:{}:{}",
                         if s.enabled { "disable" } else { "enable" },
                         self.summary.slug
                     ),
                 ),
                 (
                     "UNSUBSCRIBE".to_owned(),
-                    format!("cloud-subscription:unsubscribe:{}", self.summary.slug),
+                    format!("cloud-detail-subscription:unsubscribe:{}", self.summary.slug),
                 ),
             ]
         } else {
             vec![(
                 if busy { "WORKING..." } else { "SUBSCRIBE" }.to_owned(),
-                format!("cloud-subscription:subscribe:{}", self.summary.slug),
+                format!("cloud-detail-subscription:subscribe:{}", self.summary.slug),
             )]
         };
         for (label, id) in choices {
             let (_, r) = ui.allocate_space(Vec2::new(width, 48.0));
             if control(frame, ui, art, &id, &label, r, false, !busy)?.clicked() && !busy {
-                actions.push(id);
+                actions.push(if id == "cloud-detail-signin-subscribe" {
+                    "cloud-sign-in".to_owned()
+                } else {
+                    id.replacen("cloud-detail-subscription:", "cloud-subscription:", 1)
+                });
             }
         }
         if let Some(error) = error {
