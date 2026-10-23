@@ -438,22 +438,18 @@ fn paint_sprite(
         sprite.size,
     );
     if let Some((color, blur)) = glow {
-        // A bounded separable Gaussian samples the same sprite alpha on the GPU.
-        for y in -2_i32..=2 {
-            for x in -2_i32..=2 {
-                let weight = (-0.5 * ((x * x + y * y) as f32)).exp() / 6.1689;
-                let tint = color.gamma_multiply(weight * alpha);
-                let rect = target.translate(vec2(x as f32, y as f32) * blur / 2.0);
-                frame.image_quad_masked(
-                    painter,
-                    &sprite.path,
-                    [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()],
-                    uv,
-                    tint,
-                    solomon_graphics::BlendMode::Normal,
-                );
-            }
-        }
+        frame.atlas_image_shadowed(
+            painter,
+            &sprite.path,
+            Rect::from_min_max(
+                pos2(source.x as f32, source.y as f32),
+                pos2((source.x + source.width) as f32, (source.y + source.height) as f32),
+            ),
+            target,
+            crate::gpu_ui::ImageShadow { offset: egui::Vec2::ZERO, blur, color },
+            Color32::from_white_alpha((alpha * 255.0) as u8),
+        );
+        return;
     }
     frame.image(
         painter,
