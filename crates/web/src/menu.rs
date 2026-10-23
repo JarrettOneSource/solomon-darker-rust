@@ -370,23 +370,27 @@ impl MenuUi {
             .show(&ctx, |ui| {
                 ui.set_min_size(view.size());
                 ui.set_clip_rect(view);
-                if self.input_suspended {
+                if !enabled {
                     ui.disable();
+                    ui.set_opacity(1.0);
                 }
                 if self.cloud_visible(self.screen) {
-                    result = self.cloud.paint(frame, ui, view, enabled, &mut actions);
+                    result = self.cloud.paint(frame, ui, view, true, &mut actions);
                 } else if matches!(self.screen, Screen::Title | Screen::Play)
                     || (self.screen == Screen::Settings
                         && matches!(self.settings_back, Screen::Title | Screen::Play))
                 {
-                    result = self.title.paint(frame, ui, view, enabled, &mut actions);
+                    result = self.title.paint(frame, ui, view, true, &mut actions);
                 } else {
                     result = match self.screen {
-                        Screen::Create => self.create.paint(frame, ui, view, enabled, &mut actions),
+                        Screen::Create => self.create.paint(frame, ui, view, true, &mut actions),
                         Screen::Hall => self.hall.paint(frame, ui, view, &mut actions),
                         Screen::Join => self.join.paint_gpu(frame, ui, view, &mut actions),
                         _ => Ok(()),
                     };
+                }
+                if result.is_ok() && self.screen == Screen::Settings && self.routing.active() {
+                    result = self.settings_view.paint(frame, ui, view, &mut Vec::new());
                 }
             });
         std::mem::replace(&mut result, Ok(()))?;
@@ -404,6 +408,7 @@ impl MenuUi {
                     ui.set_clip_rect(view);
                     if self.input_suspended {
                         ui.disable();
+                        ui.set_opacity(1.0);
                     }
                     result = if self.routing.active() {
                         self.routing.paint(frame, ui, view, &mut actions)

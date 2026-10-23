@@ -4,7 +4,7 @@
 mod store;
 
 use crate::{
-    gpu_ui::{UiFrame, native_text, paint_text_layout},
+    gpu_ui::{UiFrame, paint_text_layout},
     hosted::{BoneyardDraft, BoneyardDraftSummary, WebsiteApi},
     menu::widgets,
 };
@@ -674,31 +674,8 @@ impl BoneyardLibrary {
                 egui::pos2(left + index as f32 * (button_width + 10.0), top),
                 Vec2::new(button_width, 44.0),
             );
-            let response = widgets::interact(frame, ui, &id, &spoken, "button", r, enabled);
-            widgets::paint_stock_button_tinted(
-                frame,
-                ui,
-                r,
-                0.55,
-                enabled,
-                enabled && response.is_pointer_button_down_on(),
-                Color32::from_white_alpha(if enabled { 255 } else { 128 }),
-            );
-            native_text(
-                frame,
-                ui.painter(),
-                &NativeUiTextSpec {
-                    scale: 0.55,
-                    alpha: if enabled { 1.0 } else { 0.5 },
-                    tint: 0xd9ba70,
-                    ..NativeUiTextSpec::new(
-                        NativeUiFontName::Menu,
-                        label,
-                        f64::from(r.center().x),
-                        f64::from(r.center().y + 4.95),
-                    )
-                },
-            );
+            let response =
+                widgets::cloud_button_with_label(frame, ui, &id, label, &spoken, r, 0.55, enabled);
             frame.record_value(&id, name, Some(confirming));
             if response.clicked() {
                 actions.push(format!("{action}:{key}"));
