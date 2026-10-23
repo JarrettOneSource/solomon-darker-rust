@@ -16,6 +16,7 @@ const pending = new Set();
 const requests = [];
 let subscribedSlug;
 let activeMods;
+let authenticatedToken;
 
 async function waitUntil(predicate, label, timeout = 30000) {
   const until = Date.now() + timeout;
@@ -61,7 +62,12 @@ async function waitUntil(predicate, label, timeout = 30000) {
     await page.goto(new URL(`${mount}/login`, website).href);
     await page.locator('input[autocomplete="username"]').fill(account.username);
     await page.locator('input[autocomplete="current-password"]').fill(account.password);
+    const authentication = page.waitForResponse(response =>
+      new URL(response.url()).pathname.endsWith('/api/auth/login')
+      && response.request().method() === 'POST' && response.ok());
     await page.getByRole('button', {name: 'Sign in', exact: true}).click();
+    authenticatedToken = (await (await authentication).json()).token;
+    assert.equal(typeof authenticatedToken, 'string', 'the ordinary sign-in returns its auth token');
     await page.waitForURL(target => target.pathname === `${mount}/account`);
     checks.push('the retained real account signs in through the ordinary Website form');
     await page.goto(url, {waitUntil: 'load'});
@@ -126,7 +132,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
       releaseRefresh();
       if (subscribedSlug) {
         const cleanup = await context.request.delete(new URL(`api/mods/${encodeURIComponent(subscribedSlug)}/subscription`, url).href,
-          {headers: {Authorization: `Bearer ${account.token}`}});
+          {headers: {Authorization: `Bearer ${authenticatedToken}`}});
         assert.ok(cleanup.ok(), `local test subscription cleanup failed: ${cleanup.status()}`);
       }
     } finally { await browser.close(); }
