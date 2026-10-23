@@ -52,6 +52,30 @@ green rather than assuming every library version has identical collation.
 
 ## Native multiplayer messages
 
+**Deployment publications have identities separate from signed game recovery revisions.**
+The native drain still signs the target Rust revision into the final save and accepts
+the existing checkpoint-sequence/revision acknowledgement. Its authenticated
+`X-Solomon-Deployment-Id` header additionally names the fresh Website cutover; that ID
+travels in the restart announcement and drain receipt. Website owns the mutable
+`/api/game/deployment` publication with `revision` (Website), `gameRevision`,
+`deploymentId` and `ready`. Its worker stages `ready: false` and atomically publishes
+`true` only after the replacement game and Website pass health and integrity checks.
+The immutable game's deployment document, manifest membership and hashes remain intact.
+
+The page can reload an announced update only after its final save receipt commits,
+its actual old transport retires, and a healthy publication matches both the announced
+ID and signed target game revision. Active sessions cannot reload through idle polling.
+Title/idle observes healthy publication changes, including Website-only replacements.
+This corrects the inherited `live game revision != current game revision` condition,
+which stranded a saved client when Website redeployed the same immutable game.
+
+Cost: publication-aware authorities/clients use deployment protocol 2 alongside the
+unchanged gameplay protocol. A Website worker may perform the first changed-game
+drain against the legacy authority using the original strict JSON request body; its
+extra header is ignored there. An unchanged-game drain against a legacy authority is
+rejected before retirement because its immutable clients cannot recognize publications.
+The first-cutover legacy manifest bridge remains until those tabs have transitioned.
+
 **Completed score timestamps use the installed native `time` crate at the launcher
 edge.** Source signs `new Date().toISOString()` as part of its account-bound receipt,
 including exactly three millisecond digits. The standard library supplies elapsed
