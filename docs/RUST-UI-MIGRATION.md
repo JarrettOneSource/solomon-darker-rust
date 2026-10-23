@@ -545,3 +545,14 @@ browser's Boneyard case through pinned Source `createGameSimulation`,
 insertion/read/create/restore APIs. The native import regression must also decode its
 actual shipped navigation; no test-only navigation or fabricated runtime messages are
 added to the product. This remains imported-inventory acceptance, not earned loot.
+
+The f41dc57 original phone journey now passes Inventory admission, genuine potion drag
+and the first Equip tap after that drag; `common-browser/f41dc57/responsive/` retains the
+actual before/after GPU states and reviewed equipment image. Its next failure is the old
+one-line hat-warning assertion. Pinned fa08 `hub-inventory-render-contract.test.ts:1282`
+and `native-ui.test.ts:363` specify the painted wrap `A WIZARD WOULD NEVER\nREMOVE HIS HAT!`.
+Require that exact painted text rather than flattening its layout or changing the producer.
+The same toolbar image exposes one remaining local paint-order issue: later stock corner
+art covers the prior label's final glyph. Established `web/menu.css:108–110` assigns all
+native labels z-index 1, above the sibling button chrome. Preserve that by painting the
+bar's stock art first, then its real native labels; keep the existing interaction owners.

@@ -122,7 +122,7 @@ async function walkToFomentius(page) {
     await shot(page,'phone-equipment-first-tap-rust.png');
     await action(page,'equipment:hat');await action(page,'equipment:hat');
     const notice=await ui.widget(page,'panel:notice-title');
-    assert.equal(notice.label,'A WIZARD WOULD NEVER REMOVE HIS HAT!');
+    assert.equal(notice.label,'A WIZARD WOULD NEVER\nREMOVE HIS HAT!');
     assert.ok(fitsViewport(ui.bounds(notice,{paint:true}),844,390),'authored notices fit the phone');
     await shot(page,'phone-notice-rust.png');
     await action(page,'notice-okay');
