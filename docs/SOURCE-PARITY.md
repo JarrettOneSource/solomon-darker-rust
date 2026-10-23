@@ -51,6 +51,13 @@ screen-centered MsgBox has a Menu “Skill improved” line, gap 10, a Medium na
 skill name followed by “ +1”, both tinted `0xb2b2ff`, and one OKAY button. Every
 catalog row 8 through 81 uses the same recovered message-layout kernel.
 
+Source-produced book import fixtures also exercise a freshly reconstructed Hub:
+`hub-skorcha.ts::createHubSkorchaAtVariant` starts its gesture timer at zero, and
+`game-save-document.ts::decodeHubSkorchaState` accepts the complete interval 0..29.
+The file-selection preview recreates a current save, which must restore again
+before that first actor tick. Rejecting the constructor's zero timer breaks this
+ordinary import/Continue boundary; negative values and 30 remain invalid.
+
 The accepted economy receipt owns the result. Independent cursor consumers seed
 the current sequence on connection and advance over every newer receipt; restored,
 stale, duplicate, rejected and unrelated actions never reopen it. An accepted choice
