@@ -220,8 +220,15 @@ impl CreateView {
                 let size = Vec2::new(metrics.width as f32, metrics.height as f32) * scale;
                 let rect = Rect::from_center_size(center, size.max(Vec2::splat(44.0)));
                 let id = format!("element:{}", element.as_str());
-                let response =
-                    widgets::interact(frame, ui, &id, element.as_str(), "button", rect, enabled);
+                let response = widgets::interact_unstyled(
+                    frame,
+                    ui,
+                    &id,
+                    element.as_str(),
+                    "button",
+                    rect,
+                    enabled,
+                );
                 self.create.paint_centered(
                     frame,
                     ui.painter(),
@@ -231,6 +238,7 @@ impl CreateView {
                     0.0,
                     widgets::alpha(0xffffff, reveal.opacity),
                 )?;
+                widgets::focus_outline(frame, ui, &response, 2.0, 8.0, widgets::GOLD);
                 if response.clicked() && enabled {
                     actions.push(id);
                 }
@@ -276,7 +284,7 @@ impl CreateView {
                 let size =
                     Vec2::new(metrics.logical_width as f32, metrics.logical_height as f32) * scale;
                 let id = format!("discipline:{}", discipline.as_str());
-                let response = widgets::interact(
+                let response = widgets::interact_unstyled(
                     frame,
                     ui,
                     &id,
@@ -294,6 +302,7 @@ impl CreateView {
                     0.0,
                     Color32::WHITE,
                 )?;
+                widgets::focus_outline(frame, ui, &response, 2.0, 8.0, widgets::GOLD);
                 if response.clicked() && enabled {
                     actions.push(id);
                 }
@@ -437,6 +446,7 @@ impl CreateView {
                 },
             );
         }
+        widgets::focus_outline(frame, ui, &response, 2.0, 2.0, widgets::alpha(0xffffff, 0.8));
         let editable = enabled && !self.finalizing;
         let clear = stage.rect(958.0, 38.0, 30.0, 30.0);
         if widgets::interact(

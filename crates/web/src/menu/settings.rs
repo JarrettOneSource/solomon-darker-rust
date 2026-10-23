@@ -459,20 +459,7 @@ impl SettingsView {
                 700.0_f32.min(view.height() - pad * 2.0),
             ),
         );
-        frame.image(
-            ui.painter(),
-            "assets/stock/settings-leather.png",
-            panel,
-            None,
-            widgets::color(0xddd9ce),
-        );
-        ui.painter().rect_filled(panel, 0.0, widgets::alpha(0x0e0d0c, 0.42));
-        ui.painter().rect_stroke(
-            panel,
-            0.0,
-            egui::Stroke::new(3.0, widgets::color(0x9f8547)),
-            egui::StrokeKind::Inside,
-        );
+        paint_panel_background(frame, ui, panel)?;
         frame.record_rect("settings-panel", self.page.title(), "dialog", panel, ui.is_enabled());
         let compact = view.width() < 700.0 || view.height() < 540.0;
         let band = if compact { 54.0 } else { 70.0 };
@@ -547,6 +534,12 @@ impl SettingsView {
         {
             actions.push("settings-back".to_owned());
         }
+        ui.painter().rect_stroke(
+            panel,
+            0.0,
+            egui::Stroke::new(3.0, widgets::color(0x9f8547)),
+            egui::StrokeKind::Inside,
+        );
         for (x, y, flip_x, flip_y) in [
             (panel.left() - 13.0, panel.top() - 13.0, false, false),
             (panel.right() - 67.0, panel.top() - 13.0, true, false),
@@ -956,6 +949,14 @@ DevTools: solomonDark.lua.help()",
                 }
             }
         }
+        if response.has_focus() || ui.rect_contains_pointer(rect) {
+            ui.painter().rect_stroke(
+                rect,
+                0.0,
+                egui::Stroke::new(1.0, widgets::alpha(0xdbc594, 0.8)),
+                egui::StrokeKind::Inside,
+            );
+        }
         if value != before {
             setting.set(&mut self.settings, value);
             self.changed = true;
@@ -1054,6 +1055,62 @@ impl ToggleSetting {
         Self::ReverseHotbar,
         Self::EnhancedEffects,
     ];
+}
+fn paint_panel_background(frame: &UiFrame<'_>, ui: &Ui, panel: Rect) -> Result<(), String> {
+    ui.painter().add(
+        egui::Shadow { offset: [0, 14], blur: 60, spread: 0, color: Color32::BLACK }
+            .as_shape(panel, 0.0),
+    );
+    let path = "assets/stock/settings-leather.png";
+    let size = frame.image_size(path).ok_or("Settings leather is not ready")?;
+    StockAtlas::from_image(path, size)?.paint_tiles(
+        frame,
+        ui.painter(),
+        0,
+        panel,
+        1.0,
+        Color32::WHITE,
+    )?;
+    let painter = ui.painter().with_clip_rect(panel.intersect(ui.clip_rect()));
+    let center = panel.center_top();
+    let radius = Vec2::new(panel.width() / 2.0, panel.height()).length() * 0.36;
+    let mut radial = egui::Mesh::default();
+    radial.colored_vertex(center, widgets::alpha(0x5f5230, 0.26));
+    for index in 0..=64 {
+        let angle = index as f32 / 64.0 * std::f32::consts::TAU;
+        radial.colored_vertex(
+            center + Vec2::new(angle.cos(), angle.sin()) * radius,
+            Color32::TRANSPARENT,
+        );
+        if index > 0 {
+            radial.add_triangle(0, index, index + 1);
+        }
+    }
+    painter.add(egui::Shape::mesh(radial));
+    for outside in [
+        Rect::from_min_max(
+            panel.min - Vec2::splat(40.0),
+            egui::pos2(panel.left(), panel.bottom() + 40.0),
+        ),
+        Rect::from_min_max(
+            egui::pos2(panel.right(), panel.top() - 40.0),
+            panel.max + Vec2::splat(40.0),
+        ),
+        Rect::from_min_max(
+            panel.min - Vec2::splat(40.0),
+            egui::pos2(panel.right() + 40.0, panel.top()),
+        ),
+        Rect::from_min_max(
+            egui::pos2(panel.left() - 40.0, panel.bottom()),
+            panel.max + Vec2::splat(40.0),
+        ),
+    ] {
+        painter.add(
+            egui::epaint::RectShape::filled(outside, 0.0, widgets::alpha(0xb9974e, 0.12))
+                .with_blur_width(40.0),
+        );
+    }
+    Ok(())
 }
 fn toggle_art(
     frame: &UiFrame<'_>,

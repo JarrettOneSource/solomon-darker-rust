@@ -67,6 +67,40 @@ pub(crate) fn interact(
     rect: Rect,
     enabled: bool,
 ) -> Response {
+    let response = interact_unstyled(frame, ui, id, label, role, rect, enabled);
+    if enabled && ui.is_enabled() && frame.focus_visible(&response) {
+        ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0, GOLD), StrokeKind::Inside);
+    }
+    response
+}
+
+pub(super) fn focus_outline(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    response: &Response,
+    width: f32,
+    offset: f32,
+    color: Color32,
+) {
+    if response.enabled() && frame.focus_visible(response) {
+        ui.painter().rect_stroke(
+            response.rect.expand(offset),
+            0.0,
+            Stroke::new(width, color),
+            StrokeKind::Outside,
+        );
+    }
+}
+
+pub(crate) fn interact_unstyled(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    label: &str,
+    role: &str,
+    rect: Rect,
+    enabled: bool,
+) -> Response {
     let enabled = enabled && ui.is_enabled();
     let response =
         ui.interact(rect, Id::unique(id), if enabled { Sense::click() } else { Sense::hover() });
@@ -74,9 +108,6 @@ pub(crate) fn interact(
         frame.record(id, label, role, &response);
     } else {
         frame.record_rect(id, label, role, rect, false);
-    }
-    if enabled && response.has_focus() {
-        ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0, GOLD), StrokeKind::Inside);
     }
     response
 }
@@ -194,7 +225,7 @@ pub(crate) fn paint_stock_button(
         rect,
         scale,
         enabled,
-        response.hovered() || response.has_focus(),
+        response.hovered() || frame.focus_visible(response),
     );
 }
 /// Shared nativeUI54 chrome; each source family chooses its actual highlighted state.
@@ -255,7 +286,7 @@ pub(super) fn stone_button(
     rect: Rect,
     enabled: bool,
 ) -> Result<Response, String> {
-    let response = interact(frame, ui, id, text, "button", rect, enabled);
+    let response = interact_unstyled(frame, ui, id, text, "button", rect, enabled);
     atlas.paint_raw(
         frame,
         ui.painter(),
@@ -273,6 +304,7 @@ pub(super) fn stone_button(
         0xf2f0dc,
         NativeUiTextAlign::Center,
     );
+    focus_outline(frame, ui, &response, 2.0, 3.0, alpha(0xefd17d, 0.9));
     Ok(response)
 }
 pub(super) fn flat_button(
@@ -394,7 +426,7 @@ pub(crate) fn cloud_button_with_label(
     scale: f32,
     enabled: bool,
 ) -> Response {
-    let response = interact(frame, ui, id, accessible_label, "button", rect, enabled);
+    let response = interact_unstyled(frame, ui, id, accessible_label, "button", rect, enabled);
     let opacity = if enabled { 1.0 } else { 0.5 };
     let pressed = enabled && stock_button_pressed(ui, &response);
     paint_stock_button_tinted(frame, ui, rect, scale, enabled, pressed, alpha(0xffffff, opacity));
@@ -416,6 +448,9 @@ pub(crate) fn cloud_button_with_label(
     );
     if !enabled {
         ui.painter().rect_filled(rect, 0.0, alpha(0x808080, 0.25));
+    }
+    if enabled {
+        focus_outline(frame, ui, &response, 2.0, 3.0, alpha(0xefd17d, 0.9));
     }
     response
 }
