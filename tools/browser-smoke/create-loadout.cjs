@@ -18,6 +18,7 @@ fs.mkdirSync(output, {recursive:true});
     page = await browser.newPage({viewport:{width:1600,height:900},
       ignoreHTTPSErrors:process.env.LOCAL_TLS === '1'});
     const observed = gpu.watchErrors(page);
+    await observed.ready;
     receipt.errors = observed.errors;
     await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
     await gpu.ready(page);
@@ -58,7 +59,7 @@ fs.mkdirSync(output, {recursive:true});
     await page.close();
     page = await browser.newPage({viewport:{width:1600,height:900},
       ignoreHTTPSErrors:process.env.LOCAL_TLS === '1'});
-    gpu.watchErrors(page, {errors:receipt.errors});
+    await gpu.watchErrors(page, {errors:receipt.errors}).ready;
     await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
     await gpu.ready(page);
     receipt.blank = await startNewGame(page, {name:'',element:'earth',discipline:'mind'});

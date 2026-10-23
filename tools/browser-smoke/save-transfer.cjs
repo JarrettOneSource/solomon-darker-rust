@@ -37,7 +37,7 @@ async function reveal(page, id) {
   const page = await browser.newPage({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
     viewport: {width: 1280, height: 720}});
   page.setDefaultTimeout(30000);
-  gpu.watchRequestFailures(page, {errors});
+  await gpu.watchRequestFailures(page, {errors}).ready;
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
   page.on('response', response => {
@@ -152,7 +152,7 @@ async function reveal(page, id) {
     assert.equal(JSON.parse(await storedSave()).revision, 1);
     checks.push('the real GPU export/limitations/download produces a readable browser ZIP and Cancel preserves revision one');
     await gpu.settleErrors(page);
-    await page.reload({waitUntil: 'load'});
+    await gpu.observeDocumentReplacement(page, () => page.reload({waitUntil: 'load'}));
     await gpu.ready(page);
     await gpu.click(page, 'play');
     await gpu.click(page, 'continue');

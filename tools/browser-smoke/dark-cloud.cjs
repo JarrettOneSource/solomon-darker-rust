@@ -20,7 +20,8 @@ async function revealTab(page, id) {
   let page;
   try {
     page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
-    const {errors} = gpu.watchErrors(page);
+    const {errors, ready: errorsReady} = gpu.watchErrors(page);
+    await errorsReady;
     const catalogs = [];
     const details = [];
     page.on('response', response => {
