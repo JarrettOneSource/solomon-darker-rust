@@ -40,7 +40,7 @@ const publish = publication => {
   fs.renameSync(temporary, publicationPath);
 };
 const credentials = JSON.parse(fs.readFileSync(path.join(base, 'private.json')));
-const checks = [], errors = [], cancelled = [], events = [], requests = [];
+const checks = [], errors = [], events = [], requests = [];
 const welcomed = [], checkpoints = [];
 let frame, playerId, announcement, account;
 let heldRoute = null, armSave = false, documentLoads = 0, socketCloses = 0;
@@ -86,6 +86,7 @@ async function register(page) {
   const catalog = await catalogResponse;
   assert.equal(catalog.status(), 200);
   await catalog.finished();
+  await ui.settleErrors(page);
   await ui.click(page,'cloud-sign-in');
   await page.waitForURL(value => value.pathname === `${mount}/login`);
   await accountForm(page);
@@ -126,6 +127,7 @@ async function adminRestart() {
   const browser = await chromium.connect(server.wsEndpoint());
   const page = await browser.newPage({ ignoreHTTPSErrors: true,
     viewport: { width: 1280, height: 720 } });
+  await ui.watchRequestFailures(page, {errors}).ready;
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(redact(error.message)));
   page.on('console', message => { if (message.type() === 'error') errors.push(redact(message.text())); });
@@ -139,13 +141,6 @@ async function adminRestart() {
         sha256: hash(request.postDataJSON().document) });
     }
     if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
-  });
-  page.on('requestfailed', request => {
-    const row = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
-    if (request.failure()?.errorText === 'net::ERR_ABORTED'
-      && new URL(request.url()).pathname === publicationEndpoint)
-      cancelled.push(row);
-    else errors.push(redact(row));
   });
   page.on('websocket', socket => {
     const readMessage = createNativeMessageReader();
@@ -255,6 +250,7 @@ async function adminRestart() {
     }
     publish(originalPublication);
     changedManifest = false;
+    await ui.settleErrors(page);
     fs.writeFileSync(path.join(out, 'ready-to-publish.json'), JSON.stringify({current, target,
       publication: candidate, wizardName, runId, checkpointSequence: announcement.checkpoint_sequence, result}));
     console.log('READY_TO_PUBLISH');
@@ -269,13 +265,15 @@ async function adminRestart() {
     await until(() => frame.snapshot.boneyard?.run_id === runId, 'the saved signed run continuation');
     await page.screenshot({ path: path.join(out, 'continued.png') });
     checked('the actual target artifact reloads automatically and Continue restores the saved wizard');
+    await ui.settleErrors(page);
     assert.deepEqual(errors, []);
     fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ passed: true, current, target,
-      checks, events, requests, welcomed, checkpoints, cancelled, errors }, null, 2));
+      checks, events, requests, welcomed, checkpoints, errors }, null, 2));
   } catch (error) {
+    await ui.settleErrors(page);
     await page.screenshot({ path: path.join(out, 'failure.png') });
     fs.writeFileSync(path.join(out, 'failure.json'), JSON.stringify({ error: redact(error.stack),
-      checks, events, requests, welcomed, checkpoints, announcement, cancelled, errors,
+      checks, events, requests, welcomed, checkpoints, announcement, errors,
       ui: await ui.readUi(page) }, null, 2));
     throw error;
   } finally {

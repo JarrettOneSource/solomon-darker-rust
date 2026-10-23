@@ -16,9 +16,10 @@ const websiteMount = process.env.WEBSITE_MOUNT ?? url.pathname.replace(/\/$/, ''
 const tokenKey = websiteMount ? `sdr.token:${websiteMount}` : 'sdr.token';
 const state = {frame: null, id: null, botId: null, social: null, welcomes: [], lua: [],
   commands: [], samples: [], ownedSpells: [], leaveReceipts: 0, actualDeveloper: false};
-const checks = [], errors = [], requests = [], expectedNotFound = [], cancelled = [], wasm = new Set();
+const checks = [], errors = [], requests = [], expectedNotFound = [], wasm = new Set();
 const summonCode = 'return sd.bots.summon({element="water",discipline="mind"})';
 let step = 'bootstrap';
+let page;
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 const player = id => state.frame?.snapshot.participants[id];
 function mark(label) {step = label; console.log(label);}
@@ -27,7 +28,8 @@ async function until(predicate, label, timeout = 30000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
     if (await predicate()) return;
-    if (errors.length) throw new Error(`Browser/host failure while waiting for ${label}: ${errors[0]}`);
+    if (errors.length) await ui.settleErrors(page);
+    if (errors.length) throw new Error(`Browser/host failure while waiting for ${label}: ${JSON.stringify(errors[0])}`);
     await pause(40);
   }
   throw new Error(`Timed out waiting for ${label}`);
@@ -97,7 +99,8 @@ function decode(socket) {
   const context = await browser.newContext({ignoreHTTPSErrors: true, viewport: {width: 1280, height: 720}});
   await context.addInitScript(({key, token}) => localStorage.setItem(key, token),
     {key: tokenKey, token: account.token});
-  const page = await context.newPage();
+  page = await context.newPage();
+  await ui.watchRequestFailures(page, {errors}).ready;
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', entry => {
@@ -115,11 +118,6 @@ function decode(socket) {
       const row = await response.json();
       state.actualDeveloper = (row.user || row).developerAccess === true;
     }
-  });
-  page.on('requestfailed', request => {
-    const row = {path: new URL(request.url()).pathname, error: request.failure()?.errorText};
-    if (row.error === 'net::ERR_ABORTED' && row.path === `${websiteMount}/api/game/deployment`) cancelled.push(row);
-    else errors.push(`${row.error} ${row.path}`);
   });
   page.on('websocket', decode);
   try {
@@ -200,10 +198,11 @@ function decode(socket) {
     await ui.surface(page,'title');
     await ui.assertGpuOnly(page);
     assert.ok(state.leaveReceipts > 0);
+    await ui.settleErrors(page);
     assert.deepEqual(errors, []);
     await page.screenshot({path: path.join(output, 'bot-title-cleanup.png')});
     check('the ordinary save receipt returns to Title and closes the owning developer session');
-    const receipt = {passed: true, checks, errors, requests, expectedNotFound, cancelled, wasm: [...wasm],
+    const receipt = {passed: true, checks, errors, requests, expectedNotFound, wasm: [...wasm],
       source: 'retained Source behavior; actual Rust GPU input, native policy, Console, actor/Party/Boneyard UI',
       credentialBootstrap: 'retained isolated QA3 account token; no identity/authority injection',
       botId: state.botId, runId, welcomes: state.welcomes, commands: state.commands, samples: state.samples,
@@ -211,9 +210,10 @@ function decode(socket) {
     fs.writeFileSync(path.join(output, 'learned-bot.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify({passed: true, checks, errors}));
   } catch (error) {
+    await ui.settleErrors(page);
     await page.screenshot({path: path.join(output, 'learned-bot-failure.png')});
     fs.writeFileSync(path.join(output, 'learned-bot-failure.json'), JSON.stringify({passed: false, step,
-      error: error.stack, checks, errors, requests, expectedNotFound, cancelled, wasm: [...wasm],
+      error: error.stack, checks, errors, requests, expectedNotFound, wasm: [...wasm],
       botId: state.botId, social: state.social, welcomes: state.welcomes, commands: state.commands,
       samples: state.samples, ownedSpells: state.ownedSpells, lua: state.lua, frame: state.frame,
       ui: await ui.readUi(page)}, null, 2));
