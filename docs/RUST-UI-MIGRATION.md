@@ -109,8 +109,15 @@ Website ledger 100 records native insert/update/draw at `0x005CA7C0`/`0x005D7EF0
 - Visibility: alive and lethal-pending may show; dying, spectating and absent participants
   cannot. Boneyard Game Over removes the surface and Tutorial combat-access false hides
   it. Cursors/clocks still follow accepted state while a visibility gate hides pixels.
-  The existing rank-book result modal is a neighboring panel owner, not a replacement
-  for the missing world text.
+  The source rank-book result modal was another missing neighboring surface, now owned
+  by HUD; its confirmation does not replace this world text.
+
+The current source clock is replayed by `world_notifications.rs` against the untouched
+fa08 oracle: nine programs and 1,960 records cover all four source keys, Gold parsing and
+merge boundaries, insertion pressure, complete fades and two-decimal scale rounding.
+Ten visibility cases, 77 book-name/error cases and 12 receipt deliveries are also exact.
+All eight focused notification/book/historical-loot tests pass locally. GPU composition
+and accepted production-event delivery remain pending.
 
 Confidence is high for this complete pinned-source contract and the cited recovered native
 geometry/lifecycle. Unknown until measured: composed GPU glyph clipping/blending, actual
