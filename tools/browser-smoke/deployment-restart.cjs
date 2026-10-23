@@ -304,7 +304,10 @@ async function adminRestart() {
         await until(()=>lifecycle.some(row=>row.state==='resume'&&row.trusted),
           'the actual trusted page resume');
         await page.bringToFront();
-        await lifecycleSession.detach();
+        // Chrome's lifecycle command leaves the resumed target hidden. Restore
+        // the ordinary Playwright focus policy only after real freeze/resume.
+        await lifecycleSession.send('Emulation.setFocusEmulationEnabled',{enabled:true});
+        lifecycle.push({state:'ordinary-automation-focus-restored',at:Date.now()});
       }
       await until(() => documentLoads > loads, 'coordinator publication and automatic reload', 180000);
     }, {timeout:180000});
