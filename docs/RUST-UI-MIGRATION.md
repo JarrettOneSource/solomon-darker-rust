@@ -488,3 +488,21 @@ text shadow uses sigma 1.5 before joystick transforms. Passive diagnostics recor
 actual glyph mesh bounds and paint style; the original touch driver now requires
 readable glyphs, exact default-size typography and neutral/active/cancelled appearance.
 The composed build and actual corrected-art rerun are still pending.
+
+The subsequent real 5f87eb2 phone journey opens Inventory and drags the actual Health
+Potion into its addressed destination, then its first Equip tap leaves Backpack visible.
+`responsive-5f87eb2-destination/responsive-failure.{json,png}` retains errors=[], actual
+toolbar controls at y=0–40 and book/stats painted over that toolbar. The established
+compact adaptation is explicit in c14068b3 `web/player-panels.css:89–96` and
+`player_panels/viewport.rs::layout_compact_surface`: the scrolling body starts at 48px
+and clips overflow, navigation stays above it at z-index 10, and modal overlays use 12.
+This adaptation preserves the fa08 native Inventory/Skills/service designs at usable
+phone sizes; the 48px toolbar is the existing Rust behavior, not a newly invented fa08
+control. Installed egui 0.37 `containers/area.rs:610` raises an interacted Area, so giving
+both Areas Foreground order and relying on paint-call order loses the toolbar after
+body interaction. Raw panel input also ignores that body viewport and actual layer.
+Use the same 48px-excluding viewport for rendering, clipped hit regions and raw pointer/
+wheel admission, explicitly keep navigation above the body, and retain a drag's actual
+owner through release/cancel outside its viewport. Preserve normal modal ownership.
+The original failing browser path remains the acceptance case; no second tap, wait or
+weaker equipment assertion substitutes for the first-tap transition.
