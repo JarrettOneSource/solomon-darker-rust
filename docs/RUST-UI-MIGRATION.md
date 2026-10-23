@@ -114,13 +114,14 @@ Owner names match the parallel implementation lanes. Scripts are under `tools/br
 
 Acceptance owns `gpu-ui.cjs`, `gpu-ui-contract.test.cjs`, `menu-journey.cjs`, `smoke.cjs`,
 `startup.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`, `audio.cjs`, `save-resume.cjs`,
-`saved-game.cjs`, `college-clock.cjs` and `rooms.mjs`. Menus owns detailed Hall/Settings/Cloud/Join/prompt
+`saved-game.cjs`, `college-clock.cjs`, `rooms.mjs`, `hud-input.cjs` and `tutorial-text-bounds.cjs`.
+Menus owns detailed Hall/Settings/Cloud/Join/prompt
 journeys. HUD and social own their family journeys. Root owns final joined execution and
 packaged/hosted/authoring integration. Exact stable IDs and snapshot schema are in the task's
 `gpu-ui-contract.md`; that is a development handoff, not an accepted product artifact.
 
 The common scripts are migrated to read-only GPU geometry and actual browser input. Syntax
-checks pass for all thirteen files. The architectural contract was run before the cutover:
+checks pass for all fifteen files. The architectural contract was run before the cutover:
 two tests fail for actual existing visual DOM/CSS producers and one passes; its TAP output is
 retained as `gpu-ui-contract-baseline.tap`. Current composed browser acceptance is pending,
 so no matrix surface is marked accepted from syntax/source checks alone. The independent
@@ -133,6 +134,12 @@ slider label and accepted value after real keyboard edits. It does not create an
 messages or mirror controls. Unmounted native download anchors and hidden audio/file/IME
 adapters remain platform capabilities; mounted visual anchors and hidden gameplay controls
 still fail the browser audit.
+
+Layout assertions use original `paintRect` glyph/card bounds. Visible clipped hit `rect`
+remains the pointer target, so clipping cannot make an overflowing title, tooltip or Tutorial
+instruction appear to pass. HUD blur uses an actual browser tab focus change; touch cancellation
+uses the native touch-cancel input and verifies both the neutral painted joystick and accepted
+zero movement. No synthetic browser blur event stands in for platform focus behavior.
 
 Checks must drive ordinary pointer, keyboard, touch or controller input against visible GPU
 widgets. The read-only snapshot locates those widgets and reports accepted outcomes; it

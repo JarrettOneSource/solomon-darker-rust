@@ -60,8 +60,8 @@ async function ready(page, options) {
   'complete assets and an actual GPU UI draw', { timeout: 240000, ...options });
 }
 
-function bounds(target) {
-  const [x, y, width, height] = target.rect;
+function bounds(target, {paint = false} = {}) {
+  const [x, y, width, height] = paint ? target.paintRect : target.rect;
   return { x, y, width, height };
 }
 
