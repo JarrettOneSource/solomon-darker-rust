@@ -196,7 +196,7 @@ impl ConsoleView {
         egui::ScrollArea::vertical()
             .id_salt("cheats/console-output")
             .max_height(ui.available_height().max(80.0))
-            .show(ui, |ui| {
+            .show(ui, |ui| -> Result<(), String> {
                 if self.entries.is_empty() {
                     ui.label(copy(
                         "Lua print output, return values, and errors appear here.",
@@ -208,18 +208,44 @@ impl ConsoleView {
                         .fill(Color32::from_rgb(6, 7, 8))
                         .stroke(Stroke::new(1.0, Color32::from_rgb(75, 65, 42)))
                         .inner_margin(9.0)
-                        .show(ui, |ui| {
-                            console_line(ui, &entry.code, Color32::from_rgb(190, 182, 154));
-                            for line in &entry.output {
-                                console_line(ui, line, Color32::from_rgb(210, 211, 202));
+                        .show(ui, |ui| -> Result<(), String> {
+                            console_line(
+                                gpu,
+                                ui,
+                                &format!("cheats/console-code:{}", entry.id),
+                                &entry.code,
+                                Color32::from_rgb(190, 182, 154),
+                            )?;
+                            for (index, line) in entry.output.iter().enumerate() {
+                                console_line(
+                                    gpu,
+                                    ui,
+                                    &format!("cheats/console-print:{}:{index}", entry.id),
+                                    line,
+                                    Color32::from_rgb(210, 211, 202),
+                                )?;
                             }
                             if !entry.returned.is_empty() {
-                                console_line(ui, &entry.returned, Color32::from_rgb(147, 202, 169));
+                                console_line(
+                                    gpu,
+                                    ui,
+                                    &format!("cheats/console-return:{}", entry.id),
+                                    &entry.returned,
+                                    Color32::from_rgb(147, 202, 169),
+                                )?;
                             }
                             if let Some(error) = &entry.error {
-                                console_line(ui, error, Color32::from_rgb(255, 142, 120));
+                                console_line(
+                                    gpu,
+                                    ui,
+                                    &format!("cheats/console-error:{}", entry.id),
+                                    error,
+                                    Color32::from_rgb(255, 142, 120),
+                                )?;
                             }
+                            Ok(())
                         });
+                    result.inner?;
                     gpu.record(
                         &format!("cheats/console-result:{}", entry.id),
                         &format!(
@@ -232,16 +258,26 @@ impl ConsoleView {
                         &result.response,
                     );
                 }
-            });
+                Ok(())
+            })
+            .inner?;
         Ok(action)
     }
 }
-fn console_line(ui: &mut egui::Ui, text: &str, color: Color32) {
-    ui.label(
-        RichText::new(text)
-            .font(FontId::new(12.0, FontFamily::Name("JetBrains Mono".into())))
-            .color(color),
+fn console_line(
+    gpu: &UiFrame<'_>,
+    ui: &mut egui::Ui,
+    id: &str,
+    text: &str,
+    color: Color32,
+) -> Result<(), String> {
+    let mut style = crate::gpu_ui::NativeLabelStyle::new(
+        FontId::new(12.0, FontFamily::Name("JetBrains Mono".into())),
+        color,
     );
+    style.wrap_width = Some(ui.available_width());
+    crate::gpu_ui::shaped_label(gpu, ui, id, text, style)?;
+    Ok(())
 }
 fn localized_count(count: usize) -> Result<String, String> {
     let formatter = js_sys::Intl::NumberFormat::new(&js_sys::Array::new(), &js_sys::Object::new());
