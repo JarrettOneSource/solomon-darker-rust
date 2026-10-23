@@ -24,6 +24,8 @@ fn frame(
             key_codes: &[],
             blend: BlendMode::Normal,
             announcements: &announcements,
+            rotation: egui::emath::Rot2::IDENTITY,
+            translation: Vec2::ZERO,
         })
     })
     .drop_without_applying_deltas();
@@ -135,6 +137,7 @@ fn geometry_excludes_widgets_clipped_out_of_the_scrolling_panel() {
     let widgets = frame(&ctx, vec![], paint);
     assert!(!widgets.contains_key("hidden"));
     assert_eq!(widgets["partial"].bounds.height, 10.0);
+    assert_eq!(widgets["partial"].paint_bounds.height, 20.0);
 }
 
 #[test]
@@ -179,4 +182,23 @@ fn duplicate_visible_semantic_ids_are_rejected_instead_of_overwriting_a_control(
     });
     assert_eq!(widgets["continue"].label, "Continue");
     assert!(widgets["continue"].duplicate);
+}
+
+#[test]
+fn inherited_rotation_keeps_stock_and_glyph_vertices_in_one_paint_transform() {
+    let ctx = Context::default();
+    frame(&ctx, vec![], |frame| {
+        let rotated = frame.with_rotation(pos2(100.0, 100.0), std::f32::consts::FRAC_PI_2);
+        let point = rotated.paint_position(pos2(110.0, 100.0));
+        assert!((point - pos2(100.0, 110.0)).length() < 0.0001);
+        let restored = rotated.with_rotation(pos2(100.0, 100.0), -std::f32::consts::FRAC_PI_2);
+        assert!(
+            (restored.paint_position(pos2(110.0, 100.0)) - pos2(110.0, 100.0)).length() < 0.0001
+        );
+        assert!(
+            (rotated.with_blend(BlendMode::Add).paint_position(pos2(110.0, 100.0)) - point)
+                .length()
+                < 0.0001
+        );
+    });
 }

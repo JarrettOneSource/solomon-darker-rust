@@ -11,6 +11,7 @@ use solomon_sim::native_ui_text::{
 };
 
 use super::UiFrame;
+use super::geometry::clip_image_rect;
 use crate::assets;
 
 pub struct StockAtlas {
@@ -138,16 +139,17 @@ impl StockAtlas {
         if tile.x <= 0.0 || tile.y <= 0.0 {
             return Err("stock UI tile scale must be positive".to_owned());
         }
-        let painter = painter.with_clip_rect(painter.clip_rect().intersect(destination));
         let mut y = destination.top();
         while y < destination.bottom() {
             let mut x = destination.left();
             while x < destination.right() {
-                self.paint_raw(
+                let size = tile.min(destination.max - pos2(x, y));
+                self.paint_slice(
                     frame,
-                    &painter,
+                    painter,
                     index,
-                    Rect::from_min_size(pos2(x, y), tile),
+                    Rect::from_min_size(Pos2::ZERO, size / scale),
+                    Rect::from_min_size(pos2(x, y), size),
                     tint,
                 )?;
                 x += tile.x;
@@ -217,7 +219,6 @@ impl StockAtlas {
         let size = vec2(record.width as f32, record.height as f32);
         let texture_size =
             frame.image_size(&self.path).ok_or_else(|| format!("{} is not ready", self.path))?;
-        let painter = painter.with_clip_rect(painter.clip_rect().intersect(destination));
         let edge = size * 0.05;
         // Recovered +1 overlap prevents seams between half-open mirrored corners.
         let inner = destination.size() - size * 2.0 + Vec2::splat(1.0);
@@ -260,7 +261,9 @@ impl StockAtlas {
             if *mirror_y {
                 std::mem::swap(&mut uv.min.y, &mut uv.max.y);
             }
-            frame.image(&painter, &self.path, dest, Some(uv), tint);
+            if let Some((uv, dest)) = clip_image_rect(uv, dest, destination) {
+                frame.image(painter, &self.path, dest, Some(uv), tint);
+            }
         }
         Ok(())
     }
@@ -279,35 +282,28 @@ impl StockAtlas {
         let record = self.record(index)?;
         let third = record.width as f32 / 3.0;
         let height = record.height as f32;
-        let painter = painter.with_clip_rect(painter.clip_rect().intersect(destination));
-        self.paint_slice(
-            frame,
-            &painter,
-            index,
+        let paint_piece = |source, dest| -> Result<(), String> {
+            if let Some((source, dest)) = clip_image_rect(source, dest, destination) {
+                self.paint_slice(frame, painter, index, source, dest, tint)?;
+            }
+            Ok(())
+        };
+        paint_piece(
             rect([0.0, 0.0, third, height]),
             rect([destination.left(), destination.top(), third, destination.height()]),
-            tint,
         )?;
         let mut x = third;
         while x < destination.width() - third {
             let width = third.min(destination.width() - third - x);
-            self.paint_slice(
-                frame,
-                &painter,
-                index,
+            paint_piece(
                 rect([third, 0.0, width, height]),
                 rect([destination.left() + x, destination.top(), width, destination.height()]),
-                tint,
             )?;
             x += width;
         }
-        self.paint_slice(
-            frame,
-            &painter,
-            index,
+        paint_piece(
             rect([third * 2.0, 0.0, third, height]),
             rect([destination.right() - third, destination.top(), third, destination.height()]),
-            tint,
         )
     }
 }
