@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Real Create variants: stock names, clear/focus, native randomization and Genericus.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -9,9 +10,10 @@ const output = process.env.OUT || '/tmp';
 fs.mkdirSync(output, {recursive:true});
 
 (async () => {
-  const browser = await chromium.launch({headless:true,
+  const owned = await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=metal','--ignore-gpu-blocklist']});
+  const browser = owned.browser;
   const receipt = {checks:[]};
   let page;
   try {
@@ -81,6 +83,6 @@ fs.mkdirSync(output, {recursive:true});
     try {
       if (page && !page.isClosed()) await gpu.settleErrors(page);
       fs.writeFileSync(path.join(output, 'create-loadout-receipt.json'), JSON.stringify(receipt,null,2));
-    } finally { await browser.close(); }
+    } finally { console.log(JSON.stringify({browserCleanup:await owned.close()})); }
   }
 })().catch(error => {console.error(error);process.exitCode = 1});

@@ -1,12 +1,14 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Read actual archive/global rows through the displayed GPU Hall widgets.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const gpu = require('./gpu-ui.cjs');
 (async () => {
-  const browser = await chromium.launch({headless: true,
+  const owned = await launchOwnedBrowser(chromium,{headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+  const browser = owned.browser;
   const checks = [];
   let page;
   try {
@@ -49,6 +51,6 @@ const gpu = require('./gpu-ui.cjs');
     console.log(JSON.stringify({checks, errors}));
   } finally {
     try { if (page && !page.isClosed()) await gpu.settleErrors(page); }
-    finally { await browser.close(); }
+    finally { console.log(JSON.stringify({browserCleanup:await owned.close()})); }
   }
 })().catch(error => {console.error(error); process.exitCode = 1;});

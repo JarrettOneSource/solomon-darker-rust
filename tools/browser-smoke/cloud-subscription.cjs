@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Real account subscription and delayed catalog refresh through the mounted Website API.
 // The catalog request waits at the transport boundary before reaching the actual backend.
 const assert = require('node:assert/strict');
@@ -28,9 +29,10 @@ async function waitUntil(predicate, label, timeout = 30000) {
 }
 
 (async () => {
-  const browser = await chromium.launch({headless: true,
+  const owned = await launchOwnedBrowser(chromium,{headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+  const browser = owned.browser;
   const context = await browser.newContext({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
     viewport: {width: 1280, height: 720}});
   const page = await context.newPage();
@@ -138,7 +140,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
           {headers: {Authorization: `Bearer ${authenticatedToken}`}});
         assert.ok(cleanup.ok(), `local test subscription cleanup failed: ${cleanup.status()}`);
       }
-    } finally { await browser.close(); }
+    } finally { console.log(JSON.stringify({browserCleanup:await owned.close()})); }
   }
 
 })().catch(error => {console.error(error); process.exitCode = 1;});
