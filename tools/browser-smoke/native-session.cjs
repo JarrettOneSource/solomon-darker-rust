@@ -11,6 +11,7 @@ const {startNewGame} = require('./menu-journey.cjs');
 const {assertFullscreenToggle} = require('./fullscreen.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 
 const output = path.resolve(process.env.OUT || os.tmpdir());
 const artifact = process.env.PACKAGE && path.resolve(process.env.PACKAGE);
@@ -203,16 +204,18 @@ async function approachSolomon(page, state) {
 
 (async () => {
   let browser;
+  let browserOwner;
   let first;
   let second;
   try {
     fs.mkdirSync(output, {recursive: true});
     await startHost();
-    browser = await chromium.launch({headless: true,
+    browserOwner = await launchOwnedBrowser(chromium, {headless: true,
       executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+    browser = browserOwner.browser;
     async function client() {
-      const context = await browser.newContext({viewport: {width: 1600, height: 900}});
+      const context = await browser.newContext({viewport: {width: 1280, height: 720}});
       await context.route('**/*', route => {
         const url = route.request().url();
         requests.add(url);
@@ -228,6 +231,12 @@ async function approachSolomon(page, state) {
     await startNewGame(first.page, {name: 'Felix', element: 'fire', discipline: 'body'});
     checks.push('first real College admission');
     console.log(checks.at(-1));
+    await ui.click(first.page,'hud:inventory');
+    await ui.widget(first.page,'panel:surface:inventory');
+    await first.page.screenshot({path:path.join(output,'native-scaled-inventory.png')});
+    await ui.click(first.page,'panel:close');
+    await ui.noWidget(first.page,'panel:surface:inventory');
+    checks.push('scaled desktop HUD Inventory opens its actual book through real pointer input');
     second = await client();
     await startNewGame(second.page, {name: 'Caius', element: 'ether', discipline: 'arcane'});
     await waitUntil(() => first.state.frame.snapshot.participant_order.length === 2
@@ -258,7 +267,12 @@ async function approachSolomon(page, state) {
     checks.push('accepted movement, input acknowledgements and peer state');
 
     await ui.click(first.page,(await ui.byLabel(first.page,'Fomentius',{role:'button'})).id);
-    const buy = await ui.byLabel(first.page,'Buy Health Potion for 150 gold',{role:'button',prefix:'panel:'});
+    const firstHealthPotion = snapshot => snapshot.widgets
+      .filter(widget => widget.role === 'button' && widget.id.startsWith('panel:shop:')
+        && widget.label === 'Buy Health Potion for 150 gold')
+      .sort((a,b) => a.z-b.z)[0];
+    const stock = await ui.waitForUi(first.page, firstHealthPotion, 'the first visible Health Potion stock row');
+    const buy = firstHealthPotion(stock);
     await ui.click(first.page,buy.id); await ui.click(first.page,buy.id);
     await ui.byLabel(first.page,'Health Potion, quantity 2',{role:'button',prefix:'panel:item:'});
     await waitUntil(() => participant(second.state, first.state.id).player.economy.gold === 350, 'accepted purchase on both clients');
@@ -431,8 +445,20 @@ async function approachSolomon(page, state) {
     fs.writeFileSync(path.join(output, 'native-session-failure.json'), JSON.stringify({error: error.stack, checks, errors, shutdownResourceErrors, movementEvidence, state, hostLog}, null, 2));
     throw error;
   } finally {
-    if (browser) await browser.close();
-    await stopHost();
-    fs.rmSync(working, {recursive: true, force: true});
+    try {
+      if (browserOwner) {
+        try {
+          const cleanup = await browserOwner.close();
+          fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(cleanup,null,2));
+        } catch (error) {
+          fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(
+            error.cleanup || {error:error.message},null,2));
+          throw error;
+        }
+      }
+    } finally {
+      await stopHost();
+      fs.rmSync(working, {recursive: true, force: true});
+    }
   }
 })().catch(error => {console.error(error); process.exitCode = 1;});
