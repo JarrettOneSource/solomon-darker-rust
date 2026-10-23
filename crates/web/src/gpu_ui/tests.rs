@@ -39,10 +39,28 @@ fn frame_codes(
             translation: Vec2::ZERO,
             input_scope: &input_scope,
             retired_images: &retired_images,
+            focus_from_keyboard: true,
         })
     })
     .drop_without_applying_deltas();
     widgets.into_inner()
+}
+
+#[test]
+fn focus_ring_modality_tracks_actual_pointer_and_keyboard_dispatches() {
+    let mouse = pointer(true, pos2(50.0, 50.0));
+    assert!(!focus_modality(true, &mouse));
+    assert!(!focus_modality(false, &[egui::Event::ModifiersChanged(egui::Modifiers::SHIFT)]));
+    let navigation = egui::Event::Key {
+        key: egui::Key::Tab,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    assert!(focus_modality(false, &[navigation]));
+    assert!(focus_modality(true, &[egui::Event::PointerMoved(pos2(60.0, 60.0))]));
+    assert!(focus_modality(true, &[]));
 }
 
 fn browser_key(code: &str, key: &str) -> BrowserKey {

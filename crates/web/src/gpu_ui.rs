@@ -179,9 +179,14 @@ pub struct UiFrame<'a> {
     translation: Vec2,
     input_scope: &'a RefCell<Option<String>>,
     retired_images: &'a RefCell<Vec<String>>,
+    focus_from_keyboard: bool,
 }
 
 impl UiFrame<'_> {
+    pub fn focus_visible(&self, response: &Response) -> bool {
+        response.has_focus() && (self.focus_from_keyboard || self.ctx.text_edit_focused())
+    }
+
     /// Retires a dynamic image after every mesh from this frame has been submitted.
     pub fn forget_image(&self, path: &str) {
         self.retired_images.borrow_mut().push(path.to_owned());
@@ -207,6 +212,7 @@ impl UiFrame<'_> {
             translation: self.translation,
             input_scope: self.input_scope,
             retired_images: self.retired_images,
+            focus_from_keyboard: self.focus_from_keyboard,
         }
     }
     pub fn with_rotation(&self, pivot: Pos2, radians: f32) -> UiFrame<'_> {
@@ -547,6 +553,7 @@ pub struct GpuUi {
     accessibility: accessibility::Accessibility,
     widgets: BTreeMap<String, WidgetGeometry>,
     diagnostics: UiDiagnostics,
+    focus_from_keyboard: bool,
 }
 
 /// An input transaction whose final shapes are submitted after the world draw.
@@ -612,6 +619,7 @@ impl GpuUi {
             accessibility,
             widgets: BTreeMap::new(),
             diagnostics: UiDiagnostics::default(),
+            focus_from_keyboard: true,
         })
     }
 
@@ -713,6 +721,7 @@ impl GpuUi {
         pass: batches::InputPass,
         paint: &mut impl FnMut(&mut UiFrame<'_>) -> Result<(), String>,
     ) -> Result<(), String> {
+        self.focus_from_keyboard = focus_modality(self.focus_from_keyboard, &pass.raw.events);
         focus_pointer_text(&self.ctx, &self.widgets, &pass.raw.events);
         let widgets = RefCell::new(BTreeMap::new());
         let announcements = RefCell::new(Vec::new());
@@ -732,6 +741,7 @@ impl GpuUi {
                 translation: Vec2::ZERO,
                 input_scope: &input_scope,
                 retired_images: &retired_images,
+                focus_from_keyboard: self.focus_from_keyboard,
             });
         });
         run.textures.append(std::mem::take(&mut output.textures_delta));
@@ -851,6 +861,18 @@ impl GpuUi {
     pub fn diagnostics(&self) -> &UiDiagnostics {
         &self.diagnostics
     }
+}
+
+fn focus_modality(mut keyboard: bool, events: &[egui::Event]) -> bool {
+    for event in events {
+        match event {
+            egui::Event::PointerButton { pressed: true, .. }
+            | egui::Event::Touch { phase: egui::TouchPhase::Start, .. } => keyboard = false,
+            egui::Event::Key { pressed: true, .. } | egui::Event::Text(_) => keyboard = true,
+            _ => {}
+        }
+    }
+    keyboard
 }
 
 fn focus_pointer_text(
