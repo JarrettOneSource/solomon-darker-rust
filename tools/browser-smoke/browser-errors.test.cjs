@@ -24,6 +24,20 @@ test('URL and ERR_ABORTED alone never classify a failed request',()=>{
   assert.equal(residentSuspension(failure,null,null),null);
 });
 
+test('a mounted editor document resolves stock music from its actual baseURI',()=>{
+  const fixture=evidence();
+  for(const snapshot of [fixture.captured,fixture.settled]) {
+    snapshot.documentUrl='https://example.com/game-stg/editor-test/';
+    snapshot.baseUrl='https://example.com/game-stg/';
+    const channel=snapshot.channels[0];
+    channel.url=channel.src='https://example.com/game-stg/assets/stock/audio/music/death.mp3';
+    channel.sources=[channel.url];
+  }
+  fixture.failure.url=fixture.captured.channels[0].url;
+  assert.equal(residentSuspension(fixture.failure,fixture.captured,fixture.settled).cue,'death');
+  assert.equal(fixture.captured.documentUrl,'https://example.com/game-stg/editor-test/');
+});
+
 for(const [name,change] of [
   ['a real network failure',(f)=>{f.failure.errorText='net::ERR_CONNECTION_RESET'}],
   ['an image request',(f)=>{f.failure.resourceType='image'}],
