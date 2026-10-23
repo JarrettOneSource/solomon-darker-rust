@@ -510,6 +510,7 @@ impl SettingsView {
             let mut child =
                 ui.new_child(egui::UiBuilder::new().id_salt("settings-content").max_rect(content));
             child.set_clip_rect(content);
+            child.spacing_mut().item_spacing = Vec2::ZERO;
             let mut scroll = egui::ScrollArea::vertical()
                 .id_salt(self.navigation_scope())
                 .auto_shrink([false, false]);
@@ -631,7 +632,7 @@ impl SettingsView {
     ) -> Result<(), String> {
         match self.page {
             Page::Root => {
-                group(frame, ui, "SOUND AND MUSIC", width);
+                group_heading(frame, ui, "SOUND AND MUSIC", width);
                 self.range(frame, ui, NumericSetting::Sound, width)?;
                 self.range(frame, ui, NumericSetting::Music, width)?;
                 group(frame, ui, "VIDEO SETTINGS", width);
@@ -653,7 +654,7 @@ impl SettingsView {
                 }
             }
             Page::Cloud => {
-                group(frame, ui, "DARK ACCOUNT", width);
+                group_heading(frame, ui, "DARK ACCOUNT", width);
                 let text = format!(
                     "ACCOUNT: {}",
                     self.account_username.as_deref().unwrap_or("GUEST").to_uppercase()
@@ -712,7 +713,7 @@ DevTools: solomonDark.lua.help()",
                 }
             }
             Page::Controls => {
-                group(frame, ui, "HOTBAR CYCLING", width);
+                group_heading(frame, ui, "HOTBAR CYCLING", width);
                 self.toggle(frame, ui, ToggleSetting::ReverseHotbar, width, actions)?;
                 for (title, actions_group) in
                     [("WIZARD CONTROLS", 0), ("STATS AND STUFF", 1), ("BELT HOTKEYS", 2)]
@@ -734,7 +735,7 @@ DevTools: solomonDark.lua.help()",
                 }
             }
             Page::Performance => {
-                group(frame, ui, "LIGHTING", width);
+                group_heading(frame, ui, "LIGHTING", width);
                 for setting in [
                     ToggleSetting::Lighting,
                     ToggleSetting::Shadows,
@@ -871,13 +872,12 @@ DevTools: solomonDark.lua.help()",
             if disabled { 0x746c58 } else { 0xdbc174 },
             NativeUiTextAlign::Left,
         );
-        self.control_panel.paint_centered(
+        toggle_art(
             frame,
-            ui.painter(),
-            if checked { 9 } else { 8 },
-            egui::pos2(rect.right() - 32.0, rect.center().y),
-            1.0,
-            0.0,
+            ui,
+            &self.control_panel,
+            rect,
+            checked,
             widgets::alpha(0xffffff, if disabled { 0.58 } else { 1.0 }),
         )?;
         if response.clicked() && !disabled {
@@ -1055,8 +1055,31 @@ impl ToggleSetting {
         Self::EnhancedEffects,
     ];
 }
+fn toggle_art(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    atlas: &StockAtlas,
+    rect: Rect,
+    checked: bool,
+    tint: Color32,
+) -> Result<(), String> {
+    let index = if checked { 9 } else { 8 };
+    let record = atlas.record(index)?;
+    atlas.paint_centered(
+        frame,
+        ui.painter(),
+        index,
+        egui::pos2(rect.right() - 10.0 - record.logical_width as f32 / 2.0, rect.center().y),
+        1.0,
+        0.0,
+        tint,
+    )
+}
 fn group(frame: &UiFrame<'_>, ui: &mut Ui, title: &str, width: f32) {
     ui.add_space(12.0);
+    group_heading(frame, ui, title, width);
+}
+fn group_heading(frame: &UiFrame<'_>, ui: &mut Ui, title: &str, width: f32) {
     let (_, r) = ui.allocate_space(Vec2::new(width, 23.0));
     widgets::native(
         frame,
