@@ -16,13 +16,26 @@ impl SocialUi {
             return Ok(());
         }
         let ctx = frame.ctx.clone();
-        egui::Area::new(Id::unique("social/allies"))
-            .order(Order::Middle)
-            .fixed_pos(pos2(11.0, 60.0))
+        let area =
+            egui::Area::new(Id::unique("social/allies")).order(Order::Middle).constrain(false);
+        ctx.set_transform_layer(
+            area.layer(),
+            egui::emath::TSTransform {
+                scaling: if self.coarse { 0.72 } else { 1.0 },
+                translation: if self.coarse {
+                    vec2(6.0, if in_hub { 88.0 } else { 54.0 })
+                } else {
+                    egui::Vec2::ZERO
+                },
+            },
+        );
+        let width = if self.coarse { 164.0 } else { 196.0 };
+        area.fixed_pos(if self.coarse { egui::Pos2::ZERO } else { pos2(11.0, 60.0) })
             .show(&ctx, |ui| -> Result<(), String> {
+                ui.spacing_mut().item_spacing.y = 0.0;
                 for model in &self.ally_rows {
                     let (bounds, _) =
-                        ui.allocate_exact_size(vec2(196.0, 34.0), egui::Sense::hover());
+                        ui.allocate_exact_size(vec2(width, 34.0), egui::Sense::hover());
                     let painter = ui.painter();
                     let accent = match &model.identity {
                         AllyHudIdentity::Player { element, .. } => match element.as_str() {
@@ -54,13 +67,14 @@ impl SocialUi {
                     match &model.identity {
                         AllyHudIdentity::Player { element, .. } => {
                             let clipped = painter.with_clip_rect(chip);
-                            self.portraits.paint_body(
+                            self.portraits.paint_body_clipped(
                                 frame,
                                 &clipped,
                                 *element,
                                 12,
                                 chip.min + vec2(12.85, 26.55),
                                 0.45,
+                                chip,
                             )?;
                         }
                         AllyHudIdentity::Golem => {
@@ -81,7 +95,8 @@ impl SocialUi {
                         FontId::new(12.0, FontFamily::Name("Georgia".into())),
                         Color32::from_rgb(240, 226, 182),
                     );
-                    let bar = Rect::from_min_size(bounds.min + vec2(38.0, 22.0), vec2(146.0, 7.0));
+                    let bar =
+                        Rect::from_min_size(bounds.min + vec2(38.0, 22.0), vec2(width - 50.0, 7.0));
                     painter.rect_filled(bar, 4.0, Color32::from_rgb(25, 10, 9));
                     let ratio = clamp_ally_hud_health_ratio(model.health_ratio) as f32;
                     painter.rect_filled(
@@ -118,7 +133,7 @@ impl SocialUi {
                         &format!("social/ally:{}", model.id),
                         &model.accessible_status(),
                         "progressbar",
-                        bounds,
+                        ctx.layer_transform_to_global(ui.layer_id()).unwrap_or_default() * bounds,
                         true,
                     );
                     ui.add_space(5.0);

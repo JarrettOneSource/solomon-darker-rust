@@ -42,7 +42,7 @@ impl SocialUi {
     pub(super) fn paint_card(
         &mut self,
         frame: &mut crate::gpu_ui::UiFrame<'_>,
-        ui: &mut egui::Ui,
+        _ui: &mut egui::Ui,
     ) -> Result<(), String> {
         let actor_profile = self.hub_player_profile();
         let Some(card) = self.current_card().or(actor_profile.as_ref()).cloned() else {
@@ -103,162 +103,272 @@ impl SocialUi {
                 }
             ))
         };
-        let width = (self.size.0 as f32 - 40.0).clamp(200.0, 400.0);
-        let height = (self.size.1 as f32 - 32.0).clamp(180.0, 430.0);
-        let bounds = egui::Rect::from_center_size(
-            frame.ctx.content_rect().center(),
-            egui::vec2(width, height),
-        );
-        ui.interact(bounds, egui::Id::unique("social/card-panel-block"), egui::Sense::click());
+        let ctx = frame.ctx.clone();
+        let screen = ctx.content_rect();
+        let coarse = self.coarse;
+        let width = (self.size.0 as f32 - 40.0).min(if coarse { 300.0 } else { 400.0 }).max(180.0);
+        let padding = if coarse { egui::vec2(14.0, 12.0) } else { egui::vec2(26.0, 24.0) };
+        let max_height = if coarse { screen.height() * 0.9 } else { screen.height() - 32.0 };
         let mut action = None;
         let mut portrait_error = None;
-        ui.scope_builder(egui::UiBuilder::new().max_rect(bounds), |ui| {
-            egui::Frame::new()
-                .fill(egui::Color32::from_rgb(13, 15, 21))
-                .stroke(egui::Stroke::new(2.0, super::gpu::GOLD))
-                .corner_radius(5.0)
-                .inner_margin(24.0)
-                .show(ui, |ui| {
-                    ui.set_min_width(width - 48.0);
-                    egui::ScrollArea::vertical().max_height(height - 48.0).show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            let (portrait, _) = ui
-                                .allocate_exact_size(egui::vec2(76.0, 84.0), egui::Sense::hover());
-                            let painter = ui.painter().with_clip_rect(portrait);
-                            if let Err(error) = self.portraits.paint_wizard(
-                                frame,
-                                &painter,
-                                card.element,
-                                12,
-                                portrait.min + egui::vec2(31.5, 66.5),
-                                1.15,
-                            ) {
-                                portrait_error = Some(error);
-                            }
-                            if let Err(error) = self.skills.paint_raw(
-                                frame,
-                                ui.painter(),
-                                14,
-                                egui::Rect::from_min_size(portrait.min, egui::vec2(76.0, 76.0)),
-                                egui::Color32::WHITE,
-                            ) {
-                                portrait_error = Some(error);
-                            }
-                            ui.vertical(|ui| {
-                                ui.label(super::gpu::rich(
-                                    &card.display_name,
-                                    22.0,
-                                    super::gpu::GOLD,
-                                ));
-                                ui.label(super::gpu::rich(
-                                    native_wizard_class_title(card.element, card.discipline),
-                                    14.0,
-                                    super::gpu::PALE,
-                                ));
-                                ui.label(super::gpu::rich(
-                                    card.account_username.as_ref().map_or_else(
-                                        || "Guest wizard".into(),
-                                        |name| format!("Registered · {name}"),
-                                    ),
-                                    12.0,
-                                    egui::Color32::from_gray(173),
-                                ));
-                                if let Some(activity) = &activity {
-                                    ui.label(super::gpu::rich(activity, 10.0, super::gpu::GOLD));
-                                }
+        let area = egui::Area::new(egui::Id::unique("social/player-card-surface"))
+            .order(egui::Order::Foreground)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(&ctx, |ui| {
+                egui::Frame::new()
+                    .fill(egui::Color32::from_rgba_unmultiplied(13, 15, 21, 250))
+                    .stroke(egui::Stroke::new(if coarse { 2.0 } else { 3.0 }, super::gpu::GOLD))
+                    .corner_radius(5.0)
+                    .inner_margin(egui::Margin::symmetric(padding.x as i8, padding.y as i8))
+                    .show(ui, |ui| {
+                        ui.set_width(width - 2.0 * padding.x - if coarse { 4.0 } else { 6.0 });
+                        egui::ScrollArea::vertical()
+                            .id_salt("social/player-card-scroll")
+                            .max_height((max_height - 2.0 * padding.y).max(80.0))
+                            .show(ui, |ui| {
+                                ui.spacing_mut().item_spacing = egui::vec2(
+                                    if coarse { 10.0 } else { 16.0 },
+                                    if coarse { 8.0 } else { 14.0 },
+                                );
+                                ui.horizontal(|ui| {
+                                    let size = if coarse { 72.0 } else { 92.0 };
+                                    let (portrait, _) = ui.allocate_exact_size(
+                                        egui::vec2(size, size),
+                                        egui::Sense::hover(),
+                                    );
+                                    ui.painter().rect_filled(
+                                        portrait,
+                                        7.0,
+                                        egui::Color32::from_rgb(28, 25, 18),
+                                    );
+                                    let painter = ui.painter().with_clip_rect(portrait);
+                                    let position = portrait.min
+                                        + if coarse {
+                                            egui::vec2(34.63, 62.02)
+                                        } else {
+                                            egui::vec2(44.25, 79.25)
+                                        };
+                                    if let Err(error) = self.portraits.paint_wizard(
+                                        frame,
+                                        &painter,
+                                        card.element,
+                                        12,
+                                        position,
+                                        if coarse { 0.9 } else { 1.15 },
+                                    ) {
+                                        portrait_error = Some(error);
+                                    }
+                                    if let Err(error) = self.skills.paint_raw(
+                                        frame,
+                                        ui.painter(),
+                                        14,
+                                        portrait,
+                                        egui::Color32::WHITE,
+                                    ) {
+                                        portrait_error = Some(error);
+                                    }
+                                    ui.vertical(|ui| {
+                                        ui.spacing_mut().item_spacing.y =
+                                            if coarse { 2.0 } else { 4.0 };
+                                        ui.label(super::gpu::rich(
+                                            &card.display_name,
+                                            if coarse { 19.0 } else { 28.0 },
+                                            egui::Color32::from_rgb(240, 221, 160),
+                                        ));
+                                        ui.label(card_text(
+                                            &native_wizard_class_title(
+                                                card.element,
+                                                card.discipline,
+                                            )
+                                            .to_uppercase(),
+                                            if coarse { 9.0 } else { 11.0 },
+                                            super::gpu::PALE,
+                                        ));
+                                        let badge = card.account_username.as_ref().map_or_else(
+                                            || "Guest wizard".to_owned(),
+                                            |name| format!("Registered · {name}"),
+                                        );
+                                        egui::Frame::new()
+                                            .stroke(egui::Stroke::new(
+                                                1.0,
+                                                super::gpu::GOLD.gamma_multiply(0.5),
+                                            ))
+                                            .corner_radius(9.0)
+                                            .inner_margin(egui::Margin::symmetric(
+                                                if coarse { 7 } else { 9 },
+                                                2,
+                                            ))
+                                            .show(ui, |ui| {
+                                                ui.label(card_text(
+                                                    &badge.to_uppercase(),
+                                                    if coarse { 8.0 } else { 9.5 },
+                                                    egui::Color32::from_rgb(243, 217, 148),
+                                                ));
+                                            });
+                                        if let Some(activity) = &activity {
+                                            ui.label(card_text(
+                                                activity,
+                                                if coarse { 8.0 } else { 10.0 },
+                                                super::gpu::GOLD,
+                                            ));
+                                        }
+                                    });
+                                });
+                                let playtime =
+                                    card.total_playtime_ms.map(|time| time / 60000).map_or_else(
+                                        || "—".into(),
+                                        |minutes| {
+                                            if minutes >= 60 {
+                                                format!("{}h {}m", minutes / 60, minutes % 60)
+                                            } else {
+                                                format!("{minutes}m")
+                                            }
+                                        },
+                                    );
+                                ui.vertical(|ui| {
+                                    ui.spacing_mut().item_spacing.y = 0.0;
+                                    for (label, value, icon) in [
+                                        ("Gold", format_integer(card.gold), "bag"),
+                                        (
+                                            "Highest Wave",
+                                            card.highest_wave
+                                                .map_or_else(|| "—".to_owned(), format_integer),
+                                            "wave",
+                                        ),
+                                        ("Time in the Dark", playtime, "infinity"),
+                                    ] {
+                                        ui.separator();
+                                        let (rect, _) = ui.allocate_exact_size(
+                                            egui::vec2(
+                                                ui.available_width(),
+                                                if coarse { 24.0 } else { 38.0 },
+                                            ),
+                                            egui::Sense::hover(),
+                                        );
+                                        let icon_size = if coarse { 15.0 } else { 21.0 };
+                                        let image = egui::Rect::from_center_size(
+                                            rect.left_center()
+                                                + egui::vec2(2.0 + icon_size / 2.0, 0.0),
+                                            egui::vec2(icon_size, icon_size),
+                                        );
+                                        frame.image(
+                                            ui.painter(),
+                                            &format!("assets/stock/icon-{icon}.png"),
+                                            image,
+                                            None,
+                                            egui::Color32::WHITE,
+                                        );
+                                        ui.painter().text(
+                                            rect.left_center()
+                                                + egui::vec2(if coarse { 28.0 } else { 37.0 }, 0.0),
+                                            egui::Align2::LEFT_CENTER,
+                                            label.to_uppercase(),
+                                            egui::FontId::new(
+                                                if coarse { 8.5 } else { 10.5 },
+                                                egui::FontFamily::Name("Cinzel Bold".into()),
+                                            ),
+                                            egui::Color32::from_rgb(164, 156, 137),
+                                        );
+                                        ui.painter().text(
+                                            rect.right_center() - egui::vec2(2.0, 0.0),
+                                            egui::Align2::RIGHT_CENTER,
+                                            &value,
+                                            egui::FontId::new(
+                                                if coarse { 13.0 } else { 18.0 },
+                                                egui::FontFamily::Name("Georgia".into()),
+                                            ),
+                                            if icon == "bag" {
+                                                egui::Color32::from_rgb(255, 215, 106)
+                                            } else {
+                                                egui::Color32::from_rgb(255, 240, 192)
+                                            },
+                                        );
+                                        frame.record_rect(
+                                            &format!("social/card-stat:{icon}"),
+                                            &value,
+                                            "status",
+                                            rect,
+                                            true,
+                                        );
+                                    }
+                                    ui.separator();
+                                });
+                                ui.horizontal(|ui| {
+                                    let actions =
+                                        1 + usize::from(can_message) + usize::from(can_invite);
+                                    let button_width = (ui.available_width()
+                                        - ui.spacing().item_spacing.x * (actions - 1) as f32)
+                                        / actions as f32;
+                                    if can_message
+                                        && card_button(
+                                            frame,
+                                            ui,
+                                            "card-message",
+                                            "Message",
+                                            coarse,
+                                            button_width,
+                                        )
+                                        .clicked()
+                                    {
+                                        action = Some("card-message");
+                                    }
+                                    if can_invite
+                                        && card_button(
+                                            frame,
+                                            ui,
+                                            "card-invite",
+                                            "Invite to Party",
+                                            coarse,
+                                            button_width,
+                                        )
+                                        .clicked()
+                                    {
+                                        action = Some("card-invite");
+                                    }
+                                    let close = card_button(
+                                        frame,
+                                        ui,
+                                        "card-close",
+                                        "Close",
+                                        coarse,
+                                        button_width,
+                                    );
+                                    if self.focus_modal {
+                                        close.request_focus();
+                                        self.focus_modal = false;
+                                    }
+                                    if close.clicked() {
+                                        action = Some("close");
+                                    }
+                                });
                             });
-                        });
-                        ui.add_space(14.0);
-                        let playtime = card.total_playtime_ms.map(|time| time / 60000).map_or_else(
-                            || "—".into(),
-                            |minutes| {
-                                if minutes >= 60 {
-                                    format!("{}h {}m", minutes / 60, minutes % 60)
-                                } else {
-                                    format!("{minutes}m")
-                                }
-                            },
-                        );
-                        for (label, value, icon) in [
-                            ("Gold", format_integer(card.gold), "bag"),
-                            (
-                                "Highest Wave",
-                                card.highest_wave.map_or_else(|| "—".to_owned(), format_integer),
-                                "wave",
-                            ),
-                            ("Time in the Dark", playtime, "infinity"),
-                        ] {
-                            ui.separator();
-                            ui.horizontal(|ui| {
-                                let (rect, _) = ui.allocate_exact_size(
-                                    egui::vec2(21.0, 21.0),
-                                    egui::Sense::hover(),
-                                );
-                                frame.image(
-                                    ui.painter(),
-                                    &format!("assets/stock/icon-{icon}.png"),
-                                    rect,
-                                    None,
-                                    egui::Color32::WHITE,
-                                );
-                                ui.label(super::gpu::rich(label, 14.0, super::gpu::PALE));
-                                let response =
-                                    ui.label(super::gpu::rich(&value, 18.0, super::gpu::GOLD));
-                                frame.record(
-                                    &format!("social/card-stat:{icon}"),
-                                    &value,
-                                    "status",
-                                    &response,
-                                );
-                            });
-                        }
-                        ui.add_space(18.0);
-                        ui.horizontal_wrapped(|ui| {
-                            if can_message
-                                && super::gpu::browser_button(
-                                    frame,
-                                    ui,
-                                    "card-message",
-                                    "Message",
-                                    egui::vec2(88.0, 34.0),
-                                    true,
-                                )
-                                .clicked()
-                            {
-                                action = Some("card-message");
-                            }
-                            if can_invite
-                                && super::gpu::browser_button(
-                                    frame,
-                                    ui,
-                                    "card-invite",
-                                    "Invite to Party",
-                                    egui::vec2(110.0, 34.0),
-                                    true,
-                                )
-                                .clicked()
-                            {
-                                action = Some("card-invite");
-                            }
-                            let close = super::gpu::browser_button(
-                                frame,
-                                ui,
-                                "card-close",
-                                "Close",
-                                egui::vec2(70.0, 34.0),
-                                true,
-                            );
-                            if self.focus_modal {
-                                close.request_focus();
-                                self.focus_modal = false;
-                            }
-                            if close.clicked() {
-                                action = Some("close");
-                            }
-                        });
-                    });
-                });
-        });
+                    })
+                    .response
+                    .rect
+            });
+        let bounds = area.inner;
+        let record = self.ui.record(17)?;
+        let scale = if coarse { 0.55 } else { 0.9 };
+        let source_size = egui::vec2(record.width as f32, record.height as f32);
+        let corner_size = source_size * scale;
+        let painter = ctx.layer_painter(area.response.layer_id);
+        for (left, mirrored) in [
+            (bounds.min - egui::vec2(6.0, 5.0), false),
+            (bounds.right_top() + egui::vec2(6.0 - corner_size.x, -5.0), true),
+        ] {
+            let source = egui::Rect::from_min_max(
+                egui::pos2(if mirrored { source_size.x } else { 0.0 }, 0.0),
+                egui::pos2(if mirrored { 0.0 } else { source_size.x }, source_size.y),
+            );
+            self.ui.paint_slice(
+                frame,
+                &painter,
+                17,
+                source,
+                egui::Rect::from_min_size(left, corner_size),
+                egui::Color32::WHITE,
+            )?;
+        }
         if let Some(error) = portrait_error {
             return Err(error);
         }
@@ -307,4 +417,33 @@ fn format_integer(value: u64) -> String {
         result.push(digit);
     }
     result
+}
+
+fn card_text(value: &str, size: f32, color: egui::Color32) -> egui::RichText {
+    egui::RichText::new(value)
+        .font(egui::FontId::new(size, egui::FontFamily::Name("Cinzel Bold".into())))
+        .color(color)
+}
+fn card_button(
+    frame: &crate::gpu_ui::UiFrame<'_>,
+    ui: &mut egui::Ui,
+    id: &str,
+    label: &str,
+    coarse: bool,
+    width: f32,
+) -> egui::Response {
+    let color = if id == "card-message" {
+        egui::Color32::from_rgb(207, 176, 232)
+    } else {
+        super::gpu::GOLD
+    };
+    let response = ui.add(
+        egui::Button::new(card_text(label, if coarse { 9.0 } else { 10.5 }, color))
+            .fill(egui::Color32::from_rgb(23, 20, 13))
+            .stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.55)))
+            .corner_radius(3.0)
+            .min_size(egui::vec2(width, if coarse { 44.0 } else { 34.0 })),
+    );
+    frame.record(&format!("social/{id}"), label, "button", &response);
+    response
 }

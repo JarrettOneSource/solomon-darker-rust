@@ -255,6 +255,11 @@ impl MobileUiEditor {
         self.paint_in(frame, bounds)
     }
     pub fn paint_in(&mut self, frame: &mut UiFrame<'_>, bounds: Rect) -> Result<(), String> {
+        frame.input_scope(if self.fullscreen {
+            "mobile/editor/fullscreen"
+        } else {
+            "mobile/editor/windowed"
+        });
         let ctx = frame.ctx.clone();
         self.root_bounds = hud_rect(bounds);
         let toolbar_height = if self.fullscreen { 0.0 } else { 80.0 };
@@ -284,6 +289,9 @@ impl MobileUiEditor {
             .order(Order::Foreground)
             .fixed_pos(bounds.min)
             .show(&ctx, |ui| {
+                if self.fullscreen {
+                    ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
+                }
                 ui.set_min_size(bounds.size());
                 ui.set_clip_rect(bounds);
                 ui.painter().rect_filled(viewport, 0.0, Color32::from_rgb(14, 18, 24));

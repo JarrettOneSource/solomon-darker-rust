@@ -66,19 +66,27 @@ impl SocialUi {
         let height = if tall { y + rows.len() as f64 * 36.0 - 4.0 + 12.0 } else { 50.0 };
         let ctx = frame.ctx.clone();
         let mut action = None;
-        egui::Area::new(Id::unique("social/party-chip"))
-            .order(Order::Middle)
-            .fixed_pos(pos2(11.0, 174.0))
+        let area =
+            egui::Area::new(Id::unique("social/party-chip")).order(Order::Middle).constrain(false);
+        ctx.set_transform_layer(
+            area.layer(),
+            egui::emath::TSTransform {
+                scaling: if self.coarse { 0.55 } else { 1.0 },
+                translation: if self.coarse { vec2(6.0, 54.0) } else { egui::Vec2::ZERO },
+            },
+        );
+        area.fixed_pos(if self.coarse { egui::Pos2::ZERO } else { pos2(11.0, 174.0) })
             .show(&ctx, |ui| -> Result<(), String> {
                 let origin = ui.min_rect().min;
                 let panel = Rect::from_min_size(origin, vec2(236.0, height as f32));
                 ui.set_min_size(panel.size());
                 self.ui.paint_tiles(frame, ui.painter(), 49, panel, 1.0, Color32::WHITE)?;
-                self.ui.paint_native_frame(
+                self.ui.paint_native_frame_scaled(
                     frame,
                     ui.painter(),
                     17,
                     panel,
+                    if tall { 0.4 } else { 0.3 },
                     false,
                     Color32::WHITE,
                 )?;
@@ -117,15 +125,40 @@ impl SocialUi {
                         Sense::click(),
                     );
                     frame.record("social/party-settings", "Party settings", "button", &response);
-                    self.bonedit.paint_centered(
-                        frame,
+                    let record = self.bonedit.record(54)?;
+                    let [x, y] = record.registered_origin();
+                    let image = frame
+                        .image_size(self.bonedit.path())
+                        .ok_or("Party settings icon is not ready")?;
+                    let target = Rect::from_min_size(
+                        origin
+                            + vec2(188.0, 25.0)
+                            + (vec2(x, y)
+                                - vec2(record.logical_width as f32, record.logical_height as f32)
+                                    / 2.0)
+                                * 0.6,
+                        vec2(record.width as f32, record.height as f32) * 0.6,
+                    );
+                    let uv = Rect::from_min_max(
+                        pos2(record.x as f32 / image.x, record.y as f32 / image.y),
+                        pos2(
+                            (record.x + record.width) as f32 / image.x,
+                            (record.y + record.height) as f32 / image.y,
+                        ),
+                    );
+                    frame.image_quad_masked(
                         ui.painter(),
-                        54,
-                        origin + vec2(188.0, 25.0),
-                        0.6,
-                        0.0,
+                        self.bonedit.path(),
+                        [
+                            target.left_top(),
+                            target.right_top(),
+                            target.right_bottom(),
+                            target.left_bottom(),
+                        ],
+                        uv,
                         gpu::GOLD,
-                    )?;
+                        crate::render::BlendMode::Normal,
+                    );
                     if response.clicked() {
                         action = Some("party-settings".to_owned());
                     }

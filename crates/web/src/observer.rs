@@ -137,6 +137,7 @@ impl ObserverUi {
         if !self.visible {
             return Ok(());
         }
+        frame.input_scope("observer");
         let ctx = frame.ctx.clone();
         egui::Area::new(Id::unique("observer/panel"))
             .order(Order::Foreground)

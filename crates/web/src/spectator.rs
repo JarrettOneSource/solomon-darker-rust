@@ -72,28 +72,61 @@ impl SpectatorStatusView {
         origin: egui::Pos2,
         scale: f32,
     ) -> Result<(), String> {
-        for rail in layout.horizontal_rails.iter().chain(&layout.vertical_rails) {
+        for (horizontal, rail) in layout
+            .horizontal_rails
+            .iter()
+            .map(|rail| (true, rail))
+            .chain(layout.vertical_rails.iter().map(|rail| (false, rail)))
+        {
+            let record = self.atlas.record(rail.record)?;
             let bounds = rail.bounds;
-            self.atlas.paint_tiles(
-                frame,
-                painter,
-                rail.record,
-                Rect::from_min_size(
-                    origin + vec2(bounds.x as f32, bounds.y as f32) * scale,
-                    vec2(bounds.width as f32, bounds.height as f32) * scale,
-                ),
-                scale,
-                Color32::WHITE,
-            )?;
+            let target = Rect::from_min_size(
+                origin + vec2(bounds.x as f32, bounds.y as f32) * scale,
+                vec2(bounds.width as f32, bounds.height as f32) * scale,
+            );
+            let clipped = painter.with_clip_rect(painter.clip_rect().intersect(target));
+            let extent = if horizontal { bounds.width } else { bounds.height };
+            let step = if horizontal {
+                f64::from(record.logical_width)
+            } else {
+                f64::from(record.logical_height)
+            };
+            let mut offset = 0.0;
+            while offset < extent {
+                let point = target.min
+                    + if horizontal {
+                        vec2(offset as f32 * scale, 0.0)
+                    } else {
+                        vec2(0.0, offset as f32 * scale)
+                    };
+                self.atlas.paint_raw(
+                    frame,
+                    &clipped,
+                    rail.record,
+                    Rect::from_min_size(
+                        point,
+                        vec2(record.width as f32, record.height as f32) * scale,
+                    ),
+                    Color32::WHITE,
+                )?;
+                offset += step;
+            }
         }
         for corner in &layout.corners {
-            self.atlas.paint_centered(
+            let record = self.atlas.record(corner.record)?;
+            let top_left = origin
+                + vec2(
+                    corner.center.x as f32 - record.logical_width as f32 / 2.0,
+                    corner.center.y as f32 - record.logical_height as f32 / 2.0,
+                ) * scale;
+            self.atlas.paint_raw(
                 frame,
                 painter,
                 corner.record,
-                origin + vec2(corner.center.x as f32, corner.center.y as f32) * scale,
-                scale,
-                0.0,
+                Rect::from_min_size(
+                    top_left,
+                    vec2(record.width as f32, record.height as f32) * scale,
+                ),
                 Color32::WHITE,
             )?;
         }

@@ -11,7 +11,7 @@ use solomon_sim::social::party_ui::{
 use solomon_sim::social::{party_member_display_name, party_menu_leave_label};
 
 use super::super::{PartyTab, SocialUi, gpu};
-use crate::gpu_ui::{UiFrame, message_frame};
+use crate::gpu_ui::{UiFrame, message_frame_scaled};
 
 impl SocialUi {
     pub(in crate::social) fn paint_native_party_menu(
@@ -83,7 +83,7 @@ impl SocialUi {
         let (origin, scale) = gpu::stage(self.size);
         let panel = gpu::rect(NATIVE_PARTY_MENU_FRAME, origin, scale);
         ui.interact(panel, Id::unique("social/party-panel-block"), Sense::click());
-        message_frame(frame, ui.painter(), &self.ui, panel)?;
+        message_frame_scaled(frame, ui.painter(), &self.ui, panel, scale)?;
         frame.record_rect("social/party-menu", "PARTY", "dialog", panel, true);
         let viewport = gpu::rect(NATIVE_PARTY_MENU_VIEWPORT, origin, scale);
         let mut activated = None;
@@ -203,7 +203,13 @@ impl SocialUi {
         for bounds in &plan.settings_rows {
             gpu::brackets(frame, ui.painter(), &self.ui, gpu::rect(*bounds, origin, scale), scale)?;
         }
+        if tab == PartyTab::Mods {
+            self.paint_party_mods(frame, ui, origin, scale)?;
+        }
         for text in &plan.texts {
+            if tab == PartyTab::Mods && text.label == "party:empty" {
+                continue;
+            }
             if text.label.starts_with("visibility:") && text.label.ends_with(":label") {
                 continue;
             }
@@ -341,6 +347,125 @@ impl SocialUi {
                     _ => &action,
                 })?;
             }
+        }
+        Ok(())
+    }
+    /// The user-directed GPU completion replaces the inherited empty Mods tab with
+    /// the actual admitted package metadata, while retaining stock Party chrome.
+    fn paint_party_mods(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        origin: egui::Pos2,
+        scale: f32,
+    ) -> Result<(), String> {
+        use solomon_sim::native_ui_text::{
+            NativeUiFontName, NativeUiTextAlign, measure_native_ui_text,
+        };
+        use solomon_sim::social::party_ui::{
+            fit_native_party_menu_text, native_party_menu_name_font,
+        };
+        let viewport = gpu::rect(NATIVE_PARTY_MENU_VIEWPORT, origin, scale);
+        let painter = ui.painter().with_clip_rect(viewport);
+        if self.party_mods.is_empty() {
+            gpu::native_text(
+                frame,
+                &painter,
+                &NativeUiTextSpec {
+                    tint: 0xaaa2a6,
+                    ..NativeUiTextSpec::new(
+                        NativeUiFontName::Medium,
+                        "No active mods",
+                        800.0,
+                        318.0,
+                    )
+                },
+                origin,
+                scale,
+            );
+            frame.record_rect(
+                "social/party-mods-empty",
+                "No active mods",
+                "status",
+                viewport,
+                true,
+            );
+            return Ok(());
+        }
+        let scroll = ui.interact(viewport, Id::unique("social/party-mod-scroll"), Sense::drag());
+        let content_height = self.party_mods.len() as f64 * 66.0;
+        let wheel =
+            if scroll.hovered() { ui.input(|input| input.smooth_scroll_delta.y) } else { 0.0 };
+        if wheel != 0.0 {
+            self.party_ui.scroll_y -= f64::from(wheel.signum()) * NATIVE_PARTY_MENU_WHEEL_STEP;
+        }
+        if scroll.dragged() {
+            self.party_ui.scroll_y -= f64::from(scroll.drag_delta().y / scale);
+        }
+        if scroll.has_focus() {
+            self.party_ui.scroll_y += ui.input_mut(|input| {
+                if input.consume_key(egui::Modifiers::NONE, egui::Key::PageDown) {
+                    367.0
+                } else if input.consume_key(egui::Modifiers::NONE, egui::Key::PageUp) {
+                    -367.0
+                } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
+                    NATIVE_PARTY_MENU_WHEEL_STEP
+                } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
+                    -NATIVE_PARTY_MENU_WHEEL_STEP
+                } else {
+                    0.0
+                }
+            });
+        }
+        self.party_ui.scroll_y =
+            clamp_native_party_menu_scroll(self.party_ui.scroll_y, content_height);
+        for (index, package) in self.party_mods.iter().enumerate() {
+            let y = 278.0 + index as f64 * 66.0 - self.party_ui.scroll_y;
+            let bounds = gpu::rect(HudRect::new(460.0, y, 680.0, 56.0), origin, scale);
+            if !bounds.intersects(viewport) {
+                continue;
+            }
+            gpu::brackets(frame, &painter, &self.ui, bounds, scale)?;
+            let version = format!("v{}", package.version);
+            let version_width = measure_native_ui_text(&version, NativeUiFontName::Medium, 0.9);
+            let font = native_party_menu_name_font(&package.name);
+            let name = fit_native_party_menu_text(
+                &package.name,
+                font,
+                (628.0 - version_width - 20.0).max(1.0),
+                0.85,
+            );
+            gpu::native_text(
+                frame,
+                &painter,
+                &NativeUiTextSpec {
+                    align: NativeUiTextAlign::Left,
+                    scale: 0.85,
+                    ..NativeUiTextSpec::new(font, &name, 486.0, y + 36.0)
+                },
+                origin,
+                scale,
+            );
+            gpu::native_text(
+                frame,
+                &painter,
+                &NativeUiTextSpec {
+                    align: NativeUiTextAlign::Right,
+                    scale: 0.9,
+                    tint: 0xd9ba70,
+                    ..NativeUiTextSpec::new(NativeUiFontName::Medium, &version, 1114.0, y + 36.0)
+                },
+                origin,
+                scale,
+            );
+            frame.record_rect(
+                &format!("social/party-mod:{}", package.id),
+                &format!("{} {version}", package.name),
+                "listitem",
+                bounds.intersect(viewport),
+                true,
+            );
+            frame.record_value(&format!("social/party-mod:{}", package.id), &package.version, None);
         }
         Ok(())
     }

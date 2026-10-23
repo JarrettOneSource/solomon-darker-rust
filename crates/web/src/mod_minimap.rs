@@ -1,9 +1,9 @@
 //! GPU authored minimap from `mod-ui/ModMinimap.tsx`.
 //! The accepted projection supplies every marker and the exact displayed action center.
 
-use crate::gpu_ui::UiFrame;
+use crate::gpu_ui::{UiFrame, clip_polygon_ellipse};
 use crate::ui::javascript_string;
-use egui::{Color32, FontFamily, FontId, Id, Order, Pos2, Rect, Stroke, pos2, vec2};
+use egui::{Color32, FontFamily, FontId, Id, Order, Rect, Stroke, pos2, vec2};
 use solomon_sim::Vec2;
 use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::projection::ModContentProjection;
@@ -153,7 +153,7 @@ impl ModMinimapView {
                             center + vec2(angle.cos(), angle.sin()) * 3.6
                         })
                         .collect();
-                    let points = clip_ellipse(points, bounds);
+                    let points = clip_polygon_ellipse(points, bounds);
                     if points.len() > 2 {
                         painter.add(egui::Shape::convex_polygon(points, color, Stroke::NONE));
                     }
@@ -236,34 +236,4 @@ fn marker_id(id: ModMinimapMarkerId<'_>) -> String {
             format!("powerup-{}", javascript_string(&JsValue::from_f64(id)))
         }
     }
-}
-fn clip_ellipse(mut points: Vec<Pos2>, bounds: Rect) -> Vec<Pos2> {
-    let center = bounds.center();
-    let radius = bounds.size() / 2.0;
-    for i in 0..64 {
-        if points.is_empty() {
-            break;
-        }
-        let angle = (i as f32 + 0.5) * std::f32::consts::TAU / 64.0;
-        let normal = vec2(angle.cos() / radius.x, angle.sin() / radius.y);
-        let limit = (std::f32::consts::PI / 64.0).cos();
-        let input = std::mem::take(&mut points);
-        let mut previous = *input.last().expect("nonempty clipped polygon");
-        let mut previous_distance = (previous - center).dot(normal) - limit;
-        for point in input {
-            let distance = (point - center).dot(normal) - limit;
-            if (distance <= 0.0) != (previous_distance <= 0.0) {
-                points.push(
-                    previous
-                        + (point - previous) * (previous_distance / (previous_distance - distance)),
-                );
-            }
-            if distance <= 0.0 {
-                points.push(point);
-            }
-            previous = point;
-            previous_distance = distance;
-        }
-    }
-    points
 }
