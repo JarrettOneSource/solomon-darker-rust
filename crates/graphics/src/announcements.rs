@@ -82,6 +82,12 @@ impl ScreenReader {
         Ok(self.loader || count(&self.shared, "loaders")? == 0)
     }
 
+    pub fn announce_batch(&self, messages: &[String]) -> Result<(), String> {
+        // One live-region mutation preserves every message in this frame;
+        // sequential textContent writes would leave only the final one.
+        self.announce(&messages.join("\n"))
+    }
+
     pub fn announce(&self, text: &str) -> Result<(), String> {
         if !self.is_foreground()? {
             return Ok(());

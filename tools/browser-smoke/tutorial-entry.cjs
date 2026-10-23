@@ -11,7 +11,8 @@ const {assertTutorialTextBounds}=require('./tutorial-text-bounds.cjs');
 const output=path.resolve(process.env.OUT||'/tmp/tutorial-entry');
 const url=process.env.URL||'http://127.0.0.1:4181/';
 fs.mkdirSync(output,{recursive:true});
-const receipt={passed:false,url,cases:[],errors:[]};
+const forceFallback=process.env.FORCE_FALLBACK==='1';
+const receipt={passed:false,url,forceFallback,cases:[],errors:[]};
 const position=page=>page.evaluate(()=>Array.from(wasmBindings.wizard_state()).slice(0,2));
 
 (async()=>{
@@ -30,7 +31,7 @@ const position=page=>page.evaluate(()=>Array.from(wasmBindings.wizard_state()).s
       try {
         await observed.ready;
         await ui.observeGpu(page);
-        await ui.observeAnnouncements(page);
+        await ui.observeAnnouncements(page,{forceFallback});
         await page.goto(url,{waitUntil:'domcontentloaded'});
         await ui.ready(page);
         await ui.surface(page,'title');
@@ -52,6 +53,8 @@ const position=page=>page.evaluate(()=>Array.from(wasmBindings.wizard_state()).s
             &&ui.findWidget(snapshot,'tutorial:text:subheading')?.label===subheading,
           `actual ${name} Movement lesson at ${size.width}x${size.height}`,{timeout:30000});
           const bounds=await assertTutorialTextBounds(page);
+          await ui.announced(page,heading.replaceAll('\n',' '));
+          await ui.announced(page,subheading);
           await ui.assertGpuOnly(page);
           result.layouts.push(bounds);
           await page.screenshot({path:path.join(output,`${name}-${size.width}x${size.height}-lesson.png`)});
@@ -78,6 +81,8 @@ const position=page=>page.evaluate(()=>Array.from(wasmBindings.wizard_state()).s
         }
         result.movement={before,after:await position(page)};
         result.announcements=await ui.announcements(page);
+        assert.equal(result.announcements.filter(value=>value.text.includes('Loading Boneyard…')).length,1,
+          'one unchanged actual match-loading owner announces its label once');
         assert.ok(result.announcements.some(value=>value.text.includes('Solomon')
           ||value.text.includes('Sirmin')),'actual Tutorial narration reaches the native announcement adapter');
         await page.screenshot({path:path.join(output,`${name}-movement-acknowledged.png`)});
@@ -89,6 +94,7 @@ const position=page=>page.evaluate(()=>Array.from(wasmBindings.wizard_state()).s
         receipt.failure=error.stack;
         receipt.failedCase=name;
         receipt.ui=await ui.readUi(page);
+        receipt.announcements=await ui.announcements(page);
         await page.screenshot({path:path.join(output,`${name}-failure.png`)});
         throw error;
       }finally{
