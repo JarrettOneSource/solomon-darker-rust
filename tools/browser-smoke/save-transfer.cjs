@@ -45,8 +45,7 @@ async function reveal(page, id) {
     if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
   });
   page.on('requestfailed', request => {
-    if (!(request.resourceType() === 'media' && request.failure()?.errorText === 'net::ERR_ABORTED'))
-      errors.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
+    errors.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
   });
   page.on('websocket', socket => socket.on('framereceived', ({payload}) => {
     const message = JSON.parse(payload.toString());
