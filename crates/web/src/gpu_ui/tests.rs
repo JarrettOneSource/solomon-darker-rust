@@ -484,6 +484,46 @@ fn a_remounted_field_does_not_accept_a_native_receipt_from_its_retired_instance(
 }
 
 #[test]
+fn controller_confirmation_clicks_a_text_field_and_directions_leave_it_spatially() {
+    let ctx = Context::default();
+    let mut text = String::new();
+    let focus = std::cell::Cell::new(true);
+    let submitted = std::cell::Cell::new(false);
+    let field = egui::Id::unique("controller-field");
+    let next = egui::Id::unique("controller-next");
+    let mut paint = |frame: &mut UiFrame<'_>| {
+        frame.ctx.root_ui(|ui| {
+            let output = NativeTextEdit::singleline(&mut text, "controller-field", "Name")
+                .native_name(Pos2::ZERO, 1.0)
+                .request_focus(focus.get())
+                .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(200.0, 45.0)));
+            submitted.set(output.submitted);
+            ui.interact(
+                Rect::from_min_size(pos2(260.0, 30.0), vec2(100.0, 45.0)),
+                next,
+                egui::Sense::click(),
+            );
+        });
+    };
+    frame(&ctx, Vec::new(), &mut paint);
+    focus.set(false);
+    frame(&ctx, Vec::new(), &mut paint);
+    assert!(ctx.memory(|memory| memory.has_focus(field)));
+    // Gamepad A is a real egui confirmation, without a native keyboard submit
+    // receipt. Source clicks an input; it never dispatches Enter into it.
+    frame(&ctx, vec![enter_key(egui::Key::Enter)], &mut paint);
+    assert!(!submitted.get());
+    assert!(ctx.memory(|memory| memory.has_focus(field)));
+    frame(&ctx, Vec::new(), &mut paint);
+    frame(&ctx, vec![enter_key(egui::Key::ArrowRight)], &mut paint);
+    frame(&ctx, Vec::new(), &mut paint);
+    assert!(
+        ctx.memory(|memory| memory.has_focus(next)),
+        "controller direction leaves text spatially"
+    );
+}
+
+#[test]
 fn native_editor_honors_readonly_and_async_disabled_admission_without_retiring_its_mount() {
     let ctx = Context::default();
     let mut text = String::new();
