@@ -121,6 +121,7 @@ pub(super) async fn load(document: &Document, ctx: &Context) -> Result<BrowserFo
         "Alegreya Bold",
         "Alegreya Italic",
         "JetBrains Mono",
+        "JetBrains Mono Semibold",
         "JetBrains Mono Bold",
         "IM FELL English",
     ] {
@@ -164,7 +165,8 @@ pub(super) fn font_css(family: &FontFamily, size: f32) -> String {
         "Alegreya Bold" => ("700", "normal", "'SDGPU Alegreya',Georgia,serif"),
         "Alegreya Italic" => ("400", "italic", "'SDGPU Alegreya',Georgia,serif"),
         "JetBrains Mono" => ("400", "normal", "'SDGPU JetBrains Mono',monospace"),
-        "JetBrains Mono Bold" => ("600", "normal", "'SDGPU JetBrains Mono',monospace"),
+        "JetBrains Mono Semibold" => ("600", "normal", "'SDGPU JetBrains Mono',monospace"),
+        "JetBrains Mono Bold" => ("700", "normal", "'SDGPU JetBrains Mono',monospace"),
         "Palatino" => ("400", "normal", "Palatino,'Palatino Linotype',Georgia,serif"),
         "Arial" => ("400", "normal", "Arial,Helvetica,sans-serif"),
         "IM FELL English" => ("400", "normal", "'IM FELL English',Georgia,serif"),
