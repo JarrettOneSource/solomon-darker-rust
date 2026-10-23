@@ -320,25 +320,38 @@ impl PendingHostedWork {
 }
 
 impl Game {
-    // DarkCloudBoneyards owns editor documents, imports and cloud CRUD in the Website.
-    // Its lifetime follows the selected tab, like Source's conditional React child.
     fn update_boneyard_library(&mut self) -> Result<(), String> {
         let Some(hosted) = &mut self.hosted else { return Ok(()) };
         if hosted.desktop_endpoint.is_some() || !self.menu.dark_cloud_boneyards_selected() {
             hosted.boneyard_library = None;
             return Ok(());
         }
-        if let Some(library) = &hosted.boneyard_library {
-            if library.take_menu_requested() {
-                self.menu.request_boneyard_library_menu()?;
-            }
+        let account = hosted.account.as_ref().map(|account| account.username.as_str());
+        if let Some(library) = &mut hosted.boneyard_library {
+            library.set_account(account);
+            library.update()?;
+        } else {
+            hosted.boneyard_library = Some(boneyards::BoneyardLibrary::new(
+                web_sys::window().ok_or("Boneyard library window")?,
+                hosted.api.clone(),
+                account,
+            )?);
+        }
+        Ok(())
+    }
+    pub(super) fn paint_boneyard_library(
+        &mut self,
+        frame: &mut crate::gpu_ui::UiFrame<'_>,
+    ) -> Result<(), String> {
+        if !self.menu.dark_cloud_boneyards_selected() {
             return Ok(());
         }
-        hosted.boneyard_library = Some(boneyards::BoneyardLibrary::mount(
-            &self.menu.boneyards_mount(),
-            hosted.api.mount(),
-            &self.menu.settings().controls.open_menu,
-        )?);
+        let Some(bounds) = frame.widget_rect("cloud-boneyards-content") else { return Ok(()) };
+        if let Some(library) =
+            self.hosted.as_mut().and_then(|hosted| hosted.boneyard_library.as_mut())
+        {
+            library.paint(frame, bounds, self.menu.boneyards_interactive())?;
+        }
         Ok(())
     }
 

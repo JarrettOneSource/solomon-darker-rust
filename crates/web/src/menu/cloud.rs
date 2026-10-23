@@ -1173,9 +1173,7 @@ impl CloudView {
                     egui::pos2(right - 120.0, status.top()),
                     Vec2::new(120.0, 44.0),
                 );
-                if self
-                    .art
-                    .button(frame, ui, "cloud-refresh", "REFRESH", r, 0.55, enabled)
+                if widgets::cloud_button(frame, ui, "cloud-refresh", "REFRESH", r, 0.55, enabled)
                     .clicked()
                     && enabled
                 {
@@ -1188,10 +1186,16 @@ impl CloudView {
                     egui::pos2(right - 120.0, status.top()),
                     Vec2::new(120.0, 44.0),
                 );
-                if self
-                    .art
-                    .button(frame, ui, "cloud-clear-query", "CLEAR SEARCH", r, 0.55, enabled)
-                    .clicked()
+                if widgets::cloud_button(
+                    frame,
+                    ui,
+                    "cloud-clear-query",
+                    "CLEAR SEARCH",
+                    r,
+                    0.55,
+                    enabled,
+                )
+                .clicked()
                     && enabled
                 {
                     actions.push("cloud-clear-query".to_owned());
@@ -1263,10 +1267,16 @@ impl CloudView {
                 );
                 if party && index == 4 {
                     let button = Rect::from_center_size(r.center(), Vec2::new(100.0, 44.0));
-                    if self
-                        .art
-                        .button(frame, ui, "cloud-refresh", "REFRESH", button, 0.55, enabled)
-                        .clicked()
+                    if widgets::cloud_button(
+                        frame,
+                        ui,
+                        "cloud-refresh",
+                        "REFRESH",
+                        button,
+                        0.55,
+                        enabled,
+                    )
+                    .clicked()
                         && enabled
                     {
                         actions.push("cloud-refresh".to_owned());
@@ -1325,18 +1335,16 @@ impl CloudView {
                     );
                     if self.active_error().is_some() {
                         let (_, r) = ui.allocate_space(Vec2::new(list.width(), 50.0));
-                        if self
-                            .art
-                            .button(
-                                frame,
-                                ui,
-                                "cloud-refresh",
-                                "RETRY",
-                                Rect::from_min_size(r.min, Vec2::new(170.0, 44.0)),
-                                0.55,
-                                enabled,
-                            )
-                            .clicked()
+                        if widgets::cloud_button(
+                            frame,
+                            ui,
+                            "cloud-refresh",
+                            "RETRY",
+                            Rect::from_min_size(r.min, Vec2::new(170.0, 44.0)),
+                            0.55,
+                            enabled,
+                        )
+                        .clicked()
                             && enabled
                         {
                             actions.push("cloud-refresh".to_owned());
@@ -1349,7 +1357,6 @@ impl CloudView {
                         Row::Mod(content, subscription) => rows::mod_row(
                             frame,
                             ui,
-                            &self.art,
                             &content,
                             subscription.as_deref(),
                             selected,
@@ -1364,7 +1371,6 @@ impl CloudView {
                         Row::Party(party) => rows::party_row(
                             frame,
                             ui,
-                            &self.art,
                             &party,
                             selected,
                             self.join_request.is_some(),
@@ -1386,7 +1392,6 @@ impl CloudView {
                     if let Err(error) = rows::developer_presence(
                         frame,
                         ui,
-                        &self.art,
                         &self.players,
                         &self.matches,
                         self.presence_request.is_some(),
@@ -1487,18 +1492,16 @@ impl CloudView {
         } else {
             Rect::from_min_size(footer.min + Vec2::new(239.5, 6.0), Vec2::new(353.0, 69.0))
         };
-        if self
-            .art
-            .button(
-                frame,
-                ui,
-                "cloud-primary",
-                label,
-                primary,
-                primary.height() / 69.0,
-                enabled && !disabled,
-            )
-            .clicked()
+        if widgets::cloud_button(
+            frame,
+            ui,
+            "cloud-primary",
+            label,
+            primary,
+            primary.height() / 69.0,
+            enabled && !disabled,
+        )
+        .clicked()
             && enabled
             && !disabled
         {
@@ -1552,10 +1555,16 @@ impl CloudView {
                     egui::pos2(status.right() - 120.0, status.top()),
                     Vec2::new(120.0, 44.0),
                 );
-                if self
-                    .art
-                    .button(frame, ui, "cloud-clear-query", "CLEAR SEARCH", r, 0.55, enabled)
-                    .clicked()
+                if widgets::cloud_button(
+                    frame,
+                    ui,
+                    "cloud-clear-query",
+                    "CLEAR SEARCH",
+                    r,
+                    0.55,
+                    enabled,
+                )
+                .clicked()
                     && enabled
                 {
                     actions.push("cloud-clear-query".to_owned());

@@ -2,7 +2,9 @@
 //! The Website remains the control plane; this adapter never manufactures a game ticket,
 //! score receipt or authoritative checkpoint.
 
+mod boneyards;
 mod types;
+pub use boneyards::{BoneyardDraft, BoneyardDraftSummary};
 pub use types::*;
 
 use serde::Deserialize;
