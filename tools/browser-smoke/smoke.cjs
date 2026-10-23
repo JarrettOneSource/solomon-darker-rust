@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const { chromium } = require(path.resolve(process.env.PW));
 const { startNewGame } = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const url = process.env.URL || 'http://127.0.0.1:4181/';
 const screenshot = process.env.SHOT || path.join(process.env.OUT || '.', 'rust-game-smoke.png');
 const receiptPath = path.join(path.dirname(screenshot),'smoke-receipt.json');
@@ -41,11 +42,12 @@ async function clickThenEscape(page,id) {
 
 (async () => {
   await waitForServer();
-  const browser = await chromium.launch({
+  const owned = await launchOwnedBrowser(chromium,{
     headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
   });
+  const {browser}=owned;
   let page;
   let observed;
   let step='startup';
@@ -149,5 +151,12 @@ async function clickThenEscape(page,id) {
     }
     fs.writeFileSync(receiptPath,JSON.stringify(receipt,null,2));
     throw error;
-  } finally {await browser.close()}
+  } finally {
+    try {
+      fs.writeFileSync(path.join(path.dirname(screenshot),'browser-cleanup.json'),JSON.stringify(await owned.close(),null,2));
+    } catch(error) {
+      fs.writeFileSync(path.join(path.dirname(screenshot),'browser-cleanup-failure.json'),JSON.stringify(error.cleanup||{error:error.stack},null,2));
+      throw error;
+    }
+  }
 })().catch(error => {console.error('smoke failed:',error);process.exitCode=1});

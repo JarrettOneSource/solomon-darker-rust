@@ -6,6 +6,7 @@ const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const {walkSolomonEntrance} = require('./solomon-entrance.cjs');
 
@@ -153,10 +154,10 @@ async function setEnhancedEffects(page, enabled) {
 
 (async () => {
   fs.mkdirSync(output, {recursive: true});
-  const server = await chromium.launchServer({headless: true, host: '127.0.0.1',
+  const owned = await launchOwnedBrowser(chromium,{headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const {browser}=owned;
   const context = await browser.newContext({ignoreHTTPSErrors: true, viewport: {width: 1600, height: 900}});
   const mount=url.pathname.replace(/\/$/,'');
   await context.addInitScript(({key,token})=>localStorage.setItem(key,token),
@@ -372,8 +373,11 @@ return true`);
       ui: await ui.readUi(page).catch(() => null)}, null, 2));
     throw error;
   } finally {
-    await context.close();
-    await browser.close();
-    await server.close();
+    try {
+      fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(await owned.close(),null,2));
+    } catch(error) {
+      fs.writeFileSync(path.join(output,'browser-cleanup-failure.json'),JSON.stringify(error.cleanup||{error:error.stack},null,2));
+      throw error;
+    }
   }
 })().catch(error => {console.error(error.message); process.exitCode = 1;});

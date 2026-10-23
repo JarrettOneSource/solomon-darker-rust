@@ -5,6 +5,7 @@ const path=require('node:path');
 const {chromium}=require(path.resolve(process.env.PW));
 const {reachCollegeLoadout}=require('./menu-journey.cjs');
 const ui=require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const url=process.env.URL||'http://127.0.0.1:4185/';
 const output=process.env.OUT||'/tmp';
 fs.mkdirSync(output,{recursive:true});
@@ -19,9 +20,10 @@ async function ticks(page,count) {
 }
 
 (async()=>{
-  const browser=await chromium.launch({headless:true,
+  const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+  const {browser}=owned;
   try {
     const page=await browser.newPage({viewport:{width:1600,height:900}});
     const observed=ui.watchErrors(page);
@@ -167,5 +169,12 @@ async function ticks(page,count) {
       'College pause seals input while actors advance','real settings slider',
       'key rebinding and capture rejection','HUD scale','screen-reader focus/value announcements',
       'Continue','actual GPU UI'],gpu:gpu.gpu.draw,announcements:await ui.announcements(page),errors:observed.errors}));
-  } finally {await browser.close()}
+  } finally {
+    try {
+      fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(await owned.close(),null,2));
+    } catch(error) {
+      fs.writeFileSync(path.join(output,'browser-cleanup-failure.json'),JSON.stringify(error.cleanup||{error:error.stack},null,2));
+      throw error;
+    }
+  }
 })().catch(error=>{console.error(error);process.exitCode=1});

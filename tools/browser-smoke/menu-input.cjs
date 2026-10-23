@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const {chromium} = require(path.resolve(process.env.PW));
 const {leaveCollegeOffice,reachCollegeLoadout} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const url = process.env.URL || 'http://127.0.0.1:4185/';
 const output = process.env.OUT || '/tmp';
 fs.mkdirSync(output,{recursive:true});
@@ -70,9 +71,10 @@ async function modalFocus(page) {
 }
 
 (async()=>{
-  const browser=await chromium.launch({headless:true,
+  const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+  const {browser}=owned;
   const errors=[];
   try {
     const page=await browser.newPage({viewport:{width:1600,height:900}});
@@ -179,5 +181,12 @@ async function modalFocus(page) {
       'locked loadout Back','neutral handoff','controller pause','spatial focus',
       'modal focus ownership','source portrait guidance','landscape phone title/admission/Create',
       'phone pause targets','actual GPU UI'],errors:errors.flat()}));
-  } finally {await browser.close()}
+  } finally {
+    try {
+      fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(await owned.close(),null,2));
+    } catch(error) {
+      fs.writeFileSync(path.join(output,'browser-cleanup-failure.json'),JSON.stringify(error.cleanup||{error:error.stack},null,2));
+      throw error;
+    }
+  }
 })().catch(error=>{console.error(error);process.exitCode=1});
