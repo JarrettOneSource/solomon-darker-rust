@@ -382,14 +382,62 @@ impl SocialUi {
             }
         }
         if let Some(notice) = &self.hosted_notice {
+            let screen = ctx.content_rect();
+            let font_size = screen.width() * 0.015;
+            let padding = egui::vec2(screen.width() * 0.015, screen.height() * 0.007);
+            let label = crate::gpu_ui::font_run_with_options(
+                frame.ctx,
+                egui::FontId::new(font_size, egui::FontFamily::Name("Cinzel".into())),
+                Color32::from_rgb(234, 216, 170),
+                notice,
+                crate::gpu_ui::FontRunOptions {
+                    wrap_width: Some((screen.width() * 0.7 - padding.x * 2.0 - 2.0).max(1.0)),
+                    letter_spacing: Some(font_size * 0.08),
+                    ..Default::default()
+                },
+            )?;
+            let size = label.size() + padding * 2.0 + egui::vec2(2.0, 2.0);
             egui::Area::new(Self::notice_layer().id)
                 .fade_in(false)
+                .background_interactable(false)
                 .order(Self::notice_layer().order)
-                .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 16.0))
-                .show(&ctx, |ui| {
-                    let response = ui.label(gpu::rich(notice, 16.0, gpu::GOLD));
-                    frame.record("social/notice", notice, "status", &response);
-                });
+                .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -screen.height() * 0.04))
+                .show(&ctx, |ui| -> Result<(), String> {
+                    let (bounds, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+                    ui.painter().rect_filled(
+                        bounds,
+                        0.0,
+                        Color32::from_rgba_unmultiplied(7, 6, 14, 224),
+                    );
+                    ui.painter().rect_stroke(
+                        bounds,
+                        0.0,
+                        egui::Stroke::new(1.0, Color32::from_rgba_unmultiplied(211, 177, 101, 153)),
+                        egui::StrokeKind::Inside,
+                    );
+                    frame.paint_group(
+                        ui.painter(),
+                        crate::gpu_ui::GroupEffect {
+                            shadows: vec![crate::gpu_ui::ImageShadow {
+                                offset: egui::vec2(0.0, 2.0),
+                                blur: 1.0,
+                                color: Color32::BLACK,
+                            }],
+                            ..Default::default()
+                        },
+                        |frame, painter| {
+                            label.paint(
+                                frame,
+                                painter,
+                                bounds.min + padding + egui::vec2(1.0, 1.0),
+                                1.0,
+                            )
+                        },
+                    )?;
+                    frame.record_rect("social/notice", notice, "status", bounds, true);
+                    Ok(())
+                })
+                .inner?;
         }
         self.clipboard.finish_frame();
         Ok(())
