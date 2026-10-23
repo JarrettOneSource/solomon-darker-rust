@@ -1,14 +1,12 @@
 //! The actual host profile card and its Message/Invite commands.
 
-use solomon_sim::Vec2;
 use solomon_sim::profile::native_wizard_class_title;
 use solomon_sim::social::{
     GameChatSender, GameChatWorldKind, GamePlayerCardProfile, GameSessionKind,
     hub_player_party_invite_available, native_player_card_college_invite_available,
 };
 
-use super::{SocialUi, Surface, action_button, attribute};
-use crate::ui::{append, element};
+use super::{SocialUi, Surface};
 
 impl SocialUi {
     pub(super) fn current_card(&self) -> Option<&GamePlayerCardProfile> {
@@ -41,166 +39,17 @@ impl SocialUi {
         self.unread[super::channel_index(self.channel)] = 0;
     }
 
-    pub(super) fn draw_card(&self) -> Result<(), String> {
+    pub(super) fn paint_card(
+        &mut self,
+        frame: &mut crate::gpu_ui::UiFrame<'_>,
+        ui: &mut egui::Ui,
+    ) -> Result<(), String> {
         let actor_profile = self.hub_player_profile();
-        let Some(card) = self.current_card().or(actor_profile.as_ref()) else {
+        let Some(card) = self.current_card().or(actor_profile.as_ref()).cloned() else {
             return Ok(());
         };
         let snapshot = self.snapshot.as_ref().expect("a card belongs to a host snapshot");
         let is_actor = matches!(self.surface, Some(Surface::HubPlayer(_)));
-        let dialog = element(&self.document, "section", "hub-player-profile")?;
-        for (name, value) in [
-            ("role", "dialog"),
-            ("aria-modal", "true"),
-            ("aria-labelledby", "social-player-name"),
-            ("tabindex", "-1"),
-            ("data-social-focus", "true"),
-            ("data-profile-player", card.player_id.as_str()),
-            ("data-profile-element", card.element.as_str()),
-            ("data-profile-origin", if is_actor { "actor" } else { "hosted-profile" }),
-        ] {
-            attribute(&dialog, name, value)?;
-        }
-        for class in [
-            "hub-player-profile-corner",
-            "hub-player-profile-corner hub-player-profile-corner-right",
-        ] {
-            let corner = self.ui.sprite(&self.document, 17, class)?;
-            corner
-                .style()
-                .set_property("position", "absolute")
-                .map_err(|_| "card corner positioning")?;
-            append(&dialog, &corner)?;
-        }
-        let body = element(&self.document, "div", "hub-player-profile-body")?;
-        let header = element(&self.document, "header", "hub-player-profile-header")?;
-        let portrait = element(&self.document, "span", "hub-wizard-portrait")?;
-        let wizard =
-            self.portraits.wizard(&self.document, card.element, 12, Vec2::new(31.5, 66.5), 1.15)?;
-        wizard.orb.set_hidden(true);
-        wizard
-            .root
-            .style()
-            .set_property("transform-origin", "top left")
-            .map_err(|_| "card portrait origin")?;
-        append(&portrait, &wizard.root)?;
-        let frame = self.skills.sprite(&self.document, 14, "hub-wizard-portrait-frame")?;
-        let geometry = self.skills.record(14)?;
-        // Current Website PlayerCardDialog uses the native Skills frame, with its
-        // logical dimensions scaled to the responsive portrait's square.
-        frame
-            .style()
-            .set_property("position", "absolute")
-            .map_err(|_| "player card frame position")?;
-        frame
-            .style()
-            .set_property(
-                "transform",
-                &format!(
-                    "scale(calc(var(--hub-portrait-size) / {}), calc(var(--hub-portrait-size) / {}))",
-                    geometry.logical_width, geometry.logical_height,
-                ),
-            )
-            .map_err(|_| "player card frame scale")?;
-        append(&portrait, &frame)?;
-        append(&header, &portrait)?;
-        let title = element(&self.document, "div", "hub-player-profile-title")?;
-        let name = element(&self.document, "h2", "")?;
-        attribute(&name, "id", "social-player-name")?;
-        name.set_text_content(Some(&card.display_name));
-        append(&title, &name)?;
-        let class = element(&self.document, "p", "hub-player-profile-class")?;
-        class.set_text_content(Some(native_wizard_class_title(card.element, card.discipline)));
-        append(&title, &class)?;
-        let badge = element(&self.document, "p", "hub-player-profile-badge")?;
-        attribute(&badge, "data-registered", &card.account_username.is_some().to_string())?;
-        badge.set_text_content(Some(
-            &card
-                .account_username
-                .as_ref()
-                .map_or_else(|| "Guest wizard".to_owned(), |name| format!("Registered · {name}")),
-        ));
-        append(&title, &badge)?;
-        if is_actor {
-            let actor = self.hub_players.iter().find(|actor| actor.player_id == card.player_id);
-            if let Some(activity) = actor.and_then(|actor| actor.activity) {
-                let label = element(&self.document, "p", "hub-player-profile-activity")?;
-                let (kind, text) = match activity {
-                    solomon_protocol::HubActivity::Occupied => ("occupied", "Occupied"),
-                    solomon_protocol::HubActivity::Paused => ("paused", "Paused"),
-                };
-                attribute(&label, "data-profile-activity", kind)?;
-                label.set_text_content(Some(text));
-                append(&title, &label)?;
-            }
-        } else {
-            let activity = element(&self.document, "p", "hub-player-profile-activity")?;
-            let session_label = match card.session_kind {
-                GameSessionKind::PrivateCollege => "PRIVATE COLLEGE",
-                GameSessionKind::GlobalHub => "GLOBAL HUB",
-                GameSessionKind::Standalone => "LOCAL SESSION",
-            };
-            let world_label = match card.activity {
-                GameChatWorldKind::Hub => "IN COLLEGE",
-                GameChatWorldKind::Boneyard => "IN BONEYARD",
-            };
-            activity.set_text_content(Some(&format!("{session_label} · {world_label}")));
-            append(&title, &activity)?;
-        }
-        append(&header, &title)?;
-        append(&body, &header)?;
-        let stats = element(&self.document, "dl", "hub-player-profile-stats")?;
-        let minutes = card.total_playtime_ms.map(|time| time / 60_000);
-        let playtime = minutes.map_or_else(
-            || "—".to_owned(),
-            |minutes| {
-                if minutes >= 60 {
-                    format!("{}h {}m", minutes / 60, minutes % 60)
-                } else {
-                    format!("{minutes}m")
-                }
-            },
-        );
-        for (label, value, record) in [
-            ("Gold", format_integer(card.gold), "bag"),
-            (
-                "Highest Wave",
-                card.highest_wave.map_or_else(|| "—".to_owned(), format_integer),
-                "wave",
-            ),
-            ("Time in the Dark", playtime, "infinity"),
-        ] {
-            let row = element(&self.document, "div", "hub-player-profile-stat")?;
-            let icon = element(&self.document, "img", "social-profile-icon")?;
-            attribute(&icon, "src", &format!("assets/stock/icon-{record}.png"))?;
-            attribute(&icon, "alt", "")?;
-            append(&row, &icon)?;
-            let term = element(&self.document, "dt", "")?;
-            term.set_text_content(Some(label));
-            append(&row, &term)?;
-            let value_node = element(&self.document, "dd", "")?;
-            value_node.set_text_content(Some(&value));
-            if label == "Gold" {
-                attribute(&value_node, "data-profile-gold", &card.gold.to_string())?;
-            }
-            append(&row, &value_node)?;
-            append(&stats, &row)?;
-        }
-        append(&body, &stats)?;
-        let actions = element(&self.document, "div", "hub-player-profile-actions")?;
-        if ((!is_actor && self.hosted) || card.player_id != snapshot.local_player_id)
-            && self.context.chat_enabled
-        {
-            append(
-                &actions,
-                &action_button(
-                    &self.document,
-                    "Message",
-                    "card-message",
-                    "hub-player-profile-message",
-                )?,
-            )?;
-        }
         let can_invite = if is_actor {
             hub_player_party_invite_available(
                 snapshot.party_state.as_ref().map(|state| &state.party),
@@ -227,24 +76,197 @@ impl SocialUi {
                         && !state.party.member_player_ids.contains(&card.player_id)
                 })
         };
-        if can_invite {
-            append(
-                &actions,
-                &action_button(
-                    &self.document,
-                    "Invite to Party",
-                    "card-invite",
-                    "hub-player-profile-invite",
-                )?,
-            )?;
+
+        let can_message = ((!is_actor && self.hosted)
+            || card.player_id != snapshot.local_player_id)
+            && self.context.chat_enabled;
+        let activity = if is_actor {
+            self.hub_players
+                .iter()
+                .find(|actor| actor.player_id == card.player_id)
+                .and_then(|actor| actor.activity)
+                .map(|activity| match activity {
+                    solomon_protocol::HubActivity::Occupied => "Occupied".to_owned(),
+                    solomon_protocol::HubActivity::Paused => "Paused".to_owned(),
+                })
+        } else {
+            Some(format!(
+                "{} · {}",
+                match card.session_kind {
+                    GameSessionKind::PrivateCollege => "PRIVATE COLLEGE",
+                    GameSessionKind::GlobalHub => "GLOBAL HUB",
+                    GameSessionKind::Standalone => "LOCAL SESSION",
+                },
+                match card.activity {
+                    GameChatWorldKind::Hub => "IN COLLEGE",
+                    GameChatWorldKind::Boneyard => "IN BONEYARD",
+                }
+            ))
+        };
+        let width = (self.size.0 as f32 - 40.0).clamp(200.0, 400.0);
+        let height = (self.size.1 as f32 - 32.0).clamp(180.0, 430.0);
+        let bounds = egui::Rect::from_center_size(
+            frame.ctx.content_rect().center(),
+            egui::vec2(width, height),
+        );
+        ui.interact(bounds, egui::Id::unique("social/card-panel-block"), egui::Sense::click());
+        let mut action = None;
+        let mut portrait_error = None;
+        ui.scope_builder(egui::UiBuilder::new().max_rect(bounds), |ui| {
+            egui::Frame::new()
+                .fill(egui::Color32::from_rgb(13, 15, 21))
+                .stroke(egui::Stroke::new(2.0, super::gpu::GOLD))
+                .corner_radius(5.0)
+                .inner_margin(24.0)
+                .show(ui, |ui| {
+                    ui.set_min_width(width - 48.0);
+                    egui::ScrollArea::vertical().max_height(height - 48.0).show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            let (portrait, _) = ui
+                                .allocate_exact_size(egui::vec2(76.0, 84.0), egui::Sense::hover());
+                            let painter = ui.painter().with_clip_rect(portrait);
+                            if let Err(error) = self.portraits.paint_wizard(
+                                frame,
+                                &painter,
+                                card.element,
+                                12,
+                                portrait.min + egui::vec2(31.5, 66.5),
+                                1.15,
+                            ) {
+                                portrait_error = Some(error);
+                            }
+                            if let Err(error) = self.skills.paint_raw(
+                                frame,
+                                ui.painter(),
+                                14,
+                                egui::Rect::from_min_size(portrait.min, egui::vec2(76.0, 76.0)),
+                                egui::Color32::WHITE,
+                            ) {
+                                portrait_error = Some(error);
+                            }
+                            ui.vertical(|ui| {
+                                ui.label(super::gpu::rich(
+                                    &card.display_name,
+                                    22.0,
+                                    super::gpu::GOLD,
+                                ));
+                                ui.label(super::gpu::rich(
+                                    native_wizard_class_title(card.element, card.discipline),
+                                    14.0,
+                                    super::gpu::PALE,
+                                ));
+                                ui.label(super::gpu::rich(
+                                    card.account_username.as_ref().map_or_else(
+                                        || "Guest wizard".into(),
+                                        |name| format!("Registered · {name}"),
+                                    ),
+                                    12.0,
+                                    egui::Color32::from_gray(173),
+                                ));
+                                if let Some(activity) = &activity {
+                                    ui.label(super::gpu::rich(activity, 10.0, super::gpu::GOLD));
+                                }
+                            });
+                        });
+                        ui.add_space(14.0);
+                        let playtime = card.total_playtime_ms.map(|time| time / 60000).map_or_else(
+                            || "—".into(),
+                            |minutes| {
+                                if minutes >= 60 {
+                                    format!("{}h {}m", minutes / 60, minutes % 60)
+                                } else {
+                                    format!("{minutes}m")
+                                }
+                            },
+                        );
+                        for (label, value, icon) in [
+                            ("Gold", format_integer(card.gold), "bag"),
+                            (
+                                "Highest Wave",
+                                card.highest_wave.map_or_else(|| "—".to_owned(), format_integer),
+                                "wave",
+                            ),
+                            ("Time in the Dark", playtime, "infinity"),
+                        ] {
+                            ui.separator();
+                            ui.horizontal(|ui| {
+                                let (rect, _) = ui.allocate_exact_size(
+                                    egui::vec2(21.0, 21.0),
+                                    egui::Sense::hover(),
+                                );
+                                frame.image(
+                                    ui.painter(),
+                                    &format!("assets/stock/icon-{icon}.png"),
+                                    rect,
+                                    None,
+                                    egui::Color32::WHITE,
+                                );
+                                ui.label(super::gpu::rich(label, 14.0, super::gpu::PALE));
+                                let response =
+                                    ui.label(super::gpu::rich(&value, 18.0, super::gpu::GOLD));
+                                frame.record(
+                                    &format!("social/card-stat:{icon}"),
+                                    &value,
+                                    "status",
+                                    &response,
+                                );
+                            });
+                        }
+                        ui.add_space(18.0);
+                        ui.horizontal_wrapped(|ui| {
+                            if can_message
+                                && super::gpu::browser_button(
+                                    frame,
+                                    ui,
+                                    "card-message",
+                                    "Message",
+                                    egui::vec2(88.0, 34.0),
+                                    true,
+                                )
+                                .clicked()
+                            {
+                                action = Some("card-message");
+                            }
+                            if can_invite
+                                && super::gpu::browser_button(
+                                    frame,
+                                    ui,
+                                    "card-invite",
+                                    "Invite to Party",
+                                    egui::vec2(110.0, 34.0),
+                                    true,
+                                )
+                                .clicked()
+                            {
+                                action = Some("card-invite");
+                            }
+                            let close = super::gpu::browser_button(
+                                frame,
+                                ui,
+                                "card-close",
+                                "Close",
+                                egui::vec2(70.0, 34.0),
+                                true,
+                            );
+                            if self.focus_modal {
+                                close.request_focus();
+                                self.focus_modal = false;
+                            }
+                            if close.clicked() {
+                                action = Some("close");
+                            }
+                        });
+                    });
+                });
+        });
+        if let Some(error) = portrait_error {
+            return Err(error);
         }
-        append(
-            &actions,
-            &action_button(&self.document, "Close", "close", "hub-player-profile-close")?,
-        )?;
-        append(&body, &actions)?;
-        append(&dialog, &body)?;
-        append(&self.modal, &dialog)
+        frame.record_rect("social/player-card", &card.display_name, "dialog", bounds, true);
+        if let Some(action) = action {
+            self.activate(action)?;
+        }
+        Ok(())
     }
 
     fn hub_player_profile(&self) -> Option<GamePlayerCardProfile> {

@@ -8,11 +8,8 @@ use solomon_sim::social::party_ui::{
     native_party_invitation_action_bounds, native_party_invitation_body,
 };
 use solomon_sim::social::{GameChatWorldKind, PartyInvitationView, SocialAction};
-use web_sys::HtmlElement;
 
-use super::super::{SocialUi, Surface, attribute};
-use crate::ui::text::native_text;
-use crate::ui::{append, element, message_frame, style};
+use super::super::{SocialUi, Surface};
 
 impl SocialUi {
     fn first_party_invitation(&self) -> Option<&PartyInvitationView> {
@@ -38,100 +35,71 @@ impl SocialUi {
         }
     }
 
-    pub(in crate::social) fn draw_party_invitation(&mut self) -> Result<(), String> {
-        self.party_invitation.set_hidden(!self.party_invitation_visible());
-        if !self.party_invitation_visible() {
-            self.shown_party_invitation = None;
-            self.party_invitation.set_text_content(None);
-            self.party_invitation
-                .remove_attribute("data-party-invitation")
-                .map_err(|_| "hidden Party invitation identity")?;
-            return Ok(());
-        }
-        let invitation = self.first_party_invitation().expect("visible Party invitation");
+    pub(in crate::social) fn paint_party_invitation(
+        &mut self,
+        frame: &mut crate::gpu_ui::UiFrame<'_>,
+        ui: &mut egui::Ui,
+    ) -> Result<(), String> {
+        let Some(invitation) = self.first_party_invitation() else { return Ok(()) };
         let id = invitation.id.clone();
         let body = native_party_invitation_body(&invitation.inviter.display_name);
-        let focus = self.shown_party_invitation.as_deref() != Some(id.as_str());
-        let retained_focus = self
-            .document
-            .active_element()
-            .and_then(|node| node.get_attribute("data-party-invitation-answer"));
-        self.party_invitation.set_text_content(None);
-        attribute(&self.party_invitation, "data-party-invitation", &id)?;
-        let stage = element(&self.document, "section", "hub-party-menu-stage")?;
-        for (name, value) in [
-            ("role", "dialog"),
-            ("aria-modal", "true"),
-            ("aria-label", "Party invitation"),
-            ("aria-describedby", "social-party-invitation-body"),
-            ("data-native-ui-message-box", ""),
-        ] {
-            attribute(&stage, name, value)?;
-        }
-        let scale = (f64::from(self.size.0) / 1600.0).min(f64::from(self.size.1) / 900.0);
-        let left = (f64::from(self.size.0) - 1600.0 * scale) / 2.0;
-        let top = (f64::from(self.size.1) - 900.0 * scale) / 2.0;
-        style(&stage, &format!("left:{left}px;top:{top}px;transform:scale({scale})"))?;
-        let bounds = NATIVE_PARTY_INVITATION_FRAME;
-        let frame = message_frame(&self.document, &self.ui, bounds.width, bounds.height)?;
-        style(
-            &frame,
-            &format!(
-                "position:absolute;left:{}px;top:{}px;width:{}px;height:{}px;pointer-events:none",
-                bounds.x, bounds.y, bounds.width, bounds.height
-            ),
-        )?;
-        append(&stage, &frame)?;
-        let description = element(&self.document, "p", "native-ui-sr-only")?;
-        attribute(&description, "id", "social-party-invitation-body")?;
-        description.set_text_content(Some(&body));
-        append(&stage, &description)?;
+        let opening = self.shown_party_invitation.as_deref() != Some(&id);
+        let (origin, scale) = super::super::gpu::stage(self.size);
+        let bounds = super::super::gpu::rect(NATIVE_PARTY_INVITATION_FRAME, origin, scale);
+        ui.interact(
+            bounds,
+            egui::Id::unique("social/invitation-panel-block"),
+            egui::Sense::click(),
+        );
+        crate::gpu_ui::message_frame(frame, ui.painter(), &self.ui, bounds)?;
+        frame.record_rect("social/party-invitation", &body, "dialog", bounds, true);
         for (text, font, baseline, line_height) in [
             (NATIVE_PARTY_INVITATION_TITLE, NativeUiFontName::Menu, 95.0, None),
             (body.as_str(), NativeUiFontName::Medium, 130.5, Some(17.0)),
         ] {
-            append(
-                &stage,
-                &native_text(
-                    &self.document,
-                    &NativeUiTextSpec {
-                        align: NativeUiTextAlign::Left,
-                        max_width: Some(400.0),
-                        line_height,
-                        ..NativeUiTextSpec::new(font, text, bounds.x + 76.0, bounds.y + baseline)
-                    },
-                    "",
-                )?,
-            )?;
+            super::super::gpu::native_text(
+                frame,
+                ui.painter(),
+                &NativeUiTextSpec {
+                    align: NativeUiTextAlign::Left,
+                    max_width: Some(400.0),
+                    line_height,
+                    ..NativeUiTextSpec::new(
+                        font,
+                        text,
+                        NATIVE_PARTY_INVITATION_FRAME.x + 76.0,
+                        NATIVE_PARTY_INVITATION_FRAME.y + baseline,
+                    )
+                },
+                origin,
+                scale,
+            );
         }
-        let mut focused: Option<HtmlElement> = None;
+        let mut selected = None;
         for ((label, answer), bounds) in [("ACCEPT", "accept"), ("DENY", "deny")]
             .into_iter()
             .zip(native_party_invitation_action_bounds())
         {
-            let button = self.party_stock_action(
+            let action = format!("party-invitation-{answer}:{id}");
+            let response = super::super::gpu::stock_button(
+                frame,
+                ui,
+                &self.ui,
+                &action,
                 label,
-                &format!("party-invitation-{answer}:{id}"),
-                bounds,
-                1.0,
+                super::super::gpu::rect(bounds, origin, scale),
+                true,
             )?;
-            attribute(&button, "data-party-invitation-answer", answer)?;
-            attribute(
-                &button,
-                if answer == "accept" { "data-game-default-focus" } else { "data-game-back" },
-                "true",
-            )?;
-            let should_focus =
-                if focus { answer == "accept" } else { retained_focus.as_deref() == Some(answer) };
-            if should_focus {
-                focused = Some(button.clone());
+            if opening && answer == "accept" {
+                response.request_focus();
             }
-            append(&stage, &button)?;
+            if response.clicked() {
+                selected = Some(action);
+            }
         }
-        append(&self.party_invitation, &stage)?;
         self.shown_party_invitation = Some(id);
-        if let Some(button) = focused {
-            button.focus().map_err(|_| "Party invitation focus")?;
+        if let Some(action) = selected {
+            self.activate(&action)?;
         }
         Ok(())
     }
