@@ -637,7 +637,7 @@ impl Game {
         self.menu.set_enhanced_effects_authority(self.enhanced_effects_authority())?;
         self.hud.update_diagnostics(time, self.native.as_ref().and_then(NativeGame::ping_ms))?;
         let last = self.last_time.replace(time).unwrap_or(time);
-        self.commit_ui(time)?;
+        self.commit_ui(time, self.menu.is_blocking())?;
         if self.editor_test_disposed() {
             return Ok(());
         }
@@ -646,6 +646,7 @@ impl Game {
         let mut run = self.gpu_ui.begin_frame(&mut self.renderer, viewport, time / 1000.0)?;
         let result = (|| {
             loop {
+                let menu_was_open = self.menu.is_blocking();
                 let more = {
                     let (gpu_ui, paint) = self.ui_painter();
                     gpu_ui.paint_next(&mut run, paint)?
@@ -653,7 +654,7 @@ impl Game {
                 if !more {
                     break;
                 }
-                self.commit_ui(time)?;
+                self.commit_ui(time, menu_was_open)?;
                 if self.editor_test_disposed() {
                     return Ok(());
                 }
@@ -685,7 +686,7 @@ impl Game {
         self.hosted.as_ref().is_some_and(|hosted| hosted.deployment_update.restarting())
     }
 
-    fn commit_ui(&mut self, time: f64) -> Result<(), String> {
+    fn commit_ui(&mut self, time: f64, menu_was_open: bool) -> Result<(), String> {
         if self.deployment_restarting() {
             return self.input.set_blocked(true);
         }
@@ -693,7 +694,6 @@ impl Game {
             return self.commit_hosted_observer_ui(time);
         }
         let skills_were_open = self.panels.panel() == Some(PlayerPanel::Skills);
-        let menu_was_open = self.menu.is_blocking();
         self.update_skill_picker(time)?;
         self.update_social(time)?;
         self.update_cheats()?;

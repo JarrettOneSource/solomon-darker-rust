@@ -253,6 +253,13 @@ and gameplay work in the same frame while still retiring pending textures. Obser
 deployment barriers retain their read-only/held semantics. The binding/text-focus batch regressions and actual rapid
 Settings/HUD journeys qualify this seam; the latter remain pending the combined rebuild.
 
+The ordinary58df78d Boneyard journey preserved world entry, movement, Pause/Leave and
+Continue, then exposed a local durability regression on its second Escape: live tick2923
+but saved tick2910. `MenuUi::paint` can open Pause before its typed-action commit, so sampling
+the old blocking state inside that commit misses the edge. The Game owner now captures
+that state before each input pass, preserving the existing local pause-save contract.
+The exact completed-save assertion remains the acceptance check; no timing tolerance is added.
+
 ## Test ownership and stopping checks
 
 Acceptance owns `gpu-ui.cjs`, `gpu-ui-contract.test.cjs`, `menu-journey.cjs`, `smoke.cjs`,
