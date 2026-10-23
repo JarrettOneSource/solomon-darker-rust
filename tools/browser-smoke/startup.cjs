@@ -350,7 +350,8 @@ async function main() {
     if(selected('cold'))receipt.cold=await collect(page,'cold',()=>page.goto(url,{waitUntil:'domcontentloaded'}),observed);
     if(selected('warm')) {
       if(!selected('cold'))receipt.warmPrimer=await collect(page,'warm-primer',()=>page.goto(url,{waitUntil:'domcontentloaded'}),observed);
-      receipt.warm=await collect(page,'warm',()=>page.reload({waitUntil:'domcontentloaded'}),observed);
+      receipt.warm=await collect(page,'warm',()=>ui.observeDocumentReplacement(page,
+        ()=>page.reload({waitUntil:'domcontentloaded'})),observed);
     }
     receipt.announcements=await page.evaluate(()=>({platform:window.__solomonAnnouncementPlatform,
       ownership:window.__solomonAnnouncementOwnership,events:window.__solomonAnnouncements}));
