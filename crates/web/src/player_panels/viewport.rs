@@ -13,6 +13,39 @@ pub(super) enum PanelSection {
     Next,
 }
 impl PlayerPanels {
+    pub fn inventory_preview_underlay(
+        &self,
+    ) -> Result<Option<super::InventoryPreviewUnderlay>, String> {
+        if self.panel != Some(PlayerPanel::Inventory) {
+            return Ok(None);
+        }
+        let r = self.ui.record(62)?;
+        let [ox, oy] = r.registered_origin();
+        let scale = self.view_scale * 1.25;
+        let top = if self.compact { 48.0 } else { 0.0 };
+        Ok(Some(super::InventoryPreviewUnderlay {
+            texture_path: "assets/stock/UI.png",
+            source: HudRect::new(r.x as f64, r.y as f64, r.width as f64, r.height as f64),
+            destination: HudRect::new(
+                self.stage_origin.x
+                    + 800.0 * self.view_scale
+                    + (ox as f64 - r.logical_width as f64 / 2.0) * scale,
+                self.stage_origin.y
+                    + 249.0 * self.view_scale
+                    + (oy as f64 - r.logical_height as f64 / 2.0) * scale,
+                r.width as f64 * scale,
+                r.height as f64 * scale,
+            ),
+            clip: HudRect::new(
+                0.0,
+                top,
+                self.viewport_size.0 as f64,
+                self.viewport_size.1 as f64 - top,
+            ),
+            tint: 0xffffff,
+            alpha: self.alpha * 0.32,
+        }))
+    }
     pub fn inventory_preview_placement(&self) -> Option<InventoryPreviewPlacement> {
         if self.panel != Some(PlayerPanel::Inventory) || self.notice.is_some() || self.dye.is_some()
         {
