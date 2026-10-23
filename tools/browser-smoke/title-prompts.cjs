@@ -11,7 +11,8 @@ const {startNewGame} = require('./menu-journey.cjs');
   let page;
   try {
     page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
-    const {errors} = gpu.watchErrors(page);
+    const {errors, ready: errorsReady} = gpu.watchErrors(page);
+    await errorsReady;
     await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
     await gpu.ready(page);
     await startNewGame(page, {name: 'Felix'});

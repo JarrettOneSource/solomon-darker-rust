@@ -20,7 +20,8 @@ async function reveal(page, id) {
   let page;
   try {
     page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
-    const {errors} = gpu.watchErrors(page);
+    const {errors, ready: errorsReady} = gpu.watchErrors(page);
+    await errorsReady;
     await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
     await gpu.ready(page);
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) await gpu.click(page, 'prompt-secondary');
@@ -86,7 +87,7 @@ async function reveal(page, id) {
     await gpu.value(page, 'settings-range:sound', '37');
     await gpu.click(page, 'settings-back');
     await gpu.settleErrors(page);
-    await page.reload();
+    await gpu.observeDocumentReplacement(page, () => page.reload());
     await gpu.ready(page);
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) await gpu.click(page, 'prompt-secondary');
     await gpu.click(page, 'settings');

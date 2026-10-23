@@ -35,7 +35,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
     viewport: {width: 1280, height: 720}});
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
-  gpu.watchRequestFailures(page, {errors});
+  await gpu.watchRequestFailures(page, {errors}).ready;
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
   page.on('request', request => {
@@ -71,7 +71,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
     await page.waitForURL(target => target.pathname === `${mount}/account`);
     checks.push('the retained real account signs in through the ordinary Website form');
     await gpu.settleErrors(page);
-    await page.goto(url, {waitUntil: 'load'});
+    await gpu.observeDocumentReplacement(page, () => page.goto(url, {waitUntil: 'load'}));
     await gpu.ready(page);
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) {
       await gpu.click(page, 'prompt-secondary');

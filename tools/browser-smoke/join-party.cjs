@@ -10,7 +10,8 @@ const gpu = require('./gpu-ui.cjs');
   let page;
   try {
     page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
-    const {errors} = gpu.watchErrors(page);
+    const {errors, ready: errorsReady} = gpu.watchErrors(page);
+    await errorsReady;
     const responses = [];
     page.on('response', response => {
       if (new URL(response.url()).pathname.endsWith('/api/game/parties') && response.ok()) responses.push(response.json());

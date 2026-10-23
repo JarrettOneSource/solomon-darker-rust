@@ -93,7 +93,7 @@ async function editor() {
 async function back() {
   const started = Date.now();
   await gpu.settleErrors(page);
-  await page.getByRole('button', { name: /The Dark Cloud/ }).click();
+  await gpu.observeDocumentReplacement(page, () => page.getByRole('button', { name: /The Dark Cloud/ }).click());
   await page.waitForURL(url => url.origin === game.origin && url.pathname === game.pathname
     && url.searchParams.get('dark-cloud') === 'boneyards');
   await gpu.ready(page);
@@ -110,7 +110,7 @@ async function testRow(shelf, name, label) {
   const before = sockets.length;
   const started = Date.now();
   await gpu.settleErrors(page);
-  await gpu.click(page, (await shelfWidget(shelf, name, 'test')).id);
+  await gpu.observeDocumentReplacement(page, async () => gpu.click(page, (await shelfWidget(shelf, name, 'test')).id));
   await page.waitForURL(url => url.pathname === `${mount}/boneyard`);
   await page.waitForFunction(() => window.shelfPresentationTrace.some(event =>
     event.kind === 'solomon-editor-test-state' && (event.state === 'error'
@@ -212,7 +212,7 @@ async function confirmDelete(shelf, name) {
     });
     page = await context.newPage();
     page.setDefaultTimeout(45000);
-    gpu.watchRequestFailures(page, {errors});
+    await gpu.watchRequestFailures(page, {errors}).ready;
     page.on('pageerror', error => recordError(error.message));
     page.on('console', message => {
       if (message.type() !== 'error') return;
@@ -251,7 +251,7 @@ async function confirmDelete(shelf, name) {
 
     step = 'Explore Boneyards';
     await gpu.settleErrors(page);
-    await page.goto(game.href, { timeout: 240000 });
+    await gpu.observeDocumentReplacement(page, () => page.goto(game.href, { timeout: 240000 }));
     await gpu.ready(page);
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) {
       await gpu.click(page, 'prompt-secondary');
@@ -284,7 +284,7 @@ async function confirmDelete(shelf, name) {
     // Clicking the parent scene must keep its embedded Shelf above that scene.
     await gpu.click(page, 'cloud-tab:boneyards');
     await gpu.settleErrors(page);
-    await gpu.click(page, 'boneyards/new');
+    await gpu.observeDocumentReplacement(page, () => gpu.click(page, 'boneyards/new'));
     await editor();
     await saveName(importName);
     await page.getByRole('button', { name: 'File ▾', exact: true }).click();
@@ -322,13 +322,13 @@ async function confirmDelete(shelf, name) {
     await confirmDelete('On this device', nativeName);
     checked('the ordinary editor .boneyard export imports through the full Rust native-document reader');
     await gpu.settleErrors(page);
-    await gpu.click(page, (await shelfWidget('On this device', localName)).id);
+    await gpu.observeDocumentReplacement(page, async () => gpu.click(page, (await shelfWidget('On this device', localName)).id));
     await editor();
     assert.equal(await page.getByLabel('Name', { exact: true }).inputValue(), localName);
     const consumedUrl = lastWorkshopUrl;
     await back();
     await gpu.settleErrors(page);
-    await page.goto(consumedUrl);
+    await gpu.observeDocumentReplacement(page, () => page.goto(consumedUrl));
     await page.getByRole('alert').filter({ hasText: 'no longer available' }).waitFor();
     await back();
     await confirmDelete('On this device', importName);
@@ -340,7 +340,7 @@ async function confirmDelete(shelf, name) {
 
     step = 'cloud Edit and Delete';
     await gpu.settleErrors(page);
-    await gpu.click(page, (await shelfWidget('In the cloud', localName)).id);
+    await gpu.observeDocumentReplacement(page, async () => gpu.click(page, (await shelfWidget('In the cloud', localName)).id));
     await editor();
     assert.equal(await page.getByLabel('Name', { exact: true }).inputValue(), localName);
     await back();

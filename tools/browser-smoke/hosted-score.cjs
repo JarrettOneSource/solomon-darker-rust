@@ -97,8 +97,8 @@ function observeFrame(frame) {
   }
 }
 
-function observe(page) {
-  gpu.watchRequestFailures(page, {errors});
+async function observe(page) {
+  const observation = gpu.watchRequestFailures(page, {errors});
   page.on('request', request => {
     if (['image', 'font'].includes(request.resourceType())) pendingPageArt.add(request);
     if (new URL(request.url()).pathname === `${mount}/api/auth/register`
@@ -195,6 +195,7 @@ function observe(page) {
       }
     });
   });
+  await observation.ready;
 }
 
 async function gameTitle(page, username) {
@@ -230,7 +231,8 @@ async function returnFromAccount(page) {
   await page.waitForURL(current => current.origin === url.origin
     && current.pathname === `${mount}/account`);
   await page.evaluate(() => document.fonts.ready.then(() => null));
-  await page.getByRole('navigation').getByRole('link', {name: 'Play', exact: true}).click();
+  await gpu.observeDocumentReplacement(page, () =>
+    page.getByRole('navigation').getByRole('link', {name: 'Play', exact: true}).click());
 }
 
 async function register(page) {
@@ -243,7 +245,7 @@ async function register(page) {
   await gpu.click(page, 'explore');
   await gpu.widget(page, 'cloud-sign-in', {enabled:true});
   await settlePageArt(page);
-  await gpu.click(page, 'cloud-sign-in');
+  await gpu.observeDocumentReplacement(page, () => gpu.click(page, 'cloud-sign-in'));
   await page.waitForURL(current => current.pathname === `${mount}/login`);
   await settledAccountForm(page);
   await page.getByRole('link', {name: 'Create an account', exact: true}).click();
@@ -271,7 +273,7 @@ async function signIn(page) {
   await gpu.click(page, 'explore');
   await gpu.widget(page, 'cloud-sign-in', {enabled:true});
   await settlePageArt(page);
-  await gpu.click(page, 'cloud-sign-in');
+  await gpu.observeDocumentReplacement(page, () => gpu.click(page, 'cloud-sign-in'));
   await page.waitForURL(current => current.pathname === `${mount}/login`);
   await settledAccountForm(page);
   for (const [autocomplete, value] of [['username', account.username],
@@ -437,7 +439,7 @@ async function main() {
       viewport: {width: 1280, height: 720}});
     page.setDefaultTimeout(30000);
     page.setDefaultNavigationTimeout(30000);
-    observe(page);
+    await observe(page);
     await page.goto(url.href, {waitUntil: 'load'});
     await gameTitle(page, null);
     if (process.env.PUBLISHED_SCORE) {
