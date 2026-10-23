@@ -66,6 +66,14 @@ kerning, Arabic joining and emoji clusters. The texture cache belongs to the
 current egui context and retires old runs through the same managed GPU lifetime;
 panel geometry, clipping and input remain in Rust.
 
+Dialogue navigation follows the actual control owner in `HubDialogueActions.tsx`:
+speech, keyed question/command choices, and each selector branch replace their
+available controls. `gamepad-menu-navigation.ts::confirm` resolves the current
+focusable controls when the prior element is gone. A presentation timestamp is
+not that identity: speech/choices/selector transitions can share one fixed input
+dispatch time. The Rust navigation scope therefore includes content kind and
+speech key or selector kind, preserving real Enter routing at the same time.
+
 The accepted economy receipt owns the result. Independent cursor consumers seed
 the current sequence on connection and advance over every newer receipt; restored,
 stale, duplicate, rejected and unrelated actions never reopen it. An accepted choice

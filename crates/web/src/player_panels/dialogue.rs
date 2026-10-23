@@ -24,6 +24,17 @@ use solomon_sim::native_ui_text::{
 };
 use solomon_sim::player_panels::dialogue::{hub_chat_scroll_frame, hub_chat_text_runs};
 use solomon_sim::profile::NATIVE_SKILL_CATALOG;
+
+pub(super) fn navigation_scope(content: &HubNpcChatContent, started_at: f64) -> String {
+    let phase = started_at.to_bits();
+    match content {
+        HubNpcChatContent::Choices => format!("dialogue:{phase}:choices"),
+        HubNpcChatContent::Selector(selector) => {
+            format!("dialogue:{phase}:selector:{}", selector.as_str())
+        }
+        HubNpcChatContent::Speech { key, .. } => format!("dialogue:{phase}:speech:{key}"),
+    }
+}
 impl PlayerPanels {
     pub fn show_dialogue(
         &mut self,
@@ -673,4 +684,74 @@ fn book_art_record(title: &str) -> usize {
         }
     }
     13 + (hash % 4) as usize
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn same_time_dialogue_content_changes_route_enter_to_the_current_real_control() {
+        let ctx = egui::Context::default();
+        let mut navigation = crate::menu::navigation::MenuNavigation::new();
+        let speech = |key: &str| HubNpcChatContent::Speech {
+            key: key.to_owned(),
+            lines: vec!["Speech".to_owned()],
+            next: HubNpcChatNext::Choices,
+        };
+        let phases = [
+            (speech("ARCH_Q1_0"), "speech-next"),
+            (HubNpcChatContent::Choices, "first-choice"),
+            (HubNpcChatContent::Selector(HubNpcListSelector::Books), "first-book"),
+            (HubNpcChatContent::Selector(HubNpcListSelector::TeacherSpells), "first-spell"),
+            (speech("BOOK25_LACE"), "speech-next"),
+        ];
+        for (index, (content, target)) in phases.into_iter().enumerate() {
+            let mut clicked = false;
+            let events = if index == 0 {
+                Vec::new()
+            } else {
+                [false, true]
+                    .into_iter()
+                    .map(|pressed| egui::Event::Key {
+                        key: egui::Key::Enter,
+                        physical_key: Some(egui::Key::Enter),
+                        pressed,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    })
+                    .collect()
+            };
+            ctx.run_pass(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(400.0, 300.0),
+                    )),
+                    time: Some(1.0),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    navigation.focus(ctx, &navigation_scope(&content, 1000.0), Some(target));
+                    egui::Area::new(egui::Id::unique("same-time-dialogue")).show(ctx, |ui| {
+                        let response = ui.interact(
+                            egui::Rect::from_min_size(
+                                egui::pos2(20.0, 20.0),
+                                egui::vec2(120.0, 50.0),
+                            ),
+                            egui::Id::unique(target),
+                            egui::Sense::click(),
+                        );
+                        assert!(response.has_focus(), "new content owns focus: {target}");
+                        clicked = response.clicked();
+                    });
+                },
+            )
+            .drop_without_applying_deltas();
+            if index > 0 {
+                assert!(clicked, "the real Enter reaches {target} at the same dispatch time");
+            }
+        }
+    }
 }
