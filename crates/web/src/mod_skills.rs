@@ -4,7 +4,7 @@
 use crate::gpu_ui::UiFrame;
 use crate::mod_presentation_assets::ModPresentationAssets;
 use crate::ui::javascript_string;
-use egui::{Color32, FontFamily, FontId, Id, Order, RichText, Stroke, vec2};
+use egui::{Color32, FontFamily, FontId, Id, RichText, Stroke, vec2};
 use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::assets::GameModAsset;
 use solomon_sim::modding::ui::{ModSkillIcon, project_mod_skill_book, project_mod_skill_picker};
@@ -144,7 +144,12 @@ impl ModSkillsUi {
     pub fn take_actions(&mut self) -> Vec<ModSkillAction> {
         std::mem::take(&mut self.actions)
     }
-    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+    pub fn paint(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        book_parent: egui::LayerId,
+        picker_parent: egui::LayerId,
+    ) -> Result<(), String> {
         let ctx = frame.ctx.clone();
         let small = ctx.content_rect().width() <= 700.0;
         if !self.book.is_empty() {
@@ -155,10 +160,11 @@ impl ModSkillsUi {
             } else {
                 vec2(-16.0, ctx.content_rect().height() * 0.12)
             };
-            let area = egui::Area::new(Id::unique("mod/skill-book"))
-                .order(Order::Foreground)
-                .anchor(anchor, offset)
-                .show(&ctx, |ui| {
+            let layer = egui::LayerId::new(book_parent.order, Id::unique("mod/skill-book"));
+            ctx.set_sublayer(book_parent, layer);
+            let area = egui::Area::new(layer.id).order(layer.order).anchor(anchor, offset).show(
+                &ctx,
+                |ui| {
                     egui::Frame::new()
                         .fill(Color32::from_rgba_unmultiplied(9, 10, 14, 240))
                         .stroke(Stroke::new(
@@ -185,7 +191,8 @@ impl ModSkillsUi {
                                     }
                                 });
                         });
-                });
+                },
+            );
             frame.record_rect(
                 "mod/skill-book",
                 "Mod skills",
@@ -196,8 +203,10 @@ impl ModSkillsUi {
         }
         if !self.choices.is_empty() {
             frame.input_scope("mod/skill-picker");
-            let area = egui::Area::new(Id::unique("mod/skill-picker"))
-                .order(Order::Foreground)
+            let layer = egui::LayerId::new(picker_parent.order, Id::unique("mod/skill-picker"));
+            ctx.set_sublayer(picker_parent, layer);
+            let area = egui::Area::new(layer.id)
+                .order(layer.order)
                 .anchor(egui::Align2::RIGHT_BOTTOM, vec2(-16.0, if small { -72.0 } else { -16.0 }))
                 .show(&ctx, |ui| {
                     egui::Frame::new()
