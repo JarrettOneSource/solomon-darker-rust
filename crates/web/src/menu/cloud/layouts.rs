@@ -263,20 +263,21 @@ impl LayoutsView {
                     panel.min + Vec2::new(10.0, 84.0),
                     Vec2::new(panel.width() - 26.0, 44.0),
                 );
-                if widgets::stock_button(
-                    frame,
-                    ui,
-                    "cloud-layout-load",
-                    if matches!(self.pending, Some((_, LayoutAction::Load))) {
-                        "LOADING..."
-                    } else {
-                        "LOAD LAYOUT"
-                    },
-                    b,
-                    0.55,
-                    admitted,
-                )
-                .clicked()
+                if art
+                    .button(
+                        frame,
+                        ui,
+                        "cloud-layout-load",
+                        if matches!(self.pending, Some((_, LayoutAction::Load))) {
+                            "LOADING..."
+                        } else {
+                            "LOAD LAYOUT"
+                        },
+                        b,
+                        0.55,
+                        admitted,
+                    )
+                    .clicked()
                     && admitted
                 {
                     actions.push("cloud-layout-load".to_owned());
@@ -295,20 +296,21 @@ impl LayoutsView {
             } else {
                 let admitted = enabled && !busy && self.account.is_some() && self.customized;
                 let b = panel.shrink(8.0);
-                if widgets::stock_button(
-                    frame,
-                    ui,
-                    "cloud-layout-publish",
-                    if matches!(self.pending, Some((_, LayoutAction::Publish))) {
-                        "SUBMITTING..."
-                    } else {
-                        "SUBMIT CURRENT LAYOUT"
-                    },
-                    b,
-                    0.55,
-                    admitted,
-                )
-                .clicked()
+                if art
+                    .button(
+                        frame,
+                        ui,
+                        "cloud-layout-publish",
+                        if matches!(self.pending, Some((_, LayoutAction::Publish))) {
+                            "SUBMITTING..."
+                        } else {
+                            "SUBMIT CURRENT LAYOUT"
+                        },
+                        b,
+                        0.55,
+                        admitted,
+                    )
+                    .clicked()
                     && admitted
                 {
                     actions.push("cloud-layout-publish".to_owned());
@@ -371,16 +373,17 @@ impl LayoutsView {
                 egui::pos2(r.right() - 160.0, r.top() + 12.0),
                 Vec2::new(150.0, 44.0),
             );
-            if widgets::stock_button(
-                frame,
-                ui,
-                "cloud-copy-layout",
-                if self.copied { "COPIED" } else { "COPY CODE" },
-                b,
-                0.55,
-                enabled,
-            )
-            .clicked()
+            if art
+                .button(
+                    frame,
+                    ui,
+                    "cloud-copy-layout",
+                    if self.copied { "COPIED" } else { "COPY CODE" },
+                    b,
+                    0.55,
+                    enabled,
+                )
+                .clicked()
                 && enabled
             {
                 actions.push("cloud-copy-layout".to_owned());
