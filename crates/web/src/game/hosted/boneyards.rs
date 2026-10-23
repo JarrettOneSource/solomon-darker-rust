@@ -605,6 +605,8 @@ impl BoneyardLibrary {
         }
         Ok(())
     }
+    // One row keeps its native labels, responsive width and emitted action IDs together.
+    #[allow(clippy::too_many_arguments)]
     fn paint_row(
         &self,
         frame: &mut UiFrame<'_>,
@@ -739,6 +741,8 @@ fn display_name(name: &str) -> &str {
     let trimmed = name.trim();
     if trimmed.is_empty() { "Untitled Acre" } else { trimmed }
 }
+// This drawing primitive keeps stock font/style and its clipping box explicit at the call site.
+#[allow(clippy::too_many_arguments)]
 fn stock_text(
     frame: &UiFrame<'_>,
     ui: &Ui,
