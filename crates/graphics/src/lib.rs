@@ -46,6 +46,8 @@ uniform vec4 u_shadow_bounds;
 uniform vec4 u_shadow_color;
 uniform vec2 u_shadow_offset;
 uniform vec2 u_shadow_sigma;
+uniform float u_shadow_only;
+uniform float u_texture_premultiplied;
 out vec4 o_color;
 vec4 cropped_texture(vec2 uv) {
     if (any(lessThan(uv, u_shadow_bounds.xy)) || any(greaterThanEqual(uv, u_shadow_bounds.zw))) {
@@ -75,6 +77,9 @@ float shadow_alpha(vec2 uv) {
 void main() {
     bool shadow = u_shadow_sigma.x >= 0.0;
     vec4 texel = shadow ? cropped_texture(v_uv) : texture(u_texture, v_uv);
+    if (u_texture_premultiplied > 0.5 && texel.a > 0.0) {
+        texel.rgb /= texel.a;
+    }
     texel.rgb = mix(texel.rgb, vec3(1.0), u_alpha_mask);
     float alpha = texel.a * v_color.a;
     alpha = mix(alpha, alpha * alpha, u_white_alpha_filter);
@@ -89,6 +94,11 @@ void main() {
     }
     if (shadow) {
         float shadowAlpha = shadow_alpha(v_uv - u_shadow_offset) * u_shadow_color.a;
+        if (u_shadow_only > 0.5) {
+            alpha = shadowAlpha * v_color.a;
+            o_color = vec4(u_shadow_color.rgb * mix(1.0, alpha, u_premultiply_rgb), alpha);
+            return;
+        }
         float composedAlpha = texel.a + shadowAlpha * (1.0 - texel.a);
         vec3 composedRGB = colour * texel.a + u_shadow_color.rgb * shadowAlpha * (1.0 - texel.a);
         vec3 straightRGB = composedAlpha > 0.0 ? composedRGB / composedAlpha : vec3(0.0);
@@ -112,6 +122,7 @@ pub struct Texture {
 }
 
 /// An offscreen colour target. Its texture is vertically inverted relative to loaded PNGs.
+#[derive(Clone)]
 pub struct RenderTarget {
     pub texture: Texture,
     framebuffer: WebGlFramebuffer,
@@ -149,6 +160,7 @@ pub enum TextureColorMode {
     /// Storm's white ColorMatrixFilter: native capture squares texture/vertex
     /// alpha, then the filter replaces RGB with white and premultiplies again.
     WhiteAlphaFilter,
+    Premultiplied,
 }
 
 /// Source CSS `saturate(...) brightness(...)` in sRGB, with alpha preserved.
@@ -185,6 +197,7 @@ pub struct AlphaShadow {
     pub offset: [f32; 2],
     pub sigma: [f32; 2],
     pub color: [f32; 4],
+    pub only: bool,
 }
 
 /// Where a quad's texels come from and where they land.
@@ -223,6 +236,10 @@ pub struct Renderer {
     u_shadow_offset: WebGlUniformLocation,
     u_shadow_sigma: WebGlUniformLocation,
     shadow: Option<AlphaShadow>,
+    u_shadow_only: WebGlUniformLocation,
+    u_texture_premultiplied: WebGlUniformLocation,
+    framebuffer: Option<WebGlFramebuffer>,
+    standard_alpha: bool,
     texture_color_mode: TextureColorMode,
     forced_texture_color_mode: Option<TextureColorMode>,
     forced_opacity: Option<f32>,
@@ -308,6 +325,11 @@ impl Renderer {
         let u_shadow_sigma = gl
             .get_uniform_location(&program, "u_shadow_sigma")
             .ok_or("u_shadow_sigma is missing")?;
+        let u_shadow_only =
+            gl.get_uniform_location(&program, "u_shadow_only").ok_or("u_shadow_only is missing")?;
+        let u_texture_premultiplied = gl
+            .get_uniform_location(&program, "u_texture_premultiplied")
+            .ok_or("u_texture_premultiplied is missing")?;
         gl.uniform1i(Some(&u_texture), 0);
         gl.uniform2f(Some(&u_pixel_center_offset), 0.0, 0.0);
         gl.uniform1f(Some(&u_saturation), 1.0);
@@ -316,6 +338,8 @@ impl Renderer {
         gl.uniform1f(Some(&u_premultiply_rgb), 1.0);
         gl.uniform2f(Some(&u_color_filter), -1.0, 1.0);
         gl.uniform2f(Some(&u_shadow_sigma), -1.0, -1.0);
+        gl.uniform1f(Some(&u_shadow_only), 0.0);
+        gl.uniform1f(Some(&u_texture_premultiplied), 0.0);
         gl.active_texture(Gl::TEXTURE0);
         gl.enable(Gl::BLEND);
         let (source, destination, source_alpha, destination_alpha) = BlendMode::Normal.factors();
@@ -354,6 +378,10 @@ impl Renderer {
             u_shadow_offset,
             u_shadow_sigma,
             shadow: None,
+            u_shadow_only,
+            u_texture_premultiplied,
+            framebuffer: None,
+            standard_alpha: false,
             texture_color_mode: TextureColorMode::Texture,
             forced_texture_color_mode: None,
             forced_opacity: None,
@@ -448,6 +476,13 @@ impl Renderer {
     }
 
     pub fn create_render_target(&self, side: u32) -> Result<RenderTarget, String> {
+        self.create_render_target_size([side, side])
+    }
+
+    pub fn create_render_target_size(
+        &self,
+        [width, height]: [u32; 2],
+    ) -> Result<RenderTarget, String> {
         let handle = self.gl.create_texture().ok_or("cannot create a render texture")?;
         self.gl.bind_texture(Gl::TEXTURE_2D, Some(&handle));
         for (parameter, value) in [
@@ -463,8 +498,8 @@ impl Renderer {
                 Gl::TEXTURE_2D,
                 0,
                 Gl::RGBA as i32,
-                side as i32,
-                side as i32,
+                width as i32,
+                height as i32,
                 0,
                 Gl::RGBA,
                 Gl::UNSIGNED_BYTE,
@@ -482,7 +517,7 @@ impl Renderer {
         );
         let complete =
             self.gl.check_framebuffer_status(Gl::FRAMEBUFFER) == Gl::FRAMEBUFFER_COMPLETE;
-        self.gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
+        self.gl.bind_framebuffer(Gl::FRAMEBUFFER, self.framebuffer.as_ref());
         if !complete {
             self.gl.delete_framebuffer(Some(&framebuffer));
             self.gl.delete_texture(Some(&handle));
@@ -491,7 +526,7 @@ impl Renderer {
         let id = self.next_texture_id.get();
         self.next_texture_id.set(id + 1);
         Ok(RenderTarget {
-            texture: Texture { id, handle, width: side as f32, height: side as f32 },
+            texture: Texture { id, handle, width: width as f32, height: height as f32 },
             framebuffer,
         })
     }
@@ -536,6 +571,11 @@ impl Renderer {
         draw: impl FnOnce(&mut Self),
     ) {
         self.flush();
+        let previous_framebuffer = self.framebuffer.replace(target.framebuffer.clone());
+        let previous_viewport = self.viewport;
+        let previous_logical_size = self.logical_size;
+        self.viewport = [0, 0, target.texture.width as i32, target.texture.height as i32];
+        self.logical_size = logical;
         self.gl.bind_framebuffer(Gl::FRAMEBUFFER, Some(&target.framebuffer));
         self.gl.viewport(0, 0, target.texture.width as i32, target.texture.height as i32);
         self.bind_projection(logical, [target.texture.width, target.texture.height]);
@@ -546,7 +586,10 @@ impl Renderer {
         self.bound_texture = None;
         draw(self);
         self.flush();
-        self.gl.bind_framebuffer(Gl::FRAMEBUFFER, None);
+        self.framebuffer = previous_framebuffer;
+        self.viewport = previous_viewport;
+        self.logical_size = previous_logical_size;
+        self.gl.bind_framebuffer(Gl::FRAMEBUFFER, self.framebuffer.as_ref());
         let [x, y, width, height] = self.viewport;
         self.gl.viewport(x, y, width, height);
         self.bind_projection(self.logical_size, [width as f32, height as f32]);
@@ -625,11 +668,38 @@ impl Renderer {
                 self.gl.uniform4fv_with_f32_array(Some(&self.u_shadow_color), &shadow.color);
                 self.gl.uniform2fv_with_f32_array(Some(&self.u_shadow_offset), &shadow.offset);
                 self.gl.uniform2fv_with_f32_array(Some(&self.u_shadow_sigma), &shadow.sigma);
+                self.gl.uniform1f(Some(&self.u_shadow_only), if shadow.only { 1.0 } else { 0.0 });
             } else {
                 self.gl.uniform2f(Some(&self.u_shadow_sigma), -1.0, -1.0);
             }
             self.shadow = shadow;
         }
+    }
+
+    /// GPU UI groups use ordinary SourceOver alpha, then compose into the native canvas.
+    pub fn render_ui_group(
+        &mut self,
+        target: &RenderTarget,
+        logical: [f32; 2],
+        draw: impl FnOnce(&mut Self),
+    ) {
+        self.flush();
+        let previous = self.standard_alpha;
+        self.standard_alpha = true;
+        self.bind_blend();
+        self.render_to_color(target, logical, [0.0; 4], draw);
+        self.standard_alpha = previous;
+        self.bind_blend();
+    }
+
+    fn bind_blend(&self) {
+        let (source, destination, source_alpha, destination_alpha) = self.blend.factors();
+        let source_alpha = if self.standard_alpha && self.blend == BlendMode::Normal {
+            Gl::ONE
+        } else {
+            source_alpha
+        };
+        self.gl.blend_func_separate(source, destination, source_alpha, destination_alpha);
     }
 
     /// A panel supplies its actual physical-buffer clip and fade. Flush before changing
@@ -736,8 +806,12 @@ impl Renderer {
     }
 
     pub fn destroy_render_target(&self, target: &RenderTarget) {
-        self.gl.delete_framebuffer(Some(&target.framebuffer));
-        self.destroy_texture(&target.texture);
+        Self::delete_render_target(&self.gl, target);
+    }
+
+    pub fn delete_render_target(gl: &Gl, target: &RenderTarget) {
+        gl.delete_framebuffer(Some(&target.framebuffer));
+        gl.delete_texture(Some(&target.texture.handle));
     }
 
     /// Source `installNativePixelCenterProjection` changes subsequent projection
@@ -862,13 +936,12 @@ impl Renderer {
             self.flush();
             // `native-fixed-function-render-pipeline.ts::installNativeBlendModes`.
             // Multiply preserves straight source RGB; normal/add use premultiplied RGB.
-            let (source, destination, source_alpha, destination_alpha) = blend.factors();
-            self.gl.blend_func_separate(source, destination, source_alpha, destination_alpha);
+            self.blend = blend;
+            self.bind_blend();
             self.gl.uniform1f(
                 Some(&self.u_premultiply_rgb),
                 if blend == BlendMode::Multiply { 0.0 } else { 1.0 },
             );
-            self.blend = blend;
         }
         if self.texture_color_mode != color_mode {
             self.flush();
@@ -879,6 +952,10 @@ impl Renderer {
             self.gl.uniform1f(
                 Some(&self.u_white_alpha_filter),
                 if color_mode == TextureColorMode::WhiteAlphaFilter { 1.0 } else { 0.0 },
+            );
+            self.gl.uniform1f(
+                Some(&self.u_texture_premultiplied),
+                if color_mode == TextureColorMode::Premultiplied { 1.0 } else { 0.0 },
             );
             self.texture_color_mode = color_mode;
         }

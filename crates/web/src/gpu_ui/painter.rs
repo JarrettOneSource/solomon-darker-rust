@@ -11,7 +11,7 @@ use solomon_graphics::assets;
 use solomon_graphics::{AlphaShadow, ColorFilter};
 use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
 
-use super::material::{Material, Materials};
+use super::material::{Material, Materials, TextureSource};
 
 enum ImageState {
     Loading,
@@ -216,19 +216,31 @@ impl Images {
         if !matches!(entry.state, ImageState::Ready(_)) {
             return None;
         }
-        let mut material = Material::new(entry.id, blend, mask, filter);
+        let mut material = Material::new(TextureSource::Image(entry.id), blend, mask, filter);
         if let Some(shadow) = shadow {
             material = material.with_shadow(shadow);
         }
         Some(cache.materials.texture_id(material))
     }
 
-    fn texture(&self, id: u64) -> Option<(Texture, bool, Material)> {
+    pub fn managed_texture_id(&self, id: u64, blend: BlendMode, filter: ColorFilter) -> TextureId {
+        self.0.borrow_mut().materials.texture_id(Material::new(
+            TextureSource::Managed(id),
+            blend,
+            false,
+            filter,
+        ))
+    }
+
+    fn material(&self, id: u64) -> Option<Material> {
+        self.0.borrow().materials.get(id)
+    }
+
+    fn texture(&self, id: u64) -> Option<(Texture, bool)> {
         let cache = self.0.borrow();
-        let material = cache.materials.get(id)?;
-        let entry = cache.images.get(cache.paths.get(&material.image)?)?;
+        let entry = cache.images.get(cache.paths.get(&id)?)?;
         match &entry.state {
-            ImageState::Ready(texture) => Some((texture.clone(), entry.owned, material)),
+            ImageState::Ready(texture) => Some((texture.clone(), entry.owned)),
             _ => None,
         }
     }
@@ -366,8 +378,21 @@ impl GpuPainter {
                         None,
                     ),
                     TextureId::User(id) => {
-                        let (texture, owned, material) =
-                            images.texture(id).ok_or("GPU UI mesh references a retired image")?;
+                        let material = images
+                            .material(id)
+                            .ok_or("GPU UI mesh references a retired material")?;
+                        let (texture, owned) = match material.source {
+                            TextureSource::Image(id) => images
+                                .texture(id)
+                                .ok_or("GPU UI mesh references a retired image")?,
+                            TextureSource::Managed(id) => (
+                                self.textures
+                                    .get(&TextureId::Managed(id))
+                                    .cloned()
+                                    .ok_or("GPU UI mesh references a missing managed texture")?,
+                                false,
+                            ),
+                        };
                         let mask = material.mask;
                         (
                             texture,

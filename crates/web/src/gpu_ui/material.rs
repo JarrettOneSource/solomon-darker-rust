@@ -11,11 +11,18 @@ struct ShadowKey {
     offset: [u32; 2],
     sigma: [u32; 2],
     color: [u32; 4],
+    only: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) enum TextureSource {
+    Image(u64),
+    Managed(u64),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct Material {
-    pub image: u64,
+    pub source: TextureSource,
     blend: u8,
     pub mask: bool,
     brightness: u32,
@@ -24,9 +31,9 @@ pub(super) struct Material {
 }
 
 impl Material {
-    pub fn new(image: u64, blend: BlendMode, mask: bool, filter: ColorFilter) -> Self {
+    pub fn new(source: TextureSource, blend: BlendMode, mask: bool, filter: ColorFilter) -> Self {
         Self {
-            image,
+            source,
             blend: match blend {
                 BlendMode::Normal => 0,
                 BlendMode::Add => 1,
@@ -45,6 +52,7 @@ impl Material {
             offset: shadow.offset.map(f32::to_bits),
             sigma: shadow.sigma.map(f32::to_bits),
             color: shadow.color.map(f32::to_bits),
+            only: shadow.only,
         });
         self
     }
@@ -55,6 +63,7 @@ impl Material {
             offset: shadow.offset.map(f32::from_bits),
             sigma: shadow.sigma.map(f32::from_bits),
             color: shadow.color.map(f32::from_bits),
+            only: shadow.only,
         })
     }
 
@@ -105,13 +114,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn managed_text_and_asset_images_keep_distinct_material_ownership() {
+        let mut materials = Materials::default();
+        let image = Material::new(
+            TextureSource::Image(1),
+            BlendMode::Normal,
+            false,
+            ColorFilter::default(),
+        );
+        let managed = Material::new(
+            TextureSource::Managed(1),
+            BlendMode::Normal,
+            false,
+            ColorFilter::default(),
+        );
+        assert_ne!(materials.texture_id(image), materials.texture_id(managed));
+        let TextureId::User(id) = materials.texture_id(managed) else {
+            panic!("material is a user texture")
+        };
+        assert_eq!(materials.get(id).unwrap().source, TextureSource::Managed(1));
+    }
+
+    #[test]
     fn shadow_materials_retain_their_crop_without_aliasing_plain_images() {
-        let base = Material::new(1, BlendMode::Normal, false, ColorFilter::default());
+        let base = Material::new(
+            TextureSource::Image(1),
+            BlendMode::Normal,
+            false,
+            ColorFilter::default(),
+        );
         let shadow = AlphaShadow {
             bounds: [0.1, 0.2, 0.3, 0.4],
             offset: [0.0, 0.01],
             sigma: [0.02, 0.02],
             color: [0.0, 0.0, 0.0, 0.55],
+            only: false,
         };
         let mut materials = Materials::default();
         let image_id = materials.texture_id(base);
@@ -132,7 +169,7 @@ mod tests {
     fn image_filters_batch_identical_materials_without_aliasing_blend_or_mask() {
         let mut materials = Materials::default();
         let filtered = Material::new(
-            7,
+            TextureSource::Image(7),
             BlendMode::Normal,
             false,
             ColorFilter { brightness: 1.4, saturation: 0.35 },
@@ -140,10 +177,15 @@ mod tests {
         let id = materials.texture_id(filtered);
         assert_eq!(id, materials.texture_id(filtered));
         for material in [
-            Material::new(8, BlendMode::Normal, false, filtered.filter()),
-            Material::new(7, BlendMode::Add, false, filtered.filter()),
-            Material::new(7, BlendMode::Normal, true, filtered.filter()),
-            Material::new(7, BlendMode::Normal, false, ColorFilter::default()),
+            Material::new(TextureSource::Image(8), BlendMode::Normal, false, filtered.filter()),
+            Material::new(TextureSource::Image(7), BlendMode::Add, false, filtered.filter()),
+            Material::new(TextureSource::Image(7), BlendMode::Normal, true, filtered.filter()),
+            Material::new(
+                TextureSource::Image(7),
+                BlendMode::Normal,
+                false,
+                ColorFilter::default(),
+            ),
         ] {
             assert_ne!(id, materials.texture_id(material));
         }
@@ -159,7 +201,7 @@ mod tests {
             materials.clear();
             for gain in [1.0, 1.0 + frame as f32 * 0.001] {
                 materials.texture_id(Material::new(
-                    1,
+                    TextureSource::Image(1),
                     BlendMode::Normal,
                     false,
                     ColorFilter { brightness: gain, saturation: 1.0 },

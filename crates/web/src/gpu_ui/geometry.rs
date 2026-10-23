@@ -91,6 +91,7 @@ pub(super) fn shadow_geometry(
             offset: [offset.x, offset.y],
             sigma: [sigma.x, sigma.y],
             color: shadow.color.to_srgba_unmultiplied().map(|channel| f32::from(channel) / 255.0),
+            only: false,
         },
     )
 }

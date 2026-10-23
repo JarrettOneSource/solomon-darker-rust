@@ -91,6 +91,11 @@ const cases = [
       const restored = paint([40,80,120,128], -1, 1);
       rows.push({name:'filter restoration retains the world path', actual:restored,
         expected:[20,40,60,128], delta:Math.max(...restored.map((value,index)=>Math.abs(value-[20,40,60,128][index])))});
+      gl.uniform1f(uniform('u_texture_premultiplied'),1);
+      const premultiplied=paint([64,32,16,128],-1,1);
+      rows.push({name:'GPU group textures preserve premultiplied RGB once',actual:premultiplied,
+        expected:[64,32,16,128],delta:Math.max(...premultiplied.map((value,index)=>Math.abs(value-[64,32,16,128][index])))});
+      gl.uniform1f(uniform('u_texture_premultiplied'),0);
       // An opaque neighboring atlas record deliberately surrounds the source crop.
       // Native Canvas filters only the extracted sprite and composites group opacity last.
       const atlas = new Uint8Array(12*12*4);
@@ -114,6 +119,7 @@ const cases = [
         {name:'hover brightness then colored source shadow',sigma:3,offset:[0,0],color:[255,240,183,0.55],opacity:1,brightness:1.25,tolerance:9},
         {name:'source and shadow compose before group opacity',sigma:0,offset:[0,0],color:[0,0,0,0.55],opacity:0.78,brightness:1,tolerance:1},
         {name:'mirrored crop preserves screen-space shadow offset',sigma:1,offset:[1,1],color:[0,0,0,1],opacity:1,brightness:1,mirror:true,tolerance:9},
+        {name:'independent text shadow excludes the foreground source',sigma:2,offset:[0,1],color:[0,0,0,1],opacity:1,brightness:1,only:true,tolerance:9},
       ];
       canvas.width=96;canvas.height=64;gl.viewport(0,0,96,64);
       gl.uniform2f(uniform('u_logical_size'),96,64);
@@ -131,7 +137,15 @@ const cases = [
           const mirrorContext=inputSprite.getContext('2d');mirrorContext.translate(8,0);mirrorContext.scale(-1,1);
           mirrorContext.drawImage(spriteCanvas,0,0);
         }
-        ctx.drawImage(inputSprite,32,24);
+        if(test.only) {
+          const alphaMask=document.createElement('canvas');alphaMask.width=alphaMask.height=8;
+          const pixels=new Uint8ClampedArray(sprite);
+          for(let index=0;index<pixels.length;index+=4) {
+            pixels.set(test.color.slice(0,3),index);pixels[index+3]=Math.round(pixels[index+3]*test.color[3]);
+          }
+          alphaMask.getContext('2d').putImageData(new ImageData(pixels,8,8),0,0);
+          ctx.filter=`blur(${test.sigma}px)`;ctx.drawImage(alphaMask,32+test.offset[0],24+test.offset[1]);
+        } else ctx.drawImage(inputSprite,32,24);
         const result=document.createElement('canvas');result.width=96;result.height=64;
         const resultCtx=result.getContext('2d');resultCtx.globalAlpha=test.opacity;resultCtx.drawImage(effect,0,0);
         const reference=resultCtx.getImageData(0,0,96,64).data;
@@ -145,6 +159,7 @@ const cases = [
         gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);
         gl.uniform2f(uniform('u_color_filter'),test.brightness,1);
         gl.uniform2f(uniform('u_shadow_sigma'),test.sigma/12,test.sigma/12);
+        gl.uniform1f(uniform('u_shadow_only'),test.only?1:0);
         gl.uniform2f(uniform('u_shadow_offset'),(test.mirror?-1:1)*test.offset[0]/12,test.offset[1]/12);
         gl.uniform4f(uniform('u_shadow_color'),...test.color.map((value,index)=>index===3?value:value/255));
         gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.drawArrays(gl.TRIANGLES,0,6);

@@ -303,6 +303,32 @@ impl UiFrame<'_> {
         self.images.size(path)
     }
 
+    pub fn managed_image(
+        &self,
+        painter: &Painter,
+        texture: egui::TextureId,
+        destination: Rect,
+        uv: Option<Rect>,
+        tint: Color32,
+    ) {
+        let egui::TextureId::Managed(id) = texture else {
+            panic!("managed image requires an egui TextureHandle")
+        };
+        let texture = self.images.managed_texture_id(id, self.blend, self.color_filter);
+        self.paint_texture_quad(
+            painter,
+            texture,
+            [
+                destination.left_top(),
+                destination.right_top(),
+                destination.right_bottom(),
+                destination.left_bottom(),
+            ],
+            uv.unwrap_or(Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0))),
+            tint,
+        );
+    }
+
     pub fn image_error(&self, path: &str) -> Option<String> {
         self.images.error(path)
     }
