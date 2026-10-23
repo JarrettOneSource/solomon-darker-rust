@@ -12,7 +12,7 @@ use solomon_sim::native_ui_text::{
 use solomon_sim::social::party_ui::{fit_native_party_menu_text, native_party_menu_name_font};
 use solomon_sim::social::{GameChatWorldKind, party_member_display_name};
 
-use super::{SocialUi, gpu};
+use super::{Intent, SocialUi, gpu};
 use crate::gpu_ui::UiFrame;
 
 impl SocialUi {
@@ -254,7 +254,7 @@ impl SocialUi {
             })
             .inner?;
         if let Some(action) = action {
-            self.activate(&action)?;
+            self.intents.borrow_mut().push(Intent::Action(action));
         }
         Ok(())
     }
