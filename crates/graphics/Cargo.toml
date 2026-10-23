@@ -5,6 +5,10 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[[example]]
+name = "composition_probe"
+crate-type = ["cdylib"]
+
 [dependencies]
 solomon-sim = { workspace = true }
 wasm-bindgen = { workspace = true }

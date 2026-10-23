@@ -87,6 +87,71 @@ fn native_color_filter_uses_css_luminance_and_preserves_outline_alpha() {
     }
 }
 
+#[test]
+fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_once() {
+    let ctx = Context::default();
+    let images = painter::Images::default();
+    let widgets = RefCell::new(BTreeMap::new());
+    let announcements = RefCell::new(Vec::new());
+    let input_scope = RefCell::new(None);
+    let retired_images = RefCell::new(Vec::new());
+    let previous_widgets = BTreeMap::new();
+    let output = ctx.run_pass(
+        egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(100.0, 100.0))),
+            ..Default::default()
+        },
+        |ctx| {
+            let frame = UiFrame {
+                ctx,
+                images: &images,
+                widgets: &widgets,
+                previous_widgets: &previous_widgets,
+                key_codes: &[],
+                blend: BlendMode::Normal,
+                color_filter: ColorFilter::default(),
+                announcements: &announcements,
+                rotation: egui::emath::Rot2::IDENTITY,
+                translation: Vec2::ZERO,
+                input_scope: &input_scope,
+                retired_images: &retired_images,
+                focus_from_keyboard: true,
+            };
+            let mut painter = ctx.layer_painter(egui::LayerId::new(
+                egui::Order::Middle,
+                egui::Id::unique("gpu-group"),
+            ));
+            painter.set_clip_rect(ctx.content_rect());
+            painter.set_opacity(0.4);
+            frame
+                .with_brightness(1.2)
+                .paint_group(
+                    &painter,
+                    GroupEffect { opacity: 0.5, shadows: Vec::new() },
+                    |frame, painter| {
+                        assert_eq!(frame.color_filter, ColorFilter::default());
+                        assert_eq!(painter.opacity(), 1.0);
+                        painter.rect_filled(
+                            Rect::from_min_size(pos2(-5.0, 20.0), vec2(20.0, 10.0)),
+                            0.0,
+                            Color32::WHITE,
+                        );
+                        Ok(())
+                    },
+                )
+                .unwrap();
+        },
+    );
+    let nodes =
+        effects::parse(ctx.tessellate(output.shapes.clone(), output.pixels_per_point)).unwrap();
+    output.drop_without_applying_deltas();
+    assert_eq!(nodes.len(), 1);
+    let effects::Node::Group { style, children, .. } = &nodes[0] else { panic!("GPU group") };
+    assert!((style.effect.opacity - 0.2).abs() < 0.00001);
+    assert_eq!(style.filter.brightness, 1.2);
+    assert!(effects::content_bounds(children).left() < 0.0);
+}
+
 fn browser_key(code: &str, key: &str) -> BrowserKey {
     BrowserKey {
         code: code.to_owned(),

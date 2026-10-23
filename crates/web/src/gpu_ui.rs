@@ -7,6 +7,7 @@
 mod accessibility;
 mod batches;
 mod edit;
+mod effects;
 mod fonts;
 mod geometry;
 mod input;
@@ -29,6 +30,7 @@ pub use edit::{
     EditorRules, FontRunOptions, NativeEditOutput, NativeFontRun, NativeLabelStyle, NativeTextEdit,
     TextSelection, font_run, font_run_with_options, shaped_label, text_edit_focused,
 };
+pub use effects::GroupEffect;
 pub use geometry::{clip_polygon_ellipse, css_bezier};
 pub use input::{BrowserKey, canvas_point, key_from_browser};
 pub use painter::clip_scissor;
@@ -204,6 +206,40 @@ impl UiFrame<'_> {
     pub(crate) fn fail(&self, error: String) {
         self.editor_errors.borrow_mut().push(error);
     }
+    /// Captures only this Rust GPU geometry, then applies filters/shadows/opacity.
+    pub fn paint_group(
+        &self,
+        painter: &Painter,
+        mut effect: GroupEffect,
+        paint: impl FnOnce(&UiFrame<'_>, &Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        assert!(effect.opacity.is_finite() && (0.0..=1.0).contains(&effect.opacity));
+        let layer = self.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
+        let scale = layer.scaling.abs() * (self.rotation * Vec2::X).length();
+        for shadow in &mut effect.shadows {
+            assert!(shadow.blur.is_finite() && shadow.blur >= 0.0 && shadow.offset.is_finite());
+            shadow.offset = layer.scaling * (self.rotation * shadow.offset);
+            shadow.blur *= scale;
+        }
+        effect.opacity *= painter.opacity();
+        let style = effects::Style { effect, filter: self.color_filter, blend: self.blend };
+        let marker = |boundary| {
+            egui::Shape::Callback(egui::epaint::PaintCallback {
+                rect: painter.clip_rect(),
+                callback: std::sync::Arc::new(boundary),
+            })
+        };
+        painter.add(marker(effects::Boundary::Begin(style)));
+        let mut group_painter = painter.clone();
+        group_painter.set_clip_rect(Rect::EVERYTHING);
+        group_painter.set_opacity(1.0);
+        let mut frame = self.with_blend(BlendMode::Normal);
+        frame.color_filter = ColorFilter::default();
+        let result = paint(&frame, &group_painter);
+        painter.add(marker(effects::Boundary::End));
+        result
+    }
+
     pub fn focus_visible(&self, response: &Response) -> bool {
         response.has_focus() && (self.focus_from_keyboard || text_edit_focused(self.ctx))
     }

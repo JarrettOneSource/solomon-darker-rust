@@ -166,12 +166,21 @@ The retained authored-enemy producer applies its filter and outer opacity to the
 root: the background sprite, name span and health rail. Rust `c14068b3`
 `mod_world_overlays.rs:183–188,205` and `mod-world.css` establish that boundary. Its
 original sources are pinned `mod-ui/ModEnemies.tsx:58,73–74` and `mod-enemies.css`.
-blur is `max(light_radius/10,4)`; the name also has two black text shadows. A sprite-only
-filter does not reproduce that source group. The required extension is a GPU geometry
-group captured into a reusable render target, with the same alpha-shadow material
-and opacity applied to the composed result. No HTML/control rasterization is involved.
-The complete group effect remains unaccepted until that backend and the authored
-producer are wired and verified.
+blur is `max(light_radius/10,4)`; the name also has two black text shadows. CSS filter
+drop-shadow takes Gaussian sigma directly; text-shadow uses half its blur radius,
+so the name's 2/3px text shadows use sigma1/1.5. A sprite-only filter does not reproduce
+that source group.
+
+`UiFrame::paint_group` captures the submitted GPU geometry, including managed font tiles,
+into a bounded reusable target. Nested name shadows compose before the parent enemy
+shadow and outer opacity. The depth-indexed pool reuses source/composite targets across
+frames and destroys them with the painter. It clips after the filter while preserving
+outside source pixels that contribute to the visible blur. Graphics uses standard
+SourceOver alpha only within these captures, unpremultiplies target samples once, and
+restores the enclosing framebuffer, projection and native canvas blend factors. No
+HTML/control rasterization is involved. The small graphics `composition_probe` example
+and `gpu-composition.cjs` exercise the actual renderer's nesting and hand-derived pixels;
+their runtime and the authored producer proof remain pending the canonical build.
 
 ## World notifications recovered before repair
 
