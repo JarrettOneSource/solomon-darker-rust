@@ -6,7 +6,7 @@ use solomon_sim::social::{
     hub_player_party_invite_available, native_player_card_college_invite_available,
 };
 
-use super::{Intent, SocialUi, Surface};
+use super::{SocialUi, Surface};
 
 impl SocialUi {
     pub(super) fn current_card(&self) -> Option<&GamePlayerCardProfile> {
@@ -411,7 +411,7 @@ impl SocialUi {
         }
         frame.record_rect("social/player-card", &card.display_name, "dialog", bounds, true);
         if let Some(action) = action {
-            self.intents.borrow_mut().push(Intent::Action(action.to_owned()));
+            self.activate(action)?;
         }
         Ok(())
     }

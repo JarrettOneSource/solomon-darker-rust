@@ -316,7 +316,7 @@ impl SocialUi {
                 })
                 .inner?;
             if close {
-                self.intents.borrow_mut().push(Intent::Close);
+                self.handle_intent(Intent::Close)?;
             }
         }
         if let Some(notice) = &self.hosted_notice {
@@ -329,12 +329,6 @@ impl SocialUi {
                 });
         }
         self.clipboard.finish_frame();
-        // Commit surface changes after painting, so the opening pointer release
-        // belongs to its original control rather than the new modal backdrop.
-        let intents = std::mem::take(&mut *self.intents.borrow_mut());
-        for intent in intents {
-            self.handle_intent(intent)?;
-        }
         Ok(())
     }
 
