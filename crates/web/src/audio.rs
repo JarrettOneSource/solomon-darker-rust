@@ -727,7 +727,14 @@ fn play_stock_music(
             web_sys::console::error_1(&JsValue::from_str(&error));
         }
         if let Err(error) = result {
-            report_music_rejection(&error);
+            let name = js_sys::Reflect::get(&error, &JsValue::from_str("name"))
+                .ok()
+                .and_then(|name| name.as_string());
+            // The actual pause/retirement may interrupt its pending play promise.
+            // This does not excuse a media error/abort event or a resource reload.
+            if name.as_deref() != Some("AbortError") || (owned && !paused) {
+                report_music_rejection(&error);
+            }
         }
     });
     Ok(())
