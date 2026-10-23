@@ -85,12 +85,13 @@ async function expectedFont(page,text){
     await ui.click(page,sack.id,{clickCount:2});await pagePath(page,[id]);
     await ui.widget(page,'panel:sack-name');
     await page.screenshot({path:path.join(output,'sack-name-restored.png')});
-    await ui.assertGpuOnly(page);assert.deepEqual(observed.errors,[]);
+    await ui.assertGpuOnly(page);await ui.settleErrors(page);assert.deepEqual(observed.errors,[]);
     receipt.passed=true;
   }catch(error){
     receipt.failure=error.stack;receipt.ui=await ui.readUi(page).catch(failure=>({readError:failure.message}));
     await page.screenshot({path:path.join(output,'failure.png')});throw error;
   }finally{
+    await ui.settleErrors(page);
     receipt.errors=observed.errors;fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify(receipt,null,2));await browser.close();
   }
   console.log(JSON.stringify(receipt));

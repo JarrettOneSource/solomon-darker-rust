@@ -37,12 +37,12 @@ fs.mkdirSync(output, {recursive:true});
     assert.ok(bounds.width >= 44 && bounds.height >= 44 && bounds.x >= 0 && bounds.x + bounds.width <= 844);
     if (process.env.OUT) await page.screenshot({ path: path.join(process.env.OUT, 'phone-hud-primary-selector-rust.png') });
     await ui.tap(page, 'panel:hud-select-skill:8'); await ui.noWidget(page, 'panel:skill-selector');
-    await ui.assertGpuOnly(page); assert.deepEqual(observed.errors, []);
+    await ui.assertGpuOnly(page); await ui.settleErrors(page); assert.deepEqual(observed.errors, []);
     const receipt = {passed:true, generatedName:process.env.GENERATED_NAME==='1', errors:observed.errors};
     fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify(receipt,null,2));
     console.log(JSON.stringify(receipt));
   } catch(error) {
-    if(page)await page.screenshot({path:path.join(output,'failure.png')});
+    if(page){await ui.settleErrors(page);await page.screenshot({path:path.join(output,'failure.png')});}
     fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify({passed:false,phase,
       error:error.stack,errors:observed?.errors,ui:page?await ui.readUi(page).catch(failure=>({readError:failure.message})):null},null,2));
     throw error;

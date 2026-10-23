@@ -17,7 +17,7 @@ const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
 const output = path.resolve(process.env.OUT);
 const checks = [];
 const errors = [];
-const cancelledMedia = [];
+let observed;
 const connections = [];
 const welcomes = [];
 const inventoryRequests = [];
@@ -150,7 +150,7 @@ async function main() {
       authoredRejection: 'frontend/src/game/host/game-host.ts:2434'},
     injectionScope: 'Omit inventory_result from the first real rejected health-potion Equip ACK only',
     claimScope: 'Browser receiver liveness; actual authored-consumption rollback is a separate native fixture',
-    checks, errors, cancelledMedia, connections, welcomes, inventoryRequests, inventoryReplies,
+    checks, errors, connections, welcomes, inventoryRequests, inventoryReplies,
     clientMessageTypes, serverMessageTypes};
   let browserServer;
   let browser;
@@ -164,20 +164,10 @@ async function main() {
       viewport: {width: 1280, height: 720}});
     page.setDefaultTimeout(10000);
     page.setDefaultNavigationTimeout(30000);
-    page.on('pageerror', error => errors.push(error.message));
-    page.on('console', message => {
-      if (message.type() === 'error') errors.push(message.text());
-    });
+    observed = gpu.watchErrors(page, {errors});
     page.on('response', response => {
       const pathname = new URL(response.url()).pathname;
       if (pathname.endsWith('.wasm')) wasmFiles.add(path.basename(pathname));
-      if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
-    });
-    page.on('requestfailed', request => {
-      const failure = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
-      if (request.resourceType() === 'media' && request.failure()?.errorText === 'net::ERR_ABORTED') {
-        cancelledMedia.push(failure);
-      } else errors.push(failure);
     });
     await installRejectionRoute(page);
 
@@ -193,6 +183,7 @@ async function main() {
     await waitUntil(() => welcomes.length === 1, 'real host Welcome');
     assert.equal(welcomes[0].sessionKind, 'GlobalHub');
     await gpu.surface(page,'hidden');
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checked('ordinary Create admits a real guest to the Global College');
 
@@ -230,6 +221,7 @@ async function main() {
     assert.equal(latestSnapshot.inventorySha256, receipt.beforeAction.inventorySha256);
     assert.equal(connections.length, 1);
     assert.equal(welcomes.length, 1);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     await page.screenshot({path: path.join(output, 'rejection-inventory-live.png')});
     checked('Inventory remains usable and more than ten additional authoritative ticks are accepted');
@@ -250,6 +242,7 @@ async function main() {
     receipt.afterRetry = {...latestSnapshot};
     assert.equal(receipt.finalUi.inventoryVisible, true);
     assert.equal(receipt.afterRetry.inventorySha256, receipt.beforeAction.inventorySha256);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     await gpu.assertGpuOnly(page);
     await page.screenshot({path: path.join(output, 'normal-retry-inventory-live.png')});
@@ -270,6 +263,8 @@ async function main() {
     }
     throw error;
   } finally {
+    if (page) await gpu.settleErrors(page);
+    receipt.expectedMediaSuspensions = observed?.expectedSuspensions || [];
     receipt.injection = injection;
     receipt.lastReceivedSnapshot = latestSnapshot;
     receipt.receivedSnapshotCount = snapshotCount;

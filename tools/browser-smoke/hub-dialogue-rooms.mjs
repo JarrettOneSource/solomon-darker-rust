@@ -197,6 +197,7 @@ try {
   assert.equal(remaining.has('panel:dialogue-selector:25'),false,'one-shot Lace book stays absent across the complete native catalog')
   receipt.journeys.push({interaction:'librarian',state:await state(),rowsBefore:26,rowsAfter:25,oneShotLaceRemoved:true})
   await ui.assertGpuOnly(page)
+  await ui.settleErrors(page)
   assert.deepEqual(receipt.errors,[])
   receipt.passed=true
 } catch(error) {
@@ -208,6 +209,7 @@ try {
   process.exitCode=1
 } finally {
   await keys([])
+  await ui.settleErrors(page)
   writeFileSync(`${output}/receipt.json`,`${JSON.stringify(receipt,null,2)}\n`)
   await browser.close()
 }

@@ -123,7 +123,7 @@ async function tick(page) {
         await ui.widget(page,'picker:choice:0');
         assert.equal(ui.findWidget(await ui.readUi(page),'panel:skill-book-result'),undefined,'choice books open the actual offer instead of a rank result');
         await ui.click(page,'picker:choice:0');await ui.noWidget(page,'picker:choice:0');
-        await ui.assertGpuOnly(page);assert.deepEqual(observed.errors,[]);
+        await ui.assertGpuOnly(page);await ui.settleErrors(page);assert.deepEqual(observed.errors,[]);
         result.requests=requests.length;
         result.authority=accepted.frame?'native host':'local Rust session';
         receipt.worlds.push(result);
@@ -132,7 +132,7 @@ async function tick(page) {
         receipt.failure=error.stack;
         receipt.ui=await ui.readUi(page).catch(failure=>({readError:failure.message}));
         throw error;
-      }finally{receipt.errors.push(...observed.errors);await context.close();}
+      }finally{await ui.settleErrors(page);receipt.errors.push(...observed.errors);await context.close();}
     }
     receipt.passed=true;
   }finally{
