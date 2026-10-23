@@ -390,3 +390,16 @@ meaningful current-art browser smoke and affected full journeys clean, source/DO
 clean, and packaged/live checks at their separately stated boundaries. Post-push cleanup of
 task worktrees and owned processes on every device is part of root completion; retained paths
 must carry a concrete reason. The unrelated launchd preview on port 4180/PID 96731 is preserved.
+
+Browser teardown also has a concrete diagnosed boundary. Both 88c3dfe Boneyard runs pass
+two ordinary seeded worlds, exact Pause saves and continuation. The first driver hangs
+after Chrome exits and requires Node termination (143); the explicit-owner follow-up
+retains graceful/forced close timeouts as fatal despite Chrome exit code zero. Native
+`lsof` proves reparented Crashpad/GoogleUpdater helpers retain the owned child's stderr
+socket. Installed Playwright `coreBundle.js:8799` waits for ChildProcess `close`, which
+cannot arrive while inherited stdio stays open. The task's `boneyard-owned-close` receipt,
+native sample and socket ownership evidence preserve that diagnosis. After confirmed
+owned Chrome `exit`, release only its parent-side stdio so the real close/temporary-file
+cleanup can finish. Other helper processes remain untouched; timeouts and nonzero exit
+remain failed gates. A title-only two-context close probe is a narrower passing boundary,
+not a clean full Boneyard execution claim.
