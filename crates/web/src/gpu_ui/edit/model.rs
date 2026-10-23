@@ -197,8 +197,8 @@ impl Model {
         }
     }
 
-    pub fn end_group(&mut self) {
-        self.history.group = None;
+    pub fn end_group(&mut self) -> bool {
+        self.history.group.take().is_some()
     }
 
     pub fn reconcile(&mut self, text: &str) {
