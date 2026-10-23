@@ -574,6 +574,10 @@ impl UiFrame<'_> {
     ) {
         self.record(id, label, role, response);
         if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
+            let transform =
+                self.ctx.layer_transform_to_global(response.layer_id).unwrap_or_default();
+            let center = transform * center;
+            let size = size * transform.scaling.abs();
             widget.hit_shape = HitShape::RotatedRect {
                 center: [center.x, center.y],
                 size: [size.x, size.y],

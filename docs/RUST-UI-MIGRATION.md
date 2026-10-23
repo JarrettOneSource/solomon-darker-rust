@@ -241,6 +241,23 @@ geometry/lifecycle. Unknown until measured: composed GPU glyph clipping/blending
 earned-event browser visibility and live hosted event delivery. The source fixture and
 renderer/controller checks pass; integrated production-event browser proof remains required.
 
+## Scaled GPU hit geometry
+
+Pinned `GameHud.tsx:249–258` places the HUD under its viewport/UI scale;
+`hub.css:1097–1114,1298` gives the phone Inventory and Skills controls their
+130px local bounds and custom transforms. The actual pointer target follows
+that painted transform. On24382f0, the ordinary844×390 touch journey completes
+College and Create, then its first visible Inventory tap never opens the book.
+`record_rotated_rect` records globally transformed rectangular bounds but retains
+local center/size in the exact rotated shape. Touch ownership tests a global
+point against that local shape and drops the event; mouse dispatch does not
+have that ownership admission requirement. The shape must use the same layer
+translation and uniform scale as its bounds, while preserving local rotation
+and rejecting points outside the rotated rectangle. The native regression
+covers the visible center, an interior edge and an exterior point under both
+zero and45-degree rotation. Actual tap and responsive family proof remain
+required; no larger rectangular hit fallback is permitted.
+
 ## Acceptance matrix
 
 `Pending` means current composed behavior has not been accepted. Owner names match the

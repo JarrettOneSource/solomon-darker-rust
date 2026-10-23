@@ -350,6 +350,46 @@ fn authored_clip_reports_visible_notification_ink_and_preserves_original_paint_b
 }
 
 #[test]
+fn rotated_control_hits_follow_the_painted_layer_scale_and_translation() {
+    for radians in [0.0, std::f32::consts::FRAC_PI_4] {
+        let ctx = Context::default();
+        let transform = egui::emath::TSTransform::new(vec2(17.0, 11.0), 0.5);
+        let center = pos2(200.0, 180.0);
+        let size = vec2(120.0, 70.0);
+        let rotation = egui::emath::Rot2::from_angle(radians);
+        let corners = Rect::from_center_size(Pos2::ZERO, size);
+        let bounds = Rect::from_points(&[
+            center + rotation * corners.left_top().to_vec2(),
+            center + rotation * corners.right_top().to_vec2(),
+            center + rotation * corners.right_bottom().to_vec2(),
+            center + rotation * corners.left_bottom().to_vec2(),
+        ]);
+        let paint = |frame: &mut UiFrame<'_>| {
+            frame.ctx.root_ui(|ui| {
+                ui.ctx().set_transform_layer(ui.layer_id(), transform);
+                let response =
+                    ui.interact(bounds, egui::Id::unique("rotated"), egui::Sense::click());
+                frame.record_rotated_rect(
+                    "rotated",
+                    "Inventory",
+                    "button",
+                    &response,
+                    center,
+                    size,
+                    radians,
+                );
+            });
+        };
+        frame(&ctx, vec![], paint);
+        let widgets = frame(&ctx, vec![], paint);
+        let control = &widgets["rotated"];
+        assert!(control.contains(transform * center), "the visible center owns touch input");
+        assert!(control.contains(transform * (center + rotation * vec2(55.0, 0.0))));
+        assert!(!control.contains(transform * (center + rotation * vec2(0.0, 40.0))));
+    }
+}
+
+#[test]
 fn a_real_text_pointer_focus_preserves_characters_queued_in_the_same_frame() {
     let ctx = Context::default();
     let mut text = String::new();
