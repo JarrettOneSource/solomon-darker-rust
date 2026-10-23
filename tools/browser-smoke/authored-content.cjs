@@ -9,6 +9,7 @@ const {chromium} = require(path.resolve(process.env.PW));
 const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
+const textures = require('./gpu-texture-lifetime.cjs');
 const output = path.resolve(process.env.OUT);
 const contentDirectory = path.resolve(process.env.CONTENT_DIR);
 const account = JSON.parse(fs.readFileSync(path.join(contentDirectory, 'private-account.json')));
@@ -24,7 +25,8 @@ assert.ok(['complete', 'reforge', 'finalize', 'console'].includes(authoredPhase)
 const state = {id: null, frame: null, runtime: null, content: null, welcomes: [],
   lua: [], luaRequests: [], actions: [], checkpoints: 0, leaveReceipts: 0, lastSave: null,
   audioEvents: [], assets: [], loaded: null, iconProof: [], wireTypes: {}, beltBindings: [],
-  cheatCommands: [], cheatModes: [], helloCheats: []};
+  cheatCommands: [], cheatModes: [], helloCheats: [],
+  textureProof: {paths: [], checkpoints: [], icons: [], retired: null}};
 const errors = [], requests = [], expectedNotFound = [], cancelledMedia = [], checks = [];
 let step = 'bootstrap';
 let ownedBrowserClosed = false;
@@ -196,7 +198,24 @@ async function assertAuthoredIcon(page, itemId) {
   const proof = {bounds:ui.bounds(widget),frame:JSON.parse(widget.value)};
   assert.ok(proof.bounds.width>0 && proof.bounds.height>0,'the actual authored texture crop occupies visible GPU pixels');
   assert.match(proof.frame.url,/^blob:/);
+  const gpu = await ui.readUi(page);
+  assert.ok(gpu.draw.borrowedImagePaths.includes(proof.frame.url),
+    'the visible authored icon uses an admitted world-owned GPU texture');
+  const trace = await page.evaluate(() => window.__solomonGpuTextureLifetime());
+  const admission = state.textureProof.checkpoints[0];
+  textures.assertBorrowedSamplingPreserved(admission.rows, trace, [proof.frame.url]);
+  state.textureProof.icons.push({url: proof.frame.url,
+    rows: textures.admittedTextureRows(trace, [proof.frame.url])});
   state.iconProof.push(proof);
+}
+
+async function observeBorrowedTextures(page, label) {
+  const gpu = await ui.readUi(page);
+  const paths = gpu.draw.borrowedImagePaths;
+  const trace = await page.evaluate(() => window.__solomonGpuTextureLifetime());
+  const rows = textures.admittedTextureRows(trace, paths);
+  state.textureProof.paths = [...new Set([...state.textureProof.paths, ...paths])];
+  state.textureProof.checkpoints.push({label, paths, rows});
 }
 async function observePanelInput(page) {
   await page.evaluate(() => {
@@ -285,6 +304,7 @@ async function runLua(page, code) {
   }, account.token);
   const page = await context.newPage();
   await ui.watchRequestFailures(page, {errors}).ready;
+  await textures.observeGpuTextureLifetime(page);
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
@@ -404,6 +424,7 @@ async function runLua(page, code) {
     assert.ok(identity, 'the authority accepted the enabled package identity');
     assert.equal(identity.contentSha256, acceptedPackage.contentSha256);
     check('actual package identity admits a private authority and nonempty prepared runtime');
+    await observeBorrowedTextures(page, 'actual private authority admission');
     let runId;
     if (priorOnwardPhase) {
       const accepted = priorOnwardPhase.accepted;
@@ -645,12 +666,19 @@ async function runLua(page, code) {
       return;
     }
     mark('save and resume the same authored run');
+    await observeBorrowedTextures(page, 'before the actual saved Leave');
     const beforeLeave = state.leaveReceipts;
     await gameplayReady();
     await ui.click(page,'hud:pause');
     await ui.surface(page,'pause');
     await ui.click(page,'leave');
     await ui.surface(page,'title');
+    const retired = await page.evaluate(() => window.__solomonGpuTextureLifetime());
+    textures.assertBorrowedTexturesRetired(retired, state.textureProof.paths);
+    assert.deepEqual((await ui.readUi(page)).draw.borrowedImagePaths, [],
+      'saved Leave retires borrowed UI registrations before destroying their world owner');
+    state.textureProof.retired = textures.admittedTextureRows(retired, state.textureProof.paths);
+    check('admitted world and UI share one image upload and saved Leave deletes each texture exactly once');
     assert.ok(state.leaveReceipts > beforeLeave);
     assert.ok(state.lastSave, 'the actual host supplied its signed source continuation');
     const saved = JSON.parse(state.lastSave);
@@ -681,6 +709,7 @@ async function runLua(page, code) {
       lua: state.lua.map(({request_id, ok, output, values, error}) => ({request_id, ok, output, values, error})),
       savedModStateSha256: sha256(JSON.stringify(modState)), continued: snapshot(),
       audioEvents: state.audioEvents, authoredAudioProof: state.authoredAudioProof, iconProof: state.iconProof,
+      textureProof: state.textureProof,
       rejectedBeltProof: state.rejectedBeltProof,
       robeDragProof: state.robeDragProof,
       spareRobeProof: state.spareRobeProof,
@@ -692,6 +721,7 @@ async function runLua(page, code) {
     await page.screenshot({path: path.join(output, 'authored-content-failure.png')});
     fs.writeFileSync(path.join(output, 'authored-content-failure.json'), JSON.stringify({step, error: error.stack, checks, errors, requests, expectedNotFound, continuedProfile: state.continuedProfile, priorPhase, priorSackPhase, priorOnwardPhase, accepted: snapshot(), wireTypes: state.wireTypes, movementFailure: state.movementFailure, rejectedBeltProof: state.rejectedBeltProof,
       cheatProof: state.cheatProof,
+      textureProof: state.textureProof,
       spareRobeProof: state.spareRobeProof,
       robeDragProof: state.robeDragProof ? {...state.robeDragProof,
         pointers: await page.evaluate(() => window.authoredRobePointers || [])} : undefined,
