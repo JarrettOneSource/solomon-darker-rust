@@ -482,7 +482,7 @@ impl Loader {
         self.widgets.push(serde_json::json!({
             "id": id, "label": label, "role": role,
             "rect": [left,top,width,height],
-            "paint_bounds": {"x":paint[0],"y":paint[1],"width":paint[2],"height":paint[3]},
+            "paintRect": paint,
             "enabled": true, "focused": false,
         }));
     }
