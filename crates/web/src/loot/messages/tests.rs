@@ -7,6 +7,50 @@ use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::secondary::NativeSecondaryEventState;
 use solomon_sim::session::GameSessionOptions;
 
+#[test]
+fn the_real_paint_queue_keeps_notifications_above_world_effects_and_below_hud() {
+    let ctx = egui::Context::default();
+    let rect = Rect::from_min_size(egui::Pos2::ZERO, vec2(40.0, 40.0));
+    let mut colors = Vec::new();
+    for _ in 0..2 {
+        let output = ctx.run_pass(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 300.0))),
+                ..Default::default()
+            },
+            |ctx| {
+                // Deliberately paint in the opposite order. The actual layer
+                // queue, rather than call order, must preserve native z order.
+                egui::Area::new(egui::Id::unique("game-hud"))
+                    .order(Order::Middle)
+                    .fixed_pos(egui::Pos2::ZERO)
+                    .fade_in(false)
+                    .show(ctx, |ui| {
+                        ui.set_min_size(vec2(40.0, 40.0));
+                        ui.painter().rect_filled(rect, 0.0, egui::Color32::GREEN);
+                    });
+                ctx.layer_painter(notification_layer(ctx)).rect_filled(
+                    rect,
+                    0.0,
+                    egui::Color32::RED,
+                );
+                ctx.layer_painter(LayerId::new(Order::Background, egui::Id::unique("mod/world")))
+                    .rect_filled(rect, 0.0, egui::Color32::BLUE);
+            },
+        );
+        colors = output
+            .shapes
+            .iter()
+            .filter_map(|shape| match &shape.shape {
+                egui::Shape::Rect(rect) => Some(rect.fill),
+                _ => None,
+            })
+            .collect();
+        output.drop_without_applying_deltas();
+    }
+    assert_eq!(colors, [egui::Color32::BLUE, egui::Color32::RED, egui::Color32::GREEN]);
+}
+
 fn session() -> GameSession {
     let mut session = GameSession::new(
         "local".into(),
