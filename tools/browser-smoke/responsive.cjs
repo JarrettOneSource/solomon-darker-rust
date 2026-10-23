@@ -74,9 +74,10 @@ async function walkToFomentius(page) {
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
   const {browser}=owned;
+  let page,observed;
   try {
-    const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:1});
-    const observed=ui.watchErrors(page);
+    page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:1});
+    observed=ui.watchErrors(page);
     await observed.ready;
     await ui.observeGpu(page);
     await page.goto(url,{waitUntil:'domcontentloaded'});
@@ -96,11 +97,12 @@ async function walkToFomentius(page) {
     assert.ok(fitsViewport(tooltip,844,390),'touch inspection stays on screen');
     await shot(page,'phone-item-tooltip-rust.png');
     await page.touchscreen.tap(832,195);
+    const destination=ui.bounds(await ui.widget(page,'panel:cell:5'));
     await ui.drag(page,health.id,'panel:cell:5',{touch:true});
     await ui.waitForUi(page,snapshot=>{
-      const moved=ui.findWidget(snapshot,health.id),cell=ui.findWidget(snapshot,'panel:cell:5');
-      if(!moved||!cell)return false;
-      const point=ui.center(ui.bounds(moved)),target=ui.bounds(cell);
+      const moved=ui.findWidget(snapshot,health.id);
+      if(!moved)return false;
+      const point=ui.center(ui.bounds(moved)),target=destination;
       return point.x>=target.x&&point.x<=target.x+target.width
         &&point.y>=target.y&&point.y<=target.y+target.height;
     },'real Health Potion moved into column-first cell 5');
@@ -157,6 +159,16 @@ async function walkToFomentius(page) {
       portraitNativeStage:'source landscape guidance',touchWorldEntry:'Fomentius',touchDrag:true,
       submissions:await ui.gpuDraws(page)},null,2));
     console.log(JSON.stringify({passed:true,errors:observed.errors}));
+  } catch(error) {
+    const failure={error:error.stack};
+    if(page){
+      await ui.settleErrors(page);
+      failure.errors=observed.errors;
+      failure.ui=await ui.readUi(page);
+      await shot(page,'responsive-failure.png');
+    }
+    fs.writeFileSync(path.join(output,'responsive-failure.json'),JSON.stringify(failure,null,2));
+    throw error;
   } finally {
     try {fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(await owned.close(),null,2))}
     catch(error){
