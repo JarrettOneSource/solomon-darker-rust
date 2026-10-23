@@ -13,7 +13,7 @@ mod party;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use egui::{Color32, Id, Order, Sense};
+use egui::{Color32, Id, Order};
 use solomon_sim::settings::GameControlBindings;
 use solomon_sim::social::party_ui::NativePartyMenuTab as PartyTab;
 use solomon_sim::social::{
@@ -290,7 +290,8 @@ impl SocialUi {
                     ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
                     let screen = ctx.content_rect();
                     ui.set_min_size(screen.size());
-                    let back = ui.interact(screen, Id::unique("social/backdrop"), Sense::click());
+                    let back =
+                        ui.interact(screen, Id::unique("social/backdrop"), egui::Sense::CLICK);
                     ui.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(178));
                     if self.college_visible() {
                         self.paint_college_invitation(frame, ui)?;

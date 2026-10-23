@@ -323,7 +323,7 @@ impl CheatUi {
             .show(&ctx, |ui| {
                 ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
                 ui.set_min_size(screen.size());
-                ui.interact(screen, Id::unique("cheats/backdrop"), egui::Sense::click());
+                ui.interact(screen, Id::unique("cheats/backdrop"), egui::Sense::CLICK);
                 ui.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(209));
                 ui.painter().rect_filled(bounds, 0.0, Color32::from_rgb(14, 13, 12));
                 if let Some(size) = gpu.image_size("assets/stock/settings-leather.png") {

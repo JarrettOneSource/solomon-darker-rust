@@ -118,6 +118,11 @@ impl ModMinimapView {
             |ui| {
                 let bounds = Rect::from_min_size(ui.min_rect().min, size);
                 ui.set_min_size(size);
+                if !model.actions.is_empty() {
+                    let body =
+                        ui.interact(bounds, Id::unique("mod/minimap-body"), egui::Sense::CLICK);
+                    frame.record_ellipse("mod/minimap-body", &model.label, "region", &body);
+                }
                 let painter = ui.painter();
                 let outline: Vec<_> = (0..64)
                     .map(|i| {

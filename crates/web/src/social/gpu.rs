@@ -46,7 +46,6 @@ pub(super) fn native_text(
 pub(super) fn stock_button(
     frame: &mut UiFrame<'_>,
     ui: &mut Ui,
-    _atlas: &StockAtlas,
     id: &str,
     label: &str,
     bounds: Rect,

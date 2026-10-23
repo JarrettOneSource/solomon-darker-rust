@@ -82,7 +82,7 @@ impl SocialUi {
         let visibility = state.party.visibility;
         let (origin, scale) = gpu::stage(self.size);
         let panel = gpu::rect(NATIVE_PARTY_MENU_FRAME, origin, scale);
-        ui.interact(panel, Id::unique("social/party-panel-block"), Sense::click());
+        ui.interact(panel, Id::unique("social/party-panel-block"), egui::Sense::CLICK);
         message_frame_scaled(frame, ui.painter(), &self.ui, panel, scale)?;
         frame.record_rect("social/party-menu", "PARTY", "dialog", panel, true);
         let viewport = gpu::rect(NATIVE_PARTY_MENU_VIEWPORT, origin, scale);
@@ -300,15 +300,7 @@ impl SocialUi {
                 }
                 response
             } else {
-                gpu::stock_button(
-                    frame,
-                    ui,
-                    &self.ui,
-                    &action.id,
-                    &action.label,
-                    bounds,
-                    !action.disabled,
-                )?
+                gpu::stock_button(frame, ui, &action.id, &action.label, bounds, !action.disabled)?
             };
             if self.focus_modal && action.id == "close" {
                 response.request_focus();
