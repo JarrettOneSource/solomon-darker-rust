@@ -4,12 +4,16 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
-const {reachCollegeLoadout} = require('./menu-journey.cjs');
+const {startNewGame} = require('./menu-journey.cjs');
+const {createNativeMessageReader} = require('./native-wire.cjs');
+const ui = require('./gpu-ui.cjs');
 const output = path.resolve(process.env.OUT);
 const account = JSON.parse(fs.readFileSync(process.env.ACCOUNTS))[0];
 assert.equal(account.user.id, 3, 'the isolated configured QA3 developer account');
 const url = new URL(process.env.URL || 'https://127.0.0.1:9449/game-stg/');
-assert.equal(url.href, 'https://127.0.0.1:9449/game-stg/');
+assert.equal(url.hostname, '127.0.0.1', 'the isolated owned gateway');
+const websiteMount = process.env.WEBSITE_MOUNT ?? url.pathname.replace(/\/$/, '');
+const tokenKey = websiteMount ? `sdr.token:${websiteMount}` : 'sdr.token';
 const state = {frame: null, id: null, botId: null, social: null, welcomes: [], lua: [],
   commands: [], samples: [], ownedSpells: [], leaveReceipts: 0, actualDeveloper: false};
 const checks = [], errors = [], requests = [], expectedNotFound = [], cancelled = [], wasm = new Set();
@@ -68,18 +72,11 @@ function message(message) {
   sample();
 }
 function decode(socket) {
-  let chunks = [], nextOffset = 0;
+  const readMessage = createNativeMessageReader();
   socket.on('framereceived', ({payload}) => {
     try {
-      const row = JSON.parse(payload.toString());
-      if (row.type === 'welcome_chunk') {
-        assert.equal(row.offset, nextOffset);
-        chunks.push(Buffer.from(Uint16Array.from(row.data).buffer).toString('utf16le'));
-        nextOffset += row.data.length;
-        if (nextOffset !== row.total_length) return;
-        message(JSON.parse(chunks.join('')));
-        chunks = []; nextOffset = 0;
-      } else message(row);
+      const accepted = readMessage(JSON.parse(payload.toString()));
+      if (accepted) message(accepted);
     } catch (error) {errors.push(`observed WS decode: ${error.message}`);}
   });
   socket.on('framesent', ({payload}) => {
@@ -98,7 +95,8 @@ function decode(socket) {
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
   const browser = await chromium.connect(server.wsEndpoint());
   const context = await browser.newContext({ignoreHTTPSErrors: true, viewport: {width: 1280, height: 720}});
-  await context.addInitScript(token => localStorage.setItem('sdr.token:/game-stg', token), account.token);
+  await context.addInitScript(({key, token}) => localStorage.setItem(key, token),
+    {key: tokenKey, token: account.token});
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(error.message));
@@ -120,47 +118,30 @@ function decode(socket) {
   });
   page.on('requestfailed', request => {
     const row = {path: new URL(request.url()).pathname, error: request.failure()?.errorText};
-    if (row.error === 'net::ERR_ABORTED' && !row.path.includes('/api/')) cancelled.push(row);
+    if (row.error === 'net::ERR_ABORTED' && row.path === `${websiteMount}/api/game/deployment`) cancelled.push(row);
     else errors.push(`${row.error} ${row.path}`);
   });
   page.on('websocket', decode);
   try {
     mark('actual configured developer and fresh College');
     await page.goto(url.href, {waitUntil: 'load'});
-    await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-      && document.querySelector('#status')?.textContent === '');
-    const prompt = page.locator('.title-prompt:not([hidden])');
-    if (await prompt.isVisible()) await prompt.locator('[data-menu-action="prompt-secondary"]').click();
+    await ui.ready(page);
     await until(() => state.actualDeveloper, 'real auth/me developer admission');
-    await page.locator('[data-menu-action="play"]').click();
-    await page.locator('[data-menu-action="new-game"]').click();
-    await until(async () => await prompt.isVisible()
-      || await page.locator('.game-menus[data-menu-screen="create"]').count()
-      || await page.locator('.player-panels:not([hidden]) [data-player-panel="dialogue"]').count(),
-      'the actual saved-character confirmation or fresh Create/onboarding', 120000);
-    if (await prompt.isVisible()) await prompt.locator('[data-menu-action="prompt-primary"]').click();
-    await until(async () => await page.locator('.game-menus[data-menu-screen="create"]').count()
-      || await page.locator('.player-panels:not([hidden]) [data-player-panel="dialogue"]').count(),
-      'actual fresh Create or College onboarding', 120000);
-    if (await page.locator('.player-panels:not([hidden]) [data-player-panel="dialogue"]').count())
-      await reachCollegeLoadout(page);
-    await page.getByRole('textbox', {name: 'Wizard name', exact: true}).fill('BotQA');
-    await page.locator('[data-menu-action="element:fire"]').click();
-    await page.locator('[data-menu-action="discipline:arcane"]').click();
+    await startNewGame(page, {name:'BotQA', element:'fire', discipline:'arcane'});
     await until(() => state.frame?.snapshot.participants[state.id]
       && !player(state.id).player.economy.college_intro_pending
       && !state.frame.host.resume_grace, 'accepted post-loadout College');
-    await page.locator('.hud-map').waitFor({state: 'visible'});
+    await ui.widget(page, (await ui.byLabel(page,'Enter the Boneyard',{role:'button'})).id);
+    await ui.assertGpuOnly(page);
     assert.equal(state.welcomes.at(-1).kind, 'GlobalHub');
     assert.equal(state.welcomes.at(-1).developer, true);
     check('the configured real QA3 account reaches the Global College with developer capability');
 
     mark('ordinary developer Console summon');
     await page.keyboard.press('Backquote');
-    await page.locator('[data-cheat-action="console"]').click();
-    const editor = page.locator('#cheat-menu-lua-editor');
-    await editor.fill(summonCode);
-    await page.locator('[data-cheat-action="run"]').click();
+    await ui.click(page,'cheats/tab:console');
+    await ui.fill(page,'cheats/lua-editor',summonCode);
+    await ui.click(page,'cheats/run');
     await until(() => state.commands.some(row => row.type === 'lua_execute' && row.code === summonCode),
       'actual Console summon request');
     const summon = state.commands.find(row => row.type === 'lua_execute' && row.code === summonCode);
@@ -170,7 +151,7 @@ function decode(socket) {
     state.botId = result.values[0].player_id;
     assert.ok(state.botId.startsWith('bot-'));
     await page.keyboard.press('Backquote');
-    await editor.waitFor({state: 'hidden'});
+    await ui.noWidget(page,'cheats/lua-editor');
     await until(() => player(state.botId), 'actual bot participant');
     assert.equal(player(state.botId).player.selection.element, 'Water');
     check('trusted Console input summons one actual Water/Mind learned bot through the native VM');
@@ -183,21 +164,20 @@ function decode(socket) {
     // ordinary nearest-actor interaction, with its actual card identity checked.
     await until(() => state.frame.snapshot.ticks >= admittedAt + 20, 'displayed bot admission');
     await page.keyboard.press('KeyE');
-    await page.locator('[data-profile-origin="actor"]').getByText(player(state.botId).player.selection.name,
-      {exact: true}).waitFor();
-    const invite = page.locator('[data-profile-origin="actor"] [data-social-action="card-invite"]');
-    await invite.waitFor();
+    const card = await ui.widget(page,'social/player-card');
+    assert.equal(card.label, player(state.botId).player.selection.name,
+      'the actual nearest actor opens the bot card');
+    await ui.widget(page,'social/card-invite');
     const invitedAt = Date.now();
-    await invite.click();
+    await ui.click(page,'social/card-invite');
     await until(() => state.social?.party_state?.party.member_player_ids.includes(state.botId), 'bot Party acceptance');
     assert.ok(Date.now() - invitedAt >= 2900);
-    const closeCard = page.locator('[data-profile-origin="actor"] [data-social-action="close"]');
-    if (await closeCard.isVisible()) await closeCard.click();
+    if (ui.findWidget(await ui.readUi(page),'social/card-close')) await ui.click(page,'social/card-close');
     await page.screenshot({path: path.join(output, 'bot-party-college.png')});
     check('the real actor Invite sends the bot invitation and it accepts after three seconds');
 
     mark('real Boneyard and learned policy decisions');
-    await page.locator('.hud-map').click();
+    await ui.click(page,(await ui.byLabel(page,'Enter the Boneyard',{role:'button'})).id);
     await until(() => state.frame?.snapshot.boneyard && player(state.botId)
       && !state.frame.host.loading_run_id && !state.frame.host.resume_grace, 'actual two-player Boneyard readiness', 120000);
     const runId = state.frame.snapshot.boneyard.run_id;
@@ -216,14 +196,15 @@ function decode(socket) {
 
     mark('ordinary save-before-leave and bot disposal');
     await page.keyboard.press('Escape');
-    await page.locator('[data-menu-action="leave"]').click();
-    await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
+    await ui.click(page,'leave');
+    await ui.surface(page,'title');
+    await ui.assertGpuOnly(page);
     assert.ok(state.leaveReceipts > 0);
     assert.deepEqual(errors, []);
     await page.screenshot({path: path.join(output, 'bot-title-cleanup.png')});
     check('the ordinary save receipt returns to Title and closes the owning developer session');
     const receipt = {passed: true, checks, errors, requests, expectedNotFound, cancelled, wasm: [...wasm],
-      source: 'current Website fa08; actual native policy + scoped Console + ordinary actor/Party/Boneyard UI',
+      source: 'retained Source behavior; actual Rust GPU input, native policy, Console, actor/Party/Boneyard UI',
       credentialBootstrap: 'retained isolated QA3 account token; no identity/authority injection',
       botId: state.botId, runId, welcomes: state.welcomes, commands: state.commands, samples: state.samples,
       ownedSpells: state.ownedSpells, lua: state.lua.map(({ok, error, values}) => ({ok, error, values}))};
@@ -235,8 +216,7 @@ function decode(socket) {
       error: error.stack, checks, errors, requests, expectedNotFound, cancelled, wasm: [...wasm],
       botId: state.botId, social: state.social, welcomes: state.welcomes, commands: state.commands,
       samples: state.samples, ownedSpells: state.ownedSpells, lua: state.lua, frame: state.frame,
-      ui: await page.evaluate(() => ({status: document.querySelector('#status')?.textContent,
-        menu: document.querySelector('.game-menus')?.dataset.menuScreen, text: document.body.innerText.slice(-5000)}))}, null, 2));
+      ui: await ui.readUi(page)}, null, 2));
     throw error;
   } finally {
     let timeout;
