@@ -20,6 +20,43 @@ use web_sys::{
 
 use solomon_graphics::assets;
 
+/// Source `game-audio-browser.ts::loadMusicChannel` admits a channel on loadeddata.
+/// A failed resident music fetch is a startup error, just like a failed effect buffer.
+async fn ready_music(media: &HtmlAudioElement, path: &str) -> Result<(), String> {
+    if media.ready_state() >= 2 {
+        return Ok(());
+    }
+    let mut settle = None;
+    let ready = js_sys::Promise::new(&mut |resolve, reject| settle = Some((resolve, reject)));
+    let (resolve, reject) = settle.expect("Promise installs its resolvers synchronously");
+    let loaded = Closure::<dyn FnMut(Event)>::new(move |_| {
+        let _ = resolve.call0(&JsValue::UNDEFINED);
+    });
+    let failed = Closure::<dyn FnMut(Event)>::new(move |_| {
+        let _ = reject.call1(&JsValue::UNDEFINED, &JsValue::from_str("could not load game music"));
+    });
+    media
+        .add_event_listener_with_callback("loadeddata", loaded.as_ref().unchecked_ref())
+        .map_err(|error| audio_error("music readiness listener", error))?;
+    if let Err(error) =
+        media.add_event_listener_with_callback("error", failed.as_ref().unchecked_ref())
+    {
+        media
+            .remove_event_listener_with_callback("loadeddata", loaded.as_ref().unchecked_ref())
+            .map_err(|error| audio_error("music readiness cleanup", error))?;
+        return Err(audio_error("music error listener", error));
+    }
+    media.load();
+    let result = JsFuture::from(ready).await;
+    media
+        .remove_event_listener_with_callback("loadeddata", loaded.as_ref().unchecked_ref())
+        .map_err(|error| audio_error("music readiness cleanup", error))?;
+    media
+        .remove_event_listener_with_callback("error", failed.as_ref().unchecked_ref())
+        .map_err(|error| audio_error("music error cleanup", error))?;
+    result.map(|_| ()).map_err(|error| audio_error(path, error))
+}
+
 struct PlayingVoice {
     cue: Option<AudioCue>,
     source: AudioBufferSourceNode,
@@ -86,6 +123,14 @@ pub struct GameAudio {
 }
 
 impl GameAudio {
+    pub(crate) fn startup_asset_count() -> usize {
+        AUDIO_CATALOG
+            .iter()
+            .map(|definition| definition.path)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
+    }
+
     pub async fn load(document: &Document) -> Result<Self, String> {
         let context = AudioContext::new().map_err(|error| audio_error("create context", error))?;
         let master = context.create_gain().map_err(|error| audio_error("master gain", error))?;
@@ -145,6 +190,15 @@ impl GameAudio {
             }
         }
         let promises = js_sys::Array::new();
+        for channel in &state.borrow().music {
+            let media = channel.media.clone();
+            let path = channel.cue.definition().path;
+            promises.push(&future_to_promise(async move {
+                ready_music(&media, path).await.map_err(JsValue::from)?;
+                crate::runtime_ui::completed("audio", path, 1).map_err(JsValue::from)?;
+                Ok(JsValue::UNDEFINED)
+            }));
+        }
         for path in paths {
             let state = state.clone();
             let context = context.clone();
@@ -156,6 +210,7 @@ impl GameAudio {
                 let decoded = context.decode_audio_data(&encoded.buffer())?;
                 let buffer = JsFuture::from(decoded).await?.dyn_into::<AudioBuffer>()?;
                 state.borrow_mut().buffers.insert(path.to_owned(), buffer);
+                crate::runtime_ui::completed("audio", path, 1).map_err(JsValue::from)?;
                 Ok(JsValue::UNDEFINED)
             });
             promises.push(&promise);

@@ -76,6 +76,10 @@ impl NativeGame {
         &self.presentation
     }
 
+    pub(super) fn is_inspecting(&self) -> bool {
+        self.phase == NativePhase::Inspecting
+    }
+
     pub(super) fn is_playing(&self) -> bool {
         self.phase == NativePhase::Playing
     }

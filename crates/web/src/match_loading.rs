@@ -1,105 +1,124 @@
-//! Website `MatchLoadingScreen.tsx`: source art and lifecycle copy over the existing scene.
-//! The coordinator owns progress and completion; visibility never delays admission.
+//! Source `MatchLoadingScreen.tsx`: the accepted transition owns progress and delay.
+//! Stock artwork, status and its progress track are painted in the same GPU frame.
 
+use crate::gpu_ui::UiFrame;
+use egui::{Align2, Color32, FontFamily, FontId, Id, Order, Rect, Stroke, pos2, vec2};
 use solomon_sim::menu::loading::MatchLoadingState;
-use wasm_bindgen::JsCast;
-use web_sys::{Document, HtmlElement, HtmlImageElement};
+use web_sys::Document;
 
-use crate::ui::{append, element, image};
+const ART: &str = "assets/stock/menu/match-loading-background.png";
 
+#[derive(Default)]
 pub struct MatchLoadingView {
-    root: HtmlElement,
-    art: HtmlImageElement,
-    label: HtmlElement,
-    track: HtmlElement,
-    fill: HtmlElement,
-    presented: Option<MatchLoadingState>,
+    loading: Option<MatchLoadingState>,
+    delay_elapsed: bool,
 }
 
 impl MatchLoadingView {
-    pub fn attach(document: &Document) -> Result<Self, String> {
-        let root = element(document, "div", "match-loading-screen")?;
-        root.set_hidden(true);
-        root.set_attribute("aria-busy", "true").map_err(|_| "match loading status")?;
-        let art = image(document, "match-loading-background", "match-loading-art")?;
-        let scrim = element(document, "div", "match-loading-scrim")?;
-        scrim.set_attribute("aria-hidden", "true").map_err(|_| "match loading scrim")?;
-        let label = element(document, "div", "match-loading-label")?;
-        label.set_attribute("role", "status").map_err(|_| "match loading label")?;
-        label.set_attribute("aria-live", "polite").map_err(|_| "match loading live label")?;
-        let track = element(document, "div", "match-loading-progress")?;
-        for (name, value) in
-            [("role", "progressbar"), ("aria-valuemin", "0"), ("aria-valuemax", "100")]
-        {
-            track.set_attribute(name, value).map_err(|_| "match loading progress semantics")?;
-        }
-        let fill = element(document, "div", "match-loading-progress-fill")?;
-        append(&track, &fill)?;
-        for child in [&art, &scrim, &label, &track] {
-            append(&root, child)?;
-        }
-        append(&document.body().ok_or("match loading body")?, &root)?;
-        Ok(Self {
-            root,
-            art: art.dyn_into().map_err(|_| "match loading image")?,
-            label,
-            track,
-            fill,
-            presented: None,
-        })
+    pub fn attach(_document: &Document) -> Result<Self, String> {
+        Ok(Self::default())
     }
-
     pub fn update(
         &mut self,
         loading: Option<&MatchLoadingState>,
         now_ms: f64,
     ) -> Result<(), String> {
-        self.root.set_hidden(loading.is_none());
-        let Some(loading) = loading else {
-            self.presented = None;
-            return Ok(());
-        };
-        let art_ready = self.art.complete() && self.art.natural_width() > 0;
-        let delay_elapsed = loading.should_present(now_ms);
-        for (name, value) in [
-            ("data-art-ready", art_ready),
-            ("data-delay-elapsed", delay_elapsed),
-            ("data-visible", art_ready && delay_elapsed),
-        ] {
-            self.root
-                .set_attribute(name, if value { "true" } else { "false" })
-                .map_err(|_| "match loading visibility")?;
-        }
-        if self.presented == Some(*loading) {
-            return Ok(());
-        }
-        self.label.set_text_content(Some(loading.label()));
-        self.root
-            .set_attribute("data-flow", loading.flow.id())
-            .map_err(|_| "match loading flow")?;
-        self.root
-            .set_attribute("data-stage", loading.stage.definition().id)
-            .map_err(|_| "match loading stage")?;
-        self.root
-            .set_attribute("data-progress", &loading.progress.to_string())
-            .map_err(|_| "match loading progress")?;
-        self.track
-            .set_attribute("aria-label", loading.label())
-            .map_err(|_| "match loading progress label")?;
-        self.track
-            .set_attribute("aria-valuenow", &(loading.progress * 100.0).to_string())
-            .map_err(|_| "match loading progress value")?;
-        self.fill
-            .style()
-            .set_property("width", &format!("{}%", loading.progress * 100.0))
-            .map_err(|_| "match loading fill")?;
-        self.presented = Some(*loading);
+        self.loading = loading.copied();
+        self.delay_elapsed = loading.is_some_and(|loading| loading.should_present(now_ms));
         Ok(())
     }
-}
-
-impl Drop for MatchLoadingView {
-    fn drop(&mut self) {
-        self.root.remove();
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        let Some(loading) = self.loading else { return Ok(()) };
+        frame.input_scope("match-loading");
+        let ctx = frame.ctx.clone();
+        let screen = ctx.content_rect();
+        egui::Area::new(Id::unique("match-loading"))
+            .order(Order::Foreground)
+            .fixed_pos(screen.min)
+            .show(&ctx, |ui| {
+                ui.set_min_size(screen.size());
+                ui.interact(
+                    screen,
+                    Id::unique("match-loading-hold"),
+                    egui::Sense::click_and_drag(),
+                );
+                if !self.delay_elapsed || frame.image_size(ART).is_none() {
+                    return;
+                }
+                let painter = ui.painter();
+                frame.image(painter, ART, screen, None, Color32::WHITE);
+                let scrim = Rect::from_min_max(
+                    pos2(screen.left(), screen.top() + screen.height() * 0.82),
+                    screen.max,
+                );
+                let mut gradient = egui::Mesh::default();
+                for (pos, color) in [
+                    (scrim.left_top(), Color32::TRANSPARENT),
+                    (scrim.right_top(), Color32::TRANSPARENT),
+                    (scrim.right_bottom(), Color32::from_black_alpha(179)),
+                    (scrim.left_bottom(), Color32::from_black_alpha(179)),
+                ] {
+                    gradient.colored_vertex(pos, color);
+                }
+                gradient.indices.extend([0, 1, 2, 0, 2, 3]);
+                painter.add(egui::Shape::mesh(gradient));
+                let font_size = (screen.height() * 0.022_222_22).clamp(16.8, 36.0);
+                let baseline = pos2(
+                    screen.center().x,
+                    screen.bottom()
+                        - screen.height() * 0.075
+                        - (screen.height() * 0.012_962_96).max(12.0)
+                        - 0.5,
+                );
+                let font = FontId::new(font_size, FontFamily::Name("Alegreya Bold".into()));
+                painter.text(
+                    baseline + vec2(0.0, 1.0),
+                    Align2::CENTER_BOTTOM,
+                    loading.label(),
+                    font.clone(),
+                    Color32::BLACK,
+                );
+                let label = painter.text(
+                    baseline,
+                    Align2::CENTER_BOTTOM,
+                    loading.label(),
+                    font,
+                    Color32::from_rgb(242, 229, 199),
+                );
+                frame.record_rect("match-loading:label", loading.label(), "status", label, true);
+                frame.announce(loading.label());
+                let track = Rect::from_min_size(
+                    screen.min + vec2(screen.width() * 0.2 - 0.5, screen.height() * 0.925 - 0.5),
+                    vec2(screen.width() * 0.6, (screen.height() * 0.0083).clamp(8.0, 10.0)),
+                );
+                painter.rect_filled(track, 0.0, Color32::from_rgba_unmultiplied(20, 17, 13, 235));
+                painter.rect_filled(
+                    Rect::from_min_size(
+                        track.min,
+                        vec2(track.width() * loading.progress as f32, track.height()),
+                    ),
+                    0.0,
+                    Color32::from_rgb(202, 161, 77),
+                );
+                painter.rect_stroke(
+                    track,
+                    0.0,
+                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(105, 82, 42, 230)),
+                    egui::StrokeKind::Outside,
+                );
+                frame.record_rect(
+                    "match-loading:progress",
+                    loading.label(),
+                    "progressbar",
+                    track,
+                    true,
+                );
+                frame.record_value(
+                    "match-loading:progress",
+                    &(loading.progress * 100.0).to_string(),
+                    None,
+                );
+            });
+        Ok(())
     }
 }

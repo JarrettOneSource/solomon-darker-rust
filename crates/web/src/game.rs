@@ -67,6 +67,7 @@ use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 use crate::audio::GameAudio;
 use crate::boneyard::PreparedBoneyardView;
 use crate::courtyard::{ActorPainters, Camera, CourtyardPass, CourtyardScene};
+use crate::gpu_ui::GpuUi;
 use crate::hotbar::HotbarSelection;
 use crate::hud::{Hud, HudAction, HudMode};
 use crate::input::MovementInput;
@@ -96,6 +97,9 @@ const AUTOSAVE_TICKS: u64 = 3000;
 pub struct Game {
     canvas: HtmlCanvasElement,
     renderer: Renderer,
+    gpu_ui: GpuUi,
+    ui_ready: bool,
+    frame_time: f64,
     scene: CourtyardScene,
     rooms: PrivateRoomScenes,
     wizard_view: WizardView,
@@ -189,6 +193,9 @@ struct ActiveBattle {
 
 impl Game {
     pub async fn load() -> Result<Self, String> {
+        crate::runtime_ui::begin(
+            GpuUi::startup_asset_count() + GameAudio::startup_asset_count() + 3,
+        )?;
         let window = web_sys::window().ok_or("no window")?;
         let document = window.document().ok_or("no document")?;
         let playtime = if editor_test::configured(&document)? {
@@ -222,6 +229,7 @@ impl Game {
                 .await?;
 
         let renderer = Renderer::new(webgl2_context(&canvas)?)?;
+        let gpu_ui = GpuUi::load(&document, &canvas, &renderer).await?;
         let teacher_view = TeacherView::load(&renderer).await?;
         let spell_view = SpellView::load(&renderer).await?;
         let college_texture = renderer.upload(&college_image)?;
@@ -285,6 +293,9 @@ impl Game {
         let mut game = Self {
             canvas,
             renderer,
+            gpu_ui,
+            ui_ready: false,
+            frame_time: 0.0,
             scene,
             rooms,
             wizard_view,
@@ -579,6 +590,7 @@ impl Game {
     }
 
     pub fn frame(&mut self, time: f64) -> Result<(), String> {
+        self.frame_time = time;
         if self.editor_test_disposed() {
             return Ok(());
         }
@@ -1849,7 +1861,7 @@ impl Game {
 
     fn show_storage_error(error: &str) {
         web_sys::console::warn_1(&JsValue::from_str(error));
-        set_status(error);
+        crate::runtime_ui::set_error(error);
     }
 
     pub fn retain_save_listener(
@@ -2199,6 +2211,96 @@ impl Game {
     }
 
     fn render(&mut self) -> Result<(), String> {
+        self.render_world()?;
+        self.paint_ui()?;
+        if !self.ui_ready && !self.native.as_ref().is_some_and(NativeGame::is_inspecting) {
+            let diagnostics = self.gpu_ui.diagnostics();
+            if diagnostics.meshes > 0
+                && diagnostics.static_images_ready == diagnostics.static_images_total
+            {
+                crate::runtime_ui::completed("account", "Account and saved game ready", 1)?;
+                crate::runtime_ui::completed("ready", "First game frame ready", 1)?;
+                crate::runtime_ui::finish()?;
+                self.ui_ready = true;
+            }
+        }
+        Ok(())
+    }
+
+    fn paint_ui(&mut self) -> Result<(), String> {
+        let viewport = [self.canvas.client_width() as f32, self.canvas.client_height() as f32];
+        let mut result = Ok(());
+        self.gpu_ui.run(&mut self.renderer, viewport, self.frame_time / 1000.0, |frame| {
+            result = (|| {
+                self.mod_overlays.paint(frame)?;
+                self.mod_minimap.paint(frame)?;
+                self.hud.paint(frame)?;
+                self.mod_skill_quickbar.paint(frame)?;
+                self.shared_gameplay.paint(frame)?;
+                self.panels.paint(frame)?;
+                self.mod_skills.paint(frame)?;
+                self.mod_panels.paint(frame)?;
+                self.tutorial_ui.paint(frame)?;
+                self.college_overlay.paint(frame)?;
+                self.game_over.paint(frame)?;
+                self.skill_picker.paint(frame)?;
+                self.social.paint(frame)?;
+                self.cheats.paint(frame)?;
+                self.observer_ui.paint(frame)?;
+                self.spectator_ui.paint(frame)?;
+                self.menu.paint(frame)?;
+                self.fullscreen.paint(frame)?;
+                self.match_loading_view.paint(frame)?;
+                crate::runtime_ui::paint(frame);
+                Ok(())
+            })();
+        })?;
+        result
+    }
+
+    pub(crate) fn present_failure(&mut self, time: f64) -> Result<(), String> {
+        let (width, height) = self.fit_canvas();
+        let viewport = [self.canvas.client_width() as f32, self.canvas.client_height() as f32];
+        self.renderer.begin_frame(width, height, viewport);
+        self.renderer.end_frame();
+        self.gpu_ui.run(&mut self.renderer, viewport, time / 1000.0, crate::runtime_ui::paint)?;
+        if !self.ui_ready {
+            crate::runtime_ui::startup_failed(
+                crate::runtime_ui::error().as_deref().unwrap_or("Game initialization failed"),
+            );
+        }
+        Ok(())
+    }
+
+    pub(crate) fn gpu_ui_snapshot(&self) -> serde_json::Value {
+        let ui = self.gpu_ui.diagnostics();
+        let widgets: Vec<_> = ui
+            .widgets
+            .iter()
+            .map(|widget| {
+                let rect = |bounds: crate::gpu_ui::WidgetBounds| {
+                    [bounds.x, bounds.y, bounds.width, bounds.height]
+                };
+                serde_json::json!({
+                    "id": widget.id, "label": widget.label, "role": widget.role,
+                    "rect": rect(widget.bounds), "paintRect": rect(widget.paint_bounds),
+                    "enabled": widget.enabled, "focused": widget.focused,
+                    "value": widget.value, "selected": widget.selected,
+                    "modal": widget.modal, "z": widget.z,
+                })
+            })
+            .collect();
+        serde_json::json!({
+            "schemaVersion": 1, "surface": self.menu.surface_name(), "ready": self.ui_ready,
+            "loading": null, "error": ui.error.clone().or_else(crate::runtime_ui::error),
+            "canvas": { "width": ui.viewport[0], "height": ui.viewport[1], "pixelsPerPoint": ui.pixels_per_point },
+            "capture": ui.capture,
+            "draw": { "meshes": ui.meshes, "triangles": ui.triangles, "textures": ui.textures },
+            "widgets": widgets,
+        })
+    }
+
+    fn render_world(&mut self) -> Result<(), String> {
         let display = self.native.as_ref().and_then(|native| native.display.as_ref());
         let session = display.map_or(&self.session, |display| display.session.as_ref());
         let presentation_tick = display.map_or(session.ticks as f64, |frame| frame.tick);
@@ -2208,6 +2310,14 @@ impl Game {
             self.spectator_ui.hide();
             self.mod_overlays.reset();
             self.mod_projection = None;
+            let (width, height) = self.fit_canvas();
+            self.renderer.set_native_world_pixel_centers(false);
+            self.renderer.begin_frame(
+                width,
+                height,
+                [self.canvas.client_width() as f32, self.canvas.client_height() as f32],
+            );
+            self.renderer.end_frame();
             return Ok(());
         }
         let player = &session.participants[&self.local_player_id].player;
