@@ -62,7 +62,7 @@ test('worker outputs hash WASM before rewriting and hashing the JavaScript bindi
   for (const name of ['solomon-loader', 'solomon-web']) {
     const wasm = Buffer.from(`${name} WASM fixture`);
     const wasmName = `${name}-${digest(wasm)}_bg.wasm`;
-    const binding = `export default () => new URL('${name}_bg.wasm', import.meta.url);\n`;
+    const binding = `export default () => new URL('${name}_bg.wasm', import.meta.url);${name === 'solomon-web' ? '\r\n' : '\n'}`;
     const rewritten = binding.replace(`${name}_bg.wasm`, wasmName);
     const moduleName = `${name}-${digest(rewritten)}.js`;
     await writeFile(join(root, `${name}_bg.wasm`), wasm);

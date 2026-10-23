@@ -51,7 +51,7 @@ def hash_worker_outputs(dist: Path) -> None:
         with wasm.open("rb") as stream:
             wasm_hash = hashlib.file_digest(stream, "sha256").hexdigest()[:16]
         wasm_name = f"{name}-{wasm_hash}_bg.wasm"
-        binding = module.read_text(encoding="utf-8")
+        binding = module.read_bytes().decode("utf-8")
         # Renaming within this directory preserves bindgen's relative snippet imports.
         # Only its default WASM URL changes; the bootstrap also fetches this same file.
         default_url = re.compile(rf"new URL\((['\"]){re.escape(wasm.name)}\1, import\.meta\.url\)")
@@ -62,7 +62,7 @@ def hash_worker_outputs(dist: Path) -> None:
         module_hash = hashlib.sha256(binding.encode()).hexdigest()[:16]
         outputs.append((module, wasm, f"{name}-{module_hash}.js", wasm_name, binding))
     for module, wasm, module_name, wasm_name, binding in outputs:
-        (dist / module_name).write_text(binding, encoding="utf-8")
+        (dist / module_name).write_bytes(binding.encode("utf-8"))
         wasm.rename(dist / wasm_name)
         module.unlink()
 
@@ -118,6 +118,6 @@ def prepare_trunk_bootstrap(dist: Path, mount: str) -> tuple[str, str, str]:
             raise ValueError("the existing initializer does not match this distribution")
     else:
         document=document.replace("</body>",tag+"\n</body>")
-    (dist / name).write_text(bootstrap, encoding="utf-8")
+    (dist / name).write_bytes(bootstrap.encode("utf-8"))
     index.write_text(document, encoding="utf-8")
     return document, name, bootstrap
