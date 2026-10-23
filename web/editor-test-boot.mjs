@@ -35,6 +35,11 @@ window.addEventListener('message', async event => {
     if (!entry) throw new Error('The private test entry is missing.')
     await import(entry)
   } catch (error) {
+    if (cleanupTimer !== undefined) {
+      window.clearInterval(cleanupTimer)
+      cleanupTimer = undefined
+    }
+    window.solomonLoader?.finish()
     post({ type: 'solomon-editor-test-state', state: 'error', message: error instanceof Error ? error.message : 'The private test could not load.' })
     post({ type: 'solomon-editor-test-disposed' })
   }

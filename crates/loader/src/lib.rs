@@ -103,6 +103,9 @@ pub fn error(message: &str) {
     LOADER.with(|slot| {
         if let Some(loader) = slot.borrow_mut().as_mut() {
             loader.progress.error = Some(message.to_owned());
+            if let Err(render_error) = loader.render() {
+                loader.progress.error = Some(format!("{message}\n{render_error}"));
+            }
         }
     });
 }
@@ -345,7 +348,7 @@ impl Loader {
             let top = self.logical[1] / 2.0 + self.logical[0] * 0.11;
             self.text(
                 "loader:status",
-                &format!("{}  {}%", self.progress.stage, self.progress.percentage()),
+                &format!("{}  {}%", stage_label(&self.progress.stage), self.progress.percentage()),
                 top + size,
                 size,
                 0xffffff,
@@ -388,10 +391,9 @@ impl Loader {
             }
         }
         self.renderer.flush();
-        let caption =
-            self.progress.error.clone().unwrap_or_else(|| {
-                format!("{} {}%", self.progress.stage, self.progress.percentage())
-            });
+        let caption = self.progress.error.clone().unwrap_or_else(|| {
+            format!("{} {}%", stage_label(&self.progress.stage), self.progress.percentage())
+        });
         if caption != self.last_announced {
             self.reader.announce(&caption)?;
             self.last_announced = caption;
@@ -475,6 +477,19 @@ fn fit_text(text: &str, size: f32, width: f32) -> String {
         shortened.pop();
     }
     shortened + "..."
+}
+
+fn stage_label(stage: &str) -> &str {
+    match stage {
+        "assets" => "Loading stock artwork",
+        "fonts" => "Loading fonts",
+        "interface" => "Preparing the interface",
+        "audio" => "Loading music and sound",
+        "runtime" => "Preparing the game",
+        "account" => "Loading your wizard",
+        "ready" => "Ready",
+        other => other,
+    }
 }
 
 impl Drop for Loader {

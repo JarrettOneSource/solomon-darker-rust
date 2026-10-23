@@ -696,6 +696,9 @@ impl GpuUi {
     pub fn register_image(&mut self, path: &str, texture: &solomon_graphics::Texture) {
         self.images.register(path, texture, &self.painter.gl);
     }
+    pub fn borrowed_image_paths(&self) -> Vec<String> {
+        self.images.borrowed_paths()
+    }
     pub fn take_key_codes(&mut self) -> Vec<BrowserKey> {
         self.input.take_key_codes()
     }
