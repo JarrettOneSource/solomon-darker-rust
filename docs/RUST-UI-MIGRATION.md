@@ -4,7 +4,9 @@ Acceptance target: all visible game UI is authored by Rust and submitted as GPU 
 textures and text. The behavioral reference remains Website `fa08ae249ff5563570bdb2a653e2ef9358ce7b83`
 and the recovered retail evidence it cites. Existing simulation fixtures keep their actual
 provenance. Browser/platform adapters may own the canvas, composition/clipboard/file APIs,
-audio, network and persistence; they do not paint game controls or mirror them as hidden DOM.
+native downloads, screen-reader announcements, audio, network and persistence; they do not
+paint game controls or mirror them as hidden DOM. Accessibility uses native `ariaNotify`
+where supported or one specifically marked, nonvisual, text-only live region.
 
 The migration begins at Rust `c14068b3c95aa40f0b1c85d11f73fe2622349aae`. An implementation
 or a passing kernel fixture does not establish composed visual/input acceptance. Every pending
@@ -105,7 +107,7 @@ Owner names match the parallel implementation lanes. Scripts are under `tools/br
 | Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | Pending platform activation |
 | Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | Pending GPU notice and packaged journey |
 | Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | Pending GPU notice + actual update |
-| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | Pending composed runtime |
+| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | Pending composed runtime |
 | No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Pending complete cutover |
 
 ## Test ownership and stopping checks
@@ -124,6 +126,13 @@ retained as `gpu-ui-contract-baseline.tap`. Current composed browser acceptance 
 so no matrix surface is marked accepted from syntax/source checks alone. The independent
 Save Tools module ABI journey remains a valid canonical-byte fixture; its real Files are
 inputs to that independent module and do not fabricate gameplay state.
+
+The screen-reader observer forwards actual native `ariaNotify` calls unchanged or observes
+the one `data-gpu-announcer` live-region text node. The menu journey requires newly announced
+slider label and accepted value after real keyboard edits. It does not create announcement
+messages or mirror controls. Unmounted native download anchors and hidden audio/file/IME
+adapters remain platform capabilities; mounted visual anchors and hidden gameplay controls
+still fail the browser audit.
 
 Checks must drive ordinary pointer, keyboard, touch or controller input against visible GPU
 widgets. The read-only snapshot locates those widgets and reports accepted outcomes; it
