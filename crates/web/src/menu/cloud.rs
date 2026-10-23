@@ -1,36 +1,25 @@
-//! Website `DarkCloudScene.tsx`: real catalog/directory data, source selection,
-//! sheets and detail lifetimes. The Website coordinator owns all I/O and admission.
-
+//! GPU Dark Cloud catalog/directory, search/sort sheets and detail lifetimes.
+//! Source: `DarkCloudScene.tsx`; the Website coordinator retains all I/O/admission.
+mod art;
 mod detail;
-mod dialog;
 mod format;
 mod images;
 mod layouts;
 mod rows;
-mod widgets;
-
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-
-use solomon_sim::menu::dark_cloud::{DarkCloudTab as Tab, native_dark_cloud_tab_strip};
-use solomon_sim::menu::party_directory::{DirectoryPartyAction, directory_party_action};
-use solomon_sim::native_ui_text::NativeUiFontName::{Heading, Medium, Menu};
-use wasm_bindgen::{JsCast, closure::Closure};
-use web_sys::{Document, Element, Event, HtmlElement, HtmlInputElement, KeyboardEvent};
-
-use super::{HostedMenuAction, ModSubscriptionAction, RoutingDownloadProgress};
+use super::{HostedMenuAction, ModSubscriptionAction, RoutingDownloadProgress, widgets};
+use crate::gpu_ui::UiFrame;
 use crate::hosted::{
     Account, ConnectedGamePlayer, DeveloperGameMatch, ModComments, ModDetail, ModSubscription,
     ModSummary, OwnedImageUrl, PartyActivity, PublicGameParty, SharedMobileUiLayout,
 };
-use crate::ui::cloud::DarkCloudArt;
-use crate::ui::{append, element, style};
+use art::CloudArt;
 use detail::ModDetailView;
-use dialog::CloudDialog;
+use egui::{Align2, Color32, Rect, Ui, Vec2};
 use images::CloudImages;
 use layouts::LayoutsView;
-use widgets::{control_action, control_panel, narrative, text};
-
+use solomon_sim::menu::dark_cloud::{DarkCloudTab as Tab, native_dark_cloud_tab_strip};
+use solomon_sim::menu::party_directory::{DirectoryPartyAction, directory_party_action};
+use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Sort {
     Newest,
@@ -65,34 +54,12 @@ impl Row {
 }
 
 enum Sheet {
-    Search { dialog: CloudDialog, input: HtmlInputElement },
-    Sort(CloudDialog),
+    Search { input: String },
+    Sort,
 }
-impl Sheet {
-    fn dialog(&self) -> &CloudDialog {
-        match self {
-            Self::Search { dialog, .. } | Self::Sort(dialog) => dialog,
-        }
-    }
-}
-
 pub(super) struct CloudView {
-    pub root: HtmlElement,
-    document: Document,
-    art: DarkCloudArt,
-    scene_art: HtmlElement,
-    list_art: HtmlElement,
-    heading: HtmlElement,
-    tabs: HtmlElement,
-    frame: HtmlElement,
-    columns: HtmlElement,
-    status: HtmlElement,
-    list: HtmlElement,
-    footer: HtmlElement,
-    notice: HtmlElement,
-    skull: HtmlElement,
+    art: CloudArt,
     layouts: LayoutsView,
-    boneyards: HtmlElement,
     account: Option<Account>,
     active: bool,
     tab: Tab,
@@ -123,163 +90,14 @@ pub(super) struct CloudView {
     next_request: u64,
     refresh_at: f64,
     download_progress: Option<(u64, u64, bool)>,
-    events: Rc<RefCell<Vec<String>>>,
-    gallery_active: Rc<Cell<bool>>,
     actions: Vec<HostedMenuAction>,
-    art_size: String,
-    _listeners: Vec<Closure<dyn FnMut(Event)>>,
+    tab_scroll_reset: bool,
 }
-
 impl CloudView {
-    pub async fn new(document: &Document) -> Result<Self, String> {
-        let root = element(document, "section", "menu-screen dark-cloud-scene")?;
-        root.set_attribute("aria-label", "The Dark Cloud").map_err(|_| "Dark Cloud scene label")?;
-        root.set_hidden(true);
-        let art = DarkCloudArt::load().await?;
-        let scene_art = element(document, "div", "dark-cloud-scene-art-host")?;
-        append(&root, &scene_art)?;
-        let heading = element(document, "header", "dark-cloud-heading")?;
-        append(&root, &heading)?;
-        let tabs = element(document, "nav", "dark-cloud-tabs")?;
-        tabs.set_attribute("aria-label", "Dark Cloud sections")
-            .map_err(|_| "Dark Cloud tab label")?;
-        append(&root, &tabs)?;
-        let frame = element(document, "main", "dark-cloud-list-frame")?;
-        let list_art = element(document, "div", "dark-cloud-list-art-host")?;
-        append(&frame, &list_art)?;
-        let columns = element(document, "div", "dark-cloud-columns")?;
-        append(&frame, &columns)?;
-        let status = element(document, "div", "dark-cloud-list-status")?;
-        append(&frame, &status)?;
-        let list = element(document, "div", "dark-cloud-rows")?;
-        list.set_attribute("role", "list").map_err(|_| "Dark Cloud list role")?;
-        append(&frame, &list)?;
-        let layouts = LayoutsView::new(document)?;
-        append(&frame, &layouts.root)?;
-        let boneyards = element(document, "div", "dark-cloud-boneyards-mount")?;
-        boneyards.set_hidden(true);
-        append(&frame, &boneyards)?;
-        append(&root, &frame)?;
-        let footer = element(document, "footer", "dark-cloud-footer")?;
-        append(&root, &footer)?;
-        let notice = element(document, "p", "dark-cloud-error")?;
-        notice.set_attribute("role", "alert").map_err(|_| "Dark Cloud notice role")?;
-        append(&root, &notice)?;
-        let skull = element(document, "button", "cloud-menu-skull")?;
-        for (name, value) in
-            [("type", "button"), ("aria-label", "Menu"), ("data-menu-action", "cloud-menu")]
-        {
-            skull.set_attribute(name, value).map_err(|_| "Dark Cloud menu skull")?;
-        }
-        append(&root, &skull)?;
-        let events = Rc::new(RefCell::new(Vec::new()));
-        let mut listeners = Vec::new();
-        let double_events = events.clone();
-        let double = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(target) = event.target().and_then(|target| target.dyn_into::<Element>().ok())
-            else {
-                return;
-            };
-            match target.closest("[data-cloud-row-key]") {
-                Ok(Some(row)) => {
-                    if let Some(key) = row.get_attribute("data-cloud-row-key") {
-                        double_events.borrow_mut().push(format!("cloud-open:{key}"));
-                    }
-                }
-                Ok(None) => {}
-                Err(error) => web_sys::console::error_1(&error),
-            }
-        });
-        root.add_event_listener_with_callback("dblclick", double.as_ref().unchecked_ref())
-            .map_err(|_| "Dark Cloud double click")?;
-        listeners.push(double);
-        let edited = events.clone();
-        let input = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(target) = event.target().and_then(|target| target.dyn_into::<Element>().ok())
-            else {
-                return;
-            };
-            if target.id() == "dark-cloud-comment" {
-                edited.borrow_mut().push("cloud-comment-edited".to_owned());
-            }
-            if target.id() == "dark-cloud-layout-code" {
-                edited.borrow_mut().push("cloud-layout-edited".to_owned());
-            }
-            if target.id() == "dark-cloud-search-input" {
-                edited.borrow_mut().push("cloud-search-edited".to_owned());
-            }
-        });
-        root.add_event_listener_with_callback("input", input.as_ref().unchecked_ref())
-            .map_err(|_| "Dark Cloud input listener")?;
-        listeners.push(input);
-        let failed = events.clone();
-        let error = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(target) = event.target().and_then(|target| target.dyn_into::<Element>().ok())
-            else {
-                return;
-            };
-            match target.closest("[data-cloud-image-url]") {
-                Ok(Some(media)) => {
-                    if let Some(url) = media.get_attribute("data-cloud-image-url") {
-                        failed.borrow_mut().push(format!("cloud-image-failed:{url}"));
-                    }
-                }
-                Ok(None) => {}
-                Err(error) => web_sys::console::error_1(&error),
-            }
-        });
-        root.add_event_listener_with_callback_and_bool(
-            "error",
-            error.as_ref().unchecked_ref(),
-            true,
-        )
-        .map_err(|_| "Dark Cloud media error listener")?;
-        listeners.push(error);
-        let gallery_active = Rc::new(Cell::new(false));
-        let key_active = gallery_active.clone();
-        let keyed = events.clone();
-        let key =
-            Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-                if !key_active.get() {
-                    return;
-                }
-                let Some(event) = event.dyn_ref::<KeyboardEvent>() else {
-                    return;
-                };
-                if event.target().and_then(|target| target.dyn_into::<Element>().ok()).is_some_and(
-                    |target| matches!(target.tag_name().as_str(), "INPUT" | "TEXTAREA"),
-                ) {
-                    return;
-                }
-                if event.key() == "ArrowLeft" {
-                    keyed.borrow_mut().push("cloud-gallery-previous".to_owned());
-                }
-                if event.key() == "ArrowRight" {
-                    keyed.borrow_mut().push("cloud-gallery-next".to_owned());
-                }
-            });
-        web_sys::window()
-            .ok_or("Dark Cloud has no window")?
-            .add_event_listener_with_callback("keydown", key.as_ref().unchecked_ref())
-            .map_err(|_| "gallery key listener")?;
-        listeners.push(key);
+    pub async fn new() -> Result<Self, String> {
         Ok(Self {
-            root,
-            document: document.clone(),
-            art,
-            scene_art,
-            list_art,
-            heading,
-            tabs,
-            frame,
-            columns,
-            status,
-            list,
-            footer,
-            notice,
-            skull,
-            layouts,
-            boneyards,
+            art: CloudArt::load().await?,
+            layouts: LayoutsView::new(),
             account: None,
             active: false,
             tab: Tab::Mods,
@@ -310,14 +128,10 @@ impl CloudView {
             next_request: 0,
             refresh_at: 0.0,
             download_progress: None,
-            events,
-            gallery_active,
             actions: Vec::new(),
-            art_size: String::new(),
-            _listeners: listeners,
+            tab_scroll_reset: true,
         })
     }
-
     pub fn open(&mut self) -> Result<(), String> {
         self.active = true;
         self.tab = Tab::Mods;
@@ -326,9 +140,9 @@ impl CloudView {
         self.selected = None;
         self.action_error = None;
         self.subscription_error = None;
-        self.art_size.clear();
+
         self.request_catalog();
-        self.paint()
+        self.refresh_selection()
     }
 
     pub fn open_tab(&mut self, tab: Tab, now_ms: f64) -> Result<(), String> {
@@ -337,12 +151,6 @@ impl CloudView {
             self.activate(&format!("cloud-tab:{}", tab.id()), now_ms)?;
         }
         Ok(())
-    }
-
-    /// The retained Website workshop shelf owns its own data and controls.
-    /// The coordinator mounts that same-origin surface inside this actual tab.
-    pub fn boneyards_mount(&self) -> HtmlElement {
-        self.boneyards.clone()
     }
 
     pub fn boneyards_selected(&self) -> bool {
@@ -358,13 +166,13 @@ impl CloudView {
         self.observe_request = None;
         self.detail = None;
         self.sheet = None;
-        self.gallery_active.set(false);
+
         self.actions.clear();
         if let Some(request_id) = self.join_request.take() {
             self.actions.push(HostedMenuAction::CancelPartyJoin { request_id });
         }
         self.images.clear();
-        self.events.borrow_mut().clear();
+
         self.layouts.close();
         self.mods.clear();
         self.subscriptions.clear();
@@ -388,9 +196,8 @@ impl CloudView {
         }
         self.layouts.set_account(self.account.as_ref().map(|account| account.username.as_str()))?;
         if self.active && changed {
-            self.art_size.clear();
             self.request_catalog();
-            self.paint()?;
+            self.refresh_selection()?;
         }
         Ok(())
     }
@@ -418,38 +225,23 @@ impl CloudView {
         if !self.active {
             return Ok(());
         }
-        let events = std::mem::take(&mut *self.events.borrow_mut());
-        for action in events {
-            self.activate(&action, now)?;
-        }
         self.layouts.update()?;
         if self.tab == Tab::Parties && now >= self.refresh_at {
             self.request_directory(now);
-            self.paint()?;
+            self.refresh_selection()?;
         }
-        self.paint_art()
+        Ok(())
     }
 
     pub fn modal_open(&self) -> bool {
         self.detail.is_some() || self.sheet.is_some()
     }
 
-    pub fn active_surface(&self) -> &HtmlElement {
-        if let Some(detail) = &self.detail {
-            return detail.dialog.element();
-        }
-        if let Some(sheet) = &self.sheet {
-            return sheet.dialog().element();
-        }
-        &self.root
-    }
-
     pub fn back(&mut self) -> Result<bool, String> {
         if self.modal_open() {
             self.detail = None;
             self.sheet = None;
-            self.gallery_active.set(false);
-            self.images.finish_paint(&self.root)?;
+
             return Ok(true);
         }
         Ok(false)
@@ -464,14 +256,9 @@ impl CloudView {
             self.actions.push(HostedMenuAction::SignIn);
             return Ok(true);
         }
-        if let Some(url) = action.strip_prefix("cloud-image-failed:") {
-            self.images.failed(&self.document, &self.root, url)?;
-            return Ok(true);
-        }
         if let Some(detail) = &mut self.detail
-            && detail.activate(action, &mut self.next_request, &mut self.images)?
+            && detail.activate(action, &mut self.next_request)?
         {
-            self.images.finish_paint(&self.root)?;
             return Ok(true);
         }
         if let Some(value) = action.strip_prefix("cloud-subscription:") {
@@ -483,23 +270,17 @@ impl CloudView {
             return Ok(true);
         }
         if action == "cloud-search-submit" {
-            if let Some(Sheet::Search { input, .. }) = &self.sheet {
-                self.query = input.value();
+            if let Some(Sheet::Search { input }) = &self.sheet {
+                self.query = input.clone();
             }
             self.sheet = None;
-            self.paint()?;
+            self.refresh_selection()?;
             return Ok(true);
         }
         if action == "cloud-search-clear" {
-            if let Some(Sheet::Search { input, .. }) = &self.sheet {
-                input.set_value("");
-                input.focus().map_err(|_| "clear search focus")?;
+            if let Some(Sheet::Search { input }) = &mut self.sheet {
+                input.clear();
             }
-            self.update_search_clear()?;
-            return Ok(true);
-        }
-        if action == "cloud-search-edited" {
-            self.update_search_clear()?;
             return Ok(true);
         }
         if let Some(sort) = action.strip_prefix("cloud-sort:") {
@@ -512,7 +293,7 @@ impl CloudView {
                 _ => return Err("unknown Cloud sort".to_owned()),
             };
             self.sheet = None;
-            self.paint()?;
+            self.refresh_selection()?;
             return Ok(true);
         }
         if self.modal_open() {
@@ -522,11 +303,11 @@ impl CloudView {
             return Ok(true);
         }
         if let Some(tab) = action.strip_prefix("cloud-tab:") {
-            self.art_size.clear();
             if self.tab == Tab::Layouts {
                 self.layouts.close();
             }
             self.tab = Tab::from_id(tab).ok_or("unknown Cloud section")?;
+            self.tab_scroll_reset = true;
             self.query.clear();
             self.sheet = None;
             self.selected = match self.tab {
@@ -548,12 +329,12 @@ impl CloudView {
                 self.directory_request = None;
                 self.presence_request = None;
             }
-            self.paint()?;
+            self.refresh_selection()?;
             return Ok(true);
         }
         if let Some(key) = action.strip_prefix("cloud-select:") {
             self.selected = Some(key.to_owned());
-            self.paint_selection()?;
+            self.refresh_selection()?;
             return Ok(true);
         }
         if let Some(key) = action.strip_prefix("cloud-open:") {
@@ -581,7 +362,7 @@ impl CloudView {
                     request_id: self.next_request,
                     match_id: id.to_owned(),
                 });
-                self.paint()?;
+                self.refresh_selection()?;
             }
             return Ok(true);
         }
@@ -593,11 +374,11 @@ impl CloudView {
                 } else {
                     self.request_catalog();
                 }
-                self.paint()?;
+                self.refresh_selection()?;
             }
             "cloud-clear-query" => {
                 self.query.clear();
-                self.paint()?;
+                self.refresh_selection()?;
             }
             "cloud-search" => self.show_search()?,
             "cloud-sort" => self.show_sort()?,
@@ -635,17 +416,10 @@ impl CloudView {
         self.selected = Some(format!("mod:{slug}"));
         self.sheet = None;
         self.detail = Some(ModDetailView::open(
-            &self.document,
-            &self.root,
             content,
-            self.account.as_ref().map(|account| account.username.as_str()),
-            self.events.clone(),
+            self.account.as_ref().map(|a| a.username.as_str()),
             &mut self.next_request,
-            &mut self.images,
-        )?);
-        self.gallery_active.set(true);
-        self.paint_subscription()?;
-        self.images.finish_paint(&self.root)?;
+        ));
         Ok(())
     }
 
@@ -676,8 +450,8 @@ impl CloudView {
             slug: slug.to_owned(),
             action,
         });
-        self.paint()?;
-        self.paint_subscription()
+        self.refresh_selection()?;
+        Ok(())
     }
 
     fn join_party(&mut self, id: &str) -> Result<(), String> {
@@ -709,7 +483,7 @@ impl CloudView {
                 listing_id: id.to_owned(),
             }
         });
-        self.paint()
+        self.refresh_selection()
     }
 
     pub fn complete_catalog(
@@ -738,8 +512,8 @@ impl CloudView {
             }
             Err(error) => self.subscriptions_error = Some(error),
         }
-        self.paint()?;
-        self.paint_subscription()?;
+        self.refresh_selection()?;
+
         Ok(true)
     }
 
@@ -759,7 +533,7 @@ impl CloudView {
             }
             Err(error) => self.directory_error = Some(error),
         }
-        self.paint()?;
+        self.refresh_selection()?;
         Ok(true)
     }
 
@@ -780,7 +554,7 @@ impl CloudView {
             }
             Err(error) => self.presence_error = Some(error),
         }
-        self.paint()?;
+        self.refresh_selection()?;
         Ok(true)
     }
 
@@ -791,7 +565,7 @@ impl CloudView {
         self.join_request = None;
         self.pending_listing = None;
         self.action_error = result.err();
-        self.paint()?;
+        self.refresh_selection()?;
         Ok(true)
     }
 
@@ -806,7 +580,7 @@ impl CloudView {
         if let Err(error) = result {
             self.observe_request = None;
             self.action_error = Some(error);
-            self.paint()?;
+            self.refresh_selection()?;
         }
         Ok(true)
     }
@@ -825,8 +599,8 @@ impl CloudView {
         self.download_progress = None;
         self.subscription_error = result.err();
         self.action_error = self.subscription_error.clone();
-        self.paint()?;
-        self.paint_subscription()?;
+        self.refresh_selection()?;
+
         Ok(true)
     }
 
@@ -838,8 +612,8 @@ impl CloudView {
         let Some(detail) = &mut self.detail else {
             return Ok(false);
         };
-        let accepted = detail.complete_detail(id, result, &mut self.images)?;
-        self.images.finish_paint(&self.root)?;
+        let accepted = detail.complete_detail(id, result)?;
+
         Ok(accepted)
     }
 
@@ -866,7 +640,7 @@ impl CloudView {
         id: u64,
         result: Result<OwnedImageUrl, String>,
     ) -> Result<bool, String> {
-        self.images.complete(&self.document, &self.root, id, result)
+        self.images.complete(id, result)
     }
 
     pub fn set_progress(
@@ -880,7 +654,6 @@ impl CloudView {
         self.download_progress = progress.map(|progress| {
             (progress.completed_bytes, progress.total_bytes, progress.active_mod_id.is_some())
         });
-        self.paint_footer(self.filtered_rows().len())?;
         Ok(true)
     }
 
@@ -910,21 +683,6 @@ impl CloudView {
     pub(super) fn reserve_layout_request(&mut self) -> u64 {
         self.next_request += 1;
         self.next_request
-    }
-
-    fn paint_subscription(&self) -> Result<(), String> {
-        if let Some(detail) = &self.detail {
-            let subscription = self
-                .subscriptions
-                .iter()
-                .find(|subscription| subscription.content.slug == detail.summary.slug);
-            detail.paint_subscription(
-                subscription,
-                self.subscription_request.is_some(),
-                self.subscription_error.as_deref(),
-            )?;
-        }
-        Ok(())
     }
 
     fn filtered_rows(&self) -> Vec<Row> {
@@ -992,223 +750,13 @@ impl CloudView {
         rows
     }
 
-    fn paint(&mut self) -> Result<(), String> {
-        let focus = widgets::focused_action(&self.document, &self.list);
+    fn refresh_selection(&mut self) -> Result<(), String> {
         let rows = self.filtered_rows();
         if !rows.iter().any(|row| Some(row.key()) == self.selected) {
             self.selected = rows.first().map(Row::key);
         }
-        let standalone = matches!(self.tab, Tab::Layouts | Tab::Boneyards);
-        self.columns.set_hidden(standalone);
-        self.status.set_hidden(standalone);
-        self.list.set_hidden(standalone);
-        self.layouts.root.set_hidden(self.tab != Tab::Layouts);
-        self.boneyards.set_hidden(self.tab != Tab::Boneyards);
-        self.columns
-            .set_class_name(&format!("dark-cloud-columns dark-cloud-columns-{}", self.tab.id()));
-        self.columns.set_text_content(None);
-        let labels = match self.tab {
-            Tab::Parties => ["party", "wizards", "status", "location", "action"],
-            Tab::Subscribed => ["subscribed mod", "author", "version", "status", "manage"],
-            _ => ["mod", "author", "version", "status", "action"],
-        };
-        for (index, label) in labels.into_iter().enumerate() {
-            let column = element(&self.document, "span", "")?;
-            if self.tab == Tab::Parties && index == 4 {
-                append(
-                    &column,
-                    &widgets::button(
-                        &self.document,
-                        "REFRESH",
-                        "cloud-refresh",
-                        "",
-                        Some(100.0),
-                        44.0,
-                        0.55,
-                        false,
-                    )?,
-                )?;
-            } else {
-                append(
-                    &column,
-                    &crate::ui::cloud::cloud_text(
-                        &self.document,
-                        label,
-                        Menu,
-                        1.0,
-                        0xd9ba70,
-                        false,
-                    )?,
-                )?;
-            }
-            append(&self.columns, &column)?;
-        }
-        self.paint_status(&self.status, rows.len())?;
-        self.list.set_text_content(None);
-        self.list
-            .set_attribute("aria-label", &format!("{} entries", self.tab.id()))
-            .map_err(|_| "Cloud list label")?;
-        self.list
-            .set_attribute("aria-busy", if self.loading() { "true" } else { "false" })
-            .map_err(|_| "Cloud list loading")?;
-        if self.loading() && rows.is_empty() {
-            text(
-                &self.document,
-                &self.list,
-                "p",
-                "dark-cloud-empty",
-                "CONSULTING THE DARK CLOUD...",
-                Menu,
-                0.68,
-                0xd9ba70,
-                false,
-            )?;
-        } else if rows.is_empty() && !standalone {
-            if let Some(error) = self.active_error() {
-                let notice =
-                    element(&self.document, "div", "dark-cloud-empty dark-cloud-empty-error")?;
-                notice.set_attribute("role", "alert").map_err(|_| "catalog error role")?;
-                narrative(&self.document, &notice, "p", "", error)?;
-                append(
-                    &notice,
-                    &widgets::button(
-                        &self.document,
-                        "RETRY",
-                        "cloud-refresh",
-                        "",
-                        None,
-                        44.0,
-                        0.55,
-                        false,
-                    )?,
-                )?;
-                append(&self.list, &notice)?;
-            } else {
-                let empty = if !self.query.is_empty() {
-                    "NOTHING MATCHES YOUR SEARCH."
-                } else {
-                    match self.tab {
-                        Tab::Parties => "NO PUBLIC PARTIES.",
-                        Tab::Subscribed if self.account.is_none() => "SIGN IN TO SEE YOUR MODS.",
-                        Tab::Subscribed => "NO SUBSCRIBED MODS.",
-                        _ => "NO MODS HAVE REACHED THE DARK CLOUD.",
-                    }
-                };
-                text(
-                    &self.document,
-                    &self.list,
-                    "p",
-                    "dark-cloud-empty",
-                    empty,
-                    Menu,
-                    0.68,
-                    0xd9ba70,
-                    false,
-                )?;
-            }
-        }
-        for row in &rows {
-            let selected = Some(row.key()) == self.selected;
-            let node = match row {
-                Row::Mod(content, subscription) => rows::mod_row(
-                    &self.document,
-                    content,
-                    subscription.as_deref(),
-                    selected,
-                    self.subscription_request.is_some(),
-                    self.tab == Tab::Subscribed,
-                    &mut self.images,
-                )?,
-                Row::Party(party) => rows::party_row(
-                    &self.document,
-                    party,
-                    selected,
-                    self.join_request.is_some(),
-                    self.pending_listing.as_deref() == Some(party.id.as_str()),
-                )?,
-            };
-            append(&self.list, &node)?;
-        }
-        if self.tab == Tab::Parties
-            && self.account.as_ref().is_some_and(|account| account.developer_access)
-        {
-            append(
-                &self.list,
-                &rows::developer_presence(
-                    &self.document,
-                    rows::PresenceSnapshot {
-                        players: &self.players,
-                        matches: &self.matches,
-                        loading: self.presence_request.is_some(),
-                        error: self.presence_error.as_deref(),
-                        observing: self.observe_request.as_ref().map(|(_, id)| id.as_str()),
-                    },
-                )?,
-            )?;
-        }
-        self.paint_footer(rows.len())?;
-        self.notice.set_text_content(self.action_error.as_deref());
-        self.notice.set_hidden(self.action_error.is_none());
-        self.images.finish_paint(&self.root)?;
-        widgets::restore_focus(&self.document, &self.list, focus.as_deref())?;
         Ok(())
     }
-
-    fn paint_selection(&self) -> Result<(), String> {
-        let nodes = self
-            .list
-            .query_selector_all("[data-cloud-row-key]")
-            .map_err(|_| "Cloud selected rows")?;
-        for index in 0..nodes.length() {
-            let button: HtmlElement = nodes
-                .item(index)
-                .ok_or("Cloud selected row disappeared")?
-                .dyn_into()
-                .map_err(|_| "Cloud selected row target")?;
-            let selected = button.get_attribute("data-cloud-row-key") == self.selected;
-            button
-                .set_attribute("aria-pressed", if selected { "true" } else { "false" })
-                .map_err(|_| "Cloud row selection")?;
-            if let Some(row) = button.parent_element() {
-                let base = if row.has_attribute("data-mod-slug") {
-                    "dark-cloud-row dark-cloud-mod-row"
-                } else {
-                    "dark-cloud-row dark-cloud-party-row"
-                };
-                row.set_attribute(
-                    "class",
-                    &format!("{base}{}", if selected { " selected" } else { "" }),
-                )
-                .map_err(|_| "Cloud selected row appearance")?;
-            }
-            if let Some(title) = button
-                .query_selector(".dark-cloud-row-copy > strong")
-                .map_err(|_| "Cloud selected row title")?
-            {
-                let nodes = title
-                    .query_selector_all(".native-ui-glyph, .native-ui-content-text")
-                    .map_err(|_| "Cloud selected title glyphs")?;
-                for index in 0..nodes.length() {
-                    let node: HtmlElement = nodes
-                        .item(index)
-                        .ok_or("Cloud title glyph disappeared")?
-                        .dyn_into()
-                        .map_err(|_| "Cloud title glyph")?;
-                    let color = if selected { "#bfffbf" } else { "#d9ba70" };
-                    let property = if node.class_list().contains("native-ui-glyph") {
-                        "background-color"
-                    } else {
-                        "color"
-                    };
-                    node.style()
-                        .set_property(property, color)
-                        .map_err(|_| "Cloud selected title tint")?;
-                }
-            }
-        }
-        self.paint_footer(self.filtered_rows().len())
-    }
-
     fn loading(&self) -> bool {
         if self.tab == Tab::Parties {
             self.directory_request.is_some()
@@ -1224,141 +772,561 @@ impl CloudView {
             Tab::Layouts | Tab::Boneyards => None,
         }
     }
-
-    fn paint_status(&self, parent: &HtmlElement, count: usize) -> Result<(), String> {
-        parent.set_text_content(None);
-        let label = if self.tab == Tab::Layouts {
-            "MOBILE UI LAYOUTS".to_owned()
-        } else if self.loading() && count == 0 {
+    fn show_search(&mut self) -> Result<(), String> {
+        self.sheet = Some(Sheet::Search { input: self.query.clone() });
+        Ok(())
+    }
+    fn show_sort(&mut self) -> Result<(), String> {
+        self.sheet = Some(Sheet::Sort);
+        Ok(())
+    }
+    pub fn default_focus(&self) -> Option<String> {
+        if self.detail.is_some() {
+            Some("cloud-dialog-close".to_owned())
+        } else if matches!(self.sheet, Some(Sheet::Search { .. })) {
+            Some("dark-cloud-search-input".to_owned())
+        } else if matches!(self.sheet, Some(Sheet::Sort)) {
+            Some(format!("cloud-sort:{}", self.sort.id()))
+        } else {
+            Some(format!("cloud-tab:{}", self.tab.id()))
+        }
+    }
+    pub fn navigation_scope(&self) -> String {
+        format!(
+            "cloud-{}-{}",
+            self.tab.id(),
+            if self.detail.is_some() {
+                "detail"
+            } else if matches!(self.sheet, Some(Sheet::Search { .. })) {
+                "search"
+            } else if self.sheet.is_some() {
+                "sort"
+            } else {
+                "scene"
+            }
+        )
+    }
+    pub fn paint(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        view: Rect,
+        enabled: bool,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        ui.painter().rect_filled(view, 0.0, Color32::BLACK);
+        self.images.begin_paint();
+        let phone = view.width() <= 700.0;
+        let compact = view.width() <= 880.0;
+        let short = view.height() <= 620.0;
+        let outer = if compact || short { if phone { 12.0 } else { 16.0 } } else { 55.0 };
+        if !compact && !short {
+            self.art.scene(frame, ui, view)?;
+        }
+        let (heading_height, tab_height, footer_height) = if short {
+            (46.0, 44.0, 56.0)
+        } else if phone {
+            (90.0, 44.0, 68.0)
+        } else if compact {
+            (104.0, 58.0, 78.0)
+        } else {
+            (128.0, 69.0, 100.0)
+        };
+        let heading_width = 760.0_f32.min(view.width() - 32.0);
+        let title_scale = 1.0_f32.min(heading_width / 560.0).min(
+            if short {
+                40.6
+            } else if phone {
+                38.0
+            } else {
+                58.0
+            } / 58.0,
+        );
+        widgets::native(
+            frame,
+            ui,
+            "THE DARK CLOUD",
+            NativeUiFontName::Heading,
+            egui::pos2(view.center().x, view.top() + 50.0 * title_scale),
+            title_scale,
+            0xd9ba70,
+            NativeUiTextAlign::Center,
+        );
+        if !phone {
+            widgets::native(
+                frame,
+                ui,
+                "beta",
+                NativeUiFontName::Menu,
+                egui::pos2(view.center().x + 235.0 * title_scale, view.top() + 50.0 * title_scale),
+                title_scale,
+                0xd9ba70,
+                NativeUiTextAlign::Center,
+            );
+        }
+        let admitted = enabled && !self.modal_open();
+        if !short {
+            let label = self.account.as_ref().map_or_else(
+                || "You are signed in as a GUEST.".to_owned(),
+                |a| format!("You are signed in as {}.", a.username),
+            );
+            let rect = Rect::from_min_size(
+                egui::pos2(
+                    view.center().x - 280.0_f32.min((view.width() - 24.0) / 2.0),
+                    view.top() + if phone { 38.0 } else { 58.0 },
+                ),
+                Vec2::new(560.0_f32.min(view.width() - 24.0), 50.0),
+            );
+            let id = if self.account.is_some() { "cloud-menu" } else { "cloud-sign-in" };
+            if widgets::interact(frame, ui, id, &label, "button", rect, admitted).clicked()
+                && admitted
+            {
+                actions.push(id.to_owned());
+            }
+            let scale = 1.0_f32.min(rect.width() / 560.0);
+            widgets::native(
+                frame,
+                ui,
+                &label,
+                NativeUiFontName::Menu,
+                egui::pos2(rect.center().x, rect.top() + 25.0),
+                scale,
+                0xd9ba70,
+                NativeUiTextAlign::Center,
+            );
+            if self.account.is_none() {
+                widgets::native(
+                    frame,
+                    ui,
+                    "To change this, click here.",
+                    NativeUiFontName::Menu,
+                    egui::pos2(rect.center().x, rect.top() + 25.0 + 18.0 * scale),
+                    scale,
+                    0xd9ba70,
+                    NativeUiTextAlign::Center,
+                );
+            }
+        }
+        let tabs_width =
+            if short { view.width() - 124.0 } else { 1122.0_f32.min(view.width() - outer * 2.0) };
+        let tabs = Rect::from_min_size(
+            egui::pos2(view.center().x - tabs_width / 2.0, view.top() + heading_height),
+            Vec2::new(tabs_width, tab_height),
+        );
+        let strip = native_dark_cloud_tab_strip(f64::from(tabs.width()), f64::from(tabs.height()));
+        let mut child = ui.new_child(egui::UiBuilder::new().id_salt("cloud-tabs").max_rect(tabs));
+        child.set_clip_rect(tabs);
+        let mut scroll =
+            egui::ScrollArea::horizontal().id_salt("cloud-tabs-scroll").auto_shrink([false, false]);
+        if self.tab_scroll_reset {
+            let b = strip.bounds(self.tab);
+            scroll =
+                scroll.horizontal_scroll_offset(
+                    (b.x + b.width - f64::from(tabs.width())).max(0.0) as f32
+                );
+            self.tab_scroll_reset = false;
+        }
+        let mut result = Ok(());
+        scroll.show(&mut child, |ui| {
+            let origin = ui.cursor().min;
+            ui.allocate_space(Vec2::new(strip.width as f32, strip.height as f32));
+            for tab in Tab::ALL {
+                let b = strip.bounds(tab);
+                let rect = Rect::from_min_size(
+                    origin + Vec2::new(b.x as f32, 0.0),
+                    Vec2::new(b.width as f32, b.height as f32),
+                );
+                let id = format!("cloud-tab:{}", tab.id());
+                let response =
+                    widgets::interact(frame, ui, &id, tab.label(), "tab", rect, admitted);
+                frame.record_value(&id, tab.id(), Some(self.tab == tab));
+                if let Err(error) =
+                    self.art.tab(frame, ui, rect, strip.scale as f32, tab.label(), self.tab == tab)
+                {
+                    result = Err(error);
+                    break;
+                }
+                if response.clicked() && admitted {
+                    actions.push(id);
+                }
+            }
+        });
+        std::mem::replace(&mut result, Ok(()))?;
+        let frame_rect = if !compact && !short {
+            Rect::from_min_max(view.min + Vec2::new(55.0, 173.0), view.max - Vec2::new(55.0, 100.0))
+        } else {
+            Rect::from_min_max(
+                view.min + Vec2::new(outer, heading_height + tab_height),
+                view.max - Vec2::new(outer, footer_height + 6.0),
+            )
+        };
+        self.art.list(frame, ui, frame_rect, if phone || short { 0.58 } else { 1.0 })?;
+        let pad = if phone {
+            14.0
+        } else if compact || short {
+            24.0
+        } else {
+            50.0
+        };
+        let content = frame_rect.shrink2(Vec2::new(pad, if phone { 14.0 } else { 24.0 }));
+        if self.tab == Tab::Layouts {
+            self.layouts.paint(frame, ui, &self.art, content, admitted, actions)?;
+        } else if self.tab == Tab::Boneyards {
+            frame.record_rect(
+                "cloud-boneyards-content",
+                "Boneyard library",
+                "surface",
+                content,
+                admitted,
+            );
+        } else {
+            self.paint_rows(frame, ui, content, view, admitted, actions)?;
+            self.paint_footer(frame, ui, view, footer_height, admitted, actions)?;
+        }
+        let skull = Rect::from_min_size(view.min + Vec2::new(11.0, 7.0), Vec2::new(31.0, 33.0));
+        let response =
+            widgets::interact(frame, ui, "cloud-menu", "Menu", "button", skull, admitted);
+        self.art.ui.paint_centered(
+            frame,
+            ui.painter(),
+            42,
+            skull.center(),
+            1.0,
+            0.0,
+            Color32::WHITE,
+        )?;
+        if response.clicked() && admitted {
+            actions.push("cloud-menu".to_owned());
+        }
+        if let Some(error) = &self.action_error {
+            let r = Rect::from_min_size(view.max - Vec2::new(530.0, 158.0), Vec2::new(500.0, 48.0));
+            ui.painter().rect_filled(r, 0.0, widgets::color(0x160504));
+            widgets::paragraph(ui, error, r.shrink(8.0), "IM FELL English", 16.0, widgets::ERROR);
+        }
+        if self.modal_open() {
+            let ctx = frame.ctx.clone();
+            let dialog_rect = if self.detail.is_some() {
+                Rect::from_center_size(
+                    view.center(),
+                    Vec2::new(
+                        1100.0_f32.min(view.width() - 48.0),
+                        820.0_f32.min(view.height() - 48.0),
+                    ),
+                )
+            } else if matches!(self.sheet, Some(Sheet::Search { .. })) {
+                Rect::from_center_size(
+                    view.center(),
+                    Vec2::new(
+                        520.0_f32.min(view.width() - 48.0),
+                        if view.width() < 700.0 { 240.0 } else { 205.0 },
+                    ),
+                )
+            } else {
+                Rect::from_center_size(
+                    view.center(),
+                    Vec2::new(
+                        320.0_f32.min(view.width() - 48.0),
+                        255.0_f32.min(view.height() - 48.0),
+                    ),
+                )
+            };
+            let modal = egui::Modal::new(egui::Id::unique("cloud-dialog"))
+                .area(
+                    egui::Area::new(egui::Id::unique("cloud-dialog"))
+                        .fixed_pos(dialog_rect.min)
+                        .order(egui::Order::Foreground),
+                )
+                .frame(egui::Frame::NONE)
+                .backdrop_color(Color32::from_black_alpha(191))
+                .show(&ctx, |ui| {
+                    ui.set_min_size(dialog_rect.size());
+                    ui.set_clip_rect(view);
+                    if !enabled {
+                        ui.disable();
+                    }
+                    if let Some(detail) = &mut self.detail {
+                        let subscription = self
+                            .subscriptions
+                            .iter()
+                            .find(|s| s.content.slug == detail.summary.slug);
+                        result = detail.paint(
+                            frame,
+                            ui,
+                            &self.art,
+                            &mut self.images,
+                            view,
+                            subscription,
+                            self.subscription_request.is_some(),
+                            self.subscription_error.as_deref(),
+                            actions,
+                        );
+                    } else {
+                        result = self.paint_sheet(frame, ui, view, actions);
+                    }
+                });
+            if modal.should_close() && enabled {
+                actions.push("cloud-dialog-close".to_owned());
+            }
+            std::mem::replace(&mut result, Ok(()))?;
+        }
+        self.images.finish_paint();
+        Ok(())
+    }
+    fn paint_rows(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        content: Rect,
+        view: Rect,
+        enabled: bool,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let rows = self.filtered_rows();
+        let compact = view.width() < 1100.0;
+        let status_height = if compact { 44.0 } else { 48.0 };
+        let status = Rect::from_min_size(content.min, Vec2::new(content.width(), status_height));
+        let label = if self.loading() && rows.is_empty() {
             "CONSULTING THE DARK CLOUD...".to_owned()
         } else if !self.query.is_empty() {
             format!(
-                "\"{}\", {count} {}",
+                "\"{}\", {} {}",
                 self.query.to_uppercase(),
-                if count == 1 { "MATCH" } else { "MATCHES" }
+                rows.len(),
+                if rows.len() == 1 { "MATCH" } else { "MATCHES" }
             )
         } else {
-            match self.tab {
-                Tab::Parties => format!("{count} {}", if count == 1 { "PARTY" } else { "PARTIES" }),
-                Tab::Subscribed => format!("{count} SUBSCRIBED"),
-                _ => format!("{count} {}", if count == 1 { "MOD" } else { "MODS" }),
-            }
+            format!(
+                "{} {}",
+                rows.len(),
+                match self.tab {
+                    Tab::Parties =>
+                        if rows.len() == 1 {
+                            "PARTY"
+                        } else {
+                            "PARTIES"
+                        },
+                    Tab::Subscribed => "SUBSCRIBED",
+                    _ =>
+                        if rows.len() == 1 {
+                            "MOD"
+                        } else {
+                            "MODS"
+                        },
+                }
+            )
         };
-        text(
-            &self.document,
-            parent,
-            "span",
-            "dark-cloud-status-label",
+        widgets::native(
+            frame,
+            ui,
             &label,
-            Medium,
+            NativeUiFontName::Medium,
+            status.min + Vec2::new(0.0, 24.0),
             0.85,
             0xd9ba70,
-            true,
-        )?;
-        if self.loading() && count > 0 {
-            text(
-                &self.document,
-                parent,
-                "span",
-                "dark-cloud-status-note",
-                "REFRESHING...",
-                Medium,
-                0.85,
-                0xd9ba70,
-                false,
-            )?;
-        }
+            NativeUiTextAlign::Left,
+        );
         if !self.query.is_empty() {
-            append(
-                parent,
-                &widgets::button(
-                    &self.document,
-                    "CLEAR SEARCH",
-                    "cloud-clear-query",
-                    "",
-                    None,
-                    44.0,
-                    0.55,
-                    false,
-                )?,
-            )?;
+            let r = Rect::from_min_size(
+                egui::pos2(status.right() - 180.0, status.top()),
+                Vec2::new(170.0, 40.0),
+            );
+            if widgets::stock_button(
+                frame,
+                ui,
+                "cloud-clear-query",
+                "CLEAR SEARCH",
+                r,
+                0.55,
+                enabled,
+            )
+            .clicked()
+                && enabled
+            {
+                actions.push("cloud-clear-query".to_owned());
+            }
         }
         if self.tab == Tab::Parties {
-            let refresh = widgets::button(
-                &self.document,
-                "REFRESH",
-                "cloud-refresh",
-                "",
-                None,
-                44.0,
-                0.55,
-                false,
-            )?;
-            refresh
-                .set_attribute("data-dark-cloud-refresh", "")
-                .map_err(|_| "Cloud inline refresh marker")?;
-            append(parent, &refresh)?;
-        }
-        Ok(())
-    }
-
-    fn paint_footer(&self, count: usize) -> Result<(), String> {
-        self.footer.set_text_content(None);
-        if let Some((completed, total, active)) =
-            self.download_progress.filter(|(_, total, _)| *total > 0)
-        {
-            let percent = (completed as f64 / total as f64 * 100.0 + 0.5).floor().min(100.0);
-            let progress =
-                control_panel(&self.document, &self.footer, "dark-cloud-download", true)?;
-            for (name, value) in [
-                ("role", "progressbar".to_owned()),
-                ("aria-label", "Downloading mod content".to_owned()),
-                ("aria-valuemin", "0".to_owned()),
-                ("aria-valuemax", "100".to_owned()),
-                ("aria-valuenow", percent.to_string()),
-            ] {
-                progress.set_attribute(name, &value).map_err(|_| "Cloud progress values")?;
+            let r = Rect::from_min_size(
+                egui::pos2(status.right() - 120.0, status.top()),
+                Vec2::new(110.0, 40.0),
+            );
+            if widgets::stock_button(frame, ui, "cloud-refresh", "REFRESH", r, 0.55, enabled)
+                .clicked()
+                && enabled
+            {
+                actions.push("cloud-refresh".to_owned());
             }
-            let track = element(&self.document, "div", "dark-cloud-download-track")?;
-            let fill = element(&self.document, "span", "dark-cloud-download-fill")?;
-            style(&fill, &format!("width:{percent}%"))?;
-            append(&track, &fill)?;
-            append(&progress, &track)?;
-            text(
-                &self.document,
-                &progress,
-                "small",
-                "",
-                &format!(
-                    "{}, {percent}%",
-                    if active { "DOWNLOADING MOD CONTENT" } else { "CONTENT READY" }
-                ),
-                Medium,
-                1.0,
-                0xd9ba70,
-                false,
-            )?;
         }
-        if matches!(self.tab, Tab::Layouts | Tab::Boneyards) {
-            return Ok(());
+        let list = Rect::from_min_max(content.min + Vec2::new(0.0, status_height), content.max);
+        let mut child =
+            ui.new_child(egui::UiBuilder::new().id_salt("cloud-rows-content").max_rect(list));
+        child.set_clip_rect(list);
+        let mut result = Ok(());
+        egui::ScrollArea::vertical()
+            .id_salt(format!("cloud-list-{}", self.tab.id()))
+            .auto_shrink([false, false])
+            .show(&mut child, |ui| {
+                if rows.is_empty() {
+                    let text = if self.loading() {
+                        "CONSULTING THE DARK CLOUD..."
+                    } else if let Some(error) = self.active_error() {
+                        error
+                    } else if !self.query.is_empty() {
+                        "NOTHING MATCHES YOUR SEARCH."
+                    } else {
+                        match self.tab {
+                            Tab::Parties => "NO PUBLIC PARTIES.",
+                            Tab::Subscribed if self.account.is_none() => {
+                                "SIGN IN TO SEE YOUR MODS."
+                            }
+                            Tab::Subscribed => "NO SUBSCRIBED MODS.",
+                            _ => "NO MODS HAVE REACHED THE DARK CLOUD.",
+                        }
+                    };
+                    let (_, r) = ui.allocate_space(Vec2::new(list.width(), 100.0));
+                    widgets::paragraph(
+                        ui,
+                        text,
+                        r.shrink(12.0),
+                        "IM FELL English",
+                        16.0,
+                        widgets::GOLD,
+                    );
+                    if self.active_error().is_some() {
+                        let (_, r) = ui.allocate_space(Vec2::new(list.width(), 50.0));
+                        if widgets::stock_button(
+                            frame,
+                            ui,
+                            "cloud-refresh",
+                            "RETRY",
+                            Rect::from_min_size(r.min, Vec2::new(170.0, 44.0)),
+                            0.55,
+                            enabled,
+                        )
+                        .clicked()
+                            && enabled
+                        {
+                            actions.push("cloud-refresh".to_owned());
+                        }
+                    }
+                }
+                for row in rows {
+                    let selected = Some(row.key()) == self.selected;
+                    let r = match row {
+                        Row::Mod(content, subscription) => rows::mod_row(
+                            frame,
+                            ui,
+                            &self.art,
+                            &content,
+                            subscription.as_deref(),
+                            selected,
+                            self.subscription_request.is_some(),
+                            self.tab == Tab::Subscribed,
+                            &mut self.images,
+                            list.width(),
+                            view.width(),
+                            enabled,
+                            actions,
+                        ),
+                        Row::Party(party) => rows::party_row(
+                            frame,
+                            ui,
+                            &self.art,
+                            &party,
+                            selected,
+                            self.join_request.is_some(),
+                            self.pending_listing.as_deref() == Some(party.id.as_str()),
+                            list.width(),
+                            view.width(),
+                            enabled,
+                            actions,
+                        ),
+                    };
+                    if let Err(error) = r {
+                        result = Err(error);
+                        break;
+                    }
+                }
+                if self.tab == Tab::Parties
+                    && self.account.as_ref().is_some_and(|a| a.developer_access)
+                {
+                    if let Err(error) = rows::developer_presence(
+                        frame,
+                        ui,
+                        &self.art,
+                        &self.players,
+                        &self.matches,
+                        self.presence_request.is_some(),
+                        self.presence_error.as_deref(),
+                        self.observe_request.as_ref().map(|(_, id)| id.as_str()),
+                        list.width(),
+                        enabled,
+                        actions,
+                    ) {
+                        result = Err(error);
+                    }
+                }
+            });
+        result
+    }
+    fn paint_footer(
+        &self,
+        frame: &mut UiFrame<'_>,
+        ui: &Ui,
+        view: Rect,
+        height: f32,
+        enabled: bool,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let compact = view.width() <= 880.0 || view.height() <= 620.0;
+        let phone = view.width() <= 700.0;
+        let footer = if compact {
+            Rect::from_min_max(
+                egui::pos2(view.left() + 12.0, view.bottom() - height),
+                view.max - Vec2::new(12.0, 6.0),
+            )
+        } else {
+            Rect::from_min_size(
+                egui::pos2(view.center().x - 416.0, view.bottom() - 96.5),
+                Vec2::new(824.5, 85.0),
+            )
+        };
+        let tool_width = if phone {
+            52.0
+        } else if compact {
+            68.0
+        } else {
+            90.0
+        };
+        let tool_height = if phone || view.height() <= 620.0 {
+            44.0
+        } else if compact {
+            48.0
+        } else {
+            52.0
+        };
+        for (label, id, icon, index) in
+            [("Search", "cloud-search", 58, 0), ("Sort", "cloud-sort", 66, 1)]
+        {
+            let rect = Rect::from_min_size(
+                footer.min
+                    + Vec2::new(
+                        6.0 + index as f32 * (tool_width + 12.0),
+                        (footer.height() - tool_height) / 2.0,
+                    ),
+                Vec2::new(tool_width, tool_height),
+            );
+            if self.art.tool(frame, ui, id, label, Some(icon), rect, enabled)? {
+                actions.push(id.to_owned());
+            }
         }
-        let tools = element(&self.document, "div", "dark-cloud-footer-tools")?;
-        for (label, action, icon) in [("Search", "cloud-search", 58), ("Sort", "cloud-sort", 66)] {
-            let button = self.tool_button(label, action, "", false)?;
-            button
-                .set_attribute("data-cloud-tool-icon", &icon.to_string())
-                .map_err(|_| "Cloud tool icon record")?;
-            append(&tools, &button)?;
-        }
-        append(&self.footer, &tools)?;
-        let selected =
-            self.filtered_rows().into_iter().find(|row| Some(row.key()) == self.selected);
+        let selected = self.filtered_rows().into_iter().find(|r| Some(r.key()) == self.selected);
         let (label, disabled) = if self.tab == Tab::Parties {
-            match &selected {
-                Some(Row::Party(party)) => {
+            match selected.as_ref() {
+                Some(Row::Party(p)) => {
                     let action = directory_party_action(
-                        party.visibility,
-                        matches!(party.activity, PartyActivity::Playing { .. }),
+                        p.visibility,
+                        matches!(p.activity, PartyActivity::Playing { .. }),
                     );
                     (
                         match action {
@@ -1372,416 +1340,245 @@ impl CloudView {
                 _ => ("SELECT PARTY", true),
             }
         } else {
-            ("VIEW MOD", !matches!(selected, Some(Row::Mod(_, _))))
+            ("VIEW MOD", !matches!(selected, Some(Row::Mod(..))))
         };
-        let primary = element(&self.document, "div", "dark-cloud-primary-control")?;
-        let button = widgets::button(
-            &self.document,
-            label,
-            "cloud-primary",
-            "dark-cloud-primary-button",
-            None,
-            69.0,
-            1.0,
-            disabled,
-        )?;
-        // The responsive primary button inherits its wrapper's authored physical
-        // height; its glyph/chrome scale follows that measured height.
-        button.set_attribute("data-cloud-primary", "").map_err(|_| "Cloud primary geometry")?;
-        style(&button, "width:100%;height:100%;left:0;top:0")?;
-        append(&primary, &button)?;
-        append(&self.footer, &primary)?;
-        append(
-            &self.footer,
-            &self.tool_button(
-                "OPTIONS",
-                "cloud-primary",
-                "dark-cloud-options-button",
-                !matches!(selected, Some(Row::Mod(_, _))),
-            )?,
-        )?;
-        let status = element(&self.document, "div", "dark-cloud-footer-status")?;
-        self.paint_status(&status, count)?;
-        append(&self.footer, &status)?;
-        Ok(())
-    }
-
-    fn tool_button(
-        &self,
-        label: &str,
-        action: &str,
-        class: &str,
-        disabled: bool,
-    ) -> Result<HtmlElement, String> {
-        let button = element(
-            &self.document,
-            "button",
-            &format!("dark-cloud-tool-button cloud-tool-button {class}"),
-        )?;
-        for (name, value) in [
-            ("type", "button"),
-            ("aria-label", label),
-            ("data-menu-action", action),
-            ("data-cloud-label", label),
-        ] {
-            button.set_attribute(name, value).map_err(|_| "Cloud tool button")?;
-        }
-        button
-            .toggle_attribute_with_force("disabled", disabled)
-            .map_err(|_| "Cloud tool admission")?;
-        Ok(button)
-    }
-
-    fn paint_art(&mut self) -> Result<(), String> {
-        let bounds = self.root.get_bounding_client_rect();
-        if bounds.width() <= 0.0 || bounds.height() <= 0.0 {
-            return Ok(());
-        }
-        let tabs = self.tabs.get_bounding_client_rect();
-        let frame = self.frame.get_bounding_client_rect();
-        let key = format!(
-            "{},{},{},{},{},{}",
-            bounds.width(),
-            bounds.height(),
-            tabs.width(),
-            tabs.height(),
-            frame.width(),
-            frame.height()
-        );
-        if self.art_size != key {
-            self.scene_art.set_text_content(None);
-            append(
-                &self.scene_art,
-                &self.art.scene(&self.document, bounds.width(), bounds.height())?,
-            )?;
-            self.list_art.set_text_content(None);
-            self.art.list_frame(&self.document, &self.list_art)?;
-            self.paint_heading()?;
-            self.tabs.set_text_content(None);
-            let strip = native_dark_cloud_tab_strip(tabs.width(), tabs.height());
-            let plan = element(&self.document, "div", "dark-cloud-tabs-plan")?;
-            plan.set_attribute("role", "tablist").map_err(|_| "Cloud tab list role")?;
-            plan.set_attribute("aria-label", "Dark Cloud sections")
-                .map_err(|_| "Cloud tab list label")?;
-            style(
-                &plan,
-                &format!("position:relative;width:{}px;height:{}px", strip.width, strip.height),
-            )?;
-            append(&self.tabs, &plan)?;
-            let mut selected = None;
-            for tab in Tab::ALL {
-                let bounds = strip.bounds(tab);
-                let button = element(&self.document, "button", "cloud-tab")?;
-                for (name, value) in [
-                    ("type", "button"),
-                    ("role", "tab"),
-                    ("aria-label", tab.label()),
-                    ("data-menu-action", &format!("cloud-tab:{}", tab.id())),
-                    ("aria-selected", if self.tab == tab { "true" } else { "false" }),
-                ] {
-                    button.set_attribute(name, value).map_err(|_| "Cloud tab semantics")?;
-                }
-                style(
-                    &button,
-                    &format!(
-                        "position:absolute;left:{}px;top:0;width:{}px;height:{}px",
-                        bounds.x, bounds.width, bounds.height,
-                    ),
-                )?;
-                append(
-                    &button,
-                    &self.art.tab(
-                        &self.document,
-                        tab.label(),
-                        bounds.width,
-                        bounds.height,
-                        strip.scale,
-                        self.tab == tab,
-                    )?,
-                )?;
-                append(&plan, &button)?;
-                if self.tab == tab {
-                    selected = Some(button);
-                }
-            }
-            // NativeDarkCloudTabs reveals the selected band without disturbing
-            // manual scrolling while the band is already inside the viewport.
-            if let Some(selected) = selected {
-                let left = selected.offset_left();
-                let right = left + selected.offset_width();
-                if left < self.tabs.scroll_left() {
-                    self.tabs.set_scroll_left(left);
-                } else if right > self.tabs.scroll_left() + self.tabs.client_width() {
-                    self.tabs.set_scroll_left(right - self.tabs.client_width());
-                }
-            }
-            self.skull.set_text_content(None);
-            append(&self.skull, &self.art.menu_skull(&self.document)?)?;
-            self.art_size = key;
-        }
-        if let Some(sheet) = &self.sheet {
-            self.paint_dialog_art(sheet.dialog())?;
-        }
-        if let Some(detail) = &self.detail {
-            self.paint_dialog_art(&detail.dialog)?;
-        }
-        if let Some(primary) =
-            self.footer.query_selector("[data-cloud-primary]").map_err(|_| "Cloud primary art")?
-        {
-            let height = primary.get_bounding_client_rect().height();
-            primary
-                .set_attribute("data-cloud-scale", &(height / 69.0).to_string())
-                .map_err(|_| "Cloud primary scale")?;
-        }
-        widgets::paint_art(&self.document, &self.root, &self.art)
-    }
-
-    fn paint_heading(&self) -> Result<(), String> {
-        self.heading.set_text_content(None);
-        let title = element(&self.document, "h1", "")?;
-        append(&self.heading, &title)?;
-        let size = title.get_bounding_client_rect();
-        let scale = 1.0_f64.min(size.width() / 560.0).min(size.height() / 58.0);
-        title
-            .set_attribute("aria-label", "THE DARK CLOUD")
-            .map_err(|_| "Cloud heading semantics")?;
-        widgets::baseline(
-            &self.document,
-            &title,
-            "THE DARK CLOUD",
-            Heading,
-            scale,
-            size.width() / 2.0,
-            50.0 * scale,
-        )?;
-        let beta = element(&self.document, "span", "dark-cloud-beta")?;
-        widgets::baseline(
-            &self.document,
-            &beta,
-            "beta",
-            Menu,
-            scale,
-            size.width() / 2.0 + 235.0 * scale,
-            50.0 * scale,
-        )?;
-        append(&title, &beta)?;
-        let account = element(&self.document, "button", "")?;
-        account.set_attribute("type", "button").map_err(|_| "Cloud account button type")?;
-        account
-            .set_attribute(
-                "data-menu-action",
-                if self.account.is_some() { "cloud-menu" } else { "cloud-sign-in" },
-            )
-            .map_err(|_| "Cloud account action")?;
-        let label = self.account.as_ref().map_or_else(
-            || "You are signed in as a GUEST.".to_owned(),
-            |account| format!("You are signed in as {}.", account.username),
-        );
-        account.set_attribute("aria-label", &label).map_err(|_| "Cloud account label")?;
-        append(&self.heading, &account)?;
-        let bounds = account.get_bounding_client_rect();
-        // Compact landscape hides this control. Source's element-size hook ignores
-        // zero boxes; omit hidden ink here and measure it afresh when shown again.
-        if bounds.width() <= 0.0 || bounds.height() <= 0.0 {
-            return Ok(());
-        }
-        let scale = 1.0_f64.min(bounds.width() / 560.0);
-        let x = bounds.width() / 2.0;
-        widgets::baseline(&self.document, &account, &label, Menu, scale, x, 25.0)?;
-        if self.account.is_none() {
-            widgets::baseline(
-                &self.document,
-                &account,
-                "To change this, click here.",
-                Menu,
-                scale,
-                x,
-                25.0 + 18.0 * scale,
-            )?;
-            let underline = element(&self.document, "i", "native-dark-cloud-account-underline")?;
-            style(
-                &underline,
-                &format!(
-                    "left:{}px;top:{}px;width:{}px",
-                    x + 34.0 * scale,
-                    25.0 + 20.0 * scale,
-                    145.0 * scale
+        let primary = if compact {
+            let left = footer.left() + tool_width * 2.0 + 36.0;
+            Rect::from_min_max(
+                egui::pos2(left, footer.center().y - if phone { 24.0 } else { 29.0 }),
+                egui::pos2(
+                    footer.right() - if phone { 0.0 } else { 148.0 },
+                    footer.center().y + if phone { 24.0 } else { 29.0 },
                 ),
-            )?;
-            append(&account, &underline)?;
-        }
-        Ok(())
-    }
-
-    fn paint_dialog_art(&self, dialog: &CloudDialog) -> Result<(), String> {
-        let bounds = dialog.root.get_bounding_client_rect();
-        let key = format!("{},{}", bounds.width(), bounds.height());
-        if dialog.art.get_attribute("data-cloud-panel-size").as_deref() != Some(key.as_str()) {
-            dialog.art.set_text_content(None);
-            append(&dialog.art, &self.art.panel(&self.document, bounds.width(), bounds.height())?)?;
-            dialog
-                .art
-                .set_attribute("data-cloud-panel-size", &key)
-                .map_err(|_| "Cloud dialog measured size")?;
-        }
-        Ok(())
-    }
-
-    fn show_search(&mut self) -> Result<(), String> {
-        let dialog = CloudDialog::new(
-            &self.document,
-            &self.root,
-            "dark-cloud-modal dark-cloud-modal-search",
-            "SEARCH THE DARK CLOUD",
-            self.events.clone(),
-        )?;
-        let body = element(&self.document, "div", "dark-cloud-panel-body")?;
-        text(
-            &self.document,
-            &body,
-            "h2",
-            "dark-cloud-panel-caption",
-            "SEARCH THE DARK CLOUD",
-            Medium,
-            1.0,
-            0xd9ba70,
-            false,
-        )?;
-        let form = element(&self.document, "form", "")?;
-        form.set_attribute("data-menu-action", "cloud-search-submit")
-            .map_err(|_| "Cloud search submit")?;
-        let panel = control_panel(&self.document, &form, "", false)?;
-        let row = element(&self.document, "div", "native-ui-control-field-row")?;
-        let label = text(
-            &self.document,
-            &row,
-            "label",
-            "",
-            if self.tab == Tab::Parties {
-                "LEADER, MEMBER, OR BONEYARD:"
-            } else {
-                "MOD, AUTHOR, OR TAG:"
-            },
-            Medium,
-            1.0,
-            0xd9ba70,
-            false,
-        )?;
-        label
-            .set_attribute("for", "dark-cloud-search-input")
-            .map_err(|_| "Cloud search input label")?;
-        let field = control_panel(&self.document, &row, "native-ui-control-field", true)?;
-        let input: HtmlInputElement =
-            element(&self.document, "input", "")?.dyn_into().map_err(|_| "Cloud search input")?;
-        input.set_id("dark-cloud-search-input");
-        input.set_value(&self.query);
-        input.set_attribute("data-game-default-focus", "true").map_err(|_| "Cloud search focus")?;
-        field.append_child(&input).map_err(|_| "Cloud search field")?;
-        let clear = element(&self.document, "button", "native-ui-control-clear")?;
-        for (name, value) in [
-            ("type", "button"),
-            ("aria-label", "Clear search text"),
-            ("data-menu-action", "cloud-search-clear"),
-        ] {
-            clear.set_attribute(name, value).map_err(|_| "Cloud clear search")?;
-        }
-        append(
-            &clear,
-            &crate::ui::cloud::cloud_text(&self.document, "x", Medium, 1.0, 0xd9ba70, false)?,
-        )?;
-        append(&field, &clear)?;
-        append(&panel, &row)?;
-        let panel = control_panel(&self.document, &form, "", false)?;
-        control_action(&self.document, &panel, "SEARCH NOW", "cloud-search-submit", false, false)?
-            .set_attribute("type", "submit")
-            .map_err(|_| "Cloud search form submission")?;
-        append(&body, &form)?;
-        append(dialog.element(), &body)?;
-        self.sheet = Some(Sheet::Search { dialog, input });
-        self.update_search_clear()?;
-        self.sheet.as_ref().expect("created search sheet").dialog().show()
-    }
-
-    fn update_search_clear(&self) -> Result<(), String> {
-        if let Some(Sheet::Search { dialog, input }) = &self.sheet
-            && let Some(clear) = dialog
-                .root
-                .query_selector(".native-ui-control-clear")
-                .map_err(|_| "Cloud clear search target")?
-        {
-            clear
-                .toggle_attribute_with_force("disabled", input.value().is_empty())
-                .map_err(|_| "Cloud clear search admission")?;
-        }
-        Ok(())
-    }
-
-    fn show_sort(&mut self) -> Result<(), String> {
-        let title = if self.tab == Tab::Parties { "SORT PARTIES BY..." } else { "SORT MODS BY..." };
-        let dialog = CloudDialog::new(
-            &self.document,
-            &self.root,
-            "dark-cloud-modal dark-cloud-modal-sort",
-            title,
-            self.events.clone(),
-        )?;
-        let body = element(&self.document, "div", "dark-cloud-panel-body")?;
-        text(
-            &self.document,
-            &body,
-            "h2",
-            "dark-cloud-panel-caption",
-            title,
-            Medium,
-            1.0,
-            0xd9ba70,
-            false,
-        )?;
-        let panel = control_panel(&self.document, &body, "", false)?;
-        panel.set_attribute("aria-label", "Sort order").map_err(|_| "Cloud sort group label")?;
-        panel.set_attribute("role", "group").map_err(|_| "Cloud sort group role")?;
-        let choices: &[(Sort, &str)] = if self.tab == Tab::Parties {
-            &[(Sort::Members, "MOST WIZARDS"), (Sort::Name, "LEADER NAME")]
+            )
         } else {
-            &[
-                (Sort::Newest, "NEWEST"),
-                (Sort::Updated, "UPDATED RECENTLY"),
-                (Sort::Downloads, "MOST DOWNLOADED"),
-                (Sort::Name, "NAME"),
-            ]
+            Rect::from_min_size(footer.min + Vec2::new(239.5, 6.0), Vec2::new(353.0, 69.0))
         };
-        for &(sort, label) in choices {
-            let action = control_action(
-                &self.document,
-                &panel,
-                label,
-                &format!("cloud-sort:{}", sort.id()),
-                self.sort == sort,
-                false,
-            )?;
-            action
-                .set_attribute("aria-pressed", if self.sort == sort { "true" } else { "false" })
-                .map_err(|_| "Cloud sort selected state")?;
-            if self.sort == sort {
-                action
-                    .set_attribute("data-game-default-focus", "true")
-                    .map_err(|_| "Cloud sort selected focus")?;
+        if widgets::stock_button(
+            frame,
+            ui,
+            "cloud-primary",
+            label,
+            primary,
+            primary.height() / 69.0,
+            enabled && !disabled,
+        )
+        .clicked()
+            && enabled
+            && !disabled
+        {
+            actions.push("cloud-primary".to_owned());
+        }
+        if !phone {
+            let options = Rect::from_min_size(
+                egui::pos2(
+                    footer.right() - if compact { 130.0 } else { 191.0 },
+                    footer.center().y - tool_height / 2.0,
+                ),
+                Vec2::new(if compact { 130.0 } else { 185.0 }, tool_height),
+            );
+            if self.art.tool(
+                frame,
+                ui,
+                "cloud-options",
+                "OPTIONS",
+                None,
+                options,
+                enabled && matches!(selected, Some(Row::Mod(..))),
+            )? {
+                actions.push("cloud-primary".to_owned());
             }
         }
-        append(dialog.element(), &body)?;
-        dialog.show()?;
-        self.sheet = Some(Sheet::Sort(dialog));
+        if let Some((done, total, active)) =
+            self.download_progress.filter(|(_, total, _)| *total > 0)
+        {
+            let percent = (done as f64 / total as f64 * 100.0 + 0.5).floor().min(100.0);
+            let rect = Rect::from_min_size(
+                footer.min - Vec2::new(0.0, 42.0),
+                Vec2::new(footer.width(), 34.0),
+            );
+            widgets::control_panel(frame, ui, &self.art.controls, rect, true)?;
+            ui.painter().rect_filled(
+                Rect::from_min_size(
+                    rect.min + Vec2::splat(3.0),
+                    Vec2::new((rect.width() - 6.0) * percent as f32 / 100.0, rect.height() - 6.0),
+                ),
+                0.0,
+                widgets::color(0x517e49),
+            );
+            widgets::label(
+                ui,
+                &format!(
+                    "{}, {percent}%",
+                    if active { "DOWNLOADING MOD CONTENT" } else { "CONTENT READY" }
+                ),
+                rect.center(),
+                Align2::CENTER_CENTER,
+                "Palatino",
+                16.0,
+                widgets::GOLD,
+            );
+        }
         Ok(())
     }
-}
-
-impl Drop for CloudView {
-    fn drop(&mut self) {
-        if let Some(window) = web_sys::window()
-            && let Some(key) = self._listeners.last()
-        {
-            let _ =
-                window.remove_event_listener_with_callback("keydown", key.as_ref().unchecked_ref());
+    fn paint_sheet(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        view: Rect,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let search = matches!(self.sheet, Some(Sheet::Search { .. }));
+        let size = if search {
+            Vec2::new(
+                520.0_f32.min(view.width() - 48.0),
+                if view.width() < 700.0 { 240.0 } else { 205.0 },
+            )
+        } else {
+            Vec2::new(320.0_f32.min(view.width() - 48.0), 255.0_f32.min(view.height() - 48.0))
+        };
+        let panel = Rect::from_center_size(view.center(), size);
+        self.art.panel(frame, ui, panel)?;
+        let title = if search {
+            "SEARCH THE DARK CLOUD"
+        } else if self.tab == Tab::Parties {
+            "SORT PARTIES BY..."
+        } else {
+            "SORT MODS BY..."
+        };
+        widgets::native(
+            frame,
+            ui,
+            title,
+            NativeUiFontName::Medium,
+            panel.min + Vec2::new(40.0, 42.0),
+            1.0,
+            0xd9ba70,
+            NativeUiTextAlign::Left,
+        );
+        if let Some(Sheet::Search { input }) = &mut self.sheet {
+            let body =
+                panel.shrink2(Vec2::new(if view.width() < 700.0 { 8.0 } else { 30.0 }, 24.0));
+            let field = Rect::from_min_size(
+                body.min + Vec2::new(10.0, 58.0),
+                Vec2::new(body.width() - 20.0, 44.0),
+            );
+            widgets::control_panel(frame, ui, &self.art.controls, field, true)?;
+            let response = widgets::edit(
+                frame,
+                ui,
+                "dark-cloud-search-input",
+                if self.tab == Tab::Parties {
+                    "Leader, member, or boneyard"
+                } else {
+                    "Mod, author, or tag"
+                },
+                input,
+                field,
+                "IM FELL English",
+                16.0,
+                true,
+                false,
+            );
+            frame.record_value("dark-cloud-search-input", input, None);
+            if response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                actions.push("cloud-search-submit".to_owned());
+            }
+            let clear =
+                Rect::from_min_size(field.right_top() - Vec2::new(44.0, 0.0), Vec2::splat(44.0));
+            if widgets::interact(
+                frame,
+                ui,
+                "cloud-search-clear",
+                "Clear search text",
+                "button",
+                clear,
+                !input.is_empty(),
+            )
+            .clicked()
+            {
+                actions.push("cloud-search-clear".to_owned());
+            }
+            widgets::label(
+                ui,
+                "x",
+                clear.center(),
+                Align2::CENTER_CENTER,
+                "Palatino",
+                16.0,
+                widgets::GOLD,
+            );
+            let button = Rect::from_min_size(
+                egui::pos2(field.left(), field.bottom() + 24.0),
+                Vec2::new(field.width(), 44.0),
+            );
+            if widgets::stock_button(
+                frame,
+                ui,
+                "cloud-search-submit",
+                "SEARCH NOW",
+                button,
+                0.55,
+                true,
+            )
+            .clicked()
+            {
+                actions.push("cloud-search-submit".to_owned());
+            }
+        } else {
+            let choices = if self.tab == Tab::Parties {
+                vec![(Sort::Members, "MOST WIZARDS"), (Sort::Name, "LEADER NAME")]
+            } else {
+                vec![
+                    (Sort::Newest, "NEWEST"),
+                    (Sort::Updated, "UPDATED RECENTLY"),
+                    (Sort::Downloads, "MOST DOWNLOADED"),
+                    (Sort::Name, "NAME"),
+                ]
+            };
+            for (index, (sort, label)) in choices.into_iter().enumerate() {
+                let rect = Rect::from_min_size(
+                    panel.min + Vec2::new(30.0, 62.0 + index as f32 * 44.0),
+                    Vec2::new(panel.width() - 60.0, 44.0),
+                );
+                widgets::control_panel(frame, ui, &self.art.controls, rect, false)?;
+                let id = format!("cloud-sort:{}", sort.id());
+                if widgets::interact(frame, ui, &id, label, "button", rect, true).clicked() {
+                    actions.push(id);
+                }
+                frame.record_value(
+                    &format!("cloud-sort:{}", sort.id()),
+                    sort.id(),
+                    Some(self.sort == sort),
+                );
+                widgets::native(
+                    frame,
+                    ui,
+                    label,
+                    NativeUiFontName::Medium,
+                    rect.min + Vec2::new(10.0, 28.0),
+                    1.0,
+                    if self.sort == sort { 0xbfffbf } else { 0xd9ba70 },
+                    NativeUiTextAlign::Left,
+                );
+            }
         }
+        let close =
+            Rect::from_min_size(panel.right_top() + Vec2::new(-36.0, -12.0), Vec2::splat(44.0));
+        if widgets::interact(frame, ui, "cloud-dialog-close", "Close", "button", close, true)
+            .clicked()
+        {
+            actions.push("cloud-dialog-close".to_owned());
+        }
+        widgets::label(
+            ui,
+            "×",
+            close.center(),
+            Align2::CENTER_CENTER,
+            "Georgia",
+            22.0,
+            widgets::GOLD,
+        );
+        Ok(())
     }
 }
