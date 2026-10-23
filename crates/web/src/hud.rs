@@ -411,15 +411,19 @@ impl Hud {
             );
             let custom = self.mobile_scale(MobileUiElementId::Diagnostics, coarse);
             let font_size = if coarse { 12.0 * 0.85 / scale * custom } else { 12.0 };
-            paint_rotated_text(
+            let diagnostics = format!("{}   {}", self.fps, self.ping);
+            let painted = paint_rotated_text(
                 p,
-                &format!("{}   {}", self.fps, self.ping),
+                &diagnostics,
                 egui::FontId::new(font_size, egui::FontFamily::Name("JetBrains Mono".into())),
                 egui::Color32::from_rgb(216, 212, 200),
                 if coarse { rect.center() } else { rect.min },
                 if coarse { egui::Align2::CENTER_CENTER } else { egui::Align2::LEFT_TOP },
                 (rect.center(), rotation),
             );
+            let transform = frame.ctx.layer_transform_to_global(ui.layer_id()).unwrap_or_default();
+            frame.record_rect("hud:diagnostics", &diagnostics, "text", transform * painted, false);
+            frame.record_value("hud:diagnostics", &diagnostics, None);
             self.paint_meters(frame, p, state, size, scale, coarse)?;
             let (rect, rotation) = self.mobile_rect(
                 MobileUiElementId::Xp,
@@ -1050,10 +1054,12 @@ fn paint_rotated_text(
     anchor: egui::Pos2,
     align: egui::Align2,
     rotation: (egui::Pos2, f32),
-) {
+) -> egui::Rect {
     let (pivot, angle) = rotation;
     let galley = painter.layout_no_wrap(text.into(), font, color);
     let rect = align.anchor_size(anchor, galley.size());
+    let painted = rotated_bounds(galley.mesh_bounds.translate(rect.min.to_vec2()), pivot, angle);
     let position = pivot + egui::emath::Rot2::from_angle(angle) * (rect.min - pivot);
     painter.add(egui::epaint::TextShape::new(position, galley, color).with_angle(angle));
+    painted
 }

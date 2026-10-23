@@ -1,10 +1,12 @@
 // Real Inventory and Skillbook transactions through visible GPU widget geometry.
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const fs = require('node:fs');
 const { chromium } = require(path.resolve(process.env.PW));
 const { startNewGame } = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
 const output = process.env.OUT || '/tmp';
+fs.mkdirSync(output,{recursive:true});
 const state = page => page.evaluate(() => Array.from(window.wasmBindings.wizard_state()));
 const shot = (page, name) => page.screenshot({ path: path.join(output, name) });
 const item = (page, name) => ui.byLabel(page, name, { role: 'button', prefix: 'panel:item:' });
@@ -17,8 +19,9 @@ const notice = (page, title) => ui.waitForUi(page, snapshot => {
   const browser = await chromium.launch({ headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  let page;
   try {
-    const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+    page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
     const { errors } = ui.watchErrors(page);
     await page.goto(process.env.URL || 'http://127.0.0.1:4185/'); await ui.ready(page);
     await startNewGame(page, {name:'Felix'});
@@ -69,5 +72,8 @@ const notice = (page, title) => ui.waitForUi(page, snapshot => {
     await page.waitForFunction(tick => window.wasmBindings.wizard_state()[5] > tick,frozen[5]);
     await ui.assertGpuOnly(page); assert.deepEqual(errors,[]);
     console.log(JSON.stringify({passed:true,errors,screenshots:output}));
+  } catch(error) {
+    if(page){await shot(page,'player-panels-failure.png');fs.writeFileSync(path.join(output,'player-panels-failure.json'),JSON.stringify({error:error.stack,ui:await ui.readUi(page)},null,2));}
+    throw error;
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

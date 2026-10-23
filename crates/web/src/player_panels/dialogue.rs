@@ -333,10 +333,10 @@ impl PlayerPanels {
     }
     pub(super) fn reveal_selector_focus(&mut self, id: &HubNpcSelectorId) -> Result<(), String> {
         if let Some(hit) = self.hits.iter().find(|hit| hit.npc.as_ref() == Some(id)) {
-            let delta = if hit.rect.top() < 106.0 {
-                hit.rect.top() - 106.0
-            } else if hit.rect.bottom() > 506.0 {
-                hit.rect.bottom() - 506.0
+            let delta = if hit.paint_rect.top() < 106.0 {
+                hit.paint_rect.top() - 106.0
+            } else if hit.paint_rect.bottom() > 506.0 {
+                hit.paint_rect.bottom() - 506.0
             } else {
                 0.0
             };
@@ -485,6 +485,12 @@ impl PlayerPanels {
                 HudRect::new(15.0, 25.0 + index as f64 * 90.0, 490.0, 85.0),
                 Some(row.id.clone()),
             );
+            let semantic_key = match &row.id {
+                HubNpcSelectorId::Native(id) => id.to_string(),
+                HubNpcSelectorId::ModBoast(selection) => {
+                    format!("{}:{}", selection.mod_id, selection.content_id)
+                }
+            };
             let active = self
                 .hovered_npc_selector
                 .as_ref()
@@ -498,6 +504,12 @@ impl PlayerPanels {
                 true,
                 if selected { 0x9feb9f } else { 0xffffff },
             )?;
+            node.semantic(
+                &format!("panel:selector-frame:{semantic_key}"),
+                &row.label,
+                "image",
+                HudRect::new(0.0, 0.0, 490.0, 85.0),
+            );
             match selector {
                 HubNpcListSelector::Boast => {
                     if let Some(PreparedModBoastIcon::Stock { record, .. }) = &row.boast_icon {
@@ -535,16 +547,22 @@ impl PlayerPanels {
                             );
                         }
                     }
-                    node.text(&TextSpec {
-                        tint: color,
-                        ..TextSpec::new(Font::SpecialUppercase, &row.label, 245.0, 27.5)
-                    });
-                    node.text(&TextSpec {
-                        tint: color,
-                        max_width: Some(370.0),
-                        line_height: Some(17.0),
-                        ..TextSpec::new(Font::Medium, &row.detail, 245.0, 47.5)
-                    });
+                    node.labeled_text(
+                        &format!("panel:selector-label:{semantic_key}"),
+                        &TextSpec {
+                            tint: color,
+                            ..TextSpec::new(Font::SpecialUppercase, &row.label, 245.0, 27.5)
+                        },
+                    );
+                    node.labeled_text(
+                        &format!("panel:selector-detail:{semantic_key}"),
+                        &TextSpec {
+                            tint: color,
+                            max_width: Some(370.0),
+                            line_height: Some(17.0),
+                            ..TextSpec::new(Font::Medium, &row.detail, 245.0, 47.5)
+                        },
+                    );
                 }
                 HubNpcListSelector::Books => {
                     let record = book_art_record(&row.label);
