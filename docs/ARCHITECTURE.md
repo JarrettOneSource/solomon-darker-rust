@@ -64,8 +64,12 @@ obstacle) is in `web`, index-aligned with it.
    Scenery occlusion advances through whole display ticks using that displayed local
    position; snapshot receipt and simulation stepping do not also advance its view state.
 
-The final screen pass composes each visible controller once through `GpuUi::run`; modal
-scope and actual hit geometry route input without hidden DOM controls. Native composition,
+`GpuUi::begin_frame` collects native input in dispatch order. Each `paint_next` releases
+controller borrows so the Game owner can commit typed actions and refresh models before
+the next event. Transport polling, gameplay input and simulation advance once per browser
+frame. After the world draw, `paint_layout` refreshes the final shapes without replaying
+input; `finish_frame` submits only those shapes and completes texture retirement even on
+failure. Modal scope and actual hit geometry route input without hidden DOM controls. Native composition,
 clipboard, file, audio and accessibility APIs remain browser adapters. `runtime_ui` carries
 real completed image/font/audio counts to the separate Rust splash loader and releases it
 only after account/save admission and the first complete GPU frame. Match transitions retain

@@ -212,6 +212,22 @@ selection must still be proved. No downstream surface is accepted from a partial
 | Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | Real input drivers migrated; composed runtime pending complete composed browser proof |
 | No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Joined source producer contract 3/3; complete runtime surface/input proof remains pending |
 
+## Ordered UI dispatch
+
+The actual Settings binding journey reproduced a binding click followed by Escape being
+interpreted in reverse order. The shared GPU batch previously handled every queued key before
+resolving pointer clicks, and `Game::frame` consumed typed HUD/panel actions before the GPU
+pass produced them. This also delayed opening Inventory until after a following Escape.
+The Source's browser callbacks commit each event before dispatching the next event.
+
+`GpuUi` now separates ordered input/layout commits from the final GPU submission. The Game
+owner commits controller actions and refreshes accepted-state models between those batches;
+transport polling, physical gameplay sampling and fixed simulation advancement retain one
+owner per browser frame. World rendering precedes the final UI draw. Texture upload/retirement
+is finalized even when a controller fails. Observer and deployment barriers retain their
+read-only/held semantics. The binding/text-focus batch regressions and actual rapid
+Settings/HUD journeys qualify this seam; the latter remain pending the combined rebuild.
+
 ## Test ownership and stopping checks
 
 Acceptance owns `gpu-ui.cjs`, `gpu-ui-contract.test.cjs`, `menu-journey.cjs`, `smoke.cjs`,
