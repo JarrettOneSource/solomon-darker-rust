@@ -7,9 +7,11 @@ const gpu = require('./gpu-ui.cjs');
   const browser = await chromium.launch({headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+  let page;
   try {
-    const page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
-    const {errors} = gpu.watchErrors(page);
+    page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
+    const {errors, ready: errorsReady} = gpu.watchErrors(page);
+    await errorsReady;
     const responses = [];
     page.on('response', response => {
       if (new URL(response.url()).pathname.endsWith('/api/game/parties') && response.ok()) responses.push(response.json());
@@ -38,6 +40,11 @@ const gpu = require('./gpu-ui.cjs');
     await gpu.fill(page, 'join-party-code', '0I');
     await gpu.value(page, 'join-party-code', '');
     assert.equal((await gpu.widget(page, 'join-code')).enabled, false);
+    await page.keyboard.press('Enter');
+    await gpu.nextFrame(page);
+    await page.keyboard.press('Enter');
+    await gpu.nextFrame(page);
+    await gpu.focused(page, 'join-party-code');
     await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'join-party-desktop.png')});
     const beforeRefresh = responses.length;
     await gpu.click(page, 'join-refresh');
@@ -51,7 +58,11 @@ const gpu = require('./gpu-ui.cjs');
     await gpu.click(page, 'join-back');
     await gpu.surface(page, 'play');
     await gpu.assertGpuOnly(page);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
-    console.log(JSON.stringify({checks: ['actual broker data', 'listing policy', 'normalized real paste', 'editable focus without submission', 'incomplete code disabled', 'manual refresh', 'compact viewport/scroll', 'Back to Play'], actualParties: directory.items.length, errors}));
-  } finally { await browser.close(); }
+    console.log(JSON.stringify({checks: ['actual broker data', 'listing policy', 'normalized real paste', 'editable focus without submission', 'incomplete code disabled and Enter retains editing focus', 'manual refresh', 'compact viewport/scroll', 'Back to Play'], actualParties: directory.items.length, errors}));
+  } finally {
+    try { if (page && !page.isClosed()) await gpu.settleErrors(page); }
+    finally { await browser.close(); }
+  }
 })().catch(error => {console.error(error); process.exitCode = 1;});

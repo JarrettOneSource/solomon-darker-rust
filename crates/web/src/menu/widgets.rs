@@ -74,7 +74,7 @@ pub(crate) fn interact(
     response
 }
 
-pub(super) fn focus_outline(
+pub(crate) fn focus_outline(
     frame: &UiFrame<'_>,
     ui: &Ui,
     response: &Response,
@@ -127,6 +127,8 @@ pub(crate) fn focus_on_pointer(response: &Response) {
 pub(super) fn submitted_on_enter(response: &crate::gpu_ui::NativeEditOutput) -> bool {
     response.submitted
 }
+// Bitmap font, placement and tint are the authored drawing contract.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn native(
     frame: &UiFrame<'_>,
     ui: &Ui,
@@ -193,7 +195,9 @@ pub(crate) fn stock_button(
     enabled: bool,
 ) -> Response {
     let response = interact(frame, ui, id, text, "button", rect, enabled);
-    paint_stock_button(frame, ui, &response, rect, scale, enabled);
+    let paint =
+        frame.with_brightness(if enabled && frame.focus_visible(&response) { 1.2 } else { 1.0 });
+    paint_stock_button(&paint, ui, &response, rect, scale, enabled);
     let pressed = if enabled && stock_button_pressed(ui, &response) {
         Vec2::splat(6.0 * scale)
     } else {
@@ -201,7 +205,7 @@ pub(crate) fn stock_button(
     };
     if !text.is_empty() {
         crate::gpu_ui::native_text(
-            frame,
+            &paint,
             ui.painter(),
             &NativeUiTextSpec {
                 scale: f64::from(scale),
@@ -443,6 +447,8 @@ pub(crate) fn cloud_button(
     cloud_button_with_label(frame, ui, id, label, label, rect, scale, enabled)
 }
 
+// The stock button separates its accessible name from the authored bitmap label.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn cloud_button_with_label(
     frame: &UiFrame<'_>,
     ui: &Ui,

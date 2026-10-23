@@ -53,6 +53,7 @@ async function clickThenEscape(page,id) {
   try {
     page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
     observed = ui.watchErrors(page);
+    await observed.ready;
     await ui.observeGpu(page);
     await page.goto(url, {waitUntil:'domcontentloaded'});
     await ui.ready(page);

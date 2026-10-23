@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const {startNewGame} = require('./menu-journey.cjs');
 const {chromium, request} = require(path.resolve(process.env.PW));
 
@@ -27,21 +28,10 @@ let step = 'registration';
 async function waitUntil(predicate, label) {
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
-    if (predicate()) return;
+    if (await predicate()) return;
     await new Promise(resolve => setTimeout(resolve, 50));
   }
   throw new Error(`Timed out waiting for ${label}`);
-}
-
-async function bounded(promise, label, milliseconds) {
-  let timer;
-  try {
-    return await Promise.race([promise, new Promise((resolve, reject) => {
-      timer = setTimeout(() => reject(new Error(`${label} timed out`)), milliseconds);
-    })]);
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 function checked(label) {
@@ -82,7 +72,8 @@ async function accounts() {
 function observe(page, label) {
   const state = {label, id: null, frame: null, social: null, welcomes: [], cards: [],
     invitations: [], partyActions: [], chats: [], commands: [], requests: [],
-    errors: [], cancelledPolls: [], wasm: new Set(), sockets: [], trace: []};
+    errors: [], wasm: new Set(), sockets: [], trace: []};
+  state.failureObserverReady = ui.watchRequestFailures(page, {errors: state.errors}).ready;
   page.on('pageerror', error => state.errors.push(error.message));
   page.on('console', message => {
     if (message.type() === 'error') state.errors.push(message.text());
@@ -96,13 +87,6 @@ function observe(page, label) {
       state.trace.push({direction: 'response', ...receipt});
     }
     if (response.status() >= 400) state.errors.push(`${response.status()} ${pathname}`);
-  });
-  page.on('requestfailed', item => {
-    const pathname = new URL(item.url()).pathname;
-    const failure = `${pathname}: ${item.failure()?.errorText}`;
-    if (pathname === `${websiteMount}/api/game/deployment` && item.failure()?.errorText === 'net::ERR_ABORTED') {
-      state.cancelledPolls.push(failure);
-    } else state.errors.push(failure);
   });
   page.on('websocket', socket => {
     const read = createNativeMessageReader();
@@ -151,10 +135,10 @@ function observe(page, label) {
 }
 
 async function openClient(account, label) {
-  const server = await chromium.launchServer({headless: true, host: '127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, {headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const browser = browserOwner.browser;
   const context = await browser.newContext({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
     viewport: {width: 1280, height: 720}});
   // Bootstrap the real registration credential in the staging API namespace.
@@ -164,7 +148,8 @@ async function openClient(account, label) {
   page.setDefaultTimeout(30000);
   page.setDefaultNavigationTimeout(30000);
   const state = observe(page, label);
-  const client = {browser, server, page, state, account};
+  await state.failureObserverReady;
+  const client = {browserOwner, page, state, account};
   clients.push(client);
   await page.goto(url, {waitUntil: 'load'});
   await ui.ready(page, {timeout:coldStartTimeout});
@@ -195,7 +180,8 @@ async function openClient(account, label) {
 async function newWizard(client, name) {
   const {page, state} = client;
   await startNewGame(page,{name,element:'fire',discipline:'arcane'});
-  await waitUntil(() => {
+  await waitUntil(async () => {
+    if (state.errors.length > 0) await ui.settleErrors(page);
     if (state.errors.length > 0) throw new Error(state.errors.join('; '));
     return state.welcomes.length > 0 && state.social?.party_state;
   }, `${state.label} accepted private College`);
@@ -244,22 +230,12 @@ function publicState(state) {
       activity: card.activity, playerId: card.player_id})),
     invitations: state.invitations, partyActions: state.partyActions,
     chats: state.chats, commands: state.commands, requests: state.requests,
-    wasm: [...state.wasm], errors: state.errors, cancelledPolls: state.cancelledPolls,
+    wasm: [...state.wasm], errors: state.errors,
     sockets: state.sockets, trace: state.trace, heldCheckpointSave: state.heldCheckpointSave};
 }
 
 async function closeClient(client) {
-  const process = client.server.process();
-  let mode = 'graceful';
-  try {
-    await bounded(client.browser.close(), 'Playwright disconnect', 5000);
-    await bounded(client.server.close(), 'Chrome close', 15000);
-  } catch {
-    // The retained process belongs to this harness, never another fleet browser.
-    mode = 'forced';
-    await bounded(client.server.kill(), 'Chrome termination', 5000);
-  }
-  return {mode, exited: process.exitCode !== null || process.signalCode !== null};
+  return {...await client.browserOwner.close(), exited:true};
 }
 
 (async () => {
@@ -406,11 +382,15 @@ async function closeClient(client) {
     await ui.assertGpuOnly(guest.page);
     await guest.page.screenshot({path: path.join(output, 'joined-college-party.png')});
     checked('consent and actual character confirmation join the inviter authority with both connected party members');
-    for (const client of clients) assert.deepEqual(client.state.errors, []);
+    for (const client of clients) {
+      await ui.settleErrors(client.page);
+      assert.deepEqual(client.state.errors, []);
+    }
     checked('both Metal browser clients completed without unexpected browser, API or host errors');
   } catch (error) {
     failure = {step, message: error.message, stack: error.stack};
     for (const client of clients) {
+      await ui.settleErrors(client.page);
       await client.page.screenshot({path: path.join(output, `failure-${client.state.label}.png`)}).catch(() => {});
       client.state.failureUi = await ui.readUi(client.page).catch(() => null);
     }

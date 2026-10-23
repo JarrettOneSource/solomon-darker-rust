@@ -462,10 +462,10 @@ impl MenuUi {
                 }
             };
             self.navigation.update(&ctx, &scope, preferred.as_deref());
-            if let Some(action) = self.navigation.take_confirmation() {
-                if !matches!(action.as_str(), "join-party-code") {
-                    actions.push(action);
-                }
+            if let Some(action) = self.navigation.take_confirmation()
+                && action != "join-party-code"
+            {
+                actions.push(action);
             }
             if frame.key_codes().is_empty() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.back()?;

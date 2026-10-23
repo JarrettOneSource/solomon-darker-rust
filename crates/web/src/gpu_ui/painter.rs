@@ -8,7 +8,10 @@ use egui::{ClippedPrimitive, Rect, TextureId, Vec2, vec2};
 use web_sys::{HtmlImageElement, WebGl2RenderingContext};
 
 use solomon_graphics::assets;
+use solomon_graphics::{AlphaShadow, ColorFilter};
 use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
+
+use super::material::{Material, Materials, TextureSource};
 
 enum ImageState {
     Loading,
@@ -29,6 +32,7 @@ struct ImageCache {
     next_id: u64,
     images: BTreeMap<String, ImageEntry>,
     paths: BTreeMap<u64, String>,
+    materials: Materials,
 }
 
 #[derive(Clone, Default)]
@@ -43,6 +47,10 @@ fn path_key(path: &str) -> String {
 }
 
 impl Images {
+    pub fn begin_frame(&self) {
+        self.0.borrow_mut().materials.clear();
+    }
+
     pub fn register(&self, path: &str, texture: &Texture, gl: &WebGl2RenderingContext) {
         self.forget(path, gl);
         let path = path_key(path);
@@ -129,6 +137,7 @@ impl Images {
     }
 
     pub async fn load_stock(&self, renderer: &Renderer) -> Result<(), String> {
+        crate::runtime_ui::enter_phase("interface")?;
         // These are presentation inputs, not world/death sprite banks. The inventory is
         // tracked beside the painter so missing files fail readiness before a menu opens.
         let paths = include_str!("stock-images.txt").lines().filter(|path| !path.is_empty());
@@ -138,15 +147,13 @@ impl Images {
             let path = path.to_owned();
             promises.push(&wasm_bindgen_futures::future_to_promise(async move {
                 let image = assets::load_image(&path).await.map_err(wasm_bindgen::JsValue::from)?;
-                crate::runtime_ui::completed("interface", &path, 1)
-                    .map_err(wasm_bindgen::JsValue::from)?;
                 let mut cache = images.0.borrow_mut();
                 cache.next_id += 1;
                 let id = cache.next_id;
                 let size = vec2(image.natural_width() as f32, image.natural_height() as f32);
                 cache.paths.insert(id, path.clone());
                 cache.images.insert(
-                    path,
+                    path.clone(),
                     ImageEntry {
                         id,
                         state: ImageState::Decoded(image),
@@ -154,6 +161,8 @@ impl Images {
                         owned: true,
                     },
                 );
+                drop(cache);
+                crate::runtime_ui::completed(&path).map_err(wasm_bindgen::JsValue::from)?;
                 Ok(wasm_bindgen::JsValue::UNDEFINED)
             }));
         }
@@ -193,24 +202,43 @@ impl Images {
         }
     }
 
-    pub fn texture_id(&self, path: &str, blend: BlendMode, mask: bool) -> Option<TextureId> {
+    pub fn texture_id(
+        &self,
+        path: &str,
+        blend: BlendMode,
+        mask: bool,
+        filter: ColorFilter,
+        shadow: Option<AlphaShadow>,
+    ) -> Option<TextureId> {
         self.request(path);
-        let cache = self.0.borrow();
+        let mut cache = self.0.borrow_mut();
         let entry = cache.images.get(&path_key(path))?;
         if !matches!(entry.state, ImageState::Ready(_)) {
             return None;
         }
-        let blend = match blend {
-            BlendMode::Normal => 0,
-            BlendMode::Add => 1,
-            BlendMode::Multiply => 2,
-        };
-        Some(TextureId::User(entry.id * 8 + blend + if mask { 4 } else { 0 }))
+        let mut material = Material::new(TextureSource::Image(entry.id), blend, mask, filter);
+        if let Some(shadow) = shadow {
+            material = material.with_shadow(shadow);
+        }
+        Some(cache.materials.texture_id(material))
+    }
+
+    pub fn managed_texture_id(&self, id: u64, blend: BlendMode, filter: ColorFilter) -> TextureId {
+        self.0.borrow_mut().materials.texture_id(Material::new(
+            TextureSource::Managed(id),
+            blend,
+            false,
+            filter,
+        ))
+    }
+
+    fn material(&self, id: u64) -> Option<Material> {
+        self.0.borrow().materials.get(id)
     }
 
     fn texture(&self, id: u64) -> Option<(Texture, bool)> {
         let cache = self.0.borrow();
-        let entry = cache.images.get(cache.paths.get(&(id / 8))?)?;
+        let entry = cache.images.get(cache.paths.get(&id)?)?;
         match &entry.state {
             ImageState::Ready(texture) => Some((texture.clone(), entry.owned)),
             _ => None,
@@ -249,6 +277,7 @@ impl Images {
         }
         cache.images.clear();
         cache.paths.clear();
+        cache.materials.clear();
     }
 }
 
@@ -267,18 +296,25 @@ pub fn clip_scissor(rect: Rect, physical: [i32; 2], logical: [f32; 2]) -> Option
     ])
 }
 
+mod groups;
+
 pub(super) struct GpuPainter {
     pub gl: WebGl2RenderingContext,
     textures: BTreeMap<TextureId, Texture>,
+    groups: groups::Targets,
 }
 
 impl GpuPainter {
     pub fn new(renderer: &Renderer) -> Self {
-        Self { gl: renderer.graphics_context(), textures: BTreeMap::new() }
+        Self {
+            gl: renderer.graphics_context(),
+            textures: BTreeMap::new(),
+            groups: groups::Targets::default(),
+        }
     }
 
     pub fn texture_count(&self) -> usize {
-        self.textures.len()
+        self.textures.len() + self.groups.texture_count()
     }
 
     pub fn paint(
@@ -320,100 +356,132 @@ impl GpuPainter {
                 );
             }
         }
-        let mut meshes = 0;
-        let mut triangles = 0;
-        let result = renderer.draw_screen_space(physical, logical, |renderer| {
-            for primitive in primitives {
-                let Some(clip) = clip_scissor(primitive.clip_rect, physical, logical) else {
-                    continue;
-                };
-                let egui::epaint::Primitive::Mesh(mesh) = primitive.primitive else {
-                    return Err("GPU UI does not admit external paint callbacks".to_owned());
-                };
-                if mesh.indices.is_empty() {
-                    continue;
-                }
-                if !mesh.is_valid() {
-                    return Err("GPU UI produced an invalid mesh".to_owned());
-                }
-                let (texture, blend, mode, sampling) = match mesh.texture_id {
-                    TextureId::Managed(_) => (
-                        self.textures
-                            .get(&mesh.texture_id)
-                            .cloned()
-                            .ok_or("GPU UI mesh references a missing managed texture")?,
-                        BlendMode::Normal,
-                        TextureColorMode::Texture,
-                        None,
-                    ),
-                    TextureId::User(id) => {
-                        let (texture, owned) =
-                            images.texture(id).ok_or("GPU UI mesh references a retired image")?;
-                        let blend = match id & 3 {
-                            1 => BlendMode::Add,
-                            2 => BlendMode::Multiply,
-                            _ => BlendMode::Normal,
-                        };
-                        let mask = id & 4 != 0;
-                        (
-                            texture,
-                            blend,
-                            if mask {
-                                TextureColorMode::AlphaMask
-                            } else {
-                                TextureColorMode::Texture
-                            },
-                            owned.then_some(mask),
-                        )
-                    }
-                };
-                if let Some(nearest) = sampling {
-                    renderer.set_texture_sampling(&texture, nearest);
-                }
-                let vertices: Vec<Vertex> = mesh
-                    .vertices
-                    .iter()
-                    .map(|vertex| {
-                        let color = vertex.color.to_srgba_unmultiplied();
-                        Vertex {
-                            position: [vertex.pos.x, vertex.pos.y],
-                            texel: [vertex.uv.x * texture.width, vertex.uv.y * texture.height],
-                            tint: color.map(|value| f32::from(value) / 255.0),
-                        }
-                    })
-                    .collect();
-                let mesh_triangles: Vec<[Vertex; 3]> = mesh
-                    .indices
-                    .as_chunks::<3>()
-                    .0
-                    .iter()
-                    .map(|indices| {
-                        [
-                            vertices[indices[0] as usize],
-                            vertices[indices[1] as usize],
-                            vertices[indices[2] as usize],
-                        ]
-                    })
-                    .collect();
-                renderer.draw_clipped(clip, 1.0, |renderer| {
-                    renderer.draw_triangles_with_color_mode(&texture, &mesh_triangles, blend, mode)
-                });
-                meshes += 1;
-                triangles += mesh_triangles.len();
-            }
-            Ok(())
+        let mut counts = (0, 0);
+        let result = super::effects::parse(primitives).and_then(|nodes| {
+            renderer.draw_screen_space(physical, logical, |renderer| {
+                counts = self.draw_nodes(
+                    renderer,
+                    images,
+                    &nodes,
+                    groups::View::screen(physical, logical),
+                    0,
+                )?;
+                Ok(())
+            })
         });
         for id in frees {
             if let Some(texture) = self.textures.remove(&id) {
                 renderer.destroy_texture(&texture);
             }
         }
-        result.map(|()| (meshes, triangles))
+        result.map(|()| counts)
+    }
+    fn draw_mesh(
+        &self,
+        renderer: &mut Renderer,
+        images: &Images,
+        mesh: &egui::Mesh,
+        clip: Rect,
+        view: groups::View,
+    ) -> Result<(usize, usize), String> {
+        let clip = clip.intersect(view.clip).translate(-view.origin);
+        let Some(clip) = clip_scissor(clip, view.physical, view.logical) else { return Ok((0, 0)) };
+        if mesh.indices.is_empty() {
+            return Ok((0, 0));
+        }
+        if !mesh.is_valid() {
+            return Err("GPU UI produced an invalid mesh".to_owned());
+        }
+        let (texture, blend, mode, sampling, filter, shadow) = match mesh.texture_id {
+            TextureId::Managed(_) => (
+                self.textures
+                    .get(&mesh.texture_id)
+                    .cloned()
+                    .ok_or("GPU UI mesh references a missing managed texture")?,
+                BlendMode::Normal,
+                TextureColorMode::Texture,
+                None,
+                ColorFilter::default(),
+                None,
+            ),
+            TextureId::User(id) => {
+                let material =
+                    images.material(id).ok_or("GPU UI mesh references a retired material")?;
+                let (texture, owned) = match material.source {
+                    TextureSource::Image(id) => {
+                        images.texture(id).ok_or("GPU UI mesh references a retired image")?
+                    }
+                    TextureSource::Managed(id) => (
+                        self.textures
+                            .get(&TextureId::Managed(id))
+                            .cloned()
+                            .ok_or("GPU UI mesh references a missing managed texture")?,
+                        false,
+                    ),
+                };
+                let mask = material.mask;
+                (
+                    texture,
+                    material.blend(),
+                    if mask { TextureColorMode::AlphaMask } else { TextureColorMode::Texture },
+                    owned.then_some(mask),
+                    material.filter(),
+                    material.shadow(),
+                )
+            }
+        };
+        if let Some(nearest) = sampling {
+            renderer.set_texture_sampling(&texture, nearest);
+        }
+        let vertices: Vec<Vertex> = mesh
+            .vertices
+            .iter()
+            .map(|vertex| {
+                let color = vertex.color.to_srgba_unmultiplied();
+                Vertex {
+                    position: [vertex.pos.x - view.origin.x, vertex.pos.y - view.origin.y],
+                    texel: [vertex.uv.x * texture.width, vertex.uv.y * texture.height],
+                    tint: color.map(|value| f32::from(value) / 255.0),
+                }
+            })
+            .collect();
+        let mesh_triangles: Vec<[Vertex; 3]> = mesh
+            .indices
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|indices| {
+                [
+                    vertices[indices[0] as usize],
+                    vertices[indices[1] as usize],
+                    vertices[indices[2] as usize],
+                ]
+            })
+            .collect();
+        renderer.draw_clipped(clip, 1.0, |renderer| {
+            let draw = |renderer: &mut Renderer| {
+                renderer.draw_triangles_with_color_mode(&texture, &mesh_triangles, blend, mode);
+            };
+            let filtered = |renderer: &mut Renderer| {
+                if filter == ColorFilter::default() {
+                    draw(renderer);
+                } else {
+                    renderer.draw_color_filtered(filter, draw);
+                }
+            };
+            if let Some(shadow) = shadow {
+                renderer.draw_image_shadow(shadow, filtered);
+            } else {
+                filtered(renderer);
+            }
+        });
+        Ok((1, mesh_triangles.len()))
     }
 }
 
 impl Drop for GpuPainter {
     fn drop(&mut self) {
+        self.groups.destroy(&self.gl);
         for texture in self.textures.values() {
             Renderer::delete_ui_texture(&self.gl, texture);
         }

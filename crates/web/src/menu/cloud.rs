@@ -1016,18 +1016,33 @@ impl CloudView {
             self.paint_rows(frame, ui, content, view, admitted, actions)?;
             self.paint_footer(frame, ui, view, footer_height, admitted, actions)?;
         }
-        let skull = Rect::from_min_size(view.min + Vec2::new(11.0, 7.0), Vec2::new(31.0, 33.0));
+        let coarse = web_sys::window()
+            .and_then(|window| window.match_media("(pointer: coarse)").ok().flatten())
+            .is_some_and(|query| query.matches());
+        let skull = if coarse {
+            Rect::from_min_size(view.min + Vec2::splat(4.0), Vec2::splat(44.0))
+        } else {
+            Rect::from_min_size(view.min + Vec2::new(11.0, 7.0), Vec2::new(31.0, 33.0))
+        };
         let response =
-            widgets::interact(frame, ui, "cloud-menu", "Menu", "button", skull, admitted);
+            widgets::interact_unstyled(frame, ui, "cloud-menu", "Menu", "button", skull, admitted);
+        let paint = frame.with_brightness(
+            if admitted && (response.hovered() || frame.focus_visible(&response)) {
+                1.28
+            } else {
+                1.0
+            },
+        );
         self.art.ui.paint_centered(
-            frame,
+            &paint,
             ui.painter(),
             42,
             skull.center(),
-            1.0,
+            if coarse { 1.161_290_3 } else { 1.0 },
             0.0,
             Color32::WHITE,
         )?;
+        widgets::focus_outline(frame, ui, &response, 1.0, 2.0, widgets::color(0xfff0b7));
         if response.clicked() && admitted {
             actions.push("cloud-menu".to_owned());
         }
@@ -1391,8 +1406,7 @@ impl CloudView {
                 }
                 if self.tab == Tab::Parties
                     && self.account.as_ref().is_some_and(|a| a.developer_access)
-                {
-                    if let Err(error) = rows::developer_presence(
+                    && let Err(error) = rows::developer_presence(
                         frame,
                         ui,
                         &self.players,
@@ -1403,9 +1417,9 @@ impl CloudView {
                         list.width(),
                         enabled,
                         actions,
-                    ) {
-                        result = Err(error);
-                    }
+                    )
+                {
+                    result = Err(error);
                 }
             });
         result

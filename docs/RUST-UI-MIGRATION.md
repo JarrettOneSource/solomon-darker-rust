@@ -119,6 +119,74 @@ function and matches the retained Hub-region fixture. Actual `58df78d` observes 
 Office target with transition `-1`. Acceptance must assert that completed arrival exactly,
 without broadening a tolerance or adding a fixed settling delay.
 
+## GPU color-filter contract
+
+Pinned Website `fa08ae24` uses image filters as interaction state, including
+`main-menu.css` skull `brightness(1.28)` and name-die `brightness(1.25)`,
+`hall-of-fame.css` row-toggle `brightness(1.35)` with 120ms ease-out, and
+`native-ui/native-ui-settings.css` row hover/focus `brightness(1.16)` and disabled
+`saturate(0.35) brightness(0.62)`. The pre-migration Rust CSS additionally retains
+native-button focus `brightness(1.2)` and Create glyph hover/focus `brightness(1.3)`.
+These values belong to their feature controllers; the shared material supplies the
+filter operation. The existing byte vertex tint cannot express RGB gain above 1, and
+the Arena's separate arithmetic-average saturation is a different operation.
+
+The [Filter Effects 1 specification](https://drafts.csswg.org/filter-effects/)
+defines these CSS functions in sRGB, on non-premultiplied color, with each result
+clamped. The GPU material applies saturation using the specified .213/.715/.072
+matrix, then brightness, before the renderer's blend premultiplication. Alpha is
+preserved. Direct GPU text/outline colors use the same operation through
+`UiFrame::filtered_color`; bitmap text and stock images inherit the scoped material.
+Descriptors are shared through one UI frame's ordered passes and retired at its next
+begin, so animated gains allocate no additional textures or persistent descriptors.
+
+`tools/browser-smoke/gpu-color-filter.cjs` compiles the canonical Rust shader unchanged
+and compares its pixels to native Canvas color filtering. Six cases pass, including
+gain above 1 on translucent pixels, disabled-row saturation/brightness, CSS luminance,
+black/identity alpha and restoration of the ordinary world shader path. The previous
+shader fails the first case by 31 channel bytes. These focused shader results do not
+establish feature-controller wiring or composed hover/focus appearance; those remain
+part of the menu owner's actual browser acceptance.
+
+The Create name die also retains Source `drop-shadow(0 1px 1px #000)` with outer
+opacity 0.78, changing to `brightness(1.25)` and a gold `drop-shadow(0 0 3px .../0.55)`
+on hover. Its offsets and Gaussian sigma are design-stage units, independent of the
+art's 0.525 scale. `StockAtlas::paint_shadowed` submits one padded quad: the shader
+convolves only the selected record's alpha, composites the filtered source over that
+shadow, then applies group opacity. Sampling clamps to the record's texel centers and
+returns transparent outside its bounds, preventing neighboring atlas records from
+entering the blur. It creates no additional texture or persistent effect cache.
+The canonical-shader probe now passes ten cases, including an asymmetric mirrored crop.
+Native idle/hover shadow comparisons differ by at most 5/2 channel bytes; the exact
+group-opacity case differs by at most 1 and the mirrored-offset case by at most 6.
+These Gaussian cases allow the specification's finite-kernel implementation variance;
+the original source without a shadow material fails the atlas-isolation case by 199.
+
+The retained authored-enemy producer applies its filter and outer opacity to the whole
+root: the background sprite, name span and health rail. Rust `c14068b3`
+`mod_world_overlays.rs:183–188,205` and `mod-world.css` establish that boundary. Its
+original sources are pinned `mod-ui/ModEnemies.tsx:58,73–74` and `mod-enemies.css`.
+blur is `max(light_radius/10,4)`; the name also has two black text shadows. CSS filter
+drop-shadow takes Gaussian sigma directly; text-shadow uses half its blur radius,
+so the name's 2/3px text shadows use sigma1/1.5. A sprite-only filter does not reproduce
+that source group.
+
+`UiFrame::paint_group` captures the submitted GPU geometry, including managed font tiles,
+into a bounded reusable target. Nested name shadows compose before the parent enemy
+shadow and outer opacity. The depth-indexed pool reuses source/composite targets across
+frames and destroys them with the painter. It clips after the filter while preserving
+outside source pixels that contribute to the visible blur. Graphics uses standard
+SourceOver alpha only within these captures, unpremultiplies target samples once, and
+restores the enclosing framebuffer, projection and native canvas blend factors. No
+HTML/control rasterization is involved. The small graphics `composition_probe` example
+and `gpu-composition.cjs` exercise the actual renderer's nesting and hand-derived pixels;
+their runtime and the authored producer proof remain pending the canonical build.
+
+Enemy names and authored shop labels request Alegreya600. Pinned `main.tsx` imports
+only its400/500/700 faces, so `Alegreya Semibold` keeps that native CSS600 request
+against the same loaded faces. A browser font-only probe confirms its glyph pixels
+and width exactly match700 and differ from500. No new face or startup resource is added.
+
 ## World notifications recovered before repair
 
 The visual-producer inventory found `crates/web/src/loot/messages.rs` still constructing
@@ -186,6 +254,23 @@ Confidence is high for this complete pinned-source contract and the cited recove
 geometry/lifecycle. Unknown until measured: composed GPU glyph clipping/blending, actual
 earned-event browser visibility and live hosted event delivery. The source fixture and
 renderer/controller checks pass; integrated production-event browser proof remains required.
+
+## Scaled GPU hit geometry
+
+Pinned `GameHud.tsx:249–258` places the HUD under its viewport/UI scale;
+`hub.css:1097–1114,1298` gives the phone Inventory and Skills controls their
+130px local bounds and custom transforms. The actual pointer target follows
+that painted transform. On24382f0, the ordinary844×390 touch journey completes
+College and Create, then its first visible Inventory tap never opens the book.
+`record_rotated_rect` records globally transformed rectangular bounds but retains
+local center/size in the exact rotated shape. Touch ownership tests a global
+point against that local shape and drops the event; mouse dispatch does not
+have that ownership admission requirement. The shape must use the same layer
+translation and uniform scale as its bounds, while preserving local rotation
+and rejecting points outside the rotated rectangle. The native regression
+covers the visible center, an interior edge and an exterior point under both
+zero and45-degree rotation. Actual tap and responsive family proof remain
+required; no larger rectangular hit fallback is permitted.
 
 ## Acceptance matrix
 
@@ -276,15 +361,6 @@ weaker checkpoint assertion substitutes for it. The actual save and GPU snapshot
 preserved, and the three independent media aborts remain fatal. A second seed was not
 attempted after this bounded failure.
 
-The repaired exact-save edge and browser close owner are now verified together by the
-complete `common-browser/88c3dfe/boneyard-stdio-fixed` rerun: two independently generated
-named worlds, native source/geometry, textured scenery, inward movement, Pause freeze,
-Leave/Continue, exact subsequent paused checkpoint and the same wizard/run/seed all pass.
-Both current-art world/HUD screenshots were reviewed. The process gate also passes:
-Playwright disconnects, owned Chrome exits zero gracefully, cleanup errors are empty and
-the driver exits zero without forced termination. Earlier 58df save failure and both 88
-teardown failures remain unchanged as the retained red evidence.
-
 Family evidence is likewise qualified. `menu-runtime-58df78d/hall` passes its actual
 journey with no browser errors; reviewed native/compact screenshots prompted a header
 gradient/border source correction awaiting rebuild. Settings bindings pass, while real
@@ -312,15 +388,15 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | 88c3dfe rapid inputs and complete two-seed Boneyard Pause/exact-save/Leave/Continue pass cleanly; common input neutral handoff passes; complete shared variants remain pending |
 | Settings root/cloud/performance; sliders/toggles, permissions, saved preferences, nested account policies, mobile sharing | menus | `menu/settings/**`; `settings-parity.cjs`, `menus.cjs`, `fullscreen.cjs` | 88c3dfe Settings five-group driver passes cleanly, including pointer slider and real reload; account/mobile permission variants remain owned by their family routes |
 | Control bindings; every action, duplicate swaps, Escape, modified-key rejection, allowed mouse bindings, reverse hotbar | menus + root input | `menu/settings.rs`, canonical `GameControls`; `menus.cjs`, `gameplay-input.cjs`, `hud-input.cjs` | 58df78d common gameplay-input fully passes with exact reads 8/8, raw native suspensions preserved; binding witnesses retained, complete current HUD/controller variants pending |
-| Save Transfer; multiple native/JSON/CFG/SAV/ZIP imports, inspected warnings, replace/cancel/busy/error, real export ZIP/download | menus | `menu/settings/transfer.rs`; `save-transfer.cjs`, `save-tools.cjs` | GPU source integrated; native file/confirmation/export journey pending composed browser proof |
-| Hall Local/Global × four boards; top100 and current row, portrait/orb, expand/scroll/pan, ranks/perks, loading/retry/stale result | menus | `menu/hall.rs`; `hall.cjs`, `hosted-score.cjs` | 58df78d Hall driver passes/errors empty; native/compact screenshots reviewed; queued gradient/border correction and hosted variants pending |
+| Save Transfer; multiple native/JSON/CFG/SAV/ZIP imports, inspected warnings, replace/cancel/busy/error, real export ZIP/download | menus | `menu/settings/transfer.rs`; `save-transfer.cjs`, `save-tools.cjs` | 58df78d save-transfer-native-welcome passes all five native chooser/preview/Cancel/Replace/download/re-import/reload groups with the same Felix run and errors[]; malformed/busy/error variants remain pending |
+| Hall Local/Global × four boards; top100 and current row, portrait/orb, expand/scroll/pan, ranks/perks, loading/retry/stale result | menus | `menu/hall.rs`; `hall.cjs`, `hosted-score.cjs` | 88c3dfe Hall driver passes/errors[] with reviewed native/compact screenshots; later Source style/group corrections and hosted earned-score variants remain pending |
 | Join directory; normalized code, refresh, request/admission/cancel, private/mod/cheat/location policy, list scroll | menus | `menu/join.rs`; `join-party.cjs`, `hosted-social.cjs` | GPU source integrated; actual host/directory admission pending composed browser proof |
 | Routing consent; vanilla/private/mod/cheat, added/missing/changed save mods, downloads/busy/error/retry and close invalidation | menus + root | `menu/routing.rs`, host routing; `cheat-consent.cjs`, `cloud-subscription.cjs`, `hosted-session.cjs` | GPU source integrated; consent/retry plus native authority proof pending composed browser proof |
 | Dark Cloud frame/tabs; Mods/Subscribed/Parties/Mobile UI/Boneyards, horizontal reveal, source-supported search/sort tools, empty/loading/error, account availability | menus; root Shelf | `menu/cloud/**`; `dark-cloud.cjs`, `cloud-subscription.cjs`, `authoring-shelf.cjs` | GPU source integrated; actual five-tab and portrait Cloud journey pending composed browser proof |
-| Cloud mods/detail; thumbnail lifecycle, subscription mutation/progress, screenshot contain/swipe/wrap, metadata/releases, comments/UTF16 limit/delete, preserved focus/scroll | menus | `menu/cloud/detail.rs`, real Website storage; `dark-cloud.cjs`, `cloud-subscription.cjs` | GPU source integrated; actual remote assets/subscriptions/comments pending composed browser proof |
-| Boneyard Shelf; local/cloud content, New/Import/Edit/Test/Delete and Keep, Test/Return/editor handoff and disposal | root | `game/hosted/boneyards.rs`; `authoring-shelf.cjs`, `authored-content.cjs`; export belongs to the external editor | 58df78d New/editor/cloud save/JSON/native imports pass; pointer Keep focus red; queued repair and Test/Return/Delete variants pending |
-| HUD resources/XP/concentrations, native/mod belt quantity/cooldown, three banks, portraits/map, tutorial gates, custom mobile positions | HUD | `hud/**`, `hotbar.rs`; `hud-input.cjs`, `hud-selector.cjs`, `belt-pull-off-check.cjs` | 58df78d desktop selector passes; 844 × 390 central/bottom HUD clipped, queued transform correction; touch/cancel and remaining variants pending |
-| Inventory and native rank-book confirmation; result/OKAY/Escape, retained pause/audio, column-first cells, equipment/protected clothing/third ring, nested Sack pages/back/rename, animation lock, drag/drop/restoration flybys, stats/set/wizard preview | HUD | `player_panels/{inventory*,skill_book_feedback}`, `sack_*`; `player-panels.cjs`, `skill-book-result.cjs`, `responsive.cjs`, `save-resume.cjs` | 58df panel/equip/Unforge/Skills and Sack/font-quads retained; 88c3dfe ordinary Unicode Sack reload/Continue now passes behavior without trap, clean replacement-observed and book/touch gates pending |
+| Cloud mods/detail; thumbnail lifecycle, subscription mutation/progress, screenshot contain/swipe/wrap, metadata/releases, comments/UTF16 limit/delete, preserved focus/scroll | menus | `menu/cloud/detail.rs`, real Website storage; `dark-cloud.cjs`, `cloud-subscription.cjs` | 58df78d cloud-content-view proves actual protected screenshot contain/wrap/thumbnail/Arrow and1000-UTF16 handling; newline omission blocks the complete comment journey until the shared native editor lands; rebuilt style/subscription proof pending |
+| Boneyard Shelf; local/cloud content, New/Import/Edit/Test/Delete and Keep, Test/Return/editor handoff and disposal | root | `game/hosted/boneyards.rs`; `authoring-shelf.cjs`, `authored-content.cjs`; export belongs to the external editor | 24382f0 Shelf passes all nine actual behavior groups, including Test ticks/Return, Keep/Delete, lossless imports and cloud independence; final gate retains seven media cancellations from the ordinarily removed editor-test frame, awaiting root's exact frame-removal observation |
+| HUD resources/XP/concentrations, native/mod belt quantity/cooldown, three banks, portraits/map, tutorial gates, custom mobile positions | HUD | `hud/**`, `hotbar.rs`; `hud-input.cjs`, `hud-selector.cjs`, `belt-pull-off-check.cjs` | 24382f0 original HUD input passes all nine geometry/wide/controller/blur/portrait/touch/cancel checks, errors[] and graceful exit0; corrected label art awaits the group-enabled build; 5f87 phone Inventory tap and genuine potion drag pass, fixed-toolbar navigation repair awaits proof |
+| Inventory and native rank-book confirmation; result/OKAY/Escape, retained pause/audio, column-first cells, equipment/protected clothing/third ring, nested Sack pages/back/rename, animation lock, drag/drop/restoration flybys, stats/set/wizard preview | HUD | `player_panels/{inventory*,skill_book_feedback}`, `sack_*`; `player-panels.cjs`, `skill-book-result.cjs`, `responsive.cjs`, `save-resume.cjs` | 58df panel/equip/Unforge/Skills and Sack/font-quads retained; 88c3dfe ordinary Unicode Sack reload/Continue passes behavior without trap; 5f87 real phone drag passes then first Equip fails (48px clip/layer repair committed); clean reload, imported-book confirmation/+1 and remaining touch gates pending |
 | Skills/quickbar; learned/ranked/weld pages, stock hover, every bank binding, skill/item drag and belt pull-off | HUD | `player_panels/skills.rs`, `skill_selector.rs`; `player-panels.cjs`, `hud-selector.cjs`, `mod-skills.cjs` | GPU source integrated; real learned/drag/bank/pull-off journey pending composed browser proof |
 | College services; all shops/perks/prices, insufficient gold, storage, paid Dowse/ref/roll/Done, Unforge confirmation/results, dye admission/swatches/trim/cloth | HUD | `player_panels/{services,crafting,sack_rename}.rs`; `hub-services.cjs`, `player-panels.cjs`, `responsive.cjs` | 58df78d real purchase/storage/27 Hagatha offers/insufficient Dowse/Unforge pass before fatal media errors; paid Dowse/dye variants pending |
 | NPC chat/books/boasts/authored choices; history, progressive text/audio/acceleration, selector list drag/wheel/controller, notebox/error | HUD | `player_panels/{dialogue,notebox}.rs`; `hub-dialogue-rooms.mjs`, `menu-journey.cjs` | 58df78d College dialogue plus five boasts and keyboard scroll pass before media errors; complete books/authored/selector/error variants pending |
@@ -332,14 +408,54 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Chat; Boneyard/Global/Party/Whisper, drafts/unread/fade/channel cycle, IME, author card and disconnect/reset | social | `social/chat.rs`; `hosted-social.cjs` | 58df78d actual Global delivery/author card pass; complete channels/IME/reset and fatal media gate pending |
 | Shared Pause/resume waiting; other-owner activity, dim/reveal, countdown/progress/rejoin; spectator rail/target/respawn | social | `shared_gameplay.rs`, `spectator.rs`; `hosted-session.cjs`, `spectator.cjs` | GPU source integrated; actual shared pause/respawn/target lifecycle pending composed browser proof |
 | Cheats/Console/developer observer; permissions, all resource/skill/world/dev controls, Lua submit/history/results/error/clear and bot targets | social | `cheats/**`, `observer.rs`; `authored-content.cjs`, `learned-bot.cjs`, `cheat-consent.cjs` | GPU source integrated; actual authorized Console/observer/bot journey pending composed browser proof |
-| Mobile editor; all six anchors/elements, drag/resize/rotate/snap, zoom/pan/pinch, multi-touch/cancel, undo/redo/reset/pages/dock/presets/save | social | `mobile_editor/**`, `sim/mobile_ui/**`; `mobile-editor.cjs`, `responsive.cjs` | GPU source integrated; actual parent-layer touch/edit/save journey pending composed browser proof |
-| Authored mod surfaces; Cast/Shop/Reforge/Portal, skills/subskills/offers/quickbar, minimap actions, mounted HUD text/image/bar/button, party attributes | social | `mod_panels.rs`, `mod_skills.rs`, `mod_skill_quickbar.rs`, `mod_minimap.rs`, `mod_world_overlays/**`; `authored-content.cjs`, `mod-skills.cjs` | GPU source integrated; actual admitted authored widgets/assets/retirement pending composed browser proof |
+| Mobile editor; all six anchors/elements, drag/resize/rotate/snap, zoom/pan/pinch, multi-touch/cancel, undo/redo/reset/pages/dock/presets/save | social | `mobile_editor/**`, `sim/mobile_ui/**`; `mobile-editor.cjs`, `responsive.cjs` | 58df78d actual drag/Undo/Redo pass before the retained pointer-focus defect; its 24382f0 correction is integrated, full editor/resize/rotation/save/cancel rerun pending |
+| Authored mod surfaces; Cast/Shop/Reforge/Portal, skills/subskills/offers/quickbar, minimap actions, mounted HUD text/image/bar/button, party attributes | social | `mod_panels.rs`, `mod_skills.rs`, `mod_skill_quickbar.rs`, `mod_minimap.rs`, `mod_world_overlays/**`; `authored-content.cjs`, `mod-skills.cjs` | 58df78d authored-r3 admits the actual package and purchases; five borrowed textures each upload once, then old scaled-HUD clipping blocks progress; 24382f0 contains that repair, remaining widgets/filtering/sampling/reset proof pending |
 | Match loading; every recovered stage, progress/cancel/failure, host admission/world materialization | root | `match_loading.rs`; `boneyard.cjs`, `hosted-session.cjs`, `deployment-restart.cjs` | 88c3dfe complete two-seed ordinary Map/native-world/Leave/Continue/exact-save journey passes, including clean owned browser retirement; full stage/cancel/failure/host variants remain pending |
 | Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | GPU source integrated; real fullscreen/unsupported/standalone activation pending composed browser proof |
 | Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | GPU source integrated; actual update/close failure plus packaged journey pending composed browser proof |
-| Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | GPU source integrated; native recovery regressions retained; actual update journey pending composed browser proof |
-| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | 88c3dfe mandatory named/rapid smoke clean; 58df common input fully clean/exact8/8 with strict raw media evidence; touch/resize/accessibility and focused family reruns pending |
+| Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | Three actual recovery branches pass/errors[]/graceful exit0: changed58→243 (deployment-changed-58-to-243-r2), same game243/Website6ad, and sleeping sequence4→5; checkpoint/ACK/retirement/negative publications/automatic replacement/Continue witnesses retained; packaged/update-notice variants remain separate pending gates |
+| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | 88c3dfe mandatory named/rapid smoke clean; 58df common input clean/exact8/8; 24382f0 full HUD touch/controller/blur/cancel and audio clean; real phone first-Equip clip/layer repair plus complete native editor/family input reruns remain pending |
 | No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Joined source producer contract 3/3; complete runtime surface/input proof remains pending |
+
+## Saved-session startup allocation
+
+Ordinary saved Sack and College reloads on58df78d trap first inside the generated
+`PlayerState` JSON deserializer, before later loader diagnostics encounter the damaged stack.
+The natural save, browser IndexedDB state and first stack are retained under
+`reload-58df78d/` and `hud-browser-58df78d/sack-reload-witness/` in the task evidence.
+The actual WASM prologues reserve525,760 bytes for `Game::load` and311,248 for `run`
+before decoding; player deserialization adds66,992 bytes and its map visitor another100,368,
+plus the containing save/participant frames. These overlap the unchanged1 MiB stack.
+
+Resource construction and saved-session admission must be sequential lifecycle phases.
+The constructor returns the permanent shared Game owner; saved-state parsing runs after
+resource-constructor temporaries retire. Simulation/save structures, validation, defaults
+and the WASM stack configuration retain their existing contracts. Real reload/Continue
+with the naturally generated save is the regression witness; a compile alone is insufficient.
+
+## Ordered UI dispatch
+
+The actual Settings binding journey reproduced a binding click followed by Escape being
+interpreted in reverse order. The shared GPU batch previously handled every queued key before
+resolving pointer clicks, and `Game::frame` consumed typed HUD/panel actions before the GPU
+pass produced them. This also delayed opening Inventory until after a following Escape.
+The Source's browser callbacks commit each event before dispatching the next event.
+
+`GpuUi` now separates ordered input/layout commits from the final GPU submission. The Game
+owner commits controller actions and refreshes accepted-state models between those batches;
+transport polling, physical gameplay sampling and fixed simulation advancement retain one
+owner per browser frame. World rendering precedes the final UI draw. Texture upload/retirement
+is finalized even when a controller fails. Returning to the editor stops later queued input
+and gameplay work in the same frame while still retiring pending textures. Observer and
+deployment barriers retain their read-only/held semantics. The binding/text-focus batch regressions and actual rapid
+Settings/HUD journeys qualify this seam; the latter remain pending the combined rebuild.
+
+The ordinary58df78d Boneyard journey preserved world entry, movement, Pause/Leave and
+Continue, then exposed a local durability regression on its second Escape: live tick2923
+but saved tick2910. `MenuUi::paint` can open Pause before its typed-action commit, so sampling
+the old blocking state inside that commit misses the edge. The Game owner now captures
+that state before each input pass, preserving the existing local pause-save contract.
+The exact completed-save assertion remains the acceptance check; no timing tolerance is added.
 
 ## Test ownership and stopping checks
 
@@ -352,11 +468,12 @@ journeys. HUD and social own their family journeys. Root owns final joined execu
 packaged/hosted/authoring integration. Exact stable IDs and snapshot schema are in the task's
 `gpu-ui-contract.md`; that is a development handoff, not an accepted product artifact.
 
-The common scripts are migrated to read-only GPU geometry and actual browser input. Syntax
-checks pass for the migrated common files. The architectural contract was run before the cutover:
-two tests fail for actual existing visual DOM/CSS producers and one passes; its TAP output is
-retained as `gpu-ui-contract-baseline.tap`. Current composed browser acceptance is pending,
-so no matrix surface is marked accepted from syntax/source checks alone. The independent
+The common scripts use read-only GPU geometry and actual browser input. Syntax checks pass.
+The pre-cutover source audit retained two real visual-producer failures and one passing test in
+`gpu-ui-contract-baseline.tap`; the joined producer cutover later passes all three original
+checks. The precise typography-adapter extension passes all four source checks against the
+HUD owner's implementation and still needs the joined CI gate. Actual passing and failing
+journeys are recorded above; syntax or source checks alone never accept a visual surface. The independent
 Save Tools module ABI journey remains a valid canonical-byte fixture; its real Files are
 inputs to that independent module and do not fabricate gameplay state.
 
@@ -474,3 +591,35 @@ The current GPU painter uses Georgia Bold at 9px times the full joystick scale a
 different vertical anchor. The touch repair is accepted independently; label typography,
 placement and active appearance still require the recovered Source styling and a new
 current-art visual check.
+
+The isolated `joystick-label-source/receipt.json` runs the unmodified pinned CSS and
+viewport kernel through the native browser for five viewport/UI/custom-scale/rotation
+cases. At 844 × 390 its neutral label line box is y=343.0307, height=11.0026 and bottom
+354.0333 CSS pixels; active opacity is 0.45. It qualifies typography constants only,
+not ordinary game admission or input. The correction reuses the installed Cinzel 700
+face, a unit-height GPU galley and the shared GPU group compositor for its shadow and
+opacity. [CSS Text Decoration](https://www.w3.org/TR/css-text-decor-3/#text-shadow-property)
+uses box-shadow blur values; [CSS Backgrounds](https://www.w3.org/TR/css-backgrounds-3/#shadow-blur)
+defines the corresponding Gaussian sigma as half the blur radius, so the Source 3px
+text shadow uses sigma 1.5 before joystick transforms. Passive diagnostics record the
+actual glyph mesh bounds and paint style; the original touch driver now requires
+readable glyphs, exact default-size typography and neutral/active/cancelled appearance.
+The composed build and actual corrected-art rerun are still pending.
+
+The subsequent real 5f87eb2 phone journey opens Inventory and drags the actual Health
+Potion into its addressed destination, then its first Equip tap leaves Backpack visible.
+`responsive-5f87eb2-destination/responsive-failure.{json,png}` retains errors=[], actual
+toolbar controls at y=0–40 and book/stats painted over that toolbar. The established
+compact adaptation is explicit in c14068b3 `web/player-panels.css:89–96` and
+`player_panels/viewport.rs::layout_compact_surface`: the scrolling body starts at 48px
+and clips overflow, navigation stays above it at z-index 10, and modal overlays use 12.
+This adaptation preserves the fa08 native Inventory/Skills/service designs at usable
+phone sizes; the 48px toolbar is the existing Rust behavior, not a newly invented fa08
+control. Installed egui 0.37 `containers/area.rs:610` raises an interacted Area, so giving
+both Areas Foreground order and relying on paint-call order loses the toolbar after
+body interaction. Raw panel input also ignores that body viewport and actual layer.
+Use the same 48px-excluding viewport for rendering, clipped hit regions and raw pointer/
+wheel admission, explicitly keep navigation above the body, and retain a drag's actual
+owner through release/cancel outside its viewport. Preserve normal modal ownership.
+The original failing browser path remains the acceptance case; no second tap, wait or
+weaker equipment assertion substitutes for the first-tap transition.

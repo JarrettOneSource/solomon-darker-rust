@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(process.env.PW || '/Users/jarrett/Projects/Solomon Dark/Website/frontend/node_modules/playwright-core');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const out = process.env.OUT || '/tmp';
 const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
 const observations = [];
@@ -47,15 +48,16 @@ async function saved(page) {
 
 (async () => {
   fs.mkdirSync(out, {recursive:true});
-  const server = await chromium.launchServer({headless:true,host:'127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, {headless:true,
     executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const browser = browserOwner.browser;
   let current;
   try {
     const desktop = await browser.newContext({viewport:{width:1600,height:900},ignoreHTTPSErrors:true});
     const page = await desktop.newPage(); current = page;
-    observations.push(ui.watchErrors(page)); await openEditor(page);
+    observations.push(ui.watchErrors(page));
+    await observations.at(-1).ready; await openEditor(page);
     const initialUi = await ui.readUi(page);
     assert.equal(initialUi.widgets.filter(widget => widget.id.startsWith('mobile/control:')).length, 18);
     const before = await storage(page);
@@ -91,12 +93,13 @@ async function saved(page) {
       'reset is a default-layout draft');
     await page.keyboard.press('Escape'); await saved(page);
     assert.deepEqual(await storage(page), before, 'Escape saves reset through the same store');
-    await ui.assertGpuOnly(page); await desktop.close();
+    await ui.assertGpuOnly(page); await ui.settleErrors(page); await desktop.close();
 
     const touch = await browser.newContext({viewport:{width:896,height:414},isMobile:true,
       hasTouch:true,deviceScaleFactor:1,ignoreHTTPSErrors:true});
     const phone = await touch.newPage(); current = phone;
-    observations.push(ui.watchErrors(phone)); await openEditor(phone, true);
+    observations.push(ui.watchErrors(phone));
+    await observations.at(-1).ready; await openEditor(phone, true);
     const root = ui.bounds(await ui.widget(phone, 'mobile/editor'));
     assert.deepEqual(root, {x:0,y:0,width:896,height:414}, 'touch editor fills the actual canvas');
     const initialJoystick = await transform(phone, 'leftJoystick');
@@ -131,7 +134,7 @@ async function saved(page) {
       'reopen retains the exact saved joystick transform');
     await ui.assertGpuOnly(phone);
     await phone.screenshot({path:path.join(out, 'mobile-editor-touch-restored.png')});
-    await touch.close(); current = null;
+    await ui.settleErrors(phone); await touch.close(); current = null;
     const errors = observations.flatMap(observation => observation.errors);
     assert.deepEqual(errors, []);
     const result = {checks:['18 real GPU controls','desktop drag/history/key rotation/resize',
@@ -141,26 +144,14 @@ async function saved(page) {
     console.log(JSON.stringify(result));
   } catch (error) {
     if (current) {
+      await ui.settleErrors(current);
       await current.screenshot({path:path.join(out, 'mobile-editor-failure.png')});
       fs.writeFileSync(path.join(out, 'mobile-editor-failure.json'), JSON.stringify({error:String(error),
         observations,ui:await ui.readUi(current)}, null, 2));
     }
     throw error;
   } finally {
-    let timer;
-    try {
-      await Promise.race([browser.close(), new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Playwright disconnect timed out')), 5000);
-      })]);
-      clearTimeout(timer);
-      await Promise.race([server.close(), new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Chrome close timed out')), 15000);
-      })]);
-    } catch {
-      clearTimeout(timer);
-      await Promise.race([server.kill(), new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Chrome termination timed out')), 5000);
-      })]);
-    } finally {clearTimeout(timer);}
+    fs.writeFileSync(path.join(out, 'browser-cleanup.json'),
+      JSON.stringify(await browserOwner.close(), null, 2));
   }
 })().catch(error => {console.error(error); process.exitCode = 1;});

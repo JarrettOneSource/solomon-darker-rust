@@ -16,6 +16,21 @@ pub(crate) fn rich(text: impl Into<String>, size: f32, color: Color32) -> RichTe
     RichText::new(text).font(FontId::new(size, FontFamily::Name("Georgia".into()))).color(color)
 }
 
+pub(crate) fn browser_text(
+    frame: &UiFrame<'_>,
+    painter: &Painter,
+    point: Pos2,
+    align: egui::Align2,
+    text: &str,
+    font: FontId,
+    color: Color32,
+) -> Result<Rect, String> {
+    let run = gpu_ui::font_run(frame.ctx, font, color, text, None)?;
+    let bounds = align.anchor_size(point, run.size());
+    run.paint(frame, painter, bounds.min, 1.0)?;
+    Ok(bounds)
+}
+
 pub(super) fn stage(size: (i32, i32)) -> (Pos2, f32) {
     let scale = (size.0 as f32 / 1600.0).min(size.1 as f32 / 900.0).max(0.01);
     (pos2((size.0 as f32 - 1600.0 * scale) / 2.0, (size.1 as f32 - 900.0 * scale) / 2.0), scale)
@@ -60,6 +75,7 @@ pub(super) fn stock_button(
     let scale = bounds.height() / 69.0;
     let held = enabled && crate::menu::widgets::stock_button_pressed(ui, &response);
     crate::menu::widgets::paint_stock_button_highlight(frame, ui, bounds, scale, enabled, held);
+    focus_outline(frame, ui, &response, scale);
     let mut spec = NativeUiTextSpec::new(NativeUiFontName::Menu, label, 0.0, 0.0);
     let pressed = if held { 6.0 * scale } else { 0.0 };
     spec.x = f64::from(bounds.center().x + pressed);
@@ -70,6 +86,17 @@ pub(super) fn stock_button(
     gpu_ui::native_text(frame, painter, &spec);
     frame.record(&format!("social/{id}"), label, "button", &response);
     Ok(response)
+}
+
+pub(super) fn focus_outline(frame: &UiFrame<'_>, ui: &Ui, response: &Response, scale: f32) {
+    crate::menu::widgets::focus_outline(
+        frame,
+        ui,
+        response,
+        2.0 * scale,
+        3.0 * scale,
+        Color32::from_rgba_unmultiplied(239, 209, 125, 230),
+    );
 }
 
 pub(super) fn brackets(

@@ -36,6 +36,7 @@ fn frame_codes(
             previous_widgets: &previous_widgets,
             key_codes: codes,
             blend: BlendMode::Normal,
+            color_filter: ColorFilter::default(),
             announcements: &announcements,
             rotation: egui::emath::Rot2::IDENTITY,
             translation: Vec2::ZERO,
@@ -66,6 +67,94 @@ fn focus_ring_modality_tracks_actual_pointer_and_keyboard_dispatches() {
     assert!(focus_modality(false, &[navigation]));
     assert!(focus_modality(true, &[egui::Event::PointerMoved(pos2(60.0, 60.0))]));
     assert!(focus_modality(true, &[]));
+}
+
+#[test]
+fn native_color_filter_uses_css_luminance_and_preserves_outline_alpha() {
+    let ctx = Context::default();
+    frame(&ctx, Vec::new(), |frame| {
+        let source = Color32::from_rgba_unmultiplied(255, 0, 0, 128);
+        assert_eq!(frame.filtered_color(source), source);
+        let filtered = frame.with_saturation(0.0).filtered_color(source);
+        assert_eq!(filtered.a(), source.a());
+        for channel in &filtered.to_srgba_unmultiplied()[..3] {
+            assert!(channel.abs_diff(54) <= 1);
+        }
+    });
+    let disabled = ColorFilter { brightness: 0.62, saturation: 0.35 }.rgb([1.0, 0.0, 0.0]);
+    for (actual, expected) in disabled.into_iter().zip([0.302839, 0.085839, 0.085839]) {
+        assert!((actual - expected).abs() < 0.000001);
+    }
+}
+
+#[test]
+fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_once() {
+    let ctx = Context::default();
+    let images = painter::Images::default();
+    let widgets = RefCell::new(BTreeMap::new());
+    let announcements = RefCell::new(Vec::new());
+    let input_scope = RefCell::new(None);
+    let retired_images = RefCell::new(Vec::new());
+    let previous_widgets = BTreeMap::new();
+    let editors = RefCell::new(Vec::new());
+    let editor_errors = RefCell::new(Vec::new());
+    let output = ctx.run_pass(
+        egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(100.0, 100.0))),
+            ..Default::default()
+        },
+        |ctx| {
+            let frame = UiFrame {
+                ctx,
+                images: &images,
+                widgets: &widgets,
+                previous_widgets: &previous_widgets,
+                key_codes: &[],
+                blend: BlendMode::Normal,
+                color_filter: ColorFilter::default(),
+                announcements: &announcements,
+                rotation: egui::emath::Rot2::IDENTITY,
+                translation: Vec2::ZERO,
+                input_scope: &input_scope,
+                retired_images: &retired_images,
+                focus_from_keyboard: true,
+                editor_receipts: &[],
+                editors: &editors,
+                editor_errors: &editor_errors,
+            };
+            let mut painter = ctx.layer_painter(egui::LayerId::new(
+                egui::Order::Middle,
+                egui::Id::unique("gpu-group"),
+            ));
+            painter.set_clip_rect(ctx.content_rect());
+            painter.set_opacity(0.4);
+            frame
+                .with_brightness(1.2)
+                .paint_group(
+                    &painter,
+                    GroupEffect { opacity: 0.5, shadows: Vec::new() },
+                    |frame, painter| {
+                        assert_eq!(frame.color_filter, ColorFilter::default());
+                        assert_eq!(painter.opacity(), 1.0);
+                        painter.rect_filled(
+                            Rect::from_min_size(pos2(-5.0, 20.0), vec2(20.0, 10.0)),
+                            0.0,
+                            Color32::WHITE,
+                        );
+                        Ok(())
+                    },
+                )
+                .unwrap();
+        },
+    );
+    let nodes =
+        effects::parse(ctx.tessellate(output.shapes.clone(), output.pixels_per_point)).unwrap();
+    output.drop_without_applying_deltas();
+    assert_eq!(nodes.len(), 1);
+    let effects::Node::Group { style, children, .. } = &nodes[0] else { panic!("GPU group") };
+    assert!((style.effect.opacity - 0.2).abs() < 0.00001);
+    assert_eq!(style.filter.brightness, 1.2);
+    assert!(effects::content_bounds(children).left() < 0.0);
 }
 
 fn browser_key(code: &str, key: &str) -> BrowserKey {
@@ -335,6 +424,46 @@ fn authored_clip_reports_visible_notification_ink_and_preserves_original_paint_b
     assert_eq!((visible.paint_bounds.y, visible.paint_bounds.height), (40.0, 25.0));
     assert!(!visible.is_interactive());
     assert!(!widgets.contains_key("notification:retired"));
+}
+
+#[test]
+fn rotated_control_hits_follow_the_painted_layer_scale_and_translation() {
+    for radians in [0.0, std::f32::consts::FRAC_PI_4] {
+        let ctx = Context::default();
+        let transform = egui::emath::TSTransform::new(vec2(17.0, 11.0), 0.5);
+        let center = pos2(200.0, 180.0);
+        let size = vec2(120.0, 70.0);
+        let rotation = egui::emath::Rot2::from_angle(radians);
+        let corners = Rect::from_center_size(Pos2::ZERO, size);
+        let bounds = Rect::from_points(&[
+            center + rotation * corners.left_top().to_vec2(),
+            center + rotation * corners.right_top().to_vec2(),
+            center + rotation * corners.right_bottom().to_vec2(),
+            center + rotation * corners.left_bottom().to_vec2(),
+        ]);
+        let paint = |frame: &mut UiFrame<'_>| {
+            frame.ctx.root_ui(|ui| {
+                ui.ctx().set_transform_layer(ui.layer_id(), transform);
+                let response =
+                    ui.interact(bounds, egui::Id::unique("rotated"), egui::Sense::click());
+                frame.record_rotated_rect(
+                    "rotated",
+                    "Inventory",
+                    "button",
+                    &response,
+                    center,
+                    size,
+                    radians,
+                );
+            });
+        };
+        frame(&ctx, vec![], paint);
+        let widgets = frame(&ctx, vec![], paint);
+        let control = &widgets["rotated"];
+        assert!(control.contains(transform * center), "the visible center owns touch input");
+        assert!(control.contains(transform * (center + rotation * vec2(55.0, 0.0))));
+        assert!(!control.contains(transform * (center + rotation * vec2(0.0, 40.0))));
+    }
 }
 
 #[test]

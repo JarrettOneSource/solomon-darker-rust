@@ -11,6 +11,7 @@ const {startNewGame} = require('./menu-journey.cjs');
 const {assertFullscreenToggle} = require('./fullscreen.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 
 const output = path.resolve(process.env.OUT || os.tmpdir());
 const artifact = process.env.PACKAGE && path.resolve(process.env.PACKAGE);
@@ -67,6 +68,7 @@ async function stopHost() {
 
 function observe(page) {
   const state = {frame: null, id: null, token: null, status: null, social: null, messages: [], sent: [], commands: [], results: [], saves: 0};
+  state.failureObserverReady = ui.watchRequestFailures(page, {errors}).ready;
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
     if (message.type() !== 'error') return;
@@ -111,8 +113,10 @@ const playing = state => state.frame?.snapshot.boneyard && !state.frame.host.loa
   && !state.frame.host.resume_grace && !state.frame.host.pause;
 
 async function loaded(page, state) {
+  await state.failureObserverReady;
   state.status = null;
-  await page.goto(`${origin}/?host=1`);
+  if (page.url() === 'about:blank') await page.goto(`${origin}/?host=1`);
+  else await ui.observeDocumentReplacement(page, () => page.goto(`${origin}/?host=1`));
   await ui.ready(page,{timeout:120000});
   await waitUntil(() => state.status, 'native title inspection');
   // Socket delivery precedes the next application frame that installs title prompts.
@@ -129,7 +133,7 @@ async function continueGame(page) {
 async function gameplayInputReady(page) {
   // Socket delivery can precede the frame that removes the client's loading/grace hold.
   await page.bringToFront();
-  await ui.waitForUi(page,snapshot => snapshot.surface === 'hidden' && !snapshot.input_scope
+  await ui.waitForUi(page,snapshot => snapshot.surface === 'hidden' && !snapshot.inputScope
     && !snapshot.capture.text && ui.findWidget(snapshot,'hud:health')
     && !ui.findWidget(snapshot,'shared/pause') && !ui.findWidget(snapshot,'shared/resume'),
     'actual HUD and world input handoff');
@@ -200,16 +204,18 @@ async function approachSolomon(page, state) {
 
 (async () => {
   let browser;
+  let browserOwner;
   let first;
   let second;
   try {
     fs.mkdirSync(output, {recursive: true});
     await startHost();
-    browser = await chromium.launch({headless: true,
+    browserOwner = await launchOwnedBrowser(chromium, {headless: true,
       executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+    browser = browserOwner.browser;
     async function client() {
-      const context = await browser.newContext({viewport: {width: 1600, height: 900}});
+      const context = await browser.newContext({viewport: {width: 1280, height: 720}});
       await context.route('**/*', route => {
         const url = route.request().url();
         requests.add(url);
@@ -225,6 +231,12 @@ async function approachSolomon(page, state) {
     await startNewGame(first.page, {name: 'Felix', element: 'fire', discipline: 'body'});
     checks.push('first real College admission');
     console.log(checks.at(-1));
+    await ui.click(first.page,'hud:inventory');
+    await ui.widget(first.page,'panel:surface:inventory');
+    await first.page.screenshot({path:path.join(output,'native-scaled-inventory.png')});
+    await ui.click(first.page,'panel:close');
+    await ui.noWidget(first.page,'panel:surface:inventory');
+    checks.push('scaled desktop HUD Inventory opens its actual book through real pointer input');
     second = await client();
     await startNewGame(second.page, {name: 'Caius', element: 'ether', discipline: 'arcane'});
     await waitUntil(() => first.state.frame.snapshot.participant_order.length === 2
@@ -255,12 +267,17 @@ async function approachSolomon(page, state) {
     checks.push('accepted movement, input acknowledgements and peer state');
 
     await ui.click(first.page,(await ui.byLabel(first.page,'Fomentius',{role:'button'})).id);
-    const buy = await ui.byLabel(first.page,'Buy Health Potion for 150 gold',{role:'button',prefix:'panel:'});
+    const firstHealthPotion = snapshot => snapshot.widgets
+      .filter(widget => widget.role === 'button' && widget.id.startsWith('panel:shop:')
+        && widget.label === 'Buy Health Potion for 150 gold')
+      .sort((a,b) => a.z-b.z)[0];
+    const stock = await ui.waitForUi(first.page, firstHealthPotion, 'the first visible Health Potion stock row');
+    const buy = firstHealthPotion(stock);
     await ui.click(first.page,buy.id); await ui.click(first.page,buy.id);
     await ui.byLabel(first.page,'Health Potion, quantity 2',{role:'button',prefix:'panel:item:'});
     await waitUntil(() => participant(second.state, first.state.id).player.economy.gold === 350, 'accepted purchase on both clients');
     await ui.click(first.page,'panel:close');
-    await ui.noWidget(first.page,'panel:navigation');
+    await ui.noWidget(first.page,'panel:surface:inventory');
     checks.push('real inventory transaction and authoritative feedback');
     await first.page.screenshot({path: path.join(output, 'native-college.png')});
 
@@ -283,7 +300,7 @@ async function approachSolomon(page, state) {
       assert.deepEqual(position(first.state), chatPosition, 'typing chat cannot move the wizard');
       assert.equal((await ui.readUi(first.page)).surface, 'hidden');
       await first.page.keyboard.press('Escape');
-      await ui.noWidget(first.page,'panel:navigation');
+      await ui.noWidget(first.page,'panel:surface:inventory');
       checks.push('real chat delivery and keyboard focus above Inventory');
 
       await ui.click(first.page,'social/party');
@@ -322,7 +339,7 @@ async function approachSolomon(page, state) {
     await ui.widget(second.page,'panel:surface:inventory');
     await ui.click(first.page,(await ui.byLabel(first.page,'Enter the Boneyard',{role:'button'})).id);
     await waitUntil(() => playing(first.state) && playing(second.state), 'both Boneyard renderers and resume readiness', 120000);
-    await ui.noWidget(second.page,'panel:navigation');
+    await ui.noWidget(second.page,'panel:surface:inventory');
     assert.equal(first.state.frame.snapshot.boneyard.run_id, second.state.frame.snapshot.boneyard.run_id);
     checks.push('shared Boneyard loading, old shop cleanup and renderer readiness');
     console.log(checks.at(-1));
@@ -386,6 +403,7 @@ async function approachSolomon(page, state) {
       await ui.waitForUi(first.page,snapshot => ui.findWidget(snapshot,'game-over:continue')?.label.includes('Continue'),
         'actual native Game Over input admission');
       await first.page.screenshot({path: path.join(output, 'native-game-over.png')});
+      for (const client of [first, second]) await ui.settleErrors(client.page);
       assert.deepEqual(errors, [], 'no errors before the intentional host shutdown');
       intentionalHostShutdown = true;
       await stopHost();
@@ -395,6 +413,7 @@ async function approachSolomon(page, state) {
       checks.push('Game Over reaches Continue readiness and leaves with its disconnected session');
     }
     assert.ok([...requests].some(url => url.endsWith('.wasm')));
+    for (const client of [first, second]) await ui.settleErrors(client.page);
     assert.deepEqual(errors, []);
     const commandEvidence = [first, second].map(client => ({commands: client.state.commands, results: client.state.results}));
     fs.writeFileSync(path.join(output, 'native-command-results.json'), JSON.stringify(commandEvidence, null, 2));
@@ -415,6 +434,7 @@ async function approachSolomon(page, state) {
     const state = {};
     for (const [name, client] of [['first', first], ['second', second]]) {
       if (!client) continue;
+      await ui.settleErrors(client.page);
       state[name] = {id: client.state.id, tick: client.state.frame?.snapshot.ticks, host: client.state.frame?.host,
         commands: client.state.commands, results: client.state.results,
         inputAcknowledgements: client.state.frame?.input_acknowledgements, recentSent: client.state.sent.slice(-12),
@@ -425,8 +445,20 @@ async function approachSolomon(page, state) {
     fs.writeFileSync(path.join(output, 'native-session-failure.json'), JSON.stringify({error: error.stack, checks, errors, shutdownResourceErrors, movementEvidence, state, hostLog}, null, 2));
     throw error;
   } finally {
-    if (browser) await browser.close();
-    await stopHost();
-    fs.rmSync(working, {recursive: true, force: true});
+    try {
+      if (browserOwner) {
+        try {
+          const cleanup = await browserOwner.close();
+          fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(cleanup,null,2));
+        } catch (error) {
+          fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(
+            error.cleanup || {error:error.message},null,2));
+          throw error;
+        }
+      }
+    } finally {
+      await stopHost();
+      fs.rmSync(working, {recursive: true, force: true});
+    }
   }
 })().catch(error => {console.error(error); process.exitCode = 1;});

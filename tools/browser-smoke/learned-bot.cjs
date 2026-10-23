@@ -7,6 +7,7 @@ const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const output = path.resolve(process.env.OUT);
 const account = JSON.parse(fs.readFileSync(process.env.ACCOUNTS))[0];
 assert.equal(account.user.id, 3, 'the isolated configured QA3 developer account');
@@ -16,9 +17,10 @@ const websiteMount = process.env.WEBSITE_MOUNT ?? url.pathname.replace(/\/$/, ''
 const tokenKey = websiteMount ? `sdr.token:${websiteMount}` : 'sdr.token';
 const state = {frame: null, id: null, botId: null, social: null, welcomes: [], lua: [],
   commands: [], samples: [], ownedSpells: [], leaveReceipts: 0, actualDeveloper: false};
-const checks = [], errors = [], requests = [], expectedNotFound = [], cancelled = [], wasm = new Set();
+const checks = [], errors = [], requests = [], expectedNotFound = [], wasm = new Set();
 const summonCode = 'return sd.bots.summon({element="water",discipline="mind"})';
 let step = 'bootstrap';
+let page;
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 const player = id => state.frame?.snapshot.participants[id];
 function mark(label) {step = label; console.log(label);}
@@ -27,7 +29,8 @@ async function until(predicate, label, timeout = 30000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
     if (await predicate()) return;
-    if (errors.length) throw new Error(`Browser/host failure while waiting for ${label}: ${errors[0]}`);
+    if (errors.length) await ui.settleErrors(page);
+    if (errors.length) throw new Error(`Browser/host failure while waiting for ${label}: ${JSON.stringify(errors[0])}`);
     await pause(40);
   }
   throw new Error(`Timed out waiting for ${label}`);
@@ -90,14 +93,15 @@ function decode(socket) {
 }
 (async () => {
   fs.mkdirSync(output, {recursive: true});
-  const server = await chromium.launchServer({headless: true, host: '127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, {headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const browser = browserOwner.browser;
   const context = await browser.newContext({ignoreHTTPSErrors: true, viewport: {width: 1280, height: 720}});
   await context.addInitScript(({key, token}) => localStorage.setItem(key, token),
     {key: tokenKey, token: account.token});
-  const page = await context.newPage();
+  page = await context.newPage();
+  await ui.watchRequestFailures(page, {errors}).ready;
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', entry => {
@@ -115,11 +119,6 @@ function decode(socket) {
       const row = await response.json();
       state.actualDeveloper = (row.user || row).developerAccess === true;
     }
-  });
-  page.on('requestfailed', request => {
-    const row = {path: new URL(request.url()).pathname, error: request.failure()?.errorText};
-    if (row.error === 'net::ERR_ABORTED' && row.path === `${websiteMount}/api/game/deployment`) cancelled.push(row);
-    else errors.push(`${row.error} ${row.path}`);
   });
   page.on('websocket', decode);
   try {
@@ -200,10 +199,11 @@ function decode(socket) {
     await ui.surface(page,'title');
     await ui.assertGpuOnly(page);
     assert.ok(state.leaveReceipts > 0);
+    await ui.settleErrors(page);
     assert.deepEqual(errors, []);
     await page.screenshot({path: path.join(output, 'bot-title-cleanup.png')});
     check('the ordinary save receipt returns to Title and closes the owning developer session');
-    const receipt = {passed: true, checks, errors, requests, expectedNotFound, cancelled, wasm: [...wasm],
+    const receipt = {passed: true, checks, errors, requests, expectedNotFound, wasm: [...wasm],
       source: 'retained Source behavior; actual Rust GPU input, native policy, Console, actor/Party/Boneyard UI',
       credentialBootstrap: 'retained isolated QA3 account token; no identity/authority injection',
       botId: state.botId, runId, welcomes: state.welcomes, commands: state.commands, samples: state.samples,
@@ -211,17 +211,16 @@ function decode(socket) {
     fs.writeFileSync(path.join(output, 'learned-bot.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify({passed: true, checks, errors}));
   } catch (error) {
+    await ui.settleErrors(page);
     await page.screenshot({path: path.join(output, 'learned-bot-failure.png')});
     fs.writeFileSync(path.join(output, 'learned-bot-failure.json'), JSON.stringify({passed: false, step,
-      error: error.stack, checks, errors, requests, expectedNotFound, cancelled, wasm: [...wasm],
+      error: error.stack, checks, errors, requests, expectedNotFound, wasm: [...wasm],
       botId: state.botId, social: state.social, welcomes: state.welcomes, commands: state.commands,
       samples: state.samples, ownedSpells: state.ownedSpells, lua: state.lua, frame: state.frame,
       ui: await ui.readUi(page)}, null, 2));
     throw error;
   } finally {
-    let timeout;
-    try {await Promise.race([(async () => {await browser.close(); await server.close();})(), new Promise((resolve, reject) => {
-      timeout = setTimeout(() => reject(new Error('Owned browser close timed out')), 15000);
-    })]);} catch {await server.kill();} finally {clearTimeout(timeout);}
+    fs.writeFileSync(path.join(output, 'browser-cleanup.json'),
+      JSON.stringify(await browserOwner.close(), null, 2));
   }
 })().catch(error => {console.error(error.message); process.exitCode = 1;});

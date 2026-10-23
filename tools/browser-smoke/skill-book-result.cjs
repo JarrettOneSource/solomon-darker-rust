@@ -7,6 +7,7 @@ const path = require('node:path');
 const zlib = require('node:zlib');
 const {chromium} = require(path.resolve(process.env.PW));
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const root = path.resolve(__dirname,'../..');
 const fixture = JSON.parse(zlib.inflateSync(fs.readFileSync(path.join(root,
@@ -46,6 +47,7 @@ async function importSave(page,value) {
   await ui.observeDocumentReplacement(page,()=>page.reload());await ui.ready(page);await ui.surface(page,'title');
   if(ui.findWidget(await ui.readUi(page),'prompt-secondary'))await ui.click(page,'prompt-secondary');
   await ui.click(page,'play');await ui.click(page,'continue');
+  await ui.surface(page,'hidden',{timeout:120000});
   await ui.widget(page,'hud:inventory',{enabled:true,timeout:120000});
   await ui.noWidget(page,'panel:skill-book-result');
 }
@@ -57,12 +59,14 @@ async function tick(page) {
 }
 
 (async()=>{
-  const browser=await chromium.launch({headless:true,
+  const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=metal','--ignore-gpu-blocklist']});
+  const {browser}=owned;
   try {
     for(const value of fixture.cases){
-      const context=await browser.newContext({viewport:{width:1600,height:900}});
+      const context=await browser.newContext({viewport:{width:1600,height:900},
+        ignoreHTTPSErrors:process.env.LOCAL_TLS==='1'});
       const page=await context.newPage();
       const observed=ui.watchErrors(page);
       const accepted={frame:null,id:null};
@@ -116,6 +120,7 @@ async function tick(page) {
           result.reads.push({bookId,skillId:outcome.skillId,sequence:outcome.sequence,dismiss:index===0?'OKAY':'Escape'});
         }
         await ui.observeDocumentReplacement(page,()=>page.reload());await ui.ready(page);await ui.click(page,'play');await ui.click(page,'continue');
+        await ui.surface(page,'hidden',{timeout:120000});
         await ui.widget(page,'hud:inventory',{enabled:true,timeout:120000});
         await ui.noWidget(page,'panel:skill-book-result');
         await page.keyboard.press('KeyI');await ui.widget(page,'panel:surface:inventory');
@@ -137,8 +142,9 @@ async function tick(page) {
     }
     receipt.passed=true;
   }finally{
-    fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify(receipt,null,2));
-    await browser.close();
+    try {receipt.cleanup=await owned.close();}
+    catch(error){receipt.passed=false;receipt.cleanup=error.cleanup||{error:error.stack};throw error;}
+    finally{fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify(receipt,null,2));}
   }
   console.log(JSON.stringify(receipt));
 })().catch(error=>{console.error(error);process.exitCode=1;});

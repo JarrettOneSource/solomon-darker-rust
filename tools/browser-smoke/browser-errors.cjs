@@ -37,10 +37,15 @@ function residentSuspension(failure,captured,settled) {
 }
 
 function documentRetirement(failure,retirement) {
-  if(!retirement?.pendingRequest||!retirement.completed
-    ||retirement.beforeTargetId===retirement.afterTargetId)return null;
+  if(!retirement?.pendingRequest||!retirement.completed)return null;
+  const removal=retirement.kind==='frame-removal';
+  if(removal) {
+    if(!retirement.detached||retirement.detachedTargetId!==retirement.beforeTargetId)return null;
+  } else if(retirement.beforeTargetId===retirement.afterTargetId)return null;
   const owner=residentSuspension(failure,retirement.before,retirement.before);
-  return owner?{...owner,reason:'ready resident channel retired by the observed document replacement'}:null;
+  const reason=removal?'ready resident channel retired by the observed frame removal'
+    :'ready resident channel retired by the observed document replacement';
+  return owner?{...owner,reason}:null;
 }
 
 // All wrappers forward the original native call unchanged. There are no setters
@@ -123,16 +128,16 @@ function watchRequestFailures(page,{errors=[],warnings=[]}={}) {
     expectedSuspensions:observed.expectedSuspensions,ready:observed.ready};
 }
 
-async function observeDocumentReplacement(page,action,{frame=page.mainFrame(),timeout=45000}={}) {
+async function beginRetirement(page,frame,kind) {
   const observed=observers.get(page);
-  if(!observed)throw new Error('document replacement requires the page error observer');
+  if(!observed)throw new Error('document retirement requires the page error observer');
   await settleErrors(page);
   const snapshots=new Map(await Promise.all(page.frames().map(async owner=>[owner,
     await owner.evaluate(()=>window.__solomonResidentMedia?.()??null)])));
   const target=snapshots.get(frame);
-  if(!target)throw new Error('the replacing document has no lifecycle observation');
-  const transition={beforeTargetId:target.documentId,beforeUrl:target.documentUrl,completed:false,
-    pendingRequests:[]};
+  if(!target)throw new Error('the retiring document has no lifecycle observation');
+  const transition={kind,beforeTargetId:target.documentId,beforeUrl:target.documentUrl,completed:false,
+    pendingRequests:[],navigations:[]};
   observed.replacements.push(transition);
   for(const [request,tracked] of observed.activeMedia) {
     let within=false;
@@ -146,18 +151,62 @@ async function observeDocumentReplacement(page,action,{frame=page.mainFrame(),ti
     // request for the same URL can never inherit this retirement observation.
     observed.retiringRequests.set(request,{transition,before,pendingRequest:true});
   }
+  return {target,transition};
+}
+
+async function observeFrameRemoval(page,action,{frame,timeout=45000}) {
+  if(!frame||frame===page.mainFrame()||frame.isDetached())
+    throw new Error('frame removal requires the actual attached child frame');
+  const {target,transition}=await beginRetirement(page,frame,'frame-removal');
+  let resolveRemoval;
+  const removed=new Promise(resolve=>{resolveRemoval=resolve});
+  const onRemoval=owner=>{if(owner===frame)resolveRemoval(true)};
+  page.on('framedetached',onRemoval);
+  const timer=setTimeout(()=>resolveRemoval(false),timeout);
+  try {
+    const result=await action();
+    if(!await removed||!frame.isDetached()||page.frames().includes(frame))
+      throw new Error('the actual action did not remove its owned frame');
+    transition.detached=true;
+    transition.detachedTargetId=target.documentId;
+    transition.completed=true;
+    return result;
+  } catch(error) {
+    transition.failure=error.message;
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    page.off('framedetached',onRemoval);
+  }
+}
+
+async function observeDocumentReplacement(page,action,{frame=page.mainFrame(),timeout=45000}={}) {
+  const {target,transition}=await beginRetirement(page,frame,'document-replacement');
   let resolveNavigation;
   const navigated=new Promise(resolve=>{resolveNavigation=resolve});
-  const onNavigation=owner=>{if(owner===frame)resolveNavigation(owner)};
+  const onNavigation=async owner=>{
+    if(owner!==frame)return;
+    const event={url:owner.url()};
+    transition.navigations.push(event);
+    try {
+      const after=await owner.evaluate(()=>({documentId:performance.timeOrigin,url:location.href}));
+      event.documentId=after.documentId;
+      // A Website router may first pushState into its game route, then its
+      // ordinary bridge replaces the document. The intermediate SPA event is
+      // recorded, but supplies no document-retirement evidence.
+      if(after.documentId!==target.documentId)resolveNavigation(after);
+    } catch(error) {
+      event.observationError=error.message;
+    }
+  };
   page.on('framenavigated',onNavigation);
   const timer=setTimeout(()=>resolveNavigation(null),timeout);
   try {
     const result=await action();
-    if(!await navigated)throw new Error('the actual action did not replace its document');
-    const after=await frame.evaluate(()=>({documentId:performance.timeOrigin,url:location.href}));
+    const after=await navigated;
+    if(!after)throw new Error('the actual action did not replace its document');
     transition.afterTargetId=after.documentId;
     transition.afterUrl=after.url;
-    if(after.documentId===target.documentId)throw new Error('the action only navigated within the same document');
     transition.completed=true;
     return result;
   } catch(error) {
@@ -231,4 +280,4 @@ async function settleErrors(page) {
 }
 
 module.exports={watchErrors,watchRequestFailures,settleErrors,residentSuspension,
-  documentRetirement,observeDocumentReplacement};
+  documentRetirement,observeDocumentReplacement,observeFrameRemoval};

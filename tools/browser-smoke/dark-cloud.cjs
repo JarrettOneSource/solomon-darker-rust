@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Read actual Website content through GPU catalog/detail/modal/input controls.
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -13,14 +14,16 @@ async function revealTab(page, id) {
   throw new Error(`Cloud tab did not scroll into view: ${id}`);
 }
 (async () => {
-  const browser = await chromium.launch({headless: true,
+  const owned = await launchOwnedBrowser(chromium,{headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+  const browser = owned.browser;
   const checks = [];
   let page;
   try {
     page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
-    const {errors} = gpu.watchErrors(page);
+    const {errors, ready: errorsReady} = gpu.watchErrors(page);
+    await errorsReady;
     const catalogs = [];
     const details = [];
     page.on('response', response => {
@@ -100,11 +103,15 @@ async function revealTab(page, id) {
     await gpu.click(page, 'leave');
     await gpu.surface(page, 'title');
     await gpu.assertGpuOnly(page);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checks.push('source Cloud pause/settings return, compact landscape, portrait tabs/layout edit/admission');
     console.log(JSON.stringify({checks, actualMods: actual.size, errors}));
   } catch (error) {
     if (page) await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'dark-cloud-failure.png')});
     throw error;
-  } finally { await browser.close(); }
+  } finally {
+    try { if (page && !page.isClosed()) await gpu.settleErrors(page); }
+    finally { console.log(JSON.stringify({browserCleanup:await owned.close()})); }
+  }
 })().catch(error => {console.error(error); process.exitCode = 1;});

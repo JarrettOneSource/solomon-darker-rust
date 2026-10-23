@@ -3,6 +3,17 @@
 use super::{InventoryPreviewPlacement, PanelEvent, PlayerPanel, PlayerPanels};
 use crate::gpu_ui::UiFrame;
 use solomon_sim::{Vec2, hud::HudRect};
+
+pub(super) const COMPACT_NAVIGATION_HEIGHT: f32 = 48.0;
+
+pub(super) fn navigation_layer(ctx: &egui::Context, body: egui::LayerId) -> egui::LayerId {
+    let navigation =
+        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("panel-sections"));
+    // An interacted Area rises within its order. Source's fixed toolbar must
+    // remain above the scrolling book after that interaction too.
+    ctx.set_sublayer(body, navigation);
+    navigation
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum PanelSection {
     Stats,
@@ -13,6 +24,24 @@ pub(super) enum PanelSection {
     Next,
 }
 impl PlayerPanels {
+    pub(super) fn has_compact_navigation(&self) -> bool {
+        self.compact
+            && matches!(
+                self.panel,
+                Some(PlayerPanel::Inventory | PlayerPanel::Skills | PlayerPanel::Service(_))
+            )
+    }
+
+    pub(super) fn body_viewport(&self) -> egui::Rect {
+        egui::Rect::from_min_max(
+            egui::pos2(
+                0.0,
+                if self.has_compact_navigation() { COMPACT_NAVIGATION_HEIGHT } else { 0.0 },
+            ),
+            egui::pos2(self.viewport_size.0 as f32, self.viewport_size.1 as f32),
+        )
+    }
+
     pub fn inventory_preview_underlay(
         &self,
     ) -> Result<Option<super::InventoryPreviewUnderlay>, String> {
@@ -197,9 +226,15 @@ impl PlayerPanels {
                 ("close", "Done"),
             ],
         };
-        egui::Area::new(egui::Id::unique("panel-sections"))
-            .order(egui::Order::Foreground)
+        let layer = navigation_layer(frame.ctx, self.layer_id());
+        egui::Area::new(layer.id)
+            .order(layer.order)
             .fixed_pos(egui::Pos2::ZERO)
+            .constrain_to(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(self.viewport_size.0 as f32, COMPACT_NAVIGATION_HEIGHT),
+            ))
+            .constrain(false)
             .show(frame.ctx, |ui| {
                 ui.set_min_width(self.viewport_size.0 as f32);
                 if !(!self.input_suspended
@@ -216,7 +251,7 @@ impl PlayerPanels {
                     "navigation",
                     egui::Rect::from_min_size(
                         egui::Pos2::ZERO,
-                        egui::vec2(self.viewport_size.0 as f32, 48.0),
+                        egui::vec2(self.viewport_size.0 as f32, COMPACT_NAVIGATION_HEIGHT),
                     ),
                     false,
                 );

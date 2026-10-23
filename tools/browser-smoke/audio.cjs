@@ -6,8 +6,10 @@ const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const tree = path.resolve(__dirname,'../..');
 const output = process.env.OUT || '/tmp';
+fs.mkdirSync(output,{recursive:true});
 const catalog = fs.readFileSync(path.join(tree,'crates/sim/src/audio/catalog.rs'),'utf8');
 const files = {};
 for(const match of catalog.matchAll(/id: "([^"]+)",\s*path: "([^"]+)"/g)) {
@@ -15,14 +17,30 @@ for(const match of catalog.matchAll(/id: "([^"]+)",\s*path: "([^"]+)"/g)) {
   (files[length] ||= []).push(match[1]);
 }
 (async()=>{
-const browser = await chromium.launch({headless:true,executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',args:['--autoplay-policy=document-user-activation-required','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+const owned = await launchOwnedBrowser(chromium,{headless:true,executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',args:['--autoplay-policy=document-user-activation-required','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+const {browser}=owned;
 const errors=[];
+let page;
+let failure;
 try {
-const page=await browser.newPage({viewport:{width:1600,height:900}});
-ui.watchErrors(page,{errors});
+page=await browser.newPage({viewport:{width:1600,height:900}});
+await ui.watchErrors(page,{errors}).ready;
 await page.addInitScript(({files})=>{
   const contexts=[],events=[],gains=[],metadata=new WeakMap(),connections=new WeakMap();
-  window.audioReceipt={contexts,events,gains};
+  const media=[];
+  window.audioReceipt={contexts,events,gains,media};
+  for(const name of ['play','pause']) {
+    const original=HTMLMediaElement.prototype[name];
+    HTMLMediaElement.prototype[name]=function(...args){
+      const result=Reflect.apply(original,this,args);
+      media.push({action:name,cue:this.dataset.audioCue,time:performance.now(),
+        volume:this.volume,currentTime:this.currentTime});
+      if(name==='play')result.then(
+        ()=>media.push({action:'played',cue:this.dataset.audioCue,time:performance.now()}),
+        error=>media.push({action:'rejected',cue:this.dataset.audioCue,name:error.name,time:performance.now()}));
+      return result;
+    };
+  }
   const Context=window.AudioContext;
   window.AudioContext=new Proxy(Context,{construct(target,args){const context=Reflect.construct(target,args);contexts.push(context);return context}});
   const decode=Context.prototype.decodeAudioData;
@@ -59,6 +77,15 @@ const music=()=>page.locator('audio').evaluateAll(nodes=>nodes.map(node=>({cue:n
 let tracks=await music();
 assert.ok(tracks.find(track=>track.cue==='solomondarktheme').time>0);
 assert.equal(tracks.filter(track=>!track.paused).length,1);
+const primedBeforeKeyboard=await page.evaluate(()=>audioReceipt.media);
+for(const track of tracks.filter(track=>track.cue!=='solomondarktheme')) {
+  const starts=primedBeforeKeyboard.filter(event=>event.cue===track.cue&&event.action==='play');
+  assert.equal(starts.length,1,`${track.cue} is primed once in the actual pointer gesture`);
+  assert.equal(primedBeforeKeyboard.filter(event=>event.cue===track.cue&&event.action==='played').length,1,
+    'the actual native prime promise fulfilled');
+  assert.equal(starts[0].volume,0,'unused music primes silently');
+  assert.ok(track.paused&&track.time===0,'a completed unused prime resets and pauses');
+}
 await ui.click(page,'new-game');
 await reachCollegeLoadout(page);
 await page.waitForFunction(()=>audioReceipt.events.some(event=>event.action==='start'&&event.cues?.includes('choose-element')),null,{timeout:10000});
@@ -113,9 +140,39 @@ assert.ok(Math.abs((await music()).find(track=>track.cue==='academy').volume-.41
 await ui.assertGpuOnly(page);
 await ui.settleErrors(page);
 assert.deepEqual(errors,[]);
-const receipt={passed:true,initialState,errors,hubEntryBeforeReady,hubMusicBeforeSettlement,tracks:await music(),events:await page.evaluate(()=>audioReceipt.events),loadedAudioResources:await page.evaluate(()=>performance.getEntriesByType('resource').filter(entry=>entry.name.includes('/audio/')).length)};
+const receipt={passed:true,initialState,errors,primedBeforeKeyboard,hubEntryBeforeReady,hubMusicBeforeSettlement,tracks:await music(),events:await page.evaluate(()=>audioReceipt.events),loadedAudioResources:await page.evaluate(()=>performance.getEntriesByType('resource').filter(entry=>entry.name.includes('/audio/')).length)};
 fs.writeFileSync(path.join(output,'audio-browser-receipt.json'),JSON.stringify(receipt,null,2));
 await page.screenshot({path:path.join(output,'audio-settings-rust.png')});
 console.log(JSON.stringify({passed:true,errors,events:receipt.events.length,loadedAudioResources:receipt.loadedAudioResources}));
-}finally{await browser.close()}
+} catch(error) {
+  failure=error;
+  const receipt={failure:error.stack,errors};
+  if(page&&!page.isClosed()) {
+    try {
+      await ui.settleErrors(page);
+      receipt.gpu=await ui.readUi(page);
+      receipt.audio=await page.evaluate(()=>({
+        contexts:audioReceipt.contexts.map(context=>context.state),
+        media:audioReceipt.media,events:audioReceipt.events,
+        tracks:[...document.querySelectorAll('audio')].map(track=>({
+          cue:track.dataset.audioCue,volume:track.volume,paused:track.paused,
+          time:track.currentTime,ready:track.readyState,error:track.error?.code??null
+        }))
+      }));
+    } catch(observationError) {receipt.observationError=observationError.stack}
+    try {await page.screenshot({path:path.join(output,'audio-failure.png')})}
+    catch(screenshotError) {receipt.screenshotError=screenshotError.stack}
+  }
+  fs.writeFileSync(path.join(output,'audio-browser-failure.json'),JSON.stringify(receipt,null,2));
+  throw error;
+} finally {
+  try {
+    const cleanup=await owned.close();
+    fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(cleanup,null,2));
+  } catch(error) {
+    fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(error.cleanup,null,2));
+    if(failure)throw new AggregateError([failure,error],'Audio checks and browser cleanup failed');
+    throw error;
+  }
+}
 })().catch(error=>{console.error(error);process.exitCode=1});

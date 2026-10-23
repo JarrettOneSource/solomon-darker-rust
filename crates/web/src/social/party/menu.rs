@@ -10,7 +10,7 @@ use solomon_sim::social::party_ui::{
 };
 use solomon_sim::social::{party_member_display_name, party_menu_leave_label};
 
-use super::super::{PartyTab, SocialUi, gpu};
+use super::super::{Intent, PartyTab, SocialUi, gpu};
 use crate::gpu_ui::{UiFrame, message_frame_scaled};
 
 impl SocialUi {
@@ -137,6 +137,7 @@ impl SocialUi {
             );
             spec.tint = if selected { 0xffffff } else { 0xaaa2a6 };
             gpu::native_text(frame, ui.painter(), &spec, origin, scale);
+            gpu::focus_outline(frame, ui, &response, scale);
             if response.clicked() {
                 activated = Some(format!("party-{}", candidate.id()));
             }
@@ -274,6 +275,7 @@ impl SocialUi {
                     );
                 }
                 frame.record(&format!("social/{}", action.id), &action.label, "radio", &response);
+                gpu::focus_outline(frame, ui, &response, scale);
                 if response.has_focus() {
                     let direction = ui.input_mut(|input| {
                         if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft)
@@ -334,10 +336,11 @@ impl SocialUi {
                     self.clipboard.copy(code);
                 }
             } else {
-                self.activate(match action.as_str() {
+                let action = match action.as_str() {
                     "generate" => "party-generate",
                     _ => &action,
-                })?;
+                };
+                self.intents.borrow_mut().push(Intent::Action(action.to_owned()));
             }
         }
         Ok(())

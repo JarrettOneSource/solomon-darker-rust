@@ -868,17 +868,127 @@ pub(crate) fn native_area(
     layer: egui::LayerId,
     transform: egui::emath::TSTransform,
 ) -> egui::Area {
+    native_area_in(ctx, layer, transform, ctx.content_rect())
+}
+
+pub(crate) fn native_area_in(
+    ctx: &egui::Context,
+    layer: egui::LayerId,
+    transform: egui::emath::TSTransform,
+    viewport: Rect,
+) -> egui::Area {
     ctx.set_transform_layer(layer, transform);
     egui::Area::new(layer.id)
         .order(layer.order)
         .fixed_pos(Pos2::ZERO)
-        .constrain_to(transform.inverse() * ctx.content_rect())
+        .constrain_to(transform.inverse() * viewport)
         .constrain(false)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compact_body_drag_preserves_the_first_toolbar_tap_and_body_clip() {
+        let ctx = egui::Context::default();
+        let screen = Rect::from_min_size(Pos2::ZERO, egui::vec2(844.0, 390.0));
+        let viewport = Rect::from_min_max(egui::pos2(0.0, 48.0), screen.max);
+        let body = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("player-panels"));
+        let transform = egui::emath::TSTransform::new(egui::vec2(0.0, -195.0), 0.65);
+        let native_book = Rect::from_min_size(Pos2::ZERO, egui::vec2(1675.0, 900.0));
+        let toolbar = Rect::from_min_size(Pos2::ZERO, egui::vec2(844.0, 48.0));
+        let equip = Rect::from_min_max(egui::pos2(337.0, 0.0), egui::pos2(498.0, 40.0));
+        let mut clicks = 0;
+        let mut dragged = false;
+        let mut saw_body_mesh = false;
+        for step in 0..8 {
+            let point = if step < 3 {
+                egui::pos2(100.0, 180.0)
+            } else if step < 5 {
+                egui::pos2(130.0, 220.0)
+            } else {
+                equip.center()
+            };
+            let mut events =
+                if step < 2 { Vec::new() } else { vec![egui::Event::PointerMoved(point)] };
+            if [2, 4, 5, 6].contains(&step) {
+                events.push(egui::Event::PointerButton {
+                    pos: point,
+                    button: egui::PointerButton::Primary,
+                    pressed: step == 2 || step == 5,
+                    modifiers: egui::Modifiers::NONE,
+                });
+            }
+            let mut output = ctx.run_pass(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    time: Some(step as f64 / 60.0),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    native_area_in(ctx, body, transform, viewport).fade_in(false).show(ctx, |ui| {
+                        ui.set_min_size(native_book.size());
+                        ui.painter().rect_filled(native_book, 0.0, Color32::RED);
+                        let response = ui.interact(
+                            native_book,
+                            egui::Id::unique("book-drag"),
+                            egui::Sense::click_and_drag(),
+                        );
+                        dragged |= response.dragged();
+                    });
+                    let navigation = super::super::viewport::navigation_layer(ctx, body);
+                    egui::Area::new(navigation.id)
+                        .order(navigation.order)
+                        .fade_in(false)
+                        .fixed_pos(Pos2::ZERO)
+                        .constrain_to(toolbar)
+                        .constrain(false)
+                        .show(ctx, |ui| {
+                            ui.set_min_size(toolbar.size());
+                            ui.painter().rect_filled(toolbar, 0.0, Color32::GREEN);
+                            if ui
+                                .interact(
+                                    equip,
+                                    egui::Id::unique("first-equip-tap"),
+                                    egui::Sense::click(),
+                                )
+                                .clicked()
+                            {
+                                clicks += 1;
+                            }
+                        });
+                },
+            );
+            let primitives =
+                ctx.tessellate(std::mem::take(&mut output.shapes), output.pixels_per_point);
+            output.drop_without_applying_deltas();
+            for primitive in primitives {
+                if let egui::epaint::Primitive::Mesh(mesh) = primitive.primitive
+                    && mesh.vertices.iter().any(|vertex| vertex.color == Color32::RED)
+                {
+                    saw_body_mesh = true;
+                    assert!(
+                        primitive.clip_rect.min.y >= 48.0,
+                        "scrolled native book pixels never paint over the fixed toolbar"
+                    );
+                }
+            }
+            if step >= 2 {
+                let navigation =
+                    egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("panel-sections"));
+                assert_eq!(
+                    ctx.layer_id_at(equip.center()),
+                    Some(navigation),
+                    "body interaction cannot raise its hit layer above the fixed toolbar"
+                );
+            }
+        }
+        assert!(saw_body_mesh, "the native body really submitted clipped paint geometry");
+        assert!(dragged, "the native body really received the preceding drag");
+        assert_eq!(clicks, 1, "the first toolbar tap after that drag activates once");
+    }
 
     #[test]
     fn landscape_native_controls_keep_their_real_pointer_hits_after_scaling() {

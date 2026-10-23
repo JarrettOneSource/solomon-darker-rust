@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Real account subscription and delayed catalog refresh through the mounted Website API.
 // The catalog request waits at the transport boundary before reaching the actual backend.
 const assert = require('node:assert/strict');
@@ -28,13 +29,15 @@ async function waitUntil(predicate, label, timeout = 30000) {
 }
 
 (async () => {
-  const browser = await chromium.launch({headless: true,
+  const owned = await launchOwnedBrowser(chromium,{headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+  const browser = owned.browser;
   const context = await browser.newContext({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
     viewport: {width: 1280, height: 720}});
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
+  await gpu.watchRequestFailures(page, {errors}).ready;
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
   page.on('request', request => {
@@ -43,7 +46,6 @@ async function waitUntil(predicate, label, timeout = 30000) {
   page.on('requestfinished', request => pending.delete(request));
   page.on('requestfailed', request => {
     pending.delete(request);
-    errors.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
   });
   page.on('response', async response => {
     const pathname = new URL(response.url()).pathname;
@@ -70,7 +72,8 @@ async function waitUntil(predicate, label, timeout = 30000) {
     assert.equal(typeof authenticatedToken, 'string', 'the ordinary sign-in returns its auth token');
     await page.waitForURL(target => target.pathname === `${mount}/account`);
     checks.push('the retained real account signs in through the ordinary Website form');
-    await page.goto(url, {waitUntil: 'load'});
+    await gpu.settleErrors(page);
+    await gpu.observeDocumentReplacement(page, () => page.goto(url, {waitUntil: 'load'}));
     await gpu.ready(page);
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) {
       await gpu.click(page, 'prompt-secondary');
@@ -83,7 +86,6 @@ async function waitUntil(predicate, label, timeout = 30000) {
     subscribedSlug = subscribe.id.split(':').at(-1);
     await gpu.click(page, subscribe.id);
     await waitUntil(() => activeMods?.some(mod => mod.slug === subscribedSlug), 'actual enabled subscription');
-    await gpu.widget(page, `cloud-subscription:disable:${subscribedSlug}`);
     await gpu.click(page, 'cloud-tab:subscribed');
     const enabled = `cloud-subscription:disable:${subscribedSlug}`;
     await gpu.widget(page, enabled);
@@ -117,17 +119,20 @@ async function waitUntil(predicate, label, timeout = 30000) {
     checks.push('leaving Cloud during catalog refresh preserves active content in the actual New Game route');
     releaseRefresh();
     await waitUntil(() => pending.size === 0, 'actual catalog refresh completes', 60000);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     const receipt = {passed: true, checks, requests, errors};
     fs.writeFileSync(path.join(output, 'cloud-subscription.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) {
+    await gpu.settleErrors(page);
     await page.screenshot({path: path.join(output, 'cloud-subscription-failure.png')});
     fs.writeFileSync(path.join(output, 'cloud-subscription-failure.json'), JSON.stringify({error: error.stack,
       checks, requests, errors, pending: pending.size, ui: await gpu.readUi(page)}, null, 2));
     throw error;
   } finally {
     try {
+      await gpu.settleErrors(page);
       holdRefresh = false;
       releaseRefresh();
       if (subscribedSlug) {
@@ -135,7 +140,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
           {headers: {Authorization: `Bearer ${authenticatedToken}`}});
         assert.ok(cleanup.ok(), `local test subscription cleanup failed: ${cleanup.status()}`);
       }
-    } finally { await browser.close(); }
+    } finally { console.log(JSON.stringify({browserCleanup:await owned.close()})); }
   }
 
 })().catch(error => {console.error(error); process.exitCode = 1;});

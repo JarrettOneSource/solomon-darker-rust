@@ -166,6 +166,7 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
   await ui.observeGpu(page);
   await ui.observeAnnouncements(page,{forceFallback:fallback});
   const observed=ui.watchErrors(page);
+  await observed.ready;
   let release;
   const held=new Promise(resolve=>{release=resolve});
   let arrived;
@@ -298,6 +299,7 @@ async function failedAsset(browser) {
   const page=await context.newPage();
   await ui.observeGpu(page);
   const observed=ui.watchErrors(page);
+  await observed.ready;
   let failedUrl;
   await page.route('**/assets/stock/Title.png',route=>{
     failedUrl=route.request().url();

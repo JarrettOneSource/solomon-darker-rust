@@ -13,6 +13,7 @@ pub(super) struct JoystickGeometry {
     pub size: f32,
     pub rotation: f32,
     pub scale: f32,
+    pub display_scale: f32,
 }
 impl JoystickGeometry {
     pub fn bounds(self) -> Rect {
@@ -31,7 +32,8 @@ impl JoystickGeometry {
 }
 fn geometry(state: &GameplayInputState, lane: JoystickLane) -> JoystickGeometry {
     let (width, height, percent) = state.viewport;
-    let root = (width as f32 / 1600.0).min(height as f32 / 900.0).min(1.0) * percent as f32 / 100.0;
+    let display_scale = (width as f32 / 1600.0).min(height as f32 / 900.0).min(1.0);
+    let root = display_scale * percent as f32 / 100.0;
     let id = if lane == JoystickLane::Movement {
         MobileUiElementId::LeftJoystick
     } else {
@@ -58,6 +60,7 @@ fn geometry(state: &GameplayInputState, lane: JoystickLane) -> JoystickGeometry 
         center,
         size: 237.5 * scale,
         scale,
+        display_scale,
         rotation: if state.mobile_layout.customized {
             transform.rotation.to_radians() as f32
         } else {
@@ -109,7 +112,7 @@ pub(super) fn paint(input: &MovementInput, frame: &UiFrame<'_>) -> Result<(), St
         .order(egui::Order::Middle)
         .fixed_pos(Pos2::ZERO)
         .constrain(false)
-        .show(frame.ctx, |ui| {
+        .show(frame.ctx, |ui| -> Result<(), String> {
             for (lane, geometry, movement) in lanes.drain(..) {
                 let id = if lane == JoystickLane::Movement {
                     "hud:joystick:movement"
@@ -188,18 +191,50 @@ pub(super) fn paint(input: &MovementInput, frame: &UiFrame<'_>) -> Result<(), St
                     Stroke::new(2.0 * geometry.scale, Color32::from_rgba_unmultiplied(232, 220, 181, 158)),
                 );
                 let text = if lane == JoystickLane::Movement { "MOVE" } else { "AIM / CAST" };
-                let anchor = geometry.center + rotation * egui::vec2(0.0, geometry.size * 0.38);
+                // Source cancels only the native frame's display scale in its
+                // font size; player UI/custom sizing still scales the label.
+                let font_size = 11.0 * geometry.scale / geometry.display_scale;
+                let opacity = if movement != Vec2::ZERO { 0.45 } else { 1.0 };
+                let anchor = geometry.center
+                    + rotation * egui::vec2(0.0, geometry.size / 2.0 - (24.0 + 3.0) * geometry.scale);
                 let galley = p.layout_job(egui::text::LayoutJob::simple_format(
                     text.into(),
                     egui::TextFormat {
-                        font_id: egui::FontId::new(9.0 * geometry.scale, egui::FontFamily::Name("Georgia Bold".into())),
-                        extra_letter_spacing: 0.06 * 9.0 * geometry.scale,
+                        font_id: egui::FontId::new(font_size, egui::FontFamily::Name("Cinzel Bold".into())),
+                        extra_letter_spacing: 0.06 * font_size,
+                        line_height: Some(font_size),
                         color: Color32::from_rgb(217, 210, 188),
                         ..Default::default()
                     },
                 ));
                 let origin = anchor - rotation * egui::vec2(galley.size().x / 2.0, galley.size().y);
-                p.add(egui::epaint::TextShape::new(origin, galley, Color32::from_rgb(217, 210, 188)).with_angle(geometry.rotation));
+                let shape = egui::epaint::TextShape::new(origin, galley, Color32::from_rgb(217, 210, 188))
+                    .with_angle(geometry.rotation);
+                let label_bounds = shape.visual_bounding_rect();
+                frame.paint_group(
+                    p,
+                    crate::gpu_ui::GroupEffect {
+                        opacity,
+                        shadows: vec![crate::gpu_ui::ImageShadow {
+                            offset: rotation * egui::vec2(0.0, geometry.scale),
+                            // CSS text-shadow's 3px blur radius is sigma 1.5px.
+                            blur: 1.5 * geometry.scale,
+                            color: Color32::BLACK,
+                        }],
+                    },
+                    |_, painter| {
+                        painter.add(shape);
+                        Ok(())
+                    },
+                )?;
+                let label_id = format!("{id}:label");
+                frame.record_rect(&label_id, text, "text", label_bounds, false);
+                frame.record_value(
+                    &label_id,
+                    &serde_json::json!({"fontFamily":"Cinzel Bold","fontSize":font_size,
+                        "lineHeight":font_size,"letterSpacing":0.06*font_size,"opacity":opacity}).to_string(),
+                    None,
+                );
                 frame.record_ellipse(id, label, "joystick", &response);
                 frame.record_value(
                     id,
@@ -207,7 +242,8 @@ pub(super) fn paint(input: &MovementInput, frame: &UiFrame<'_>) -> Result<(), St
                     Some(movement != Vec2::ZERO),
                 );
             }
-        });
+            Ok(())
+        }).inner?;
     Ok(())
 }
 /// The two authored CSS radial gradients become ordinary coloured GPU triangles.

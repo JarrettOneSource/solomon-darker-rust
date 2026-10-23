@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Actual registered-account score publication, without injected state or protocol.
 // Source: host/game-host.ts:6863, MainMenuScene.tsx:843 and GameLeaderboardEndpoints.cs.
 // The gate approach follows native-session.cjs; all movement uses real keyboard input.
@@ -66,17 +67,6 @@ async function waitUntil(predicate, label, timeout = 30000) {
   throw new Error(`Timed out waiting for ${label}`);
 }
 
-async function bounded(promise, label, milliseconds) {
-  let timer;
-  try {
-    return await Promise.race([promise, new Promise((resolve, reject) => {
-      timer = setTimeout(() => reject(new Error(`${label} timed out`)), milliseconds);
-    })]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 function participant() {
   return state.frame?.snapshot.participants[state.id];
 }
@@ -97,7 +87,8 @@ function observeFrame(frame) {
   }
 }
 
-function observe(page) {
+async function observe(page) {
+  const observation = gpu.watchRequestFailures(page, {errors});
   page.on('request', request => {
     if (['image', 'font'].includes(request.resourceType())) pendingPageArt.add(request);
     if (new URL(request.url()).pathname === `${mount}/api/auth/register`
@@ -148,7 +139,6 @@ function observe(page) {
     failedResources.push({path: new URL(request.url()).pathname,
       type: request.resourceType(), failure: request.failure()?.errorText,
       step, pagePath: new URL(page.url()).pathname});
-    errors.push(redact(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
   });
   page.on('websocket', socket => {
     const read = createNativeMessageReader();
@@ -195,6 +185,7 @@ function observe(page) {
       }
     });
   });
+  await observation.ready;
 }
 
 async function gameTitle(page, username) {
@@ -214,6 +205,7 @@ async function gameTitle(page, username) {
 async function settlePageArt(page) {
   await page.evaluate(() => document.fonts.ready.then(() => null));
   await waitUntil(() => pendingPageArt.size === 0, 'requested page images and fonts');
+  await gpu.settleErrors(page);
 }
 
 async function settledAccountForm(page) {
@@ -229,7 +221,8 @@ async function returnFromAccount(page) {
   await page.waitForURL(current => current.origin === url.origin
     && current.pathname === `${mount}/account`);
   await page.evaluate(() => document.fonts.ready.then(() => null));
-  await page.getByRole('navigation').getByRole('link', {name: 'Play', exact: true}).click();
+  await gpu.observeDocumentReplacement(page, () =>
+    page.getByRole('navigation').getByRole('link', {name: 'Play', exact: true}).click());
 }
 
 async function register(page) {
@@ -242,7 +235,7 @@ async function register(page) {
   await gpu.click(page, 'explore');
   await gpu.widget(page, 'cloud-sign-in', {enabled:true});
   await settlePageArt(page);
-  await gpu.click(page, 'cloud-sign-in');
+  await gpu.observeDocumentReplacement(page, () => gpu.click(page, 'cloud-sign-in'));
   await page.waitForURL(current => current.pathname === `${mount}/login`);
   await settledAccountForm(page);
   await page.getByRole('link', {name: 'Create an account', exact: true}).click();
@@ -270,7 +263,7 @@ async function signIn(page) {
   await gpu.click(page, 'explore');
   await gpu.widget(page, 'cloud-sign-in', {enabled:true});
   await settlePageArt(page);
-  await gpu.click(page, 'cloud-sign-in');
+  await gpu.observeDocumentReplacement(page, () => gpu.click(page, 'cloud-sign-in'));
   await page.waitForURL(current => current.pathname === `${mount}/login`);
   await settledAccountForm(page);
   for (const [autocomplete, value] of [['username', account.username],
@@ -424,19 +417,19 @@ async function main() {
     checks, errors, failedResources, apiRequests, registrationRequests,
     admissions, welcomes, commands, inputSamples,
     scoreReceipts, scorePosts, hallRequests, hallActivations, healthSamples};
-  let browserServer;
+  let browserOwner;
   let browser;
   let page;
   try {
-    browserServer = await chromium.launchServer({headless: true, host: '127.0.0.1',
+    browserOwner = await launchOwnedBrowser(chromium, {headless: true,
       executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-    browser = await chromium.connect(browserServer.wsEndpoint());
+    browser = browserOwner.browser;
     page = await browser.newPage({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
       viewport: {width: 1280, height: 720}});
     page.setDefaultTimeout(30000);
     page.setDefaultNavigationTimeout(30000);
-    observe(page);
+    await observe(page);
     await page.goto(url.href, {waitUntil: 'load'});
     await gameTitle(page, null);
     if (process.env.PUBLISHED_SCORE) {
@@ -459,6 +452,7 @@ async function main() {
       checked('a fresh browser signs into the actual account through the unchanged mounted form');
       step = `persisted Global Hall via ordinary ${mode}`;
       await globalHall(page, entry.runId, mode);
+      await gpu.settleErrors(page);
       assert.deepEqual(errors, []);
       checked(`the persisted run appears on all four Global boards via ordinary ${mode} activation`);
       receipt.passed = true;
@@ -535,6 +529,7 @@ async function main() {
     assert.equal(published.body.accountUsername, account.username);
     assert.equal(published.body.elapsedTicks, receipt.completedScore.elapsed_ticks);
     assert.equal(published.body.awesomeness, receipt.completedScore.awesomeness);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checked('the real signed completion receipt is POSTed once and the unchanged API returns 201');
 
@@ -553,6 +548,7 @@ async function main() {
     assert.ok(state.leaveReceipts > 0);
     await globalHall(page, runId, 'pointer');
     assert.equal(commands.some(command => command.kind === 'set_cheats'), false);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checked('normal continuation and save-before-leave reach a Global Hall row backed by the actual API');
     receipt.passed = true;
@@ -564,38 +560,36 @@ async function main() {
     }
     throw error;
   } finally {
-    receipt.beforeCleanup = {errors: [...errors], pendingPageArt: [...pendingPageArt]
-      .map(request => new URL(request.url()).pathname)};
-    receipt.wasmFiles = [...wasmFiles];
-    receipt.lastAuthority = state.frame ? {tick: state.frame.snapshot.ticks,
-      run: state.frame.snapshot.run, host: state.frame.host,
-      position: participant()?.wizard.position} : null;
-    fs.writeFileSync(path.join(output, 'solomon-approach.json'), JSON.stringify(approach, null, 2) + '\n');
-    fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
-    step = 'browser cleanup';
-    if (browser) {
-      await bounded(browser.close(), 'browser connection close', 5000).catch(error => {
-        receipt.connectionCloseError = error.message;
-      });
-    }
-    if (browserServer) {
-      try {
-        await bounded(browserServer.close(), 'Chrome close', 15000);
-        receipt.cleanup = 'graceful';
-      } catch (error) {
-        receipt.cleanupError = error.message;
-        await bounded(browserServer.kill(), 'owned Chrome kill', 5000).catch(error => {
-          receipt.cleanupError += `; ${error.message}`;
-        });
-        receipt.cleanup = 'forced';
+    try {
+      if (page && !page.isClosed()) await gpu.settleErrors(page);
+    } finally {
+      receipt.beforeCleanup = {errors: [...errors], pendingPageArt: [...pendingPageArt]
+        .map(request => new URL(request.url()).pathname)};
+      receipt.wasmFiles = [...wasmFiles];
+      receipt.lastAuthority = state.frame ? {tick: state.frame.snapshot.ticks,
+        run: state.frame.snapshot.run, host: state.frame.host,
+        position: participant()?.wizard.position} : null;
+      fs.writeFileSync(path.join(output, 'solomon-approach.json'), JSON.stringify(approach, null, 2) + '\n');
+      fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
+      step = 'browser cleanup';
+      let cleanupFailure;
+      if (browserOwner) {
+        try {receipt.cleanup = await browserOwner.close();}
+        catch (error) {
+          receipt.cleanup = error.cleanup;
+          receipt.cleanupError = redact(error.stack || error.message);
+          receipt.passed = false;
+          cleanupFailure = error;
+        }
+        receipt.browserClosed = Boolean(receipt.cleanup
+          && (receipt.cleanup.exitCode !== null || receipt.cleanup.signalCode !== null));
+        ownedBrowserClosed = receipt.browserClosed;
       }
-      receipt.browserClosed = browserServer.process().exitCode !== null
-        || browserServer.process().signalCode !== null;
-      ownedBrowserClosed = receipt.browserClosed;
+      fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
+      console.log(JSON.stringify({passed: receipt.passed, checks, failure: receipt.failure,
+        wasmFiles: receipt.wasmFiles, browserClosed: receipt.browserClosed}));
+      if (cleanupFailure) throw cleanupFailure;
     }
-    fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
-    console.log(JSON.stringify({passed: receipt.passed, checks, failure: receipt.failure,
-      wasmFiles: receipt.wasmFiles, browserClosed: receipt.browserClosed}));
   }
 }
 

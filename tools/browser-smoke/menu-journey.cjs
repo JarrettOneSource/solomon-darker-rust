@@ -39,8 +39,8 @@ async function reachCollegeLoadout(page, {touch = false} = {}) {
   if (touch) {
     await activate(page, 'panel:dialogue-next');
     await ui.widget(page, 'panel:dialogue-choice:0');
-    await activate(page, 'panel:dialogue-next');
-    await ui.value(page, 'panel:dialogue-key', 'ARCH_DISMISS_0');
+    if((await ui.widget(page,'panel:dialogue-next')).label!=='Done')
+      throw new Error('the actual question list must expose its Done action');
     await activate(page, 'panel:dialogue-next');
   } else await page.keyboard.press('Escape');
   await ui.noWidget(page, 'panel:dialogue');

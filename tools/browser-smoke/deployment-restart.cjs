@@ -8,6 +8,7 @@ const path = require('node:path');
 const { chromium } = require(path.resolve(process.env.PW));
 const { createNativeMessageReader } = require('./native-wire.cjs');
 const {reachCollegeLoadout}=require('./menu-journey.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const ui=require('./gpu-ui.cjs');
 
 const base = path.resolve(process.env.LOCAL_GATEWAY);
@@ -26,6 +27,7 @@ assert.match(originalPublication.deploymentId, /^[a-f0-9]{32}$/);
 assert.equal(originalPublication.ready, true);
 assert.ok(Number.isSafeInteger(originalPublication.deploymentSequence) && originalPublication.deploymentSequence >= 0);
 const publicationSequence = originalPublication.deploymentSequence + 1;
+const laterPublication = process.env.LATER_PUBLICATION === '1';
 if (process.env.SAME_GAME === '1') assert.equal(current, target);
 else assert.notEqual(current, target);
 const targetWebsite = process.env.TARGET_WEBSITE_REVISION;
@@ -40,8 +42,11 @@ const publish = publication => {
   fs.renameSync(temporary, publicationPath);
 };
 const credentials = JSON.parse(fs.readFileSync(path.join(base, 'private.json')));
-const checks = [], errors = [], cancelled = [], events = [], requests = [];
+const checks = [], errors = [], events = [], requests = [];
 const welcomed = [], checkpoints = [];
+const lifecycle = [];
+const publicationStarts = [];
+let recoveredPublication;
 let frame, playerId, announcement, account;
 let heldRoute = null, armSave = false, documentLoads = 0, socketCloses = 0;
 let releaseSave;
@@ -86,7 +91,7 @@ async function register(page) {
   const catalog = await catalogResponse;
   assert.equal(catalog.status(), 200);
   await catalog.finished();
-  await ui.click(page,'cloud-sign-in');
+  await ui.observeDocumentReplacement(page, () => ui.click(page,'cloud-sign-in'));
   await page.waitForURL(value => value.pathname === `${mount}/login`);
   await accountForm(page);
   await page.getByRole('link', { name: 'Create an account', exact: true }).click();
@@ -105,7 +110,10 @@ async function register(page) {
   assert.equal((await registered).status(), 201);
   await page.waitForURL(value => value.pathname === `${mount}/account`);
   await page.waitForLoadState('networkidle');
-  await page.getByRole('link', { name: 'Play', exact: true }).first().click();
+  await ui.observeDocumentReplacement(page, async () => {
+    await page.getByRole('link', { name: 'Play', exact: true }).first().click();
+    await page.waitForURL(value => value.origin === url.origin && value.pathname === `${mount}/`);
+  });
   await title(page);
 }
 async function adminRestart() {
@@ -120,15 +128,34 @@ async function adminRestart() {
 
 (async () => {
   fs.mkdirSync(out, { recursive: true });
-  const server = await chromium.launchServer({ headless: true, host: '127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, { headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
-  const browser = await chromium.connect(server.wsEndpoint());
-  const page = await browser.newPage({ ignoreHTTPSErrors: true,
-    viewport: { width: 1280, height: 720 } });
+    args: ['--use-angle=metal', '--ignore-gpu-blocklist',
+      ...(laterPublication ? ['--remote-debugging-port=9229','--ignore-certificate-errors'] : [])] });
+  // Ordinary Playwright contexts emulate perpetual focus. The public CDP
+  // noDefaults option leaves the actual native freeze/resume lifecycle intact.
+  const lifecycleBrowser = laterPublication
+    ? await chromium.connectOverCDP('http://127.0.0.1:9229',{noDefaults:true}) : null;
+  const browser = lifecycleBrowser ?? browserOwner.browser;
+  const page = lifecycleBrowser ? await browser.contexts()[0].newPage()
+    : await browser.newPage({ignoreHTTPSErrors:true});
+  await page.setViewportSize({width:1600,height:900});
+  if (laterPublication) await page.addInitScript(() => {
+    for (const state of ['freeze','resume']) document.addEventListener(state,event =>
+      console.debug('__SOLOMON_LIFECYCLE__'+JSON.stringify({state,trusted:event.isTrusted,
+        visibility:document.visibilityState,time:performance.now()})));
+  });
+  await ui.watchRequestFailures(page, {errors}).ready;
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(redact(error.message)));
-  page.on('console', message => { if (message.type() === 'error') errors.push(redact(message.text())); });
+  page.on('console', message => {
+    if (message.type() === 'error') errors.push(redact(message.text()));
+    const prefix='__SOLOMON_LIFECYCLE__';
+    if (message.text().startsWith(prefix)) lifecycle.push(JSON.parse(message.text().slice(prefix.length)));
+  });
+  page.on('request',request => {
+    if(new URL(request.url()).pathname===publicationEndpoint) publicationStarts.push(Date.now());
+  });
   page.on('response', response => {
     const request = response.request(), pathname = new URL(response.url()).pathname;
     if (request.resourceType() === 'document' && pathname === `${mount}/`) documentLoads += 1;
@@ -139,13 +166,6 @@ async function adminRestart() {
         sha256: hash(request.postDataJSON().document) });
     }
     if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
-  });
-  page.on('requestfailed', request => {
-    const row = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
-    if (request.failure()?.errorText === 'net::ERR_ABORTED'
-      && new URL(request.url()).pathname === publicationEndpoint)
-      cancelled.push(row);
-    else errors.push(redact(row));
   });
   page.on('websocket', socket => {
     const readMessage = createNativeMessageReader();
@@ -255,10 +275,42 @@ async function adminRestart() {
     }
     publish(originalPublication);
     changedManifest = false;
-    fs.writeFileSync(path.join(out, 'ready-to-publish.json'), JSON.stringify({current, target,
-      publication: candidate, wizardName, runId, checkpointSequence: announcement.checkpoint_sequence, result}));
-    console.log('READY_TO_PUBLISH');
-    await until(() => documentLoads > loads, 'coordinator publication and automatic reload', 180000);
+    await ui.observeDocumentReplacement(page, async () => {
+      let lifecycleSession;
+      if (laterPublication) {
+        lifecycleSession = await page.context().newCDPSession(page);
+        await lifecycleSession.send('Page.setWebLifecycleState', {state:'frozen'});
+        await until(()=>lifecycle.some(row=>row.state==='freeze'&&row.trusted
+          &&row.visibility==='hidden'),'the actual trusted hidden-page freeze');
+        const polls = publicationStarts.length;
+        await sleep(1200);
+        assert.equal(publicationStarts.length, polls,
+          'a frozen document cannot observe the intermediate ready publication');
+      }
+      fs.writeFileSync(path.join(out, 'ready-to-publish.json'), JSON.stringify({current, target,
+        publication: candidate, wizardName, runId, checkpointSequence: announcement.checkpoint_sequence,
+        lifecycleFrozen: laterPublication, result}));
+      console.log('READY_TO_PUBLISH');
+      if (laterPublication) {
+        const replacementPath = path.join(out, 'later-publication-ready.json');
+        await until(() => fs.existsSync(replacementPath), 'the actual later healthy replacement', 180000);
+        recoveredPublication = JSON.parse(fs.readFileSync(replacementPath));
+        assert.equal(recoveredPublication.gameRevision,target);
+        assert.equal(recoveredPublication.revision,targetWebsite);
+        assert.equal(recoveredPublication.ready,true);
+        assert.ok(recoveredPublication.deploymentSequence > publicationSequence);
+        assert.notEqual(recoveredPublication.deploymentId,publicationId);
+        await lifecycleSession.send('Page.setWebLifecycleState', {state:'active'});
+        await until(()=>lifecycle.some(row=>row.state==='resume'&&row.trusted),
+          'the actual trusted page resume');
+        await page.bringToFront();
+        // Chrome's lifecycle command leaves the resumed target hidden. Restore
+        // the ordinary Playwright focus policy only after real freeze/resume.
+        await lifecycleSession.send('Emulation.setFocusEmulationEnabled',{enabled:true});
+        lifecycle.push({state:'ordinary-automation-focus-restored',at:Date.now()});
+      }
+      await until(() => documentLoads > loads, 'coordinator publication and automatic reload', 180000);
+    }, {timeout:180000});
     await title(page);
     assert.equal(await page.locator('meta[name="solomon-build-revision"]').getAttribute('content'), target);
     await ui.click(page,'play');
@@ -269,21 +321,23 @@ async function adminRestart() {
     await until(() => frame.snapshot.boneyard?.run_id === runId, 'the saved signed run continuation');
     await page.screenshot({ path: path.join(out, 'continued.png') });
     checked('the actual target artifact reloads automatically and Continue restores the saved wizard');
+    if (laterPublication) checked('the lifecycle-frozen client accepts the later healthy sequence after missing the announced publication');
+    await ui.settleErrors(page);
     assert.deepEqual(errors, []);
     fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ passed: true, current, target,
-      checks, events, requests, welcomed, checkpoints, cancelled, errors }, null, 2));
+      checks, events, requests, welcomed, checkpoints, lifecycle, publicationStarts, recoveredPublication, errors }, null, 2));
   } catch (error) {
+    await ui.settleErrors(page);
     await page.screenshot({ path: path.join(out, 'failure.png') });
     fs.writeFileSync(path.join(out, 'failure.json'), JSON.stringify({ error: redact(error.stack),
-      checks, events, requests, welcomed, checkpoints, announcement, cancelled, errors,
+      checks, events, requests, welcomed, checkpoints, announcement, lifecycle, publicationStarts, recoveredPublication, errors,
       ui: await ui.readUi(page) }, null, 2));
     throw error;
   } finally {
     releaseSave();
     if (changedManifest) publish(originalPublication);
-    let timer;
-    try { await Promise.race([server.close(), new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error('Chrome close timed out')), 15000);
-    })]); } catch { await server.kill(); } finally { clearTimeout(timer); }
+    if (lifecycleBrowser) await lifecycleBrowser.close();
+    fs.writeFileSync(path.join(out, 'browser-cleanup.json'),
+      JSON.stringify(await browserOwner.close(), null, 2));
   }
 })().catch(error => { console.error(redact(error.stack)); process.exitCode = 1; });

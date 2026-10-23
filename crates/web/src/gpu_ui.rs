@@ -7,9 +7,11 @@
 mod accessibility;
 mod batches;
 mod edit;
+mod effects;
 mod fonts;
 mod geometry;
 mod input;
+mod material;
 mod painter;
 mod stock;
 #[cfg(test)]
@@ -22,13 +24,14 @@ use egui::{Color32, Context, Painter, Pos2, Rect, Response, Vec2, pos2, vec2};
 use serde::Serialize;
 use web_sys::{Document, HtmlCanvasElement};
 
-use solomon_graphics::{BlendMode, Renderer};
+use solomon_graphics::{BlendMode, ColorFilter, Renderer};
 
 pub use edit::{
     EditorRules, FontRunOptions, NativeEditOutput, NativeFontRun, NativeLabelStyle, NativeTextEdit,
     TextSelection, font_run, font_run_with_options, shaped_label, text_edit_focused,
 };
-pub use geometry::clip_polygon_ellipse;
+pub use effects::GroupEffect;
+pub use geometry::{clip_polygon_ellipse, css_bezier};
 pub use input::{BrowserKey, canvas_point, key_from_browser};
 pub use painter::clip_scissor;
 pub use stock::{StockAtlas, message_frame, message_frame_scaled, native_text, paint_text_layout};
@@ -171,6 +174,14 @@ pub struct UiDiagnostics {
     pub widgets: Vec<WidgetGeometry>,
 }
 
+/// Source `drop-shadow`: offsets and Gaussian sigma in the current UI coordinates.
+#[derive(Clone, Copy, Debug)]
+pub struct ImageShadow {
+    pub offset: Vec2,
+    pub blur: f32,
+    pub color: Color32,
+}
+
 /// Shared painting seam. Feature controllers retain typed state and actions.
 pub struct UiFrame<'a> {
     pub ctx: &'a Context,
@@ -179,6 +190,7 @@ pub struct UiFrame<'a> {
     previous_widgets: &'a BTreeMap<String, WidgetGeometry>,
     key_codes: &'a [BrowserKey],
     blend: BlendMode,
+    color_filter: ColorFilter,
     announcements: &'a RefCell<Vec<String>>,
     rotation: egui::emath::Rot2,
     translation: Vec2,
@@ -194,6 +206,40 @@ impl UiFrame<'_> {
     pub(crate) fn fail(&self, error: String) {
         self.editor_errors.borrow_mut().push(error);
     }
+    /// Captures only this Rust GPU geometry, then applies filters/shadows/opacity.
+    pub fn paint_group(
+        &self,
+        painter: &Painter,
+        mut effect: GroupEffect,
+        paint: impl FnOnce(&UiFrame<'_>, &Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        assert!(effect.opacity.is_finite() && (0.0..=1.0).contains(&effect.opacity));
+        let layer = self.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
+        let scale = layer.scaling.abs() * (self.rotation * Vec2::X).length();
+        for shadow in &mut effect.shadows {
+            assert!(shadow.blur.is_finite() && shadow.blur >= 0.0 && shadow.offset.is_finite());
+            shadow.offset = layer.scaling * (self.rotation * shadow.offset);
+            shadow.blur *= scale;
+        }
+        effect.opacity *= painter.opacity();
+        let style = effects::Style { effect, filter: self.color_filter, blend: self.blend };
+        let marker = |boundary| {
+            egui::Shape::Callback(egui::epaint::PaintCallback {
+                rect: painter.clip_rect(),
+                callback: std::sync::Arc::new(boundary),
+            })
+        };
+        painter.add(marker(effects::Boundary::Begin(style)));
+        let mut group_painter = painter.clone();
+        group_painter.set_clip_rect(Rect::EVERYTHING);
+        group_painter.set_opacity(1.0);
+        let mut frame = self.with_blend(BlendMode::Normal);
+        frame.color_filter = ColorFilter::default();
+        let result = paint(&frame, &group_painter);
+        painter.add(marker(effects::Boundary::End));
+        result
+    }
+
     pub fn focus_visible(&self, response: &Response) -> bool {
         response.has_focus() && (self.focus_from_keyboard || text_edit_focused(self.ctx))
     }
@@ -218,6 +264,7 @@ impl UiFrame<'_> {
             previous_widgets: self.previous_widgets,
             key_codes: self.key_codes,
             blend,
+            color_filter: self.color_filter,
             announcements: self.announcements,
             rotation: self.rotation,
             translation: self.translation,
@@ -229,6 +276,35 @@ impl UiFrame<'_> {
             editor_errors: self.editor_errors,
         }
     }
+    /// Sets the image RGB gain for this view; stock bitmap text inherits it.
+    pub fn with_brightness(&self, brightness: f32) -> UiFrame<'_> {
+        assert!(brightness.is_finite() && brightness >= 0.0);
+        let mut frame = self.with_blend(self.blend);
+        frame.color_filter.brightness = brightness;
+        frame
+    }
+
+    /// Uses Source CSS saturation before brightness, preserving image alpha.
+    pub fn with_saturation(&self, saturation: f32) -> UiFrame<'_> {
+        assert!(saturation.is_finite() && saturation >= 0.0);
+        let mut frame = self.with_blend(self.blend);
+        frame.color_filter.saturation = saturation;
+        frame
+    }
+
+    /// Applies this view's Source colour filter to direct egui text/solid paint.
+    pub fn filtered_color(&self, color: Color32) -> Color32 {
+        if self.color_filter == ColorFilter::default() {
+            return color;
+        }
+        let [red, green, blue, alpha] = color.to_srgba_unmultiplied();
+        let [red, green, blue] = self
+            .color_filter
+            .rgb([red, green, blue].map(|channel| f32::from(channel) / 255.0))
+            .map(|channel| (channel * 255.0).round() as u8);
+        Color32::from_rgba_unmultiplied(red, green, blue, alpha)
+    }
+
     pub fn with_rotation(&self, pivot: Pos2, radians: f32) -> UiFrame<'_> {
         let local = egui::emath::Rot2::from_angle(radians);
         let mut frame = self.with_blend(self.blend);
@@ -277,6 +353,32 @@ impl UiFrame<'_> {
         self.images.size(path)
     }
 
+    pub fn managed_image(
+        &self,
+        painter: &Painter,
+        texture: egui::TextureId,
+        destination: Rect,
+        uv: Option<Rect>,
+        tint: Color32,
+    ) {
+        let egui::TextureId::Managed(id) = texture else {
+            panic!("managed image requires an egui TextureHandle")
+        };
+        let texture = self.images.managed_texture_id(id, self.blend, self.color_filter);
+        self.paint_texture_quad(
+            painter,
+            texture,
+            [
+                destination.left_top(),
+                destination.right_top(),
+                destination.right_bottom(),
+                destination.left_bottom(),
+            ],
+            uv.unwrap_or(Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0))),
+            tint,
+        );
+    }
+
     pub fn image_error(&self, path: &str) -> Option<String> {
         self.images.error(path)
     }
@@ -303,6 +405,51 @@ impl UiFrame<'_> {
             )),
             tint,
         )
+    }
+
+    /// Composites the blurred alpha and source together before applying tint alpha.
+    #[allow(clippy::too_many_arguments)]
+    pub fn atlas_image_shadowed(
+        &self,
+        painter: &Painter,
+        path: &str,
+        source: Rect,
+        destination: Rect,
+        shadow: ImageShadow,
+        tint: Color32,
+    ) -> bool {
+        assert!(shadow.blur.is_finite() && shadow.blur >= 0.0);
+        assert!(shadow.offset.is_finite());
+        if !destination.is_positive() {
+            return true;
+        }
+        let Some(size) = self.image_size(path) else {
+            self.images.request(path);
+            return false;
+        };
+        let uv = Rect::from_min_max(
+            (source.min.to_vec2() / size).to_pos2(),
+            (source.max.to_vec2() / size).to_pos2(),
+        );
+        let (destination, uv, shadow) = geometry::shadow_geometry(uv, destination, shadow);
+        let Some(texture_id) =
+            self.images.texture_id(path, BlendMode::Normal, false, self.color_filter, Some(shadow))
+        else {
+            return false;
+        };
+        self.paint_texture_quad(
+            painter,
+            texture_id,
+            [
+                destination.left_top(),
+                destination.right_top(),
+                destination.right_bottom(),
+                destination.left_bottom(),
+            ],
+            uv,
+            tint,
+        );
+        true
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -353,7 +500,10 @@ impl UiFrame<'_> {
         tint: Color32,
         blend: BlendMode,
     ) -> bool {
-        let Some(texture_id) = self.images.texture_id(path, blend, false) else { return false };
+        let Some(texture_id) = self.images.texture_id(path, blend, false, self.color_filter, None)
+        else {
+            return false;
+        };
         let mut mesh = egui::Mesh::with_texture(texture_id);
         mesh.vertices.extend(positions.into_iter().zip(uv).map(|(pos, uv)| egui::epaint::Vertex {
             pos: self.paint_position(pos),
@@ -401,7 +551,22 @@ impl UiFrame<'_> {
         blend: BlendMode,
         mask: bool,
     ) -> bool {
-        let Some(texture_id) = self.images.texture_id(path, blend, mask) else { return false };
+        let Some(texture_id) = self.images.texture_id(path, blend, mask, self.color_filter, None)
+        else {
+            return false;
+        };
+        self.paint_texture_quad(painter, texture_id, positions, uv, tint);
+        true
+    }
+
+    fn paint_texture_quad(
+        &self,
+        painter: &Painter,
+        texture_id: egui::TextureId,
+        positions: [Pos2; 4],
+        uv: Rect,
+        tint: Color32,
+    ) {
         let mut mesh = egui::Mesh::with_texture(texture_id);
         let uvs = [uv.left_top(), uv.right_top(), uv.right_bottom(), uv.left_bottom()];
         mesh.vertices.extend(positions.into_iter().zip(uvs).map(|(pos, uv)| {
@@ -409,7 +574,6 @@ impl UiFrame<'_> {
         }));
         mesh.indices.extend_from_slice(&[0, 1, 2, 0, 2, 3]);
         painter.add(egui::Shape::mesh(mesh));
-        true
     }
 
     pub fn record(&self, id: &str, label: &str, role: &str, response: &Response) {
@@ -460,6 +624,10 @@ impl UiFrame<'_> {
     ) {
         self.record(id, label, role, response);
         if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
+            let transform =
+                self.ctx.layer_transform_to_global(response.layer_id).unwrap_or_default();
+            let center = transform * center;
+            let size = size * transform.scaling.abs();
             widget.hit_shape = HitShape::RotatedRect {
                 center: [center.x, center.y],
                 size: [size.x, size.y],
@@ -587,12 +755,15 @@ pub struct UiRun {
 }
 
 impl GpuUi {
-    pub(crate) fn startup_asset_count() -> usize {
-        fonts::asset_count()
-            + include_str!("gpu_ui/stock-images.txt")
+    pub(crate) fn startup_resources() -> Vec<crate::runtime_ui::StartupResource> {
+        let mut resources = fonts::startup_resources();
+        resources.extend(
+            include_str!("gpu_ui/stock-images.txt")
                 .lines()
                 .filter(|path| !path.is_empty())
-                .count()
+                .map(|path| crate::runtime_ui::StartupResource::new("interface", path)),
+        );
+        resources
     }
 
     pub async fn load(
@@ -670,6 +841,7 @@ impl GpuUi {
         }
         renderer.flush();
         self.images.upload_ready(renderer)?;
+        self.images.begin_frame();
         let physical = [self.canvas.width() as i32, self.canvas.height() as i32];
         let pixels_per_point = physical[0] as f32 / viewport[0];
         let pending = self.input.take(viewport, pixels_per_point, time_seconds)?;
@@ -756,6 +928,7 @@ impl GpuUi {
                 previous_widgets: &self.widgets,
                 key_codes: &pass.codes,
                 blend: BlendMode::Normal,
+                color_filter: ColorFilter::default(),
                 announcements: &announcements,
                 rotation: egui::emath::Rot2::IDENTITY,
                 translation: Vec2::ZERO,

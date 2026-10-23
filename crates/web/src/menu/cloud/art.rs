@@ -115,6 +115,8 @@ impl CloudArt {
         );
         Ok(())
     }
+    // The stock sprite requires explicit registration, scale and mirror axes.
+    #[allow(clippy::too_many_arguments)]
     fn sprite(
         &self,
         frame: &UiFrame<'_>,
@@ -303,6 +305,8 @@ impl CloudArt {
         );
         Ok(())
     }
+    // This stock control keeps its semantic action and source geometry together.
+    #[allow(clippy::too_many_arguments)]
     pub fn tool(
         &self,
         frame: &mut UiFrame<'_>,

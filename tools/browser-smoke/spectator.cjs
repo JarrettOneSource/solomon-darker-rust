@@ -8,6 +8,7 @@ const {createNativeMessageReader} = require('./native-wire.cjs');
 const {walkSolomonEntrance} = require('./solomon-entrance.cjs');
 const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 
 const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
 const output = path.resolve(process.env.OUT);
@@ -23,6 +24,7 @@ async function until(predicate, label) {
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
     for (const client of clients) {
+      if (client.errors.length) await ui.settleErrors(client.page);
       if (client.errors.length) throw new Error(`${client.label}: ${client.errors.join('; ')}`);
     }
     if (await predicate()) return;
@@ -88,10 +90,10 @@ function observeGpu() {
 }
 
 async function open(account, label) {
-  const server = await chromium.launchServer({headless: true, host: '127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, {headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const browser = browserOwner.browser;
   const context = await browser.newContext({ignoreHTTPSErrors: true,
     viewport: {width: 1600, height: 900}});
   if (account.token) {
@@ -99,12 +101,13 @@ async function open(account, label) {
   }
   await context.addInitScript(observeGpu);
   const page = await context.newPage();
-  const client = {label, browser, server, page, id: null, frame: null, loaded: null,
+  const client = {label, browserOwner, page, id: null, frame: null, loaded: null,
     errors: [], cancelledMedia: [], cancelledNavigation: [], accountNavigating: false,
     inputs: [], inputBoundaries: [], movementAttempts: [], lua: [], luaRequests: [],
     flame: {active: false, births: new Map(), frames: [], actors: []},
     checkpoints: 0, leaves: 0, wasm: new Set()};
   clients.push(client);
+  await ui.watchRequestFailures(page, {errors: client.errors}).ready;
   page.setDefaultTimeout(30000);
   page.setDefaultNavigationTimeout(30000);
   page.on('pageerror', error => client.errors.push(error.message));
@@ -112,10 +115,6 @@ async function open(account, label) {
     if (message.type() !== 'error') return;
     if (message.text().includes('404') && /\/api\/game\/(rejoin|saves\/0)$/.test(message.location().url)) return;
     client.errors.push(message.text());
-  });
-  page.on('requestfailed', item => {
-    const failure = `${new URL(item.url()).pathname}: ${item.failure()?.errorText}`;
-    client.errors.push(failure);
   });
   page.on('response', response => {
     const pathname = new URL(response.url()).pathname;
@@ -177,7 +176,7 @@ async function registerPeer(client, account) {
   const response = await catalog;
   assert.equal(response.status(), 200);
   await response.finished();
-  await ui.click(page,'cloud-sign-in');
+  await ui.observeDocumentReplacement(page, () => ui.click(page,'cloud-sign-in'));
   await page.waitForURL(current => current.pathname === '/game-stg/login');
   await page.getByRole('link', {name: 'Create an account', exact: true}).click();
   await page.waitForURL(current => current.pathname === '/game-stg/register');
@@ -199,7 +198,8 @@ async function registerPeer(client, account) {
   // Current Source Register.tsx navigates to Account, then Shell's real Play
   // link returns to the Rust mount. Registration itself does not open the game.
   await page.waitForURL(current => current.pathname === '/game-stg/account');
-  await page.getByRole('link', {name: 'Play', exact: true}).first().click();
+  await ui.observeDocumentReplacement(page, () =>
+    page.getByRole('link', {name: 'Play', exact: true}).first().click());
   await page.waitForURL(current => current.pathname === '/game-stg/');
   await ui.ready(page);
   await ui.waitForUi(page,snapshot=>snapshot.widgets.some(widget=>widget.label===account.username),'actual account name after registration');
@@ -447,38 +447,12 @@ function summary(client) {
 }
 
 async function close(client) {
-  const owned = client.server.process();
-  client.cleanup = {mode: 'graceful', errors: []};
-  async function bounded(promise, label) {
-    let timer;
-    try {
-      await Promise.race([promise, new Promise((resolve, reject) => {
-        timer = setTimeout(() => reject(new Error(label)), 5000);
-      })]);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
   try {
-    await bounded(client.browser.close(), 'remote browser close deadline');
-    await bounded(client.server.close(), 'Chrome server close deadline');
+    client.cleanup = await client.browserOwner.close();
+    return true;
   } catch (error) {
-    client.cleanup.mode = 'forced';
-    client.cleanup.errors.push(error.message);
-    try {
-      await bounded(client.server.kill(), 'Chrome termination deadline');
-    } catch (error) {
-      client.cleanup.errors.push(error.message);
-      owned.kill('SIGKILL');
-    }
-  }
-  if (owned.exitCode !== null || owned.signalCode !== null) return true;
-  try {
-    process.kill(owned.pid, 0);
+    client.cleanup = error.cleanup ?? {errors:[error.message]};
     return false;
-  } catch (error) {
-    if (error.code === 'ESRCH') return true;
-    throw error;
   }
 }
 
@@ -605,6 +579,7 @@ async function close(client) {
     await until(() => !guest.frame.snapshot.boneyard
       && guest.frame.snapshot.run.phase === 'Hub', 'the surviving peer returns to College');
     checked('saved leader Leave resets spectator presentation and returns the peer to College');
+    for (const client of clients) await ui.settleErrors(client.page);
     assert.deepEqual(clients.flatMap(client => client.errors), []);
     if (build) {
       const wasm = Object.keys(build.files).find(file => /^solomon-web-.*\.wasm$/.test(file));
@@ -614,6 +589,7 @@ async function close(client) {
   } catch (error) {
     failure = {step, error: error.stack};
     for (const client of clients) {
+      await ui.settleErrors(client.page);
       await inputBoundary(client, 'failure').catch(() => {});
       await client.page.screenshot({path: path.join(output, `${client.label}-failure.png`)}).catch(() => {});
       failure[client.label] = await ui.readUi(client.page).catch(()=>'page closed');
@@ -632,12 +608,11 @@ async function close(client) {
         .filter(([file]) => /^solomon-web-.*\.wasm$/.test(file)))};
     const receipt = {passed: !failure, step, artifact, checks, failure};
     receipt.browserClosed = (await Promise.all(clients.map(close))).every(Boolean);
+    if (!receipt.browserClosed) receipt.passed = false;
     receipt.clients = clients.map(client => ({...summary(client), cleanup: client.cleanup}));
     fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify({passed: receipt.passed, checks, step, browserClosed: receipt.browserClosed,
       failure: failure?.error}));
-    // The launched browser server can retain an idle observation socket after
-    // its Chrome process exits. All evidence is written synchronously above.
-    process.exit(failure || !receipt.browserClosed ? 1 : 0);
+    if (!receipt.passed) process.exitCode = 1;
   }
 })().catch(error => {console.error(error.stack); process.exitCode = 1;});

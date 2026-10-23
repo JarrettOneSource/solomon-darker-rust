@@ -13,7 +13,7 @@ use fullscreen::SettingsFullscreen;
 use solomon_protocol::hosted::{EnhancedEffectsAuthority, EnhancedEffectsScope};
 use solomon_sim::hud::quickbar::NativeSkillQuickbarCooldownPresentation;
 use solomon_sim::mobile_ui::{MobileUiLayout, MobileUiLayoutState};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
+use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
 use solomon_sim::settings::{GameControlAction, GameSettings, game_binding_label};
 use std::rc::Rc;
 use web_sys::Document;
@@ -774,10 +774,8 @@ DevTools: solomonDark.lua.help()",
         }
         Ok(())
     }
-    fn row(&self, frame: &UiFrame<'_>, ui: &mut Ui, width: f32) -> Result<Rect, String> {
-        let (_, rect) = ui.allocate_space(Vec2::new(width, 44.0));
-        self.control_panel.paint_raw(frame, ui.painter(), 3, rect, Color32::WHITE)?;
-        Ok(rect)
+    fn row(&self, ui: &mut Ui, width: f32) -> Rect {
+        ui.allocate_space(Vec2::new(width, 44.0)).1
     }
     fn static_row(
         &self,
@@ -786,7 +784,8 @@ DevTools: solomonDark.lua.help()",
         label: &str,
         width: f32,
     ) -> Result<(), String> {
-        let rect = self.row(frame, ui, width)?;
+        let rect = self.row(ui, width);
+        self.control_panel.paint_raw(frame, ui.painter(), 3, rect, Color32::WHITE)?;
         widgets::native(
             frame,
             ui,
@@ -799,6 +798,8 @@ DevTools: solomonDark.lua.help()",
         );
         Ok(())
     }
+    // This native row binds an action and enabled policy to authored text and geometry.
+    #[allow(clippy::too_many_arguments)]
     fn action_row(
         &self,
         frame: &mut UiFrame<'_>,
@@ -809,20 +810,30 @@ DevTools: solomonDark.lua.help()",
         enabled: bool,
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
-        let rect = self.row(frame, ui, width)?;
-        let response = widgets::interact(frame, ui, id, label, "button", rect, enabled);
+        let rect = self.row(ui, width);
+        let response = widgets::interact_unstyled(frame, ui, id, label, "button", rect, enabled);
+        let highlight = enabled && (response.hovered() || frame.focus_visible(&response));
+        let saturation = frame.with_saturation(if enabled { 1.0 } else { 0.35 });
+        let paint = saturation.with_brightness(if !enabled {
+            0.62
+        } else if highlight {
+            1.16
+        } else {
+            1.0
+        });
+        self.control_panel.paint_raw(&paint, ui.painter(), 3, rect, Color32::WHITE)?;
         widgets::native(
-            frame,
+            &paint,
             ui,
             label,
             NativeUiFontName::ControlPanel,
             rect.min + Vec2::new(10.0, 26.0),
             1.0,
-            if enabled { 0xdbc174 } else { 0x746c58 },
+            0xdbc174,
             NativeUiTextAlign::Left,
         );
         self.control_panel.paint_centered(
-            frame,
+            &paint,
             ui.painter(),
             0,
             egui::pos2(rect.right() - 20.0, rect.center().y),
@@ -830,6 +841,9 @@ DevTools: solomonDark.lua.help()",
             0.0,
             Color32::WHITE,
         )?;
+        if highlight {
+            row_outline(&paint, ui, rect);
+        }
         if response.clicked() && enabled {
             actions.push(id.to_owned());
         }
@@ -844,7 +858,7 @@ DevTools: solomonDark.lua.help()",
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
         let (id, label, nested) = setting.definition();
-        let rect = self.row(frame, ui, width)?;
+        let rect = self.row(ui, width);
         let (disabled, checked) = if matches!(setting, ToggleSetting::EnhancedEffects) {
             self.enhanced_effects_authority
                 .map_or((false, self.settings.enhanced_effects), |a| (!a.can_change, a.enabled))
@@ -853,26 +867,40 @@ DevTools: solomonDark.lua.help()",
             (disabled, !disabled && setting.stored(&self.settings))
         };
         let id = format!("settings-toggle:{id}");
-        let response = widgets::interact(frame, ui, &id, label, "checkbox", rect, !disabled);
+        let response =
+            widgets::interact_unstyled(frame, ui, &id, label, "checkbox", rect, !disabled);
         frame.record_value(&id, if checked { "true" } else { "false" }, Some(checked));
+        let highlight = !disabled && (response.hovered() || frame.focus_visible(&response));
+        let saturation = frame.with_saturation(if disabled { 0.35 } else { 1.0 });
+        let paint = saturation.with_brightness(if disabled {
+            0.62
+        } else if highlight {
+            1.16
+        } else {
+            1.0
+        });
+        self.control_panel.paint_raw(&paint, ui.painter(), 3, rect, Color32::WHITE)?;
         widgets::native(
-            frame,
+            &paint,
             ui,
             label,
             NativeUiFontName::ControlPanel,
             rect.min + Vec2::new(if nested { 30.0 } else { 10.0 }, 26.0),
             1.0,
-            if disabled { 0x746c58 } else { 0xdbc174 },
+            0xdbc174,
             NativeUiTextAlign::Left,
         );
         toggle_art(
-            frame,
+            &paint,
             ui,
             &self.control_panel,
             rect,
             checked,
             widgets::alpha(0xffffff, if disabled { 0.58 } else { 1.0 }),
         )?;
+        if highlight {
+            row_outline(&paint, ui, rect);
+        }
         if response.clicked() && !disabled {
             actions.push(id);
         }
@@ -886,9 +914,19 @@ DevTools: solomonDark.lua.help()",
         width: f32,
     ) -> Result<(), String> {
         let (id, label, min, max) = setting.definition();
-        let rect = self.row(frame, ui, width)?;
+        let rect = self.row(ui, width);
+        let track = Rect::from_min_max(
+            rect.min + Vec2::new(if width < 500.0 { 144.0 } else { 156.0 }, 7.5),
+            rect.max - Vec2::new(68.0, 7.5),
+        );
+        let id = format!("settings-range:{id}");
+        let response = ui.interact(track, egui::Id::unique(&id), egui::Sense::click_and_drag());
+        widgets::focus_on_pointer(&response);
+        frame.record(&id, label, "slider", &response);
+        let paint = frame.with_brightness(if response.has_focus() { 1.16 } else { 1.0 });
+        self.control_panel.paint_raw(&paint, ui.painter(), 3, rect, Color32::WHITE)?;
         widgets::native(
-            frame,
+            &paint,
             ui,
             label,
             NativeUiFontName::ControlPanel,
@@ -897,23 +935,15 @@ DevTools: solomonDark.lua.help()",
             0xdbc174,
             NativeUiTextAlign::Left,
         );
-        let track = Rect::from_min_max(
-            rect.min + Vec2::new(if width < 500.0 { 144.0 } else { 156.0 }, 7.5),
-            rect.max - Vec2::new(68.0, 7.5),
-        );
-        self.control_panel.paint_strip(frame, ui.painter(), 4, track, Color32::WHITE)?;
-        let id = format!("settings-range:{id}");
-        let response = ui.interact(track, egui::Id::unique(&id), egui::Sense::click_and_drag());
-        widgets::focus_on_pointer(&response);
-        frame.record(&id, label, "slider", &response);
+        self.control_panel.paint_strip(&paint, ui.painter(), 4, track, Color32::WHITE)?;
         let mut value = setting.value(&self.settings);
         let before = value;
-        if response.dragged() || response.clicked() {
-            if let Some(pos) = response.interact_pointer_pos() {
-                let fraction = ((pos.x - track.left() - 32.0) / (track.width() - 64.0).max(1.0))
-                    .clamp(0.0, 1.0);
-                value = (f32::from(min) + fraction * f32::from(max - min)).round() as u16;
-            }
+        if (response.dragged() || response.clicked())
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let fraction =
+                ((pos.x - track.left() - 32.0) / (track.width() - 64.0).max(1.0)).clamp(0.0, 1.0);
+            value = (f32::from(min) + fraction * f32::from(max - min)).round() as u16;
         }
         if response.has_focus() {
             ui.memory_mut(|memory| {
@@ -950,13 +980,8 @@ DevTools: solomonDark.lua.help()",
                 }
             }
         }
-        if response.has_focus() || ui.rect_contains_pointer(rect) {
-            ui.painter().rect_stroke(
-                rect,
-                0.0,
-                egui::Stroke::new(1.0, widgets::alpha(0xdbc594, 0.8)),
-                egui::StrokeKind::Inside,
-            );
+        if response.has_focus() {
+            row_outline(&paint, ui, rect);
         }
         if value != before {
             setting.set(&mut self.settings, value);
@@ -969,7 +994,7 @@ DevTools: solomonDark.lua.help()",
             track.center().y,
         );
         self.control_panel.paint_centered(
-            frame,
+            &paint,
             ui.painter(),
             18,
             center,
@@ -978,7 +1003,7 @@ DevTools: solomonDark.lua.help()",
             Color32::WHITE,
         )?;
         widgets::native(
-            frame,
+            &paint,
             ui,
             &format!("{value}%"),
             NativeUiFontName::ControlPanel,
@@ -997,12 +1022,15 @@ DevTools: solomonDark.lua.help()",
         width: f32,
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
-        let rect = self.row(frame, ui, width)?;
+        let rect = self.row(ui, width);
         let label = binding_label(action);
         let id = format!("bind:{}", binding_id(action));
-        let response = widgets::interact(frame, ui, &id, &label, "button", rect, true);
+        let response = widgets::interact_unstyled(frame, ui, &id, &label, "button", rect, true);
+        let highlight = response.hovered() || frame.focus_visible(&response);
+        let paint = frame.with_brightness(if highlight { 1.16 } else { 1.0 });
+        self.control_panel.paint_raw(&paint, ui.painter(), 3, rect, Color32::WHITE)?;
         widgets::native(
-            frame,
+            &paint,
             ui,
             &label,
             NativeUiFontName::ControlPanel,
@@ -1015,24 +1043,40 @@ DevTools: solomonDark.lua.help()",
             egui::pos2(rect.right() - 210.0, rect.center().y - 15.0),
             Vec2::new(200.0, 30.0),
         );
-        self.control_panel.paint_raw(frame, ui.painter(), 5, plate, Color32::WHITE)?;
         let listening = self.pending_binding == Some(action);
+        let alpha = binding_alpha(ui, response.id, listening);
+        self.control_panel.paint_raw(
+            &paint,
+            ui.painter(),
+            5,
+            plate,
+            widgets::alpha(0xffffff, f64::from(alpha)),
+        )?;
         frame.record_value(&id, self.settings.controls.code(action), Some(listening));
         let value = if listening {
             "PRESS A KEY".to_owned()
         } else {
             game_binding_label(self.settings.controls.code(action))
         };
-        widgets::native(
-            frame,
-            ui,
-            &value,
-            NativeUiFontName::ControlPanel,
-            plate.center() + Vec2::new(0.0, 4.0),
-            1.0,
-            if listening { 0xf7e1a0 } else { 0xd9bd72 },
-            NativeUiTextAlign::Center,
+        let position = plate.center() + Vec2::new(0.0, 4.0);
+        crate::gpu_ui::native_text(
+            &paint,
+            ui.painter(),
+            &NativeUiTextSpec {
+                align: NativeUiTextAlign::Center,
+                alpha: f64::from(alpha),
+                tint: if listening { 0xf7e1a0 } else { 0xd9bd72 },
+                ..NativeUiTextSpec::new(
+                    NativeUiFontName::ControlPanel,
+                    &value,
+                    f64::from(position.x),
+                    f64::from(position.y),
+                )
+            },
         );
+        if highlight {
+            row_outline(&paint, ui, rect);
+        }
         if response.clicked() {
             actions.push(id);
         }
@@ -1113,6 +1157,28 @@ fn paint_panel_background(frame: &UiFrame<'_>, ui: &Ui, panel: Rect) -> Result<(
     }
     Ok(())
 }
+fn row_outline(frame: &UiFrame<'_>, ui: &Ui, rect: Rect) {
+    ui.painter().rect_stroke(
+        rect,
+        0.0,
+        egui::Stroke::new(1.0, frame.filtered_color(widgets::alpha(0xdbc594, 0.8))),
+        egui::StrokeKind::Inside,
+    );
+}
+
+fn binding_alpha(ui: &Ui, id: egui::Id, listening: bool) -> f32 {
+    let animation = id.with("listening-opacity");
+    if !listening {
+        ui.data_mut(|data| data.remove::<f64>(animation));
+        return 1.0;
+    }
+    let now = ui.input(|input| input.time);
+    let started = ui.data_mut(|data| *data.get_temp_mut_or_insert_with(animation, || now));
+    // Source's .8s steps(2,end) cycle has 0/50/100% keyframes at 1/.45/1.
+    let step = ((now - started).rem_euclid(0.8) / 0.2).floor() as usize;
+    [1.0, 0.725, 0.45, 0.725][step.min(3)]
+}
+
 fn toggle_art(
     frame: &UiFrame<'_>,
     ui: &Ui,

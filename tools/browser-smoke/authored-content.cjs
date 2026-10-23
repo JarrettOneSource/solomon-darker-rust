@@ -10,6 +10,7 @@ const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
 const textures = require('./gpu-texture-lifetime.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const output = path.resolve(process.env.OUT);
 const contentDirectory = path.resolve(process.env.CONTENT_DIR);
 const account = JSON.parse(fs.readFileSync(path.join(contentDirectory, 'private-account.json')));
@@ -29,7 +30,6 @@ const state = {id: null, frame: null, runtime: null, content: null, welcomes: []
   textureProof: {paths: [], checkpoints: [], icons: [], retired: null}};
 const errors = [], requests = [], expectedNotFound = [], cancelledMedia = [], checks = [];
 let step = 'bootstrap';
-let ownedBrowserClosed = false;
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 let priorPhase = null;
 let priorSackPhase = null;
@@ -88,16 +88,6 @@ if (authoredPhase === 'console') {
 }
 
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-async function bounded(promise, label, milliseconds) {
-  let timeout;
-  try {
-    return await Promise.race([promise, new Promise((resolve, reject) => {
-      timeout = setTimeout(() => reject(new Error(`${label} timed out`)), milliseconds);
-    })]);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 async function until(predicate, label, timeout = 30000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -269,10 +259,10 @@ async function runLua(page, code) {
 
 (async () => {
   fs.mkdirSync(output, {recursive: true});
-  const server = await chromium.launchServer({headless: true, host: '127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, {headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const browser = browserOwner.browser;
   const context = await browser.newContext({ignoreHTTPSErrors: true, viewport: {width: 1280, height: 720}});
   await context.addInitScript(token => {
     localStorage.setItem('sdr.token:/game-stg', token);
@@ -304,6 +294,7 @@ async function runLua(page, code) {
   }, account.token);
   const page = await context.newPage();
   await textures.observeGpuTextureLifetime(page);
+  await ui.watchRequestFailures(page, {errors}).ready;
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
@@ -311,10 +302,6 @@ async function runLua(page, code) {
     const location = message.location().url;
     if (message.text().includes('404') && (/\/api\/game\/saves\/0$/.test(location) || location.endsWith('/api/game/rejoin'))) return;
     errors.push(message.text());
-  });
-  page.on('requestfailed', request => {
-    const receipt = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
-    errors.push(receipt);
   });
   page.on('response', response => {
     const pathname = new URL(response.url()).pathname;
@@ -385,10 +372,12 @@ async function runLua(page, code) {
       const subscribe=`cloud-subscription:subscribe:${acceptedPackage.slug}`;
       const enable=`cloud-subscription:enable:${acceptedPackage.slug}`;
       const disable=`cloud-subscription:disable:${acceptedPackage.slug}`;
-      await ui.waitForUi(page,snapshot=>[subscribe,enable,disable].some(id=>ui.findWidget(snapshot,id)),'accepted Cloud subscription row');
+      await ui.widget(page,`cloud-open-mod:${acceptedPackage.slug}`);
       let activatedHere=false;
       if(ui.findWidget(await ui.readUi(page),subscribe)){await ui.click(page,subscribe);activatedHere=true;}
-      else if(ui.findWidget(await ui.readUi(page),enable)){await ui.click(page,enable);activatedHere=true;}
+      await ui.click(page,'cloud-tab:subscribed');
+      await ui.waitForUi(page,snapshot=>[enable,disable].some(id=>ui.findWidget(snapshot,id)),'accepted Subscribed Mods row');
+      if(ui.findWidget(await ui.readUi(page),enable)){await ui.click(page,enable);activatedHere=true;}
       await ui.widget(page,disable);
       await page.screenshot({path: path.join(output, 'authored-enabled.png')});
       check(activatedHere ? 'actual account Cloud subscription enables the unchanged uploaded Source package'
@@ -615,6 +604,7 @@ async function runLua(page, code) {
         const expectedRow = process.env.EXPECT_CHEAT_ROW === 'present';
         assert.equal(state.cheatProof.pauseRowVisible, expectedRow);
         await page.screenshot({path: path.join(output, 'console-row-witness.png')});
+        await ui.settleErrors(page);
         fs.writeFileSync(path.join(output, 'console-row-witness.json'), JSON.stringify({
           matched: true, expectedRow, errors, admission: state.cheatProof, accepted: snapshot()}, null, 2));
         assert.deepEqual(errors, []);
@@ -654,6 +644,7 @@ async function runLua(page, code) {
       }
     }
     if (authoredPhase === 'console') {
+      await ui.settleErrors(page);
       assert.deepEqual(errors, []);
       fs.writeFileSync(path.join(output, 'authored-console.json'), JSON.stringify({
         passed: true, source: acceptedPackage.source, package: acceptedPackage,
@@ -685,7 +676,7 @@ async function runLua(page, code) {
     assert.ok(modState && Object.keys(modState).length, 'accepted authored runtime reaches the real save');
     const beforeReload = snapshot();
     state.frame = null; state.runtime = null;
-    await page.reload({waitUntil: 'load'});
+    await ui.observeDocumentReplacement(page, () => page.reload({waitUntil: 'load'}));
     await ui.ready(page);
     await ui.click(page,'play');
     await ui.click(page,'continue');
@@ -699,6 +690,7 @@ async function runLua(page, code) {
     await until(() => state.frame.snapshot.ticks > resumedTick + 30, 'continued authored authority');
     await page.screenshot({path: path.join(output, 'authored-resumed.png')});
     check('real checkpoint persistence and same-run reload retain inventory, semantic state and later authority ticks');
+    await ui.settleErrors(page);
     assert.deepEqual(errors, []);
     const receipt = {passed: true, package: acceptedPackage, checks, requests, expectedNotFound,
       continuedProfile: state.continuedProfile, priorPhase, priorSackPhase, priorOnwardPhase,
@@ -715,6 +707,7 @@ async function runLua(page, code) {
     fs.writeFileSync(path.join(output, 'authored-content.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify({passed: true, checks, errors}));
   } catch (error) {
+    await ui.settleErrors(page);
     await page.screenshot({path: path.join(output, 'authored-content-failure.png')});
     fs.writeFileSync(path.join(output, 'authored-content-failure.json'), JSON.stringify({step, error: error.stack, checks, errors, requests, expectedNotFound, continuedProfile: state.continuedProfile, priorPhase, priorSackPhase, priorOnwardPhase, accepted: snapshot(), wireTypes: state.wireTypes, movementFailure: state.movementFailure, rejectedBeltProof: state.rejectedBeltProof,
       cheatProof: state.cheatProof,
@@ -725,31 +718,10 @@ async function runLua(page, code) {
       ui: await ui.readUi(page)}, null, 2));
     throw error;
   } finally {
-    const cleanup = {};
-    await bounded(browser.close(), 'browser connection close', 5000).catch(error => {
-      cleanup.connectionError = error.message;
-    });
-    try {
-      await bounded(server.close(), 'owned Chrome close', 15000);
-      cleanup.mode = 'graceful';
-    } catch (error) {
-      cleanup.error = error.message;
-      await bounded(server.kill(), 'owned Chrome termination', 5000).catch(error => {
-        cleanup.terminationError = error.message;
-      });
-      cleanup.mode = 'forced';
-    }
-    ownedBrowserClosed = server.process().exitCode !== null || server.process().signalCode !== null;
-    cleanup.browserClosed = ownedBrowserClosed;
-    fs.writeFileSync(path.join(output, 'browser-cleanup.json'), JSON.stringify(cleanup, null, 2));
-    assert.ok(ownedBrowserClosed, 'the owned Chrome process exited');
+    fs.writeFileSync(path.join(output, 'browser-cleanup.json'),
+      JSON.stringify(await browserOwner.close(), null, 2));
   }
-})().then(() => {
-  // Playwright's server socket can outlive its already-exited Chrome child.
-  // Finish only after the cleanup receipt confirms that child is closed.
-  if (ownedBrowserClosed) process.exit(0);
-}).catch(error => {
+})().catch(error => {
   console.error(error.message);
-  if (ownedBrowserClosed) process.exit(1);
   process.exitCode = 1;
 });

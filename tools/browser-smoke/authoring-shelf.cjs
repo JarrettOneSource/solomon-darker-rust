@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Actual Rust GPU Shelf and Website editor journey. No state setters,
 // synthetic documents, API writes or socket sends are used by this driver.
 const assert = require('node:assert/strict');
@@ -92,7 +93,8 @@ async function editor() {
 
 async function back() {
   const started = Date.now();
-  await page.getByRole('button', { name: /The Dark Cloud/ }).click();
+  await gpu.settleErrors(page);
+  await gpu.observeDocumentReplacement(page, () => page.getByRole('button', { name: /The Dark Cloud/ }).click());
   await page.waitForURL(url => url.origin === game.origin && url.pathname === game.pathname
     && url.searchParams.get('dark-cloud') === 'boneyards');
   await gpu.ready(page);
@@ -108,7 +110,8 @@ async function saveName(name) {
 async function testRow(shelf, name, label) {
   const before = sockets.length;
   const started = Date.now();
-  await gpu.click(page, (await shelfWidget(shelf, name, 'test')).id);
+  await gpu.settleErrors(page);
+  await gpu.observeDocumentReplacement(page, async () => gpu.click(page, (await shelfWidget(shelf, name, 'test')).id));
   await page.waitForURL(url => url.pathname === `${mount}/boneyard`);
   await page.waitForFunction(() => window.shelfPresentationTrace.some(event =>
     event.kind === 'solomon-editor-test-state' && (event.state === 'error'
@@ -125,8 +128,10 @@ async function testRow(shelf, name, label) {
   const tick = await test.evaluate(() => window.wasmBindings.wizard_state()[5]);
   await test.waitForFunction(tick => window.wasmBindings.wizard_state()[5] > tick + 20, tick);
   await page.screenshot({ path: path.join(out, `${label}-playing.png`) });
-  await page.getByRole('button', { name: /Return to editing/ }).click();
-  await page.locator('iframe.editor-test-frame').waitFor({ state: 'detached' });
+  await gpu.observeFrameRemoval(page, async () => {
+    await page.getByRole('button', { name: /Return to editing/ }).click();
+    await page.locator('iframe.editor-test-frame').waitFor({ state: 'detached' });
+  }, {frame: test});
   assert.equal(await page.getByLabel('Name', { exact: true }).inputValue(), name);
   assert.equal(await page.getByRole('button', { name: 'Test Boneyard' })
     .evaluate(node => document.activeElement === node), true);
@@ -163,11 +168,12 @@ async function confirmDelete(shelf, name) {
 (async () => {
   fs.mkdirSync(out, { recursive: true });
   fs.writeFileSync(path.join(out, 'private-account.json'), JSON.stringify(account), { mode: 0o600, flag: 'wx' });
-  let failure;
+  let failure, browserOwner;
   try {
-    browser = await chromium.launch({ headless: true,
+    browserOwner = await launchOwnedBrowser(chromium,{ headless: true,
       executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
+    browser = browserOwner.browser;
     const context = await browser.newContext({ ignoreHTTPSErrors: localTls, acceptDownloads: true,
       viewport: { width: 1600, height: 900 } });
     await context.addInitScript(() => {
@@ -209,6 +215,7 @@ async function confirmDelete(shelf, name) {
     });
     page = await context.newPage();
     page.setDefaultTimeout(45000);
+    await gpu.watchRequestFailures(page, {errors}).ready;
     page.on('pageerror', error => recordError(error.message));
     page.on('console', message => {
       if (message.type() !== 'error') return;
@@ -220,7 +227,6 @@ async function confirmDelete(shelf, name) {
     page.on('requestfailed', request => {
       const receipt = { path: new URL(request.url()).pathname, reason: request.failure()?.errorText };
       failedResources.push(receipt);
-      recordError(`${receipt.path}: ${receipt.reason}`);
     });
     page.on('response', response => {
       const pathname = new URL(response.url()).pathname;
@@ -247,7 +253,8 @@ async function confirmDelete(shelf, name) {
     checked('ordinary registration creates an isolated authoring account');
 
     step = 'Explore Boneyards';
-    await page.goto(game.href, { timeout: 240000 });
+    await gpu.settleErrors(page);
+    await gpu.observeDocumentReplacement(page, () => page.goto(game.href, { timeout: 240000 }));
     await gpu.ready(page);
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) {
       await gpu.click(page, 'prompt-secondary');
@@ -279,7 +286,8 @@ async function confirmDelete(shelf, name) {
     step = 'New, export and cloud save';
     // Clicking the parent scene must keep its embedded Shelf above that scene.
     await gpu.click(page, 'cloud-tab:boneyards');
-    await gpu.click(page, 'boneyards/new');
+    await gpu.settleErrors(page);
+    await gpu.observeDocumentReplacement(page, () => gpu.click(page, 'boneyards/new'));
     await editor();
     await saveName(importName);
     await page.getByRole('button', { name: 'File ▾', exact: true }).click();
@@ -316,12 +324,14 @@ async function confirmDelete(shelf, name) {
     await shelfWidget('On this device', nativeName);
     await confirmDelete('On this device', nativeName);
     checked('the ordinary editor .boneyard export imports through the full Rust native-document reader');
-    await gpu.click(page, (await shelfWidget('On this device', localName)).id);
+    await gpu.settleErrors(page);
+    await gpu.observeDocumentReplacement(page, async () => gpu.click(page, (await shelfWidget('On this device', localName)).id));
     await editor();
     assert.equal(await page.getByLabel('Name', { exact: true }).inputValue(), localName);
     const consumedUrl = lastWorkshopUrl;
     await back();
-    await page.goto(consumedUrl);
+    await gpu.settleErrors(page);
+    await gpu.observeDocumentReplacement(page, () => page.goto(consumedUrl));
     await page.getByRole('alert').filter({ hasText: 'no longer available' }).waitFor();
     await back();
     await confirmDelete('On this device', importName);
@@ -332,7 +342,8 @@ async function confirmDelete(shelf, name) {
     await testRow('In the cloud', localName, 'cloud-test');
 
     step = 'cloud Edit and Delete';
-    await gpu.click(page, (await shelfWidget('In the cloud', localName)).id);
+    await gpu.settleErrors(page);
+    await gpu.observeDocumentReplacement(page, async () => gpu.click(page, (await shelfWidget('In the cloud', localName)).id));
     await editor();
     assert.equal(await page.getByLabel('Name', { exact: true }).inputValue(), localName);
     await back();
@@ -341,6 +352,7 @@ async function confirmDelete(shelf, name) {
     checked('cloud deletion preserves the actual local copy');
     await page.screenshot({ path: path.join(out, 'shelf-complete.png') });
     checked('cloud Edit/Test/Delete use real API rows and cloud deletion preserves the local draft');
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checked('the complete GPU Shelf/editor journey has no browser, API or runtime errors');
   } catch (error) {
@@ -352,12 +364,25 @@ async function confirmDelete(shelf, name) {
       await page.screenshot({ path: path.join(out, 'failure.png') }).catch(() => {});
     }
   } finally {
-    // Retain the app result before browser-process shutdown, which can hang
-    // independently of the accepted UI journey on a busy GPU machine.
-    fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ target: game.href, tls_verified: !localTls, checks, failure, errors,
-      errorCounts, requests, failedResources, sockets, lifecycle, assetStartups }, null, 2));
-    console.log(JSON.stringify({ checks: checks.length, failure, output: out }));
-    if (browser) await browser.close();
+    const receipt = { target: game.href, tls_verified: !localTls, checks, failure, errors,
+      errorCounts, requests, failedResources, sockets, lifecycle, assetStartups };
+    try {
+      if (page && !page.isClosed()) await gpu.settleErrors(page);
+    } finally {
+      fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify(receipt, null, 2));
+      if (browserOwner) {
+        try {receipt.cleanup = await browserOwner.close();}
+        catch (error) {
+          receipt.cleanup = error.cleanup;
+          receipt.cleanupError = redact(error.stack || error.message);
+          process.exitCode = 1;
+        }
+      }
+      fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify(receipt, null, 2));
+      console.log(JSON.stringify({ checks: checks.length,
+        failure: failure ? {step: failure.step, error: failure.error.split('\n')[0]} : null,
+        cleanup: receipt.cleanup, cleanupError: receipt.cleanupError, output: out }));
+    }
     if (failure) process.exitCode = 1;
   }
 })();

@@ -1,9 +1,11 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Browser export/import through the real File chooser, Blob download and durable save slot.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const gpu = require('./gpu-ui.cjs');
+const {createNativeMessageReader} = require('./native-wire.cjs');
 const output = path.resolve(process.env.OUT);
 const expected = JSON.parse(fs.readFileSync(path.join(output, 'archive-receipt.json')));
 const checks = [], errors = [], requests = [];
@@ -31,12 +33,14 @@ async function reveal(page, id) {
 }
 
 (async () => {
-  const browser = await chromium.launch({headless: true,
+  const owned = await launchOwnedBrowser(chromium,{headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+  const browser = owned.browser;
   const page = await browser.newPage({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
     viewport: {width: 1280, height: 720}});
   page.setDefaultTimeout(30000);
+  await gpu.watchRequestFailures(page, {errors}).ready;
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
   page.on('response', response => {
@@ -44,26 +48,42 @@ async function reveal(page, id) {
     if (pathname.includes('/api/')) requests.push({path: pathname, status: response.status()});
     if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
   });
-  page.on('requestfailed', request => {
-    errors.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
+  page.on('websocket', socket => {
+    const read = createNativeMessageReader();
+    socket.on('framereceived', ({payload}) => {
+      const message = read(JSON.parse(payload.toString()));
+      if (!message) return;
+      if (message.type === 'welcome') {accepted = message.frame; playerId = message.credentials.player_id;}
+      else if (message.type === 'snapshot') accepted = message.frame;
+      else if (message.type === 'error') errors.push(`host ${message.code}: ${message.reason}`);
+    });
   });
-  page.on('websocket', socket => socket.on('framereceived', ({payload}) => {
-    const message = JSON.parse(payload.toString());
-    if (message.type === 'welcome') {accepted = message.frame; playerId = message.credentials.player_id;}
-    else if (message.type === 'snapshot') accepted = message.frame;
-    else if (message.type === 'error') errors.push(`host ${message.code}: ${message.reason}`);
-  }));
-  const storedSave = () => page.evaluate(() => new Promise((resolve, reject) => {
-    const mount = document.querySelector('meta[name="solomon-website-mount"]')?.content.replace(/\/$/, '') || '';
-    const opening = indexedDB.open(`solomon-darker-rust-saves${mount ? `:${mount}` : ''}`);
-    opening.onerror = () => reject(opening.error);
-    opening.onsuccess = () => {
-      const db = opening.result;
-      const reading = db.transaction('slots', 'readonly').objectStore('slots').get(0);
-      reading.onerror = () => {db.close(); reject(reading.error);};
-      reading.onsuccess = () => {db.close(); resolve(reading.result ?? null);};
-    };
-  }));
+  const storedSave = () => page.evaluate(async () => {
+    const configuration = document.querySelector('meta[name="solomon-website-mount"]');
+    const mount = configuration?.content.replace(/\/$/, '') || '';
+    const name = `${configuration ? 'solomon-dark-game-saves' : 'solomon-darker-rust-saves'}${mount ? `:${mount}` : ''}`;
+    if (!(await indexedDB.databases()).some(database => database.name === name)) return null;
+    return new Promise((resolve, reject) => {
+      const opening = indexedDB.open(name);
+      opening.onerror = () => reject(opening.error);
+      opening.onupgradeneeded = () => {
+        opening.transaction.abort();
+        reject(new Error('The observed save database disappeared before its read-only open.'));
+      };
+      opening.onsuccess = () => {
+        const db = opening.result;
+        try {
+          const reading = db.transaction('slots', 'readonly').objectStore('slots').get(0);
+          reading.onerror = () => {db.close(); reject(reading.error);};
+          reading.onsuccess = () => {
+            db.close();
+            const value = reading.result;
+            resolve(value == null ? null : typeof value === 'string' ? value : JSON.stringify(value));
+          };
+        } catch (error) {db.close(); reject(error);}
+      };
+    });
+  });
   const choose = async files => {
     const opening = page.waitForEvent('filechooser');
     await reveal(page, 'save-import');
@@ -138,25 +158,34 @@ async function reveal(page, id) {
     await gpu.click(page, 'save-cancel');
     assert.equal(JSON.parse(await storedSave()).revision, 1);
     checks.push('the real GPU export/limitations/download produces a readable browser ZIP and Cancel preserves revision one');
-    await page.reload({waitUntil: 'load'});
+    await gpu.settleErrors(page);
+    await gpu.observeDocumentReplacement(page, () => page.reload({waitUntil: 'load'}));
     await gpu.ready(page);
     await gpu.click(page, 'play');
     await gpu.click(page, 'continue');
-    await waitUntil(() => accepted?.snapshot.boneyard?.run_id === expected.runId
+    await waitUntil(() => playerId && accepted?.snapshot.participants[playerId]
+      && accepted.snapshot.boneyard?.run_id === expected.runId
       && !accepted.host.loading_run_id && !accepted.host.resume_grace, 'actual imported Boneyard continuation', 120000);
     assert.equal(accepted.snapshot.participants[playerId].player.selection.name, expected.displayName);
     const restoredTick = accepted.snapshot.ticks;
     await waitUntil(() => accepted?.snapshot.ticks > restoredTick + 100,
       'restored Boneyard advances through a full second of authoritative ticks');
     checks.push('fresh browser reload restores the exported wizard and the same Boneyard run through actual host admission');
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
-    const receipt = {passed: true, checks, requests, errors, archiveSha256: expected.sha256, importedRevision: record.revision};
+    const receipt = {passed: true, checks, requests, errors, archiveSha256: expected.sha256, importedRevision: record.revision,
+      continued: {playerId, runId: accepted.snapshot.boneyard.run_id, ticks: accepted.snapshot.ticks,
+        selection: accepted.snapshot.participants[playerId].player.selection}};
     fs.writeFileSync(path.join(output, 'native-save-transfer.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) {
+    await gpu.settleErrors(page);
     await page.screenshot({path: path.join(output, 'native-save-transfer-failure.png')});
     fs.writeFileSync(path.join(output, 'native-save-transfer-failure.json'), JSON.stringify({error: error.stack, checks, requests, errors,
       ui: await gpu.readUi(page)}, null, 2));
     throw error;
-  } finally {await browser.close();}
+  } finally {
+    try {await gpu.settleErrors(page);}
+    finally {console.log(JSON.stringify({browserCleanup:await owned.close()}));}
+  }
 })().catch(error => {console.error(error); process.exitCode = 1;});

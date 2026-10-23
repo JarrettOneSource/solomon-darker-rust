@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // The real retained wizard and its native kill-confirmation modal.
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -5,12 +6,15 @@ const {chromium} = require(path.resolve(process.env.PW));
 const gpu = require('./gpu-ui.cjs');
 const {startNewGame} = require('./menu-journey.cjs');
 (async () => {
-  const browser = await chromium.launch({headless: true,
+  const owned = await launchOwnedBrowser(chromium,{headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+  const browser = owned.browser;
+  let page;
   try {
-    const page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
-    const {errors} = gpu.watchErrors(page);
+    page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
+    const {errors, ready: errorsReady} = gpu.watchErrors(page);
+    await errorsReady;
     await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
     await gpu.ready(page);
     await startNewGame(page, {name: 'Felix'});
@@ -36,7 +40,11 @@ const {startNewGame} = require('./menu-journey.cjs');
     await gpu.click(page, 'prompt-primary');
     await gpu.noWidget(page, 'prompt-primary');
     await gpu.assertGpuOnly(page);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({checks: ['real saved wizard', 'decline retains wizard', 'native phone prompt', 'explicit replacement intent'], errors}));
-  } finally { await browser.close(); }
+  } finally {
+    try { if (page && !page.isClosed()) await gpu.settleErrors(page); }
+    finally { console.log(JSON.stringify({browserCleanup:await owned.close()})); }
+  }
 })().catch(error => {console.error(error); process.exitCode = 1;});

@@ -7,6 +7,7 @@ const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 
 const output = path.resolve(process.env.OUT);
 const contentDirectory = path.resolve(process.env.CONTENT_DIR);
@@ -135,10 +136,10 @@ async function geometry(page, id) {
 
 (async () => {
   fs.mkdirSync(output, {recursive: true});
-  const server = await chromium.launchServer({headless: true, host: '127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, {headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const browser = browserOwner.browser;
   const context = await browser.newContext({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
     viewport: {width: 1280, height: 720}});
   await context.addInitScript(token => {
@@ -158,6 +159,7 @@ async function geometry(page, id) {
     }, true);
   }, account.token);
   const page = await context.newPage();
+  await ui.watchRequestFailures(page, {errors}).ready;
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
@@ -166,10 +168,6 @@ async function geometry(page, id) {
     if (message.text().includes('404') && (/\/api\/game\/saves\/0$/.test(pathname)
       || pathname.endsWith('/api/game/rejoin'))) return;
     errors.push(message.text());
-  });
-  page.on('requestfailed', request => {
-    const failure = {path: new URL(request.url()).pathname, error: request.failure()?.errorText};
-    errors.push(`${failure.path}: ${failure.error}`);
   });
   page.on('request', request => {
     const requested = new URL(request.url());
@@ -241,9 +239,13 @@ async function geometry(page, id) {
     await ui.click(page, 'settings-back'); await ui.click(page, 'settings-back');
     await ui.click(page, 'explore');
     const subscribeId = `cloud-subscription:subscribe:${acceptedPackage.slug}`;
-    await ui.waitForUi(page, snapshot => ui.findWidget(snapshot, subscribeId)
-      || ui.findWidget(snapshot, `cloud-subscription:disable:${acceptedPackage.slug}`), 'available subscription');
+    await ui.widget(page, `cloud-open-mod:${acceptedPackage.slug}`);
     if (ui.findWidget(await ui.readUi(page), subscribeId)) await ui.click(page, subscribeId);
+    await ui.click(page, 'cloud-tab:subscribed');
+    const enableId = `cloud-subscription:enable:${acceptedPackage.slug}`;
+    await ui.waitForUi(page, snapshot => ui.findWidget(snapshot, enableId)
+      || ui.findWidget(snapshot, `cloud-subscription:disable:${acceptedPackage.slug}`), 'actual subscribed row');
+    if (ui.findWidget(await ui.readUi(page), enableId)) await ui.click(page, enableId);
     await ui.widget(page, `cloud-subscription:disable:${acceptedPackage.slug}`);
     await page.screenshot({path: path.join(output, 'gravity-enabled.png')});
     check('the real QA account subscribes to the unchanged Source Gravity Lesson package');
@@ -402,6 +404,7 @@ async function geometry(page, id) {
     assert.ok(await page.evaluate(() => Boolean(localStorage.getItem('sdr.token:/game-stg'))));
     await page.screenshot({path: path.join(output, 'gravity-title-reset.png')});
     check('real save-before-leave reaches Title and disposes quickbar input without unscoped credential writes');
+    await ui.settleErrors(page);
     assert.deepEqual(errors, []);
     const receipt = {passed: true, source: acceptedPackage.source, package: acceptedPackage,
       credentialBootstrap: 'actual separate local API account, scoped token; form acceptance is separate',
@@ -413,6 +416,7 @@ async function geometry(page, id) {
     fs.writeFileSync(path.join(output, 'mod-skills.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify({passed: true, checks, errors}));
   } catch (error) {
+    await ui.settleErrors(page);
     await page.screenshot({path: path.join(output, 'mod-skills-failure.png')});
     const gpu = await ui.readUi(page);
     fs.writeFileSync(path.join(output, 'mod-skills-failure.json'), JSON.stringify({passed: false,
@@ -422,13 +426,7 @@ async function geometry(page, id) {
       keys: await keySamples(page), gpu}, null, 2));
     throw error;
   } finally {
-    let timeout;
-    try {
-      await Promise.race([server.close(), new Promise((resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error('Chrome close timed out')), 15000);
-      })]);
-    } catch {
-      await Promise.race([server.kill(), pause(5000)]);
-    } finally {clearTimeout(timeout);}
+    fs.writeFileSync(path.join(output, 'browser-cleanup.json'),
+      JSON.stringify(await browserOwner.close(), null, 2));
   }
 })().catch(error => {console.error(error.message); process.exitCode = 1;});

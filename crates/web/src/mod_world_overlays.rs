@@ -4,7 +4,7 @@
 mod scene;
 pub use scene::{ModSceneOverlay, ModSceneOverlayFrame, ModScenePartyMember, ModViewAction};
 
-use crate::gpu_ui::UiFrame;
+use crate::gpu_ui::{GroupEffect, ImageShadow, UiFrame, css_bezier};
 use crate::mod_presentation_assets::ModPresentationAssets;
 use egui::{Color32, FontFamily, FontId, Id, Order, Pos2, Rect, Stroke, pos2, vec2};
 use solomon_sim::Vec2;
@@ -254,7 +254,7 @@ impl ModWorldOverlays {
         for event in &self.pickups {
             let born = *self.births.entry((2, event.id, event.tick)).or_insert(now);
             let progress = ((now - born) / 0.5).clamp(0.0, 1.0) as f32;
-            let eased = bezier(progress, 0.0, 0.0, 0.58, 1.0);
+            let eased = css_bezier(progress, 0.0, 0.0, 0.58, 1.0);
             painter.circle_stroke(
                 event.center,
                 12.0 * (1.0 + 2.0 * eased),
@@ -288,47 +288,100 @@ impl ModWorldOverlays {
                     Stroke::new(2.0, Color32::from_rgb(213, 192, 142)),
                 );
             }
-            painter.text(
-                shop.center - vec2(0.0, 7.0),
-                egui::Align2::CENTER_CENTER,
-                &shop.name,
-                FontId::new(11.0, FontFamily::Name("Alegreya".into())),
-                Color32::from_rgb(240, 228, 196),
-            );
+            frame.paint_group(
+                &painter,
+                GroupEffect {
+                    shadows: vec![ImageShadow {
+                        offset: vec2(0.0, 1.0),
+                        blur: 1.5,
+                        color: Color32::BLACK,
+                    }],
+                    ..Default::default()
+                },
+                |frame, painter| {
+                    crate::social::gpu::browser_text(
+                        frame,
+                        painter,
+                        shop.center - vec2(0.0, 7.0),
+                        egui::Align2::CENTER_CENTER,
+                        &shop.name,
+                        FontId::new(11.0, FontFamily::Name("Alegreya Semibold".into())),
+                        Color32::from_rgb(240, 228, 196),
+                    )?;
+                    Ok(())
+                },
+            )?;
             frame.record_rect(&format!("mod/shop:{index}"), &shop.name, "img", image, true);
         }
         for enemy in &self.enemies {
-            let alpha = if enemy.dying { 0.75 } else { 1.0 };
-            paint_sprite(
-                frame,
+            frame.paint_group(
                 &painter,
-                &enemy.sprite,
-                0.72,
-                alpha,
-                Some((enemy.glow, enemy.blur)),
-            );
-            let top = enemy.sprite.center.y - enemy.sprite.size.y * 0.72;
-            painter.text(
-                pos2(enemy.sprite.center.x, top - 6.0),
-                egui::Align2::CENTER_BOTTOM,
-                &enemy.name,
-                FontId::new(10.0, FontFamily::Name("Alegreya Medium".into())),
-                Color32::from_rgb(234, 223, 196).gamma_multiply(alpha),
-            );
-            let rail =
-                Rect::from_min_size(pos2(enemy.sprite.center.x - 22.0, top + 9.0), vec2(44.0, 4.0));
-            painter.rect_filled(rail, 0.0, Color32::from_rgb(36, 22, 26).gamma_multiply(alpha));
-            painter.rect_filled(
-                Rect::from_min_size(rail.min, vec2(rail.width() * enemy.health, rail.height())),
-                0.0,
-                Color32::from_rgb(165, 67, 82).gamma_multiply(alpha),
-            );
-            painter.rect_stroke(
-                rail,
-                0.0,
-                Stroke::new(1.0, Color32::from_black_alpha((204.0 * alpha) as u8)),
-                egui::StrokeKind::Inside,
-            );
+                GroupEffect {
+                    opacity: if enemy.dying { 0.75 } else { 1.0 },
+                    shadows: vec![ImageShadow {
+                        offset: egui::Vec2::ZERO,
+                        blur: enemy.blur,
+                        color: enemy.glow,
+                    }],
+                },
+                |frame, painter| {
+                    paint_sprite(frame, painter, &enemy.sprite, 0.72, 1.0, None);
+                    let top = enemy.sprite.center.y - enemy.sprite.size.y * 0.72;
+                    let name = crate::gpu_ui::font_run_with_options(
+                        frame.ctx,
+                        FontId::new(10.0, FontFamily::Name("Alegreya Semibold".into())),
+                        Color32::from_rgb(234, 223, 196),
+                        &enemy.name,
+                        crate::gpu_ui::FontRunOptions {
+                            line_height: Some(12.0),
+                            ..Default::default()
+                        },
+                    )?;
+                    let name_origin = egui::Align2::CENTER_BOTTOM
+                        .anchor_size(pos2(enemy.sprite.center.x, top), name.size())
+                        .min;
+                    frame.paint_group(
+                        painter,
+                        GroupEffect {
+                            shadows: vec![
+                                ImageShadow {
+                                    offset: vec2(0.0, 1.0),
+                                    blur: 1.0,
+                                    color: Color32::BLACK,
+                                },
+                                ImageShadow {
+                                    offset: egui::Vec2::ZERO,
+                                    blur: 1.5,
+                                    color: Color32::BLACK,
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                        |frame, painter| name.paint(frame, painter, name_origin, 1.0),
+                    )?;
+                    let rail = Rect::from_min_size(
+                        pos2(enemy.sprite.center.x - 22.0, top + 9.0),
+                        vec2(44.0, 4.0),
+                    );
+                    painter.rect_filled(rail, 0.0, Color32::from_rgb(36, 22, 26));
+                    let content = rail.shrink(1.0);
+                    painter.rect_filled(
+                        Rect::from_min_size(
+                            content.min,
+                            vec2(content.width() * enemy.health, content.height()),
+                        ),
+                        0.0,
+                        Color32::from_rgb(165, 67, 82),
+                    );
+                    painter.rect_stroke(
+                        rail,
+                        0.0,
+                        Stroke::new(1.0, Color32::from_black_alpha(204)),
+                        egui::StrokeKind::Inside,
+                    );
+                    Ok(())
+                },
+            )?;
             frame.record_rect(
                 &format!("mod/enemy:{}", enemy.id),
                 &enemy.name,
@@ -347,26 +400,34 @@ impl ModWorldOverlays {
                 ModSpellEffectKind::Area => {
                     let born = *self.births.entry((0, effect.id, 0)).or_insert(now);
                     let phase = if reduced { 1.0 } else { alternate(now - born, 0.55) };
-                    let radius = effect.radius * if reduced { 1.0 } else { 0.96 + 0.08 * phase };
+                    let pulse_scale = if reduced { 1.0 } else { 0.96 + 0.08 * phase };
+                    let radius = effect.radius * pulse_scale;
                     let alpha = if reduced { 1.0 } else { 0.55 + 0.45 * phase };
-                    for i in (0..12).rev() {
-                        let ratio = i as f32 / 12.0;
-                        painter.circle_filled(
-                            center,
-                            radius * ratio,
-                            Color32::from_rgba_unmultiplied(
-                                133,
-                                78,
-                                219,
-                                ((1.0 - ratio) * 56.0 * alpha) as u8,
-                            ),
+                    let border_width = 2.0 * pulse_scale;
+                    // CSS's default circle gradient ends at the padding box's farthest corner.
+                    let fade_radius =
+                        (radius - border_width).max(0.0) * std::f32::consts::SQRT_2 * 0.68;
+                    let mut gradient = egui::Mesh::default();
+                    gradient.colored_vertex(
+                        center,
+                        Color32::from_rgba_unmultiplied(133, 78, 219, (56.0 * alpha) as u8),
+                    );
+                    for index in 0..=64 {
+                        let angle = std::f32::consts::TAU * index as f32 / 64.0;
+                        gradient.colored_vertex(
+                            center + vec2(angle.cos(), angle.sin()) * fade_radius,
+                            Color32::TRANSPARENT,
                         );
+                        if index > 0 {
+                            gradient.add_triangle(0, index, index + 1);
+                        }
                     }
+                    painter.add(egui::Shape::mesh(gradient));
                     painter.circle_stroke(
                         center,
-                        radius,
+                        (radius - border_width / 2.0).max(0.0),
                         Stroke::new(
-                            2.0,
+                            border_width,
                             Color32::from_rgba_unmultiplied(176, 132, 255, (199.0 * alpha) as u8),
                         ),
                     );
@@ -438,22 +499,18 @@ fn paint_sprite(
         sprite.size,
     );
     if let Some((color, blur)) = glow {
-        // A bounded separable Gaussian samples the same sprite alpha on the GPU.
-        for y in -2_i32..=2 {
-            for x in -2_i32..=2 {
-                let weight = (-0.5 * ((x * x + y * y) as f32)).exp() / 6.1689;
-                let tint = color.gamma_multiply(weight * alpha);
-                let rect = target.translate(vec2(x as f32, y as f32) * blur / 2.0);
-                frame.image_quad_masked(
-                    painter,
-                    &sprite.path,
-                    [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()],
-                    uv,
-                    tint,
-                    solomon_graphics::BlendMode::Normal,
-                );
-            }
-        }
+        frame.atlas_image_shadowed(
+            painter,
+            &sprite.path,
+            Rect::from_min_max(
+                pos2(source.x as f32, source.y as f32),
+                pos2((source.x + source.width) as f32, (source.y + source.height) as f32),
+            ),
+            target,
+            crate::gpu_ui::ImageShadow { offset: egui::Vec2::ZERO, blur, color },
+            Color32::from_white_alpha((alpha * 255.0) as u8),
+        );
+        return;
     }
     frame.image(
         painter,
@@ -475,17 +532,5 @@ fn packed_color(color: i64) -> Color32 {
 }
 fn alternate(seconds: f64, duration: f64) -> f32 {
     let phase = (seconds / duration).rem_euclid(2.0) as f32;
-    bezier(if phase > 1.0 { 2.0 - phase } else { phase }, 0.42, 0.0, 0.58, 1.0)
-}
-fn bezier(t: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
-    let curve = |v: f32, p1: f32, p2: f32| {
-        3.0 * (1.0 - v) * (1.0 - v) * v * p1 + 3.0 * (1.0 - v) * v * v * p2 + v * v * v
-    };
-    let mut low = 0.0;
-    let mut high = 1.0;
-    for _ in 0..16 {
-        let middle = (low + high) * 0.5;
-        if curve(middle, x1, x2) < t { low = middle } else { high = middle }
-    }
-    curve((low + high) * 0.5, y1, y2)
+    css_bezier(if phase > 1.0 { 2.0 - phase } else { phase }, 0.42, 0.0, 0.58, 1.0)
 }

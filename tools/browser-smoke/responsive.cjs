@@ -5,6 +5,7 @@ const path=require('node:path');
 const {chromium}=require(path.resolve(process.env.PW));
 const {startNewGame}=require('./menu-journey.cjs');
 const ui=require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const output=process.env.OUT||'/tmp';
 const url=process.env.URL||'http://127.0.0.1:4185/';
 fs.mkdirSync(output,{recursive:true});
@@ -69,12 +70,15 @@ async function walkToFomentius(page) {
 }
 
 (async()=>{
-  const browser=await chromium.launch({headless:true,
+  const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+  const {browser}=owned;
+  let page,observed;
   try {
-    const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:1});
-    const observed=ui.watchErrors(page);
+    page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:1});
+    observed=ui.watchErrors(page);
+    await observed.ready;
     await ui.observeGpu(page);
     await page.goto(url,{waitUntil:'domcontentloaded'});
     await ui.ready(page);
@@ -93,15 +97,29 @@ async function walkToFomentius(page) {
     assert.ok(fitsViewport(tooltip,844,390),'touch inspection stays on screen');
     await shot(page,'phone-item-tooltip-rust.png');
     await page.touchscreen.tap(832,195);
+    const destination=ui.bounds(await ui.widget(page,'panel:cell:5'));
     await ui.drag(page,health.id,'panel:cell:5',{touch:true});
     await ui.waitForUi(page,snapshot=>{
-      const moved=ui.findWidget(snapshot,health.id),cell=ui.findWidget(snapshot,'panel:cell:5');
-      if(!moved||!cell)return false;
-      const point=ui.center(ui.bounds(moved)),target=ui.bounds(cell);
+      const moved=ui.findWidget(snapshot,health.id);
+      if(!moved)return false;
+      const point=ui.center(ui.bounds(moved)),target=destination;
       return point.x>=target.x&&point.x<=target.x+target.width
         &&point.y>=target.y&&point.y<=target.y+target.height;
     },'real Health Potion moved into column-first cell 5');
+    const afterDrag=await ui.readUi(page);
+    const toolbarActions=new Set(['panel:view-stats','panel:view-backpack',
+      'panel:view-equipment','panel:skills','panel:close']);
+    for(const widget of afterDrag.widgets.filter(widget=>widget.enabled
+      &&widget.id.startsWith('panel:')&&!toolbarActions.has(widget.id))) {
+      assert.ok(widget.rect[1]>=48,'scrolled native body hits stay below its fixed toolbar');
+    }
     await action(page,'view-equipment');
+    await ui.widget(page,'panel:equipment:hat');
+    await ui.noWidget(page,health.id);
+    fs.writeFileSync(path.join(output,'phone-navigation-after-drag.json'),JSON.stringify({
+      before:afterDrag,afterFirstEquipTap:await ui.readUi(page),
+    },null,2));
+    await shot(page,'phone-equipment-first-tap-rust.png');
     await action(page,'equipment:hat');await action(page,'equipment:hat');
     const notice=await ui.widget(page,'panel:notice-title');
     assert.equal(notice.label,'A WIZARD WOULD NEVER REMOVE HIS HAT!');
@@ -154,5 +172,21 @@ async function walkToFomentius(page) {
       portraitNativeStage:'source landscape guidance',touchWorldEntry:'Fomentius',touchDrag:true,
       submissions:await ui.gpuDraws(page)},null,2));
     console.log(JSON.stringify({passed:true,errors:observed.errors}));
-  } finally{await browser.close()}
+  } catch(error) {
+    const failure={error:error.stack};
+    if(page){
+      await ui.settleErrors(page);
+      failure.errors=observed.errors;
+      failure.ui=await ui.readUi(page);
+      await shot(page,'responsive-failure.png');
+    }
+    fs.writeFileSync(path.join(output,'responsive-failure.json'),JSON.stringify(failure,null,2));
+    throw error;
+  } finally {
+    try {fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(await owned.close(),null,2))}
+    catch(error){
+      fs.writeFileSync(path.join(output,'browser-cleanup-failure.json'),JSON.stringify(error.cleanup||{error:error.stack},null,2));
+      throw error;
+    }
+  }
 })().catch(error=>{console.error(error);process.exitCode=1});

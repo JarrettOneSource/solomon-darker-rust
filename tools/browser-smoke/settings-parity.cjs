@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Real GPU Settings pages, stored preferences and native keyboard/mouse capture.
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -13,13 +14,16 @@ async function reveal(page, id) {
   throw new Error(`Settings control did not scroll into view: ${id}`);
 }
 (async () => {
-  const browser = await chromium.launch({headless: true,
+  const owned = await launchOwnedBrowser(chromium,{headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+  const browser = owned.browser;
   const checks = [];
+  let page;
   try {
-    const page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
-    const {errors} = gpu.watchErrors(page);
+    page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
+    const {errors, ready: errorsReady} = gpu.watchErrors(page);
+    await errorsReady;
     await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
     await gpu.ready(page);
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) await gpu.click(page, 'prompt-secondary');
@@ -84,7 +88,8 @@ async function reveal(page, id) {
     await gpu.click(page, 'settings');
     await gpu.value(page, 'settings-range:sound', '37');
     await gpu.click(page, 'settings-back');
-    await page.reload();
+    await gpu.settleErrors(page);
+    await gpu.observeDocumentReplacement(page, () => page.reload());
     await gpu.ready(page);
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) await gpu.click(page, 'prompt-secondary');
     await gpu.click(page, 'settings');
@@ -95,8 +100,12 @@ async function reveal(page, id) {
     assert.ok(panel.x >= 0 && panel.x + panel.width <= 390);
     await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'phone-settings.png')});
     await gpu.assertGpuOnly(page);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checks.push('accepted preferences survive actual reload; compact GPU panel');
     console.log(JSON.stringify({checks, errors}));
-  } finally { await browser.close(); }
+  } finally {
+    try { if (page && !page.isClosed()) await gpu.settleErrors(page); }
+    finally { console.log(JSON.stringify({browserCleanup:await owned.close()})); }
+  }
 })().catch(error => {console.error(error); process.exitCode = 1;});

@@ -12,7 +12,7 @@ use solomon_sim::native_ui_text::{
 use solomon_sim::social::party_ui::{fit_native_party_menu_text, native_party_menu_name_font};
 use solomon_sim::social::{GameChatWorldKind, party_member_display_name};
 
-use super::{SocialUi, gpu};
+use super::{Intent, SocialUi, gpu};
 use crate::gpu_ui::UiFrame;
 
 impl SocialUi {
@@ -106,6 +106,7 @@ impl SocialUi {
                     Sense::click(),
                 );
                 frame.record("social/party", "PARTY", "button", &header);
+                gpu::focus_outline(frame, ui, &header, 1.0);
                 if header.clicked() {
                     action = Some("party".to_owned());
                 }
@@ -166,6 +167,7 @@ impl SocialUi {
                         gpu::GOLD,
                         solomon_graphics::BlendMode::Normal,
                     );
+                    gpu::focus_outline(frame, ui, &response, 1.0);
                     if response.clicked() {
                         action = Some("party-settings".to_owned());
                     }
@@ -202,6 +204,7 @@ impl SocialUi {
                         action = Some(id);
                     }
                     gpu::brackets(frame, ui.painter(), &self.ui, bounds, 1.0)?;
+                    gpu::focus_outline(frame, ui, &response, 1.0);
                     let tags_width: f64 = tags
                         .iter()
                         .enumerate()
@@ -251,7 +254,7 @@ impl SocialUi {
             })
             .inner?;
         if let Some(action) = action {
-            self.activate(&action)?;
+            self.intents.borrow_mut().push(Intent::Action(action));
         }
         Ok(())
     }

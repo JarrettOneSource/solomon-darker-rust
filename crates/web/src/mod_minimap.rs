@@ -113,9 +113,10 @@ impl ModMinimapView {
             "hud.overlay" => screen.center() - size / 2.0,
             _ => pos2(screen.width() - 16.0 - size.x, 16.0),
         };
-        egui::Area::new(Id::unique("mod/minimap")).order(Order::Middle).fixed_pos(point).show(
-            &ctx,
-            |ui| {
+        egui::Area::new(Id::unique("mod/minimap"))
+            .order(Order::Middle)
+            .fixed_pos(point)
+            .show(&ctx, |ui| -> Result<(), String> {
                 let bounds = Rect::from_min_size(ui.min_rect().min, size);
                 ui.set_min_size(size);
                 if !model.actions.is_empty() {
@@ -171,25 +172,29 @@ impl ModMinimapView {
                     );
                 }
                 if let Some(binding) = &model.binding {
-                    painter.text(
+                    crate::social::gpu::browser_text(
+                        frame,
+                        &painter,
                         bounds.left_bottom() + vec2(7.2, -5.6),
                         egui::Align2::LEFT_BOTTOM,
                         binding,
                         FontId::new(10.0, FontFamily::Name("Alegreya".into())),
                         Color32::from_rgb(238, 227, 196),
-                    );
+                    )?;
                 }
                 // Source overlays each declared action at the same anchor, preserving order.
                 for action in &model.actions {
                     let font = FontId::new(10.0, FontFamily::Name("Alegreya".into()));
-                    let galley = ui.painter().layout_no_wrap(
-                        action.clone(),
+                    let label = crate::gpu_ui::font_run(
+                        frame.ctx,
                         font,
                         Color32::from_rgb(238, 227, 196),
-                    );
+                        action,
+                        None,
+                    )?;
                     let rect = Rect::from_center_size(
                         bounds.center_bottom() - vec2(0.0, 22.0),
-                        galley.size() + vec2(11.2, 6.4),
+                        label.size() + vec2(11.2, 6.4),
                     );
                     let response = ui.interact(
                         rect,
@@ -203,11 +208,7 @@ impl ModMinimapView {
                         Stroke::new(1.0, Color32::from_rgb(210, 190, 139)),
                         egui::StrokeKind::Inside,
                     );
-                    ui.painter().galley(
-                        rect.center() - galley.size() / 2.0,
-                        galley,
-                        Color32::WHITE,
-                    );
+                    label.paint(frame, ui.painter(), rect.center() - label.size() / 2.0, 1.0)?;
                     frame.record(
                         &format!("mod/minimap-action:{action}"),
                         action,
@@ -223,8 +224,9 @@ impl ModMinimapView {
                     }
                 }
                 frame.record_rect("mod/minimap", &model.label, "img", bounds, true);
-            },
-        );
+                Ok(())
+            })
+            .inner?;
         Ok(())
     }
 }

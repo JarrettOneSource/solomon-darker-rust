@@ -2,6 +2,20 @@
 
 use egui::{Pos2, Rect, vec2};
 
+/// The authored overlay's CSS timing curve, also used by stock hover transitions.
+pub fn css_bezier(t: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+    let curve = |v: f32, p1: f32, p2: f32| {
+        3.0 * (1.0 - v) * (1.0 - v) * v * p1 + 3.0 * (1.0 - v) * v * v * p2 + v * v * v
+    };
+    let mut low = 0.0;
+    let mut high = 1.0;
+    for _ in 0..16 {
+        let middle = (low + high) * 0.5;
+        if curve(middle, x1, x2) < t { low = middle } else { high = middle }
+    }
+    curve((low + high) * 0.5, y1, y2)
+}
+
 /// Clips a convex polygon against an ellipse's 64-plane approximation.
 pub fn clip_polygon_ellipse(mut points: Vec<Pos2>, bounds: Rect) -> Vec<Pos2> {
     if !bounds.is_positive() {
@@ -54,10 +68,80 @@ pub(super) fn clip_image_rect(source: Rect, destination: Rect, clip: Rect) -> Op
     ))
 }
 
+pub(super) fn shadow_geometry(
+    uv: Rect,
+    destination: Rect,
+    shadow: super::ImageShadow,
+) -> (Rect, Rect, solomon_graphics::AlphaShadow) {
+    let expanded =
+        destination.union(destination.translate(shadow.offset).expand(shadow.blur * 3.0));
+    let uv_per_point = uv.size() / destination.size();
+    let expanded_uv = Rect::from_min_max(
+        uv.min + (expanded.min - destination.min) * uv_per_point,
+        uv.max + (expanded.max - destination.max) * uv_per_point,
+    );
+    let offset = shadow.offset * uv_per_point;
+    let sigma = uv_per_point.abs() * shadow.blur;
+    let bounds = Rect::from_two_pos(uv.min, uv.max);
+    (
+        expanded,
+        expanded_uv,
+        solomon_graphics::AlphaShadow {
+            bounds: [bounds.left(), bounds.top(), bounds.right(), bounds.bottom()],
+            offset: [offset.x, offset.y],
+            sigma: [sigma.x, sigma.y],
+            color: shadow.color.to_srgba_unmultiplied().map(|channel| f32::from(channel) / 255.0),
+            only: false,
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use egui::{pos2, vec2};
+
+    #[test]
+    fn mirrored_shadow_uvs_keep_positive_sigma_and_screen_direction_offsets() {
+        let uv = Rect::from_min_max(pos2(0.6, 0.3), pos2(0.2, 0.5));
+        let destination = Rect::from_min_size(pos2(20.0, 30.0), vec2(40.0, 20.0));
+        let (_, expanded_uv, material) = shadow_geometry(
+            uv,
+            destination,
+            super::super::ImageShadow {
+                offset: vec2(2.0, 1.0),
+                blur: 3.0,
+                color: egui::Color32::BLACK,
+            },
+        );
+        assert_eq!(material.bounds, [0.2, 0.3, 0.6, 0.5]);
+        assert!(expanded_uv.left() > expanded_uv.right());
+        assert!(material.sigma.into_iter().all(|sigma| sigma > 0.0));
+        assert!(material.offset[0] < 0.0 && material.offset[1] > 0.0);
+    }
+
+    #[test]
+    fn shadow_padding_preserves_the_registered_crop_and_design_stage_scaling() {
+        let uv = Rect::from_min_max(pos2(0.2, 0.3), pos2(0.6, 0.5));
+        let destination = Rect::from_min_size(pos2(20.0, 30.0), vec2(40.0, 20.0));
+        let shadow = super::super::ImageShadow {
+            offset: vec2(0.0, 1.0),
+            blur: 3.0,
+            color: egui::Color32::BLACK,
+        };
+        let (expanded, expanded_uv, material) = shadow_geometry(uv, destination, shadow);
+        assert_eq!(expanded, Rect::from_min_max(pos2(11.0, 22.0), pos2(69.0, 60.0)));
+        assert!((expanded_uv.min - pos2(0.11, 0.22)).length() < 0.000001);
+        assert!((expanded_uv.max - pos2(0.69, 0.6)).length() < 0.000001);
+        assert_eq!(material.bounds, [uv.left(), uv.top(), uv.right(), uv.bottom()]);
+        let (_, scaled_uv, scaled_material) = shadow_geometry(
+            uv,
+            Rect::from_min_size(pos2(40.0, 60.0), vec2(80.0, 40.0)),
+            super::super::ImageShadow { offset: shadow.offset * 2.0, blur: 6.0, ..shadow },
+        );
+        assert_eq!(scaled_uv, expanded_uv);
+        assert_eq!(scaled_material, material);
+    }
 
     #[test]
     fn clipped_portrait_vertices_stay_inside_the_same_ellipse() {
