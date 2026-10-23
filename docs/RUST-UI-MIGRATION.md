@@ -148,6 +148,19 @@ shader fails the first case by 31 channel bytes. These focused shader results do
 establish feature-controller wiring or composed hover/focus appearance; those remain
 part of the menu owner's actual browser acceptance.
 
+The Create name die also retains Source `drop-shadow(0 1px 1px #000)` with outer
+opacity 0.78, changing to `brightness(1.25)` and a gold `drop-shadow(0 0 3px .../0.55)`
+on hover. Its offsets and Gaussian sigma are design-stage units, independent of the
+art's 0.525 scale. `StockAtlas::paint_shadowed` submits one padded quad: the shader
+convolves only the selected record's alpha, composites the filtered source over that
+shadow, then applies group opacity. Sampling clamps to the record's texel centers and
+returns transparent outside its bounds, preventing neighboring atlas records from
+entering the blur. It creates no additional texture or persistent effect cache.
+The canonical-shader probe now passes nine cases. Native idle/hover shadow comparisons
+differ by at most 4/2 channel bytes; the exact group-opacity case differs by at most 1.
+These Gaussian cases allow the specification's finite-kernel implementation variance;
+the original source without a shadow material fails the atlas-isolation case by 199.
+
 ## World notifications recovered before repair
 
 The visual-producer inventory found `crates/web/src/loot/messages.rs` still constructing

@@ -167,6 +167,14 @@ pub struct UiDiagnostics {
     pub widgets: Vec<WidgetGeometry>,
 }
 
+/// Source `drop-shadow`: offsets and Gaussian sigma in the current UI coordinates.
+#[derive(Clone, Copy, Debug)]
+pub struct ImageShadow {
+    pub offset: Vec2,
+    pub blur: f32,
+    pub color: Color32,
+}
+
 /// Shared painting seam. Feature controllers retain typed state and actions.
 pub struct UiFrame<'a> {
     pub ctx: &'a Context,
@@ -323,6 +331,51 @@ impl UiFrame<'_> {
         )
     }
 
+    /// Composites the blurred alpha and source together before applying tint alpha.
+    #[allow(clippy::too_many_arguments)]
+    pub fn atlas_image_shadowed(
+        &self,
+        painter: &Painter,
+        path: &str,
+        source: Rect,
+        destination: Rect,
+        shadow: ImageShadow,
+        tint: Color32,
+    ) -> bool {
+        assert!(shadow.blur.is_finite() && shadow.blur >= 0.0);
+        assert!(shadow.offset.is_finite());
+        if !destination.is_positive() {
+            return true;
+        }
+        let Some(size) = self.image_size(path) else {
+            self.images.request(path);
+            return false;
+        };
+        let uv = Rect::from_min_max(
+            (source.min.to_vec2() / size).to_pos2(),
+            (source.max.to_vec2() / size).to_pos2(),
+        );
+        let (destination, uv, shadow) = geometry::shadow_geometry(uv, destination, shadow);
+        let Some(texture_id) =
+            self.images.texture_id(path, BlendMode::Normal, false, self.color_filter, Some(shadow))
+        else {
+            return false;
+        };
+        self.paint_texture_quad(
+            painter,
+            texture_id,
+            [
+                destination.left_top(),
+                destination.right_top(),
+                destination.right_bottom(),
+                destination.left_bottom(),
+            ],
+            uv,
+            tint,
+        );
+        true
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn image_rotated(
         &self,
@@ -371,7 +424,8 @@ impl UiFrame<'_> {
         tint: Color32,
         blend: BlendMode,
     ) -> bool {
-        let Some(texture_id) = self.images.texture_id(path, blend, false, self.color_filter) else {
+        let Some(texture_id) = self.images.texture_id(path, blend, false, self.color_filter, None)
+        else {
             return false;
         };
         let mut mesh = egui::Mesh::with_texture(texture_id);
@@ -421,9 +475,22 @@ impl UiFrame<'_> {
         blend: BlendMode,
         mask: bool,
     ) -> bool {
-        let Some(texture_id) = self.images.texture_id(path, blend, mask, self.color_filter) else {
+        let Some(texture_id) = self.images.texture_id(path, blend, mask, self.color_filter, None)
+        else {
             return false;
         };
+        self.paint_texture_quad(painter, texture_id, positions, uv, tint);
+        true
+    }
+
+    fn paint_texture_quad(
+        &self,
+        painter: &Painter,
+        texture_id: egui::TextureId,
+        positions: [Pos2; 4],
+        uv: Rect,
+        tint: Color32,
+    ) {
         let mut mesh = egui::Mesh::with_texture(texture_id);
         let uvs = [uv.left_top(), uv.right_top(), uv.right_bottom(), uv.left_bottom()];
         mesh.vertices.extend(positions.into_iter().zip(uvs).map(|(pos, uv)| {
@@ -431,7 +498,6 @@ impl UiFrame<'_> {
         }));
         mesh.indices.extend_from_slice(&[0, 1, 2, 0, 2, 3]);
         painter.add(egui::Shape::mesh(mesh));
-        true
     }
 
     pub fn record(&self, id: &str, label: &str, role: &str, response: &Response) {

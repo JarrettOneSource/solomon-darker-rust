@@ -3,7 +3,15 @@
 use std::collections::BTreeMap;
 
 use egui::TextureId;
-use solomon_graphics::{BlendMode, ColorFilter};
+use solomon_graphics::{AlphaShadow, BlendMode, ColorFilter};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct ShadowKey {
+    bounds: [u32; 4],
+    offset: [u32; 2],
+    sigma: [u32; 2],
+    color: [u32; 4],
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct Material {
@@ -12,6 +20,7 @@ pub(super) struct Material {
     pub mask: bool,
     brightness: u32,
     saturation: u32,
+    shadow: Option<ShadowKey>,
 }
 
 impl Material {
@@ -26,7 +35,27 @@ impl Material {
             mask,
             brightness: filter.brightness.to_bits(),
             saturation: filter.saturation.to_bits(),
+            shadow: None,
         }
+    }
+
+    pub fn with_shadow(mut self, shadow: AlphaShadow) -> Self {
+        self.shadow = Some(ShadowKey {
+            bounds: shadow.bounds.map(f32::to_bits),
+            offset: shadow.offset.map(f32::to_bits),
+            sigma: shadow.sigma.map(f32::to_bits),
+            color: shadow.color.map(f32::to_bits),
+        });
+        self
+    }
+
+    pub fn shadow(self) -> Option<AlphaShadow> {
+        self.shadow.map(|shadow| AlphaShadow {
+            bounds: shadow.bounds.map(f32::from_bits),
+            offset: shadow.offset.map(f32::from_bits),
+            sigma: shadow.sigma.map(f32::from_bits),
+            color: shadow.color.map(f32::from_bits),
+        })
     }
 
     pub fn blend(self) -> BlendMode {
@@ -74,6 +103,30 @@ impl Materials {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shadow_materials_retain_their_crop_without_aliasing_plain_images() {
+        let base = Material::new(1, BlendMode::Normal, false, ColorFilter::default());
+        let shadow = AlphaShadow {
+            bounds: [0.1, 0.2, 0.3, 0.4],
+            offset: [0.0, 0.01],
+            sigma: [0.02, 0.02],
+            color: [0.0, 0.0, 0.0, 0.55],
+        };
+        let mut materials = Materials::default();
+        let image_id = materials.texture_id(base);
+        let shadow_id = materials.texture_id(base.with_shadow(shadow));
+        assert_ne!(image_id, shadow_id);
+        assert_eq!(shadow_id, materials.texture_id(base.with_shadow(shadow)));
+        assert_ne!(
+            shadow_id,
+            materials.texture_id(
+                base.with_shadow(AlphaShadow { bounds: [0.5, 0.6, 0.7, 0.8], ..shadow })
+            )
+        );
+        let TextureId::User(id) = shadow_id else { panic!("shadow is an image material") };
+        assert_eq!(materials.get(id).unwrap().shadow(), Some(shadow));
+    }
 
     #[test]
     fn image_filters_batch_identical_materials_without_aliasing_blend_or_mask() {
