@@ -266,6 +266,19 @@ impl MenuUi {
             Screen::Settings => "settings",
         }
     }
+    fn navigation_scope(&self) -> String {
+        if self.routing.active() {
+            "routing".to_owned()
+        } else if self.prompt.kind.is_some() {
+            "title-prompt".to_owned()
+        } else if self.screen == Screen::Settings {
+            self.settings_view.navigation_scope()
+        } else if self.screen == Screen::Cloud {
+            self.cloud.navigation_scope()
+        } else {
+            format!("{:?}-{:?}", self.screen, self.selected_element)
+        }
+    }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let keys = frame.key_codes().to_vec();
         let editing = frame.ctx.text_edit_focused();
@@ -306,6 +319,7 @@ impl MenuUi {
             }
         }
         if self.orientation_blocked {
+            frame.input_scope("landscape-guidance");
             let view = frame.ctx.input(|i| i.content_rect());
             let ctx = frame.ctx.clone();
             egui::Modal::new(Id::unique("landscape-guidance"))
@@ -332,6 +346,9 @@ impl MenuUi {
                     );
                 });
             return Ok(());
+        }
+        if !self.input_suspended && self.pending_start.is_none() && self.is_blocking() {
+            frame.input_scope(&self.navigation_scope());
         }
         if self.screen == Screen::Hidden && !self.routing.active() {
             return Ok(());
@@ -402,17 +419,20 @@ impl MenuUi {
             std::mem::replace(&mut result, Ok(()))?;
         }
         if !self.input_suspended && self.pending_start.is_none() {
-            let scope = if self.routing.active() {
-                "routing".to_owned()
-            } else if self.prompt.kind.is_some() {
-                "title-prompt".to_owned()
-            } else if self.screen == Screen::Settings {
-                self.settings_view.navigation_scope()
-            } else if self.screen == Screen::Cloud {
-                self.cloud.navigation_scope()
-            } else {
-                format!("{:?}-{:?}", self.screen, self.selected_element)
-            };
+            let scope = self.navigation_scope();
+            let navigation_requested = !ctx.text_edit_focused()
+                && ctx.input(|input| {
+                    [
+                        egui::Key::Enter,
+                        egui::Key::Tab,
+                        egui::Key::ArrowUp,
+                        egui::Key::ArrowDown,
+                        egui::Key::ArrowLeft,
+                        egui::Key::ArrowRight,
+                    ]
+                    .into_iter()
+                    .any(|key| input.key_pressed(key))
+                });
             let preferred = if self.routing.active() {
                 Some("routing-back".to_owned())
             } else if self.prompt.kind.is_some() {
@@ -420,16 +440,25 @@ impl MenuUi {
             } else {
                 match self.screen {
                     Screen::Title | Screen::Play => Some(self.title.default_focus().to_owned()),
-                    Screen::Create => self.create.default_focus().map(str::to_owned),
+                    Screen::Create if navigation_requested => {
+                        self.create.default_focus().map(str::to_owned)
+                    }
+                    Screen::Create => None,
                     Screen::Pause => Some("resume".to_owned()),
                     Screen::Settings => self.settings_view.default_focus(),
                     Screen::Hall => Some("hall-back".to_owned()),
-                    Screen::Join => Some("join-party-code".to_owned()),
+                    Screen::Join if navigation_requested => Some("join-party-code".to_owned()),
+                    Screen::Join => None,
                     Screen::Cloud => self.cloud.default_focus(),
                     Screen::Hidden => None,
                 }
             };
             self.navigation.update(&ctx, &scope, preferred.as_deref());
+            if let Some(action) = self.navigation.take_confirmation() {
+                if !matches!(action.as_str(), "join-party-code") {
+                    actions.push(action);
+                }
+            }
             if frame.key_codes().is_empty() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.back()?;
             }
@@ -1322,6 +1351,7 @@ impl MenuUi {
     }
 
     fn settings_changed(&mut self) -> Result<(), String> {
+        self.settings_view.take_changed();
         let settings = self.settings_view.read()?;
         if settings != self.settings {
             // The coordinator may require private-College consent. Keep accepted
@@ -1585,7 +1615,7 @@ impl PauseView {
     fn paint(
         &self,
         frame: &mut UiFrame<'_>,
-        ui: &egui::Ui,
+        ui: &mut egui::Ui,
         view: Rect,
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
@@ -1600,10 +1630,11 @@ impl PauseView {
         let stage =
             widgets::Stage { origin: view.center() - Vec2::new(800.0, 450.0) * scale, scale };
         ui.painter().rect_filled(view, 0.0, widgets::alpha(0, self.reveal * 0.85));
+        ui.set_opacity(self.reveal as f32);
         let spread = solomon_sim::float::fround((1.0 - self.reveal) * 25.0 + 40.0);
         let top = (900.0 - self.body_height()) / 2.0 - spread;
         let bottom = top + self.body_height() + spread * 2.0;
-        self.atlas.paint_native_frame(
+        self.atlas.paint_native_frame_scaled(
             frame,
             ui.painter(),
             17,
@@ -1613,8 +1644,9 @@ impl PauseView {
                 353.0 + spread * 2.0,
                 self.body_height() + spread * 2.0,
             ),
+            scale,
             true,
-            widgets::alpha(0xffffff, self.reveal),
+            Color32::WHITE,
         )?;
         self.atlas.paint_centered(
             frame,
@@ -1623,7 +1655,7 @@ impl PauseView {
             stage.at(800.0, top - 42.0),
             scale,
             std::f32::consts::FRAC_PI_2,
-            widgets::alpha(0xffffff, self.reveal),
+            Color32::WHITE,
         )?;
         for (x, offset, size) in [(800.0, 55.0, 1.0), (725.0, 42.0, 0.75), (875.0, 42.0, 0.75)] {
             self.atlas.paint_centered(
@@ -1633,7 +1665,7 @@ impl PauseView {
                 stage.at(x, bottom + offset),
                 scale * size,
                 0.0,
-                widgets::alpha(0xffffff, self.reveal),
+                Color32::WHITE,
             )?;
         }
         for (index, (label, id)) in self.rows.iter().enumerate() {

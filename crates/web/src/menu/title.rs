@@ -276,14 +276,14 @@ impl TitleView {
                 continue;
             }
             let rect = controls.rect(0.0, f64::from(row) * 76.0, 353.0, 69.0);
-            let admitted = enabled && (action != "continue" || self.can_resume);
-            let response =
-                widgets::stock_button(frame, ui, action, "", rect, controls_scale, admitted);
-            frame.record_rect(action, label, "button", rect, admitted);
+            let available = action != "continue" || self.can_resume;
+            let admitted = enabled && available;
+            let response = widgets::interact(frame, ui, action, label, "button", rect, admitted);
+            widgets::paint_stock_button(frame, ui, &response, rect, controls_scale, available);
             if response.clicked() && admitted {
                 actions.push(action.to_owned());
             }
-            let tint = widgets::alpha(0xffffff, if admitted { 1.0 } else { 0.36 });
+            let tint = widgets::alpha(0xffffff, if available { 1.0 } else { 0.36 });
             let press = if response.is_pointer_button_down_on() {
                 Vec2::splat(6.0 * controls_scale)
             } else {

@@ -33,33 +33,15 @@ impl CloudArt {
                 Color32::WHITE,
             )?;
         }
-        for (index, x, y, rotation) in [
-            (29, 135.0, 83.0, std::f32::consts::PI),
-            (29, w - 135.0, 83.0, 0.0),
-            (31, w - 112.0, 18.0, 0.0),
-            (32, 104.0, 26.5, 0.0),
-            (32, w + 44.0, h - 126.5, 0.0),
-            (31, -57.0, h - 135.0, 0.0),
+        for (index, x, y, anchor, mirror) in [
+            (29, 135.0, 83.0, [0.5, 0.5], [true, true]),
+            (29, w - 135.0, 83.0, [0.5, 0.5], [false, true]),
+            (31, w - 112.0, 18.0, [0.0, 0.0], [false, false]),
+            (32, 104.0, 26.5, [0.0, 0.0], [true, false]),
+            (32, w + 44.0, h - 126.5, [0.0, 0.0], [true, false]),
+            (31, -57.0, h - 135.0, [0.0, 0.0], [false, false]),
         ] {
-            self.ui.paint(
-                frame,
-                ui.painter(),
-                index,
-                view.min + Vec2::new(x, y),
-                1.0,
-                Color32::WHITE,
-            )?;
-            if rotation != 0.0 {
-                self.ui.paint_centered(
-                    frame,
-                    ui.painter(),
-                    index,
-                    view.min + Vec2::new(x, y),
-                    1.0,
-                    rotation,
-                    Color32::WHITE,
-                )?;
-            }
+            self.sprite(frame, ui, index, view.min + Vec2::new(x, y), anchor, 1.0, mirror)?;
         }
         for (left, positions) in [
             (0.0, [[-42.5, 162.5], [-82.5, (h - 8.0) / 2.0]]),
@@ -73,12 +55,104 @@ impl CloudArt {
                 self.ui.paint(frame, &clip, 20, view.min + Vec2::new(x, y), 1.0, Color32::WHITE)?;
             }
         }
+        ui.painter().rect_filled(
+            Rect::from_min_size(view.min, Vec2::new(w, 50.0)),
+            0.0,
+            Color32::BLACK,
+        );
         widgets::gradient(
             ui,
-            Rect::from_min_size(view.min, Vec2::new(w, 150.0)),
+            Rect::from_min_size(view.min + Vec2::new(0.0, 50.0), Vec2::new(w, 100.0)),
             Color32::BLACK,
             Color32::TRANSPARENT,
         );
+        let shadow = |vertices: [egui::Pos2; 4], colors: [Color32; 4]| {
+            let mut mesh = egui::Mesh::default();
+            for (pos, color) in vertices.into_iter().zip(colors) {
+                mesh.colored_vertex(view.min + pos.to_vec2(), color);
+            }
+            mesh.add_triangle(0, 1, 2);
+            mesh.add_triangle(0, 2, 3);
+            ui.painter().add(egui::Shape::mesh(mesh));
+        };
+        let transparent = Color32::TRANSPARENT;
+        let black = Color32::BLACK;
+        shadow(
+            [
+                egui::pos2(-5.0, 113.0),
+                egui::pos2(w + 5.0, 113.0),
+                egui::pos2(w - 55.0, 173.0),
+                egui::pos2(55.0, 173.0),
+            ],
+            [transparent, transparent, black, black],
+        );
+        shadow(
+            [
+                egui::pos2(55.0, h - 100.0),
+                egui::pos2(w - 55.0, h - 100.0),
+                egui::pos2(w + 5.0, h - 40.0),
+                egui::pos2(-5.0, h - 40.0),
+            ],
+            [black, black, transparent, transparent],
+        );
+        shadow(
+            [
+                egui::pos2(-5.0, 113.0),
+                egui::pos2(55.0, 173.0),
+                egui::pos2(55.0, h - 100.0),
+                egui::pos2(-5.0, h - 40.0),
+            ],
+            [transparent, black, black, transparent],
+        );
+        shadow(
+            [
+                egui::pos2(w - 55.0, 173.0),
+                egui::pos2(w + 5.0, 113.0),
+                egui::pos2(w + 5.0, h - 40.0),
+                egui::pos2(w - 55.0, h - 100.0),
+            ],
+            [black, transparent, transparent, black],
+        );
+        Ok(())
+    }
+    fn sprite(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        index: usize,
+        position: egui::Pos2,
+        anchor: [f32; 2],
+        scale: f32,
+        mirror: [bool; 2],
+    ) -> Result<(), String> {
+        let record = self.ui.record(index)?;
+        let registered = record.registered_origin();
+        let logical = Vec2::new(record.logical_width as f32, record.logical_height as f32);
+        let origin = position - Vec2::new(logical.x * anchor[0], logical.y * anchor[1]) * scale;
+        let rect = Rect::from_min_size(
+            origin + Vec2::from(registered) * scale,
+            Vec2::new(record.width as f32, record.height as f32) * scale,
+        );
+        let size = frame.image_size(self.ui.path()).ok_or("UI atlas not ready")?;
+        let uv = Rect::from_min_max(
+            egui::pos2(record.x as f32 / size.x, record.y as f32 / size.y),
+            egui::pos2(
+                (record.x + record.width) as f32 / size.x,
+                (record.y + record.height) as f32 / size.y,
+            ),
+        );
+        let quad = [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()]
+            .map(|p| {
+                let mut delta = p - position;
+                if mirror[0] {
+                    delta.x = -delta.x;
+                }
+                if mirror[1] {
+                    delta.y = -delta.y;
+                }
+                position + delta
+            });
+        frame.image_quad(ui.painter(), self.ui.path(), quad, uv, Color32::WHITE);
         Ok(())
     }
     pub fn list(&self, frame: &UiFrame<'_>, ui: &Ui, rect: Rect, scale: f32) -> Result<(), String> {
@@ -91,7 +165,15 @@ impl CloudArt {
             scale,
             Color32::WHITE,
         )?;
-        self.ui.paint_native_frame(frame, ui.painter(), 17, rect, true, Color32::WHITE)?;
+        self.ui.paint_native_frame_scaled(
+            frame,
+            ui.painter(),
+            17,
+            rect,
+            scale,
+            true,
+            Color32::WHITE,
+        )?;
         for (index, dest) in [
             (
                 10,
@@ -221,6 +303,49 @@ impl CloudArt {
         );
         Ok(())
     }
+    pub fn button(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        id: &str,
+        label: &str,
+        rect: Rect,
+        scale: f32,
+        enabled: bool,
+    ) -> egui::Response {
+        let response = widgets::interact(frame, ui, id, label, "button", rect, enabled);
+        let alpha = if enabled { 1.0 } else { 0.5 };
+        let pressed = enabled && response.is_pointer_button_down_on();
+        widgets::paint_stock_button_tinted(
+            frame,
+            ui,
+            rect,
+            scale,
+            enabled,
+            pressed,
+            widgets::alpha(0xffffff, alpha),
+        );
+        let press = if pressed { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
+        crate::gpu_ui::native_text(
+            frame,
+            ui.painter(),
+            &solomon_sim::native_ui_text::NativeUiTextSpec {
+                alpha,
+                scale: f64::from(scale),
+                tint: 0xd9ba70,
+                ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
+                    NativeUiFontName::Menu,
+                    label,
+                    f64::from(rect.center().x + press.x),
+                    f64::from(rect.center().y + 9.0 * scale + press.y),
+                )
+            },
+        );
+        if !enabled {
+            ui.painter().rect_filled(rect, 0.0, widgets::alpha(0x808080, 0.25));
+        }
+        response
+    }
     pub fn tool(
         &self,
         frame: &mut UiFrame<'_>,
@@ -233,43 +358,72 @@ impl CloudArt {
     ) -> Result<bool, String> {
         let response = widgets::interact(frame, ui, id, label, "button", rect, enabled);
         let scale = rect.height() / 52.0;
-        self.ui.paint_raw(
+        let pressed = enabled && response.is_pointer_button_down_on();
+        self.ui.paint_centered(
             frame,
-            ui.painter(),
-            if response.is_pointer_button_down_on() { 104 } else { 103 },
-            rect,
+            &ui.painter().with_clip_rect(rect.intersect(ui.clip_rect())),
+            if pressed { 104 } else { 103 },
+            rect.center(),
+            scale,
+            0.0,
             Color32::WHITE,
         )?;
+        let press = if pressed { Vec2::splat(4.0 * scale) } else { Vec2::ZERO };
+        let alpha = if enabled { 1.0 } else { 0.5 };
         if let Some(icon) = icon {
             self.ui.paint_centered(
                 frame,
                 ui.painter(),
                 icon,
-                rect.center(),
+                rect.center() + press,
                 scale,
                 0.0,
-                Color32::WHITE,
+                widgets::alpha(0xffffff, alpha),
             )?;
         } else {
-            widgets::native(
+            crate::gpu_ui::native_text(
                 frame,
-                ui,
-                &label.to_lowercase(),
-                NativeUiFontName::Menu,
-                rect.center() + Vec2::new(0.0, 8.0 * scale),
-                scale,
-                0xd9ba70,
-                NativeUiTextAlign::Center,
+                ui.painter(),
+                &solomon_sim::native_ui_text::NativeUiTextSpec {
+                    alpha,
+                    scale: f64::from(scale),
+                    tint: 0xd9ba70,
+                    ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
+                        NativeUiFontName::Menu,
+                        &label.to_lowercase(),
+                        f64::from(rect.center().x + press.x),
+                        f64::from(rect.center().y + 8.0 * scale + press.y),
+                    )
+                },
             );
         }
-        self.ui.paint_native_frame(
-            frame,
-            ui.painter(),
-            53,
-            rect.expand(6.0 * scale),
-            false,
-            Color32::WHITE,
-        )?;
+        if !enabled {
+            ui.painter().rect_filled(rect, 0.0, widgets::alpha(0x808080, 0.25));
+        }
+        for (position, mirror) in [
+            (rect.min - Vec2::splat(6.0 * scale), [false, false]),
+            (rect.right_top() + Vec2::new(6.0, -6.0) * scale, [true, false]),
+        ] {
+            self.sprite(frame, ui, 53, position, [0.0, 0.0], scale, mirror)?;
+        }
+        let record = self.ui.record(53)?;
+        let connector = rect.width() - 42.0 * scale;
+        if connector > 0.0 {
+            self.ui.paint_slice(
+                frame,
+                ui.painter(),
+                53,
+                Rect::from_min_size(
+                    egui::pos2(record.width as f32 * 0.95, 0.0),
+                    Vec2::new(record.width as f32 * 0.05, record.height as f32),
+                ),
+                Rect::from_min_size(
+                    rect.min + Vec2::new(21.0, -6.0) * scale,
+                    Vec2::new(connector, 62.0 * scale),
+                ),
+                Color32::WHITE,
+            )?;
+        }
         Ok(response.clicked() && enabled)
     }
 }

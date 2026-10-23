@@ -286,6 +286,7 @@ impl HallView {
             stage.rect(200.0, 80.0, 1200.0, 695.0)
         };
         let scale = if compact { 1.0 } else { stage.scale };
+        frame.record_rect("hall-records", "Hall records", "region", box_rect, true);
         self.ui.paint_tiles(frame, ui.painter(), 49, box_rect, scale, Color32::WHITE)?;
         let mut child =
             ui.new_child(egui::UiBuilder::new().id_salt("hall-content").max_rect(box_rect));
@@ -331,6 +332,8 @@ impl HallView {
                 } else {
                     error.unwrap_or("No records yet.")
                 };
+                frame.record_rect("hall-status", text, "status", box_rect, false);
+                frame.record_value("hall-status", text, None);
                 hall_text(
                     frame,
                     ui,
@@ -512,11 +515,12 @@ impl HallView {
                 widgets::alpha(0xd9ba70, hall_highlight_fill_alpha(tick)),
             );
         }
-        self.ui.paint_native_frame(
+        self.ui.paint_native_frame_scaled(
             frame,
             ui.painter(),
             17,
             rect,
+            stage.scale,
             false,
             widgets::alpha(0xffffff, if current { hall_current_frame_alpha(tick) } else { 0.2 }),
         )?;
@@ -530,21 +534,24 @@ impl HallView {
             Color32::WHITE,
         )?;
         hall_text(frame, ui, stage, &rank, layout.rank);
-        let orb = self.portraits.paint_wizard(
+        let portrait_scale = stage.scale * 1.25 * entry.portrait_scale as f32;
+        self.portraits.paint_wizard_with_orb(
             frame,
             ui.painter(),
             entry.element,
             (entry.heading_index % 24) as usize,
             stage.at(layout.wizard.x, layout.wizard.y),
-            stage.scale * 1.25 * entry.portrait_scale as f32,
-        )?;
-        paint_vfx(
-            frame,
-            ui.painter(),
-            &self.vfx,
-            orb,
-            stage.scale * 1.25 * entry.portrait_scale as f32,
-            &solomon_sim::element_vfx::native_element_vfx_plan(entry.element, tick, 1.0),
+            portrait_scale,
+            |frame, painter, orb| {
+                paint_vfx(
+                    frame,
+                    painter,
+                    &self.vfx,
+                    orb,
+                    portrait_scale,
+                    &solomon_sim::element_vfx::native_element_vfx_plan(entry.element, tick, 1.0),
+                )
+            },
         )?;
         for (value, anchor) in [
             (entry.wizard_name.clone(), layout.name),
@@ -625,7 +632,7 @@ impl HallView {
         ] {
             hall_text(frame, ui, stage, &value, anchor);
         }
-        self.ui.paint_native_frame(
+        self.ui.paint_native_frame_scaled(
             frame,
             ui.painter(),
             50,
@@ -635,6 +642,7 @@ impl HallView {
                 layout.kills_frame.width,
                 layout.kills_frame.height,
             ),
+            stage.scale,
             false,
             widgets::alpha(0xffffff, 0.5),
         )?;

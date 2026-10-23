@@ -305,6 +305,7 @@ impl JoinView {
             egui::Stroke::new(1.0, widgets::alpha(0xbf9d4e, 0.45)),
             egui::StrokeKind::Inside,
         );
+        frame.record_rect("join-party-list", "Party directory", "region", list, true);
         let mut child = ui.new_child(
             egui::UiBuilder::new()
                 .id_salt("join-list")

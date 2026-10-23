@@ -1,6 +1,6 @@
 //! The pinned title confirmations retain the stock message art and modal choices.
 use super::widgets::{self, Stage};
-use crate::gpu_ui::{StockAtlas, UiFrame, message_frame};
+use crate::gpu_ui::{StockAtlas, UiFrame, message_frame_scaled};
 use egui::{Align2, Color32, Rect, Ui, Vec2};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum TitlePromptKind {
@@ -38,7 +38,13 @@ impl TitlePrompt {
             native
         };
         let stage = Stage { origin: view.center() - Vec2::new(250.0, 182.0) * scale, scale };
-        message_frame(frame, ui.painter(), &self.atlas, stage.rect(0.0, 0.0, 500.0, 362.0))?;
+        message_frame_scaled(
+            frame,
+            ui.painter(),
+            &self.atlas,
+            stage.rect(0.0, 0.0, 500.0, 362.0),
+            scale,
+        )?;
         let (title, body) = match kind {
             TitlePromptKind::Tutorial => (
                 "PLAY THE TUTORIAL?",

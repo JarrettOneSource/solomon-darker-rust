@@ -1,148 +1,110 @@
-// Read-only journey against the configured Website backend. No fabricated mod
-// rows, subscription changes, comments or party admission are used by this check.
+// Read actual Website content through GPU catalog/detail/modal/input controls.
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { chromium } = require(path.resolve(process.env.PW));
+const {chromium} = require(path.resolve(process.env.PW));
+const gpu = require('./gpu-ui.cjs');
 
-async function assertListFrameFits(scene) {
-  const boxes = await scene.evaluate(root => {
-    const frame = root.querySelector('.dark-cloud-list-frame').getBoundingClientRect();
-    const art = root.querySelector('.dark-cloud-native-list-art > .stock-nine-slice:last-child').getBoundingClientRect();
-    return {frame: frame.toJSON(), art: art.toJSON()};
-  });
-  for (const edge of ['left', 'top', 'right', 'bottom']) {
-    assert.ok(Math.abs(boxes.frame[edge] - boxes.art[edge]) < 1,
-      `Cloud ${edge} artwork follows its own layout box under CSS zoom: ${JSON.stringify(boxes)}`);
+async function revealTab(page, id) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (gpu.findWidget(await gpu.readUi(page), id)) return;
+    await gpu.wheel(page, 'cloud-tabs', 240, 0);
+    await gpu.nextFrame(page);
   }
+  throw new Error(`Cloud tab did not scroll into view: ${id}`);
 }
-
-async function assertSelectedTabVisible(scene) {
-  const boxes = await scene.evaluate(root => {
-    const nav = root.querySelector('.dark-cloud-tabs');
-    return {host:nav.getBoundingClientRect().toJSON(),
-      selected:nav.querySelector('[aria-selected="true"]').getBoundingClientRect().toJSON(),
-      viewport:window.innerWidth};
-  });
-  assert.ok(boxes.host.left >= -1 && boxes.host.right <= boxes.viewport + 1,
-    `Cloud tab viewport stays onscreen: ${JSON.stringify(boxes)}`);
-  assert.ok(boxes.selected.left >= boxes.host.left - 1 && boxes.selected.right <= boxes.host.right + 1,
-    `Cloud selected band is visible: ${JSON.stringify(boxes)}`);
-}
-
 (async () => {
-  const browser = await chromium.launch({
-    headless: true,
+  const browser = await chromium.launch({headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
-  });
-  const errors = [];
-  const failedRequests = [];
-  const cancelledMedia = [];
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
+  const checks = [];
   let page;
   try {
-    page = await browser.newPage({
-      viewport: {width: 1600, height: 900},
-      ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
-    });
-    page.on('pageerror', error => errors.push(error.message));
-    page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
-    page.on('requestfailed', request => {
-      const receipt = {path: new URL(request.url()).pathname, failure: request.failure()};
-      if (request.resourceType() === 'media' && request.failure()?.errorText === 'net::ERR_ABORTED') cancelledMedia.push(receipt);
-      else failedRequests.push(receipt);
-    });
-    page.on('response', response => {if (response.status() >= 400) failedRequests.push({path: new URL(response.url()).pathname, status: response.status()});});
+    page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
+    const {errors} = gpu.watchErrors(page);
     const catalogs = [];
+    const details = [];
     page.on('response', response => {
-      if (new URL(response.url()).pathname.endsWith('/api/mods') && response.ok()) catalogs.push(response.json());
+      const pathname = new URL(response.url()).pathname;
+      if (pathname.endsWith('/api/mods') && response.ok()) catalogs.push(response.json());
+      else if (/\/api\/mods\/[^/]+$/.test(pathname) && response.ok()) details.push(response.json());
     });
-    await page.goto(process.env.URL || 'http://127.0.0.1:4181/', {waitUntil: 'load'});
-    await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-      && document.getElementById('status').textContent === '', null, {timeout: 60000});
-    if (await page.locator('.title-prompt:not([hidden])').isVisible()) await page.locator('[data-menu-action="prompt-secondary"]').click();
-    await page.getByRole('button', {name: 'Explore the Dark Cloud', exact: true}).click();
-    const scene = page.locator('.dark-cloud-scene:not([hidden])');
-    await scene.waitFor();
-    await scene.locator('.dark-cloud-rows[aria-busy="false"]').waitFor({timeout: 30000});
-    assert.ok(catalogs.length > 0, 'the real catalog was requested');
-    const pages = await Promise.all(catalogs);
-    const actual = [...new Set(pages.flatMap(result => result.items.map(item => item.slug)))].sort();
-    assert.deepEqual(await scene.locator('[data-mod-slug]').evaluateAll(rows => rows.map(row => row.dataset.modSlug).sort()), actual);
-    assert.equal(await scene.locator('[data-native-ui-font="heading"]').count() > 0, true, 'stock heading glyphs are present');
-    await assertListFrameFits(scene);
-    await assertSelectedTabVisible(scene);
+    await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
+    await gpu.ready(page);
+    if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) await gpu.click(page, 'prompt-secondary');
+    await gpu.click(page, 'explore');
+    await gpu.surface(page, 'dark-cloud');
+    await gpu.waitForUi(page, () => catalogs.length > 0, 'actual catalog response');
+    const catalog = await catalogs.at(-1);
+    const actual = new Map(catalog.items.map(item => [item.slug, item]));
+    await gpu.waitForUi(page, s => !gpu.findWidget(s, 'cloud-list-status')?.value.includes('CONSULTING'), 'accepted catalog');
+    const visible = (await gpu.readUi(page)).widgets.filter(w => w.id.startsWith('cloud-select:mod:'));
+    for (const row of visible) assert.ok(actual.has(row.id.slice('cloud-select:mod:'.length)), 'rendered mod is real catalog content');
+    await gpu.assertGpuOnly(page);
     await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'dark-cloud-catalog.png')});
-    await scene.getByRole('button', {name: 'Search', exact: true}).click();
-    const search = page.getByRole('dialog', {name: 'SEARCH THE DARK CLOUD', exact: true});
-    const input = search.locator('#dark-cloud-search-input');
-    await input.fill('no-source-mod-can-match-this-93c1');
-    await input.click();
-    assert.equal(await input.evaluate(node => document.activeElement === node), true, 'editing does not submit the search form');
-    await input.press('Enter');
-    await search.waitFor({state: 'hidden'});
-    assert.equal(await scene.locator('[data-mod-slug]').count(), 0);
-    await scene.locator('[data-menu-action="cloud-clear-query"]:visible').click();
-    await scene.getByRole('button', {name: 'Sort', exact: true}).click();
-    await page.getByRole('dialog', {name: 'SORT MODS BY...', exact: true}).getByRole('button', {name: 'NAME', exact: true}).click();
-    const detailChecks = [];
-    if (actual.length > 0) {
-      const first = scene.locator('[data-mod-slug]').first();
-      const slug = await first.getAttribute('data-mod-slug');
-      const detailResponse = page.waitForResponse(response => new URL(response.url()).pathname.endsWith(`/api/mods/${slug}`) && response.ok());
-      await first.locator('.dark-cloud-row-main').dblclick();
-      const detail = await (await detailResponse).json();
-      const dialog = page.locator('dialog.dark-cloud-detail[open]');
-      await dialog.waitFor();
-      await page.waitForFunction(() => !document.querySelector('.dark-cloud-versions .dark-cloud-section-heading')?.textContent.includes('LOADING'));
-      assert.equal(await dialog.locator('.dark-cloud-gallery-thumbnails button').count(), detail.screenshots.length > 1 ? detail.screenshots.length : 0);
-      assert.equal(await dialog.locator('.dark-cloud-detail-subscription').evaluate(node => Boolean(node.closest('aside.dark-cloud-detail-summary'))), true);
+    checks.push('actual catalog and stock GPU scene');
+    await gpu.click(page, 'cloud-search');
+    await gpu.fill(page, 'dark-cloud-search-input', 'no-source-mod-can-match-this-93c1');
+    await gpu.focused(page, 'dark-cloud-search-input');
+    await page.keyboard.press('Enter');
+    await gpu.noWidget(page, 'dark-cloud-search-input');
+    await gpu.waitForUi(page, s => gpu.findWidget(s, 'cloud-list-status')?.value.includes('0 MATCHES'), 'no matching real content');
+    await gpu.click(page, 'cloud-clear-query');
+    await gpu.click(page, 'cloud-sort');
+    await gpu.click(page, 'cloud-sort:name');
+    await gpu.focused(page, 'cloud-sort');
+    checks.push('search edit/Enter/clear, sort, modal return focus');
+    const firstMod = (await gpu.readUi(page)).widgets.find(w => w.id.startsWith('cloud-select:mod:'));
+    if (firstMod) {
+      const slug = firstMod.id.slice('cloud-select:mod:'.length);
+      await gpu.click(page, firstMod.id, {clickCount: 2});
+      await gpu.widget(page, 'cloud-detail-title');
+      await gpu.waitForUi(page, () => details.length > 0, 'actual detail');
+      const detail = await details.at(-1);
+      assert.equal((await gpu.widget(page, 'cloud-detail-title')).value, actual.get(slug).name);
       if (detail.screenshots.length > 1) {
-        await dialog.getByRole('button', {name: 'NEXT IMAGE', exact: true}).click();
-        await page.waitForFunction(() => document.querySelector('.dark-cloud-gallery .dark-cloud-section-heading')?.textContent.includes('2 /'));
+        await gpu.click(page, 'cloud-gallery-next');
+        await gpu.value(page, 'cloud-gallery-image', `2 / ${detail.screenshots.length}`);
         await page.keyboard.press('ArrowLeft');
-        await page.waitForFunction(() => document.querySelector('.dark-cloud-gallery .dark-cloud-section-heading')?.textContent.includes('1 /'));
-        detailChecks.push('actual gallery navigation');
+        await gpu.value(page, 'cloud-gallery-image', `1 / ${detail.screenshots.length}`);
+        checks.push('actual screenshot gallery navigation');
       }
       await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'dark-cloud-detail.png')});
       await page.keyboard.press('Escape');
-      await dialog.waitFor({state: 'hidden'});
-      detailChecks.push('real catalog double activation', 'actual detail/version/comments receipts', 'native modal Escape');
+      await gpu.noWidget(page, 'cloud-detail-title');
+      await gpu.focused(page, firstMod.id);
+      checks.push('real row double activation, detail receipt, modal Escape and restored row focus');
     }
     await page.keyboard.press('Escape');
-    await page.locator('.game-menus[data-menu-screen="pause"]').waitFor();
-    await page.waitForFunction(() => document.querySelector('.pause-stage')?.style.opacity === '1');
+    await gpu.surface(page, 'pause');
+    await page.waitForTimeout(400);
     await page.keyboard.press('Escape');
-    assert.equal(await page.locator('.game-menus').getAttribute('data-menu-screen'), 'pause', 'source Cloud menu has no keyboard Escape action');
-    await page.getByRole('button', {name: 'GAME SETTINGS', exact: true}).click();
-    await page.locator('.game-settings-backdrop:not([hidden])').waitFor();
-    await page.locator('[data-menu-action="settings-back"]').click();
-    await page.locator('.game-menus[data-menu-screen="dark-cloud"]').waitFor();
+    await gpu.surface(page, 'pause');
+    await gpu.click(page, 'pause-settings');
+    await gpu.surface(page, 'settings');
+    await gpu.click(page, 'settings-back');
+    await gpu.surface(page, 'dark-cloud');
     await page.setViewportSize({width: 896, height: 414});
-    await scene.locator('.dark-cloud-heading > button').waitFor({state: 'hidden'});
-    // Allow measured artwork to repaint after the compact-height rule hides the
-    // account control; a zero-width hidden control must not enter glyph layout.
-    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    assert.deepEqual(errors, [], 'compact landscape keeps the native text loop alive');
-    assert.ok(await scene.locator('h1 .native-ui-glyph').count() > 0);
-    await assertListFrameFits(scene);
-    await assertSelectedTabVisible(scene);
+    await gpu.nextFrame(page);
     await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'dark-cloud-landscape.png')});
     await page.setViewportSize({width: 390, height: 844});
-    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    await assertListFrameFits(scene);
-    await assertSelectedTabVisible(scene);
+    await gpu.nextFrame(page);
+    await revealTab(page, 'cloud-tab:layouts');
+    await gpu.click(page, 'cloud-tab:layouts');
+    await gpu.widget(page, 'dark-cloud-layout-code');
+    await gpu.fill(page, 'dark-cloud-layout-code', '0I-abcd-efgh');
+    await gpu.value(page, 'dark-cloud-layout-code', 'ABCD-EFGH');
+    assert.equal((await gpu.widget(page, 'cloud-layout-publish')).enabled, false, 'guest cannot publish a saved layout');
     await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'dark-cloud-portrait.png')});
-    await page.keyboard.press('Escape');
-    await page.getByRole('button', {name: 'MAIN MENU', exact: true}).click();
-    await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
+    await gpu.click(page, 'cloud-menu');
+    await gpu.surface(page, 'pause');
+    await gpu.click(page, 'leave');
+    await gpu.surface(page, 'title');
+    await gpu.assertGpuOnly(page);
     assert.deepEqual(errors, []);
-    assert.deepEqual(failedRequests, []);
-    console.log(JSON.stringify({checks: ['actual catalog rows', 'stock typography', 'search input/submit/clear', 'sort sheet', ...detailChecks, 'source Cloud pause/settings/return', 'desktop, landscape and portrait frame sizing'], detailAvailable: actual.length > 0, errors, cancelledMedia}));
+    checks.push('source Cloud pause/settings return, compact landscape, portrait tabs/layout edit/admission');
+    console.log(JSON.stringify({checks, actualMods: actual.size, errors}));
   } catch (error) {
-    if (page) {
-      await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'dark-cloud-failure.png')});
-      console.error(JSON.stringify({errors, failedRequests, cancelledMedia, status: await page.locator('#status').textContent()}));
-    }
+    if (page) await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'dark-cloud-failure.png')});
     throw error;
   } finally { await browser.close(); }
-})().catch(error => { console.error(error); process.exitCode = 1; });
+})().catch(error => {console.error(error); process.exitCode = 1;});

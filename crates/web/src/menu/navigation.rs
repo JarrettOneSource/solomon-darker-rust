@@ -6,14 +6,16 @@ use egui::{Context, Id};
 pub(crate) struct MenuNavigation {
     scope: String,
     needs_focus: bool,
+    confirmation: Option<String>,
 }
 impl MenuNavigation {
     pub fn new() -> Self {
-        Self { scope: String::new(), needs_focus: true }
+        Self { scope: String::new(), needs_focus: true, confirmation: None }
     }
     pub fn release(&mut self) {
         self.scope.clear();
         self.needs_focus = true;
+        self.confirmation = None;
     }
     pub fn update(&mut self, ctx: &Context, scope: &str, preferred: Option<&str>) {
         if self.scope != scope {
@@ -23,8 +25,16 @@ impl MenuNavigation {
         if self.needs_focus
             && let Some(preferred) = preferred
         {
+            if ctx.memory(|memory| memory.focused().is_none())
+                && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Enter))
+            {
+                self.confirmation = Some(preferred.to_owned());
+            }
             ctx.memory_mut(|memory| memory.request_focus(Id::unique(preferred)));
             self.needs_focus = false;
         }
+    }
+    pub fn take_confirmation(&mut self) -> Option<String> {
+        self.confirmation.take()
     }
 }

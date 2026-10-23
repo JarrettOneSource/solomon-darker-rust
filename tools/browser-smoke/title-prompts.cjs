@@ -1,57 +1,42 @@
-// Run against the shipped UI. PW, URL and OUT follow the other browser journeys.
+// The real retained wizard and its native kill-confirmation modal.
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { chromium } = require(path.resolve(process.env.PW));
-const { startNewGame } = require('./menu-journey.cjs');
-
+const {chromium} = require(path.resolve(process.env.PW));
+const gpu = require('./gpu-ui.cjs');
+const {startNewGame} = require('./menu-journey.cjs');
 (async () => {
-  const browser = await chromium.launch({
-    headless: true,
+  const browser = await chromium.launch({headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
-  });
-  const errors = [];
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
   try {
-    const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-    page.on('pageerror', error => errors.push(error.message));
-    page.on('console', message => {
-      if (message.type() === 'error') errors.push(message.text());
-    });
-    await page.goto(process.env.URL || 'http://127.0.0.1:4185/');
-    await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-      && !document.querySelector('#status').textContent, null, { timeout: 60000 });
-    await startNewGame(page, { name: 'Felix' });
+    const page = await browser.newPage({viewport: {width: 1600, height: 900}});
+    const {errors} = gpu.watchErrors(page);
+    await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
+    await gpu.ready(page);
+    await startNewGame(page, {name: 'Felix'});
     await page.keyboard.press('Escape');
-    await page.locator('.game-menus[data-menu-screen="pause"]').waitFor();
-    await page.locator('[data-menu-action="leave"]').click();
-    await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
-    await page.locator('[data-menu-action="play"]').click();
-    await page.locator('[data-menu-action="new-game"]').click();
-    const prompt = page.getByRole('dialog', { name: 'Kill character?', exact: true });
-    await prompt.waitFor();
-    const before = await page.evaluate(() => Array.from(wasmBindings.wizard_state()));
+    await gpu.surface(page, 'pause');
+    await gpu.click(page, 'leave');
+    await gpu.surface(page, 'title');
+    await gpu.click(page, 'play');
+    await gpu.click(page, 'new-game');
+    await gpu.widget(page, 'prompt-primary');
+    const before = await page.evaluate(() => Array.from(window.wasmBindings.wizard_state()));
     await page.keyboard.press('Escape');
-    await prompt.waitFor({ state: 'hidden' });
-    assert.equal(await page.locator('.game-menus').getAttribute('data-menu-screen'), 'play');
-    const after = await page.evaluate(() => Array.from(wasmBindings.wizard_state()));
+    await gpu.noWidget(page, 'prompt-primary');
+    await gpu.surface(page, 'play');
+    const after = await page.evaluate(() => Array.from(window.wasmBindings.wizard_state()));
     assert.deepEqual(after, before, 'declining keeps the paused wizard intact');
-    await page.locator('[data-menu-action="new-game"]').click();
-    await prompt.waitFor();
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.waitForFunction(() => document.querySelector('.title-prompt-stage').getBoundingClientRect().width < 390);
-    const yes = page.locator('[data-menu-action="prompt-primary"]');
-    assert.ok((await yes.boundingBox()).height >= 44, 'phone confirmation remains touchable');
-    if (process.env.OUT) {
-      await page.screenshot({ path: path.join(process.env.OUT, 'phone-kill-character-rust.png') });
-    }
-    await yes.click();
-    await page.getByRole('textbox', { name: 'Wizard name', exact: true }).waitFor();
+    await gpu.click(page, 'new-game');
+    await page.setViewportSize({width: 390, height: 844});
+    await gpu.nextFrame(page);
+    const yes = gpu.bounds(await gpu.widget(page, 'prompt-primary'));
+    assert.ok(yes.height >= 44 && yes.x >= 0 && yes.x + yes.width <= 390);
+    await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'phone-kill-character-rust.png')});
+    await gpu.click(page, 'prompt-primary');
+    await gpu.noWidget(page, 'prompt-primary');
+    await gpu.assertGpuOnly(page);
     assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ passed: true, errors }));
-  } finally {
-    await browser.close();
-  }
-})().catch(error => {
-  console.error(error);
-  process.exitCode = 1;
-});
+    console.log(JSON.stringify({checks: ['real saved wizard', 'decline retains wizard', 'native phone prompt', 'explicit replacement intent'], errors}));
+  } finally { await browser.close(); }
+})().catch(error => {console.error(error); process.exitCode = 1;});
