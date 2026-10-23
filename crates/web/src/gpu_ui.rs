@@ -82,6 +82,17 @@ pub struct WidgetGeometry {
     activated: bool,
     #[serde(skip)]
     interactive: bool,
+    #[serde(skip)]
+    keyboard_activated: bool,
+}
+
+impl WidgetGeometry {
+    pub fn is_interactive(&self) -> bool {
+        self.interactive
+    }
+    pub fn activated_by_keyboard(&self) -> bool {
+        self.keyboard_activated
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -95,6 +106,7 @@ pub struct UiDiagnostics {
     pub static_images_total: usize,
     pub error: Option<String>,
     pub capture: UiCapture,
+    pub input_scope: Option<String>,
     pub widgets: Vec<WidgetGeometry>,
 }
 
@@ -345,6 +357,10 @@ impl UiFrame<'_> {
             widget.layer_id = Some(response.layer_id);
             widget.activated = response.clicked();
             widget.interactive = response.sense.interactive();
+            widget.keyboard_activated = response.clicked()
+                && !self
+                    .ctx
+                    .input(|input| input.pointer.button_released(egui::PointerButton::Primary));
         }
     }
 
@@ -393,6 +409,7 @@ impl UiFrame<'_> {
                         | "tab"
                         | "menuitem"
                 ),
+                keyboard_activated: false,
             },
         );
     }
@@ -529,7 +546,8 @@ impl GpuUi {
             return Err(error);
         }
         self.input.set_widgets(&self.widgets);
-        self.input.set_scope(input_scope.borrow().as_deref());
+        let input_scope = input_scope.into_inner();
+        self.input.set_scope(input_scope.as_deref());
         if let Err(error) = self.input.apply_output(&output.platform_output, capture) {
             output.textures_delta.clear();
             return Err(error);
@@ -569,6 +587,7 @@ impl GpuUi {
             static_images_total: self.images.static_image_count(),
             error: None,
             capture,
+            input_scope,
             widgets: self.widgets.values().cloned().collect(),
         };
         Ok(capture)
