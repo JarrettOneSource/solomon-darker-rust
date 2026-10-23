@@ -34,7 +34,8 @@ test('Rust creates only platform adapter DOM elements',()=>{
       const announcement=filename==='crates/graphics/src/announcements.rs'
         && /^"div"\s*$/.test(match[1]) && text.includes('data-gpu-announcer');
       // Unmounted anchors invoke the browser's native file-download capability.
-      if(!announcement&&!/^"(?:canvas|input|textarea|audio|a)"\s*$/.test(match[1])) {
+      const platformTag=filename===fontProbePath?/^"canvas"\s*$/:/^"(?:canvas|input|textarea|audio|a)"\s*$/;
+      if(!announcement&&!platformTag.test(match[1])) {
         forbidden.push(`${filename}: ${match[0]}`);
       }
     }
@@ -53,6 +54,10 @@ test('the native font probe stays hidden, noninteractive and transient',()=>{
   const probe=sources.find(({filename})=>filename===fontProbePath);
   if(!probe)return;
   const {text}=probe;
+  assert.deepEqual([...text.matchAll(/\.create_element_ns\s*\(\s*namespace,\s*"([^"]+)"\s*\)/g)]
+    .map(match=>match[1]),['svg','text'],'the font probe has one SVG root and one text child');
+  assert.deepEqual([...text.matchAll(/\.create_element\s*\(\s*"([^"]+)"\s*\)/g)]
+    .map(match=>match[1]),['canvas'],'its only other element is the detached typography canvas');
   assert.match(text,/let namespace\s*=\s*Some\("http:\/\/www\.w3\.org\/2000\/svg"\)/);
   for(const [name,value]of [['data-gpu-font-metrics',''],['aria-hidden','true'],['focusable','false']]) {
     assert.ok(text.includes(`("${name}", "${value}")`),`font probe retains ${name}`);
