@@ -23,7 +23,7 @@ use web_sys::{Document, HtmlCanvasElement};
 
 use solomon_graphics::{BlendMode, Renderer};
 
-pub use geometry::clip_polygon_ellipse;
+pub use geometry::{clip_polygon_ellipse, css_bezier};
 pub use input::{BrowserKey, canvas_point, key_from_browser};
 pub use painter::clip_scissor;
 pub use stock::{StockAtlas, message_frame, message_frame_scaled, native_text, paint_text_layout};

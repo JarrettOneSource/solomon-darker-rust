@@ -2,6 +2,20 @@
 
 use egui::{Pos2, Rect, vec2};
 
+/// The authored overlay's CSS timing curve, also used by stock hover transitions.
+pub fn css_bezier(t: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+    let curve = |v: f32, p1: f32, p2: f32| {
+        3.0 * (1.0 - v) * (1.0 - v) * v * p1 + 3.0 * (1.0 - v) * v * v * p2 + v * v * v
+    };
+    let mut low = 0.0;
+    let mut high = 1.0;
+    for _ in 0..16 {
+        let middle = (low + high) * 0.5;
+        if curve(middle, x1, x2) < t { low = middle } else { high = middle }
+    }
+    curve((low + high) * 0.5, y1, y2)
+}
+
 /// Clips a convex polygon against an ellipse's 64-plane approximation.
 pub fn clip_polygon_ellipse(mut points: Vec<Pos2>, bounds: Rect) -> Vec<Pos2> {
     if !bounds.is_positive() {

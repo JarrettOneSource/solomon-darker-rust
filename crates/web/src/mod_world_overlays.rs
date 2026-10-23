@@ -4,7 +4,7 @@
 mod scene;
 pub use scene::{ModSceneOverlay, ModSceneOverlayFrame, ModScenePartyMember, ModViewAction};
 
-use crate::gpu_ui::UiFrame;
+use crate::gpu_ui::{UiFrame, css_bezier};
 use crate::mod_presentation_assets::ModPresentationAssets;
 use egui::{Color32, FontFamily, FontId, Id, Order, Pos2, Rect, Stroke, pos2, vec2};
 use solomon_sim::Vec2;
@@ -254,7 +254,7 @@ impl ModWorldOverlays {
         for event in &self.pickups {
             let born = *self.births.entry((2, event.id, event.tick)).or_insert(now);
             let progress = ((now - born) / 0.5).clamp(0.0, 1.0) as f32;
-            let eased = bezier(progress, 0.0, 0.0, 0.58, 1.0);
+            let eased = css_bezier(progress, 0.0, 0.0, 0.58, 1.0);
             painter.circle_stroke(
                 event.center,
                 12.0 * (1.0 + 2.0 * eased),
@@ -475,17 +475,5 @@ fn packed_color(color: i64) -> Color32 {
 }
 fn alternate(seconds: f64, duration: f64) -> f32 {
     let phase = (seconds / duration).rem_euclid(2.0) as f32;
-    bezier(if phase > 1.0 { 2.0 - phase } else { phase }, 0.42, 0.0, 0.58, 1.0)
-}
-fn bezier(t: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
-    let curve = |v: f32, p1: f32, p2: f32| {
-        3.0 * (1.0 - v) * (1.0 - v) * v * p1 + 3.0 * (1.0 - v) * v * v * p2 + v * v * v
-    };
-    let mut low = 0.0;
-    let mut high = 1.0;
-    for _ in 0..16 {
-        let middle = (low + high) * 0.5;
-        if curve(middle, x1, x2) < t { low = middle } else { high = middle }
-    }
-    curve((low + high) * 0.5, y1, y2)
+    css_bezier(if phase > 1.0 { 2.0 - phase } else { phase }, 0.42, 0.0, 0.58, 1.0)
 }
