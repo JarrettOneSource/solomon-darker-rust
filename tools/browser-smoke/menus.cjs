@@ -26,6 +26,7 @@ async function ticks(page,count) {
     const page=await browser.newPage({viewport:{width:1600,height:900}});
     const observed=ui.watchErrors(page);
     await ui.observeGpu(page);
+    await ui.observeAnnouncements(page);
     await page.goto(url,{waitUntil:'domcontentloaded'});
     await ui.ready(page);
     await screen(page,'title');
@@ -85,7 +86,10 @@ async function ticks(page,count) {
     await shot(page,'menu-pause.png');
     await ui.click(page,'pause-settings');
     await screen(page,'settings');
+    const announcementsBefore=(await ui.announcements(page)).length;
     await ui.setSlider(page,'settings-range:ui-scale',135);
+    await ui.announced(page,'UI SCALE',{afterIndex:announcementsBefore});
+    await ui.announced(page,'135',{afterIndex:announcementsBefore});
     await shot(page,'menu-settings-root.png');
     await ui.click(page,'settings-page:controls');
     await ui.widget(page,'bind:move-up');
@@ -158,7 +162,7 @@ async function ticks(page,count) {
     console.log(JSON.stringify({checks:['title clock','College admission before the sole loadout',
       'accepted/rejected stock Create names','stock Create effects','new-game HUD',
       'College pause seals input while actors advance','real settings slider',
-      'key rebinding and capture rejection','HUD scale','Continue','actual GPU UI'],
-      gpu:gpu.gpu.draw,errors:observed.errors}));
+      'key rebinding and capture rejection','HUD scale','screen-reader focus/value announcements',
+      'Continue','actual GPU UI'],gpu:gpu.gpu.draw,announcements:await ui.announcements(page),errors:observed.errors}));
   } finally {await browser.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});

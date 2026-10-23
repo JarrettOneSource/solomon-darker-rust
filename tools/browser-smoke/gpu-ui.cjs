@@ -153,18 +153,30 @@ async function drag(page, fromId, toId, { touch = false } = {}) {
 async function assertGpuOnly(page) {
   const evidence = await page.evaluate(() => {
     const passive = new Set(['CANVAS', 'SCRIPT', 'STYLE', 'LINK', 'NOSCRIPT']);
+    const nonvisual = element => {
+      const bounds = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return element.hidden || style.display === 'none' || style.visibility === 'hidden'
+        || style.opacity === '0' || bounds.width === 0 || bounds.height === 0
+        || bounds.right <= 0 || bounds.bottom <= 0
+        || bounds.left >= innerWidth || bounds.top >= innerHeight
+        || /^rect\(0px,? 0px,? 0px,? 0px\)$/.test(style.clip)
+        || style.clipPath === 'inset(50%)';
+    };
     const unexpected = [...document.body.querySelectorAll('*')].filter(element => {
       if (passive.has(element.tagName)) return false;
       if (element.tagName === 'AUDIO' && element.hidden && !element.controls) return false;
-      const adapter = element.hasAttribute('data-gpu-text-input')
-        || (element.tagName === 'INPUT' && element.type === 'file');
-      if (adapter) {
-        const bounds = element.getBoundingClientRect();
-        const style = getComputedStyle(element);
-        return !element.hidden && style.display !== 'none' && style.visibility !== 'hidden'
-          && style.opacity !== '0' && bounds.width > 0 && bounds.height > 0
-          && bounds.right > 0 && bounds.bottom > 0;
+      if (element.hasAttribute('data-gpu-announcer')) {
+        return !['DIV', 'SPAN'].includes(element.tagName) || !nonvisual(element)
+          || !['polite', 'assertive'].includes(element.getAttribute('aria-live'))
+          || element.children.length !== 0 || element.hasAttribute('tabindex')
+          || element.hasAttribute('data-menu-action') || element.hasAttribute('data-panel-action');
       }
+      const textAdapter = element.hasAttribute('data-gpu-text-input')
+        && (element.tagName === 'TEXTAREA' || (element.tagName === 'INPUT'
+          && ['text', 'search', 'email', 'password', 'url', 'tel', 'number'].includes(element.type)));
+      const adapter = textAdapter || (element.tagName === 'INPUT' && element.type === 'file');
+      if (adapter) return !nonvisual(element);
       return true;
     }).map(element => ({ tag: element.tagName, id: element.id, class: element.className }));
     const text = [...document.body.childNodes]
@@ -228,6 +240,45 @@ async function gpuDraws(page) {
   return page.evaluate(() => window.__solomonGpuDraws);
 }
 
+async function observeAnnouncements(page) {
+  await page.addInitScript(() => {
+    const announcements = [];
+    Object.defineProperty(window, '__solomonAnnouncements', {value:announcements});
+    for (const type of [Document, Element]) {
+      const notify = type.prototype.ariaNotify;
+      if (typeof notify !== 'function') continue;
+      type.prototype.ariaNotify = function (text, options) {
+        const result = Reflect.apply(notify, this, [text, options]);
+        announcements.push({source:'ariaNotify',text});
+        return result;
+      };
+    }
+    const observe = () => {
+      const observer = new MutationObserver(records => {
+        for (const record of records) {
+          const element = record.target.nodeType === Node.ELEMENT_NODE
+            ? record.target : record.target.parentElement;
+          const announcer = element?.closest('[data-gpu-announcer]');
+          if (announcer?.textContent) announcements.push({source:'aria-live',text:announcer.textContent});
+        }
+      });
+      observer.observe(document.body, {subtree:true,childList:true,characterData:true});
+    };
+    if (document.body) observe();
+    else document.addEventListener('DOMContentLoaded', observe, {once:true});
+  });
+}
+
+async function announcements(page) {
+  return page.evaluate(() => window.__solomonAnnouncements);
+}
+
+async function announced(page, text, {afterIndex = 0, timeout = 10000} = {}) {
+  await page.waitForFunction(({text,afterIndex}) => window.__solomonAnnouncements
+    .slice(afterIndex).some(event => event.text.toLowerCase().includes(text.toLowerCase())),
+  {text,afterIndex}, {timeout});
+}
+
 // Native Gamepad prototypes feed the production navigator adapter, never game commands.
 async function installController(page) {
   await page.evaluate(() => {
@@ -261,4 +312,5 @@ module.exports = {
   readUi, waitForUi, findWidget, widget, noWidget, byLabel, surface, ready, bounds, center, click, tap,
   fill, value, focused, setSlider, wheel, drag, assertGpuOnly, watchErrors, installController, controller, nextFrame,
   observeGpu, gpuDraws,
+  observeAnnouncements, announcements, announced,
 };
