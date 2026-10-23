@@ -472,3 +472,31 @@ meaningful current-art browser smoke and affected full journeys clean, source/DO
 clean, and packaged/live checks at their separately stated boundaries. Post-push cleanup of
 task worktrees and owned processes on every device is part of root completion; retained paths
 must carry a concrete reason. The unrelated launchd preview on port 4180/PID 96731 is preserved.
+
+Browser teardown also has a concrete diagnosed boundary. Both 88c3dfe Boneyard runs pass
+two ordinary seeded worlds, exact Pause saves and continuation. The first driver hangs
+after Chrome exits and requires Node termination (143); the explicit-owner follow-up
+retains graceful/forced close timeouts as fatal despite Chrome exit code zero. Native
+`lsof` proves reparented Crashpad/GoogleUpdater helpers retain the owned child's stderr
+socket. Installed Playwright `coreBundle.js:8799` waits for ChildProcess `close`, which
+cannot arrive while inherited stdio stays open. The task's `boneyard-owned-close` receipt,
+native sample and socket ownership evidence preserve that diagnosis. After confirmed
+owned Chrome `exit`, release only its parent-side stdio so the real close/temporary-file
+cleanup can finish. Other helper processes remain untouched; timeouts and nonzero exit
+remain failed gates. A title-only two-context close probe is a narrower passing boundary,
+not a clean full Boneyard execution claim. The later `boneyard-stdio-fixed` original-case
+rerun qualifies the full process gate after the inherited-stdio repair, with Chrome exit
+zero and no timeout or forced termination. Two real Node process regressions separately
+prove the inherited-pipe failure, preserve live stderr/nonzero exit, and leave the holder
+running when the parent's streams are released.
+
+The first actual coarse-touch HUD journey on 88c3dfe exposes a stale common test contract,
+after its desktop geometry/controller/blur checks pass. `reachCollegeLoadout` expected
+`ARCH_DISMISS_0` after Q1 speech → question list → Done. Pinned fa08
+`HubDialogueActions.tsx:249` calls onDone, and `HubInventorySurface.tsx:855` delegates to
+`dismissOrCloseChat` at line 514, which closes the surface directly. Rust c14068b3 and
+the GPU candidate match that behavior. The compiled dismissal row belongs to the
+no-remaining-choices opening fallback in `hub-npc-dialogue.ts:98`, not this Done action.
+Retain actual touch Skip/question/Done and visible-close assertions, remove the invented
+extra dismissal/Skip step, and rerun the unchanged HUD movement/cancel requirements.
+The original red is `common-browser/88c3dfe/hud-input/run.log`; cleanup exits zero.
