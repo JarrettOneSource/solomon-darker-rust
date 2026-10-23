@@ -2,7 +2,7 @@
 
 use crate::gpu_ui::UiFrame;
 use crate::mod_presentation_assets::ModPresentationAssets;
-use egui::{Color32, FontFamily, FontId, Id, Order, Stroke, vec2};
+use egui::{Color32, FontFamily, FontId, Id, Stroke, vec2};
 use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::assets::GameModAsset;
 use solomon_sim::modding::skill_quickbar::{
@@ -47,6 +47,10 @@ pub struct ModSkillQuickbarView {
     listening: bool,
 }
 impl ModSkillQuickbarView {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Middle, egui::Id::unique("mod/quickbar"))
+    }
+
     pub fn new(window: &Window) -> Result<Self, String> {
         let current = Rc::new(RefCell::new(QuickbarState::default()));
         let actions = Rc::new(RefCell::new(Vec::new()));
@@ -143,8 +147,8 @@ impl ModSkillQuickbarView {
             return Ok(());
         }
         let ctx = frame.ctx.clone();
-        egui::Area::new(Id::unique("mod/quickbar"))
-            .order(Order::Middle)
+        egui::Area::new(self.layer_id().id)
+            .order(self.layer_id().order)
             .anchor(egui::Align2::CENTER_BOTTOM, vec2(0.0, -80.0))
             .show(&ctx, |ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;

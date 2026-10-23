@@ -118,6 +118,9 @@ impl ModSceneOverlay {
         });
         Ok(())
     }
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("mod/scene"))
+    }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let Some(room) = &self.room else { return Ok(()) };
         frame.input_scope(&format!("mod/scene:{}:{}", room.content_id, room.index));
@@ -137,8 +140,8 @@ impl ModSceneOverlay {
             pos2(left + width, footer.top() - 12.0),
         );
         let mut direction = None;
-        egui::Area::new(Id::unique("mod/scene"))
-            .order(Order::Foreground)
+        egui::Area::new(self.layer_id().id)
+            .order(self.layer_id().order)
             .fixed_pos(egui::Pos2::ZERO)
             .show(&ctx, |ui| {
                 ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));

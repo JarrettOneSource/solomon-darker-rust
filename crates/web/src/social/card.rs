@@ -112,10 +112,7 @@ impl SocialUi {
         let max_height = if coarse { screen.height() * 0.9 } else { screen.height() - 32.0 };
         let mut action = None;
         let mut portrait_error = None;
-        let layer = egui::LayerId::new(
-            parent.layer_id().order,
-            egui::Id::unique("social/player-card-surface"),
-        );
+        let layer = Self::card_layer(parent.layer_id());
         ctx.set_sublayer(parent.layer_id(), layer);
         let area = egui::Area::new(layer.id)
             .order(layer.order)

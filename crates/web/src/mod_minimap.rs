@@ -3,7 +3,7 @@
 
 use crate::gpu_ui::{UiFrame, clip_polygon_ellipse};
 use crate::ui::javascript_string;
-use egui::{Color32, FontFamily, FontId, Id, Order, Rect, Stroke, pos2, vec2};
+use egui::{Color32, FontFamily, FontId, Id, Rect, Stroke, pos2, vec2};
 use solomon_sim::Vec2;
 use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::projection::ModContentProjection;
@@ -39,6 +39,10 @@ pub struct ModMinimapView {
     actions: Vec<ModMinimapAction>,
 }
 impl ModMinimapView {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Middle, egui::Id::unique("mod/minimap"))
+    }
+
     pub fn new(_document: &Document) -> Result<Self, String> {
         Ok(Self { model: None, actions: Vec::new() })
     }
@@ -113,8 +117,8 @@ impl ModMinimapView {
             "hud.overlay" => screen.center() - size / 2.0,
             _ => pos2(screen.width() - 16.0 - size.x, 16.0),
         };
-        egui::Area::new(Id::unique("mod/minimap"))
-            .order(Order::Middle)
+        egui::Area::new(self.layer_id().id)
+            .order(self.layer_id().order)
             .fixed_pos(point)
             .show(&ctx, |ui| -> Result<(), String> {
                 let bounds = Rect::from_min_size(ui.min_rect().min, size);

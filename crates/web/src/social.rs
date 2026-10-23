@@ -63,11 +63,9 @@ enum Intent {
 pub(crate) fn layers_above_hud(ctx: &egui::Context, hud_layer: egui::LayerId) {
     // Source HUD z10 is below the Social z60 parent. Keep its world children
     // in that order when an interacted or newly visible Area rises.
-    let allies = SocialUi::allies_layer();
-    let party = SocialUi::party_layer();
-    ctx.set_sublayer(hud_layer, allies);
-    ctx.set_sublayer(allies, party);
-    ctx.set_sublayer(party, SocialUi::chat_layer(false));
+    for layer in [SocialUi::party_layer(), SocialUi::allies_layer(), SocialUi::chat_layer(false)] {
+        ctx.set_sublayer(hud_layer, layer);
+    }
 }
 
 pub struct SocialUi {
@@ -274,19 +272,39 @@ impl SocialUi {
         self.paint(frame)
     }
 
-    fn allies_layer() -> egui::LayerId {
+    pub fn allies_layer() -> egui::LayerId {
         egui::LayerId::new(Order::Middle, Id::unique("social/allies"))
     }
 
-    fn party_layer() -> egui::LayerId {
+    pub fn party_layer() -> egui::LayerId {
         egui::LayerId::new(Order::Middle, Id::unique("social/party-chip"))
     }
 
-    fn chat_layer(open: bool) -> egui::LayerId {
+    pub fn chat_layer(open: bool) -> egui::LayerId {
         egui::LayerId::new(
             if open { Order::Foreground } else { Order::Middle },
             Id::unique("social/chat"),
         )
+    }
+
+    pub fn dialog_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("social/dialog"))
+    }
+
+    pub fn party_invitation_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("social/party-invitation"))
+    }
+
+    pub fn college_invitation_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("social/college-invitation"))
+    }
+
+    pub fn notice_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Tooltip, Id::unique("social/notice"))
+    }
+
+    pub fn card_layer(parent: egui::LayerId) -> egui::LayerId {
+        egui::LayerId::new(parent.order, Id::unique("social/player-card-surface"))
     }
 
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
@@ -319,8 +337,15 @@ impl SocialUi {
             self.college_visible() || self.party_invitation_visible() || self.surface.is_some();
         if modal {
             let mut close = false;
-            egui::Area::new(Id::unique("social/modal"))
-                .order(Order::Foreground)
+            let layer = if self.college_visible() {
+                Self::college_invitation_layer()
+            } else if self.party_invitation_visible() {
+                Self::party_invitation_layer()
+            } else {
+                Self::dialog_layer()
+            };
+            egui::Area::new(layer.id)
+                .order(layer.order)
                 .fixed_pos(egui::Pos2::ZERO)
                 .show(&ctx, |ui| -> Result<(), String> {
                     ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
@@ -356,8 +381,8 @@ impl SocialUi {
             }
         }
         if let Some(notice) = &self.hosted_notice {
-            egui::Area::new(Id::unique("social/notice"))
-                .order(Order::Tooltip)
+            egui::Area::new(Self::notice_layer().id)
+                .order(Self::notice_layer().order)
                 .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 16.0))
                 .show(&ctx, |ui| {
                     let response = ui.label(gpu::rich(notice, 16.0, gpu::GOLD));
