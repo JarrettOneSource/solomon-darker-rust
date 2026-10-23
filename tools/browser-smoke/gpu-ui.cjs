@@ -1,6 +1,6 @@
 // Read-only GPU observations locate widgets; every interaction uses browser input.
 const assert = require('node:assert/strict');
-const {watchErrors,watchRequestFailures,settleErrors}=require('./browser-errors.cjs');
+const {watchErrors,watchRequestFailures,settleErrors,observeDocumentReplacement}=require('./browser-errors.cjs');
 
 async function readUi(page) {
   return page.evaluate(() => {
@@ -378,6 +378,6 @@ async function useNativeFocus(...pages) {
 module.exports = {
   readUi, waitForUi, findWidget, widget, noWidget, byLabel, surface, ready, bounds, center, actionable, click, tap,
   fill, value, focused, setSlider, wheel, drag, assertGpuOnly, watchErrors, installController, controller, nextFrame,
-  observeGpu, gpuDraws, watchRequestFailures, settleErrors,
+  observeGpu, gpuDraws, watchRequestFailures, settleErrors, observeDocumentReplacement,
   observeAnnouncements, announcements, announced, useNativeFocus,
 };

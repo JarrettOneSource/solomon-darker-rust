@@ -14,9 +14,12 @@ function residentSuspension(failure,captured,settled) {
   const matches=captured.channels.filter(channel=>channel.url===failure.url);
   if(matches.length!==1)return null;
   const before=matches[0];
-  const after=settled.channels.find(channel=>channel.id===before.id);
+  const remaining=settled.channels.filter(channel=>channel.url===failure.url);
+  if(remaining.length!==1)return null;
+  const after=remaining[0];
+  if(after.id!==before.id)return null;
   const stock=musicPaths.get(before.cue);
-  if(!stock||new URL(`assets/stock/audio/${stock}`,captured.documentUrl).href!==failure.url)return null;
+  if(!stock||new URL(`assets/stock/audio/${stock}`,captured.baseUrl??captured.documentUrl).href!==failure.url)return null;
   for(const channel of [before,after]) {
     if(!channel||channel.cue!==before.cue||channel.url!==failure.url||channel.src!==failure.url
       ||!channel.connected||!channel.hidden||channel.controls||channel.preload!=='auto'
@@ -31,6 +34,13 @@ function residentSuspension(failure,captured,settled) {
   }
   return {cue:before.cue,channelId:before.id,documentId:captured.documentId,
     reason:'ready resident channel suspended by the browser'};
+}
+
+function documentRetirement(failure,retirement) {
+  if(!retirement?.pendingRequest||!retirement.completed
+    ||retirement.beforeTargetId===retirement.afterTargetId)return null;
+  const owner=residentSuspension(failure,retirement.before,retirement.before);
+  return owner?{...owner,reason:'ready resident channel retired by the observed document replacement'}:null;
 }
 
 // All wrappers forward the original native call unchanged. There are no setters
@@ -73,7 +83,7 @@ function observeResidentMedia() {
     }
   }).observe(document,{subtree:true,childList:true});
   Object.defineProperty(window,'__solomonResidentMedia',{value:()=>({
-    documentId:performance.timeOrigin,documentUrl:location.href,
+    documentId:performance.timeOrigin,documentUrl:location.href,baseUrl:document.baseURI,
     channels:[...channels].map(([media,channel])=>({...channel,...describe(media)})),
   })});
 }
@@ -81,23 +91,82 @@ function observeResidentMedia() {
 function watchRequestFailures(page,{errors=[],warnings=[]}={}) {
   if(observers.has(page))throw new Error('one browser error observer owns each page');
   const observed={errors,warnings,rawFailures:[],expectedSuspensions:[],mediaFailures:[],pending:[],
-    mediaEvents:new Set(),id:++nextObserver};
+    mediaEvents:new Set(),activeMedia:new Map(),retiringRequests:new Map(),replacements:[],
+    nextRequest:0,id:++nextObserver};
   observed.ready=page.addInitScript(observeResidentMedia);
   observers.set(page,observed);
+  page.on('request',request=>{
+    if(request.resourceType()==='media')observed.activeMedia.set(request,{
+      id:++observed.nextRequest,owner:request.frame(),status:null});
+  });
+  page.on('response',response=>{
+    const row=observed.activeMedia.get(response.request());
+    if(row)row.status=response.status();
+  });
+  page.on('requestfinished',request=>observed.activeMedia.delete(request));
   page.on('requestfailed',request=>{
+    const tracked=observed.activeMedia.get(request);
+    const retirement=observed.retiringRequests.get(request);
+    observed.activeMedia.delete(request);
     const failure={type:'requestfailed',url:request.url(),method:request.method(),
-      resourceType:request.resourceType(),failure:request.failure()};
+      resourceType:request.resourceType(),failure:request.failure(),requestId:tracked?.id};
     errors.push(failure);observed.rawFailures.push(failure);
     if(failure.resourceType!=='media'||failure.failure?.errorText!=='net::ERR_ABORTED')return;
-    const pending=(async()=>{
-      const [response,captured]=await Promise.all([request.response(),
-        page.evaluate(()=>window.__solomonResidentMedia?.()??null)]);
-      return {failure,status:response?.status()??null,captured};
-    })().catch(error=>({failure,observationError:error.message}));
+    const owner=tracked?.owner??request.frame();
+    const status=tracked?.status??null;
+    const pending=owner.evaluate(()=>window.__solomonResidentMedia?.()??null)
+      .then(captured=>({failure,status,captured,owner,retirement}),
+        error=>({failure,status,owner,retirement,observationError:error.message}));
     observed.pending.push(pending);
   });
   return {errors,warnings,rawFailures:observed.rawFailures,
     expectedSuspensions:observed.expectedSuspensions,ready:observed.ready};
+}
+
+async function observeDocumentReplacement(page,action,{frame=page.mainFrame(),timeout=45000}={}) {
+  const observed=observers.get(page);
+  if(!observed)throw new Error('document replacement requires the page error observer');
+  await settleErrors(page);
+  const snapshots=new Map(await Promise.all(page.frames().map(async owner=>[owner,
+    await owner.evaluate(()=>window.__solomonResidentMedia?.()??null)])));
+  const target=snapshots.get(frame);
+  if(!target)throw new Error('the replacing document has no lifecycle observation');
+  const transition={beforeTargetId:target.documentId,beforeUrl:target.documentUrl,completed:false,
+    pendingRequests:[]};
+  observed.replacements.push(transition);
+  for(const [request,tracked] of observed.activeMedia) {
+    let within=false;
+    for(let ancestor=tracked.owner;ancestor;ancestor=ancestor.parentFrame())if(ancestor===frame)within=true;
+    if(!within)continue;
+    const before=snapshots.get(tracked.owner);
+    const evidence={requestId:tracked.id,url:request.url(),method:request.method(),
+      resourceType:request.resourceType(),status:tracked.status,before};
+    transition.pendingRequests.push(evidence);
+    // The exact still-pending Request instance is the membership key. A new
+    // request for the same URL can never inherit this retirement observation.
+    observed.retiringRequests.set(request,{transition,before,pendingRequest:true});
+  }
+  let resolveNavigation;
+  const navigated=new Promise(resolve=>{resolveNavigation=resolve});
+  const onNavigation=owner=>{if(owner===frame)resolveNavigation(owner)};
+  page.on('framenavigated',onNavigation);
+  const timer=setTimeout(()=>resolveNavigation(null),timeout);
+  try {
+    const result=await action();
+    if(!await navigated)throw new Error('the actual action did not replace its document');
+    const after=await frame.evaluate(()=>({documentId:performance.timeOrigin,url:location.href}));
+    transition.afterTargetId=after.documentId;
+    transition.afterUrl=after.url;
+    if(after.documentId===target.documentId)throw new Error('the action only navigated within the same document');
+    transition.completed=true;
+    return result;
+  } catch(error) {
+    transition.failure=error.message;
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    page.off('framenavigated',onNavigation);
+  }
 }
 
 function watchErrors(page,{errors=[],warnings=[]}={}) {
@@ -119,31 +188,40 @@ async function settleErrors(page) {
   await observed.ready;
   // Let already queued native media events (including error/abort) run before
   // deciding whether a completed request failure belongs to idle suspension.
-  await page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,0)));
+  const frames=page.frames();
+  await Promise.all(frames.map(frame=>frame.evaluate(()=>new Promise(resolve=>setTimeout(resolve,0)))));
   const pending=await Promise.all(observed.pending.splice(0));
-  const settled=await page.evaluate(()=>window.__solomonResidentMedia?.()??null);
-  for(const channel of settled?.channels??[])for(const event of channel.events) {
+  const snapshots=new Map(await Promise.all(frames.map(async frame=>[frame,
+    await frame.evaluate(()=>window.__solomonResidentMedia?.()??null)])));
+  for(const snapshot of snapshots.values())for(const channel of snapshot?.channels??[])for(const event of channel.events) {
     if(!['error','abort'].includes(event.type))continue;
-    const key=`${settled.documentId}:${channel.id}:${event.type}:${event.time}`;
+    const key=`${snapshot.documentId}:${channel.id}:${event.type}:${event.time}`;
     if(observed.mediaEvents.has(key))continue;
     observed.mediaEvents.add(key);
     observed.errors.push({type:'media',event:event.type,url:event.url,cue:event.cue,
       code:event.error,time:event.time});
   }
   for(const row of pending) {
-    const classification=residentSuspension({...row.failure,status:row.status,
-      errorText:row.failure.failure?.errorText},row.captured,settled);
-    observed.mediaFailures.push({...row,settled,classification});
+    const {owner,retirement,...evidence}=row;
+    const settled=snapshots.get(owner)??null;
+    const failure={...row.failure,status:row.status,errorText:row.failure.failure?.errorText};
+    const retired=retirement?{...retirement.transition,before:retirement.before,
+      pendingRequest:retirement.pendingRequest}:null;
+    const classification=residentSuspension(failure,row.captured,settled)
+      ??documentRetirement(failure,retired);
+    observed.mediaFailures.push({...evidence,retirement:retired,settled,classification});
     if(classification) {
       const index=observed.errors.indexOf(row.failure);
       if(index>=0)observed.errors.splice(index,1);
       observed.expectedSuspensions.push({failure:row.failure,classification,
-        captured:row.captured,settled});
+        captured:row.captured,settled,retirement:retired});
     }
   }
   const report={url:page.url(),rawFailures:observed.rawFailures,
     expectedSuspensions:observed.expectedSuspensions,mediaFailures:observed.mediaFailures,
-    media:settled,errors:observed.errors,warnings:observed.warnings};
+    replacements:observed.replacements,
+    media:snapshots.get(page.mainFrame()),frames:[...snapshots.values()].filter(Boolean),
+    errors:observed.errors,warnings:observed.warnings};
   if(process.env.OUT) {
     fs.mkdirSync(process.env.OUT,{recursive:true});
     fs.writeFileSync(path.join(process.env.OUT,`browser-errors-${observed.id}.json`),
@@ -152,4 +230,5 @@ async function settleErrors(page) {
   return report;
 }
 
-module.exports={watchErrors,watchRequestFailures,settleErrors,residentSuspension};
+module.exports={watchErrors,watchRequestFailures,settleErrors,residentSuspension,
+  documentRetirement,observeDocumentReplacement};
