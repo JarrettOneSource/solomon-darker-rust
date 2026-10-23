@@ -7,7 +7,10 @@ use solomon_sim::economy::{
     HubInventoryAction, HubInventoryItem, INVENTORY_SACK_NAME_MAX_LENGTH,
     normalize_inventory_sack_name,
 };
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
+use solomon_sim::native_ui_text::{
+    NativeUiFontName, NativeUiTextAlign, NativeUiTextPlacement, NativeUiTextSpec,
+    layout_native_ui_text,
+};
 use solomon_sim::player_panels::sack_rename::{
     INVENTORY_SACK_RENAME_BUTTON, INVENTORY_SACK_RENAME_BUTTON_SCALE, InventorySackRenameOwner,
     InventorySackRenameSelection, inventory_sack_rename_dialog_layout,
@@ -183,21 +186,23 @@ impl PlayerPanels {
                         },
                     );
                 }
+                let label = NativeUiTextSpec {
+                    align: NativeUiTextAlign::Left,
+                    placement: NativeUiTextPlacement::Box,
+                    tint: 0xd9ba70,
+                    ..NativeUiTextSpec::new(NativeUiFontName::Medium, "Sack name", 0.0, 0.0)
+                };
+                let label_size = layout_native_ui_text(&label);
                 let mut field = layout.field;
-                field.x += 90.0;
-                field.width -= 90.0;
+                field.x += 20.0 + label_size.width;
+                field.width -= 30.0 + label_size.width;
                 native_text(
                     frame,
                     ui.painter(),
                     &NativeUiTextSpec {
-                        align: NativeUiTextAlign::Left,
-                        tint: 0xd9ba70,
-                        ..NativeUiTextSpec::new(
-                            NativeUiFontName::Medium,
-                            "Sack name",
-                            layout.field.x,
-                            layout.field.y + 28.0,
-                        )
+                        x: layout.field.x + 10.0,
+                        y: layout.field.y + (44.0 - label_size.height) / 2.0,
+                        ..label
                     },
                 );
                 let pending = dialog.pending_name.is_some();
@@ -211,7 +216,7 @@ impl PlayerPanels {
                     frame,
                     ui.painter(),
                     5,
-                    rect(field),
+                    rect(field).shrink2(egui::vec2(0.0, 7.0)),
                     3.0,
                     egui::Color32::WHITE,
                 ) {
@@ -222,7 +227,10 @@ impl PlayerPanels {
                     "panel:sack-rename:name",
                     "Sack name",
                 )
-                .font(egui::FontId::new(22.0, egui::FontFamily::Name("Georgia".into())))
+                .font(egui::FontId::new(16.0, egui::FontFamily::Name("IM FELL English".into())))
+                .line_height(16.0 * 1.35)
+                .margin(egui::vec2(10.0, 7.0))
+                .color(egui::Color32::from_rgb(217, 186, 112))
                 .rules(crate::gpu_ui::EditorRules {
                     utf16_limit: Some(INVENTORY_SACK_NAME_MAX_LENGTH),
                     ..Default::default()
@@ -232,6 +240,14 @@ impl PlayerPanels {
                 .show(frame, &mut child, rect(field));
                 if child.is_visible() && response.has_focus() {
                     dialog.focus_next = false;
+                }
+                if response.has_focus() {
+                    ui.painter().rect_stroke(
+                        rect(field).shrink(7.0),
+                        0.0,
+                        egui::Stroke::new(1.0, egui::Color32::from_rgb(217, 186, 112)),
+                        egui::StrokeKind::Inside,
+                    );
                 }
                 if before != dialog.draft {
                     dialog.error = None;

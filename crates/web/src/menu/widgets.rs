@@ -393,13 +393,24 @@ pub(super) fn edit(
     } else {
         crate::gpu_ui::NativeTextEdit::singleline(value, id, label)
     };
-    edit.font(FontId::new(size, egui::FontFamily::Name(font.into())))
+    let response = edit
+        .font(FontId::new(size, egui::FontFamily::Name(font.into())))
         .color(GOLD)
+        .line_height(size * 1.35)
         .hint_text(hint)
         .enabled(enabled)
         .rules(rules)
         .margin(Vec2::new(10.0, 7.0))
-        .show(frame, ui, rect)
+        .show(frame, ui, rect);
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            rect.shrink(7.0),
+            0.0,
+            egui::Stroke::new(1.0, GOLD),
+            egui::StrokeKind::Inside,
+        );
+    }
+    response
 }
 
 pub(super) fn control_panel(
