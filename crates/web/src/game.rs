@@ -25,9 +25,10 @@ use crate::player_panels::{
 use crate::storage::SaveStore;
 use crate::tutorial::TutorialUi;
 use crate::tutorial_scene::{TutorialFrame, TutorialScene};
-use crate::{assets, set_status, storage};
+use crate::{set_status, storage};
 use solomon_assets::parse_bundle;
 use solomon_assets::save_document;
+use solomon_graphics::assets;
 use solomon_sim::Vec2;
 use solomon_sim::appearance::StarterEquipmentAppearance;
 use solomon_sim::audio::MusicScene;
@@ -71,7 +72,6 @@ use crate::hud::{Hud, HudAction, HudMode};
 use crate::input::MovementInput;
 use crate::menu::{MenuAction, MenuUi};
 use crate::npc::NpcView;
-use crate::render::Renderer;
 use crate::rooms::{PrivateRoomFrame, PrivateRoomScenes};
 use crate::shared_gameplay::SharedGameplayUi;
 use crate::skill_picker::{SkillPicker, SkillPickerAction};
@@ -83,6 +83,7 @@ use crate::world_overlays::{WorldOverlayFrame, WorldOverlayPlayer, WorldOverlays
 use crate::world_screen_feedback::{
     ScreenFeedbackScene, WorldScreenFeedback, WorldScreenFeedbackFrame,
 };
+use solomon_graphics::Renderer;
 use solomon_sim::spells::presentation::SpellDrawQueue;
 
 const LOCAL_PLAYER_ID: &str = "local";

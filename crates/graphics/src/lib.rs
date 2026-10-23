@@ -3,6 +3,8 @@
 //! the Website's native per-channel blend equations. Destinations are
 //! logical pixels of the 1600×900 view, which `begin_frame` letterboxes into the canvas.
 
+pub mod assets;
+
 use solomon_sim::float;
 use web_sys::{
     HtmlImageElement, WebGl2RenderingContext as Gl, WebGlBuffer, WebGlFramebuffer, WebGlProgram,
@@ -482,12 +484,12 @@ impl Renderer {
         self.gl.delete_texture(Some(&texture.handle));
     }
 
-    pub(crate) fn graphics_context(&self) -> Gl {
+    pub fn graphics_context(&self) -> Gl {
         self.gl.clone()
     }
 
     /// Applies an egui glyph-atlas patch without replacing its live texture.
-    pub(crate) fn update_rgba(
+    pub fn update_rgba(
         &mut self,
         texture: &Texture,
         origin: [usize; 2],
@@ -513,7 +515,7 @@ impl Renderer {
     }
 
     /// Draws the Rust UI over the complete canvas, then restores world projection/state.
-    pub(crate) fn draw_screen_space(
+    pub fn draw_screen_space(
         &mut self,
         physical: [i32; 2],
         logical: [f32; 2],
@@ -544,7 +546,7 @@ impl Renderer {
         result
     }
 
-    pub(crate) fn set_texture_sampling(&mut self, texture: &Texture, nearest: bool) {
+    pub fn set_texture_sampling(&mut self, texture: &Texture, nearest: bool) {
         self.flush();
         self.gl.bind_texture(Gl::TEXTURE_2D, Some(&texture.handle));
         self.bound_texture = Some(texture.id);
@@ -554,7 +556,7 @@ impl Renderer {
         }
     }
 
-    pub(crate) fn delete_ui_texture(gl: &Gl, texture: &Texture) {
+    pub fn delete_ui_texture(gl: &Gl, texture: &Texture) {
         gl.delete_texture(Some(&texture.handle));
     }
 
@@ -612,7 +614,7 @@ impl Renderer {
     }
 
     /// Active logical-to-device scale, including the letterboxed viewport.
-    pub(crate) fn physical_pixel_scale(&self) -> [f32; 2] {
+    pub fn physical_pixel_scale(&self) -> [f32; 2] {
         [
             self.viewport[2] as f32 / self.logical_size[0],
             self.viewport[3] as f32 / self.logical_size[1],

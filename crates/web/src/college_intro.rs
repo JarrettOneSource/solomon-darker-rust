@@ -1,83 +1,66 @@
 //! Stock College admission title and cover over the accepted controller state.
 
+use crate::gpu_ui::{StockAtlas, UiFrame};
 use solomon_sim::Vec2;
 use solomon_sim::hub::college_intro::{
     NativeCollegeIntroPhase, NativeCollegeIntroState, native_college_title_presentation,
 };
 use solomon_sim::viewport::game_viewport;
-use web_sys::{Document, HtmlElement};
-
-use crate::ui::{StockAtlas, append, element, style};
+use web_sys::Document;
 
 pub struct CollegeIntroOverlay {
-    root: HtmlElement,
-    cover: HtmlElement,
-    presents: HtmlElement,
-    title: HtmlElement,
+    atlas: StockAtlas,
+    view: Option<(usize, f64, f64, f64)>,
+    viewport: [f32; 2],
 }
 
 impl CollegeIntroOverlay {
-    pub async fn attach(document: &Document) -> Result<Self, String> {
-        let atlas = StockAtlas::load("Title").await?;
-        let root = element(document, "div", "college-intro-overlay")?;
-        root.set_hidden(true);
-        root.set_attribute("role", "img").map_err(|_| "College title role")?;
-        let cover = element(document, "span", "college-intro-cover")?;
-        let presents = atlas.sprite(document, 7, "college-intro-title")?;
-        let title = atlas.sprite(document, 9, "college-intro-title")?;
-        for child in [&cover, &presents, &title] {
-            append(&root, child)?;
-        }
-        append(&document.body().ok_or("College title document body")?, &root)?;
-        Ok(Self { root, cover, presents, title })
+    pub async fn attach(_document: &Document) -> Result<Self, String> {
+        Ok(Self { atlas: StockAtlas::load("Title").await?, view: None, viewport: [0.0; 2] })
     }
 
     pub fn update(
-        &self,
+        &mut self,
         state: Option<&NativeCollegeIntroState>,
         width: i32,
         height: i32,
     ) -> Result<(), String> {
-        let Some(state) =
-            state.filter(|state| state.phase == NativeCollegeIntroPhase::CourtyardWalk)
-        else {
-            self.root.set_hidden(true);
-            return Ok(());
-        };
-        self.root.set_hidden(false);
-        let viewport = game_viewport(Vec2::new(f64::from(width), f64::from(height)));
-        let view = native_college_title_presentation(state.title_cursor, state.cover_alpha);
-        self.root
-            .set_attribute(
-                "aria-label",
-                if view.record == 7 { "Raptisoft Games presents" } else { "Solomon Dark" },
-            )
-            .map_err(|_| "College title label")?;
-        self.root
-            .set_attribute("data-college-intro-title-cursor", &state.title_cursor.to_string())
-            .map_err(|_| "College title cursor")?;
-        self.root
-            .set_attribute("data-college-intro-title-record", &view.record.to_string())
-            .map_err(|_| "College title record")?;
-        style(&self.cover, &format!("opacity:{}", state.cover_alpha))?;
-        for (record, title) in [(7, &self.presents), (9, &self.title)] {
-            title.set_hidden(view.record != record);
-            title
-                .style()
-                .set_property("top", &format!("{}px", view.y * viewport.display_scale))
-                .map_err(|_| "College title baseline")?;
-            title
-                .style()
-                .set_property("opacity", &view.alpha.to_string())
-                .map_err(|_| "College title alpha")?;
-            title
-                .style()
-                .set_property(
-                    "transform",
-                    &format!("translate(-50%, -50%) scale({})", viewport.display_scale),
-                )
-                .map_err(|_| "College title scale")?;
-        }
+        self.viewport = [width as f32, height as f32];
+        self.view = state
+            .filter(|state| state.phase == NativeCollegeIntroPhase::CourtyardWalk)
+            .map(|state| {
+                let view = native_college_title_presentation(state.title_cursor, state.cover_alpha);
+                (view.record, view.y, view.alpha, state.cover_alpha)
+            });
+        Ok(())
+    }
+
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        let Some((record, y, alpha, cover)) = self.view else { return Ok(()) };
+        let scale = game_viewport(Vec2::new(self.viewport[0] as f64, self.viewport[1] as f64))
+            .display_scale as f32;
+        let painter = frame.ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Foreground,
+            egui::Id::unique("college-intro"),
+        ));
+        let bounds = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::from(self.viewport));
+        painter.rect_filled(bounds, 0.0, egui::Color32::BLACK.gamma_multiply(cover as f32));
+        self.atlas.paint_centered(
+            frame,
+            &painter,
+            record,
+            egui::pos2(self.viewport[0] / 2.0, y as f32 * scale),
+            scale,
+            0.0,
+            egui::Color32::WHITE.gamma_multiply(alpha as f32),
+        )?;
+        frame.record_rect(
+            "college-intro:title",
+            if record == 7 { "Raptisoft Games presents" } else { "Solomon Dark" },
+            "image",
+            bounds,
+            false,
+        );
         Ok(())
     }
 }

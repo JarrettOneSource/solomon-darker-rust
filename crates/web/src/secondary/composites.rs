@@ -9,7 +9,7 @@ use super::draws::TargetDraw;
 use super::hits::clear_triangles;
 use super::{SecondaryPuppetHit, SecondaryView};
 use crate::courtyard::Camera;
-use crate::render::{BlendMode, Renderer, TextureColorMode};
+use solomon_graphics::{BlendMode, Renderer, TextureColorMode};
 
 impl SecondaryView {
     pub(super) fn update_composites(

@@ -25,7 +25,7 @@ use solomon_sim::hub::painter::PainterLayer;
 
 use crate::courtyard::Camera;
 use crate::native_mesh::NativeMeshVertex;
-use crate::render::{Renderer, Texture};
+use solomon_graphics::{Renderer, Texture};
 
 pub struct EnemyViewPlayer<'a> {
     pub id: &'a str,
@@ -147,7 +147,8 @@ impl EnemyView {
             dead_hawg_texture,
         )
         .await?;
-        let image = crate::assets::load_image("assets/stock/enemy-green-plasma.png").await?;
+        let image =
+            solomon_graphics::assets::load_image("assets/stock/enemy-green-plasma.png").await?;
         let green_plasma = renderer.upload_with_repeat(&image, true)?;
         Ok(Self {
             art,

@@ -18,7 +18,7 @@ use web_sys::{
     HtmlAudioElement,
 };
 
-use crate::assets;
+use solomon_graphics::assets;
 
 struct PlayingVoice {
     cue: Option<AudioCue>,

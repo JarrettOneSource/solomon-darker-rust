@@ -20,7 +20,7 @@ use solomon_sim::hub::painter::{
 use solomon_sim::painter::overlays::{PainterOverlayOrder, PainterOwnerOverlay};
 use std::collections::BTreeMap;
 
-use crate::render::{BlendMode, Quad, Renderer, Texture};
+use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
 pub struct Camera {
     pub origin: Vec2,

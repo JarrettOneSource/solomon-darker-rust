@@ -85,7 +85,7 @@ async function walkToFomentius(page) {
     assert.ok(ui.bounds(health).width>=46,'phone slots keep a usable physical size');
     await shot(page,'phone-inventory-rust.png');
     await ui.tap(page,health.id);
-    const tooltip=ui.bounds(await ui.widget(page,'panel:tooltip'));
+    const tooltip=ui.bounds(await ui.widget(page,'panel:tooltip'),{paint:true});
     assert.ok(fitsViewport(tooltip,390,844),'touch inspection stays on screen');
     await shot(page,'phone-item-tooltip-rust.png');
     await page.touchscreen.tap(378,180);
@@ -101,7 +101,7 @@ async function walkToFomentius(page) {
     await action(page,'equipment:hat');await action(page,'equipment:hat');
     const notice=await ui.widget(page,'panel:notice-title');
     assert.equal(notice.label,'A WIZARD WOULD NEVER REMOVE HIS HAT!');
-    assert.ok(fitsViewport(ui.bounds(notice),390,844),'authored notices fit the phone');
+    assert.ok(fitsViewport(ui.bounds(notice,{paint:true}),390,844),'authored notices fit the phone');
     await shot(page,'phone-notice-rust.png');
     await action(page,'notice-okay');
     await action(page,'skills');await settle(page);await settle(page);

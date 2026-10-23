@@ -4,7 +4,9 @@ Acceptance target: all visible game UI is authored by Rust and submitted as GPU 
 textures and text. The behavioral reference remains Website `fa08ae249ff5563570bdb2a653e2ef9358ce7b83`
 and the recovered retail evidence it cites. Existing simulation fixtures keep their actual
 provenance. Browser/platform adapters may own the canvas, composition/clipboard/file APIs,
-audio, network and persistence; they do not paint game controls or mirror them as hidden DOM.
+native downloads, screen-reader announcements, audio, network and persistence; they do not
+paint game controls or mirror them as hidden DOM. Accessibility uses native `ariaNotify`
+where supported or one specifically marked, nonvisual, text-only live region.
 
 The migration begins at Rust `c14068b3c95aa40f0b1c85d11f73fe2622349aae`. An implementation
 or a passing kernel fixture does not establish composed visual/input acceptance. Every pending
@@ -73,7 +75,7 @@ Owner names match the parallel implementation lanes. Scripts are under `tools/br
 | Surface and required variants | Owner | Implementation/reference and acceptance route | Current blocker/evidence |
 | --- | --- | --- | --- |
 | Process startup; cold, warm, held image/font/wasm; failed required asset; no partial Title or HUD | foundation + root; acceptance tests | Startup evidence above; `startup.cjs`; loader geometry, monotonic work, immediate readiness transition, screenshots | Baseline reproduces absent splash/premature Title; GPU repair and acceptance pending |
-| GPU runtime; stock bundle crops/rotation/registered origins, glyph masks, browser fonts, dynamic images, blend/clips | foundation | `gpu_ui.rs`, existing `render.rs`, stock manifest; read-only `gpu_ui_state`, GPU meshes/textures and final screenshots | Pending foundation and composed GPU evidence |
+| GPU runtime; stock bundle crops/rotation/registered origins, glyph masks, browser fonts, dynamic images, blend/clips | foundation | `gpu_ui.rs`, existing `render.rs`, stock manifest; read-only `gpu_ui_state`, GPU meshes/textures and final screenshots | Core probe 15/15; composed game/art acceptance pending |
 | Title/Play; clouds, moon, graves, Solomon animation, logo/art, Continue policy, account/desktop links | menus | `menu/title.rs`, pinned Main Menu; `smoke.cjs`, `menus.cjs`, `menu-input.cjs` | Pending GPU port/current art |
 | Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | Pending GPU modal input |
 | College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | Pending GPU controls and ordinary admission path |
@@ -105,25 +107,47 @@ Owner names match the parallel implementation lanes. Scripts are under `tools/br
 | Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | Pending platform activation |
 | Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | Pending GPU notice and packaged journey |
 | Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | Pending GPU notice + actual update |
-| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | Pending composed runtime |
+| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | Pending composed runtime |
 | No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Pending complete cutover |
 
 ## Test ownership and stopping checks
 
 Acceptance owns `gpu-ui.cjs`, `gpu-ui-contract.test.cjs`, `menu-journey.cjs`, `smoke.cjs`,
 `startup.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`, `audio.cjs`, `save-resume.cjs`,
-`saved-game.cjs`, `college-clock.cjs` and `rooms.mjs`. Menus owns detailed Hall/Settings/Cloud/Join/prompt
+`saved-game.cjs`, `college-clock.cjs`, `rooms.mjs`, `hud-input.cjs` and `tutorial-text-bounds.cjs`.
+Menus owns detailed Hall/Settings/Cloud/Join/prompt
 journeys. HUD and social own their family journeys. Root owns final joined execution and
 packaged/hosted/authoring integration. Exact stable IDs and snapshot schema are in the task's
 `gpu-ui-contract.md`; that is a development handoff, not an accepted product artifact.
 
 The common scripts are migrated to read-only GPU geometry and actual browser input. Syntax
-checks pass for all thirteen files. The architectural contract was run before the cutover:
+checks pass for all fifteen files. The architectural contract was run before the cutover:
 two tests fail for actual existing visual DOM/CSS producers and one passes; its TAP output is
 retained as `gpu-ui-contract-baseline.tap`. Current composed browser acceptance is pending,
 so no matrix surface is marked accepted from syntax/source checks alone. The independent
 Save Tools module ABI journey remains a valid canonical-byte fixture; its real Files are
 inputs to that independent module and do not fabricate gameplay state.
+
+The screen-reader observer forwards actual native `ariaNotify` calls unchanged or observes
+the one `data-gpu-announcer` live-region text node. The menu journey requires newly announced
+slider label and accepted value after real keyboard edits. It does not create announcement
+messages or mirror controls. Unmounted native download anchors and hidden audio/file/IME
+adapters remain platform capabilities; mounted visual anchors and hidden gameplay controls
+still fail the browser audit.
+
+Layout assertions use original `paintRect` glyph/card bounds. Visible clipped hit `rect`
+remains the pointer target, so clipping cannot make an overflowing title, tooltip or Tutorial
+instruction appear to pass. HUD blur uses an actual browser tab focus change; touch cancellation
+uses the native touch-cancel input and verifies both the neutral painted joystick and accepted
+zero movement. No synthetic browser blur event stands in for platform focus behavior.
+
+The foundation's retained `foundation-probe/result.json` and `extended-result.json` were
+reviewed with `gpu-unicode-scroll.png`: all 15 checks pass for real GPU submission, loaded
+static inputs, pointer button/checkbox, text editing, Unicode/IME commit, native clipboard
+copy/cut/paste, wheel scrolling and absence of scrolled-out rows. The body contains only the
+GPU canvas and marked text adapter in that probe, with no runtime errors. This is core runtime
+evidence; it does not accept the game menus, mobile layout, startup or the later accessibility
+follow-up by implication.
 
 Checks must drive ordinary pointer, keyboard, touch or controller input against visible GPU
 widgets. The read-only snapshot locates those widgets and reports accepted outcomes; it

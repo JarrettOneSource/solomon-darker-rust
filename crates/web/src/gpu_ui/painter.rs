@@ -7,8 +7,8 @@ use std::rc::Rc;
 use egui::{ClippedPrimitive, Rect, TextureId, Vec2, vec2};
 use web_sys::{HtmlImageElement, WebGl2RenderingContext};
 
-use crate::assets;
-use crate::render::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
+use solomon_graphics::assets;
+use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
 
 enum ImageState {
     Loading,

@@ -3,7 +3,7 @@
 
 use solomon_sim::Vec2;
 
-use crate::render::{BlendMode, Renderer, Vertex};
+use solomon_graphics::{BlendMode, Renderer, Vertex};
 
 pub(super) fn rgba(tint: u32, alpha: f64) -> [f32; 4] {
     [

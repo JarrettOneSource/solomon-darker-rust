@@ -23,10 +23,10 @@ use solomon_sim::spells::air::{
     NativeAirLightningInput, NativeAirLightningPlan, build_native_air_lightning_plan,
 };
 
-use crate::assets;
 use crate::courtyard::Camera;
-use crate::render::{RenderTarget, Renderer, Texture};
 use crate::spells::{SpellView, StockAtlas};
+use solomon_graphics::assets;
+use solomon_graphics::{RenderTarget, Renderer, Texture};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SecondaryPresentationMemory {

@@ -20,7 +20,7 @@ use egui::{Color32, Context, Painter, Pos2, Rect, Response, Vec2, pos2, vec2};
 use serde::Serialize;
 use web_sys::{Document, HtmlCanvasElement};
 
-use crate::render::{BlendMode, Renderer};
+use solomon_graphics::{BlendMode, Renderer};
 
 pub use geometry::clip_polygon_ellipse;
 pub use input::{BrowserKey, canvas_point, key_from_browser};

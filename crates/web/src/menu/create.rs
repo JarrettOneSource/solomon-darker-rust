@@ -3,8 +3,8 @@
 
 use super::widgets::{self, Stage};
 use crate::gpu_ui::{StockAtlas, UiFrame, paint_text_layout};
-use crate::render::BlendMode;
 use egui::{Align2, Color32, FontId, Id, Pos2, Rect, Ui, Vec2};
+use solomon_graphics::BlendMode;
 use solomon_sim::element_vfx::{self, ElementVfxBlend, ElementVfxDraw};
 use solomon_sim::menu::create_name::{
     finalize_create_wizard_name, layout_create_wizard_name, validate_create_wizard_name,

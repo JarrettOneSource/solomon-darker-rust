@@ -4,7 +4,7 @@
 
 use super::catalog::SceneryCatalog;
 use super::*;
-use crate::assets;
+use solomon_graphics::assets;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::scenery::{
     NativeSceneryLayer, NativeSceneryPlan, NativeSceneryShadowTexture, NativeScenerySource,

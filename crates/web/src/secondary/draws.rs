@@ -8,7 +8,7 @@ use solomon_sim::spells::air::{NativeAirCoronaPlan, NativeAirMesh};
 
 use super::SecondaryView;
 use crate::courtyard::Camera;
-use crate::render::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
+use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
 
 pub(super) struct TargetDraw {
     pub center: Vec2,

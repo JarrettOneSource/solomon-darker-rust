@@ -1,119 +1,80 @@
-//! Custom Sack names from `renderer/hub-inventory/sack-name.ts`.
-//! Stock text stays on its bitmap atlas. This one fallback uses the same browser
-//! Canvas2D font metrics and Pixi8.19 wrapping rules as Source's `Text`.
-
+//! Custom Sack names use individually rasterized Arial glyphs on the GPU.
+//! The source Pixi word-wrap algorithm remains shared with its retained goldens.
+use crate::gpu_ui::UiFrame;
 use js_sys::{Array, Intl, Object, Reflect};
 use solomon_sim::Vec2;
 use solomon_sim::native_ui_text::{NativeUiFontName, native_ui_font};
-use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement};
-
-use super::{element, style};
+use wasm_bindgen::JsValue;
 
 pub(crate) struct BrowserSackName {
-    pub node: HtmlElement,
+    pub lines: Vec<String>,
     pub size: Vec2,
     pub baseline_offset: f64,
+    pub font_size: f32,
+    pub scale: f32,
+    pub tint: u32,
 }
-
-pub(crate) fn browser_sack_name(
-    document: &Document,
+impl BrowserSackName {
+    pub fn paint(
+        &self,
+        frame: &UiFrame<'_>,
+        painter: &egui::Painter,
+        origin: egui::Pos2,
+        scale: f32,
+    ) {
+        for (index, line) in self.lines.iter().enumerate() {
+            let font = egui::FontId::new(
+                self.font_size * self.scale * scale,
+                egui::FontFamily::Name("Arial".into()),
+            );
+            painter.text(
+                origin + egui::vec2(0.0, index as f32 * self.font_size * self.scale * scale),
+                egui::Align2::LEFT_TOP,
+                line,
+                font,
+                egui::Color32::from_rgb(
+                    (self.tint >> 16) as u8,
+                    (self.tint >> 8) as u8,
+                    self.tint as u8,
+                ),
+            );
+        }
+        let _ = frame;
+    }
+}
+pub(crate) fn gpu_sack_name(
+    frame: &UiFrame<'_>,
     text: &str,
     tint: u32,
     max_width: f64,
     wrap: bool,
 ) -> Result<BrowserSackName, String> {
-    let font_size = native_ui_font(NativeUiFontName::Menu).metrics[0];
-    let canvas: HtmlCanvasElement = document
-        .create_element("canvas")
-        .map_err(|_| "Sack name canvas")?
-        .dyn_into()
-        .map_err(|_| "Sack name canvas")?;
-    let context: CanvasRenderingContext2d = canvas
-        .get_context("2d")
-        .map_err(|_| "Sack name Canvas2D context")?
-        .ok_or("Sack name Canvas2D context")?
-        .dyn_into()
-        .map_err(|_| "Sack name Canvas2D context")?;
-    let font = format!("normal normal normal {font_size}px \"Arial\",sans-serif");
-    context.set_font(&font);
-
-    // CanvasTextMetrics.measureFont measures this authored probe, rather than
-    // the current name or the browser's CSS line box.
-    let probe = context.measure_text("|ÉqÅM").map_err(|_| "Sack name font metrics")?;
-    let mut ascent = probe.actual_bounding_box_ascent();
-    let mut font_height = ascent + probe.actual_bounding_box_descent();
-    if font_height == 0.0 {
-        ascent = font_size;
-        font_height = font_size;
-    }
+    let font_size = native_ui_font(NativeUiFontName::Menu).metrics[0] as f32;
+    let font = egui::FontId::new(font_size, egui::FontFamily::Name("Arial".into()));
+    let advance = |text: &str| {
+        Ok(frame.ctx.fonts_mut(|fonts| {
+            fonts.layout_no_wrap(text.into(), font.clone(), egui::Color32::WHITE).size().x
+        }) as f64)
+    };
     let lines = if wrap {
-        wrap_name(text, max_width, |token| advance(&context, token), graphemes)?
+        wrap_name(text, max_width, advance, graphemes)?
     } else {
         text.replace("\r\n", "\n").replace('\r', "\n").split('\n').map(str::to_owned).collect()
     };
     let mut width: f64 = 0.0;
     for line in &lines {
-        let metrics = context.measure_text(line).map_err(|_| "Sack name line measurement")?;
-        // Source includes actual ink overhang when it exceeds advance width.
-        width = width.max(
-            metrics
-                .width()
-                .max(metrics.actual_bounding_box_left() + metrics.actual_bounding_box_right()),
-        );
+        width = width.max(advance(line)?);
     }
-    let height = font_size.max(font_height) + lines.len().saturating_sub(1) as f64 * font_size;
-    let scale = if !wrap && width > max_width { max_width / width } else { 1.0 };
-    // game-webgl.ts fixes the Inventory renderer's resolution at1.
-    let pixel_width = width.max(1.0).ceil();
-    let pixel_height = height.max(1.0).ceil();
-    canvas.set_width(pixel_width as u32);
-    canvas.set_height(pixel_height as u32);
-    // Resizing resets Canvas2D state. Source draws a left-aligned, alphabetic
-    // baseline with no stroke, shadow, padding or letter spacing.
-    context.set_font(&font);
-    context.set_text_baseline("alphabetic");
-    context.set_fill_style_str(&format!("#{tint:06x}"));
-    let line_shift = ((font_size - font_height) / 2.0).max(0.0);
-    for (index, line) in lines.iter().enumerate() {
-        context
-            .fill_text(line, 0.0, ascent + line_shift + index as f64 * font_size)
-            .map_err(|_| "Sack name canvas text")?;
-    }
-    canvas.set_attribute("aria-hidden", "true").map_err(|_| "Sack name canvas semantics")?;
-    canvas
-        .set_attribute(
-            "style",
-            &format!("display:block;width:{}px;height:{}px", pixel_width, pixel_height),
-        )
-        .map_err(|_| "Sack name canvas display size")?;
-    let node = element(document, "span", "sack-name-browser-fallback")?;
-    node.set_attribute("aria-label", text).map_err(|_| "Sack name semantics")?;
-    node.set_attribute("data-native-sack-name-width", &width.to_string())
-        .map_err(|_| "Sack name measured width")?;
-    node.set_attribute("data-native-sack-name-height", &height.to_string())
-        .map_err(|_| "Sack name measured height")?;
-    node.set_attribute("data-native-sack-name-ascent", &ascent.to_string())
-        .map_err(|_| "Sack name measured ascent")?;
-    node.set_attribute(
-        "data-native-sack-name-lines",
-        &serde_json::to_string(&lines).map_err(|_| "Sack name measured lines")?,
-    )
-    .map_err(|_| "Sack name measured lines")?;
-    style(
-        &node,
-        &format!(
-            "position:absolute;display:block;width:{width}px;height:{height}px;font:{font_size}px/{font_size}px Arial,sans-serif;transform:scale({scale});transform-origin:top left;pointer-events:none",
-        ),
-    )?;
-    node.append_child(&canvas).map_err(|_| "Sack name canvas attachment")?;
+    let scale = if !wrap && width > max_width { (max_width / width) as f32 } else { 1.0 };
     Ok(BrowserSackName {
-        node,
-        size: Vec2::new(width * scale, height * scale),
-        baseline_offset: ascent * scale,
+        size: Vec2::new(width * scale as f64, font_size as f64 * lines.len() as f64 * scale as f64),
+        baseline_offset: font_size as f64 * 0.8 * scale as f64,
+        lines,
+        font_size,
+        scale,
+        tint,
     })
 }
-
 /// Pixi wordWrap with the Sack's fixed whiteSpace=pre, breakWords=true and
 /// letterSpacing=0. Fitting sums advance widths; final ink is measured afterward.
 fn wrap_name<A, G>(
@@ -180,13 +141,6 @@ where
         lines.push(String::new());
     }
     Ok(lines)
-}
-
-fn advance(context: &CanvasRenderingContext2d, text: &str) -> Result<f64, String> {
-    context
-        .measure_text(text)
-        .map(|metrics| metrics.width())
-        .map_err(|_| "Sack name advance measurement".to_owned())
 }
 
 fn trim_line(line: &str) -> String {

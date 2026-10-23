@@ -4,7 +4,7 @@ const path = require('node:path');
 const { chromium } = require(path.resolve(process.env.PW));
 const { startNewGame } = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
-const url = process.env.URL || 'http://127.0.0.1:4180/';
+const url = process.env.URL || 'http://127.0.0.1:4181/';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function waitForServer() {

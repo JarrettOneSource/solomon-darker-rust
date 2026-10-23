@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/sim", "crates/assets", "crates/web", "crates/launcher", "crates/protocol", "crates/modding", "crates/save-tools"]
+members = ["crates/sim", "crates/assets", "crates/graphics", "crates/web", "crates/launcher", "crates/protocol", "crates/modding", "crates/save-tools"]
 
 [workspace.package]
 version = "0.1.0"
@@ -8,6 +8,7 @@ edition = "2024"
 publish = false
 
 [workspace.dependencies]
+solomon-graphics = { path = "crates/graphics" }
 solomon-sim = { path = "crates/sim" }
 solomon-assets = { path = "crates/assets" }
 solomon-protocol = { path = "crates/protocol" }

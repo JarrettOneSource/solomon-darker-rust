@@ -12,8 +12,8 @@ use solomon_sim::spells::presentation::{
 };
 
 use crate::courtyard::Camera;
-use crate::render::{BlendMode, Quad, Renderer, Texture};
 use crate::spells::SpellView;
+use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
 pub struct BoneyardWeatherView {
     weather: NativeBoneyardWeather,

@@ -39,7 +39,6 @@ impl PlayerPanels {
         snapshot: &PlayerPanelSnapshot<'_>,
         now_ms: f64,
     ) -> Result<(), String> {
-        self.dirty = true;
         self.transfer_double_activation = false;
         let source = match press.target {
             Target::Item(item_id) => Some(InventoryDropSource::Backpack { item_id }),

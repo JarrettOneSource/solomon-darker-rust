@@ -176,7 +176,17 @@ data records preserves that contract without a TypeScript host at runtime. `solo
 keeps its dependency-free scene and world types; `solomon-web` translates JSON into them.
 Cost: the browser artifact includes the 1.8 MB geometry bank and a small explicit wire model.
 
-**The HUD uses browser DOM with stock atlas sprites and repeated strips.** The world stays
+**Visible game UI belongs to the Rust GPU renderer.** The October 23 full-port requirement
+supersedes the earlier DOM presentation decision below. Menus, HUD, panels, social/mod
+screens and lifecycle overlays use the existing WebGL2 canvas, stock atlases and native
+layout rules. The shared `gpu_ui` module uses egui for Rust interaction, text/layout and
+tessellation; it does not replace the game loop or simulation. Browser glyph rasterization,
+text composition, clipboard, file access and other platform capabilities remain adapters,
+not a visual HTML/CSS implementation. A CSS interpreter, DOM screenshot renderer, hidden
+legacy UI or synthetic-action test facade would not satisfy this contract. The live migration
+inventory and acceptance state are in `RUST-UI-MIGRATION.md`; implementation is in progress.
+
+**Superseded: the HUD used browser DOM with stock atlas sprites and repeated strips.** The world stays
 in WebGL; the screen-space HUD uses the browser's existing layout, hit testing and accessible
 buttons. `web/ui.rs` reads the same stock bundles as the renderer and projects the sprites,
 strips, mirrored frames and button art these screens require. This keeps the native art

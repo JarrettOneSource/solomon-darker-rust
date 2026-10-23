@@ -15,7 +15,7 @@ use super::art::{blend, color, project};
 use super::{EnemyDraw, EnemyDrawGroup, EnemyPainter, EnemyRoot, EnemyView, EnemyViewFrame};
 use crate::courtyard::Camera;
 use crate::native_mesh::{NativeMeshVertex, clip_native_mesh};
-use crate::render::{BlendMode, Renderer, Vertex};
+use solomon_graphics::{BlendMode, Renderer, Vertex};
 
 impl EnemyView {
     pub(super) fn draw_mesh(&self, renderer: &mut Renderer, camera: &Camera, draw: &EnemyDraw) {
