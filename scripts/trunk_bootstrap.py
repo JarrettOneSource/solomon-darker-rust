@@ -35,6 +35,38 @@ def render_bootstrap(resources: dict[str, str]) -> str:
     return template.replace("__SOLOMON_RESOURCES__", json.dumps(resources, sort_keys=True))
 
 
+def hash_worker_outputs(dist: Path) -> None:
+    """Trunk workers keep their bindgen names; give our external entries content hashes."""
+    outputs = []
+    for name in ("solomon-loader", "solomon-web"):
+        module = dist / f"{name}.js"
+        wasm = dist / f"{name}_bg.wasm"
+        if not module.exists() and not wasm.exists():
+            continue
+        if not module.is_file() or not wasm.is_file():
+            raise ValueError(f"expected both JavaScript and WASM worker outputs for {name}")
+        if any(re.fullmatch(rf"{name}-[0-9a-f]+(?:\.js|_bg\.wasm)", path.name)
+               for path in dist.iterdir()):
+            raise ValueError(f"mixed prepared and unprepared worker outputs for {name}")
+        with wasm.open("rb") as stream:
+            wasm_hash = hashlib.file_digest(stream, "sha256").hexdigest()[:16]
+        wasm_name = f"{name}-{wasm_hash}_bg.wasm"
+        binding = module.read_text(encoding="utf-8")
+        # Renaming within this directory preserves bindgen's relative snippet imports.
+        # Only its default WASM URL changes; the bootstrap also fetches this same file.
+        default_url = re.compile(rf"new URL\((['\"]){re.escape(wasm.name)}\1, import\.meta\.url\)")
+        binding, count = default_url.subn(
+            lambda match: f"new URL({match[1]}{wasm_name}{match[1]}, import.meta.url)", binding)
+        if count != 1:
+            raise ValueError(f"expected one default WASM URL in the {name} binding; found {count}")
+        module_hash = hashlib.sha256(binding.encode()).hexdigest()[:16]
+        outputs.append((module, wasm, f"{name}-{module_hash}.js", wasm_name, binding))
+    for module, wasm, module_name, wasm_name, binding in outputs:
+        (dist / module_name).write_text(binding, encoding="utf-8")
+        wasm.rename(dist / wasm_name)
+        module.unlink()
+
+
 def validate_trunk_bootstrap(bootstrap: str, mount: str) -> None:
     mount_prefix(mount)
     match = re.search(r"^const resources = (\{[^\n]+\});$", bootstrap, re.MULTILINE)
@@ -59,6 +91,7 @@ def prepare_trunk_bootstrap(dist: Path, mount: str) -> tuple[str, str, str]:
     bases=re.findall(r'<base\b[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>',document)
     if bases != [prefix]:
         raise ValueError(f"the game document must use the {prefix} public URL")
+    hash_worker_outputs(dist)
     resources = {}
     files = [path.name for path in dist.iterdir() if path.is_file()]
     for key, pattern in RESOURCE_NAMES.items():
