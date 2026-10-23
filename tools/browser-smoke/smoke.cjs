@@ -1,10 +1,14 @@
 // Required real-input smoke for the Rust/WASM game and its GPU UI.
 // PW=<playwright-core> URL=http://127.0.0.1:4181/ node tools/browser-smoke/smoke.cjs
 const path = require('node:path');
+const fs = require('node:fs');
 const { chromium } = require(path.resolve(process.env.PW));
 const { startNewGame } = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
 const url = process.env.URL || 'http://127.0.0.1:4181/';
+const screenshot = process.env.SHOT || path.join(process.env.OUT || '.', 'rust-game-smoke.png');
+const receiptPath = path.join(path.dirname(screenshot),'smoke-receipt.json');
+fs.mkdirSync(path.dirname(screenshot),{recursive:true});
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function waitForServer() {
@@ -25,23 +29,27 @@ async function waitForServer() {
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
   });
+  let page;
+  let observed;
+  let step='startup';
   try {
-    const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-    const observed = ui.watchErrors(page);
+    page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+    observed = ui.watchErrors(page);
     await ui.observeGpu(page);
     await page.goto(url, {waitUntil:'domcontentloaded'});
     await ui.ready(page);
     await ui.surface(page, 'title');
     const titleGpu = await ui.assertGpuOnly(page);
-    const screenshot = process.env.SHOT || 'rust-game-smoke.png';
     const filename = path.parse(screenshot);
     await page.screenshot({path:path.join(filename.dir, `${filename.name}-title${filename.ext || '.png'}`)});
     const state = () => page.evaluate(() => Array.from(window.wasmBindings.wizard_state()));
+    step='ordinary College and Create admission';
     await startNewGame(page);
     await ui.widget(page, 'hud:pause');
     await page.waitForTimeout(300);
     const spawned = await state();
     const initialStudents = await page.evaluate(() => Array.from(window.wasmBindings.npc_state()));
+    step='actual College movement and ambient students';
     await page.keyboard.down('KeyS');
     await page.waitForTimeout(700);
     await page.keyboard.up('KeyS');
@@ -80,10 +88,23 @@ async function waitForServer() {
       noRuntimeOrAssetErrors: observed.errors.length === 0,
       ready: gameplayGpu.gpu.ready && gameplayGpu.gpu.error === null,
     };
-    console.log(JSON.stringify({spawned,afterSouth,afterEast,
+    const receipt={passed:Object.values(checks).every(Boolean),url,spawned,afterSouth,afterEast,
       studentCounts:[initialStudents[0],laterStudents[0]],walkingStudentCount,
       titleGpu:titleGpu.gpu,gameplayGpu:gameplayGpu.gpu,submissions,
-      problems:observed.errors,warnings:observed.warnings,checks},null,1));
-    if (!Object.values(checks).every(Boolean)) process.exitCode = 1;
+      problems:observed.errors,warnings:observed.warnings,checks};
+    fs.writeFileSync(receiptPath,JSON.stringify(receipt,null,2));
+    console.log(JSON.stringify(receipt,null,1));
+    if (!receipt.passed) process.exitCode = 1;
+  } catch(error) {
+    const receipt={passed:false,url,step,failure:error.stack,problems:observed?.errors,
+      warnings:observed?.warnings};
+    if(page&&!page.isClosed()) {
+      try {receipt.gpu=await ui.readUi(page)}
+      catch(observationError) {receipt.observationError=observationError.stack}
+      try {await page.screenshot({path:path.join(path.dirname(screenshot),'smoke-failure.png')})}
+      catch(screenshotError) {receipt.screenshotError=screenshotError.stack}
+    }
+    fs.writeFileSync(receiptPath,JSON.stringify(receipt,null,2));
+    throw error;
   } finally {await browser.close()}
 })().catch(error => {console.error('smoke failed:',error);process.exitCode=1});

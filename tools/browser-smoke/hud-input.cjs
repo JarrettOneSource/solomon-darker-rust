@@ -115,6 +115,8 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
       assert.ok(afterTouch[0]>beforeTouch[0]+20,'touch walks east');
       assert.equal((await ui.widget(touch,'hud:joystick:movement')).selected,true,
         'the GPU joystick shows the active touch');
+      assert.equal((await ui.widget(touch,'hud:joystick:movement')).focused,false,
+        'the source drag-only joystick does not take keyboard focus');
       await client.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
       await ticks(touch,40);
       const cancelStart=await state(touch);
@@ -124,6 +126,8 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
         'real touch cancellation stops movement');
       assert.equal((await ui.widget(touch,'hud:joystick:movement')).selected,false,
         'the GPU joystick returns to its neutral presentation');
+      assert.equal((await ui.widget(touch,'hud:joystick:movement')).focused,false,
+        'touch cancellation leaves keyboard focus with the ordinary owner');
       const movement=await touch.evaluate(()=>Array.from(wasmBindings.gameplay_input_state()).slice(0,2));
       assert.deepEqual(movement,[0,0],'cancel clears the accepted movement input');
       await ui.assertGpuOnly(touch);
