@@ -304,6 +304,7 @@ async function runLua(page, code) {
   }, account.token);
   const page = await context.newPage();
   await textures.observeGpuTextureLifetime(page);
+  await ui.watchRequestFailures(page, {errors}).ready;
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
@@ -311,10 +312,6 @@ async function runLua(page, code) {
     const location = message.location().url;
     if (message.text().includes('404') && (/\/api\/game\/saves\/0$/.test(location) || location.endsWith('/api/game/rejoin'))) return;
     errors.push(message.text());
-  });
-  page.on('requestfailed', request => {
-    const receipt = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
-    errors.push(receipt);
   });
   page.on('response', response => {
     const pathname = new URL(response.url()).pathname;
@@ -617,6 +614,7 @@ async function runLua(page, code) {
         const expectedRow = process.env.EXPECT_CHEAT_ROW === 'present';
         assert.equal(state.cheatProof.pauseRowVisible, expectedRow);
         await page.screenshot({path: path.join(output, 'console-row-witness.png')});
+        await ui.settleErrors(page);
         fs.writeFileSync(path.join(output, 'console-row-witness.json'), JSON.stringify({
           matched: true, expectedRow, errors, admission: state.cheatProof, accepted: snapshot()}, null, 2));
         assert.deepEqual(errors, []);
@@ -656,6 +654,7 @@ async function runLua(page, code) {
       }
     }
     if (authoredPhase === 'console') {
+      await ui.settleErrors(page);
       assert.deepEqual(errors, []);
       fs.writeFileSync(path.join(output, 'authored-console.json'), JSON.stringify({
         passed: true, source: acceptedPackage.source, package: acceptedPackage,
@@ -687,6 +686,7 @@ async function runLua(page, code) {
     assert.ok(modState && Object.keys(modState).length, 'accepted authored runtime reaches the real save');
     const beforeReload = snapshot();
     state.frame = null; state.runtime = null;
+    await ui.settleErrors(page);
     await page.reload({waitUntil: 'load'});
     await ui.ready(page);
     await ui.click(page,'play');
@@ -701,6 +701,7 @@ async function runLua(page, code) {
     await until(() => state.frame.snapshot.ticks > resumedTick + 30, 'continued authored authority');
     await page.screenshot({path: path.join(output, 'authored-resumed.png')});
     check('real checkpoint persistence and same-run reload retain inventory, semantic state and later authority ticks');
+    await ui.settleErrors(page);
     assert.deepEqual(errors, []);
     const receipt = {passed: true, package: acceptedPackage, checks, requests, expectedNotFound,
       continuedProfile: state.continuedProfile, priorPhase, priorSackPhase, priorOnwardPhase,
@@ -717,6 +718,7 @@ async function runLua(page, code) {
     fs.writeFileSync(path.join(output, 'authored-content.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify({passed: true, checks, errors}));
   } catch (error) {
+    await ui.settleErrors(page);
     await page.screenshot({path: path.join(output, 'authored-content-failure.png')});
     fs.writeFileSync(path.join(output, 'authored-content-failure.json'), JSON.stringify({step, error: error.stack, checks, errors, requests, expectedNotFound, continuedProfile: state.continuedProfile, priorPhase, priorSackPhase, priorOnwardPhase, accepted: snapshot(), wireTypes: state.wireTypes, movementFailure: state.movementFailure, rejectedBeltProof: state.rejectedBeltProof,
       cheatProof: state.cheatProof,

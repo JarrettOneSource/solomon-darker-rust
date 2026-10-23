@@ -158,6 +158,7 @@ async function geometry(page, id) {
     }, true);
   }, account.token);
   const page = await context.newPage();
+  await ui.watchRequestFailures(page, {errors}).ready;
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
@@ -166,10 +167,6 @@ async function geometry(page, id) {
     if (message.text().includes('404') && (/\/api\/game\/saves\/0$/.test(pathname)
       || pathname.endsWith('/api/game/rejoin'))) return;
     errors.push(message.text());
-  });
-  page.on('requestfailed', request => {
-    const failure = {path: new URL(request.url()).pathname, error: request.failure()?.errorText};
-    errors.push(`${failure.path}: ${failure.error}`);
   });
   page.on('request', request => {
     const requested = new URL(request.url());
@@ -406,6 +403,7 @@ async function geometry(page, id) {
     assert.ok(await page.evaluate(() => Boolean(localStorage.getItem('sdr.token:/game-stg'))));
     await page.screenshot({path: path.join(output, 'gravity-title-reset.png')});
     check('real save-before-leave reaches Title and disposes quickbar input without unscoped credential writes');
+    await ui.settleErrors(page);
     assert.deepEqual(errors, []);
     const receipt = {passed: true, source: acceptedPackage.source, package: acceptedPackage,
       credentialBootstrap: 'actual separate local API account, scoped token; form acceptance is separate',
@@ -417,6 +415,7 @@ async function geometry(page, id) {
     fs.writeFileSync(path.join(output, 'mod-skills.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify({passed: true, checks, errors}));
   } catch (error) {
+    await ui.settleErrors(page);
     await page.screenshot({path: path.join(output, 'mod-skills-failure.png')});
     const gpu = await ui.readUi(page);
     fs.writeFileSync(path.join(output, 'mod-skills-failure.json'), JSON.stringify({passed: false,
@@ -428,7 +427,7 @@ async function geometry(page, id) {
   } finally {
     let timeout;
     try {
-      await Promise.race([server.close(), new Promise((resolve, reject) => {
+      await Promise.race([(async () => {await browser.close(); await server.close();})(), new Promise((resolve, reject) => {
         timeout = setTimeout(() => reject(new Error('Chrome close timed out')), 15000);
       })]);
     } catch {

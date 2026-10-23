@@ -55,7 +55,8 @@ async function saved(page) {
   try {
     const desktop = await browser.newContext({viewport:{width:1600,height:900},ignoreHTTPSErrors:true});
     const page = await desktop.newPage(); current = page;
-    observations.push(ui.watchErrors(page)); await openEditor(page);
+    observations.push(ui.watchErrors(page));
+    await observations.at(-1).ready; await openEditor(page);
     const initialUi = await ui.readUi(page);
     assert.equal(initialUi.widgets.filter(widget => widget.id.startsWith('mobile/control:')).length, 18);
     const before = await storage(page);
@@ -91,12 +92,13 @@ async function saved(page) {
       'reset is a default-layout draft');
     await page.keyboard.press('Escape'); await saved(page);
     assert.deepEqual(await storage(page), before, 'Escape saves reset through the same store');
-    await ui.assertGpuOnly(page); await desktop.close();
+    await ui.assertGpuOnly(page); await ui.settleErrors(page); await desktop.close();
 
     const touch = await browser.newContext({viewport:{width:896,height:414},isMobile:true,
       hasTouch:true,deviceScaleFactor:1,ignoreHTTPSErrors:true});
     const phone = await touch.newPage(); current = phone;
-    observations.push(ui.watchErrors(phone)); await openEditor(phone, true);
+    observations.push(ui.watchErrors(phone));
+    await observations.at(-1).ready; await openEditor(phone, true);
     const root = ui.bounds(await ui.widget(phone, 'mobile/editor'));
     assert.deepEqual(root, {x:0,y:0,width:896,height:414}, 'touch editor fills the actual canvas');
     const initialJoystick = await transform(phone, 'leftJoystick');
@@ -131,7 +133,7 @@ async function saved(page) {
       'reopen retains the exact saved joystick transform');
     await ui.assertGpuOnly(phone);
     await phone.screenshot({path:path.join(out, 'mobile-editor-touch-restored.png')});
-    await touch.close(); current = null;
+    await ui.settleErrors(phone); await touch.close(); current = null;
     const errors = observations.flatMap(observation => observation.errors);
     assert.deepEqual(errors, []);
     const result = {checks:['18 real GPU controls','desktop drag/history/key rotation/resize',
@@ -141,6 +143,7 @@ async function saved(page) {
     console.log(JSON.stringify(result));
   } catch (error) {
     if (current) {
+      await ui.settleErrors(current);
       await current.screenshot({path:path.join(out, 'mobile-editor-failure.png')});
       fs.writeFileSync(path.join(out, 'mobile-editor-failure.json'), JSON.stringify({error:String(error),
         observations,ui:await ui.readUi(current)}, null, 2));
