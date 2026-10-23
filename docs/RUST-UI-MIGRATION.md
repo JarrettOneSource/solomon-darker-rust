@@ -70,6 +70,30 @@ records native `MyLoader::Render` at `0x005BCA40`, numerator `0x0081F6A8`, denom
   producer-ordering defect, not an allowed navigation cancellation. Root's repair must
   start empty media, attach handlers, then set src/load together; loadeddata stays required
   and every unexpected request failure remains fatal in the next composed startup.
+- Root's `media-{python,native}-58df78d-create.json` traces distinguish later browser
+  suspension from that duplicate-load defect: one load per resident channel, successful
+  loadeddata, native suspend/NETWORK_IDLE, no media abort/error, then cancelled pending
+  HTTP transfers while the same channels remain resident. Academy subsequently plays.
+  This also occurs on the canonical Range-capable AssetServer, so Range handling does not
+  explain it. The [HTML media loading contract](https://html.spec.whatwg.org/multipage/media.html#concept-media-load-resource)
+  permits suspension after buffering and requires NETWORK_IDLE plus a suspend event.
+  Acceptance must retain raw network failures and await a shared, per-channel ownership
+  classification. Missing readiness, media errors/abort, reload/source changes, removal
+  and unrelated cancellations remain fatal; a URL or ERR_ABORTED match alone is insufficient.
+- Pinned `MainMenuScene.tsx:730` installs pointerdown and keydown audio unlock on window
+  capture. Rust installed them on document bubbling; the GPU canvas owns and stops its
+  pointer event before it reaches that phase. Actual `audio.cjs` on 58df78d times out
+  after the real Play click while waiting for AudioContext running
+  (`common-browser/58df78d/audio-pointer-red/run.log`). Restore the Source capture owner;
+  retain pointer-only activation and the real playback/mixer assertions.
+- The same Source director's `primeMusicChannels`/`finishMusicPrime` owns one successful
+  zero-volume play per unused stock channel during unlock. Current/outgoing, already
+  primed and pending channels are excluded; deliberate music pause excludes priming.
+  Completion resets unused channels, but must preserve a channel that became active in
+  the meantime and honor a subsequent deliberate pause. Source test
+  `game-audio-director.test.ts:538` proves later automatic Academy playback. Rust lacked
+  this established behavior. Reuse its resident channels with one per-channel promise
+  owner; the browser audio check must observe native prime calls before keyboard input.
 - Pinned Website also shows truthful stage, whole percentage, pending filename and ready
   item count. Those are explicit browser enhancements; stock per-file order/weighting is
   unknown. The separate match-loading lifecycle is not the startup denominator.
@@ -199,6 +223,48 @@ static hosts answer Range requests with a full 200 response; that is a diagnosed
 limitation, not yet the demonstrated owner of the cancellations. Root owns the media
 trace. No broad cancellation allowance has been added.
 
+The shared observer now has 30 focused positive/failure regressions. It captures the
+actual request's owning frame, native media source/load/events and document baseURI, then
+awaits final ownership/readiness before classifying suspension. HTTP/media errors, missing
+readiness, reload, removal, duplicate owners and unrelated cancellations stay fatal.
+`common-browser/58df78d/media-owned-input` passes the complete unchanged input journey,
+with eight reads/eight RAF and a reviewed final GPU Pause screenshot. Its
+`browser-errors-1.json` preserves all three raw failed transfers and both lifecycle
+snapshots for each permitted native suspension; unexpected errors are empty. Earlier
+failed family receipts remain unchanged and still need their own clean current reruns.
+
+Required smoke on `88c3dfe5977d4ba96216afa25366895ab2aab542` now passes all 14 checks,
+including named Helvidius/Ether/Arcane, exact Office arrival, both rapid-input sequences,
+movement/students and genuine GPU-only presentation with no unexpected errors. Full
+current-art Title and Courtyard/HUD screenshots were reviewed; evidence is
+`common-browser/88c3dfe/smoke/`. The actual audio test on that artifact also passes pointer
+capture unlock/Title playback, then fails the Source priming assertion with zero
+Academy prime calls (`audio-prime-red/run.log`). The complete audio journey now passes on
+`24382f0c2055763bf100775b72e9e78a596dc68f`: actual pointer activation resumes the context
+and Title, all five inactive native music channels prime once silently and fulfill/reset
+before any keyboard input, then ordinary College admission automatically plays Academy.
+Choose/cast/drink effects and real music/sound sliders pass. The reviewed final GPU Settings
+image, native playback receipts, zero raw network failures and graceful owned-browser exit
+are retained in `common-browser/24382f0/audio/`.
+
+All seven startup cases are now qualified on that immutable 88c3dfe artifact across the
+retained `startup-88c3dfe-{warm-verified,held,music-verified,required-error}` receipts.
+Cold/warm pass with real native announcements and exact pending-request/document-replacement
+ownership for the three raw warm-reload cancellations. Held Title, font and main WASM prove
+89, 8 and zero completed items respectively, the exact unfinished path and native splash
+without partial menus. Held music proves 322/326 plus one fallback announcer across loader
+and main, priority before handoff and actual changed-control Tab announcement afterward.
+The required Title 503 remains an explicitly owned visible failure. The original combined
+held receipt still records its later focus-observation race as failed; focused music/error
+follow-ups qualify those cases without rewriting that raw result.
+
+Settings' five behavior groups now pass cleanly in
+`menu-runtime-88c3dfe/settings-observed`, including the real pointer slider, bindings,
+preferences and reload. Root's `restore-88c3dfe/sack-ordinary` proves accepted Unicode
+Sack names and exact header restoration after an ordinary full reload/Continue, with no
+deserialization trap. That original Sack run still fails only on unobserved old-document
+media cancellation; its owned-replacement rerun remains required before a clean gate claim.
+
 `common-browser/58df78d/boneyard/receipt.json` uses ordinary named Felix admission and
 HUD Map. Actual generated native world/source geometry, inward keyboard movement, Pause
 freeze, Leave/Title and Continue at the same position all pass; full current-art entry
@@ -209,6 +275,15 @@ already sees an open menu. Root owns this production save-edge repair; no test t
 weaker checkpoint assertion substitutes for it. The actual save and GPU snapshot are
 preserved, and the three independent media aborts remain fatal. A second seed was not
 attempted after this bounded failure.
+
+The repaired exact-save edge and browser close owner are now verified together by the
+complete `common-browser/88c3dfe/boneyard-stdio-fixed` rerun: two independently generated
+named worlds, native source/geometry, textured scenery, inward movement, Pause freeze,
+Leave/Continue, exact subsequent paused checkpoint and the same wizard/run/seed all pass.
+Both current-art world/HUD screenshots were reviewed. The process gate also passes:
+Playwright disconnects, owned Chrome exits zero gracefully, cleanup errors are empty and
+the driver exits zero without forced termination. Earlier 58df save failure and both 88
+teardown failures remain unchanged as the retained red evidence.
 
 Family evidence is likewise qualified. `menu-runtime-58df78d/hall` passes its actual
 journey with no browser errors; reviewed native/compact screenshots prompted a header
@@ -229,14 +304,14 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 
 | Surface and required variants | Owner | Implementation/reference and acceptance route | Current blocker/evidence |
 | --- | --- | --- | --- |
-| Process startup; cold, warm, held image/font/wasm; failed required asset; no partial Title or HUD | foundation + root; acceptance tests | Startup evidence above; `startup.cjs`; loader geometry, monotonic work, immediate readiness transition, screenshots | Ordinary startup and tiny-loader pixels/resize/overlap proved; cold/warm/held/failure matrix pending |
+| Process startup; cold, warm, held image/font/wasm; failed required asset; no partial Title or HUD | foundation + root; acceptance tests | Startup evidence above; `startup.cjs`; loader geometry, monotonic work, immediate readiness transition, screenshots | All seven cases pass on 88c3dfe across retained receipts; exact held counts/path, splash, no partial menus, native/fallback announcements and failure ownership proved |
 | GPU runtime; stock bundle crops/rotation/registered origins, glyph masks, browser fonts, dynamic images, blend/clips | foundation | `gpu_ui.rs`, shared `graphics/src/lib.rs`, stock manifest; read-only `gpu_ui_state`, GPU meshes/textures and final screenshots | Core probe 15/15; joined source audit 3/3; composed game/art pending complete composed browser proof |
 | Title/Play; clouds, moon, graves, Solomon animation, logo/art, Continue policy, account/desktop links | menus | `menu/title.rs`, pinned Main Menu; `smoke.cjs`, `menus.cjs`, `menu-input.cjs` | Ordinary Title/Tutorial prompt screenshot reviewed; complete Title variants pending |
-| Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | GPU source integrated; real prompt cancel/focus journey pending complete composed browser proof |
-| College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | 58df78d actual named Helvidius/Ether/Arcane, Felix and blank Genericus variants pass; remaining variants/final media gate pending |
-| Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | 58df78d rapid inputs/neutral handoff and Boneyard Pausefreeze/Leave/Continue pass; subsequent Escape Pause misses exact saved tick; shared variants/media gate pending |
-| Settings root/cloud/performance; sliders/toggles, permissions, saved preferences, nested account policies, mobile sharing | menus | `menu/settings/**`; `settings-parity.cjs`, `menus.cjs`, `fullscreen.cjs` | 58df78d real keyboard/bind checks pass; slider pointer focus red in settings/slider-focus-receipt.json; queued repair and saved variants pending |
-| Control bindings; every action, duplicate swaps, Escape, modified-key rejection, allowed mouse bindings, reverse hotbar | menus + root input | `menu/settings.rs`, canonical `GameControls`; `menus.cjs`, `gameplay-input.cjs`, `hud-input.cjs` | 58df78d Escape/swap/Back/F2/mouse and gameplay aim/belt/neutral checks pass, exact gamepad reads 8/8; complete HUD/controller variants and media gate pending |
+| Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | 88c3dfe prompts-observed clean: real saved wizard, Escape decline preserves exact state, narrow viewport confirmation and explicit replacement; Tutorial Yes/focus route remains in common input coverage |
+| College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | 88c3dfe required named Helvidius/Ether/Arcane smoke and default/random/blank variants clean; 24382f0 full audio activation/priming/scene/mixer journey clean; complete element/discipline/admission variants pending |
+| Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | 88c3dfe rapid inputs and complete two-seed Boneyard Pause/exact-save/Leave/Continue pass cleanly; common input neutral handoff passes; complete shared variants remain pending |
+| Settings root/cloud/performance; sliders/toggles, permissions, saved preferences, nested account policies, mobile sharing | menus | `menu/settings/**`; `settings-parity.cjs`, `menus.cjs`, `fullscreen.cjs` | 88c3dfe Settings five-group driver passes cleanly, including pointer slider and real reload; account/mobile permission variants remain owned by their family routes |
+| Control bindings; every action, duplicate swaps, Escape, modified-key rejection, allowed mouse bindings, reverse hotbar | menus + root input | `menu/settings.rs`, canonical `GameControls`; `menus.cjs`, `gameplay-input.cjs`, `hud-input.cjs` | 58df78d common gameplay-input fully passes with exact reads 8/8, raw native suspensions preserved; binding witnesses retained, complete current HUD/controller variants pending |
 | Save Transfer; multiple native/JSON/CFG/SAV/ZIP imports, inspected warnings, replace/cancel/busy/error, real export ZIP/download | menus | `menu/settings/transfer.rs`; `save-transfer.cjs`, `save-tools.cjs` | GPU source integrated; native file/confirmation/export journey pending composed browser proof |
 | Hall Local/Global × four boards; top100 and current row, portrait/orb, expand/scroll/pan, ranks/perks, loading/retry/stale result | menus | `menu/hall.rs`; `hall.cjs`, `hosted-score.cjs` | 58df78d Hall driver passes/errors empty; native/compact screenshots reviewed; queued gradient/border correction and hosted variants pending |
 | Join directory; normalized code, refresh, request/admission/cancel, private/mod/cheat/location policy, list scroll | menus | `menu/join.rs`; `join-party.cjs`, `hosted-social.cjs` | GPU source integrated; actual host/directory admission pending composed browser proof |
@@ -245,7 +320,7 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Cloud mods/detail; thumbnail lifecycle, subscription mutation/progress, screenshot contain/swipe/wrap, metadata/releases, comments/UTF16 limit/delete, preserved focus/scroll | menus | `menu/cloud/detail.rs`, real Website storage; `dark-cloud.cjs`, `cloud-subscription.cjs` | GPU source integrated; actual remote assets/subscriptions/comments pending composed browser proof |
 | Boneyard Shelf; local/cloud content, New/Import/Edit/Test/Delete and Keep, Test/Return/editor handoff and disposal | root | `game/hosted/boneyards.rs`; `authoring-shelf.cjs`, `authored-content.cjs`; export belongs to the external editor | 58df78d New/editor/cloud save/JSON/native imports pass; pointer Keep focus red; queued repair and Test/Return/Delete variants pending |
 | HUD resources/XP/concentrations, native/mod belt quantity/cooldown, three banks, portraits/map, tutorial gates, custom mobile positions | HUD | `hud/**`, `hotbar.rs`; `hud-input.cjs`, `hud-selector.cjs`, `belt-pull-off-check.cjs` | 58df78d desktop selector passes; 844 × 390 central/bottom HUD clipped, queued transform correction; touch/cancel and remaining variants pending |
-| Inventory and native rank-book confirmation; result/OKAY/Escape, retained pause/audio, column-first cells, equipment/protected clothing/third ring, nested Sack pages/back/rename, animation lock, drag/drop/restoration flybys, stats/set/wizard preview | HUD | `player_panels/{inventory*,skill_book_feedback}`, `sack_*`; `player-panels.cjs`, `skill-book-result.cjs`, `responsive.cjs`, `save-resume.cjs` | 58df78d panel/equip/Unforge/Skills plus paid Sack/Unicode/font-quads pass; real saved-player reload deserialize red, media errors and book/touch variants pending |
+| Inventory and native rank-book confirmation; result/OKAY/Escape, retained pause/audio, column-first cells, equipment/protected clothing/third ring, nested Sack pages/back/rename, animation lock, drag/drop/restoration flybys, stats/set/wizard preview | HUD | `player_panels/{inventory*,skill_book_feedback}`, `sack_*`; `player-panels.cjs`, `skill-book-result.cjs`, `responsive.cjs`, `save-resume.cjs` | 58df panel/equip/Unforge/Skills and Sack/font-quads retained; 88c3dfe ordinary Unicode Sack reload/Continue now passes behavior without trap, clean replacement-observed and book/touch gates pending |
 | Skills/quickbar; learned/ranked/weld pages, stock hover, every bank binding, skill/item drag and belt pull-off | HUD | `player_panels/skills.rs`, `skill_selector.rs`; `player-panels.cjs`, `hud-selector.cjs`, `mod-skills.cjs` | GPU source integrated; real learned/drag/bank/pull-off journey pending composed browser proof |
 | College services; all shops/perks/prices, insufficient gold, storage, paid Dowse/ref/roll/Done, Unforge confirmation/results, dye admission/swatches/trim/cloth | HUD | `player_panels/{services,crafting,sack_rename}.rs`; `hub-services.cjs`, `player-panels.cjs`, `responsive.cjs` | 58df78d real purchase/storage/27 Hagatha offers/insufficient Dowse/Unforge pass before fatal media errors; paid Dowse/dye variants pending |
 | NPC chat/books/boasts/authored choices; history, progressive text/audio/acceleration, selector list drag/wheel/controller, notebox/error | HUD | `player_panels/{dialogue,notebox}.rs`; `hub-dialogue-rooms.mjs`, `menu-journey.cjs` | 58df78d College dialogue plus five boasts and keyboard scroll pass before media errors; complete books/authored/selector/error variants pending |
@@ -259,52 +334,12 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Cheats/Console/developer observer; permissions, all resource/skill/world/dev controls, Lua submit/history/results/error/clear and bot targets | social | `cheats/**`, `observer.rs`; `authored-content.cjs`, `learned-bot.cjs`, `cheat-consent.cjs` | GPU source integrated; actual authorized Console/observer/bot journey pending composed browser proof |
 | Mobile editor; all six anchors/elements, drag/resize/rotate/snap, zoom/pan/pinch, multi-touch/cancel, undo/redo/reset/pages/dock/presets/save | social | `mobile_editor/**`, `sim/mobile_ui/**`; `mobile-editor.cjs`, `responsive.cjs` | GPU source integrated; actual parent-layer touch/edit/save journey pending composed browser proof |
 | Authored mod surfaces; Cast/Shop/Reforge/Portal, skills/subskills/offers/quickbar, minimap actions, mounted HUD text/image/bar/button, party attributes | social | `mod_panels.rs`, `mod_skills.rs`, `mod_skill_quickbar.rs`, `mod_minimap.rs`, `mod_world_overlays/**`; `authored-content.cjs`, `mod-skills.cjs` | GPU source integrated; actual admitted authored widgets/assets/retirement pending composed browser proof |
-| Match loading; every recovered stage, progress/cancel/failure, host admission/world materialization | root | `match_loading.rs`; `boneyard.cjs`, `hosted-session.cjs`, `deployment-restart.cjs` | 58df78d actual Map admission/native world/textured render pass, Leave/Continue same run; exact Pause save barrier red, full stages/failure/host variants pending |
+| Match loading; every recovered stage, progress/cancel/failure, host admission/world materialization | root | `match_loading.rs`; `boneyard.cjs`, `hosted-session.cjs`, `deployment-restart.cjs` | 88c3dfe complete two-seed ordinary Map/native-world/Leave/Continue/exact-save journey passes, including clean owned browser retirement; full stage/cancel/failure/host variants remain pending |
 | Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | GPU source integrated; real fullscreen/unsupported/standalone activation pending composed browser proof |
 | Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | GPU source integrated; actual update/close failure plus packaged journey pending composed browser proof |
 | Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | GPU source integrated; native recovery regressions retained; actual update journey pending composed browser proof |
-| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | 58df78d named edit/rapid ordering, pointer/keyboard/trusted blur and exact 8/8 gamepad polling pass; slider pointer focus, touch/resize/accessibility family gates and media errors remain |
+| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | 88c3dfe mandatory named/rapid smoke clean; 58df common input fully clean/exact8/8 with strict raw media evidence; touch/resize/accessibility and focused family reruns pending |
 | No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Joined source producer contract 3/3; complete runtime surface/input proof remains pending |
-
-## Saved-session startup allocation
-
-Ordinary saved Sack and College reloads on58df78d trap first inside the generated
-`PlayerState` JSON deserializer, before later loader diagnostics encounter the damaged stack.
-The natural save, browser IndexedDB state and first stack are retained under
-`reload-58df78d/` and `hud-browser-58df78d/sack-reload-witness/` in the task evidence.
-The actual WASM prologues reserve525,760 bytes for `Game::load` and311,248 for `run`
-before decoding; player deserialization adds66,992 bytes and its map visitor another100,368,
-plus the containing save/participant frames. These overlap the unchanged1 MiB stack.
-
-Resource construction and saved-session admission must be sequential lifecycle phases.
-The constructor returns the permanent shared Game owner; saved-state parsing runs after
-resource-constructor temporaries retire. Simulation/save structures, validation, defaults
-and the WASM stack configuration retain their existing contracts. Real reload/Continue
-with the naturally generated save is the regression witness; a compile alone is insufficient.
-
-## Ordered UI dispatch
-
-The actual Settings binding journey reproduced a binding click followed by Escape being
-interpreted in reverse order. The shared GPU batch previously handled every queued key before
-resolving pointer clicks, and `Game::frame` consumed typed HUD/panel actions before the GPU
-pass produced them. This also delayed opening Inventory until after a following Escape.
-The Source's browser callbacks commit each event before dispatching the next event.
-
-`GpuUi` now separates ordered input/layout commits from the final GPU submission. The Game
-owner commits controller actions and refreshes accepted-state models between those batches;
-transport polling, physical gameplay sampling and fixed simulation advancement retain one
-owner per browser frame. World rendering precedes the final UI draw. Texture upload/retirement
-is finalized even when a controller fails. Returning to the editor stops later queued input
-and gameplay work in the same frame while still retiring pending textures. Observer and
-deployment barriers retain their read-only/held semantics. The binding/text-focus batch regressions and actual rapid
-Settings/HUD journeys qualify this seam; the latter remain pending the combined rebuild.
-
-The ordinary58df78d Boneyard journey preserved world entry, movement, Pause/Leave and
-Continue, then exposed a local durability regression on its second Escape: live tick2923
-but saved tick2910. `MenuUi::paint` can open Pause before its typed-action commit, so sampling
-the old blocking state inside that commit misses the edge. The Game owner now captures
-that state before each input pass, preserving the existing local pause-save contract.
-The exact completed-save assertion remains the acceptance check; no timing tolerance is added.
 
 ## Test ownership and stopping checks
 
@@ -331,6 +366,15 @@ slider label and accepted value after real keyboard edits. It does not create an
 messages or mirror controls. Unmounted native download anchors and hidden audio/file/IME
 adapters remain platform capabilities; mounted visual anchors and hidden gameplay controls
 still fail the browser audit.
+
+The native font-run geometry adapter is limited to
+`gpu_ui/edit/font_run.rs`: an SVG root with one text child, marked `data-gpu-font-metrics`,
+hidden and noninteractive, attaches only for synchronous typography measurement and is
+removed after success or failure. It measures native joining, bidi caret and selection
+geometry; an unattached canvas paints text-only GPU tiles. The source audit permits only
+those exact SVG/text constructors in that module and checks the hidden/transient contract.
+Other SVG producers and every HTML screenshot/control facade remain rejected. Runtime
+GPU-only acceptance still requires the transient probe to be absent between operations.
 
 Layout assertions use original `paintRect` glyph/card bounds. Visible clipped hit `rect`
 remains the pointer target, so clipping cannot make an overflowing title, tooltip or Tutorial
@@ -369,3 +413,64 @@ meaningful current-art browser smoke and affected full journeys clean, source/DO
 clean, and packaged/live checks at their separately stated boundaries. Post-push cleanup of
 task worktrees and owned processes on every device is part of root completion; retained paths
 must carry a concrete reason. The unrelated launchd preview on port 4180/PID 96731 is preserved.
+
+Browser teardown also has a concrete diagnosed boundary. Both 88c3dfe Boneyard runs pass
+two ordinary seeded worlds, exact Pause saves and continuation. The first driver hangs
+after Chrome exits and requires Node termination (143); the explicit-owner follow-up
+retains graceful/forced close timeouts as fatal despite Chrome exit code zero. Native
+`lsof` proves reparented Crashpad/GoogleUpdater helpers retain the owned child's stderr
+socket. Installed Playwright `coreBundle.js:8799` waits for ChildProcess `close`, which
+cannot arrive while inherited stdio stays open. The task's `boneyard-owned-close` receipt,
+native sample and socket ownership evidence preserve that diagnosis. After confirmed
+owned Chrome `exit`, release only its parent-side stdio so the real close/temporary-file
+cleanup can finish. Other helper processes remain untouched; timeouts and nonzero exit
+remain failed gates. A title-only two-context close probe is a narrower passing boundary,
+not a clean full Boneyard execution claim. The later `boneyard-stdio-fixed` original-case
+rerun qualifies the full process gate after the inherited-stdio repair, with Chrome exit
+zero and no timeout or forced termination. Two real Node process regressions separately
+prove the inherited-pipe failure, preserve live stderr/nonzero exit, and leave the holder
+running when the parent's streams are released.
+
+The first actual coarse-touch HUD journey on 88c3dfe exposes a stale common test contract,
+after its desktop geometry/controller/blur checks pass. `reachCollegeLoadout` expected
+`ARCH_DISMISS_0` after Q1 speech → question list → Done. Pinned fa08
+`HubDialogueActions.tsx:249` calls onDone, and `HubInventorySurface.tsx:855` delegates to
+`dismissOrCloseChat` at line 514, which closes the surface directly. Rust c14068b3 and
+the GPU candidate match that behavior. The compiled dismissal row belongs to the
+no-remaining-choices opening fallback in `hub-npc-dialogue.ts:98`, not this Done action.
+Retain actual touch Skip/question/Done and visible-close assertions, remove the invented
+extra dismissal/Skip step, and rerun the unchanged HUD movement/cancel requirements.
+The original red is `common-browser/88c3dfe/hud-input/run.log`; cleanup exits zero.
+
+The subsequent real-touch run isolates the production input defect:
+`joystick-native-trace/receipt.json` records computed canvas touch-action auto, visual
+scale one and native focus true. The real pointerdown acquires implicit capture; its
+first move is followed immediately by a trusted pointercancel/lostpointercapture before
+any test cancellation. Accepted movement stays zero. Dialogue is already closed and
+the input scope is null, so delaying that transition is not the repair. Pinned fa08
+`input/touch-joystick.css:17` and `hub.css:1029` disable native touch manipulation for
+the joystick/scene. [Pointer Events section 8](https://www.w3.org/TR/pointerevents3/#declaring-direct-manipulation-behavior)
+requires touch-action before the gesture; cancelling pointer events alone cannot
+prevent browser pan/zoom, which cancels the pointer stream. Restore that nonvisual
+platform input policy on the actual game canvas at adapter attachment. Keep genuine
+pointer capture, explicit cancel/blur clearing, GPU joystick state and movement checks;
+no keyboard, synthetic game command, delayed gesture or hidden control substitutes for it.
+
+The original nine-part HUD input journey now passes on 24382f0, including genuine
+coarse-pointer movement, native touch cancellation, zero accepted movement afterward,
+neutral painted joystick and no joystick keyboard focus. The desktop geometry, wide layout,
+stick/D-pad priority, drift and actual tab blur checks also pass. Evidence and reviewed
+screenshots are in `common-browser/24382f0/hud-input-verified`; the process and owned Chrome
+both exit zero with no unexpected errors. The earlier same-artifact run passed the behavior
+but correctly failed its stale cleanup's TouchEnd after TouchCancel; that raw failure is
+retained rather than rewritten.
+
+That screenshot also exposes a remaining visual port gap: the MOVE label is about four
+pixels high. Pinned fa08 `input/touch-joystick.css:49` uses Cinzel 700 via `--font-display`,
+an 11px font divided by `--hud-display-scale`, unit line height, bottom 24px, 0.06em spacing
+and active opacity 0.45. `HubScene.tsx:953` applies the same display scale to the native
+frame, so the inverse font scaling preserves an 11px label at default UI/custom scale.
+The current GPU painter uses Georgia Bold at 9px times the full joystick scale and a
+different vertical anchor. The touch repair is accepted independently; label typography,
+placement and active appearance still require the recovered Source styling and a new
+current-art visual check.
