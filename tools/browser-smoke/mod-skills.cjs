@@ -351,6 +351,11 @@ async function geometry(page, id) {
 
     mark('check Source keyboard behavior with actual editable Console focus');
     await openConsole(page);
+    const unicodeDraft = '-- مرحباً بالعالم 👩🏽‍🚀\n-- שלום עולם 👨‍👩‍👧‍👦';
+    await ui.fill(page, 'cheats/lua-editor', unicodeDraft);
+    await ui.value(page, 'cheats/lua-editor', unicodeDraft);
+    await page.screenshot({path: path.join(output, 'gravity-unicode-console-draft.png')});
+    await ui.fill(page, 'cheats/lua-editor', '');
     await noCast(() => page.keyboard.press('Shift+Digit1'), 'US Shift+1 is !, so Source sends no cast');
     await ui.value(page, 'cheats/lua-editor', '!');
     await ui.fill(page, 'cheats/lua-editor', '');
