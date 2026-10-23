@@ -6,6 +6,7 @@
 
 mod accessibility;
 mod fonts;
+mod geometry;
 mod input;
 mod painter;
 mod stock;
@@ -21,6 +22,7 @@ use web_sys::{Document, HtmlCanvasElement};
 
 use solomon_graphics::{BlendMode, Renderer};
 
+pub use geometry::clip_polygon_ellipse;
 pub use input::{BrowserKey, canvas_point, key_from_browser};
 pub use painter::clip_scissor;
 pub use stock::{StockAtlas, message_frame, native_text, paint_text_layout};
@@ -61,6 +63,7 @@ pub struct WidgetGeometry {
     pub label: String,
     pub role: String,
     pub bounds: WidgetBounds,
+    pub paint_bounds: WidgetBounds,
     pub enabled: bool,
     pub focused: bool,
     pub modal: bool,
@@ -75,6 +78,10 @@ pub struct WidgetGeometry {
     layer_id: Option<egui::LayerId>,
     #[serde(skip)]
     duplicate: bool,
+    #[serde(skip)]
+    activated: bool,
+    #[serde(skip)]
+    interactive: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -100,6 +107,8 @@ pub struct UiFrame<'a> {
     key_codes: &'a [BrowserKey],
     blend: BlendMode,
     announcements: &'a RefCell<Vec<String>>,
+    rotation: egui::emath::Rot2,
+    translation: Vec2,
 }
 
 impl UiFrame<'_> {
@@ -115,7 +124,21 @@ impl UiFrame<'_> {
             key_codes: self.key_codes,
             blend,
             announcements: self.announcements,
+            rotation: self.rotation,
+            translation: self.translation,
         }
+    }
+    pub fn with_rotation(&self, pivot: Pos2, radians: f32) -> UiFrame<'_> {
+        let local = egui::emath::Rot2::from_angle(radians);
+        let mut frame = self.with_blend(self.blend);
+        frame.rotation = self.rotation * local;
+        frame.translation =
+            self.translation + self.rotation * (pivot.to_vec2() - local * pivot.to_vec2());
+        frame
+    }
+
+    fn paint_position(&self, point: Pos2) -> Pos2 {
+        (self.rotation * point.to_vec2() + self.translation).to_pos2()
     }
     pub fn key_codes(&self) -> &[BrowserKey] {
         self.key_codes
@@ -225,7 +248,7 @@ impl UiFrame<'_> {
         let Some(texture_id) = self.images.texture_id(path, blend, false) else { return false };
         let mut mesh = egui::Mesh::with_texture(texture_id);
         mesh.vertices.extend(positions.into_iter().zip(uv).map(|(pos, uv)| egui::epaint::Vertex {
-            pos,
+            pos: self.paint_position(pos),
             uv,
             color: tint,
         }));
@@ -273,13 +296,9 @@ impl UiFrame<'_> {
         let Some(texture_id) = self.images.texture_id(path, blend, mask) else { return false };
         let mut mesh = egui::Mesh::with_texture(texture_id);
         let uvs = [uv.left_top(), uv.right_top(), uv.right_bottom(), uv.left_bottom()];
-        mesh.vertices.extend(
-            positions.into_iter().zip(uvs).map(|(pos, uv)| egui::epaint::Vertex {
-                pos,
-                uv,
-                color: tint,
-            }),
-        );
+        mesh.vertices.extend(positions.into_iter().zip(uvs).map(|(pos, uv)| {
+            egui::epaint::Vertex { pos: self.paint_position(pos), uv, color: tint }
+        }));
         mesh.indices.extend_from_slice(&[0, 1, 2, 0, 2, 3]);
         painter.add(egui::Shape::mesh(mesh));
         true
@@ -295,14 +314,22 @@ impl UiFrame<'_> {
             .map_or(response.interact_rect, |transform| transform * response.interact_rect);
         self.record_rect(id, label, role, rect, response.enabled());
         if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
+            widget.paint_bounds = self
+                .ctx
+                .layer_transform_to_global(response.layer_id)
+                .map_or(response.rect, |transform| transform * response.rect)
+                .into();
             widget.focused = response.has_focus();
             widget.modal = self.ctx.memory(|memory| memory.top_modal_layer().is_some());
             widget.egui_id = Some(response.id);
             widget.layer_id = Some(response.layer_id);
+            widget.activated = response.clicked();
+            widget.interactive = response.sense.interactive();
         }
     }
 
     pub fn record_rect(&self, id: &str, label: &str, role: &str, rect: Rect, enabled: bool) {
+        let paint_bounds = rect.into();
         let rect = rect.intersect(self.ctx.input(|input| input.content_rect()));
         if !rect.is_positive() || !rect.is_finite() {
             return;
@@ -320,6 +347,7 @@ impl UiFrame<'_> {
                 label: label.to_owned(),
                 role: role.to_owned(),
                 bounds: rect.into(),
+                paint_bounds,
                 enabled,
                 focused: false,
                 modal: false,
@@ -329,6 +357,22 @@ impl UiFrame<'_> {
                 egui_id: None,
                 layer_id: None,
                 duplicate: false,
+                activated: false,
+                interactive: matches!(
+                    role,
+                    "button"
+                        | "textbox"
+                        | "password"
+                        | "input"
+                        | "text-entry"
+                        | "slider"
+                        | "checkbox"
+                        | "switch"
+                        | "combobox"
+                        | "radio"
+                        | "tab"
+                        | "menuitem"
+                ),
             },
         );
     }
@@ -436,6 +480,8 @@ impl GpuUi {
                 key_codes: &key_codes,
                 blend: BlendMode::Normal,
                 announcements: &announcements,
+                rotation: egui::emath::Rot2::IDENTITY,
+                translation: Vec2::ZERO,
             });
         });
         let capture = UiCapture {
@@ -450,14 +496,16 @@ impl GpuUi {
             output.textures_delta.clear();
             return Err(error);
         }
-        self.input.set_text_rects(&self.widgets);
+        self.input.set_widgets(&self.widgets);
         if let Err(error) = self.input.apply_output(&output.platform_output, capture) {
             output.textures_delta.clear();
             return Err(error);
         }
-        if let Err(error) =
-            self.accessibility.update(&output.platform_output, &announcements.into_inner())
-        {
+        if let Err(error) = self.accessibility.update(
+            &output.platform_output,
+            &announcements.into_inner(),
+            &self.widgets,
+        ) {
             output.textures_delta.clear();
             return Err(error);
         }
@@ -518,7 +566,7 @@ fn focus_pointer_text(
         let layer = ctx.layer_id_at(*pos);
         for widget in widgets.values().rev() {
             if !widget.enabled
-                || !matches!(widget.role.as_str(), "textbox" | "input" | "text-entry")
+                || !matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
                 || widget.layer_id != layer
             {
                 continue;
