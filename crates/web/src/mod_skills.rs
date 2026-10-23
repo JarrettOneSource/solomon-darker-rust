@@ -169,9 +169,11 @@ impl ModSkillsUi {
             };
             let layer = Self::book_layer(book_parent);
             ctx.set_sublayer(book_parent, layer);
-            let area = egui::Area::new(layer.id).order(layer.order).anchor(anchor, offset).show(
-                &ctx,
-                |ui| {
+            let area = egui::Area::new(layer.id)
+                .fade_in(false)
+                .order(layer.order)
+                .anchor(anchor, offset)
+                .show(&ctx, |ui| {
                     egui::Frame::new()
                         .fill(Color32::from_rgba_unmultiplied(9, 10, 14, 240))
                         .stroke(Stroke::new(
@@ -200,8 +202,7 @@ impl ModSkillsUi {
                                     }
                                 });
                         });
-                },
-            );
+                });
             frame.record_rect(
                 "mod/skill-book",
                 "Mod skills",
@@ -215,6 +216,7 @@ impl ModSkillsUi {
             let layer = Self::picker_layer(picker_parent);
             ctx.set_sublayer(picker_parent, layer);
             let area = egui::Area::new(layer.id)
+                .fade_in(false)
                 .order(layer.order)
                 .anchor(egui::Align2::RIGHT_BOTTOM, vec2(-16.0, if small { -72.0 } else { -16.0 }))
                 .show(&ctx, |ui| {

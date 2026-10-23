@@ -118,6 +118,7 @@ impl ModMinimapView {
             _ => pos2(screen.width() - 16.0 - size.x, 16.0),
         };
         egui::Area::new(self.layer_id().id)
+            .fade_in(false)
             .order(self.layer_id().order)
             .fixed_pos(point)
             .show(&ctx, |ui| -> Result<(), String> {

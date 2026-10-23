@@ -156,6 +156,7 @@ impl SharedGameplayUi {
         if let Some(pause) = &self.pause {
             frame.input_scope("shared/pause");
             egui::Area::new(Self::pause_layer().id)
+                .fade_in(false)
                 .order(Self::pause_layer().order)
                 .fixed_pos(egui::Pos2::ZERO)
                 .show(&ctx, |ui| {

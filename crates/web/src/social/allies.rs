@@ -17,7 +17,7 @@ impl SocialUi {
         }
         let ctx = frame.ctx.clone();
         let layer = Self::allies_layer();
-        let area = egui::Area::new(layer.id).order(layer.order).constrain(false);
+        let area = egui::Area::new(layer.id).fade_in(false).order(layer.order).constrain(false);
         ctx.set_transform_layer(
             area.layer(),
             egui::emath::TSTransform {

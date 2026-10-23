@@ -112,6 +112,7 @@ impl DeploymentUpdate {
         let ctx = frame.ctx.clone();
         let screen = ctx.content_rect();
         let area = egui::Area::new(self.layer_id().id)
+            .fade_in(false)
             .order(self.layer_id().order)
             .fixed_pos(egui::Pos2::ZERO)
             .show(&ctx, |ui| {
