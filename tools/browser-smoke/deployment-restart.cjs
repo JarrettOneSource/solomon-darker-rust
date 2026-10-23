@@ -45,6 +45,7 @@ const credentials = JSON.parse(fs.readFileSync(path.join(base, 'private.json')))
 const checks = [], errors = [], events = [], requests = [];
 const welcomed = [], checkpoints = [];
 const lifecycle = [];
+const publicationStarts = [];
 let recoveredPublication;
 let frame, playerId, announcement, account;
 let heldRoute = null, armSave = false, documentLoads = 0, socketCloses = 0;
@@ -129,14 +130,32 @@ async function adminRestart() {
   fs.mkdirSync(out, { recursive: true });
   const browserOwner = await launchOwnedBrowser(chromium, { headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
-  const browser = browserOwner.browser;
-  const page = await browser.newPage({ ignoreHTTPSErrors: true,
-    viewport: { width: 1600, height: 900 } });
+    args: ['--use-angle=metal', '--ignore-gpu-blocklist',
+      ...(laterPublication ? ['--remote-debugging-port=9229','--ignore-certificate-errors'] : [])] });
+  // Ordinary Playwright contexts emulate perpetual focus. The public CDP
+  // noDefaults option leaves the actual native freeze/resume lifecycle intact.
+  const lifecycleBrowser = laterPublication
+    ? await chromium.connectOverCDP('http://127.0.0.1:9229',{noDefaults:true}) : null;
+  const browser = lifecycleBrowser ?? browserOwner.browser;
+  const page = lifecycleBrowser ? await browser.contexts()[0].newPage()
+    : await browser.newPage({ignoreHTTPSErrors:true});
+  await page.setViewportSize({width:1600,height:900});
+  if (laterPublication) await page.addInitScript(() => {
+    for (const state of ['freeze','resume']) document.addEventListener(state,event =>
+      console.debug('__SOLOMON_LIFECYCLE__'+JSON.stringify({state,trusted:event.isTrusted,
+        visibility:document.visibilityState,time:performance.now()})));
+  });
   await ui.watchRequestFailures(page, {errors}).ready;
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(redact(error.message)));
-  page.on('console', message => { if (message.type() === 'error') errors.push(redact(message.text())); });
+  page.on('console', message => {
+    if (message.type() === 'error') errors.push(redact(message.text()));
+    const prefix='__SOLOMON_LIFECYCLE__';
+    if (message.text().startsWith(prefix)) lifecycle.push(JSON.parse(message.text().slice(prefix.length)));
+  });
+  page.on('request',request => {
+    if(new URL(request.url()).pathname===publicationEndpoint) publicationStarts.push(Date.now());
+  });
   page.on('response', response => {
     const request = response.request(), pathname = new URL(response.url()).pathname;
     if (request.resourceType() === 'document' && pathname === `${mount}/`) documentLoads += 1;
@@ -261,10 +280,11 @@ async function adminRestart() {
       if (laterPublication) {
         lifecycleSession = await page.context().newCDPSession(page);
         await lifecycleSession.send('Page.setWebLifecycleState', {state:'frozen'});
-        lifecycle.push({state:'frozen',at:Date.now()});
-        const polls = requests.filter(row => row.pathname === publicationEndpoint).length;
+        await until(()=>lifecycle.some(row=>row.state==='freeze'&&row.trusted
+          &&row.visibility==='hidden'),'the actual trusted hidden-page freeze');
+        const polls = publicationStarts.length;
         await sleep(1200);
-        assert.equal(requests.filter(row => row.pathname === publicationEndpoint).length, polls,
+        assert.equal(publicationStarts.length, polls,
           'a frozen document cannot observe the intermediate ready publication');
       }
       fs.writeFileSync(path.join(out, 'ready-to-publish.json'), JSON.stringify({current, target,
@@ -281,7 +301,9 @@ async function adminRestart() {
         assert.ok(recoveredPublication.deploymentSequence > publicationSequence);
         assert.notEqual(recoveredPublication.deploymentId,publicationId);
         await lifecycleSession.send('Page.setWebLifecycleState', {state:'active'});
-        lifecycle.push({state:'active',at:Date.now(),publication:recoveredPublication});
+        await until(()=>lifecycle.some(row=>row.state==='resume'&&row.trusted),
+          'the actual trusted page resume');
+        await page.bringToFront();
         await lifecycleSession.detach();
       }
       await until(() => documentLoads > loads, 'coordinator publication and automatic reload', 180000);
@@ -300,17 +322,18 @@ async function adminRestart() {
     await ui.settleErrors(page);
     assert.deepEqual(errors, []);
     fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ passed: true, current, target,
-      checks, events, requests, welcomed, checkpoints, lifecycle, recoveredPublication, errors }, null, 2));
+      checks, events, requests, welcomed, checkpoints, lifecycle, publicationStarts, recoveredPublication, errors }, null, 2));
   } catch (error) {
     await ui.settleErrors(page);
     await page.screenshot({ path: path.join(out, 'failure.png') });
     fs.writeFileSync(path.join(out, 'failure.json'), JSON.stringify({ error: redact(error.stack),
-      checks, events, requests, welcomed, checkpoints, announcement, lifecycle, recoveredPublication, errors,
+      checks, events, requests, welcomed, checkpoints, announcement, lifecycle, publicationStarts, recoveredPublication, errors,
       ui: await ui.readUi(page) }, null, 2));
     throw error;
   } finally {
     releaseSave();
     if (changedManifest) publish(originalPublication);
+    if (lifecycleBrowser) await lifecycleBrowser.close();
     fs.writeFileSync(path.join(out, 'browser-cleanup.json'),
       JSON.stringify(await browserOwner.close(), null, 2));
   }
