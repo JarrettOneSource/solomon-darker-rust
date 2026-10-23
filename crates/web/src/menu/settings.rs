@@ -904,6 +904,7 @@ DevTools: solomonDark.lua.help()",
         self.control_panel.paint_strip(frame, ui.painter(), 4, track, Color32::WHITE)?;
         let id = format!("settings-range:{id}");
         let response = ui.interact(track, egui::Id::unique(&id), egui::Sense::click_and_drag());
+        widgets::focus_on_pointer(&response);
         frame.record(&id, label, "slider", &response);
         let mut value = setting.value(&self.settings);
         let before = value;

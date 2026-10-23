@@ -104,12 +104,24 @@ pub(crate) fn interact_unstyled(
     let enabled = enabled && ui.is_enabled();
     let response =
         ui.interact(rect, Id::unique(id), if enabled { Sense::click() } else { Sense::hover() });
+    focus_on_pointer(&response);
     if enabled {
         frame.record(id, label, role, &response);
     } else {
         frame.record_rect(id, label, role, rect, false);
     }
     response
+}
+
+/// Match native form controls: the actual pointer target retains keyboard focus.
+pub(crate) fn focus_on_pointer(response: &Response) {
+    if response.enabled()
+        && response.visible()
+        && (response.is_pointer_button_down_on()
+            || response.clicked_by(egui::PointerButton::Primary))
+    {
+        response.request_focus();
+    }
 }
 pub(super) fn native(
     frame: &UiFrame<'_>,
