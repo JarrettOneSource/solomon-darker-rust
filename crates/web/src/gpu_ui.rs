@@ -25,7 +25,7 @@ use crate::render::{BlendMode, Renderer};
 pub use geometry::clip_polygon_ellipse;
 pub use input::{BrowserKey, canvas_point, key_from_browser};
 pub use painter::clip_scissor;
-pub use stock::{StockAtlas, message_frame, native_text, paint_text_layout};
+pub use stock::{StockAtlas, message_frame, message_frame_scaled, native_text, paint_text_layout};
 
 pub fn cooldown_sector_points(remaining: f64, capacity: f64) -> Vec<Pos2> {
     solomon_sim::hud::quickbar::native_cooldown_sector_points(remaining, capacity)
@@ -109,9 +109,15 @@ pub struct UiFrame<'a> {
     announcements: &'a RefCell<Vec<String>>,
     rotation: egui::emath::Rot2,
     translation: Vec2,
+    input_scope: &'a RefCell<Option<String>>,
 }
 
 impl UiFrame<'_> {
+    /// The last foreground owner painted this frame owns controller navigation.
+    /// Frames without an owner leave the gamepad with gameplay.
+    pub fn input_scope(&self, scope: &str) {
+        *self.input_scope.borrow_mut() = Some(scope.to_owned());
+    }
     pub fn announce(&self, text: &str) {
         self.announcements.borrow_mut().push(text.to_owned());
     }
@@ -126,6 +132,7 @@ impl UiFrame<'_> {
             announcements: self.announcements,
             rotation: self.rotation,
             translation: self.translation,
+            input_scope: self.input_scope,
         }
     }
     pub fn with_rotation(&self, pivot: Pos2, radians: f32) -> UiFrame<'_> {
@@ -134,6 +141,13 @@ impl UiFrame<'_> {
         frame.rotation = self.rotation * local;
         frame.translation =
             self.translation + self.rotation * (pivot.to_vec2() - local * pivot.to_vec2());
+        frame
+    }
+
+    fn with_scale(&self, origin: Pos2, scale: f32) -> UiFrame<'_> {
+        let mut frame = self.with_blend(self.blend);
+        frame.rotation = scale * self.rotation;
+        frame.translation = self.translation + self.rotation * (origin.to_vec2() * (1.0 - scale));
         frame
     }
 
@@ -471,6 +485,7 @@ impl GpuUi {
         let key_codes = self.input.take_key_codes();
         let widgets = RefCell::new(BTreeMap::new());
         let announcements = RefCell::new(Vec::new());
+        let input_scope = RefCell::new(None);
         let mut output = self.ctx.run_pass(raw, |ctx| {
             paint(&mut UiFrame {
                 ctx,
@@ -482,6 +497,7 @@ impl GpuUi {
                 announcements: &announcements,
                 rotation: egui::emath::Rot2::IDENTITY,
                 translation: Vec2::ZERO,
+                input_scope: &input_scope,
             });
         });
         let capture = UiCapture {
@@ -497,6 +513,7 @@ impl GpuUi {
             return Err(error);
         }
         self.input.set_widgets(&self.widgets);
+        self.input.set_scope(input_scope.borrow().as_deref());
         if let Err(error) = self.input.apply_output(&output.platform_output, capture) {
             output.textures_delta.clear();
             return Err(error);
