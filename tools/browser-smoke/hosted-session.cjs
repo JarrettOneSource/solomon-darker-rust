@@ -12,7 +12,6 @@ const output = path.resolve(process.env.OUT || '/tmp');
 const url = process.env.URL || 'http://127.0.0.1:4181/';
 const checks = [];
 const errors = [];
-const cancelledMedia = [];
 const inactiveRejoin = [];
 const requests = [];
 const state = {id: null, frame: null, welcome: null, loaded: null, pongs: 0, checkpoints: 0, leaveReceipts: 0};
@@ -54,8 +53,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
   });
   page.on('requestfailed', request => {
     const receipt = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
-    if (request.resourceType() === 'media' && request.failure()?.errorText === 'net::ERR_ABORTED') cancelledMedia.push(receipt);
-    else errors.push(receipt);
+    errors.push(receipt);
   });
   page.on('websocket', socket => {
     const read = createNativeMessageReader();
@@ -165,14 +163,14 @@ async function waitUntil(predicate, label, timeout = 30000) {
     assert.equal(inactiveRejoin.length, 1, 'the ended party falls back through the source inactive-rejoin contract');
     assert.deepEqual(errors, []);
     const receipt = {passed: true, checks, requests, pingResponses: state.pongs,
-      checkpoints: state.checkpoints, leaveReceipts: state.leaveReceipts, inactiveRejoin, errors, cancelledMedia, gpu:await gpu.assertGpuOnly(page), submissions:await gpu.gpuDraws(page)};
+      checkpoints: state.checkpoints, leaveReceipts: state.leaveReceipts, inactiveRejoin, errors, gpu:await gpu.assertGpuOnly(page), submissions:await gpu.gpuDraws(page)};
     fs.writeFileSync(path.join(output, 'hosted-session.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) {
     const ui = await gpu.readUi(page);
     await page.screenshot({path: path.join(output, 'hosted-session-failure.png')});
     fs.writeFileSync(path.join(output, 'hosted-session-failure.json'), JSON.stringify({error: error.stack,
-      checks, errors, cancelledMedia, requests, ui, accepted: {id: state.id, tick: state.frame?.snapshot.ticks,
+      checks, errors, requests, ui, accepted: {id: state.id, tick: state.frame?.snapshot.ticks,
         wizard: state.frame?.snapshot.participants[state.id]?.wizard, host: state.frame?.host}}, null, 2));
     throw error;
   } finally {

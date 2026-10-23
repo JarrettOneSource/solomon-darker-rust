@@ -38,8 +38,7 @@ async function until(predicate, label) {
     if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
   });
   page.on('requestfailed', request => {
-    if (!(request.resourceType() === 'media' && request.failure()?.errorText === 'net::ERR_ABORTED'))
-      errors.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
+    errors.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
   });
   page.on('websocket', socket => {
     const read = createNativeMessageReader();
@@ -62,8 +61,8 @@ async function until(predicate, label) {
         leaveReceipts.push(message.message.request_id);
     });
   });
-  const settings = () => page.evaluate(() => JSON.parse(
-    localStorage.getItem('solomon-darker-rust-settings-v1:/game-stg')));
+  let settingsKey;
+  const settings = () => page.evaluate(key => JSON.parse(localStorage.getItem(key)), settingsKey);
   const cloudSettings = async () => {
     const state = await gpu.waitForUi(page, state => ['title','pause'].includes(state.surface),
       'Title or Pause settings entry');
@@ -75,6 +74,10 @@ async function until(predicate, label) {
     await page.goto(process.env.URL, {waitUntil:'domcontentloaded'});
     await gpu.ready(page);
     await gpu.assertGpuOnly(page);
+    settingsKey = await page.evaluate(() => {
+      const mount = document.querySelector('meta[name="solomon-website-mount"]')?.content || '';
+      return `solomon-dark-game-settings-v1${mount ? `:${mount}` : ''}`;
+    });
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) {
       await gpu.click(page, 'prompt-secondary');
       await gpu.noWidget(page, 'prompt-secondary');
@@ -83,14 +86,14 @@ async function until(predicate, label) {
     const activity = () => gpu.widget(page, 'settings-toggle:activity');
     const initiallyEnabled = (await activity()).selected;
     await gpu.click(page, 'settings-toggle:activity');
-    await page.waitForFunction(expected => JSON.parse(localStorage.getItem(
-      'solomon-darker-rust-settings-v1:/game-stg'))?.enable_activity_messages === expected,
-    !initiallyEnabled);
+    await page.waitForFunction(({key, expected}) =>
+      JSON.parse(localStorage.getItem(key))?.enableActivityMessages === expected,
+    {key: settingsKey, expected: !initiallyEnabled});
     await page.reload({waitUntil: 'load'});
     await gpu.ready(page);
     await cloudSettings();
     assert.equal((await activity()).selected, !initiallyEnabled);
-    assert.equal((await settings()).enable_cheats, false);
+    assert.equal((await settings()).enableCheats, false);
     checks.push('a changed title preference commits and survives a real reload');
     await gpu.click(page, 'settings-back');
     await gpu.click(page, 'settings-back');
@@ -104,19 +107,19 @@ async function until(predicate, label) {
     await gpu.click(page, 'settings-toggle:cheats');
     await gpu.widget(page, 'routing/dialog');
     assert.equal((await gpu.widget(page, 'routing/dialog')).label, 'CHEATS USE PRIVATE COLLEGES');
-    assert.equal((await settings()).enable_cheats, false);
+    assert.equal((await settings()).enableCheats, false);
     assert.equal(commands.length, beforePrompt);
     await gpu.click(page, 'routing-back');
     await gpu.noWidget(page, 'routing/dialog');
     assert.equal((await cheats()).selected, false);
-    assert.equal((await settings()).enable_cheats, false);
+    assert.equal((await settings()).enableCheats, false);
     checks.push('Global cheat request waits for consent and Cancel preserves accepted preferences');
     await gpu.click(page, 'settings-toggle:cheats');
     await gpu.widget(page, 'routing/dialog');
     await page.screenshot({path: path.join(output, 'global-cheat-consent.png')});
     await gpu.click(page, 'routing-continue');
     await gpu.surface(page, 'title');
-    assert.equal((await settings()).enable_cheats, true);
+    assert.equal((await settings()).enableCheats, true);
     assert.deepEqual(errors, []);
     assert.equal(commands.length, beforePrompt, 'Global College must never receive enabled cheats');
     assert.equal(leaveRequests.length, 1);
