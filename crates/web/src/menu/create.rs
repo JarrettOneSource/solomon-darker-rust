@@ -305,7 +305,7 @@ impl CreateView {
                 Color32::WHITE,
             )?;
         }
-        self.paint_name(frame, ui, name_stage, enabled, actions)?;
+        self.paint_name(frame, ui, name_stage, admitted, actions)?;
         let back = Rect::from_min_size(view.min + Vec2::splat(4.0), Vec2::splat(44.0));
         let response = widgets::interact(
             frame,
@@ -386,7 +386,10 @@ impl CreateView {
             Color32::WHITE,
         );
         let previous = self.name.clone();
-        let edit = egui::TextEdit::singleline(&mut self.name)
+        let mut locked = previous.as_str();
+        let text: &mut dyn egui::TextBuffer =
+            if self.finalizing { &mut locked } else { &mut self.name };
+        let edit = egui::TextEdit::singleline(text)
             .id(Id::unique("create-name"))
             .font(FontId::new(40.0 * stage.scale, egui::FontFamily::Name("Georgia".into())))
             .text_color(Color32::TRANSPARENT)
@@ -432,10 +435,19 @@ impl CreateView {
                 },
             );
         }
+        let editable = enabled && !self.finalizing;
         let clear = stage.rect(958.0, 38.0, 30.0, 30.0);
-        if widgets::interact(frame, ui, "clear-name", "Clear wizard name", "button", clear, enabled)
-            .clicked()
-            && enabled
+        if widgets::interact(
+            frame,
+            ui,
+            "clear-name",
+            "Clear wizard name",
+            "button",
+            clear,
+            editable,
+        )
+        .clicked()
+            && editable
         {
             actions.push("clear-name".to_owned());
         }
@@ -454,10 +466,10 @@ impl CreateView {
             "Randomize wizard name",
             "button",
             random,
-            enabled,
+            editable,
         )
         .clicked()
-            && enabled
+            && editable
         {
             actions.push("randomize-name".to_owned());
         }
