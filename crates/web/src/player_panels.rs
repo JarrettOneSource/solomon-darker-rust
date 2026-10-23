@@ -1293,10 +1293,10 @@ impl PlayerPanels {
             match panel {
                 PlayerPanel::Inventory => "inventory".to_owned(),
                 PlayerPanel::Skills => "skills".to_owned(),
-                PlayerPanel::Dialogue => format!(
-                    "dialogue:{}",
-                    self.dialogue.as_ref().expect("open dialogue").started_at.to_bits()
-                ),
+                PlayerPanel::Dialogue => {
+                    let dialogue = self.dialogue.as_ref().expect("open dialogue");
+                    dialogue::navigation_scope(&dialogue.content, dialogue.started_at)
+                }
                 PlayerPanel::SkillSelector(target) => format!("skill-selector:{target:?}"),
                 PlayerPanel::Service(trader) => format!("service:{trader:?}"),
             }
