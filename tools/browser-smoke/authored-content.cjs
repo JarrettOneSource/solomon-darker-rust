@@ -658,8 +658,7 @@ async function runLua(page, code) {
     assert.ok(modState && Object.keys(modState).length, 'accepted authored runtime reaches the real save');
     const beforeReload = snapshot();
     state.frame = null; state.runtime = null;
-    await ui.settleErrors(page);
-    await page.reload({waitUntil: 'load'});
+    await ui.observeDocumentReplacement(page, () => page.reload({waitUntil: 'load'}));
     await ui.ready(page);
     await ui.click(page,'play');
     await ui.click(page,'continue');

@@ -175,8 +175,7 @@ async function registerPeer(client, account) {
   const response = await catalog;
   assert.equal(response.status(), 200);
   await response.finished();
-  await ui.settleErrors(page);
-  await ui.click(page,'cloud-sign-in');
+  await ui.observeDocumentReplacement(page, () => ui.click(page,'cloud-sign-in'));
   await page.waitForURL(current => current.pathname === '/game-stg/login');
   await page.getByRole('link', {name: 'Create an account', exact: true}).click();
   await page.waitForURL(current => current.pathname === '/game-stg/register');
@@ -198,7 +197,8 @@ async function registerPeer(client, account) {
   // Current Source Register.tsx navigates to Account, then Shell's real Play
   // link returns to the Rust mount. Registration itself does not open the game.
   await page.waitForURL(current => current.pathname === '/game-stg/account');
-  await page.getByRole('link', {name: 'Play', exact: true}).first().click();
+  await ui.observeDocumentReplacement(page, () =>
+    page.getByRole('link', {name: 'Play', exact: true}).first().click());
   await page.waitForURL(current => current.pathname === '/game-stg/');
   await ui.ready(page);
   await ui.waitForUi(page,snapshot=>snapshot.widgets.some(widget=>widget.label===account.username),'actual account name after registration');
