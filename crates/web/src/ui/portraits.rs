@@ -33,21 +33,52 @@ impl StockPortraits {
         position: Pos2,
         scale: f32,
     ) -> Result<Pos2, String> {
+        self.paint_wizard_with_orb(
+            gpu,
+            painter,
+            element,
+            heading,
+            position,
+            scale,
+            |_, _, _| Ok(()),
+        )
+    }
+
+    /// The orb paints at its original depth between the staff/robe/head layers.
+    #[allow(clippy::too_many_arguments)] // The callback inserts live VFX into the stock layer order.
+    pub fn paint_wizard_with_orb(
+        &self,
+        gpu: &UiFrame<'_>,
+        painter: &Painter,
+        element: WizardElement,
+        heading: usize,
+        position: Pos2,
+        scale: f32,
+        paint_orb: impl FnOnce(&UiFrame<'_>, &Painter, Pos2) -> Result<(), String>,
+    ) -> Result<Pos2, String> {
         let heading = heading % 24;
         let front = self.staff_front[heading];
-        if !front {
-            self.paint_layer(gpu, painter, "staff-back", heading, position, scale)?;
-        }
-        for layer in [
-            format!("robe-dynamic-{}", element.as_str()),
-            format!("robe-fixed-{}", element.as_str()),
-        ] {
-            self.paint_layer(gpu, painter, &layer, heading, position, scale)?;
-        }
+        let [x, y] = self.staff_orbs[heading];
+        let socket = position + vec2(x as f32, y as f32) * scale;
         if front {
+            for layer in [
+                format!("robe-dynamic-{}", element.as_str()),
+                format!("robe-fixed-{}", element.as_str()),
+            ] {
+                self.paint_layer(gpu, painter, &layer, heading, position, scale)?;
+            }
             self.paint_layer(gpu, painter, "staff-front", heading, position, scale)?;
+            paint_orb(gpu, painter, socket)?;
+        } else {
+            self.paint_layer(gpu, painter, "staff-back", heading, position, scale)?;
+            paint_orb(gpu, painter, socket)?;
+            for layer in [
+                format!("robe-dynamic-{}", element.as_str()),
+                format!("robe-fixed-{}", element.as_str()),
+            ] {
+                self.paint_layer(gpu, painter, &layer, heading, position, scale)?;
+            }
         }
-        // Head follows front staff in the source's z-order.
         self.paint_layer(
             gpu,
             painter,
@@ -56,8 +87,7 @@ impl StockPortraits {
             position,
             scale,
         )?;
-        let [x, y] = self.staff_orbs[heading];
-        Ok(position + vec2(x as f32, y as f32) * scale)
+        Ok(socket)
     }
 
     /// AllyHud omits the weapon and orb.
