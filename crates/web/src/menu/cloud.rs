@@ -828,6 +828,7 @@ impl CloudView {
         enabled: bool,
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
+        widgets::scrollbar_style(ui, 0x876d37, 0x080808, true);
         ui.painter().rect_filled(view, 0.0, Color32::BLACK);
         self.images.begin_paint();
         let phone = view.width() <= 700.0;
@@ -946,8 +947,10 @@ impl CloudView {
         frame.record_rect("cloud-tabs", "Dark Cloud sections", "region", tabs, admitted);
         let mut child = ui.new_child(egui::UiBuilder::new().id_salt("cloud-tabs").max_rect(tabs));
         child.set_clip_rect(tabs);
-        let mut scroll =
-            egui::ScrollArea::horizontal().id_salt("cloud-tabs-scroll").auto_shrink([false, false]);
+        let mut scroll = egui::ScrollArea::horizontal()
+            .id_salt("cloud-tabs-scroll")
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
+            .auto_shrink([false, false]);
         if self.tab_scroll_reset {
             let b = strip.bounds(self.tab);
             scroll =

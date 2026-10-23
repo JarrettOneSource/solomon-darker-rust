@@ -4,8 +4,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
+const gpu = require('./gpu-ui.cjs');
 const output = path.resolve(process.env.OUT || '/tmp');
 const url = process.env.URL;
+const website = new URL(process.env.WEBSITE_URL || url);
+const mount = website.pathname.replace(/\/$/, '');
 const account = JSON.parse(fs.readFileSync(path.join(process.env.PRIVATE_DIR, 'private-accounts.json')))[0];
 const errors = [];
 const checks = [];
@@ -29,7 +32,6 @@ async function waitUntil(predicate, label, timeout = 30000) {
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
   const context = await browser.newContext({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
     viewport: {width: 1280, height: 720}});
-  await context.addInitScript(token => localStorage.setItem('sdr.token', token), account.token);
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(error.message));
@@ -57,43 +59,54 @@ async function waitUntil(predicate, label, timeout = 30000) {
     await route.continue();
   });
   try {
+    await page.goto(new URL(`${mount}/login`, website).href);
+    await page.locator('input[autocomplete="username"]').fill(account.username);
+    await page.locator('input[autocomplete="current-password"]').fill(account.password);
+    await page.getByRole('button', {name: 'Sign in', exact: true}).click();
+    await page.waitForURL(target => target.pathname === `${mount}/account`);
+    checks.push('the retained real account signs in through the ordinary Website form');
     await page.goto(url, {waitUntil: 'load'});
-    await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-      && document.querySelector('#status')?.textContent === '', null, {timeout: 60000});
-    if (await page.locator('.title-prompt:not([hidden])').isVisible())
-      await page.locator('[data-menu-action="prompt-secondary"]').click();
-    await page.getByRole('button', {name: 'Explore the Dark Cloud', exact: true}).click();
-    await page.locator('.dark-cloud-rows[aria-busy="false"]').waitFor();
-    const subscribe = page.locator('[data-menu-action^="cloud-subscription:subscribe:"]:visible').first();
-    subscribedSlug = (await subscribe.getAttribute('data-menu-action')).split(':').at(-1);
-    await subscribe.click();
+    await gpu.ready(page);
+    if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) {
+      await gpu.click(page, 'prompt-secondary');
+      await gpu.noWidget(page, 'prompt-secondary');
+    }
+    await gpu.click(page, 'explore');
+    const ready = await gpu.waitForUi(page, snapshot => snapshot.widgets.some(widget =>
+      widget.id.startsWith('cloud-subscription:subscribe:') && widget.enabled), 'actual unsubscribed catalog row');
+    const subscribe = ready.widgets.find(widget => widget.id.startsWith('cloud-subscription:subscribe:') && widget.enabled);
+    subscribedSlug = subscribe.id.split(':').at(-1);
+    await gpu.click(page, subscribe.id);
     await waitUntil(() => activeMods?.some(mod => mod.slug === subscribedSlug), 'actual enabled subscription');
-    await page.locator(`[data-mod-slug="${subscribedSlug}"] .dark-cloud-row-state.enabled`).waitFor();
-    await page.locator('[data-menu-action="cloud-tab:subscribed"]').click();
-    const enabled = page.locator(`[data-menu-action="cloud-subscription:disable:${subscribedSlug}"]:visible`).first();
-    await enabled.waitFor();
+    await gpu.widget(page, `cloud-subscription:disable:${subscribedSlug}`);
+    await gpu.click(page, 'cloud-tab:subscribed');
+    const enabled = `cloud-subscription:disable:${subscribedSlug}`;
+    await gpu.widget(page, enabled);
     await waitUntil(() => pending.size === 0, 'immediate catalog completion');
-    assert.equal(await enabled.isEnabled(), true);
+    assert.equal((await gpu.widget(page, enabled)).enabled, true);
     checks.push('immediately completed subscription updates the actual enabled UI');
     await page.screenshot({path: path.join(output, 'cloud-subscription-enabled.png')});
-    await enabled.click();
-    const enable = page.locator(`[data-menu-action="cloud-subscription:enable:${subscribedSlug}"]:visible`).first();
-    await enable.waitFor();
+    await gpu.click(page, enabled);
+    const enable = `cloud-subscription:enable:${subscribedSlug}`;
+    await gpu.widget(page, enable);
     await waitUntil(() => activeMods?.every(mod => mod.slug !== subscribedSlug), 'actual disabled subscription');
     holdRefresh = true;
-    await enable.click();
+    await gpu.click(page, enable);
     await waitUntil(() => activeMods?.some(mod => mod.slug === subscribedSlug), 'actual re-enabled subscription');
     await waitUntil(() => pending.size > 0, 'actual delayed catalog refresh in flight');
     checks.push('actual subscription is enabled while its catalog refresh remains in flight');
     await page.keyboard.press('Escape');
-    await page.getByRole('button', {name: 'MAIN MENU', exact: true}).click();
-    await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
-    await page.locator('[data-menu-action="play"]').click();
-    await page.locator('[data-menu-action="new-game"]').click();
-    const prompt = page.getByRole('dialog', {name: 'Local play is active', exact: true});
-    await prompt.waitFor();
+    await gpu.surface(page, 'pause');
+    await gpu.click(page, 'leave');
+    await gpu.surface(page, 'title');
+    await gpu.click(page, 'play');
+    await gpu.click(page, 'new-game');
+    await gpu.surface(page, 'routing');
+    const prompt = await gpu.widget(page, 'routing/dialog');
     const actualName = activeMods.find(mod => mod.slug === subscribedSlug).name;
-    assert.ok((await prompt.innerText()).includes(actualName));
+    assert.equal(prompt.label, 'Local play is active');
+    assert.ok(prompt.value.includes(actualName));
+    await gpu.assertGpuOnly(page);
     assert.ok(pending.size > 0, 'the route sees active content before its catalog refresh completes');
     await page.screenshot({path: path.join(output, 'cloud-subscription-routing.png')});
     checks.push('leaving Cloud during catalog refresh preserves active content in the actual New Game route');
@@ -106,8 +119,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
   } catch (error) {
     await page.screenshot({path: path.join(output, 'cloud-subscription-failure.png')});
     fs.writeFileSync(path.join(output, 'cloud-subscription-failure.json'), JSON.stringify({error: error.stack,
-      checks, requests, errors, pending: pending.size, ui: await page.evaluate(() => ({status: document.querySelector('#status')?.textContent,
-        menu: document.querySelector('.game-menus')?.dataset.menuScreen, text: document.body.innerText.slice(-2500)}))}, null, 2));
+      checks, requests, errors, pending: pending.size, ui: await gpu.readUi(page)}, null, 2));
     throw error;
   } finally {
     try {

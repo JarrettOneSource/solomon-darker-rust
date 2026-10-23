@@ -277,6 +277,8 @@ async function confirmDelete(shelf, name) {
     checked('Explore paints the Rust GPU Shelf, responds to the parent viewport and preserves the focused menu key');
 
     step = 'New, export and cloud save';
+    // Clicking the parent scene must keep its embedded Shelf above that scene.
+    await gpu.click(page, 'cloud-tab:boneyards');
     await gpu.click(page, 'boneyards/new');
     await editor();
     await saveName(importName);

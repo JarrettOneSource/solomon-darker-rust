@@ -109,14 +109,14 @@ pub(super) fn label(
     font: &str,
     size: f32,
     tint: Color32,
-) {
+) -> Rect {
     ui.painter().text(
         position,
         align,
         text,
         FontId::new(size, egui::FontFamily::Name(font.into())),
         tint,
-    );
+    )
 }
 pub(super) fn paragraph(
     ui: &Ui,
@@ -297,6 +297,23 @@ pub(super) fn flat_button(
     );
     response
 }
+pub(crate) fn scrollbar_style(ui: &mut Ui, thumb: u32, track: u32, thin: bool) {
+    let style = ui.style_mut();
+    if thin {
+        style.spacing.scroll = egui::style::ScrollStyle::solid();
+        style.spacing.scroll.bar_inner_margin = 0.0;
+    }
+    style.spacing.scroll.foreground_color = false;
+    style.visuals.extreme_bg_color = color(track);
+    for visual in [
+        &mut style.visuals.widgets.inactive,
+        &mut style.visuals.widgets.hovered,
+        &mut style.visuals.widgets.active,
+    ] {
+        visual.bg_fill = color(thumb);
+    }
+}
+
 pub(super) fn gradient(ui: &Ui, rect: Rect, top: Color32, bottom: Color32) {
     let mut mesh = egui::Mesh::default();
     mesh.colored_vertex(rect.left_top(), top);
