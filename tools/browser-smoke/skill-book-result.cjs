@@ -32,7 +32,25 @@ async function visibleAfterScroll(page,id) {
   }
   throw new Error(`Settings never revealed ${id}`);
 }
-async function importSave(page,value) {
+async function admitted(page,value,accepted) {
+  const expected=value.document.continuation.simulation.playerEntities.configs[0];
+  const uiState=await ui.waitForUi(page,snapshot=>{
+    const selection=snapshot.acceptedSelection,frame=accepted.frame,host=frame?.host;
+    return snapshot.ready&&snapshot.surface==='hidden'&&snapshot.inputScope===null
+      &&selection?.name===expected.displayName
+      &&selection.element.toLowerCase()===expected.element
+      &&selection.discipline.toLowerCase()===expected.discipline
+      &&frame?.snapshot.run.phase===(value.world==='hub'?'Hub':'Active')
+      &&host?.connected_player_ids.includes(accepted.id)
+      &&!host.materializing_player_ids.includes(accepted.id)
+      &&host.loading_run_id===null&&host.resume_grace===null
+      &&(host.pause===null||host.pause.owner_player_id===accepted.id);
+  },`actual admitted ${expected.displayName}/${value.world} and ready authority`,{timeout:120000});
+  return{selection:uiState.acceptedSelection,frame:uiState.frame,inputScope:uiState.inputScope,
+    authority:{playerId:accepted.id,ticks:accepted.frame.snapshot.ticks,
+      phase:accepted.frame.snapshot.run.phase,host:accepted.frame.host}};
+}
+async function importSave(page,value,accepted) {
   await page.goto(url);await ui.ready(page);await ui.surface(page,'title');
   if(ui.findWidget(await ui.readUi(page),'prompt-secondary'))await ui.click(page,'prompt-secondary');
   await ui.click(page,'settings');await ui.click(page,'settings-page:cloud');
@@ -47,9 +65,9 @@ async function importSave(page,value) {
   await ui.observeDocumentReplacement(page,()=>page.reload());await ui.ready(page);await ui.surface(page,'title');
   if(ui.findWidget(await ui.readUi(page),'prompt-secondary'))await ui.click(page,'prompt-secondary');
   await ui.click(page,'play');await ui.click(page,'continue');
-  await ui.surface(page,'hidden',{timeout:120000});
-  await ui.widget(page,'hud:inventory',{enabled:true,timeout:120000});
+  const admission=await admitted(page,value,accepted);
   await ui.noWidget(page,'panel:skill-book-result');
+  return admission;
 }
 async function position(page) {
   return page.evaluate(()=>Array.from(window.wasmBindings.wizard_state()).slice(0,2));
@@ -87,7 +105,7 @@ async function tick(page) {
       const result={world:value.world,retainedSequence:value.retainedSequence,reads:[]};
       try {
         await observed.ready;
-        await importSave(page,value);
+        result.admission=await importSave(page,value,accepted);
         assert.equal(ui.findWidget(await ui.readUi(page),'panel:skill-book-result'),undefined,
           'admission seeds the retained accepted rank receipt without replaying it');
         for(const [index,bookId] of value.bookIds.slice(0,2).entries()){
@@ -120,8 +138,7 @@ async function tick(page) {
           result.reads.push({bookId,skillId:outcome.skillId,sequence:outcome.sequence,dismiss:index===0?'OKAY':'Escape'});
         }
         await ui.observeDocumentReplacement(page,()=>page.reload());await ui.ready(page);await ui.click(page,'play');await ui.click(page,'continue');
-        await ui.surface(page,'hidden',{timeout:120000});
-        await ui.widget(page,'hud:inventory',{enabled:true,timeout:120000});
+        result.restoredAdmission=await admitted(page,value,accepted);
         await ui.noWidget(page,'panel:skill-book-result');
         await page.keyboard.press('KeyI');await ui.widget(page,'panel:surface:inventory');
         for(const id of value.bookIds.slice(0,2))assert.equal(ui.findWidget(await ui.readUi(page),`panel:item:${id}`),undefined,'accepted consumed books stay absent after reload');
