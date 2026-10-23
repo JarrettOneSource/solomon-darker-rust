@@ -177,6 +177,7 @@ mod tests {
                 duplicate: false,
                 activated: false,
                 interactive: true,
+                keyboard_activated: false,
             },
         );
         assert_eq!(state.messages(&[], &widgets), ["UI SCALE, slider, 100"]);
@@ -213,6 +214,7 @@ mod tests {
                 duplicate: false,
                 activated: false,
                 interactive: true,
+                keyboard_activated: false,
             },
         )]);
         assert_eq!(state.messages(&[], &widgets), ["Password, password"]);
