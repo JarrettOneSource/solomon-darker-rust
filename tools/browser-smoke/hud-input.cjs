@@ -18,7 +18,7 @@ async function ready(page,{touch=false}={}) {
     await page.setViewportSize({width:844,height:390});
     await ui.noWidget(page,'landscape-guidance');
   }
-  await startNewGame(page,{touch});
+  await startNewGame(page,{name:null,touch});
   await ui.widget(page,'hud:health');
 }
 

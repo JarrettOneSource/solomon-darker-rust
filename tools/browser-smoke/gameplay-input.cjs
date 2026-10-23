@@ -23,7 +23,7 @@ async function pad(page,buttons=[],axes=[0,0,0,0],analog={}){
     await ui.observeGpu(page);
     await page.goto(url,{waitUntil:'domcontentloaded'});
     await ui.ready(page);
-    await startNewGame(page);
+    await startNewGame(page,{name:null});
     await page.waitForFunction(()=>window.wasmBindings.gameplay_input_state().length===11);
     await page.mouse.move(1160,270);await frames(page);
     assert.equal((await input(page))[2],0);
