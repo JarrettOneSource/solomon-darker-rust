@@ -377,7 +377,7 @@ fn a_new_field_has_committed_geometry_before_an_immediate_click_and_submit() {
     events.extend(pointer(false, pos2(50.0, 50.0)));
     events.extend(pointer(true, pos2(50.0, 120.0)));
     events.push(enter_key(egui::Key::Enter));
-    let receipt = edit::model::Receipt::unbound(1, 1.0, edit::model::Intent::Submit);
+    let receipt = edit::model::Receipt::unbound(1, edit::model::Intent::Submit);
     let passes = batches::into_passes(
         egui::RawInput { events, ..Default::default() },
         vec![browser_key("Enter", "Enter")],
@@ -435,14 +435,14 @@ fn native_editor_enter_is_per_dispatch_and_keeps_the_real_singleline_focus() {
     };
     frame(&ctx, Vec::new(), &mut paint);
     let mut session = edit::session::Session::new(descriptor.borrow().clone().unwrap());
-    let first = session.receipt(1, 1.0, edit::model::Intent::Submit, None, None);
+    let first = session.receipt(1, edit::model::Intent::Submit, None, None);
     let widgets =
         frame_native(&ctx, vec![enter_key(egui::Key::Enter)], &[], &[first], None, &mut paint);
     assert!(submitted.get());
     assert!(widgets["native-form"].focused);
     frame(&ctx, Vec::new(), &mut paint);
     assert!(!submitted.get());
-    let next = session.receipt(2, 1.0, edit::model::Intent::Submit, None, None);
+    let next = session.receipt(2, edit::model::Intent::Submit, None, None);
     let widgets =
         frame_native(&ctx, vec![enter_key(egui::Key::Enter)], &[], &[next], None, &mut paint);
     assert!(submitted.get());
@@ -465,7 +465,7 @@ fn a_remounted_field_does_not_accept_a_native_receipt_from_its_retired_instance(
         })
     });
     let mut old_session = edit::session::Session::new(descriptor.unwrap());
-    let old_input = old_session.receipt(1, 1.0, edit::model::Intent::Submit, None, None);
+    let old_input = old_session.receipt(1, edit::model::Intent::Submit, None, None);
     frame(&ctx, Vec::new(), |_| {});
     let mut submitted = false;
     frame_native(&ctx, Vec::new(), &[], &[old_input], None, |frame| {
