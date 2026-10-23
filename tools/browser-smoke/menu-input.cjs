@@ -135,6 +135,7 @@ async function modalFocus(page) {
     await screen(page,'hidden');
     await ui.assertGpuOnly(page);
     await page.screenshot({path:path.join(output,'menu-controller-game.png')});
+    await ui.settleErrors(page);
     assert.deepEqual(desktopErrors.errors,[]);
     await page.close();
 
@@ -170,6 +171,7 @@ async function modalFocus(page) {
     await ui.tap(touch,'resume');
     await screen(touch,'hidden');
     await ui.assertGpuOnly(touch);
+    await ui.settleErrors(touch);
     assert.deepEqual(touchErrors.errors,[]);
     console.log(JSON.stringify({checks:['controller College admission and sole loadout',
       'locked loadout Back','neutral handoff','controller pause','spatial focus',

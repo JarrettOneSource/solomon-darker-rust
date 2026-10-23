@@ -53,6 +53,7 @@ async function resume(page) {
       return `solomon-dark-game-settings-v1${mount?`:${mount}`:''}`;
     });
     await page.waitForFunction(key=>JSON.parse(localStorage.getItem(key))?.uiScalePercent===125,settingsKey);
+    await ui.settleErrors(page);
     await page.reload(); await loaded(page);
     // College keeps ticking behind Pause/Settings. Compare with the completed
     // document actually loaded at Title, including any final pagehide write.
@@ -79,6 +80,7 @@ async function resume(page) {
     await page.keyboard.press('Escape'); await screen(page,'pause');
     const boneyardPaused=await wizard(page);
     const runSave=await saved(page,record=>record.checkpoint.boneyard && record.checkpoint.ticks===boneyardPaused[5]);
+    await ui.settleErrors(page);
     await page.reload(); await loaded(page);
     assert.deepEqual((await wizard(page)).slice(0,6),savedWizardState(runSave),
       'reload restores the same Boneyard participant and tick');
@@ -100,6 +102,8 @@ async function resume(page) {
     assert.equal(protectedSave.document,newer.document,'a stale writer preserves the newer complete document');
     assert.equal(protectedSave.revision,newer.revision);
     await ui.assertGpuOnly(page);
+    await ui.settleErrors(page);
+    await ui.settleErrors(other);
     assert.deepEqual(errors,[]);
     console.log(JSON.stringify({passed:true,checks:['College reload','inventory and gold','saved preferences','Boneyard reload','atomic stale-tab rejection'],revisions:[hubSave.revision,runSave.revision,newer.revision],errors}));
   } finally {await browser.close();}

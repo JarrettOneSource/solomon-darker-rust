@@ -1,5 +1,6 @@
 // Read-only GPU observations locate widgets; every interaction uses browser input.
 const assert = require('node:assert/strict');
+const {watchErrors,watchRequestFailures,settleErrors}=require('./browser-errors.cjs');
 
 async function readUi(page) {
   return page.evaluate(() => {
@@ -234,21 +235,6 @@ async function assertGpuOnly(page) {
   return { ...evidence, gpu: ui };
 }
 
-function watchErrors(page, {errors = [], warnings = []} = {}) {
-  page.on('pageerror', error => errors.push({ type: 'pageerror', message: error.message }));
-  page.on('console', message => {
-    if (message.type() === 'error') errors.push({ type: 'console', message: message.text(), location: message.location() });
-    else if (message.type() === 'warning') warnings.push(message.text());
-  });
-  page.on('response', response => {
-    if (response.status() >= 400) errors.push({ type: 'response', status: response.status(), url: response.url() });
-  });
-  page.on('requestfailed', request => errors.push({
-    type: 'requestfailed', url: request.url(), method: request.method(), failure: request.failure(),
-  }));
-  return { errors, warnings };
-}
-
 // Observe actual WebGL submissions while forwarding the original call unchanged.
 async function observeGpu(page) {
   await page.addInitScript(() => {
@@ -392,6 +378,6 @@ async function useNativeFocus(...pages) {
 module.exports = {
   readUi, waitForUi, findWidget, widget, noWidget, byLabel, surface, ready, bounds, center, actionable, click, tap,
   fill, value, focused, setSlider, wheel, drag, assertGpuOnly, watchErrors, installController, controller, nextFrame,
-  observeGpu, gpuDraws,
+  observeGpu, gpuDraws, watchRequestFailures, settleErrors,
   observeAnnouncements, announcements, announced, useNativeFocus,
 };
