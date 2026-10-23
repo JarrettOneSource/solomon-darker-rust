@@ -128,9 +128,10 @@ async function testRow(shelf, name, label) {
   const tick = await test.evaluate(() => window.wasmBindings.wizard_state()[5]);
   await test.waitForFunction(tick => window.wasmBindings.wizard_state()[5] > tick + 20, tick);
   await page.screenshot({ path: path.join(out, `${label}-playing.png`) });
-  await gpu.settleErrors(page);
-  await page.getByRole('button', { name: /Return to editing/ }).click();
-  await page.locator('iframe.editor-test-frame').waitFor({ state: 'detached' });
+  await gpu.observeFrameRemoval(page, async () => {
+    await page.getByRole('button', { name: /Return to editing/ }).click();
+    await page.locator('iframe.editor-test-frame').waitFor({ state: 'detached' });
+  }, {frame: test});
   assert.equal(await page.getByLabel('Name', { exact: true }).inputValue(), name);
   assert.equal(await page.getByRole('button', { name: 'Test Boneyard' })
     .evaluate(node => document.activeElement === node), true);

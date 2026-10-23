@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require(path.resolve(process.env.PW));
 const gpu = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const base = new URL(process.env.URL || 'https://127.0.0.1:9449/game-stg/');
 const out = path.resolve(process.env.OUT);
 const fixture = JSON.parse(fs.readFileSync(path.resolve(__dirname,
@@ -27,6 +28,7 @@ const redact = value => String(value).replaceAll(account.password, '[password]')
   .replaceAll(account.email, '[email]')
   .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[token]');
 const checked = name => { checks.push(name); console.log(name); };
+let owned;
 let browser;
 let page;
 let step = 'registration';
@@ -82,9 +84,10 @@ async function waitForEditorAssets(messageOffset, label, started) {
   fs.writeFileSync(path.join(out, 'private-account.json'), JSON.stringify(account), { mode: 0o600, flag: 'wx' });
   let failure;
   try {
-    browser = await chromium.launch({ headless: true,
+    owned = await launchOwnedBrowser(chromium, { headless: true,
       executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
+    browser = owned.browser;
     const context = await browser.newContext({ ignoreHTTPSErrors: localTls, acceptDownloads: true,
       viewport: { width: 1600, height: 900 } });
     await context.addInitScript(() => {
@@ -96,6 +99,7 @@ async function waitForEditorAssets(messageOffset, label, started) {
     });
     page = await context.newPage();
     page.setDefaultTimeout(45000);
+    await gpu.watchRequestFailures(page, {errors}).ready;
     page.on('pageerror', error => errors.push(redact(error.message)));
     page.on('console', message => { if (message.type() === 'error') errors.push(redact(message.text())); });
     page.on('response', response => {
@@ -173,10 +177,15 @@ async function waitForEditorAssets(messageOffset, label, started) {
         admissionTimer = setTimeout(() => reject(new Error('editor admission did not arrive')), 45000);
       })]);
     } finally { clearTimeout(admissionTimer); }
-    await page.getByRole('button', { name: 'Return to editing' }).click();
-    assert.equal(await page.locator('iframe.editor-test-frame').getAttribute('hidden'), '');
-    release();
-    await waitForDisposed(1);
+    const cancelledFrame = page.frames().find(frame =>
+      new URL(frame.url()).pathname === `${mount}/editor-test/`);
+    assert.ok(cancelledFrame);
+    await gpu.observeFrameRemoval(page, async () => {
+      await page.getByRole('button', { name: 'Return to editing' }).click();
+      assert.equal(await page.locator('iframe.editor-test-frame').getAttribute('hidden'), '');
+      release();
+      await waitForDisposed(1);
+    }, {frame: cancelledFrame});
     await page.unroute(`**${mount}/api/game/editor-test`);
     assert.equal(sockets.length, 1);
     assert.ok(sockets[0].received > 0 && sockets[0].closed);
@@ -197,8 +206,10 @@ async function waitForEditorAssets(messageOffset, label, started) {
     const firstTick = await frame.evaluate(() => window.wasmBindings.wizard_state()[5]);
     await frame.waitForFunction(tick => window.wasmBindings.wizard_state()[5] > tick + 20, firstTick);
     await page.screenshot({ path: path.join(out, 'editor-playing.png') });
-    await page.getByRole('button', { name: 'Return to editing' }).click();
-    await waitForDisposed(2);
+    await gpu.observeFrameRemoval(page, async () => {
+      await page.getByRole('button', { name: 'Return to editing' }).click();
+      await waitForDisposed(2);
+    }, {frame});
     assert.equal(sockets.length, 2);
     assert.ok(sockets.every(socket => socket.closed));
     assert.deepEqual(await savedState(), before);
@@ -207,6 +218,7 @@ async function waitForEditorAssets(messageOffset, label, started) {
     checked('the actual disposable Boneyard advances native ticks and returns to the unchanged draft');
     const messages = await page.evaluate(() => window.editorTestMessages);
     assert.deepEqual(messages.filter(message => message.state === 'error'), []);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checked('both editor lifecycles complete without browser, API or game errors');
   } catch (error) {
@@ -220,8 +232,15 @@ async function waitForEditorAssets(messageOffset, label, started) {
       await page.screenshot({ path: path.join(out, 'failure.png') }).catch(() => {});
     }
   } finally {
-    if (browser) await browser.close();
-    fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ target: base.href, tls_verified: !localTls, checks, failure, errors, requests, sockets, assetStartups }, null, 2));
+    let cleanup;
+    if (owned) {
+      try {cleanup = await owned.close();}
+      catch (error) {
+        cleanup = error.cleanup || {error: error.stack};
+        failure ||= {step: 'browser cleanup', error: redact(error.stack || error.message)};
+      }
+    }
+    fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ target: base.href, tls_verified: !localTls, checks, failure, errors, requests, sockets, assetStartups, cleanup }, null, 2));
     console.log(JSON.stringify({ checks: checks.length, failure, output: out }));
     if (failure) process.exitCode = 1;
   }
