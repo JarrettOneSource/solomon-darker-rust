@@ -7,6 +7,7 @@ const {chromium}=require(path.resolve(process.env.PW));
 const {startNewGame}=require('./menu-journey.cjs');
 const {readSave,waitForSave,localParticipant}=require('./saved-game.cjs');
 const ui=require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const output=process.env.OUT||path.resolve('boneyard-smoke');
 const url=process.env.URL||'http://127.0.0.1:4181/';
 const state=page=>page.evaluate(()=>Array.from(window.wasmBindings.wizard_state()));
@@ -59,9 +60,10 @@ async function scenery(page,filename) {
   await fs.mkdir(output,{recursive:true});
   const catalog=JSON.parse(await fs.readFile(path.resolve(__dirname,'../../web/assets/boneyards.json'),'utf8'));
   const templates=new Set(catalog.templates.map(template=>`${template.sourceSha256}:${template.geometrySha256}`));
-  const browser=await chromium.launch({headless:true,
+  const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+  const {browser}=owned;
   const receipt={url,maps:[],errors:[]};
   let current;
   let currentErrors=[];
@@ -153,8 +155,13 @@ async function scenery(page,filename) {
     }
     process.exitCode=1;
   } finally {
+    receipt.behaviorPassed=receipt.status==='passed';
+    try {receipt.cleanup=await owned.close()}
+    catch(error) {
+      receipt.cleanup=error.cleanup;receipt.cleanupFailure=error.stack;
+      receipt.status='failed';process.exitCode=1;
+    }
     await fs.writeFile(path.join(output,'receipt.json'),`${JSON.stringify(receipt,null,2)}\n`);
-    await browser.close();
   }
   console.log(JSON.stringify({status:receipt.status,maps:receipt.maps.length,errors:receipt.errors,failure:receipt.failure}));
 })().catch(error=>{console.error(error);process.exitCode=1});
