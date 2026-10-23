@@ -9,6 +9,7 @@ use solomon_sim::menu::save_mods::GameSaveModMismatch;
 use std::cell::RefCell;
 
 mod presentation;
+pub(crate) use presentation::{consent_button, consent_button_size, consent_frame};
 pub struct RoutingDownloadProgress<'a> {
     pub completed_bytes: u64,
     pub total_bytes: u64,

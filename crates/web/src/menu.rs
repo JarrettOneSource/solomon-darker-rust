@@ -6,7 +6,7 @@ mod hall;
 mod join;
 pub(crate) mod navigation;
 mod prompt;
-mod routing;
+pub(crate) mod routing;
 mod settings;
 mod title;
 pub(crate) mod widgets;
