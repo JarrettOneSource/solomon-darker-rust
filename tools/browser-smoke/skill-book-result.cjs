@@ -46,6 +46,8 @@ async function admitted(page,value,accepted) {
       &&host.loading_run_id===null&&host.resume_grace===null
       &&(host.pause===null||host.pause.owner_player_id===accepted.id);
   },`actual admitted ${expected.displayName}/${value.world} and ready authority`,{timeout:120000});
+  assert.deepEqual(uiState.widgets.filter(widget=>widget.id.startsWith('world-notification:book:'))
+    .map(widget=>widget.id),[],'admission never replays a retained accepted rank notification');
   return{selection:uiState.acceptedSelection,frame:uiState.frame,inputScope:uiState.inputScope,
     authority:{playerId:accepted.id,ticks:accepted.frame.snapshot.ticks,
       phase:accepted.frame.snapshot.run.phase,host:accepted.frame.host}};
@@ -133,8 +135,17 @@ async function tick(page) {
           await ui.noWidget(page,'panel:skill-book-result');
           assert.equal((await ui.readUi(page)).surface,'hidden','dismissing the result does not open Pause');
           if(value.world==='boneyard')await until(async()=>await tick(page)>pausedTick,'authoritative play resumes after confirmation');
-          const notification=await ui.widget(page,`world-notification:book:-${outcome.sequence}`);
+          const notificationId=`world-notification:book:-${outcome.sequence}`;
+          const entered=await ui.waitForUi(page,snapshot=>{
+            const message=ui.findWidget(snapshot,notificationId);
+            return message&&JSON.parse(message.value).offset===0;
+          },'the actual rank notification completes its native entrance');
+          const notification=ui.findWidget(entered,notificationId);
           assert.equal(notification.label,expected.text,'the actual accepted rank also paints its native world +1 message');
+          const presentation=JSON.parse(notification.value);
+          assert.equal(presentation.baseline,67,'Source places the settled Menu text at50+17');
+          assert.equal(presentation.clipTop,50,'Source world-notification ink clips atnativeY50');
+          assert.equal(presentation.scale,1);
           await page.screenshot({path:path.join(output,`${value.world}-rank-${index}-notification.png`)});
           result.reads.push({bookId,skillId:outcome.skillId,sequence:outcome.sequence,
             dismiss:index===0?'OKAY':'Escape',notification});
