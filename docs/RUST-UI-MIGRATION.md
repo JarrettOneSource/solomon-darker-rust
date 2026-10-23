@@ -223,6 +223,25 @@ static hosts answer Range requests with a full 200 response; that is a diagnosed
 limitation, not yet the demonstrated owner of the cancellations. Root owns the media
 trace. No broad cancellation allowance has been added.
 
+The shared observer now has 22 focused positive/failure regressions. It captures the
+actual request's owning frame, native media source/load/events and document baseURI, then
+awaits final ownership/readiness before classifying suspension. HTTP/media errors, missing
+readiness, reload, removal, duplicate owners and unrelated cancellations stay fatal.
+`common-browser/58df78d/media-owned-input` passes the complete unchanged input journey,
+with eight reads/eight RAF and a reviewed final GPU Pause screenshot. Its
+`browser-errors-1.json` preserves all three raw failed transfers and both lifecycle
+snapshots for each permitted native suspension; unexpected errors are empty. Earlier
+failed family receipts remain unchanged and still need their own clean current reruns.
+
+Required smoke on `88c3dfe5977d4ba96216afa25366895ab2aab542` now passes all 14 checks,
+including named Helvidius/Ether/Arcane, exact Office arrival, both rapid-input sequences,
+movement/students and genuine GPU-only presentation with no unexpected errors. Full
+current-art Title and Courtyard/HUD screenshots were reviewed; evidence is
+`common-browser/88c3dfe/smoke/`. The actual audio test on that artifact also passes pointer
+capture unlock/Title playback, then fails the new Source priming assertion with zero
+Academy prime calls (`audio-prime-red/run.log`). The priming implementation is committed
+but awaits the next composed artifact and actual audio verification.
+
 `common-browser/58df78d/boneyard/receipt.json` uses ordinary named Felix admission and
 HUD Map. Actual generated native world/source geometry, inward keyboard movement, Pause
 freeze, Leave/Title and Continue at the same position all pass; full current-art entry
@@ -257,10 +276,10 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | GPU runtime; stock bundle crops/rotation/registered origins, glyph masks, browser fonts, dynamic images, blend/clips | foundation | `gpu_ui.rs`, shared `graphics/src/lib.rs`, stock manifest; read-only `gpu_ui_state`, GPU meshes/textures and final screenshots | Core probe 15/15; joined source audit 3/3; composed game/art pending complete composed browser proof |
 | Title/Play; clouds, moon, graves, Solomon animation, logo/art, Continue policy, account/desktop links | menus | `menu/title.rs`, pinned Main Menu; `smoke.cjs`, `menus.cjs`, `menu-input.cjs` | Ordinary Title/Tutorial prompt screenshot reviewed; complete Title variants pending |
 | Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | GPU source integrated; real prompt cancel/focus journey pending complete composed browser proof |
-| College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | 58df78d actual named Helvidius/Ether/Arcane, Felix and blank Genericus variants pass; remaining variants/final media gate pending |
+| College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | 88c3dfe required named Helvidius/Ether/Arcane smoke clean; 58df Felix/Genericus variants retained; complete variants/UI audio priming pending |
 | Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | 58df78d rapid inputs/neutral handoff and Boneyard Pausefreeze/Leave/Continue pass; subsequent Escape Pause misses exact saved tick; shared variants/media gate pending |
 | Settings root/cloud/performance; sliders/toggles, permissions, saved preferences, nested account policies, mobile sharing | menus | `menu/settings/**`; `settings-parity.cjs`, `menus.cjs`, `fullscreen.cjs` | 58df78d real keyboard/bind checks pass; slider pointer focus red in settings/slider-focus-receipt.json; queued repair and saved variants pending |
-| Control bindings; every action, duplicate swaps, Escape, modified-key rejection, allowed mouse bindings, reverse hotbar | menus + root input | `menu/settings.rs`, canonical `GameControls`; `menus.cjs`, `gameplay-input.cjs`, `hud-input.cjs` | 58df78d Escape/swap/Back/F2/mouse and gameplay aim/belt/neutral checks pass, exact gamepad reads 8/8; complete HUD/controller variants and media gate pending |
+| Control bindings; every action, duplicate swaps, Escape, modified-key rejection, allowed mouse bindings, reverse hotbar | menus + root input | `menu/settings.rs`, canonical `GameControls`; `menus.cjs`, `gameplay-input.cjs`, `hud-input.cjs` | 58df78d common gameplay-input fully passes with exact reads 8/8, raw native suspensions preserved; binding witnesses retained, complete current HUD/controller variants pending |
 | Save Transfer; multiple native/JSON/CFG/SAV/ZIP imports, inspected warnings, replace/cancel/busy/error, real export ZIP/download | menus | `menu/settings/transfer.rs`; `save-transfer.cjs`, `save-tools.cjs` | GPU source integrated; native file/confirmation/export journey pending composed browser proof |
 | Hall Local/Global × four boards; top100 and current row, portrait/orb, expand/scroll/pan, ranks/perks, loading/retry/stale result | menus | `menu/hall.rs`; `hall.cjs`, `hosted-score.cjs` | 58df78d Hall driver passes/errors empty; native/compact screenshots reviewed; queued gradient/border correction and hosted variants pending |
 | Join directory; normalized code, refresh, request/admission/cancel, private/mod/cheat/location policy, list scroll | menus | `menu/join.rs`; `join-party.cjs`, `hosted-social.cjs` | GPU source integrated; actual host/directory admission pending composed browser proof |
@@ -287,7 +306,7 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | GPU source integrated; real fullscreen/unsupported/standalone activation pending composed browser proof |
 | Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | GPU source integrated; actual update/close failure plus packaged journey pending composed browser proof |
 | Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | GPU source integrated; native recovery regressions retained; actual update journey pending composed browser proof |
-| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | 58df78d named edit/rapid ordering, pointer/keyboard/trusted blur and exact 8/8 gamepad polling pass; slider pointer focus, touch/resize/accessibility family gates and media errors remain |
+| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | 88c3dfe mandatory named/rapid smoke clean; 58df common input fully clean/exact8/8 with strict raw media evidence; touch/resize/accessibility and focused family reruns pending |
 | No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Joined source producer contract 3/3; complete runtime surface/input proof remains pending |
 
 ## Test ownership and stopping checks
