@@ -1,7 +1,7 @@
 //! GPU chat transcript/composer from Website `GameChat.tsx`.
 //! Drafts stay local; sending queues a host command and never inserts a message.
 
-use egui::{Color32, FontFamily, FontId, Id, Order, Rect, RichText, Stroke, pos2, vec2};
+use egui::{Color32, FontFamily, FontId, Id, Rect, RichText, Stroke, pos2, vec2};
 use solomon_sim::settings::game_binding_label;
 use solomon_sim::social::{GameChatChannel, GameChatMessage};
 
@@ -45,8 +45,9 @@ impl SocialUi {
             && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab));
         let anchor = if self.coarse { egui::Align2::LEFT_TOP } else { egui::Align2::LEFT_BOTTOM };
         let offset = vec2(left, if self.coarse { if open { 0.0 } else { 11.0 } } else { -34.0 });
-        egui::Area::new(Id::unique("social/chat"))
-            .order(if open { Order::Foreground } else { Order::Middle })
+        let layer = Self::chat_layer(open);
+        egui::Area::new(layer.id)
+            .order(layer.order)
             .anchor(anchor, offset)
             .show(&ctx, |ui| -> Result<(), String> {
                 ui.set_min_width(width);

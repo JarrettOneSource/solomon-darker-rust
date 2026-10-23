@@ -253,6 +253,36 @@ impl SocialUi {
         Ok(())
     }
 
+    pub fn paint_above_hud(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        hud_layer: egui::LayerId,
+    ) -> Result<(), String> {
+        // Source HUD z10 is below the Social z60 parent. Keep its world children
+        // in that order when an interacted or newly visible Area rises.
+        let allies = Self::allies_layer();
+        let party = Self::party_layer();
+        frame.ctx.set_sublayer(hud_layer, allies);
+        frame.ctx.set_sublayer(allies, party);
+        frame.ctx.set_sublayer(party, Self::chat_layer(false));
+        self.paint(frame)
+    }
+
+    fn allies_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Middle, Id::unique("social/allies"))
+    }
+
+    fn party_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Middle, Id::unique("social/party-chip"))
+    }
+
+    fn chat_layer(open: bool) -> egui::LayerId {
+        egui::LayerId::new(
+            if open { Order::Foreground } else { Order::Middle },
+            Id::unique("social/chat"),
+        )
+    }
+
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         self.clipboard.clear();
         if !self.context.visible || self.snapshot.is_none() {

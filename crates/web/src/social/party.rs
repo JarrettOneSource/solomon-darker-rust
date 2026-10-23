@@ -5,7 +5,7 @@ mod invitation;
 mod menu;
 pub(super) use interaction::{PartyClipboard, PartyMenuInteraction};
 
-use egui::{Color32, Id, Order, Rect, Sense, pos2, vec2};
+use egui::{Color32, Id, Rect, Sense, pos2, vec2};
 use solomon_sim::native_ui_text::{
     NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec, measure_native_ui_text,
 };
@@ -66,8 +66,8 @@ impl SocialUi {
         let height = if tall { y + rows.len() as f64 * 36.0 - 4.0 + 12.0 } else { 50.0 };
         let ctx = frame.ctx.clone();
         let mut action = None;
-        let area =
-            egui::Area::new(Id::unique("social/party-chip")).order(Order::Middle).constrain(false);
+        let layer = Self::party_layer();
+        let area = egui::Area::new(layer.id).order(layer.order).constrain(false);
         ctx.set_transform_layer(
             area.layer(),
             egui::emath::TSTransform {
