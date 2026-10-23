@@ -20,7 +20,7 @@ const {
 const {createNativeMessageReader} = require('./browser-smoke/native-wire.cjs');
 const {observeNativeChildren} = require('./browser-smoke/native-child.cjs');
 const {redact, sanitizeError} = require('./browser-smoke/desktop-failure.cjs');
-const obsoleteMenuImage = require('./browser-smoke/obsolete-menu-image.cjs');
+const ui = require('./browser-smoke/gpu-ui.cjs');
 const applicationPath = resolve(process.env.SDR_DESKTOP_APP || `dist-desktop/Solomon Darker-${process.platform}-${process.arch}`);
 const manifest = JSON.parse(await readFile(join(applicationPath, 'desktop-package-manifest.json'), 'utf8'));
 const executable = resolve(applicationPath, manifest.executable);
@@ -57,15 +57,13 @@ try {
     name: 'Play offline'
   }).click();
   await title(solo.page);
-  await solo.page.locator('[data-menu-action="settings"]').click();
-  const music = solo.page.locator('input[data-setting="music"]');
-  await music.focus();
-  await music.press('Home');
-  await music.press('ArrowRight');
-  await solo.page.locator('[data-menu-action="settings-page:controls"]').click();
-  await solo.page.locator('[data-setting="reverse-hotbar"]').click();
-  await solo.page.locator('[data-menu-action="settings-back"]').click();
-  await solo.page.locator('[data-menu-action="settings-back"]').click();
+  await ui.click(solo.page,'settings');
+  await ui.click(solo.page,'settings-range:music');await ui.focused(solo.page,'settings-range:music');
+  await solo.page.keyboard.press('Home');await solo.page.keyboard.press('ArrowRight');await ui.value(solo.page,'settings-range:music','1');
+  await ui.click(solo.page,'settings-page:controls');
+  await ui.click(solo.page,'settings-toggle:reverse-hotbar');
+  await ui.click(solo.page,'settings-back');
+  await ui.click(solo.page,'settings-back');
   await enterHub(solo, 'Offline', 'fire');
   const runtime = await solo.page.evaluate(() => ({
     origin: location.origin,
@@ -96,12 +94,12 @@ try {
     JSON.parse(localStorage.getItem('solomon-dark-game-settings-v1')));
   assert.equal(preferences.musicVolumePercent, 1);
   assert.equal(preferences.reverseHotbarCycle, true);
-  await resumed.page.locator('[data-menu-action="settings"]').click();
-  assert.equal(await resumed.page.locator('input[data-setting="music"]').inputValue(), '1');
-  await resumed.page.locator('[data-menu-action="settings-page:controls"]').click();
-  assert.equal(await resumed.page.locator('[data-setting="reverse-hotbar"]').getAttribute('aria-pressed'), 'true');
-  await resumed.page.locator('[data-menu-action="settings-back"]').click();
-  await resumed.page.locator('[data-menu-action="settings-back"]').click();
+  await ui.click(resumed.page,'settings');
+  await ui.value(resumed.page,'settings-range:music','1');
+  await ui.click(resumed.page,'settings-page:controls');
+  assert.equal((await ui.widget(resumed.page,'settings-toggle:reverse-hotbar')).selected,true);
+  await ui.click(resumed.page,'settings-back');
+  await ui.click(resumed.page,'settings-back');
   const saved = await readSave(resumed.page);
   assert.equal(saved.document.schemaVersion, 51);
   const id = saved.document.continuation.summary.playerId;
@@ -110,8 +108,8 @@ try {
   assert.ok(playerIndex >= 0, 'the Source entity columns retain the saved player identity');
   const locomotion = entities.locomotions[playerIndex];
   assert.ok(locomotion.position.x > movement.before + 10);
-  await resumed.page.locator('[data-menu-action="play"]').click();
-  await resumed.page.locator('[data-menu-action="continue"]').click();
+  await ui.click(resumed.page,'play');
+  await ui.click(resumed.page,'continue');
   await readyHub(resumed);
   assert.ok(position(resumed).x > movement.before + 10, 'ordinary Continue restored the committed source document');
   await resumed.page.screenshot({
@@ -246,7 +244,7 @@ try {
     console.error(JSON.stringify({
       label: instance.label,
       url: redact(instance.page.url()),
-      body: redact(await instance.page.locator('body').innerText({timeout: 5000}).catch(() => '')).slice(0, 2500),
+      ui: await ui.readUi(instance.page).catch(()=>null),
       errors,
       cancelledMenuImages: receipts.cancelledMenuImages
     }));
@@ -332,15 +330,7 @@ async function launch(label, userData) {
   });
   page.on('requestfailed', request => {
     if (request.url().startsWith('solomon-darker://app/')) {
-      if (request.failure()?.errorText === 'net::ERR_ABORTED'
-        && new URL(request.url()).pathname.startsWith('/assets/stock/audio/music/')) {
-        receipts.cancelledMusic.push({label, path: new URL(request.url()).pathname});
-        return;
-      }
-      resourceChecks.push(obsoleteMenuImage(page, request).then(cancelled => {
-        if (cancelled) receipts.cancelledMenuImages.push({label, ...cancelled});
-        else errors.push(redact(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
-      }));
+      errors.push(redact(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
     }
   });
   page.on('websocket', socket => {
@@ -369,16 +359,9 @@ async function launch(label, userData) {
   return instance;
 }
 async function title(page) {
-  await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-    && document.querySelector('#status')?.textContent === '', null, {
-    timeout: 120000
-  });
-  await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
-  const prompt = page.locator('.title-prompt:not([hidden])');
-  if (await prompt.isVisible()) {
-    await prompt.locator('[data-menu-action="prompt-secondary"]').click();
-    await prompt.waitFor({state: 'hidden'});
-  }
+  await ui.ready(page);await ui.surface(page,'title');
+  if(ui.findWidget(await ui.readUi(page),'prompt-secondary')){await ui.click(page,'prompt-secondary');await ui.noWidget(page,'prompt-secondary');}
+  await ui.assertGpuOnly(page);
   const instance = [...running].find(candidate => candidate.page === page);
   const bootstrap = await page.evaluate(() => ({
     scripts: [...document.querySelectorAll('script[type="module"][src]')]
@@ -410,7 +393,8 @@ async function enterHub(instance, name, element) {
 }
 async function readyHub(instance) {
   await waitFor(() => instance.state.id && !instance.state.frame?.snapshot.boneyard, 'accepted College');
-  await instance.page.waitForFunction(() => document.querySelector('.game-menus')?.dataset.menuScreen === 'hidden' && window.wasmBindings.wizard_state()[6] === 0 && window.wasmBindings.wizard_state()[7] === -1);
+  await ui.surface(instance.page,'hidden');
+  await instance.page.waitForFunction(()=>window.wasmBindings.wizard_state()[6]===0&&window.wasmBindings.wizard_state()[7]===-1);
 }
 async function move(instance) {
   await instance.page.bringToFront();
@@ -518,7 +502,7 @@ async function proveFailedClose(instance) {
   assert.equal(instance.page.isClosed(), false);
   assert.equal(instance.app.process().exitCode, null);
   assert.equal((await hostProcess(instance.app)).pid, child.pid);
-  await instance.page.locator('[data-menu-action="resume"]').click();
+  await ui.click(instance.page,'resume');
   await readyHub(instance);
   await waitFor(() => !instance.state.frame.host.pause && !instance.state.frame.host.resume_grace,
     'the accepted post-warning resume');
@@ -666,28 +650,14 @@ async function proveUpdatePrompt(instance) {
   }, fixture);
   const state = await instance.page.evaluate(() => window.solomonDarkRuntime.desktop.checkUpdates());
   assert.equal(state.update.revision, fixture.revision);
-  const notice = instance.page.locator('.desktop-update-notice');
-  await notice.getByRole('button', {
-    name: 'Download update'
-  }).waitFor();
-  const bounds = await notice.evaluate(root => {
-    const rectangle = root.getBoundingClientRect();
-    return {left: rectangle.left, top: rectangle.top, right: rectangle.right,
-      bottom: rectangle.bottom, width: rectangle.width, height: rectangle.height,
-      viewportWidth: innerWidth, viewportHeight: innerHeight};
-  });
-  assert.ok(bounds.width > 0 && bounds.height > 0 && bounds.left >= 0 && bounds.top >= 0
-    && bounds.right <= bounds.viewportWidth && bounds.bottom <= bounds.viewportHeight,
-  `the desktop update notice is visible inside the game window: ${JSON.stringify(bounds)}`);
-  await instance.page.screenshot({
-    path: join(evidence, 'update-prompt.png')
-  });
-  await notice.getByRole('button', {
-    name: 'Later'
-  }).click();
-  await notice.waitFor({
-    state: 'detached'
-  });
+  await ui.widget(instance.page,'desktop/download');
+  const notice=await ui.widget(instance.page,'desktop/update');
+  const {x:left,y:top,width,height}=ui.bounds(notice);const viewport=await instance.page.evaluate(()=>({width:innerWidth,height:innerHeight}));
+  const bounds={left,top,right:left+width,bottom:top+height,width,height,viewportWidth:viewport.width,viewportHeight:viewport.height};
+  assert.ok(width>0&&height>0&&left>=0&&top>=0&&bounds.right<=viewport.width&&bounds.bottom<=viewport.height,
+    `the GPU desktop update notice is inside the actual game window: ${JSON.stringify(bounds)}`);
+  await ui.assertGpuOnly(instance.page);await instance.page.screenshot({path:join(evidence,'update-prompt.png')});
+  await ui.click(instance.page,'desktop/later');await ui.noWidget(instance.page,'desktop/update');
   assert.ok(instance.state.frame, 'update dismissal leaves the accepted game alive');
   return {
     shown: true,

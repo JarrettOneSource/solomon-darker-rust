@@ -56,6 +56,42 @@ impl From<Rect> for WidgetBounds {
     }
 }
 
+impl WidgetBounds {
+    pub fn rect(self) -> Rect {
+        Rect::from_min_size(pos2(self.x, self.y), vec2(self.width, self.height))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HitShape {
+    #[default]
+    Rect,
+    Ellipse,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct HitRegion {
+    pub bounds: WidgetBounds,
+    pub paint_bounds: WidgetBounds,
+    pub shape: HitShape,
+}
+impl HitRegion {
+    pub fn contains(self, point: Pos2) -> bool {
+        if !self.bounds.rect().contains(point) {
+            return false;
+        }
+        match self.shape {
+            HitShape::Rect => true,
+            HitShape::Ellipse => {
+                let rect = self.paint_bounds.rect();
+                rect.is_positive()
+                    && ((point - rect.center()) / (rect.size() / 2.0)).length_sq() <= 1.0
+            }
+        }
+    }
+}
+
 /// A visible real widget, read by diagnostics and Tutorial anchors only.
 #[derive(Clone, Debug, Serialize)]
 pub struct WidgetGeometry {
@@ -64,6 +100,7 @@ pub struct WidgetGeometry {
     pub role: String,
     pub bounds: WidgetBounds,
     pub paint_bounds: WidgetBounds,
+    pub hit_shape: HitShape,
     pub enabled: bool,
     pub focused: bool,
     pub modal: bool,
@@ -82,10 +119,28 @@ pub struct WidgetGeometry {
     activated: bool,
     #[serde(skip)]
     interactive: bool,
+    #[serde(skip)]
+    keyboard_activated: bool,
+}
+
+impl WidgetGeometry {
+    pub fn hit_region(&self) -> HitRegion {
+        HitRegion { bounds: self.bounds, paint_bounds: self.paint_bounds, shape: self.hit_shape }
+    }
+    pub fn contains(&self, point: Pos2) -> bool {
+        self.hit_region().contains(point)
+    }
+    pub fn is_interactive(&self) -> bool {
+        self.interactive
+    }
+    pub fn activated_by_keyboard(&self) -> bool {
+        self.keyboard_activated
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct UiDiagnostics {
+    pub frame: u64,
     pub viewport: [f32; 2],
     pub pixels_per_point: f32,
     pub meshes: usize,
@@ -95,6 +150,7 @@ pub struct UiDiagnostics {
     pub static_images_total: usize,
     pub error: Option<String>,
     pub capture: UiCapture,
+    pub input_scope: Option<String>,
     pub widgets: Vec<WidgetGeometry>,
 }
 
@@ -345,6 +401,17 @@ impl UiFrame<'_> {
             widget.layer_id = Some(response.layer_id);
             widget.activated = response.clicked();
             widget.interactive = response.sense.interactive();
+            widget.keyboard_activated = response.clicked()
+                && !self
+                    .ctx
+                    .input(|input| input.pointer.button_released(egui::PointerButton::Primary));
+        }
+    }
+
+    pub fn record_ellipse(&self, id: &str, label: &str, role: &str, response: &Response) {
+        self.record(id, label, role, response);
+        if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
+            widget.hit_shape = HitShape::Ellipse;
         }
     }
 
@@ -368,6 +435,7 @@ impl UiFrame<'_> {
                 role: role.to_owned(),
                 bounds: rect.into(),
                 paint_bounds,
+                hit_shape: HitShape::Rect,
                 enabled,
                 focused: false,
                 modal: false,
@@ -393,6 +461,7 @@ impl UiFrame<'_> {
                         | "tab"
                         | "menuitem"
                 ),
+                keyboard_activated: false,
             },
         );
     }
@@ -516,11 +585,6 @@ impl GpuUi {
                 retired_images: &retired_images,
             });
         });
-        let capture = UiCapture {
-            pointer: self.ctx.egui_wants_pointer_input(),
-            keyboard: self.ctx.egui_wants_keyboard_input(),
-            text: output.platform_output.ime.is_some(),
-        };
         self.widgets = widgets.into_inner();
         if let Some(widget) = self.widgets.values().find(|widget| widget.duplicate) {
             let error = format!("GPU UI widget id {} was painted more than once", widget.id);
@@ -529,7 +593,20 @@ impl GpuUi {
             return Err(error);
         }
         self.input.set_widgets(&self.widgets);
-        self.input.set_scope(input_scope.borrow().as_deref());
+        let input_scope = input_scope.into_inner();
+        self.input.set_scope(input_scope.as_deref());
+        let pointer = self.ctx.input(|input| input.pointer.interact_pos());
+        let capture = UiCapture {
+            pointer: input_scope.is_some()
+                || self.input.owns_pointer()
+                || pointer.is_some_and(|point| {
+                    self.widgets
+                        .values()
+                        .any(|widget| widget.is_interactive() && widget.contains(point))
+                }),
+            keyboard: self.ctx.egui_wants_keyboard_input(),
+            text: output.platform_output.ime.is_some(),
+        };
         if let Err(error) = self.input.apply_output(&output.platform_output, capture) {
             output.textures_delta.clear();
             return Err(error);
@@ -560,6 +637,7 @@ impl GpuUi {
         }
         let (meshes, triangles) = painted?;
         self.diagnostics = UiDiagnostics {
+            frame: self.diagnostics.frame + 1,
             viewport,
             pixels_per_point,
             meshes,
@@ -569,6 +647,7 @@ impl GpuUi {
             static_images_total: self.images.static_image_count(),
             error: None,
             capture,
+            input_scope,
             widgets: self.widgets.values().cloned().collect(),
         };
         Ok(capture)
@@ -576,6 +655,9 @@ impl GpuUi {
 
     pub fn forget_image(&mut self, path: &str) {
         self.images.forget(path, &self.painter.gl);
+    }
+    pub fn image_texture(&self, path: &str) -> Option<solomon_graphics::Texture> {
+        self.images.cached_texture(path)
     }
     pub fn take_key_codes(&mut self) -> Vec<BrowserKey> {
         self.input.take_key_codes()

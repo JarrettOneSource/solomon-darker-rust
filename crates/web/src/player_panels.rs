@@ -72,6 +72,17 @@ pub struct InventoryPreviewPlacement {
     pub alpha: f64,
 }
 
+/// The native UI.62 seal under the live wizard, expressed in CSS canvas pixels.
+#[derive(Clone, Copy, Debug)]
+pub struct InventoryPreviewUnderlay {
+    pub texture_path: &'static str,
+    pub source: solomon_sim::hud::HudRect,
+    pub destination: solomon_sim::hud::HudRect,
+    pub clip: solomon_sim::hud::HudRect,
+    pub tint: u32,
+    pub alpha: f64,
+}
+
 pub struct PlayerPanelSnapshot<'a> {
     pub selection: &'a NewGameSelection,
     pub book: &'a NativeSkillBookState,

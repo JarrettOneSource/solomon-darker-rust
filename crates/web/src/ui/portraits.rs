@@ -90,8 +90,8 @@ impl StockPortraits {
         Ok(socket)
     }
 
-    /// AllyHud omits the weapon and orb.
-    pub fn paint_body(
+    #[allow(clippy::too_many_arguments)] // The body shares an explicit circular clip across every stock layer.
+    pub fn paint_body_clipped(
         &self,
         gpu: &UiFrame<'_>,
         painter: &Painter,
@@ -99,13 +99,22 @@ impl StockPortraits {
         heading: usize,
         position: Pos2,
         scale: f32,
+        clip: Rect,
     ) -> Result<(), String> {
         for layer in [
             format!("robe-dynamic-{}", element.as_str()),
             format!("robe-fixed-{}", element.as_str()),
             format!("head-{}", element.as_str()),
         ] {
-            self.paint_layer(gpu, painter, &layer, heading % 24, position, scale)?;
+            self.paint_layer_clipped(
+                gpu,
+                painter,
+                &layer,
+                heading % 24,
+                position,
+                scale,
+                Some(clip),
+            )?;
         }
         Ok(())
     }
@@ -118,6 +127,20 @@ impl StockPortraits {
         heading: usize,
         position: Pos2,
         scale: f32,
+    ) -> Result<(), String> {
+        self.paint_layer_clipped(gpu, painter, layer, heading, position, scale, None)
+    }
+
+    #[allow(clippy::too_many_arguments)] // An optional shared circular clip preserves the authored portrait mask.
+    fn paint_layer_clipped(
+        &self,
+        gpu: &UiFrame<'_>,
+        painter: &Painter,
+        layer: &str,
+        heading: usize,
+        position: Pos2,
+        scale: f32,
+        clip: Option<Rect>,
     ) -> Result<(), String> {
         let name = format!("player-character-{layer}");
         let frames =
@@ -136,7 +159,33 @@ impl StockPortraits {
                 pos2(*x as f32 / size.x, *y as f32 / size.y),
                 pos2((*x + *width) as f32 / size.x, (*y + *height) as f32 / size.y),
             );
-            gpu.image(painter, &path, target, Some(uv), Color32::WHITE);
+            if let Some(clip) = clip {
+                let polygon = crate::gpu_ui::clip_polygon_ellipse(
+                    vec![
+                        target.left_top(),
+                        target.right_top(),
+                        target.right_bottom(),
+                        target.left_bottom(),
+                    ],
+                    clip,
+                );
+                for index in 1..polygon.len().saturating_sub(1) {
+                    let positions = [polygon[0], polygon[index], polygon[index + 1]];
+                    let uvs = positions.map(|position| {
+                        uv.min + ((position - target.min) / target.size()) * uv.size()
+                    });
+                    gpu.image_triangle(
+                        painter,
+                        &path,
+                        positions,
+                        uvs,
+                        Color32::WHITE,
+                        solomon_graphics::BlendMode::Normal,
+                    );
+                }
+            } else {
+                gpu.image(painter, &path, target, Some(uv), Color32::WHITE);
+            }
         }
         Ok(())
     }

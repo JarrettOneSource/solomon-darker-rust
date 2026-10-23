@@ -186,8 +186,8 @@ async function approachApothecary(page) {
   await actionByLabel(page,/Apprentice Apothecary · 8 gold/,{prefix:'mod/panel:'});
 }
 async function openInventory(page) {
-  if (!ui.findWidget(await ui.readUi(page),'panel:inventory')) await ui.click(page,'hud:inventory');
-  await ui.widget(page,'panel:inventory');
+  if (!ui.findWidget(await ui.readUi(page),'panel:surface:inventory')) await ui.click(page,'hud:inventory');
+  await ui.widget(page,'panel:surface:inventory');
   await ui.waitForUi(page,snapshot => snapshot.widgets.some(widget => widget.id.startsWith('panel:item:') && widget.enabled)
     && !ui.findWidget(snapshot,'panel:inventory-flyby'), 'settled enabled Inventory cells');
 }
@@ -446,7 +446,7 @@ async function runLua(page, code) {
         await assertRejectedCustomPotionBinding(page,tonicId);
         await page.screenshot({path: path.join(output, 'authored-inventory.png')});
         await ui.click(page,'panel:close');
-        await ui.noWidget(page,'panel:inventory');
+        await ui.noWidget(page,'panel:surface:inventory');
       }
       // Source forbids removing worn robes. The earlier real character replacement
       // left its gear in Luthacus's scavenged bag; retrieve that actual spare robe.
@@ -473,7 +473,7 @@ async function runLua(page, code) {
           await until(() => player().economy.backpack.some(item => item.id === bag.id),
             'actual scavenged bag transfer');
           await ui.click(page,'panel:close');
-          await ui.noWidget(page,'panel:inventory');
+          await ui.noWidget(page,'panel:surface:inventory');
         }
         await openInventory(page);
         await ui.click(page,`panel:item:${bag.id}`,{clickCount:2});
@@ -498,7 +498,7 @@ async function runLua(page, code) {
         // The footer closes the book directly; Back starts another Sack slide and
         // an immediate Escape can be consumed by that still-active transition.
         await ui.click(page,'panel:close');
-        await ui.noWidget(page,'panel:inventory');
+        await ui.noWidget(page,'panel:surface:inventory');
       }
       await approachApothecary(page);
       const goldBeforeReforge = player().economy.gold;
@@ -540,7 +540,7 @@ async function runLua(page, code) {
       assert.equal(appliedStatus.expiresTick - appliedStatus.startedTick, 2000,
         'the accepted 20-second Source status is applied by the real rule');
       await page.keyboard.press('Escape');
-      await ui.noWidget(page,'panel:inventory');
+      await ui.noWidget(page,'panel:surface:inventory');
       check('actual custom potion Inventory use commits inventory and source on-use effects');
     }
     if (includeConsole || observeConsole) {

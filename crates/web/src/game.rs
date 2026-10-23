@@ -2235,6 +2235,7 @@ impl Game {
                 self.mod_overlays.paint(frame)?;
                 self.mod_minimap.paint(frame)?;
                 self.hud.paint(frame)?;
+                self.input.paint(frame)?;
                 self.mod_skill_quickbar.paint(frame)?;
                 self.shared_gameplay.paint(frame)?;
                 self.panels.paint(frame)?;
@@ -2249,13 +2250,24 @@ impl Game {
                 self.observer_ui.paint(frame)?;
                 self.spectator_ui.paint(frame)?;
                 self.menu.paint(frame)?;
+                if let Some(hosted) = &mut self.hosted {
+                    hosted.paint_boneyard_library(&self.menu, frame)?;
+                }
                 self.fullscreen.paint(frame)?;
+                if let Some(desktop) = &mut self.desktop_bridge {
+                    desktop.paint(frame)?;
+                }
                 self.match_loading_view.paint(frame)?;
+                if let Some(hosted) = &mut self.hosted {
+                    hosted.deployment_update.paint(frame)?;
+                }
                 crate::runtime_ui::paint(frame);
                 Ok(())
             })();
         })?;
-        result
+        result?;
+        self.input.set_ui_geometry(self.gpu_ui.diagnostics(), &self.hud.belt_input_geometry());
+        Ok(())
     }
 
     pub(crate) fn present_failure(&mut self, time: f64) -> Result<(), String> {
@@ -2295,6 +2307,7 @@ impl Game {
             "loading": null, "error": ui.error.clone().or_else(crate::runtime_ui::error),
             "canvas": { "width": ui.viewport[0], "height": ui.viewport[1], "pixelsPerPoint": ui.pixels_per_point },
             "capture": ui.capture,
+            "inputScope": ui.input_scope, "frame": ui.frame,
             "draw": { "meshes": ui.meshes, "triangles": ui.triangles, "textures": ui.textures },
             "widgets": widgets,
         })
@@ -2362,21 +2375,51 @@ impl Game {
         self.renderer.begin_frame(width, height, [viewport.x as f32, viewport.y as f32]);
         if self.panels.covers_world() {
             self.renderer.set_native_world_pixel_centers(false);
+            let client_width = self.canvas.client_width().max(1) as f32;
+            let client_height = self.canvas.client_height().max(1) as f32;
+            self.renderer.begin_frame(width, height, [client_width, client_height]);
+            self.renderer.set_saturation(1.0);
+            let ratio_x = f64::from(width) / f64::from(client_width);
+            let ratio_y = f64::from(height) / f64::from(client_height);
+            let clip = |bounds: solomon_sim::hud::HudRect| {
+                [
+                    (bounds.x * ratio_x).round() as i32,
+                    (f64::from(height) - (bounds.y + bounds.height) * ratio_y).round() as i32,
+                    (bounds.width * ratio_x).round() as i32,
+                    (bounds.height * ratio_y).round() as i32,
+                ]
+            };
+            if let Some(underlay) = self.panels.inventory_preview_underlay()? {
+                let texture = self
+                    .gpu_ui
+                    .image_texture(underlay.texture_path)
+                    .ok_or("The stock Inventory seal is not ready")?;
+                let rect = |r: solomon_sim::hud::HudRect| {
+                    [r.x as f32, r.y as f32, r.width as f32, r.height as f32]
+                };
+                self.renderer.draw_clipped(
+                    clip(underlay.clip),
+                    underlay.alpha as f32,
+                    |renderer| {
+                        renderer.draw(
+                            &texture,
+                            solomon_graphics::Quad {
+                                source: rect(underlay.source),
+                                destination: rect(underlay.destination),
+                                tint: [
+                                    ((underlay.tint >> 16) & 255) as f32 / 255.0,
+                                    ((underlay.tint >> 8) & 255) as f32 / 255.0,
+                                    (underlay.tint & 255) as f32 / 255.0,
+                                    1.0,
+                                ],
+                                blend: solomon_graphics::BlendMode::Normal,
+                            },
+                        );
+                    },
+                );
+            }
             if let Some(preview) = self.panels.inventory_preview_placement() {
-                let client_width = self.canvas.client_width().max(1) as f32;
-                let client_height = self.canvas.client_height().max(1) as f32;
-                self.renderer.begin_frame(width, height, [client_width, client_height]);
-                self.renderer.set_saturation(1.0);
-                let ratio_x = f64::from(width) / f64::from(client_width);
-                let ratio_y = f64::from(height) / f64::from(client_height);
-                let clip = [
-                    (preview.clip.x * ratio_x).round() as i32,
-                    (f64::from(height) - (preview.clip.y + preview.clip.height) * ratio_y).round()
-                        as i32,
-                    (preview.clip.width * ratio_x).round() as i32,
-                    (preview.clip.height * ratio_y).round() as i32,
-                ];
-                self.renderer.draw_clipped(clip, preview.alpha as f32, |renderer| {
+                self.renderer.draw_clipped(clip(preview.clip), preview.alpha as f32, |renderer| {
                     self.wizard_view.draw_preview(
                         renderer,
                         &Camera { origin: Vec2::ZERO, scale: preview.scale },

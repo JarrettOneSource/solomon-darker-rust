@@ -11,6 +11,7 @@ use solomon_sim::social::{
 
 impl Game {
     pub(super) fn update_social(&mut self, now: f64) -> Result<(), String> {
+        self.update_hosted_party_mods();
         if let Some(native) = &mut self.native {
             for rejection in std::mem::take(&mut native.chat_rejections) {
                 self.social.chat_rejected(rejection);

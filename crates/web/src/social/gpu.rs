@@ -46,7 +46,6 @@ pub(super) fn native_text(
 pub(super) fn stock_button(
     frame: &mut UiFrame<'_>,
     ui: &mut Ui,
-    atlas: &StockAtlas,
     id: &str,
     label: &str,
     bounds: Rect,
@@ -58,33 +57,19 @@ pub(super) fn stock_button(
         })
         .inner;
     let painter = ui.painter();
-    let tint = if enabled { Color32::WHITE } else { Color32::from_white_alpha(100) };
-    let path = if enabled && (response.hovered() || response.has_focus()) {
-        "assets/stock/menu/main-menu-button-hover.png"
-    } else {
-        "assets/stock/menu/main-menu-button.png"
-    };
-    frame.image(painter, path, bounds, None, tint);
     let scale = bounds.height() / 69.0;
-    let corner = vec2(24.0, 30.0) * scale;
-    for (center, mirror) in [
-        (pos2(bounds.left() + corner.x / 2.0, bounds.center().y), false),
-        (pos2(bounds.right() - corner.x / 2.0, bounds.center().y), true),
-    ] {
-        let uv =
-            if mirror { Some(Rect::from_min_max(pos2(1.0, 0.0), pos2(0.0, 1.0))) } else { None };
-        frame.image(
-            painter,
-            "assets/stock/menu/main-menu-button-corner.png",
-            Rect::from_center_size(center, corner),
-            uv,
-            tint,
-        );
-    }
-    atlas.paint_native_frame(frame, painter, 54, bounds, false, tint)?;
+    crate::menu::widgets::paint_stock_button_highlight(
+        frame,
+        ui,
+        bounds,
+        scale,
+        enabled,
+        response.is_pointer_button_down_on(),
+    );
     let mut spec = NativeUiTextSpec::new(NativeUiFontName::Menu, label, 0.0, 0.0);
-    spec.x = f64::from(bounds.center().x);
-    spec.y = f64::from(bounds.center().y + 9.0 * scale);
+    let pressed = if enabled && response.is_pointer_button_down_on() { 6.0 * scale } else { 0.0 };
+    spec.x = f64::from(bounds.center().x + pressed);
+    spec.y = f64::from(bounds.center().y + 9.0 * scale + pressed);
     spec.scale = f64::from(scale);
     spec.tint = 0xd9ba70;
     spec.alpha = if enabled { 1.0 } else { 0.4 };
@@ -101,15 +86,18 @@ pub(super) fn brackets(
     scale: f32,
 ) -> Result<(), String> {
     let record = atlas.record(50)?;
-    let size = vec2(record.logical_width as f32, record.logical_height as f32) * scale;
+    let size = vec2(record.width as f32, record.height as f32) * scale;
+    let [registered_x, registered_y] = record.registered_origin();
     for (point, sx, sy) in [
         (bounds.left_top(), 1.0, 1.0),
         (bounds.right_top(), -1.0, 1.0),
         (bounds.left_bottom(), 1.0, -1.0),
         (bounds.right_bottom(), -1.0, -1.0),
     ] {
-        let left = point.x + if sx < 0.0 { -size.x } else { 0.0 };
-        let top = point.y + if sy < 0.0 { -size.y } else { 0.0 };
+        let left =
+            point.x + if sx < 0.0 { -registered_x * scale - size.x } else { registered_x * scale };
+        let top =
+            point.y + if sy < 0.0 { -registered_y * scale - size.y } else { registered_y * scale };
         let source = Rect::from_min_max(
             pos2(
                 if sx < 0.0 { record.width as f32 } else { 0.0 },

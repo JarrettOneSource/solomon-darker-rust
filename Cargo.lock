@@ -1212,6 +1212,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solomon-loader"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "js-sys",
+ "serde_json",
+ "solomon-graphics",
+ "solomon-sim",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "solomon-modding"
 version = "0.1.0"
 dependencies = [

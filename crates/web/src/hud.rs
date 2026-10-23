@@ -46,6 +46,24 @@ impl HudAccess {
         Self { combat: true, inventory: true, quickbar: true, skills: true, spell: true };
 }
 
+/// Actual CSS-pixel control face and press-time admission retained by gameplay input.
+#[derive(Clone, Copy, Debug)]
+pub struct HudBeltHit {
+    pub slot: usize,
+    pub face: egui::Rect,
+    pub rotation: f32,
+    pub input_scale: f64,
+    pub cast_eligible: bool,
+}
+impl HudBeltHit {
+    pub fn contains(self, point: egui::Pos2) -> bool {
+        self.face.contains(
+            self.face.center()
+                + egui::emath::Rot2::from_angle(-self.rotation) * (point - self.face.center()),
+        )
+    }
+}
+
 pub struct Hud {
     document: Document,
     visible: Cell<bool>,
@@ -61,6 +79,7 @@ pub struct Hud {
     college: StockAtlas,
     portraits: StockAtlas,
     actions: RefCell<Vec<HudAction>>,
+    belt_hits: RefCell<Vec<HudBeltHit>>,
     disabled_actions: RefCell<Vec<HudAction>>,
     snapshot: Option<HudState>,
     viewport: (i32, i32),
@@ -96,6 +115,7 @@ impl Hud {
             college: StockAtlas::load("College").await?,
             portraits: StockAtlas::load("LevelPicker").await?,
             actions: RefCell::new(Vec::new()),
+            belt_hits: RefCell::new(Vec::new()),
             disabled_actions: RefCell::new(Vec::new()),
             snapshot: None,
             viewport: (0, 0),
@@ -234,26 +254,7 @@ impl Hud {
         rect: egui::Rect,
         label: &str,
     ) -> egui::Response {
-        let enabled = self.actions_enabled && !self.disabled_actions.borrow().contains(&action);
-        let mut child = crate::player_panels::chrome::child_ui(ui, "hud-admission", ui.max_rect());
-        if !(enabled) {
-            child.disable();
-        }
-        let id = format!("hud:{}", action_id(action));
-        let response = child.interact(rect, egui::Id::unique(&id), egui::Sense::click());
-        frame.record(&id, label, "button", &response);
-        if response.has_focus() {
-            ui.painter().rect_stroke(
-                rect.expand(3.0),
-                2.0,
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(219, 197, 148)),
-                egui::StrokeKind::Outside,
-            );
-        }
-        if response.clicked() && enabled {
-            self.actions.borrow_mut().push(action);
-        }
-        response
+        self.action_rotated(frame, ui, action, rect, label, 0.0)
     }
     fn action_rotated(
         &self,
@@ -270,7 +271,11 @@ impl Hud {
             child.disable();
         }
         let id = format!("hud:{}", action_id(action));
-        let response = child.interact(rect, egui::Id::unique(&id), egui::Sense::click());
+        let response = child.interact(
+            rotated_bounds(rect, rect.center(), rotation),
+            egui::Id::unique(&id),
+            egui::Sense::click(),
+        );
         frame.record(&id, label, "button", &response);
         if response.has_focus() {
             ui.painter().rect_stroke(
@@ -291,13 +296,18 @@ impl Hud {
             });
         if response.clicked()
             && enabled
+            && !matches!(action, HudAction::Belt(_))
             && (valid_pointer || !ui.ctx().input(|input| input.pointer.any_released()))
         {
             self.actions.borrow_mut().push(action);
         }
         response
     }
+    pub fn belt_input_geometry(&self) -> Vec<HudBeltHit> {
+        self.belt_hits.borrow().clone()
+    }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        self.belt_hits.borrow_mut().clear();
         if !self.visible.get() {
             return Ok(());
         }
@@ -726,13 +736,19 @@ impl Hud {
                 );
             }
             let Some(entry) = entry else {
-                frame.record_rect(
-                    &format!("hud:belt:{}", self.hotbar.slot(slot)),
-                    "Empty belt slot, controller selected",
-                    "button",
-                    rect,
-                    false,
+                let mut disabled = crate::player_panels::chrome::child_ui(
+                    ui,
+                    "empty-controller-belt-slot",
+                    ui.max_rect(),
                 );
+                disabled.disable();
+                let id = format!("hud:belt:{}", self.hotbar.slot(slot));
+                let response = disabled.interact(
+                    rotated_bounds(rect, rect.center(), rotation),
+                    egui::Id::unique(&id),
+                    egui::Sense::click(),
+                );
+                frame.record(&id, "Empty belt slot, controller selected", "button", &response);
                 continue;
             };
             let row = self.quickbar[slot].as_ref();
@@ -849,12 +865,32 @@ impl Hud {
                 ),
                 rotation,
             );
-            frame.record_value(&format!("hud:belt:{}",self.hotbar.slot(slot)),&serde_json::json!({"inputScale":scale,"castEligible":!row.is_some_and(|row|row.combat_disabled),"authoritySlot":self.hotbar.slot(slot),"count":count}).to_string(),None);
+            let transform = frame.ctx.layer_transform_to_global(ui.layer_id()).unwrap_or_default();
+            self.belt_hits.borrow_mut().push(HudBeltHit {
+                slot: self.hotbar.slot(slot),
+                face: transform * rect,
+                rotation,
+                input_scale: scale as f64 * control_scale as f64,
+                cast_eligible: !row.is_some_and(|row| row.combat_disabled),
+            });
+            frame.record_value(&format!("hud:belt:{}",self.hotbar.slot(slot)),&serde_json::json!({"inputScale":scale as f64*control_scale as f64,"castEligible":!row.is_some_and(|row|row.combat_disabled),"authoritySlot":self.hotbar.slot(slot),"count":count}).to_string(),None);
             if slot == 0 {
-                frame.record("hud:secondary-slot", label, "button", &response);
+                frame.record_rect(
+                    "hud:secondary-slot",
+                    label,
+                    "button",
+                    transform * response.interact_rect,
+                    response.enabled(),
+                );
             }
             if health == Some(slot) {
-                frame.record("hud:health-potion", label, "button", &response);
+                frame.record_rect(
+                    "hud:health-potion",
+                    label,
+                    "button",
+                    transform * response.interact_rect,
+                    response.enabled(),
+                );
             }
         }
         self.hotbar_controls.paint(frame, ui, &belt, coarse, size);

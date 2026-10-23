@@ -141,6 +141,10 @@ async function modalFocus(page) {
     const touch=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
     const touchErrors=ui.watchErrors(touch);errors.push(touchErrors.errors);
     await ready(touch);
+    assert.match((await ui.widget(touch,'landscape-guidance')).label,/Rotate your device to landscape/);
+    await touch.screenshot({path:path.join(output,'menu-touch-portrait-guidance.png')});
+    await touch.setViewportSize({width:844,height:390});
+    await ui.noWidget(touch,'landscape-guidance');
     if(ui.findWidget(await ui.readUi(touch),'prompt-secondary'))await ui.tap(touch,'prompt-secondary');
     await touch.screenshot({path:path.join(output,'menu-touch-title.png')});
     await ui.tap(touch,'play');
@@ -169,6 +173,7 @@ async function modalFocus(page) {
     assert.deepEqual(touchErrors.errors,[]);
     console.log(JSON.stringify({checks:['controller College admission and sole loadout',
       'locked loadout Back','neutral handoff','controller pause','spatial focus',
-      'modal focus ownership','touch title/admission/Create','phone pause targets','actual GPU UI'],errors:errors.flat()}));
+      'modal focus ownership','source portrait guidance','landscape phone title/admission/Create',
+      'phone pause targets','actual GPU UI'],errors:errors.flat()}));
   } finally {await browser.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});

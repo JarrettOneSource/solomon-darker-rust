@@ -42,6 +42,12 @@ fn path_key(path: &str) -> String {
 }
 
 impl Images {
+    pub fn cached_texture(&self, path: &str) -> Option<Texture> {
+        match &self.0.borrow().images.get(&path_key(path))?.state {
+            ImageState::Ready(texture) => Some(texture.clone()),
+            _ => None,
+        }
+    }
     pub fn static_image_count(&self) -> usize {
         include_str!("stock-images.txt").lines().filter(|line| !line.is_empty()).count()
     }
