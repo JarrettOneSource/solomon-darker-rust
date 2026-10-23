@@ -621,11 +621,14 @@ impl Game {
         self.menu.set_enhanced_effects_authority(self.enhanced_effects_authority())?;
         self.hud.update_diagnostics(time, self.native.as_ref().and_then(NativeGame::ping_ms))?;
         let last = self.last_time.replace(time).unwrap_or(time);
+        self.commit_ui(time)?;
+        if self.editor_test_disposed() {
+            return Ok(());
+        }
         self.fit_canvas();
         let viewport = [self.canvas.client_width() as f32, self.canvas.client_height() as f32];
         let mut run = self.gpu_ui.begin_frame(&mut self.renderer, viewport, time / 1000.0)?;
         let result = (|| {
-            self.commit_ui(time)?;
             loop {
                 let more = {
                     let (gpu_ui, paint) = self.ui_painter();
@@ -635,6 +638,9 @@ impl Game {
                     break;
                 }
                 self.commit_ui(time)?;
+                if self.editor_test_disposed() {
+                    return Ok(());
+                }
             }
             self.input.set_ui_geometry(self.gpu_ui.diagnostics(), &self.hud.belt_input_geometry());
             if !self.deployment_restarting() {
@@ -652,6 +658,9 @@ impl Game {
         // Managed textures can be allocated before a later controller/action fails.
         // Always finish the transaction, including its deferred image retirements.
         self.gpu_ui.finish_frame(&mut self.renderer, run, result)?;
+        if self.editor_test_disposed() {
+            return Ok(());
+        }
         self.input.set_ui_geometry(self.gpu_ui.diagnostics(), &self.hud.belt_input_geometry());
         self.finish_ready_frame()
     }
@@ -690,6 +699,9 @@ impl Game {
                 self.menu.complete_create_loadout(false)?;
                 self.match_loading = None;
                 return Err(error);
+            }
+            if self.editor_test_disposed() {
+                return Ok(());
             }
         }
         for action in self.hud.take_actions() {
@@ -785,7 +797,7 @@ impl Game {
                 continue;
             }
             if self.is_editor_test() {
-                self.return_to_editor()?;
+                return self.return_to_editor();
             } else if self.native.is_some() {
                 self.send_native_command(
                     GameCommand::ContinueGameOver {
