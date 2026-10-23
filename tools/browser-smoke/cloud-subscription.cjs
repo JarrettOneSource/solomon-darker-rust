@@ -83,7 +83,6 @@ async function waitUntil(predicate, label, timeout = 30000) {
     subscribedSlug = subscribe.id.split(':').at(-1);
     await gpu.click(page, subscribe.id);
     await waitUntil(() => activeMods?.some(mod => mod.slug === subscribedSlug), 'actual enabled subscription');
-    await gpu.widget(page, `cloud-subscription:disable:${subscribedSlug}`);
     await gpu.click(page, 'cloud-tab:subscribed');
     const enabled = `cloud-subscription:disable:${subscribedSlug}`;
     await gpu.widget(page, enabled);
