@@ -118,8 +118,10 @@ async function finishedLoader(page) {
   return {removed:true,drawsBefore:before,drawsAfter:after};
 }
 
-async function collect(page, name, navigate) {
-  const observed=ui.watchErrors(page);
+async function collect(page, name, navigate, observed=ui.watchErrors(page)) {
+  const errorStart=observed.errors.length;
+  const warningStart=observed.warnings.length;
+  await observed.ready;
   const samples=[];
   await navigate();
   const deadline=Date.now()+240000;
@@ -147,8 +149,10 @@ async function collect(page, name, navigate) {
       await ui.assertGpuOnly(page);
       await page.screenshot({path:path.join(output,`${name}-title.png`)});
       await ui.settleErrors(page);
-      assert.deepEqual(observed.errors,[],'ordinary startup has no runtime or required asset errors');
-      return {samples,lastLoading,ready:snapshot,handoff,errors:observed.errors,warnings:observed.warnings,
+      const errors=observed.errors.slice(errorStart);
+      const warnings=observed.warnings.slice(warningStart);
+      assert.deepEqual(errors,[],'ordinary startup has no runtime or required asset errors');
+      return {samples,lastLoading,ready:snapshot,handoff,errors,warnings,
         submissions:await ui.gpuDraws(page)};
     }
     await page.waitForTimeout(50);
@@ -333,10 +337,11 @@ async function main() {
     const page=await context.newPage();
     await ui.observeGpu(page);
     await ui.observeAnnouncements(page);
-    if(selected('cold'))receipt.cold=await collect(page,'cold',()=>page.goto(url,{waitUntil:'domcontentloaded'}));
+    const observed=ui.watchErrors(page);
+    if(selected('cold'))receipt.cold=await collect(page,'cold',()=>page.goto(url,{waitUntil:'domcontentloaded'}),observed);
     if(selected('warm')) {
-      if(!selected('cold'))receipt.warmPrimer=await collect(page,'warm-primer',()=>page.goto(url,{waitUntil:'domcontentloaded'}));
-      receipt.warm=await collect(page,'warm',()=>page.reload({waitUntil:'domcontentloaded'}));
+      if(!selected('cold'))receipt.warmPrimer=await collect(page,'warm-primer',()=>page.goto(url,{waitUntil:'domcontentloaded'}),observed);
+      receipt.warm=await collect(page,'warm',()=>page.reload({waitUntil:'domcontentloaded'}),observed);
     }
     receipt.announcements=await page.evaluate(()=>({platform:window.__solomonAnnouncementPlatform,
       ownership:window.__solomonAnnouncementOwnership,events:window.__solomonAnnouncements}));
