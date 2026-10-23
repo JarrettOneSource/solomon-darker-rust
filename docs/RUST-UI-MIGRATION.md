@@ -474,3 +474,17 @@ The current GPU painter uses Georgia Bold at 9px times the full joystick scale a
 different vertical anchor. The touch repair is accepted independently; label typography,
 placement and active appearance still require the recovered Source styling and a new
 current-art visual check.
+
+The isolated `joystick-label-source/receipt.json` runs the unmodified pinned CSS and
+viewport kernel through the native browser for five viewport/UI/custom-scale/rotation
+cases. At 844 × 390 its neutral label line box is y=343.0307, height=11.0026 and bottom
+354.0333 CSS pixels; active opacity is 0.45. It qualifies typography constants only,
+not ordinary game admission or input. The correction reuses the installed Cinzel 700
+face, a unit-height GPU galley and the shared GPU group compositor for its shadow and
+opacity. [CSS Text Decoration](https://www.w3.org/TR/css-text-decor-3/#text-shadow-property)
+uses box-shadow blur values; [CSS Backgrounds](https://www.w3.org/TR/css-backgrounds-3/#shadow-blur)
+defines the corresponding Gaussian sigma as half the blur radius, so the Source 3px
+text shadow uses sigma 1.5 before joystick transforms. Passive diagnostics record the
+actual glyph mesh bounds and paint style; the original touch driver now requires
+readable glyphs, exact default-size typography and neutral/active/cancelled appearance.
+The composed build and actual corrected-art rerun are still pending.
