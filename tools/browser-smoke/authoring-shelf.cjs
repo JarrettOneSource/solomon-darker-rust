@@ -1,10 +1,11 @@
-// Actual Website editor shelf inside the Rust Cloud tab. No state setters,
+// Actual Rust GPU Shelf and Website editor journey. No state setters,
 // synthetic documents, API writes or socket sends are used by this driver.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require(path.resolve(process.env.PW));
+const gpu = require('./gpu-ui.cjs');
 
 const game = new URL(process.env.URL || 'https://127.0.0.1:9449/game-stg/');
 const website = new URL(process.env.WEBSITE_URL || game.href);
@@ -38,10 +39,36 @@ const pause = milliseconds => new Promise(resolve => setTimeout(resolve, millise
 let browser, page, step = 'registration', lastWorkshopUrl;
 
 async function library() {
-  await page.locator('iframe.boneyard-library-frame').waitFor({ state: 'visible' });
-  const frame = page.frameLocator('iframe.boneyard-library-frame');
-  await frame.getByRole('button', { name: 'NEW BONEYARD', exact: true }).waitFor();
-  return frame;
+  await gpu.ready(page);
+  await gpu.widget(page, 'boneyards/new', {enabled:true});
+  await gpu.assertGpuOnly(page);
+  assert.equal(page.frames().length, 1, 'the game Shelf is painted by Rust with no visual iframe');
+}
+
+function rowPrefix(shelf, action) {
+  return `boneyards/${action}:${shelf === 'In the cloud' ? 'cloud' : 'local'}:`;
+}
+
+async function shelfWidget(shelf, name, action = 'edit') {
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    const snapshot = await gpu.readUi(page);
+    const found = snapshot.widgets.filter(widget => widget.id.startsWith(rowPrefix(shelf, action))
+      && widget.value === name);
+    assert.ok(found.length <= 1, `${shelf} contains one matching ${action} action for ${name}`);
+    if (found[0]) return found[0];
+    await gpu.wheel(page, 'cloud-boneyards-content', 0, attempt === 0 ? -2500 : 200);
+    await pause(120);
+  }
+  throw new Error(`The actual visible Shelf has no ${action} action for ${shelf}: ${name}`);
+}
+
+async function focusWithTab(id) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (gpu.findWidget(await gpu.readUi(page), id)?.focused) return;
+    await page.keyboard.press('Tab');
+    await pause(30);
+  }
+  assert.fail(`Actual keyboard Tab did not reach ${id}`);
 }
 
 async function recordAssetStartup(target, label, started) {
@@ -53,12 +80,6 @@ async function recordAssetStartup(target, label, started) {
   assetStartups.push(startup);
   console.log(JSON.stringify({ asset_ready: label, elapsed_ms: startup.elapsed_ms,
     resources: resources.length }));
-}
-
-function row(frame, shelf, name) {
-  return frame.locator(`section[aria-label="${shelf}"] li`).filter({
-    has: frame.getByRole('button', { name: `Edit ${name}`, exact: true }),
-  });
 }
 
 async function editor() {
@@ -73,12 +94,9 @@ async function back() {
   await page.getByRole('button', { name: /The Dark Cloud/ }).click();
   await page.waitForURL(url => url.origin === game.origin && url.pathname === game.pathname
     && url.searchParams.get('dark-cloud') === 'boneyards');
-  // Back creates a fresh game document. Game::load clears this existing status
-  // only after resident stock assets and audio finish loading.
-  await page.waitForFunction(() => document.getElementById('status')?.textContent === '',
-    null, { timeout: 240000 });
+  await gpu.ready(page);
   await recordAssetStartup(page, `library-return-${assetStartups.length + 1}`, started);
-  return library();
+  await library();
 }
 
 async function saveName(name) {
@@ -86,10 +104,10 @@ async function saveName(name) {
   await page.getByText('Saved locally', { exact: true }).waitFor();
 }
 
-async function testRow(frame, shelf, name, label) {
+async function testRow(shelf, name, label) {
   const before = sockets.length;
   const started = Date.now();
-  await row(frame, shelf, name).getByRole('button', { name: `Test ${name}`, exact: true }).click();
+  await gpu.click(page, (await shelfWidget(shelf, name, 'test')).id);
   await page.waitForURL(url => url.pathname === `${mount}/boneyard`);
   await page.waitForFunction(() => window.shelfPresentationTrace.some(event =>
     event.kind === 'solomon-editor-test-state' && (event.state === 'error'
@@ -101,6 +119,8 @@ async function testRow(frame, shelf, name, label) {
   assert.ok(test, 'the shelf Test opens the real disposable Rust runtime');
   await recordAssetStartup(test, label, started);
   await page.locator('[data-editor-test-state="playing"]').waitFor();
+  await gpu.ready(test);
+  await gpu.assertGpuOnly(test);
   const tick = await test.evaluate(() => window.wasmBindings.wizard_state()[5]);
   await test.waitForFunction(tick => window.wasmBindings.wizard_state()[5] > tick + 20, tick);
   await page.screenshot({ path: path.join(out, `${label}-playing.png`) });
@@ -119,27 +139,23 @@ async function testRow(frame, shelf, name, label) {
   return back();
 }
 
-async function confirmDelete(frame, shelf, name) {
-  const section = frame.locator(`section[aria-label="${shelf}"]`);
-  const target = row(frame, shelf, name);
-  await target.getByRole('button', { name: `Delete ${name}`, exact: true }).click();
-  const keep = section.getByRole('button', { name: `Keep ${name}`, exact: true });
-  await keep.waitFor();
-  assert.equal(await keep.evaluate(node => document.activeElement === node), true);
-  await keep.click();
-  assert.equal(await row(frame, shelf, name).count(), 1, 'a repeated click on the safe button keeps the draft');
-  await row(frame, shelf, name).getByRole('button', { name: `Delete ${name}`, exact: true }).click();
-  await section.getByRole('button', { name: `Delete ${name}`, exact: true }).click();
-  // Edit is already absent during confirmation. Await the actual deletion
-  // receipt instead, particularly while cloud removal is still pending.
+async function confirmDelete(shelf, name) {
+  const safe = (await shelfWidget(shelf, name, 'safe')).id;
+  await gpu.click(page, safe);
+  await gpu.waitForUi(page, snapshot => {
+    const keep = gpu.findWidget(snapshot, safe);
+    return keep?.label === `Keep ${name}` && keep.selected === true;
+  }, 'the same last row button becomes safe Keep');
+  await gpu.focused(page, safe);
+  await gpu.click(page, safe);
+  await shelfWidget(shelf, name);
+  assert.equal((await gpu.widget(page, safe)).label, `Delete ${name}`,
+    'a repeated click on the stable safe button keeps the draft');
+  await gpu.click(page, safe);
+  await gpu.click(page, safe.replace('boneyards/safe:', 'boneyards/confirm:'));
   const location = shelf === 'In the cloud' ? 'the cloud' : 'this device';
-  await frame.getByRole('status').filter({ hasText: `Deleted ${name} from ${location}.` }).waitFor();
-  const newButton = frame.getByRole('button', { name: 'NEW BONEYARD', exact: true });
-  for (let attempt = 0; attempt < 50; attempt++) {
-    if (await newButton.evaluate(node => document.activeElement === node)) return;
-    await pause(20);
-  }
-  assert.fail('confirmed deletion did not return focus to New');
+  await gpu.value(page, 'boneyards/status', `Deleted ${name} from ${location}.`);
+  await gpu.focused(page, 'boneyards/new');
 }
 
 (async () => {
@@ -230,27 +246,36 @@ async function confirmDelete(frame, shelf, name) {
 
     step = 'Explore Boneyards';
     await page.goto(game.href, { timeout: 240000 });
-    await page.locator('.title-prompt[aria-label="PLAY THE TUTORIAL?"]').waitFor({ timeout: 240000 });
-    await page.locator('[data-menu-action="prompt-secondary"]').click();
-    await page.locator('.title-prompt').waitFor({ state: 'hidden' });
-    await page.locator('[data-menu-action="explore"]').click();
-    await page.locator('[data-menu-action="cloud-tab:boneyards"]').click();
-    let frame = await library();
-    assert.equal(await frame.locator('.boneyard-library-document').getAttribute('data-parent-narrow'), 'false');
+    await gpu.ready(page);
+    if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) {
+      await gpu.click(page, 'prompt-secondary');
+      await gpu.noWidget(page, 'prompt-secondary');
+    }
+    await gpu.click(page, 'explore');
+    await gpu.click(page, 'cloud-tab:boneyards');
+    await library();
     await page.screenshot({ path: path.join(out, 'shelf-desktop.png') });
     await page.setViewportSize({ width: 390, height: 844 });
-    await frame.locator('.boneyard-library-document[data-parent-narrow="true"]').waitFor();
+    await gpu.waitForUi(page, snapshot => {
+      const button = gpu.findWidget(snapshot, 'boneyards/new');
+      return button && button.rect[0] >= 0 && button.rect[0] + button.rect[2] <= 390;
+    }, 'the real Shelf header fits the phone viewport');
+    const phoneNew = gpu.bounds(await gpu.widget(page, 'boneyards/new'));
+    const phoneImport = gpu.bounds(await gpu.widget(page, 'boneyards/import'));
+    assert.ok(phoneNew.y + phoneNew.height <= phoneImport.y
+      || phoneNew.x + phoneNew.width <= phoneImport.x, 'responsive Shelf tools do not overlap');
+    await gpu.assertGpuOnly(page);
     await page.screenshot({ path: path.join(out, 'shelf-phone.png') });
     await page.setViewportSize({ width: 1600, height: 900 });
-    await frame.getByRole('button', { name: 'NEW BONEYARD', exact: true }).focus();
+    await focusWithTab('boneyards/new');
     await page.keyboard.press('Escape');
-    await page.locator('.game-menus[data-menu-screen="pause"]').waitFor();
-    await page.locator('[data-menu-action="resume"]').click();
-    frame = await library();
-    checked('Explore mounts the same-origin shelf, parent-responsive layout and focused iframe menu key');
+    await gpu.surface(page, 'pause');
+    await gpu.click(page, 'resume');
+    await library();
+    checked('Explore paints the Rust GPU Shelf, responds to the parent viewport and preserves the focused menu key');
 
     step = 'New, export and cloud save';
-    await frame.getByRole('button', { name: 'NEW BONEYARD', exact: true }).click();
+    await gpu.click(page, 'boneyards/new');
     await editor();
     await saveName(importName);
     await page.getByRole('button', { name: 'File ▾', exact: true }).click();
@@ -265,44 +290,47 @@ async function confirmDelete(frame, shelf, name) {
     await page.getByRole('button', { name: 'Save to cloud', exact: true }).click();
     await cloudWrite;
     await page.getByText('Draft saved to the cloud.', { exact: true }).waitFor();
-    frame = await back();
-    await row(frame, 'On this device', localName).waitFor();
-    await row(frame, 'In the cloud', localName).waitFor();
+    await back();
+    await shelfWidget('On this device', localName);
+    await shelfWidget('In the cloud', localName);
     checked('New reaches the top-level editor and ordinary autosave/export/cloud save populate both shelves');
 
     step = 'Import and local Edit';
-    await frame.locator('input[type="file"]').setInputFiles(exported);
-    await row(frame, 'On this device', importName).waitFor();
-    await row(frame, 'On this device', localName).getByRole('button', { name: `Edit ${localName}`, exact: true }).click();
+    const choosing = page.waitForEvent('filechooser');
+    await gpu.click(page, 'boneyards/import');
+    await (await choosing).setFiles(exported);
+    await shelfWidget('On this device', importName);
+    await gpu.click(page, (await shelfWidget('On this device', localName)).id);
     await editor();
     assert.equal(await page.getByLabel('Name', { exact: true }).inputValue(), localName);
     const consumedUrl = lastWorkshopUrl;
-    frame = await back();
+    await back();
     await page.goto(consumedUrl);
     await page.getByRole('alert').filter({ hasText: 'no longer available' }).waitFor();
-    frame = await back();
-    await confirmDelete(frame, 'On this device', importName);
+    await back();
+    await confirmDelete('On this device', importName);
     checked('real export imports locally; Edit consumes once; repeated Delete becomes Keep and confirmed deletion restores New focus');
 
     step = 'local and cloud Test';
-    frame = await testRow(frame, 'On this device', localName, 'local-test');
-    frame = await testRow(frame, 'In the cloud', localName, 'cloud-test');
+    await testRow('On this device', localName, 'local-test');
+    await testRow('In the cloud', localName, 'cloud-test');
 
     step = 'cloud Edit and Delete';
-    await row(frame, 'In the cloud', localName).getByRole('button', { name: `Edit ${localName}`, exact: true }).click();
+    await gpu.click(page, (await shelfWidget('In the cloud', localName)).id);
     await editor();
     assert.equal(await page.getByLabel('Name', { exact: true }).inputValue(), localName);
-    frame = await back();
-    await confirmDelete(frame, 'In the cloud', localName);
-    assert.equal(await row(frame, 'On this device', localName).count(), 1, 'cloud deletion preserves the actual local copy');
+    await back();
+    await confirmDelete('In the cloud', localName);
+    await shelfWidget('On this device', localName);
+    checked('cloud deletion preserves the actual local copy');
     await page.screenshot({ path: path.join(out, 'shelf-complete.png') });
     checked('cloud Edit/Test/Delete use real API rows and cloud deletion preserves the local draft');
     assert.deepEqual(errors, []);
-    checked('the complete mounted journey has no browser, API or runtime errors');
+    checked('the complete GPU Shelf/editor journey has no browser, API or runtime errors');
   } catch (error) {
     failure = { step, error: redact(error.stack || error.message), url: page?.url() };
     if (page) {
-      failure.status = await page.locator('#status').textContent({ timeout: 1000 }).catch(() => null);
+      failure.gpu = await gpu.readUi(page).catch(() => null);
       failure.frames = page.frames().map(frame => new URL(frame.url()).pathname);
       lifecycle.push({ label: 'failure', events: await page.evaluate(() => window.shelfPresentationTrace) });
       await page.screenshot({ path: path.join(out, 'failure.png') }).catch(() => {});

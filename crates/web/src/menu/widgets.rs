@@ -350,7 +350,20 @@ pub(crate) fn cloud_button(
     scale: f32,
     enabled: bool,
 ) -> Response {
-    let response = interact(frame, ui, id, label, "button", rect, enabled);
+    cloud_button_with_label(frame, ui, id, label, label, rect, scale, enabled)
+}
+
+pub(crate) fn cloud_button_with_label(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    label: &str,
+    accessible_label: &str,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+) -> Response {
+    let response = interact(frame, ui, id, accessible_label, "button", rect, enabled);
     let opacity = if enabled { 1.0 } else { 0.5 };
     let pressed = enabled && response.is_pointer_button_down_on();
     paint_stock_button_tinted(frame, ui, rect, scale, enabled, pressed, alpha(0xffffff, opacity));
