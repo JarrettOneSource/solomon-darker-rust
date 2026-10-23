@@ -200,7 +200,6 @@ impl PlayerPanels {
                         )
                     },
                 );
-                let input_id = egui::Id::unique("sack-rename:name");
                 let pending = dialog.pending_name.is_some();
                 let mut child =
                     crate::player_panels::chrome::child_ui(ui, "hud-admission", ui.max_rect());
@@ -208,7 +207,6 @@ impl PlayerPanels {
                     child.disable();
                 }
                 let before = dialog.draft.clone();
-                let mut buffer = Utf16Name(&mut dialog.draft);
                 if let Err(message) = self.control_panel.paint_frame(
                     frame,
                     ui.painter(),
@@ -219,23 +217,20 @@ impl PlayerPanels {
                 ) {
                     error = Some(message);
                 }
-                let response = child.put(
-                    rect(field),
-                    egui::TextEdit::singleline(&mut buffer)
-                        .id(input_id)
-                        .font(egui::FontId::new(22.0, egui::FontFamily::Name("Georgia".into())))
-                        .desired_width(field.width as f32),
-                );
-                frame.record("panel:sack-rename:name", "Sack name", "textbox", &response);
-                frame.record_value("panel:sack-rename:name", &dialog.draft, None);
-                if dialog.focus_next {
-                    response.request_focus();
-                    let mut state =
-                        egui::TextEdit::load_state(frame.ctx, input_id).unwrap_or_default();
-                    state.cursor.set_char_range(Some(egui::text::CCursorRange::select_all_str(
-                        &dialog.draft,
-                    )));
-                    state.store(frame.ctx, input_id);
+                let response = crate::gpu_ui::NativeTextEdit::singleline(
+                    &mut dialog.draft,
+                    "panel:sack-rename:name",
+                    "Sack name",
+                )
+                .font(egui::FontId::new(22.0, egui::FontFamily::Name("Georgia".into())))
+                .rules(crate::gpu_ui::EditorRules {
+                    utf16_limit: Some(INVENTORY_SACK_NAME_MAX_LENGTH),
+                    ..Default::default()
+                })
+                .request_focus(dialog.focus_next)
+                .select_all(dialog.focus_next)
+                .show(frame, &mut child, rect(field));
+                if child.is_visible() && response.has_focus() {
                     dialog.focus_next = false;
                 }
                 if before != dialog.draft {
@@ -293,11 +288,7 @@ impl PlayerPanels {
                     }) {
                         close = true;
                     }
-                    if valid
-                        && frame.ctx.input_mut(|input| {
-                            input.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
-                        })
-                    {
+                    if valid && response.submitted {
                         submit = true;
                     }
                 }
@@ -320,56 +311,9 @@ impl PlayerPanels {
     }
 }
 
-/// HTML maxlength is measured in UTF-16 units, including supplementary characters.
-struct Utf16Name<'a>(&'a mut String);
-impl egui::TextBuffer for Utf16Name<'_> {
-    fn type_id(&self) -> std::any::TypeId {
-        std::any::TypeId::of::<String>()
-    }
-    fn is_mutable(&self) -> bool {
-        true
-    }
-    fn as_str(&self) -> &str {
-        self.0
-    }
-    fn insert_text(&mut self, text: &str, index: egui::text::CharIndex) -> usize {
-        let capacity = INVENTORY_SACK_NAME_MAX_LENGTH.saturating_sub(self.0.encode_utf16().count());
-        let mut units = 0;
-        let inserted = text
-            .chars()
-            .take_while(|c| {
-                units += c.len_utf16();
-                units <= capacity
-            })
-            .collect::<String>();
-        let byte = self.0.char_indices().nth(index.0).map_or(self.0.len(), |(index, _)| index);
-        self.0.insert_str(byte, &inserted);
-        inserted.chars().count()
-    }
-    fn delete_char_range(&mut self, range: std::ops::Range<egui::text::CharIndex>) {
-        let start =
-            self.0.char_indices().nth(range.start.0).map_or(self.0.len(), |(index, _)| index);
-        let end = self.0.char_indices().nth(range.end.0).map_or(self.0.len(), |(index, _)| index);
-        self.0.replace_range(start..end, "");
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui::TextBuffer;
-    #[test]
-    fn supplementary_characters_respect_the_actual_utf16_limit() {
-        let mut draft = "a".repeat(29);
-        let mut buffer = Utf16Name(&mut draft);
-        assert_eq!(buffer.insert_text("😀😀", egui::text::CharIndex(29)), 1);
-        assert_eq!(buffer.as_str().encode_utf16().count(), 31);
-        assert_eq!(buffer.insert_text("😀", egui::text::CharIndex(30)), 0);
-        assert_eq!(buffer.insert_text("z", egui::text::CharIndex(0)), 1);
-        assert_eq!(buffer.as_str().encode_utf16().count(), 32);
-        buffer.delete_char_range(egui::text::CharIndex(30)..egui::text::CharIndex(31));
-        assert_eq!(buffer.as_str(), format!("z{}", "a".repeat(29)));
-    }
     #[test]
     fn rejected_receipt_preserves_the_draft_and_unlocks_only_its_own_request() {
         let mut dialog = SackRenameDialog {

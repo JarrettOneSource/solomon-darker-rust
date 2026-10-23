@@ -59,10 +59,6 @@ impl LayoutsView {
         Ok(())
     }
     pub fn activate(&mut self, action: &str, next: &mut u64) -> Result<bool, String> {
-        if action == "cloud-layout-edited" {
-            self.normalize();
-            return Ok(true);
-        }
         if action == "cloud-copy-layout" {
             if let Some((_, layout)) = &self.shared {
                 let promise = web_sys::window()
@@ -110,20 +106,7 @@ impl LayoutsView {
         });
         Ok(true)
     }
-    fn normalize(&mut self) {
-        let compact: String = self
-            .input
-            .to_uppercase()
-            .chars()
-            .filter(|c| "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".contains(*c))
-            .take(8)
-            .collect();
-        self.input = if compact.len() > 4 {
-            format!("{}-{}", &compact[..4], &compact[4..])
-        } else {
-            compact
-        };
-    }
+
     pub fn complete(
         &mut self,
         id: u64,
@@ -253,10 +236,12 @@ impl LayoutsView {
                     16.0,
                     enabled && !busy,
                     false,
+                    crate::gpu_ui::EditorRules {
+                        normalize: Some(normalize_layout_code),
+                        ..Default::default()
+                    },
+                    "",
                 );
-                if response.changed() {
-                    self.normalize();
-                }
                 frame.record_value("dark-cloud-layout-code", &self.input, None);
                 let admitted = enabled && !busy && self.input.len() == 9;
                 if admitted && widgets::submitted_on_enter(&response) {
@@ -395,4 +380,14 @@ impl LayoutsView {
         }
         Ok(())
     }
+}
+
+fn normalize_layout_code(value: &str) -> String {
+    let compact: String = value
+        .to_uppercase()
+        .chars()
+        .filter(|c| "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".contains(*c))
+        .take(8)
+        .collect();
+    if compact.len() > 4 { format!("{}-{}", &compact[..4], &compact[4..]) } else { compact }
 }

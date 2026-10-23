@@ -236,6 +236,24 @@ keeps Unicode tables in maintained libraries instead of hand-written character r
 Browser rendering/input acceptance must cover the complete caller cutover, including
 multiline editing, joined scripts, selection, undo and composition before completion.
 
+The one nonvisual textarea carries accepted full-value/UTF-16 selection snapshots and
+immutable native edit intents. Field-owned normalization and validation run synchronously
+before the next native dispatch. Rust replays those intents between the existing ordered
+UI passes, so an earlier Clear/history action cannot be overwritten by a later stale
+transport snapshot. Reconciliation acknowledges delivered or discarded receipt sequences;
+an earlier layout cannot retire a later native field/composition. Clipboard events write
+their trusted native data synchronously. Enter submission is a per-dispatch result and
+does not surrender single-line focus.
+
+Font rows preserve complete native shaping, disjoint bidi selection rectangles and
+pointer caret affinity. UAX#14 wrapping uses native `Intl.Segmenter` dictionary boundaries
+for complex-context scripts. Browser tabs keep their original accepted value; only font
+raster input substitutes the nonprinting U+001F segment separator so Canvas does not
+normalize TAB into a space and change bidi ordering. Native full-context font pixels are
+positioned at the Source tab stops (Console: two spaces) with the same geometry used for
+selection. The native tab/embedding and selection probes are retained in the October23
+full-UI task. This is font geometry and text rasterization, not a rendered DOM control.
+
 **Superseded: the HUD used browser DOM with stock atlas sprites and repeated strips.** The world stays
 in WebGL; the screen-space HUD uses the browser's existing layout, hit testing and accessible
 buttons. `web/ui.rs` reads the same stock bundles as the renderer and projects the sprites,

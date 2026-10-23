@@ -1697,6 +1697,8 @@ impl CloudView {
                 16.0,
                 true,
                 false,
+                crate::gpu_ui::EditorRules::default(),
+                "",
             );
             frame.record_value("dark-cloud-search-input", input, None);
             if widgets::submitted_on_enter(&response) {

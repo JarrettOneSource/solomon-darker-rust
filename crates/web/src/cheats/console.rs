@@ -145,25 +145,27 @@ impl ConsoleView {
             }
         }
         ui.label(copy("LUA", 11.0));
-        let response = ui.add_sized(
-            vec2(ui.available_width(), 150.0),
-            egui::TextEdit::multiline(&mut self.editor)
-                .id(Id::unique("cheats/lua-editor"))
-                .code_editor()
+        let (_, field) = ui.allocate_space(vec2(ui.available_width(), 150.0));
+        let response =
+            crate::gpu_ui::NativeTextEdit::multiline(&mut self.editor, "cheats/lua-editor", "LUA")
+                .code_editor(true)
+                .tab_size(2.0)
+                .line_height(13.0 * 1.55)
+                .margin(vec2(12.0, 12.0))
                 .font(FontId::new(13.0, FontFamily::Name("JetBrains Mono".into())))
-                .text_color(Color32::from_rgb(229, 225, 211))
-                .background_color(Color32::from_rgb(5, 6, 7))
-                .desired_width(f32::INFINITY),
-        );
-        gpu.record("cheats/lua-editor", "LUA", "textbox", &response);
-        gpu.record_value("cheats/lua-editor", &self.editor, None);
-        if self.focus {
-            response.request_focus();
+                .color(Color32::from_rgb(233, 225, 200))
+                .background(Color32::from_rgb(8, 10, 8))
+                .rules(crate::gpu_ui::EditorRules {
+                    utf16_limit: Some(MAX_LUA_CONSOLE_CODE_LENGTH),
+                    ..Default::default()
+                })
+                .request_focus(self.focus)
+                .show(gpu, ui, field);
+        if ui.is_visible() && response.has_focus() {
             self.focus = false;
         }
         if response.changed() {
             self.history_cursor = None;
-            truncate_utf16(&mut self.editor, MAX_LUA_CONSOLE_CODE_LENGTH);
         }
         let busy = self.pending.is_some() || self.next_code.is_some();
         let count = localized_count(self.editor.encode_utf16().count())?;
@@ -251,27 +253,4 @@ fn localized_count(count: usize) -> Result<String, String> {
         .map_err(|_| "format Lua code length")?
         .as_string()
         .ok_or_else(|| "Lua code length is not text".into())
-}
-fn truncate_utf16(text: &mut String, maximum: usize) {
-    let mut units = 0;
-    for (index, character) in text.char_indices() {
-        units += character.len_utf16();
-        if units > maximum {
-            text.truncate(index);
-            return;
-        }
-    }
-}
-#[cfg(test)]
-mod tests {
-    use super::truncate_utf16;
-    #[test]
-    fn lua_editor_limit_counts_utf16_without_cutting_a_unicode_character() {
-        let mut value = "A😀βZ".to_owned();
-        truncate_utf16(&mut value, 4);
-        assert_eq!(value, "A😀β");
-        let mut value = "A😀βZ".to_owned();
-        truncate_utf16(&mut value, 2);
-        assert_eq!(value, "A");
-    }
 }

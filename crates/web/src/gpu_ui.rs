@@ -6,6 +6,7 @@
 
 mod accessibility;
 mod batches;
+mod edit;
 mod fonts;
 mod geometry;
 mod input;
@@ -23,6 +24,10 @@ use web_sys::{Document, HtmlCanvasElement};
 
 use solomon_graphics::{BlendMode, Renderer};
 
+pub use edit::{
+    EditorRules, FontRunOptions, NativeEditOutput, NativeFontRun, NativeLabelStyle, NativeTextEdit,
+    TextSelection, font_run, font_run_with_options, shaped_label, text_edit_focused,
+};
 pub use geometry::clip_polygon_ellipse;
 pub use input::{BrowserKey, canvas_point, key_from_browser};
 pub use painter::clip_scissor;
@@ -180,11 +185,17 @@ pub struct UiFrame<'a> {
     input_scope: &'a RefCell<Option<String>>,
     retired_images: &'a RefCell<Vec<String>>,
     focus_from_keyboard: bool,
+    editor_receipts: &'a [edit::model::Receipt],
+    editors: &'a RefCell<Vec<edit::EditorDescriptor>>,
+    editor_errors: &'a RefCell<Vec<String>>,
 }
 
 impl UiFrame<'_> {
+    pub(crate) fn fail(&self, error: String) {
+        self.editor_errors.borrow_mut().push(error);
+    }
     pub fn focus_visible(&self, response: &Response) -> bool {
-        response.has_focus() && (self.focus_from_keyboard || self.ctx.text_edit_focused())
+        response.has_focus() && (self.focus_from_keyboard || text_edit_focused(self.ctx))
     }
 
     /// Retires a dynamic image after every mesh from this frame has been submitted.
@@ -213,6 +224,9 @@ impl UiFrame<'_> {
             input_scope: self.input_scope,
             retired_images: self.retired_images,
             focus_from_keyboard: self.focus_from_keyboard,
+            editor_receipts: self.editor_receipts,
+            editors: self.editors,
+            editor_errors: self.editor_errors,
         }
     }
     pub fn with_rotation(&self, pivot: Pos2, radians: f32) -> UiFrame<'_> {
@@ -696,7 +710,11 @@ impl GpuUi {
         mut paint: impl FnMut(&mut UiFrame<'_>) -> Result<(), String>,
     ) -> Result<(), String> {
         let raw = run.layout_input.clone();
-        self.paint_pass(run, batches::InputPass { raw, codes: Vec::new() }, &mut paint)
+        self.paint_pass(
+            run,
+            batches::InputPass { raw, codes: Vec::new(), edits: Vec::new() },
+            &mut paint,
+        )
     }
 
     fn paint_pass(
@@ -727,6 +745,8 @@ impl GpuUi {
         let announcements = RefCell::new(Vec::new());
         let input_scope = RefCell::new(None);
         let retired_images = RefCell::new(Vec::new());
+        let editors = RefCell::new(Vec::new());
+        let editor_errors = RefCell::new(Vec::new());
         let mut result = Ok(());
         let mut output = self.ctx.run_pass(pass.raw, |ctx| {
             result = paint(&mut UiFrame {
@@ -742,11 +762,20 @@ impl GpuUi {
                 input_scope: &input_scope,
                 retired_images: &retired_images,
                 focus_from_keyboard: self.focus_from_keyboard,
+                editor_receipts: &pass.edits,
+                editors: &editors,
+                editor_errors: &editor_errors,
             });
         });
         run.textures.append(std::mem::take(&mut output.textures_delta));
         run.retired_images.extend(retired_images.into_inner());
         result?;
+        if let Some(error) = editor_errors.into_inner().into_iter().next() {
+            return Err(error);
+        }
+        let editors = editors.into_inner();
+        edit::set_focus(&self.ctx, &editors);
+        self.input.set_editors(editors, pass.edits.last().map(|receipt| receipt.sequence))?;
         self.widgets = widgets.into_inner();
         if let Some(widget) = self.widgets.values().find(|widget| widget.duplicate) {
             let error = format!("GPU UI widget id {} was painted more than once", widget.id);
@@ -771,8 +800,8 @@ impl GpuUi {
                         .values()
                         .any(|widget| widget.is_interactive() && widget.contains(point))
                 }),
-            keyboard: self.ctx.egui_wants_keyboard_input(),
-            text: output.platform_output.ime.is_some(),
+            keyboard: self.ctx.egui_wants_keyboard_input() || text_edit_focused(&self.ctx),
+            text: text_edit_focused(&self.ctx),
         };
         self.input.apply_output(&output.platform_output, capture)?;
         self.accessibility.update(

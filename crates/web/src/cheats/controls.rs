@@ -2,7 +2,7 @@
 
 use super::{CheatFrame, button, copy};
 use crate::gpu_ui::UiFrame;
-use egui::{Color32, FontFamily, FontId, Id, RichText, Stroke, vec2};
+use egui::{Color32, FontFamily, FontId, RichText, Stroke, vec2};
 use solomon_sim::menu::cheats::{
     CHEAT_MENU_EXPERIENCE_MAX, CHEAT_MENU_GOLD_MAX, CHEAT_MENU_RUN_SEED_MAX,
     CHEAT_MENU_SPAWN_COUNT_MAX, CheatMenuAction, CheatMenuCatalogs,
@@ -543,17 +543,14 @@ fn select(
 }
 fn field(gpu: &UiFrame<'_>, ui: &mut egui::Ui, id: &str, label: &str, value: &mut String) -> bool {
     ui.label(copy(label, 11.0));
-    let response = ui.add(
-        egui::TextEdit::singleline(value)
-            .id(Id::unique(("cheats", id)))
-            .font(FontId::new(13.0, FontFamily::Name("Cinzel Bold".into())))
-            .text_color(Color32::from_rgb(243, 226, 169))
-            .background_color(Color32::from_rgb(10, 9, 7))
-            .desired_width(ui.available_width()),
-    );
-    gpu.record(&format!("cheats/{id}"), label, "textbox", &response);
-    gpu.record_value(&format!("cheats/{id}"), value, None);
-    response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter))
+    let (_, rect) = ui.allocate_space(egui::vec2(ui.available_width(), 26.0));
+    let stable_id = format!("cheats/{id}");
+    crate::gpu_ui::NativeTextEdit::singleline(value, &stable_id, label)
+        .font(FontId::new(13.0, FontFamily::Name("Cinzel Bold".into())))
+        .color(Color32::from_rgb(243, 226, 169))
+        .background(Color32::from_rgb(10, 9, 7))
+        .show(gpu, ui, rect)
+        .submitted
 }
 fn inline(
     gpu: &UiFrame<'_>,

@@ -135,7 +135,7 @@ pub(super) fn take_error() -> Option<String> {
     GLYPH_ERROR.with(|slot| slot.borrow_mut().take())
 }
 
-fn font_css(family: &FontFamily, size: f32) -> String {
+pub(super) fn font_css(family: &FontFamily, size: f32) -> String {
     let name = match family {
         FontFamily::Name(name) => name.as_ref(),
         FontFamily::Monospace => "JetBrains Mono",
