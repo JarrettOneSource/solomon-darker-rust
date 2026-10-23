@@ -4,6 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const root=path.resolve(__dirname,'../..');
+const fontProbePath='crates/web/src/gpu_ui/edit/font_run.rs';
 function rustFiles(directory) {
   return fs.readdirSync(directory,{withFileTypes:true}).flatMap(entry=>{
     const filename=path.join(directory,entry.name);
@@ -37,10 +38,28 @@ test('Rust creates only platform adapter DOM elements',()=>{
         forbidden.push(`${filename}: ${match[0]}`);
       }
     }
-    if(/\.create_element_ns\s*\(|\.set_inner_html\s*\(/.test(text))forbidden.push(filename);
+    for(const match of text.matchAll(/\.create_element_ns\s*\(([^)]*)\)/g)) {
+      const fontProbe=filename===fontProbePath
+        && /^\s*namespace,\s*"(?:svg|text)"\s*$/.test(match[1]);
+      if(!fontProbe)forbidden.push(`${filename}: ${match[0]}`);
+    }
+    if(/\.set_inner_html\s*\(/.test(text))forbidden.push(filename);
     if(/\bHtmlIFrameElement\b/.test(text))forbidden.push(`${filename}: visual iframe`);
   }
   assert.deepEqual(forbidden,[],'no legacy visual DOM factory, SVG or iframe survives');
+});
+
+test('the native font probe stays hidden, noninteractive and transient',()=>{
+  const probe=sources.find(({filename})=>filename===fontProbePath);
+  if(!probe)return;
+  const {text}=probe;
+  assert.match(text,/let namespace\s*=\s*Some\("http:\/\/www\.w3\.org\/2000\/svg"\)/);
+  for(const [name,value]of [['data-gpu-font-metrics',''],['aria-hidden','true'],['focusable','false']]) {
+    assert.ok(text.includes(`("${name}", "${value}")`),`font probe retains ${name}`);
+  }
+  assert.ok(text.includes('position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;overflow:hidden'));
+  assert.match(text,/let result\s*=\s*f\(probe\);\s*probe\.root\.remove\(\);\s*result/,
+    'measurement success and failure both remove the native typography probe');
 });
 
 test('the GPU renderer cannot rasterize HTML as a visual substitute',()=>{

@@ -469,6 +469,15 @@ messages or mirror controls. Unmounted native download anchors and hidden audio/
 adapters remain platform capabilities; mounted visual anchors and hidden gameplay controls
 still fail the browser audit.
 
+The native font-run geometry adapter is limited to
+`gpu_ui/edit/font_run.rs`: an SVG root with one text child, marked `data-gpu-font-metrics`,
+hidden and noninteractive, attaches only for synchronous typography measurement and is
+removed after success or failure. It measures native joining, bidi caret and selection
+geometry; an unattached canvas paints text-only GPU tiles. The source audit permits only
+those exact SVG/text constructors in that module and checks the hidden/transient contract.
+Other SVG producers and every HTML screenshot/control facade remain rejected. Runtime
+GPU-only acceptance still requires the transient probe to be absent between operations.
+
 Layout assertions use original `paintRect` glyph/card bounds. Visible clipped hit `rect`
 remains the pointer target, so clipping cannot make an overflowing title, tooltip or Tutorial
 instruction appear to pass. HUD blur uses an actual browser tab focus change; touch cancellation
@@ -548,3 +557,22 @@ prevent browser pan/zoom, which cancels the pointer stream. Restore that nonvisu
 platform input policy on the actual game canvas at adapter attachment. Keep genuine
 pointer capture, explicit cancel/blur clearing, GPU joystick state and movement checks;
 no keyboard, synthetic game command, delayed gesture or hidden control substitutes for it.
+
+The original nine-part HUD input journey now passes on 24382f0, including genuine
+coarse-pointer movement, native touch cancellation, zero accepted movement afterward,
+neutral painted joystick and no joystick keyboard focus. The desktop geometry, wide layout,
+stick/D-pad priority, drift and actual tab blur checks also pass. Evidence and reviewed
+screenshots are in `common-browser/24382f0/hud-input-verified`; the process and owned Chrome
+both exit zero with no unexpected errors. The earlier same-artifact run passed the behavior
+but correctly failed its stale cleanup's TouchEnd after TouchCancel; that raw failure is
+retained rather than rewritten.
+
+That screenshot also exposes a remaining visual port gap: the MOVE label is about four
+pixels high. Pinned fa08 `input/touch-joystick.css:49` uses Cinzel 700 via `--font-display`,
+an 11px font divided by `--hud-display-scale`, unit line height, bottom 24px, 0.06em spacing
+and active opacity 0.45. `HubScene.tsx:953` applies the same display scale to the native
+frame, so the inverse font scaling preserves an 11px label at default UI/custom scale.
+The current GPU painter uses Georgia Bold at 9px times the full joystick scale and a
+different vertical anchor. The touch repair is accepted independently; label typography,
+placement and active appearance still require the recovered Source styling and a new
+current-art visual check.
