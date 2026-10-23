@@ -71,7 +71,7 @@ pub enum Intent {
 
 #[derive(Clone, Debug)]
 pub struct Receipt {
-    pub id: Option<egui::Id>,
+    pub owner: Option<super::EditorOwner>,
     pub sequence: u64,
     pub time: f64,
     pub before: Arc<str>,
@@ -86,7 +86,7 @@ pub struct Receipt {
 impl Receipt {
     pub fn unbound(sequence: u64, time: f64, intent: Intent) -> Self {
         Self {
-            id: None,
+            owner: None,
             sequence,
             time,
             before: "".into(),
@@ -331,7 +331,7 @@ mod tests {
             text,
         );
         Receipt {
-            id: Some(egui::Id::unique("name")),
+            owner: Some(super::super::EditorOwner { id: egui::Id::unique("name"), instance: 1 }),
             sequence,
             time: 1.0,
             before: before.into(),

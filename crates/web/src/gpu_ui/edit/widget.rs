@@ -14,6 +14,7 @@ use crate::gpu_ui::UiFrame;
 #[derive(Clone)]
 struct State {
     model: Model,
+    owner: super::EditorOwner,
     offset: Vec2,
     caret_since: f64,
     pointer_caret: Option<Rect>,
@@ -140,6 +141,7 @@ impl<'a> NativeTextEdit<'a> {
 
     pub fn show(self, frame: &UiFrame<'_>, ui: &mut Ui, rect: Rect) -> NativeEditOutput {
         let id = Id::unique(self.id);
+        let owner = super::owner(frame.ctx, id);
         let enabled = self.enabled && ui.is_enabled();
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
         if !enabled {
@@ -168,6 +170,7 @@ impl<'a> NativeTextEdit<'a> {
             data.get_temp::<Arc<Mutex<State>>>(key).unwrap_or_else(|| {
                 let state = Arc::new(Mutex::new(State {
                     model: Model::new(self.text),
+                    owner,
                     offset: Vec2::ZERO,
                     caret_since: 0.0,
                     pointer_caret: None,
@@ -178,6 +181,16 @@ impl<'a> NativeTextEdit<'a> {
             })
         });
         let mut state = state.lock().expect("native editor state");
+        if state.owner != owner {
+            *state = State {
+                model: Model::new(self.text),
+                owner,
+                offset: Vec2::ZERO,
+                caret_since: frame.ctx.input(|input| input.time),
+                pointer_caret: None,
+                transport: None,
+            };
+        }
         if state.model.text() != self.text.as_str() {
             state.pointer_caret = None;
         }
@@ -190,11 +203,9 @@ impl<'a> NativeTextEdit<'a> {
         let mut submitted = false;
         let mut rejected = None;
         if enabled {
-            for receipt in frame
-                .editor_receipts
-                .iter()
-                .filter(|receipt| receipt.id == Some(id) || receipt.id.is_none() && has_focus)
-            {
+            for receipt in frame.editor_receipts.iter().filter(|receipt| {
+                receipt.owner == Some(owner) || receipt.owner.is_none() && has_focus
+            }) {
                 let change = state.model.apply(receipt, self.rules, self.readonly);
                 state.pointer_caret =
                     receipt.caret.filter(|_| receipt.text.as_ref() == state.model.text());
@@ -380,7 +391,7 @@ impl<'a> NativeTextEdit<'a> {
                 state.transport = Some(Arc::new(state.model.clone()));
             }
             frame.editors.borrow_mut().push(EditorDescriptor {
-                id: response.id,
+                owner: state.owner,
                 text: self.text.as_str().into(),
                 model: state.transport.as_ref().expect("transport snapshot").clone(),
                 rules: self.rules,
