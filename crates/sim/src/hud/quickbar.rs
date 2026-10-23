@@ -73,33 +73,42 @@ pub fn native_skill_quickbar_cooldown_presentation(
 
 #[must_use]
 pub fn native_cooldown_sector_path(remaining: f64, capacity: f64) -> String {
-    if remaining <= 0.0 || capacity <= 0.0 || remaining.is_nan() || capacity.is_nan() {
+    let points = native_cooldown_sector_points(remaining, capacity);
+    if points.is_empty() {
         return String::new();
     }
-    let quotient = remaining / capacity;
-    let ratio = if quotient.is_nan() { quotient } else { quotient.min(1.0) };
-    let start = 360.0 * (1.0 - ratio);
     let mut path = "M 26.5 26.5".to_owned();
-    append_ray_point(&mut path, start);
-    let mut boundary = ((start / 45.0).floor() + 1.0) * 45.0;
-    while boundary <= 360.0 {
-        append_ray_point(&mut path, boundary);
-        boundary += 45.0;
+    for point in &points[1..] {
+        path.push_str(&format!(" L {} {}", coordinate(point.x), coordinate(point.y)));
     }
     path.push_str(" Z");
     path
 }
 
-fn append_ray_point(path: &mut String, degrees: f64) {
+/// The same square-clipped ray fan used by the Source SVG and the GPU painter.
+#[must_use]
+pub fn native_cooldown_sector_points(remaining: f64, capacity: f64) -> Vec<crate::Vec2> {
+    if remaining <= 0.0 || capacity <= 0.0 || remaining.is_nan() || capacity.is_nan() {
+        return Vec::new();
+    }
+    let quotient = remaining / capacity;
+    let ratio = if quotient.is_nan() { quotient } else { quotient.min(1.0) };
+    let start = 360.0 * (1.0 - ratio);
+    let mut points = vec![crate::Vec2::new(26.5, 26.5), ray_point(start)];
+    let mut boundary = ((start / 45.0).floor() + 1.0) * 45.0;
+    while boundary <= 360.0 {
+        points.push(ray_point(boundary));
+        boundary += 45.0;
+    }
+    points
+}
+
+fn ray_point(degrees: f64) -> crate::Vec2 {
     let radians = degrees * std::f64::consts::PI / 180.0;
     let dx = radians.cos();
     let dy = -radians.sin();
     let scale = 26.5 / dx.abs().max(dy.abs());
-    path.push_str(&format!(
-        " L {} {}",
-        coordinate(26.5 + dx * scale),
-        coordinate(26.5 + dy * scale)
-    ));
+    crate::Vec2::new(26.5 + dx * scale, 26.5 + dy * scale)
 }
 
 fn coordinate(value: f64) -> String {
