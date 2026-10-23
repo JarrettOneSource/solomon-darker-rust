@@ -78,6 +78,10 @@ async function walkToFomentius(page) {
     await ui.observeGpu(page);
     await page.goto(url,{waitUntil:'domcontentloaded'});
     await ui.ready(page);
+    assert.match((await ui.widget(page,'landscape-guidance')).label,/Rotate your device to landscape/);
+    await shot(page,'phone-title-portrait-guidance.png');
+    await page.setViewportSize({width:844,height:390});
+    await ui.noWidget(page,'landscape-guidance');
     await startNewGame(page,{name:'Felix',touch:true});
     await ui.tap(page,'hud:inventory');await settle(page);
     await action(page,'view-backpack');
@@ -86,9 +90,9 @@ async function walkToFomentius(page) {
     await shot(page,'phone-inventory-rust.png');
     await ui.tap(page,health.id);
     const tooltip=ui.bounds(await ui.widget(page,'panel:tooltip'),{paint:true});
-    assert.ok(fitsViewport(tooltip,390,844),'touch inspection stays on screen');
+    assert.ok(fitsViewport(tooltip,844,390),'touch inspection stays on screen');
     await shot(page,'phone-item-tooltip-rust.png');
-    await page.touchscreen.tap(378,180);
+    await page.touchscreen.tap(832,195);
     await ui.drag(page,health.id,'panel:cell:5',{touch:true});
     await ui.waitForUi(page,snapshot=>{
       const moved=ui.findWidget(snapshot,health.id),cell=ui.findWidget(snapshot,'panel:cell:5');
@@ -101,7 +105,7 @@ async function walkToFomentius(page) {
     await action(page,'equipment:hat');await action(page,'equipment:hat');
     const notice=await ui.widget(page,'panel:notice-title');
     assert.equal(notice.label,'A WIZARD WOULD NEVER REMOVE HIS HAT!');
-    assert.ok(fitsViewport(ui.bounds(notice,{paint:true}),390,844),'authored notices fit the phone');
+    assert.ok(fitsViewport(ui.bounds(notice,{paint:true}),844,390),'authored notices fit the phone');
     await shot(page,'phone-notice-rust.png');
     await action(page,'notice-okay');
     await action(page,'skills');await settle(page);await settle(page);
@@ -110,7 +114,7 @@ async function walkToFomentius(page) {
     await ui.tap(page,skills[0].id);
     await ui.widget(page,'panel:tooltip');
     await shot(page,'phone-skills-rust.png');
-    await page.touchscreen.tap(378,180);
+    await page.touchscreen.tap(832,195);
     await action(page,'close');await settle(page);
     await ui.noWidget(page,'panel:close');
     await walkToFomentius(page);await settle(page);
@@ -130,7 +134,11 @@ async function walkToFomentius(page) {
     await shot(page,'phone-dye-rust.png');
     await action(page,'dye-cancel');
     await ui.noWidget(page,'panel:dye');
+    await page.setViewportSize({width:390,height:844});
+    await ui.widget(page,'landscape-guidance');
+    await shot(page,'phone-inventory-portrait-guidance.png');
     await page.setViewportSize({width:844,height:390});await settle(page);
+    await ui.noWidget(page,'landscape-guidance');
     await action(page,'view-equipment');
     assert.ok(ui.bounds(await ui.widget(page,'panel:equipment:hat')).width>=46);
     await shot(page,'landscape-inventory-rust.png');
@@ -142,7 +150,8 @@ async function walkToFomentius(page) {
     assert.deepEqual(observed.errors,[]);
     fs.writeFileSync(path.join(output,'responsive-browser-receipt.json'),JSON.stringify({passed:true,
       errors:observed.errors,viewports:[[390,844],[844,390],[1600,900]],
-      touchWorldEntry:'Fomentius',touchDrag:true,submissions:await ui.gpuDraws(page)},null,2));
+      portraitNativeStage:'source landscape guidance',touchWorldEntry:'Fomentius',touchDrag:true,
+      submissions:await ui.gpuDraws(page)},null,2));
     console.log(JSON.stringify({passed:true,errors:observed.errors}));
   } finally{await browser.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});

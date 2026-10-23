@@ -141,6 +141,16 @@ instruction appear to pass. HUD blur uses an actual browser tab focus change; to
 uses the native touch-cancel input and verifies both the neutral painted joystick and accepted
 zero movement. No synthetic browser blur event stands in for platform focus behavior.
 
+Phone journeys preserve the actual portrait admission rule. Pinned Website
+`MainMenuScene.tsx` and `main-menu.css` at its portrait media query, and Rust `c14068b3`
+`web/menu.css`, place native stages behind rotate-to-landscape guidance on coarse portrait
+devices; Dark Cloud alone remains portrait-admitted. The old phone scripts attempted native
+gameplay at 390 × 844 despite that gate and are stale evidence. Current tests require the GPU
+guidance, rotate to 844 × 390 for actual admission, compact controls, touch drag/shop/dye and
+cancel checks, and verify guidance returns on portrait resize. Portrait Cloud acceptance
+remains a separate required menu route. No media-query override or hidden activation bypasses
+the source gate.
+
 The foundation's retained `foundation-probe/result.json` and `extended-result.json` were
 reviewed with `gpu-unicode-scroll.png`: all 15 checks pass for real GPU submission, loaded
 static inputs, pointer button/checkbox, text editing, Unicode/IME commit, native clipboard
