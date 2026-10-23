@@ -324,7 +324,8 @@ impl Loader {
         self.triangles = 2;
         self.widgets.clear();
         let origin = [(self.logical[0] - 480.0) / 2.0, (self.logical[1] - 320.0) / 2.0];
-        for (index, texture) in self.art.iter().enumerate() {
+        for index in 0..self.art.len() {
+            let texture = &self.art[index];
             let mut bounds = ART[index].1;
             let mut source = [0.0, 0.0, texture.width, texture.height];
             if index == 3 {
@@ -341,6 +342,13 @@ impl Loader {
                 );
                 self.meshes += 1;
                 self.triangles += 2;
+                let (id, label) = [
+                    ("loader:logo", "Solomon Dark logo"),
+                    ("loader:url", "Solomon Dark website"),
+                    ("loader:frame", "Loading progress frame"),
+                    ("loader:fill", "Completed loading work"),
+                ][index];
+                self.record(id, label, "img", bounds);
             }
         }
         if self.font.is_some() {
@@ -453,14 +461,30 @@ impl Loader {
             self.triangles += 2;
         }
         if bounds[0].is_finite() {
-            let rect = [
-                bounds[0] * self.scale,
-                bounds[1] * self.scale,
-                (bounds[2] - bounds[0]) * self.scale,
-                (bounds[3] - bounds[1]) * self.scale,
-            ];
-            self.widgets.push(serde_json::json!({"id":id,"label":text,"role":if id=="loader:error"{"alert"}else{"status"},"rect":rect,"paint_bounds":{"x":rect[0],"y":rect[1],"width":rect[2],"height":rect[3]},"enabled":true,"focused":false}));
+            self.record(
+                id,
+                text,
+                if id == "loader:error" { "alert" } else { "status" },
+                [bounds[0], bounds[1], bounds[2] - bounds[0], bounds[3] - bounds[1]],
+            );
         }
+    }
+
+    fn record(&mut self, id: &str, label: &str, role: &str, bounds: [f32; 4]) {
+        let paint = bounds.map(|value| value * self.scale);
+        let left = paint[0].max(0.0);
+        let top = paint[1].max(0.0);
+        let width = (paint[0] + paint[2]).min(self.viewport[0]) - left;
+        let height = (paint[1] + paint[3]).min(self.viewport[1]) - top;
+        if width <= 0.0 || height <= 0.0 {
+            return;
+        }
+        self.widgets.push(serde_json::json!({
+            "id": id, "label": label, "role": role,
+            "rect": [left,top,width,height],
+            "paint_bounds": {"x":paint[0],"y":paint[1],"width":paint[2],"height":paint[3]},
+            "enabled": true, "focused": false,
+        }));
     }
 }
 
