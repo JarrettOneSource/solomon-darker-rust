@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use egui::util::undoer::Undoer;
-use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Selection {
@@ -61,8 +60,6 @@ pub enum Intent {
     Replace { range: Selection, text: String },
     Select(Selection),
     SelectAll,
-    DeleteBackward,
-    DeleteForward,
     Copy,
     Cut,
     Undo,
@@ -206,39 +203,6 @@ impl Model {
                     self.composition =
                         Some(Selection { anchor: start, focus: self.value.selection.focus });
                 }
-            }
-            Intent::DeleteBackward | Intent::DeleteForward if !readonly => {
-                let mut range = self.value.selection;
-                if range.range().is_empty() {
-                    let cursor = range.focus;
-                    let mut boundaries: Vec<_> = self
-                        .value
-                        .text
-                        .graphemes(true)
-                        .scan(0, |units, grapheme| {
-                            let start = *units;
-                            *units += grapheme.encode_utf16().count();
-                            Some(start)
-                        })
-                        .collect();
-                    boundaries.push(self.value.text.encode_utf16().count());
-                    range = if matches!(receipt.intent, Intent::DeleteBackward) {
-                        Selection {
-                            anchor: boundaries
-                                .into_iter()
-                                .filter(|&i| i < cursor)
-                                .max()
-                                .unwrap_or(0),
-                            focus: cursor,
-                        }
-                    } else {
-                        Selection {
-                            anchor: cursor,
-                            focus: boundaries.into_iter().find(|&i| i > cursor).unwrap_or(cursor),
-                        }
-                    };
-                }
-                self.replace(range, "", rules, &mut change);
             }
             _ => {}
         }
@@ -475,9 +439,9 @@ mod tests {
         receipt.intent = Intent::Redo;
         model.apply(&receipt, Rules::default(), false);
         assert_eq!(model.text(), text);
-        receipt.sequence = 6;
-        receipt.intent = Intent::DeleteBackward;
-        model.apply(&receipt, Rules::default(), false);
+        let expected = "مرحبا\nשלום 🧑‍💻";
+        let (range, inserted) = replacement(text, expected);
+        model.apply(&insert(6, text, range, &inserted), Rules::default(), false);
         assert_eq!(model.text(), "مرحبا\nשלום 🧑‍💻", "backspace removes the combined e cluster once");
     }
 }

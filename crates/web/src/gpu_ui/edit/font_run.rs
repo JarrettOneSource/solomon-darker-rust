@@ -269,9 +269,9 @@ fn wrap_rows(
     probe: &FontProbe,
     tab_size: f32,
 ) -> Result<Vec<std::ops::Range<usize>>, String> {
-    let Some(width) = width else { return Ok(vec![0..text.len()]) };
+    let Some(width) = width else { return Ok(std::iter::once(0..text.len()).collect()) };
     if text.is_empty() {
-        return Ok(vec![0..0]);
+        return Ok(std::iter::once(0..0).collect());
     };
     let mut breaks: Vec<_> = unicode_linebreak::linebreaks(text).map(|(index, _)| index).collect();
     let complex = |character: char| {
