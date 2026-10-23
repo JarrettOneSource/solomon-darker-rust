@@ -18,19 +18,6 @@ async function ticks(page,count) {
     start+count,{timeout:20000});
 }
 
-async function slider(page,id,target) {
-  await ui.click(page,id);
-  await ui.nextFrame(page);
-  const current=Number((await ui.widget(page,id)).value);
-  assert.ok(Number.isFinite(current),'the real slider reports its accepted number');
-  const key=current<target?'ArrowRight':'ArrowLeft';
-  for(let count=0;count<Math.abs(target-current);count++) {
-    await page.keyboard.press(key);
-    await ui.nextFrame(page);
-  }
-  await ui.value(page,id,String(target));
-}
-
 (async()=>{
   const browser=await chromium.launch({headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -98,7 +85,7 @@ async function slider(page,id,target) {
     await shot(page,'menu-pause.png');
     await ui.click(page,'pause-settings');
     await screen(page,'settings');
-    await slider(page,'settings-range:ui-scale',135);
+    await ui.setSlider(page,'settings-range:ui-scale',135);
     await shot(page,'menu-settings-root.png');
     await ui.click(page,'settings-page:controls');
     await ui.widget(page,'bind:move-up');

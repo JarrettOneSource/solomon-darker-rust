@@ -1,5 +1,6 @@
 // Read the browser's actual completed save. These helpers never write authority.
 const assert = require('node:assert/strict');
+const {readUi} = require('./gpu-ui.cjs');
 
 async function readSave(page) {
   return page.evaluate(() => new Promise((resolve, reject) => {
@@ -32,7 +33,7 @@ async function waitForSave(page, predicate) {
     if (record && predicate(record)) return record;
     await page.waitForTimeout(100);
   } while (Date.now() < deadline);
-  throw new Error(`Save did not commit: ${await page.locator('#status').textContent()}`);
+  throw new Error(`Save did not commit: ${JSON.stringify(await readUi(page))}`);
 }
 
 function localParticipant(record) {

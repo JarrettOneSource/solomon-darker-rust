@@ -30,7 +30,7 @@ writes. Raw 145-sample receipt and reviewed 20-second/ready screenshots are reta
 
 Pinned Website sources are `frontend/src/game/{NativeLoader.tsx,game-assets.ts,
 game-asset-readiness.ts,native-loader.css}`, `renderer/{loader-render-contract.ts,
-loader-renderer.ts,game-viewport.ts}` and `Game.tsx`. Website ledger
+loader-renderer.ts,game-viewport.ts}` and `frontend/src/pages/Game.tsx`. Website ledger
 `docs/Game Native Parity RE/041-2026-08-14-total-startup-progress-and-active-item-presentation.md`
 records native `MyLoader::Render` at `0x005BCA40`, numerator `0x0081F6A8`, denominator
 `0x0081F6AC` and completion gate `0x0081F6B0`, plus clean-stock delayed-work evidence.
@@ -38,6 +38,12 @@ records native `MyLoader::Render` at `0x005BCA40`, numerator `0x0081F6A8`, denom
 - Loader artwork becomes resident before the general startup workload. Title is installed
   only after the required load/decode promises complete; no menu appears underneath a
   partially loaded presentation.
+- Pinned `game-assets.ts::loadGameStartupAssets` awaits loader, title, match-loading and
+  resident-audio groups in that order. `pages/Game.tsx` then admits `MainMenuScene` only when
+  this whole promise completes and auth, save and subscribed-mod readiness are complete.
+  `main.tsx` mounts the same native Loader during lazy game-code loading. The older ledger's
+  635-item manifest is historical, not the current manifest count; future world assets are
+  not part of that source startup promise merely because a later scene can use them.
 - The background is `0x000054`. A centered 480 × 320 logical composition has logo bounds
   `(41,13,388,227)`, URL `(119,251,244,18)`, frame `(125,263,230,54)` and fill
   `(144,282,192,18)`. The extracted assets already contain the native 90-degree rotation.
@@ -52,6 +58,12 @@ records native `MyLoader::Render` at `0x005BCA40`, numerator `0x0081F6A8`, denom
 - High confidence: source geometry, readiness ownership and native work-bound lifecycle.
   Unknown: exact reported 20-second sequence on the new build until measured under cold,
   warm and deliberately held asset requests.
+
+The four inputs added by integration `5502339` were independently compared byte-for-byte
+with the pinned Website files. All match, with dimensions logo 388 × 227, URL 244 × 18,
+frame 230 × 54 and fill 192 × 18. The source comparison receipt is
+`startup-baseline/loader-source-assets.json` in the task evidence directory. No composed
+startup acceptance is implied by that input check.
 
 ## Acceptance matrix
 
@@ -98,11 +110,20 @@ Owner names match the parallel implementation lanes. Scripts are under `tools/br
 
 ## Test ownership and stopping checks
 
-Acceptance owns `gpu-ui.cjs`, `menu-journey.cjs`, `smoke.cjs`, `startup.cjs`, `menus.cjs`,
-`menu-input.cjs` and `responsive.cjs`. Menus owns detailed Hall/Settings/Cloud/Join/prompt
+Acceptance owns `gpu-ui.cjs`, `gpu-ui-contract.test.cjs`, `menu-journey.cjs`, `smoke.cjs`,
+`startup.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`, `audio.cjs`, `save-resume.cjs`,
+`saved-game.cjs`, `college-clock.cjs` and `rooms.mjs`. Menus owns detailed Hall/Settings/Cloud/Join/prompt
 journeys. HUD and social own their family journeys. Root owns final joined execution and
 packaged/hosted/authoring integration. Exact stable IDs and snapshot schema are in the task's
 `gpu-ui-contract.md`; that is a development handoff, not an accepted product artifact.
+
+The common scripts are migrated to read-only GPU geometry and actual browser input. Syntax
+checks pass for all thirteen files. The architectural contract was run before the cutover:
+two tests fail for actual existing visual DOM/CSS producers and one passes; its TAP output is
+retained as `gpu-ui-contract-baseline.tap`. Current composed browser acceptance is pending,
+so no matrix surface is marked accepted from syntax/source checks alone. The independent
+Save Tools module ABI journey remains a valid canonical-byte fixture; its real Files are
+inputs to that independent module and do not fabricate gameplay state.
 
 Checks must drive ordinary pointer, keyboard, touch or controller input against visible GPU
 widgets. The read-only snapshot locates those widgets and reports accepted outcomes; it
