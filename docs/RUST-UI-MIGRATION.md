@@ -271,6 +271,15 @@ weaker checkpoint assertion substitutes for it. The actual save and GPU snapshot
 preserved, and the three independent media aborts remain fatal. A second seed was not
 attempted after this bounded failure.
 
+The repaired exact-save edge and browser close owner are now verified together by the
+complete `common-browser/88c3dfe/boneyard-stdio-fixed` rerun: two independently generated
+named worlds, native source/geometry, textured scenery, inward movement, Pause freeze,
+Leave/Continue, exact subsequent paused checkpoint and the same wizard/run/seed all pass.
+Both current-art world/HUD screenshots were reviewed. The process gate also passes:
+Playwright disconnects, owned Chrome exits zero gracefully, cleanup errors are empty and
+the driver exits zero without forced termination. Earlier 58df save failure and both 88
+teardown failures remain unchanged as the retained red evidence.
+
 Family evidence is likewise qualified. `menu-runtime-58df78d/hall` passes its actual
 journey with no browser errors; reviewed native/compact screenshots prompted a header
 gradient/border source correction awaiting rebuild. Settings bindings pass, while real
@@ -293,9 +302,9 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Process startup; cold, warm, held image/font/wasm; failed required asset; no partial Title or HUD | foundation + root; acceptance tests | Startup evidence above; `startup.cjs`; loader geometry, monotonic work, immediate readiness transition, screenshots | All seven cases pass on 88c3dfe across retained receipts; exact held counts/path, splash, no partial menus, native/fallback announcements and failure ownership proved |
 | GPU runtime; stock bundle crops/rotation/registered origins, glyph masks, browser fonts, dynamic images, blend/clips | foundation | `gpu_ui.rs`, shared `graphics/src/lib.rs`, stock manifest; read-only `gpu_ui_state`, GPU meshes/textures and final screenshots | Core probe 15/15; joined source audit 3/3; composed game/art pending complete composed browser proof |
 | Title/Play; clouds, moon, graves, Solomon animation, logo/art, Continue policy, account/desktop links | menus | `menu/title.rs`, pinned Main Menu; `smoke.cjs`, `menus.cjs`, `menu-input.cjs` | Ordinary Title/Tutorial prompt screenshot reviewed; complete Title variants pending |
-| Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | GPU source integrated; real prompt cancel/focus journey pending complete composed browser proof |
+| Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | 88c3dfe prompts-observed clean: real saved wizard, Escape decline preserves exact state, narrow viewport confirmation and explicit replacement; Tutorial Yes/focus route remains in common input coverage |
 | College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | 88c3dfe required named Helvidius/Ether/Arcane smoke clean; 58df Felix/Genericus variants retained; complete variants/UI audio priming pending |
-| Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | 58df78d rapid inputs/neutral handoff and Boneyard Pausefreeze/Leave/Continue pass; subsequent Escape Pause misses exact saved tick; shared variants/media gate pending |
+| Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | 88c3dfe rapid inputs and complete two-seed Boneyard Pause/exact-save/Leave/Continue pass cleanly; common input neutral handoff passes; complete shared variants remain pending |
 | Settings root/cloud/performance; sliders/toggles, permissions, saved preferences, nested account policies, mobile sharing | menus | `menu/settings/**`; `settings-parity.cjs`, `menus.cjs`, `fullscreen.cjs` | 88c3dfe Settings five-group driver passes cleanly, including pointer slider and real reload; account/mobile permission variants remain owned by their family routes |
 | Control bindings; every action, duplicate swaps, Escape, modified-key rejection, allowed mouse bindings, reverse hotbar | menus + root input | `menu/settings.rs`, canonical `GameControls`; `menus.cjs`, `gameplay-input.cjs`, `hud-input.cjs` | 58df78d common gameplay-input fully passes with exact reads 8/8, raw native suspensions preserved; binding witnesses retained, complete current HUD/controller variants pending |
 | Save Transfer; multiple native/JSON/CFG/SAV/ZIP imports, inspected warnings, replace/cancel/busy/error, real export ZIP/download | menus | `menu/settings/transfer.rs`; `save-transfer.cjs`, `save-tools.cjs` | GPU source integrated; native file/confirmation/export journey pending composed browser proof |
@@ -320,7 +329,7 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Cheats/Console/developer observer; permissions, all resource/skill/world/dev controls, Lua submit/history/results/error/clear and bot targets | social | `cheats/**`, `observer.rs`; `authored-content.cjs`, `learned-bot.cjs`, `cheat-consent.cjs` | GPU source integrated; actual authorized Console/observer/bot journey pending composed browser proof |
 | Mobile editor; all six anchors/elements, drag/resize/rotate/snap, zoom/pan/pinch, multi-touch/cancel, undo/redo/reset/pages/dock/presets/save | social | `mobile_editor/**`, `sim/mobile_ui/**`; `mobile-editor.cjs`, `responsive.cjs` | GPU source integrated; actual parent-layer touch/edit/save journey pending composed browser proof |
 | Authored mod surfaces; Cast/Shop/Reforge/Portal, skills/subskills/offers/quickbar, minimap actions, mounted HUD text/image/bar/button, party attributes | social | `mod_panels.rs`, `mod_skills.rs`, `mod_skill_quickbar.rs`, `mod_minimap.rs`, `mod_world_overlays/**`; `authored-content.cjs`, `mod-skills.cjs` | GPU source integrated; actual admitted authored widgets/assets/retirement pending composed browser proof |
-| Match loading; every recovered stage, progress/cancel/failure, host admission/world materialization | root | `match_loading.rs`; `boneyard.cjs`, `hosted-session.cjs`, `deployment-restart.cjs` | 58df78d actual Map admission/native world/textured render pass, Leave/Continue same run; exact Pause save barrier red, full stages/failure/host variants pending |
+| Match loading; every recovered stage, progress/cancel/failure, host admission/world materialization | root | `match_loading.rs`; `boneyard.cjs`, `hosted-session.cjs`, `deployment-restart.cjs` | 88c3dfe complete two-seed ordinary Map/native-world/Leave/Continue/exact-save journey passes, including clean owned browser retirement; full stage/cancel/failure/host variants remain pending |
 | Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | GPU source integrated; real fullscreen/unsupported/standalone activation pending composed browser proof |
 | Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | GPU source integrated; actual update/close failure plus packaged journey pending composed browser proof |
 | Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | GPU source integrated; native recovery regressions retained; actual update journey pending composed browser proof |
@@ -402,4 +411,8 @@ native sample and socket ownership evidence preserve that diagnosis. After confi
 owned Chrome `exit`, release only its parent-side stdio so the real close/temporary-file
 cleanup can finish. Other helper processes remain untouched; timeouts and nonzero exit
 remain failed gates. A title-only two-context close probe is a narrower passing boundary,
-not a clean full Boneyard execution claim.
+not a clean full Boneyard execution claim. The later `boneyard-stdio-fixed` original-case
+rerun qualifies the full process gate after the inherited-stdio repair, with Chrome exit
+zero and no timeout or forced termination. Two real Node process regressions separately
+prove the inherited-pipe failure, preserve live stderr/nonzero exit, and leave the holder
+running when the parent's streams are released.
