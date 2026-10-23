@@ -158,6 +158,7 @@ impl DesktopBridge {
         let ctx = frame.ctx.clone();
         let mut action = None;
         let area = egui::Area::new(self.layer_id().id)
+            .fade_in(false)
             .order(self.layer_id().order)
             .anchor(egui::Align2::RIGHT_TOP, vec2(-12.0, 12.0))
             .show(&ctx, |ui| {

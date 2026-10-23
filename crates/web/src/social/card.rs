@@ -115,6 +115,7 @@ impl SocialUi {
         let layer = Self::card_layer(parent.layer_id());
         ctx.set_sublayer(parent.layer_id(), layer);
         let area = egui::Area::new(layer.id)
+            .fade_in(false)
             .order(layer.order)
             .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
             .show(&ctx, |ui| {

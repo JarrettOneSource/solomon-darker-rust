@@ -345,6 +345,7 @@ impl SocialUi {
                 Self::dialog_layer()
             };
             egui::Area::new(layer.id)
+                .fade_in(false)
                 .order(layer.order)
                 .fixed_pos(egui::Pos2::ZERO)
                 .show(&ctx, |ui| -> Result<(), String> {
@@ -382,6 +383,7 @@ impl SocialUi {
         }
         if let Some(notice) = &self.hosted_notice {
             egui::Area::new(Self::notice_layer().id)
+                .fade_in(false)
                 .order(Self::notice_layer().order)
                 .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 16.0))
                 .show(&ctx, |ui| {

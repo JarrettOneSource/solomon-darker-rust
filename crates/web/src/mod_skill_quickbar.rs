@@ -148,6 +148,7 @@ impl ModSkillQuickbarView {
         }
         let ctx = frame.ctx.clone();
         egui::Area::new(self.layer_id().id)
+            .fade_in(false)
             .order(self.layer_id().order)
             .anchor(egui::Align2::CENTER_BOTTOM, vec2(0.0, -80.0))
             .show(&ctx, |ui| {

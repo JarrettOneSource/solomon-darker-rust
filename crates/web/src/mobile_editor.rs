@@ -300,74 +300,82 @@ impl MobileUiEditor {
         self.refresh_page_bounds();
         self.hit_targets.clear();
         let mut error = None;
-        egui::Area::new(layer.id).order(layer.order).fixed_pos(bounds.min).show(&ctx, |ui| {
-            if !enabled {
-                ui.disable();
-            }
-            if self.fullscreen && enabled {
-                ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
-            }
-            ui.set_min_size(bounds.size());
-            ui.set_clip_rect(bounds);
-            ui.painter().rect_filled(viewport, 0.0, Color32::from_rgb(14, 18, 24));
-            if !self.fullscreen {
-                let response =
-                    ui.interact(viewport, Id::unique("mobile/page-pan"), egui::Sense::drag());
-                frame.record("mobile/viewport", "Mobile layout viewport", "application", &response);
-                self.hit_targets.push(HitTarget {
-                    hit: Hit::Page,
-                    center: viewport.center(),
-                    size: viewport.size(),
-                    rotation: 0.0,
-                });
-            }
-            if let Err(message) = self.paint_page(frame, ui, viewport) {
-                error = Some(message);
-            }
-            if self.fullscreen {
-                if let Err(message) = self.paint_dock(frame, ui, bounds) {
+        egui::Area::new(layer.id).fade_in(false).order(layer.order).fixed_pos(bounds.min).show(
+            &ctx,
+            |ui| {
+                if !enabled {
+                    ui.disable();
+                }
+                if self.fullscreen && enabled {
+                    ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
+                }
+                ui.set_min_size(bounds.size());
+                ui.set_clip_rect(bounds);
+                ui.painter().rect_filled(viewport, 0.0, Color32::from_rgb(14, 18, 24));
+                if !self.fullscreen {
+                    let response =
+                        ui.interact(viewport, Id::unique("mobile/page-pan"), egui::Sense::drag());
+                    frame.record(
+                        "mobile/viewport",
+                        "Mobile layout viewport",
+                        "application",
+                        &response,
+                    );
+                    self.hit_targets.push(HitTarget {
+                        hit: Hit::Page,
+                        center: viewport.center(),
+                        size: viewport.size(),
+                        rotation: 0.0,
+                    });
+                }
+                if let Err(message) = self.paint_page(frame, ui, viewport) {
                     error = Some(message);
                 }
-            } else {
-                self.paint_toolbar(
-                    frame,
-                    ui,
-                    Rect::from_min_size(bounds.min, vec2(bounds.width(), toolbar_height)),
+                if self.fullscreen {
+                    if let Err(message) = self.paint_dock(frame, ui, bounds) {
+                        error = Some(message);
+                    }
+                } else {
+                    self.paint_toolbar(
+                        frame,
+                        ui,
+                        Rect::from_min_size(bounds.min, vec2(bounds.width(), toolbar_height)),
+                    );
+                    self.paint_inspector(
+                        frame,
+                        ui,
+                        Rect::from_min_max(pos2(bounds.left(), viewport.bottom()), bounds.max),
+                    );
+                }
+                if let Some(message) = &self.error {
+                    let rect = Rect::from_min_size(
+                        bounds.left_bottom() - vec2(0.0, 32.0),
+                        vec2(bounds.width(), 32.0),
+                    );
+                    ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(60, 16, 14));
+                    ui.painter().text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        message,
+                        egui::FontId::proportional(13.0),
+                        Color32::from_rgb(255, 160, 140),
+                    );
+                    frame.record_rect("mobile/error", message, "alert", rect, true);
+                }
+                frame.record_rect(
+                    "mobile/editor",
+                    "Mobile controls",
+                    "application",
+                    bounds,
+                    enabled && !self.busy,
                 );
-                self.paint_inspector(
-                    frame,
-                    ui,
-                    Rect::from_min_max(pos2(bounds.left(), viewport.bottom()), bounds.max),
+                frame.record_value(
+                    "mobile/editor",
+                    self.selected.as_str(),
+                    Some(!self.restoring_default),
                 );
-            }
-            if let Some(message) = &self.error {
-                let rect = Rect::from_min_size(
-                    bounds.left_bottom() - vec2(0.0, 32.0),
-                    vec2(bounds.width(), 32.0),
-                );
-                ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(60, 16, 14));
-                ui.painter().text(
-                    rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    message,
-                    egui::FontId::proportional(13.0),
-                    Color32::from_rgb(255, 160, 140),
-                );
-                frame.record_rect("mobile/error", message, "alert", rect, true);
-            }
-            frame.record_rect(
-                "mobile/editor",
-                "Mobile controls",
-                "application",
-                bounds,
-                enabled && !self.busy,
-            );
-            frame.record_value(
-                "mobile/editor",
-                self.selected.as_str(),
-                Some(!self.restoring_default),
-            );
-        });
+            },
+        );
         if let Some(error) = error {
             return Err(error);
         }

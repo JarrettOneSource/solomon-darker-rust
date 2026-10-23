@@ -322,6 +322,7 @@ impl CheatUi {
         let mut action = None;
         let mut console_error = None;
         egui::Area::new(self.layer_id().id)
+            .fade_in(false)
             .order(self.layer_id().order)
             .fixed_pos(egui::Pos2::ZERO)
             .show(&ctx, |ui| {

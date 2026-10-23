@@ -134,6 +134,7 @@ impl FullscreenControl {
         };
         let mut keyboard_activation = false;
         egui::Area::new(Self::control_layer().id)
+            .fade_in(false)
             .order(Self::control_layer().order)
             .fixed_pos(point)
             .show(&ctx, |ui| {
@@ -185,6 +186,7 @@ impl FullscreenControl {
         if show_help || error.is_some() {
             let message=error.unwrap_or_else(||"Fullscreen on iPhone or iPad\nTap Share, Add to Home Screen, keep Open as Web App enabled if shown, then launch Solomon Darker from its icon.\nOtherwise, open the game in a browser that supports fullscreen.".into());
             egui::Area::new(Self::help_layer().id)
+                .fade_in(false)
                 .order(Self::help_layer().order)
                 .fixed_pos(pos2(
                     (point.x - 290.0).max(8.0),

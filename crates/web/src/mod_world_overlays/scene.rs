@@ -141,6 +141,7 @@ impl ModSceneOverlay {
         );
         let mut direction = None;
         egui::Area::new(self.layer_id().id)
+            .fade_in(false)
             .order(self.layer_id().order)
             .fixed_pos(egui::Pos2::ZERO)
             .show(&ctx, |ui| {

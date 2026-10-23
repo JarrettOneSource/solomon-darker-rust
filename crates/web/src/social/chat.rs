@@ -47,6 +47,7 @@ impl SocialUi {
         let offset = vec2(left, if self.coarse { if open { 0.0 } else { 11.0 } } else { -34.0 });
         let layer = Self::chat_layer(open);
         egui::Area::new(layer.id)
+            .fade_in(false)
             .order(layer.order)
             .anchor(anchor, offset)
             .show(&ctx, |ui| -> Result<(), String> {

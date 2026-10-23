@@ -81,6 +81,7 @@ impl ModPanelsView {
         }
         let ctx = frame.ctx.clone();
         egui::Area::new(self.layer_id().id)
+            .fade_in(false)
             .order(self.layer_id().order)
             .anchor(egui::Align2::RIGHT_BOTTOM, vec2(-16.0, -80.0))
             .show(&ctx, |ui| -> Result<(), String> {

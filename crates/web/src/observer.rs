@@ -309,6 +309,7 @@ impl ObserverUi {
         );
         let ctx = frame.ctx.clone();
         egui::Area::new(self.layer_id().id)
+            .fade_in(false)
             .order(self.layer_id().order)
             .fixed_pos(bounds.min)
             .constrain(false)
