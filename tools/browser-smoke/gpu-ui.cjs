@@ -290,25 +290,30 @@ async function announced(page, text, {afterIndex = 0, timeout = 10000} = {}) {
 // Native Gamepad prototypes feed the production navigator adapter, never game commands.
 async function installController(page) {
   await page.evaluate(() => {
-    window.gpuTestPad = { buttons: [], x: 0, y: 0, connected: true };
+    window.gpuTestPad = { buttons: [], axes: [0,0,0,0], analog: {}, reads: 0, connected: true };
     const gamepad = Object.create(Gamepad.prototype, {
       index: { value: 0 }, connected: { get: () => window.gpuTestPad.connected },
       mapping: { value: 'standard' },
-      axes: { get: () => [window.gpuTestPad.x, window.gpuTestPad.y] },
+      axes: { get: () => window.gpuTestPad.axes },
       buttons: { get: () => Array.from({ length: 17 }, (_, index) =>
         Object.create(GamepadButton.prototype, {
           pressed: { value: window.gpuTestPad.buttons.includes(index) },
-          value: { value: window.gpuTestPad.buttons.includes(index) ? 1 : 0 },
+          value: { value: window.gpuTestPad.analog[index]
+            ?? (window.gpuTestPad.buttons.includes(index) ? 1 : 0) },
         })) },
     });
-    Object.defineProperty(navigator, 'getGamepads', { value: () => [gamepad] });
+    Object.defineProperty(navigator, 'getGamepads', { value: () => {
+      window.gpuTestPad.reads += 1;
+      return [gamepad];
+    } });
   });
 }
 
-async function controller(page, buttons = [], x = 0, y = 0) {
-  await page.evaluate(({ buttons, x, y }) => {
-    window.gpuTestPad = { ...window.gpuTestPad, buttons, x, y };
-  }, { buttons, x, y });
+async function controller(page, buttons = [], x = 0, y = 0,
+  {rightX = 0, rightY = 0, analog = {}} = {}) {
+  await page.evaluate(({ buttons, axes, analog }) => {
+    window.gpuTestPad = { ...window.gpuTestPad, buttons, axes, analog };
+  }, { buttons, axes:[x,y,rightX,rightY], analog });
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 }
 
