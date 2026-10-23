@@ -585,6 +585,9 @@ reveal DONE with one genuine upward touch drag inside the actual dye viewport be
 tapping it. `native_dye_modal_opacity` adds .01 per10ms tick: the opening reaches full
 opacity at1000ms; the selected-swatch pulse is a separate200ms clock. The final art
 screenshot must observe the full opening, without delaying or repeating activation.
+HUD's owner agreed that the existing passive `panel:dye` value records JSON
+`{phase,opacity}` from the same native clock used by its actual paint. It adds no action
+or state setter; read-only consumers can wait for the submitted opacity1 frame.
 
 The Tutorial text-bounds helper currently has no executable caller, so its syntax check
 does not qualify Tutorial layout. Pinned fa08 `core-kernels/native-tutorial.ts`
