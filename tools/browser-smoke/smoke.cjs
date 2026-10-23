@@ -2,6 +2,7 @@
 // PW=<playwright-core> URL=http://127.0.0.1:4181/ node tools/browser-smoke/smoke.cjs
 const path = require('node:path');
 const fs = require('node:fs');
+const assert = require('node:assert/strict');
 const { chromium } = require(path.resolve(process.env.PW));
 const { startNewGame } = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
@@ -22,6 +23,19 @@ async function waitForServer() {
   throw new Error(`server at ${url} did not answer`);
 }
 
+async function clickThenEscape(page,id) {
+  const {point}=await ui.actionable(page,id);
+  const before=await ui.readUi(page);
+  await page.mouse.click(point.x,point.y);
+  await page.keyboard.press('Escape');
+  // Both native dispatches precede the first observation/wait. The frame
+  // boundary afterward prevents accepting the unchanged pre-click screenshot.
+  await ui.nextFrame(page);
+  const after=await ui.readUi(page);
+  assert.ok(after.frame>before.frame,'the actual GPU frame consumed the rapid input sequence');
+  return {beforeFrame:before.frame,afterFrame:after.frame,surface:after.surface};
+}
+
 (async () => {
   await waitForServer();
   const browser = await chromium.launch({
@@ -32,6 +46,7 @@ async function waitForServer() {
   let page;
   let observed;
   let step='startup';
+  const rapid={};
   try {
     page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
     observed = ui.watchErrors(page);
@@ -42,13 +57,28 @@ async function waitForServer() {
     const titleGpu = await ui.assertGpuOnly(page);
     const filename = path.parse(screenshot);
     await page.screenshot({path:path.join(filename.dir, `${filename.name}-title${filename.ext || '.png'}`)});
+    if(ui.findWidget(await ui.readUi(page),'prompt-secondary')) {
+      await ui.click(page,'prompt-secondary');
+      await ui.noWidget(page,'prompt-secondary');
+    }
+    step='real Play click immediately followed by Escape';
+    rapid.play=await clickThenEscape(page,'play');
+    assert.equal(rapid.play.surface,'title','Play followed immediately by Escape returns to Title');
     const state = () => page.evaluate(() => Array.from(window.wasmBindings.wizard_state()));
     step='ordinary College and Create admission';
-    await startNewGame(page);
+    const acceptedSelection=await startNewGame(page);
+    assert.deepEqual(acceptedSelection,{name:'Helvidius',element:'Ether',discipline:'Arcane'},
+      'the actual admitted player retains the requested name, element and discipline');
     await ui.widget(page, 'hud:pause');
     await page.waitForTimeout(300);
     const spawned = await state();
     const initialStudents = await page.evaluate(() => Array.from(window.wasmBindings.npc_state()));
+    step='real HUD Inventory click immediately followed by Escape';
+    rapid.inventory=await clickThenEscape(page,'hud:inventory');
+    await ui.noWidget(page,'panel:surface:inventory');
+    const afterInventory=await ui.readUi(page);
+    assert.equal(afterInventory.surface,'hidden','Inventory Escape does not also open Pause');
+    rapid.inventory.surface=afterInventory.surface;
     step='actual College movement and ambient students';
     await page.keyboard.down('KeyS');
     await page.waitForTimeout(700);
@@ -87,8 +117,12 @@ async function waitForServer() {
       actualCanvasSubmissions: submissions.canvasCalls.game > 0 && submissions.vertices > 0,
       noRuntimeOrAssetErrors: observed.errors.length === 0,
       ready: gameplayGpu.gpu.ready && gameplayGpu.gpu.error === null,
+      namedEtherArcane: acceptedSelection.name==='Helvidius'&&acceptedSelection.element==='Ether'
+        &&acceptedSelection.discipline==='Arcane',
+      rapidPlayEscape: rapid.play.surface==='title',
+      rapidInventoryEscape: rapid.inventory.surface==='hidden',
     };
-    const receipt={passed:Object.values(checks).every(Boolean),url,spawned,afterSouth,afterEast,
+    const receipt={passed:Object.values(checks).every(Boolean),url,acceptedSelection,rapid,spawned,afterSouth,afterEast,
       studentCounts:[initialStudents[0],laterStudents[0]],walkingStudentCount,
       titleGpu:titleGpu.gpu,gameplayGpu:gameplayGpu.gpu,submissions,
       problems:observed.errors,warnings:observed.warnings,checks};
@@ -96,7 +130,7 @@ async function waitForServer() {
     console.log(JSON.stringify(receipt,null,1));
     if (!receipt.passed) process.exitCode = 1;
   } catch(error) {
-    const receipt={passed:false,url,step,failure:error.stack,problems:observed?.errors,
+    const receipt={passed:false,url,step,rapid,failure:error.stack,problems:observed?.errors,
       warnings:observed?.warnings};
     if(page&&!page.isClosed()) {
       try {receipt.gpu=await ui.readUi(page)}
