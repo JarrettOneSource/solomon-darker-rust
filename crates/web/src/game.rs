@@ -140,6 +140,7 @@ pub struct Game {
     match_loading: Option<MatchLoadingState>,
     match_loading_view: crate::match_loading::MatchLoadingView,
     panels: PlayerPanels,
+    book_feedback_scope: Option<(String, Option<String>)>,
     skill_picker: SkillPicker,
     social: SocialUi,
     cheats: crate::cheats::CheatUi,
@@ -339,6 +340,7 @@ impl Game {
             match_loading: None,
             match_loading_view: crate::match_loading::MatchLoadingView::attach(&document)?,
             panels,
+            book_feedback_scope: None,
             skill_picker,
             social: SocialUi::attach(&document).await?,
             cheats: crate::cheats::CheatUi::attach(&document)?,
@@ -571,6 +573,8 @@ impl Game {
     }
 
     fn reset_world_views(&mut self) -> Result<(), String> {
+        self.book_feedback_scope = None;
+        self.panels.reset_skill_book_feedback(None);
         self.spectator_camera = Default::default();
         self.spectator_ui.hide();
         if let Some(previous) = self.battle.take() {
@@ -1284,6 +1288,7 @@ impl Game {
     }
 
     fn advance_session_ui(&mut self, now: f64) -> Result<(), String> {
+        self.observe_skill_book_feedback(now)?;
         if !self.has_game || self.native_ui_waiting() {
             return Ok(());
         }
@@ -1301,6 +1306,34 @@ impl Game {
         ) && !self.panels.is_open()
         {
             self.open_hub_dialogue(HubInteractionId::ArchChancellor, now)?;
+        }
+        Ok(())
+    }
+
+    fn observe_skill_book_feedback(&mut self, now: f64) -> Result<(), String> {
+        if !self.has_game
+            || self.world_loading
+            || self.is_hosted_observer()
+            || matches!(self.session.run.phase, GameRunPhase::Loadout | GameRunPhase::GameOver)
+        {
+            if self.book_feedback_scope.take().is_some() {
+                self.panels.reset_skill_book_feedback(None);
+            }
+            return Ok(());
+        }
+        let run = self.session.boneyard.as_ref().map(|world| world.loaded.run_id.as_str());
+        let feedback = self.session.participants[&self.local_player_id]
+            .player
+            .economy
+            .action_feedback
+            .as_ref();
+        if self.book_feedback_scope.as_ref().is_none_or(|(player, previous_run)| {
+            player != &self.local_player_id || previous_run.as_deref() != run
+        }) {
+            self.panels.reset_skill_book_feedback(feedback);
+            self.book_feedback_scope = Some((self.local_player_id.clone(), run.map(str::to_owned)));
+        } else {
+            self.panels.observe_skill_book_feedback(feedback, now)?;
         }
         Ok(())
     }
