@@ -1,14 +1,13 @@
 // Source-produced import fixtures for the real File chooser/Inventory journey.
 // These prove book use after import; they do not claim an ordinary loot drop.
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { fixturesDir, loadKernel, writeFixture } from './oracle.mjs'
+import { loadKernel, writeFixture } from './oracle.mjs'
 
 const game = await loadKernel('core-server/game-simulation.ts')
 const entities = await loadKernel('core-server/player-entity-store.ts')
 const economy = await loadKernel('core-kernels/hub-economy.ts')
 const saves = await loadKernel('save/game-save-document.ts')
+const { NATIVE_GENERATED_BONEYARDS } = await loadKernel('host/native-generated-boneyards.ts')
 const cases = []
 for (const world of ['hub', 'boneyard']) {
   let state, playerId, loadedBoneyard = null
@@ -19,13 +18,15 @@ for (const world of ['hub', 'boneyard']) {
     } }, { gameRngSeed: 17, combatRngSeed: 91 })
     state = game.declineGameSimulationTutorial(state, playerId)
   } else {
-    const retained = JSON.parse(readFileSync(resolve(fixturesDir, 'save-active-goldens.json'), 'utf8'))
-    const input = retained.cases.find(row => row.name === 'fire-18')
-    assert(input, 'retained source actor-arena save exists')
-    const restored = saves.restoreGameSaveDocument(JSON.stringify(input.document))
-    state = restored.state
-    playerId = restored.playerId
-    loadedBoneyard = restored.loadedBoneyard
+    playerId = 'active-owner'
+    state = game.createGameSimulation({ [playerId]: {
+      displayName: 'Actor Save Oracle', element: 'fire', discipline: 'mind',
+    } }, { gameRngSeed: 17, combatRngSeed: 91 })
+    state = game.declineGameSimulationTutorial(state, playerId)
+    loadedBoneyard = { ...NATIVE_GENERATED_BONEYARDS[0], choice: {
+      id: 'default-random', name: 'Random Boneyard', source: 'default',
+    }, seed: '00000000000000000000000000000000', runId: 'book-import-stock' }
+    state = game.enterBoneyardWorld(state, loadedBoneyard)
   }
   const bookIds = []
   for (const subtype of [3, 3, 3, 2]) {
@@ -56,7 +57,7 @@ for (const world of ['hub', 'boneyard']) {
 }
 writeFixture('skill-book-browser-saves.json.zlib',
   'tools/website-oracle/skill-book-browser-saves.mjs',
-  'fa08 skill-book inventory insertion/read and public create/restore save APIs', {
+  'fa08 stock Boneyard entry, skill-book inventory insertion/read and public create/restore save APIs', {
     sourceRevision: 'fa08ae249ff5563570bdb2a653e2ef9358ce7b83',
     qualification: 'Source-produced inventory fixtures imported through the real File chooser; ordinary loot earning is separate.',
     cases,

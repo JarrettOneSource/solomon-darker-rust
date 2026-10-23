@@ -5,12 +5,13 @@ use crate::hosted::{
     ConnectedGamePlayer, ConnectedPlayerActivity, DeveloperGameMatch, ModSubscription, ModSummary,
     PartyActivity, PublicGameParty,
 };
-use egui::{Align2, Rect, Ui, Vec2};
+use egui::{Color32, Rect, Ui, Vec2};
 use solomon_sim::menu::party_directory::{
     DirectoryPartyAction, directory_party_action, directory_party_presentation,
 };
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
 use solomon_sim::social::{GameSessionKind, PartyVisibility};
+use unicode_segmentation::UnicodeSegmentation;
 // Bitmap font, placement and tint are the authored drawing contract.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn ink(
@@ -22,8 +23,8 @@ pub(super) fn ink(
     tint: u32,
     rect: Rect,
     center: bool,
-) {
-    ink_with_fallback(frame, ui, text, font, scale, tint, rect, center, "Alegreya");
+) -> Result<(), String> {
+    ink_with_fallback(frame, ui, text, font, scale, tint, rect, center, "Alegreya")
 }
 
 // Source external labels retain their inherited family when a retail glyph is absent.
@@ -38,7 +39,7 @@ pub(super) fn ink_with_fallback(
     rect: Rect,
     center: bool,
     fallback: &str,
-) {
+) -> Result<(), String> {
     let spec = solomon_sim::native_ui_text::NativeUiTextSpec {
         placement: solomon_sim::native_ui_text::NativeUiTextPlacement::Box,
         scale: f64::from(scale),
@@ -65,14 +66,58 @@ pub(super) fn ink_with_fallback(
             solomon_sim::native_ui_text::native_ui_font(font).metrics[0] as f32 * scale,
             egui::FontFamily::Name(fallback.into()),
         );
-        painter.text(
-            if center { rect.center() } else { rect.left_center() },
-            if center { Align2::CENTER_CENTER } else { Align2::LEFT_CENTER },
-            text,
-            font,
-            widgets::color(tint),
-        );
+        let run = crate::gpu_ui::font_run(ui.ctx(), font, widgets::color(tint), text, None)?;
+        let origin = if center {
+            rect.center() - run.size() / 2.0
+        } else {
+            rect.left_center() - Vec2::new(0.0, run.size().y / 2.0)
+        };
+        run.paint(frame, &painter, origin, 1.0)?;
     }
+    Ok(())
+}
+
+fn narrative_line(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    text: &str,
+    rect: Rect,
+    size: f32,
+    color: Color32,
+) -> Result<(), String> {
+    let font = egui::FontId::new(size, egui::FontFamily::Name("IM FELL English".into()));
+    let source = text
+        .split([' ', '\t', '\n', '\r', '\u{000c}'])
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut run = crate::gpu_ui::font_run(ui.ctx(), font.clone(), color, &source, None)?;
+    if run.size().x > rect.width() {
+        let boundaries: Vec<_> = source.grapheme_indices(true).map(|(offset, _)| offset).collect();
+        let mut low = 0;
+        let mut high = boundaries.len();
+        while low < high {
+            let middle = low + (high - low).div_ceil(2);
+            let end = boundaries.get(middle).copied().unwrap_or(source.len());
+            let candidate = format!("{}…", &source[..end]);
+            let measured =
+                crate::gpu_ui::font_run(ui.ctx(), font.clone(), color, &candidate, None)?;
+            if measured.size().x <= rect.width() {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        let end = boundaries.get(low).copied().unwrap_or(source.len());
+        run =
+            crate::gpu_ui::font_run(ui.ctx(), font, color, &format!("{}…", &source[..end]), None)?;
+    }
+    run.paint(
+        frame,
+        &ui.painter().with_clip_rect(rect.intersect(ui.clip_rect())),
+        rect.left_center() - Vec2::new(0.0, run.size().y / 2.0),
+        1.0,
+    )
 }
 
 // The row paints borrowed catalog state and emits actions through the scene owner.
@@ -128,7 +173,7 @@ pub(super) fn mod_row(
     );
     frame.record_value(&id, &content.slug, Some(selected));
     if enabled {
-        if response.double_clicked() {
+        if frame.double_clicked(&response) {
             actions.push(format!("cloud-open:mod:{}", content.slug));
         } else if response.clicked() {
             actions.push(id);
@@ -138,7 +183,7 @@ pub(super) fn mod_row(
         main.min + Vec2::new(3.0, if phone { 12.0 } else { 10.0 }),
         Vec2::new(if phone { 44.0 } else { 56.0 }, if phone { 48.0 } else { 56.0 }),
     );
-    images.paint(frame, ui, content.thumbnail_url.as_deref(), &content.name, thumb, false);
+    images.paint(frame, ui, content.thumbnail_url.as_deref(), &content.name, thumb, false)?;
     let title_left = thumb.right() + 9.0;
     let author_w = if viewport_width <= 880.0 {
         80.0
@@ -170,22 +215,19 @@ pub(super) fn mod_row(
         if selected { 0xbfffbf } else { 0xd9ba70 },
         copy,
         false,
-    );
+    )?;
     let summary_rect = Rect::from_min_max(
         egui::pos2(title_left, main.top() + 34.0),
         egui::pos2(copy_right, main.top() + 52.0),
     );
-    let painter = ui.painter().with_clip_rect(summary_rect.intersect(ui.clip_rect()));
-    painter.text(
-        summary_rect.left_center(),
-        Align2::LEFT_CENTER,
+    narrative_line(
+        frame,
+        ui,
         &content.summary,
-        egui::FontId::new(
-            if phone { 13.0 } else { 14.0 },
-            egui::FontFamily::Name("IM FELL English".into()),
-        ),
+        summary_rect,
+        if phone { 13.0 } else { 14.0 },
         widgets::color(0xb2a78d),
-    );
+    )?;
     if !phone {
         ink(
             frame,
@@ -199,7 +241,7 @@ pub(super) fn mod_row(
                 egui::pos2(copy_right, main.top() + 72.0),
             ),
             false,
-        );
+        )?;
     }
     let author = if phone {
         Rect::from_min_size(
@@ -218,7 +260,7 @@ pub(super) fn mod_row(
         0xd9ba70,
         author,
         !phone,
-    );
+    )?;
     if !phone && version_w > 0.0 {
         ink(
             frame,
@@ -232,7 +274,7 @@ pub(super) fn mod_row(
                 Vec2::new(version_w, height),
             ),
             true,
-        );
+        )?;
     }
     let on = subscription.is_some_and(|s| s.enabled);
     let state = if on {
@@ -262,7 +304,7 @@ pub(super) fn mod_row(
         if on { 0xa9d29d } else { 0xa99a70 },
         status,
         !phone,
-    );
+    )?;
     if !phone || selected {
         let mut choices = vec![("VIEW", format!("cloud-open-mod:{}", content.slug), true)];
         if subscribed && let Some(s) = subscription {
@@ -350,7 +392,7 @@ pub(super) fn party_row(
         enabled,
     );
     if enabled {
-        if response.double_clicked() {
+        if frame.double_clicked(&response) {
             actions.push(format!("cloud-open:party:{}", party.id));
         } else if response.clicked() {
             actions.push(id);
@@ -369,7 +411,7 @@ pub(super) fn party_row(
         0xd9ba70,
         mark,
         true,
-    );
+    )?;
     let left = mark.right() + 9.0;
     let copy_right = if phone { main.right() } else { main.right() - 365.0 };
     ink(
@@ -384,7 +426,7 @@ pub(super) fn party_row(
             egui::pos2(copy_right, main.top() + 30.0),
         ),
         false,
-    );
+    )?;
     let mut flags = Vec::new();
     if party.session_kind == GameSessionKind::PrivateCollege {
         flags.push("PRIVATE COLLEGE".to_owned());
@@ -407,18 +449,12 @@ pub(super) fn party_row(
             egui::pos2(copy_right, main.top() + 48.0),
         ),
         false,
-    );
+    )?;
     let members = Rect::from_min_max(
         egui::pos2(left, main.top() + 50.0),
         egui::pos2(copy_right, main.top() + 68.0),
     );
-    ui.painter().with_clip_rect(members.intersect(ui.clip_rect())).text(
-        members.left_center(),
-        Align2::LEFT_CENTER,
-        party.members.join(", "),
-        egui::FontId::new(14.0, egui::FontFamily::Name("IM FELL English".into())),
-        widgets::color(0xb2a78d),
-    );
+    narrative_line(frame, ui, &party.members.join(", "), members, 14.0, widgets::color(0xb2a78d))?;
     let location = match &party.activity {
         PartyActivity::Hub => None,
         PartyActivity::Playing { boneyard_name } => Some(boneyard_name.as_str()),
@@ -438,7 +474,7 @@ pub(super) fn party_row(
                 Vec2::new(main.right() - left, 18.0),
             ),
             false,
-        );
+        )?;
         ink(
             frame,
             ui,
@@ -451,7 +487,7 @@ pub(super) fn party_row(
                 Vec2::new(main.right() - left, 18.0),
             ),
             false,
-        );
+        )?;
     } else {
         for (text, x, w) in [
             (p.squad.as_str(), main.right() - 365.0, 95.0),
@@ -467,7 +503,7 @@ pub(super) fn party_row(
                 0xd9ba70,
                 Rect::from_min_size(egui::pos2(x, main.top()), Vec2::new(w, main.height())),
                 true,
-            );
+            )?;
         }
     }
     if !phone || selected {
@@ -525,17 +561,17 @@ pub(super) fn developer_presence(
         0xd9ba70,
         header,
         false,
-    );
+    )?;
     if let Some(error) = error {
         let (_, r) = ui.allocate_space(Vec2::new(width, 50.0));
         widgets::paragraph(ui, error, r, "IM FELL English", 15.0, widgets::ERROR);
     }
     if loading && players.is_empty() {
         let (_, r) = ui.allocate_space(Vec2::new(width, 40.0));
-        ink(frame, ui, "SCRYING...", NativeUiFontName::Medium, 1.0, 0xd9ba70, r, false);
+        ink(frame, ui, "SCRYING...", NativeUiFontName::Medium, 1.0, 0xd9ba70, r, false)?;
     } else if !loading && error.is_none() && players.is_empty() {
         let (_, r) = ui.allocate_space(Vec2::new(width, 40.0));
-        ink(frame, ui, "NO WIZARDS CONNECTED.", NativeUiFontName::Medium, 1.0, 0xd9ba70, r, false);
+        ink(frame, ui, "NO WIZARDS CONNECTED.", NativeUiFontName::Medium, 1.0, 0xd9ba70, r, false)?;
     }
     let phone = width < 600.0;
     for game in matches {
@@ -550,7 +586,7 @@ pub(super) fn developer_presence(
             0xd9ba70,
             Rect::from_min_size(info.min, Vec2::new(info.width(), 24.0)),
             false,
-        );
+        )?;
         ink(
             frame,
             ui,
@@ -560,7 +596,7 @@ pub(super) fn developer_presence(
             0xd9ba70,
             Rect::from_min_size(info.min + Vec2::new(0.0, 26.0), Vec2::new(info.width(), 22.0)),
             false,
-        );
+        )?;
         let status = if game.wave_number > 0 {
             format!("WAVE {}", game.wave_number)
         } else {
@@ -580,7 +616,7 @@ pub(super) fn developer_presence(
             0xd9ba70,
             Rect::from_min_size(r.min + Vec2::new(0.0, 50.0), Vec2::new(r.width() - 130.0, 22.0)),
             false,
-        );
+        )?;
         let b = Rect::from_min_size(
             egui::pos2(r.right() - 120.0, r.top() + if phone { 80.0 } else { 10.0 }),
             Vec2::new(110.0, 44.0),
@@ -612,7 +648,7 @@ pub(super) fn developer_presence(
         0xd9ba70,
         r,
         false,
-    );
+    )?;
     for player in players {
         let (_, r) = ui.allocate_space(Vec2::new(width, if phone { 130.0 } else { 80.0 }));
         let detail = if player.bot {
@@ -656,7 +692,7 @@ pub(super) fn developer_presence(
                     Vec2::new(width, 20.0),
                 ),
                 false,
-            );
+            )?;
         }
     }
     Ok(())

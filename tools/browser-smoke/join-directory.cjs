@@ -73,16 +73,20 @@ async function client(browser, label, authenticated = true) {
       page.getByRole('navigation').getByRole('link',{name:'Play',exact:true}).click());
   } else await page.goto(game.href);
   await gpu.ready(page);
-  if (gpu.findWidget(await gpu.readUi(page),'prompt-secondary')) await gpu.click(page,'prompt-secondary');
+  if (gpu.findWidget(await gpu.readUi(page),'prompt-secondary')) {
+    await gpu.click(page,'prompt-secondary');
+    await gpu.noWidget(page,'prompt-secondary');
+  }
+  await gpu.useNativeFocus(page);
+  await page.bringToFront();
   return result;
 }
 
 async function visibility(owner, value, native) {
   const {page,state} = owner;
-  await gpu.useNativeFocus(page);
   await page.bringToFront();
   if (!gpu.findWidget(await gpu.readUi(page),`social/visibility:${value}`)) {
-    if (gpu.findWidget(await gpu.readUi(page),'social/party-menu')) await gpu.click(page,'social/tab:settings');
+    if (gpu.findWidget(await gpu.readUi(page),'social/party-menu')) await gpu.click(page,'social/party-settings');
     else await gpu.click(page,'social/party-settings-shortcut');
   }
   await gpu.click(page,`social/visibility:${value}`);
@@ -92,7 +96,6 @@ async function visibility(owner, value, native) {
 
 async function joinMenu(visitor) {
   const {page} = visitor;
-  await gpu.useNativeFocus(page);
   await page.bringToFront();
   const surface = (await gpu.readUi(page)).surface;
   if (surface === 'title') {
@@ -105,7 +108,6 @@ async function joinMenu(visitor) {
 
 async function refresh(visitor, id, label) {
   const {page,state} = visitor;
-  await gpu.useNativeFocus(page);
   await page.bringToFront();
   const count = state.directories.length;
   await gpu.click(page,'join-refresh');
@@ -122,12 +124,34 @@ async function refresh(visitor, id, label) {
   }
 }
 
+async function leavePlayer(owner) {
+  const {page,state}=owner;
+  if(!state.id||state.sockets.every(socket=>socket.closed))return;
+  await page.bringToFront();
+  if(gpu.findWidget(await gpu.readUi(page),'social/close')) {
+    await gpu.click(page,'social/close');
+    await gpu.noWidget(page,'social/close');
+  }
+  const current=(await gpu.readUi(page)).surface;
+  if(current==='title')return;
+  const before=state.saveWrites.length;
+  if(current==='hidden') {
+    await gpu.click(page,'hud:pause');
+    await gpu.surface(page,'pause');
+  } else assert.equal(current,'pause','owned cleanup must use the ordinary active gameplay menu');
+  await gpu.click(page,'leave');
+  await gpu.surface(page,'title');
+  await until(()=>state.saveWrites.length>before,'actual final account checkpoint persistence');
+  assert.equal(state.saveWrites.at(-1),200);
+}
+
 (async () => {
   const owned = await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=metal','--ignore-gpu-blocklist']});
   const browser = owned.browser;
   let failure;
+  const cleanup=[];
   try {
     const leader = await client(browser,'A');
     await gpu.click(leader.page,'settings');
@@ -177,10 +201,9 @@ async function refresh(visitor, id, label) {
     const request = leader.state.social.party_state.join_requests.find(request =>
       request.requester.account_username === accounts[1].username);
     assert.ok(request,'only the owned visitor request is acted on');
-    await gpu.useNativeFocus(leader.page);
     await leader.page.bringToFront();
     await gpu.click(leader.page,'social/party');
-    await gpu.click(leader.page,'social/tab:members');
+    await gpu.click(leader.page,'social/party-members');
     await gpu.click(leader.page,`social/deny:${request.id}`);
     await gpu.click(leader.page,'social/close');
     await until(() => !leader.state.social.party_state.join_requests.some(row => row.id === request.id), 'actual leader denial');
@@ -207,7 +230,6 @@ async function refresh(visitor, id, label) {
     checked('real Party ID typing and Enter resolve, consent and admit the requested wizard to the owned authority');
 
     step = 'playing directory policy';
-    await gpu.useNativeFocus(leader.page);
     await leader.page.bringToFront();
     await gpu.click(leader.page,'hud:map');
     await until(() => leader.state.frame?.snapshot.boneyard && visitor.state.frame?.snapshot.boneyard,'actual shared Boneyard entry',120000);
@@ -217,17 +239,7 @@ async function refresh(visitor, id, label) {
     assert.equal(playing.enabled,false,'the actual playing party cannot be joined through its row');
     await spectator.page.screenshot({path:path.join(output,'owned-party-in-game.png')});
     checked('the actual running owned party is displayed IN GAME with its Join action disabled');
-    for (const owner of [leader,visitor]) {
-      await gpu.useNativeFocus(owner.page);
-      await owner.page.bringToFront();
-      const before = owner.state.saveWrites.length;
-      await gpu.click(owner.page,'hud:pause');
-      await gpu.surface(owner.page,'pause');
-      await gpu.click(owner.page,'leave');
-      await gpu.surface(owner.page,'title');
-      await until(() => owner.state.saveWrites.length > before,'actual final account checkpoint persistence');
-      assert.equal(owner.state.saveWrites.at(-1),200);
-    }
+    for (const owner of [leader,visitor]) await leavePlayer(owner);
     checked('both admitted players leave through the real menu and persist their actual final checkpoint');
     for (const owner of clients) {
       await gpu.assertGpuOnly(owner.page);
@@ -243,8 +255,12 @@ async function refresh(visitor, id, label) {
     process.exitCode = 1;
   } finally {
     try {
+      if(failure)for(const owner of clients) {
+        try {await leavePlayer(owner);cleanup.push({label:owner.state.label,left:true});}
+        catch(error){cleanup.push({label:owner.state.label,error:error.stack});}
+      }
       for (const owner of clients) await gpu.settleErrors(owner.page);
-      fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify({passed:!failure,checks,failure,
+      fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify({passed:!failure,checks,failure,cleanup,
         clients:clients.map(({state,observation}) => ({label:state.label,id:state.id,
           partyId:state.social?.party_state?.party.id,joins:state.joins,
           directories:state.directories,errors:observation.errors,sockets:state.sockets,saveWrites:state.saveWrites,

@@ -48,6 +48,20 @@ async function observed(context) {
   page.setDefaultTimeout(45000);
   const observation = gpu.watchErrors(page);
   await observation.ready;
+  await page.addInitScript(()=>{
+    const uploads=[];
+    Object.defineProperty(window,'__cloudTextureUploads',{value:uploads});
+    for(const type of [WebGLRenderingContext,WebGL2RenderingContext]) {
+      const upload=type.prototype.texImage2D;
+      type.prototype.texImage2D=function(...args){
+        const result=Reflect.apply(upload,this,args);
+        const source=args.at(-1);
+        if(source instanceof HTMLImageElement && source.src.startsWith('blob:'))
+          uploads.push({source:source.src,width:source.naturalWidth,height:source.naturalHeight});
+        return result;
+      };
+    }
+  });
   observations.push(observation);pages.push(page);
   page.on('response', async response => {
     const pathname = new URL(response.url()).pathname;
@@ -65,13 +79,13 @@ async function observed(context) {
 async function detail(page) {
   await gpu.ready(page);
   if (gpu.findWidget(await gpu.readUi(page),'prompt-secondary')) await gpu.click(page,'prompt-secondary');
-  const stockTextures=(await gpu.readUi(page)).draw.textures;
   await gpu.click(page,'explore');
   await gpu.widget(page,`cloud-select:mod:${slug}`);
   await gpu.click(page,`cloud-open-mod:${slug}`);
   await gpu.value(page,'cloud-detail-title',modName);
   await gpu.value(page,'cloud-gallery-image','1 / 2');
-  await gpu.waitForUi(page,snapshot => snapshot.draw.textures >= stockTextures+2,'actual protected gallery textures uploaded to GPU');
+  await page.waitForFunction(()=>new Set(window.__cloudTextureUploads
+    .filter(upload=>upload.width>0&&upload.height>0).map(upload=>upload.source)).size>=2);
 }
 
 async function reveal(page,id) {

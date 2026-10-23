@@ -111,7 +111,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
     await gpu.surface(page, 'routing');
     const prompt = await gpu.widget(page, 'routing/dialog');
     const actualName = activeMods.find(mod => mod.slug === subscribedSlug).name;
-    assert.equal(prompt.label, 'Local play is active');
+    assert.equal(prompt.label, 'LOCAL PLAY IS ACTIVE');
     assert.ok(prompt.value.includes(actualName));
     await gpu.assertGpuOnly(page);
     assert.ok(pending.size > 0, 'the route sees active content before its catalog refresh completes');

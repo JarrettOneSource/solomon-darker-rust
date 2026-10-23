@@ -2,7 +2,7 @@
 //! Typed paint markers carry data only; no external callback code is executed.
 
 use egui::{ClippedPrimitive, Rect, epaint::Primitive};
-use solomon_graphics::{BlendMode, ColorFilter};
+use solomon_graphics::{BlendMode, ColorFilter, ShadowOutput};
 
 use super::ImageShadow;
 
@@ -24,6 +24,7 @@ pub(super) struct Style {
     pub effect: GroupEffect,
     pub filter: ColorFilter,
     pub blend: BlendMode,
+    pub output: ShadowOutput,
 }
 
 pub(super) enum Boundary {
@@ -130,6 +131,7 @@ mod tests {
             },
             filter: ColorFilter::default(),
             blend: BlendMode::Normal,
+            output: ShadowOutput::Source,
         }
     }
     fn mesh() -> ClippedPrimitive {

@@ -152,6 +152,7 @@ impl ModSkillsUi {
     ) -> Result<(), String> {
         let ctx = frame.ctx.clone();
         let small = ctx.content_rect().width() <= 700.0;
+        let mut paint_error = None;
         if !self.book.is_empty() {
             frame.input_scope("mod/skill-book");
             let anchor = if small { egui::Align2::RIGHT_BOTTOM } else { egui::Align2::RIGHT_TOP };
@@ -185,8 +186,10 @@ impl ModSkillsUi {
                                 )
                                 .show(ui, |ui| {
                                     for row in &self.book {
-                                        if let Some(action) = paint_row(frame, ui, row, false) {
-                                            self.actions.push(action);
+                                        match paint_row(frame, ui, row, false) {
+                                            Ok(Some(action)) => self.actions.push(action),
+                                            Ok(None) => {}
+                                            Err(error) => paint_error = Some(error),
                                         }
                                     }
                                 });
@@ -230,10 +233,10 @@ impl ModSkillsUi {
                                     for rows in self.choices.chunks(columns) {
                                         ui.columns(columns, |cells| {
                                             for (row, cell) in rows.iter().zip(cells) {
-                                                if let Some(action) =
-                                                    paint_row(frame, cell, row, true)
-                                                {
-                                                    self.actions.push(action);
+                                                match paint_row(frame, cell, row, true) {
+                                                    Ok(Some(action)) => self.actions.push(action),
+                                                    Ok(None) => {}
+                                                    Err(error) => paint_error = Some(error),
                                                 }
                                             }
                                         });
@@ -249,7 +252,7 @@ impl ModSkillsUi {
                 true,
             );
         }
-        Ok(())
+        paint_error.map_or(Ok(()), Err)
     }
 }
 fn copy(text: &str, size: f32) -> RichText {
@@ -262,55 +265,147 @@ fn paint_row(
     ui: &mut egui::Ui,
     row: &SkillRow,
     choice: bool,
-) -> Option<ModSkillAction> {
+) -> Result<Option<ModSkillAction>, String> {
     if row.tag != "article" && row.tag != "button" {
-        ui.label(copy(&row.name, 11.2));
-        return None;
+        let heading = row.tag == "h3";
+        if heading {
+            ui.add_space(6.4);
+        }
+        let text = if heading { row.name.to_uppercase() } else { row.name.clone() };
+        let mut style = crate::gpu_ui::NativeLabelStyle::new(
+            FontId::new(
+                if heading { 10.88 } else { 11.2 },
+                FontFamily::Name("Cinzel Semibold".into()),
+            ),
+            if heading {
+                Color32::from_rgb(201, 182, 221)
+            } else {
+                Color32::from_rgb(232, 220, 185)
+            },
+        );
+        style.wrap_width = Some(ui.available_width());
+        style.line_height = Some(if heading { 13.6 } else { 14.0 });
+        crate::gpu_ui::shaped_label(
+            frame,
+            ui,
+            &format!("mod/skill-heading:{}", row.key),
+            &text,
+            style,
+        )?;
+        return Ok(None);
     }
-    let mut clicked = false;
-    ui.horizontal(|ui| {
+    ui.horizontal(|ui| -> Result<Option<ModSkillAction>, String> {
         if row.subskill {
             ui.add_space(16.0);
         }
-        let description_height = row.description.as_ref().map_or(0.0, |description| {
-            ui.painter()
-                .layout(
-                    description.clone(),
-                    FontId::new(9.92, FontFamily::Name("Alegreya".into())),
-                    Color32::WHITE,
-                    (ui.available_width() - 52.0).max(1.0),
-                )
-                .size()
-                .y
-        });
-        let height =
-            (16.0 + if row.detail.is_some() { 14.0 } else { 0.0 } + description_height + 12.8)
-                .max(if choice { 51.2 } else { 44.8 });
-        let (bounds, response) = ui.allocate_exact_size(
-            vec2(ui.available_width(), height),
-            if row.action.is_some() && !row.disabled {
-                egui::Sense::click()
+        let width = ui.available_width();
+        let has_icon = row.icon_url.is_some();
+        let gap = if choice { 2.4 } else { 1.6 };
+        let family = if row.tag == "article" { "Cinzel ExtraBold" } else { "Cinzel Semibold" };
+        let mut text = vec![(
+            row.name.as_str(),
+            FontId::new(if choice { 11.52 } else { 11.2 }, FontFamily::Name(family.into())),
+            if choice {
+                Color32::from_rgb(234, 220, 182)
             } else {
-                egui::Sense::hover()
+                Color32::from_rgb(232, 220, 185)
+            },
+            (!choice).then_some(14.0),
+        )];
+        if let Some(detail) = &row.detail {
+            text.push((
+                detail,
+                FontId::new(11.2, FontFamily::Name("Cinzel Semibold".into())),
+                Color32::from_rgb(232, 220, 185),
+                Some(14.0),
+            ));
+        }
+        if let Some(description) = &row.description {
+            text.push((
+                description,
+                FontId::new(9.92, FontFamily::Name("Alegreya Medium".into())),
+                if choice {
+                    Color32::from_rgb(191, 179, 208)
+                } else {
+                    Color32::from_rgb(184, 174, 195)
+                },
+                Some(11.904),
+            ));
+        }
+        let runs = text
+            .into_iter()
+            .enumerate()
+            .map(|(index, (text, font, color, line_height))| {
+                let column = if has_icon { 1 } else { index % 2 };
+                let wrap_width = if column == 0 { 32.0 } else { (width - 54.0).max(1.0) };
+                crate::gpu_ui::font_run_with_options(
+                    frame.ctx,
+                    font,
+                    color,
+                    text,
+                    crate::gpu_ui::FontRunOptions {
+                        wrap_width: Some(wrap_width),
+                        line_height,
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let rows = skill_grid_rows(
+            &runs.iter().map(|run| run.size().y).collect::<Vec<_>>(),
+            has_icon,
+            choice,
+        );
+        let content_height = rows.iter().sum::<f32>() + gap * (rows.len().saturating_sub(1)) as f32;
+        let (bounds, response) = ui
+            .add_enabled_ui(!row.disabled, |ui| {
+                let (bounds, _) = ui
+                    .allocate_exact_size(vec2(width, content_height + 14.8), egui::Sense::hover());
+                let response = ui.interact(
+                    bounds,
+                    Id::unique(("mod/skill", &row.key)),
+                    if row.action.is_some() { egui::Sense::click() } else { egui::Sense::hover() },
+                );
+                (bounds, response)
+            })
+            .inner;
+        let hover =
+            response.hovered() && row.action.is_some() || choice && frame.focus_visible(&response);
+        ui.painter().rect_filled(
+            bounds,
+            0.0,
+            if choice {
+                Color32::from_rgba_unmultiplied(27, 20, 38, 240)
+            } else {
+                Color32::from_rgba_unmultiplied(27, 22, 34, 230)
             },
         );
-        ui.painter().rect_filled(bounds, 0.0, Color32::from_rgba_unmultiplied(27, 22, 34, 230));
         ui.painter().rect_stroke(
             bounds,
             0.0,
             Stroke::new(
                 1.0,
-                if response.hovered() && row.action.is_some() {
+                if hover {
                     Color32::from_rgb(229, 204, 255)
+                } else if choice {
+                    Color32::from_rgba_unmultiplied(178, 147, 218, 179)
                 } else {
                     Color32::from_rgba_unmultiplied(139, 119, 160, 158)
                 },
             ),
             egui::StrokeKind::Inside,
         );
-        let left = bounds.min + vec2(6.4, 6.4);
+        let origin = bounds.min + vec2(7.4, 7.4);
         if let Some(url) = &row.icon_url {
-            let icon = egui::Rect::from_min_size(left, vec2(32.0, 32.0));
+            let icon_box = egui::Rect::from_min_size(
+                origin + vec2(0.0, (content_height - 32.0) / 2.0),
+                vec2(32.0, 32.0),
+            );
+            let size = frame
+                .image_size(url)
+                .map(|size| size * (32.0 / size.x).min(32.0 / size.y))
+                .unwrap_or(vec2(32.0, 32.0));
+            let icon = egui::Rect::from_center_size(icon_box.center(), size);
             frame.image(ui.painter(), url, icon, None, Color32::WHITE);
             let id = format!("mod/skill-icon:{}", row.key);
             frame.record_rect(&id, &format!("{} icon", row.name), "img", icon, true);
@@ -318,29 +413,30 @@ fn paint_row(
                 frame.record_value(&id, &format!("{}x{} {url}", size.x, size.y), None);
             }
         }
-        let text_rect =
-            egui::Rect::from_min_max(left + vec2(39.2, 0.0), bounds.max - vec2(6.4, 6.4));
-        ui.scope_builder(egui::UiBuilder::new().max_rect(text_rect), |ui| {
-            ui.label(copy(&row.name, 11.2));
-            if let Some(detail) = &row.detail {
-                ui.label(copy(detail, 10.0));
-            }
-            if let Some(description) = &row.description {
-                ui.label(
-                    RichText::new(description)
-                        .font(FontId::new(9.92, FontFamily::Name("Alegreya".into())))
-                        .color(Color32::from_rgb(184, 174, 195)),
-                );
-            }
-        });
+        for (index, run) in runs.iter().enumerate() {
+            let column = if has_icon { 1 } else { index % 2 };
+            let row_index = if has_icon { index } else { index / 2 };
+            let top = rows[..row_index].iter().sum::<f32>() + gap * row_index as f32;
+            run.paint(
+                frame,
+                ui.painter(),
+                origin
+                    + vec2(
+                        if column == 0 { 0.0 } else { 39.2 },
+                        top + (rows[row_index] - run.size().y) / 2.0,
+                    ),
+                1.0,
+            )?;
+        }
+        let id = format!("mod/skill:{}", row.key);
         frame.record(
-            &format!("mod/skill:{}", row.key),
+            &id,
             &row.name,
             if row.action.is_some() { "button" } else { "article" },
             &response,
         );
         frame.record_value(
-            &format!("mod/skill:{}", row.key),
+            &id,
             &[Some(row.name.as_str()), row.detail.as_deref(), row.description.as_deref()]
                 .into_iter()
                 .flatten()
@@ -348,9 +444,32 @@ fn paint_row(
                 .join("\n"),
             None,
         );
-        clicked = response.clicked() && !row.disabled;
-    });
-    if clicked { row.action.clone() } else { None }
+        Ok(if response.clicked() && !row.disabled { row.action.clone() } else { None })
+    })
+    .inner
+}
+
+fn skill_grid_rows(heights: &[f32], has_icon: bool, choice: bool) -> Vec<f32> {
+    let count = if has_icon { if choice { 2 } else { 3 } } else { heights.len().div_ceil(2) };
+    let mut rows = vec![0.0_f32; count];
+    for (index, height) in heights.iter().enumerate() {
+        let row = if has_icon { index } else { index / 2 };
+        rows[row] = rows[row].max(*height);
+    }
+    let gap = if choice { 2.4 } else { 1.6 };
+    let current = rows.iter().sum::<f32>() + gap * count.saturating_sub(1) as f32;
+    let minimum = if choice {
+        36.4
+    } else if has_icon {
+        32.0
+    } else {
+        0.0
+    };
+    let extra = (minimum - current).max(0.0) / count as f32;
+    for row in &mut rows {
+        *row += extra;
+    }
+    rows
 }
 
 fn icon_url(

@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use egui::TextureId;
-use solomon_graphics::{AlphaShadow, BlendMode, ColorFilter};
+use solomon_graphics::{AlphaShadow, BlendMode, ColorFilter, ShadowOutput};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct ShadowKey {
@@ -11,7 +11,7 @@ struct ShadowKey {
     offset: [u32; 2],
     sigma: [u32; 2],
     color: [u32; 4],
-    only: bool,
+    output: ShadowOutput,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -52,7 +52,7 @@ impl Material {
             offset: shadow.offset.map(f32::to_bits),
             sigma: shadow.sigma.map(f32::to_bits),
             color: shadow.color.map(f32::to_bits),
-            only: shadow.only,
+            output: shadow.output,
         });
         self
     }
@@ -63,7 +63,7 @@ impl Material {
             offset: shadow.offset.map(f32::from_bits),
             sigma: shadow.sigma.map(f32::from_bits),
             color: shadow.color.map(f32::from_bits),
-            only: shadow.only,
+            output: shadow.output,
         })
     }
 
@@ -148,12 +148,18 @@ mod tests {
             offset: [0.0, 0.01],
             sigma: [0.02, 0.02],
             color: [0.0, 0.0, 0.0, 0.55],
-            only: false,
+            output: ShadowOutput::Source,
         };
         let mut materials = Materials::default();
         let image_id = materials.texture_id(base);
         let shadow_id = materials.texture_id(base.with_shadow(shadow));
         assert_ne!(image_id, shadow_id);
+        assert_ne!(
+            shadow_id,
+            materials.texture_id(
+                base.with_shadow(AlphaShadow { output: ShadowOutput::Outer, ..shadow })
+            )
+        );
         assert_eq!(shadow_id, materials.texture_id(base.with_shadow(shadow)));
         assert_ne!(
             shadow_id,

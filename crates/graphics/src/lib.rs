@@ -93,9 +93,15 @@ void main() {
         colour = clamp(colour * u_color_filter.x, 0.0, 1.0);
     }
     if (shadow) {
-        float shadowAlpha = shadow_alpha(v_uv - u_shadow_offset) * u_shadow_color.a;
+        float blurredAlpha = shadow_alpha(v_uv - u_shadow_offset);
+        float shadowAlpha = blurredAlpha * u_shadow_color.a;
         if (u_shadow_only > 0.5) {
             alpha = shadowAlpha * v_color.a;
+            if (u_shadow_only > 2.5) {
+                alpha = texel.a * (1.0 - blurredAlpha) * u_shadow_color.a * v_color.a;
+            } else if (u_shadow_only > 1.5) {
+                alpha *= 1.0 - texel.a;
+            }
             o_color = vec4(u_shadow_color.rgb * mix(1.0, alpha, u_premultiply_rgb), alpha);
             return;
         }
@@ -190,6 +196,17 @@ impl ColorFilter {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ShadowOutput {
+    #[default]
+    Source,
+    Shadow,
+    /// CSS outer box-shadow clips the caster's original interior from the shadow.
+    Outer,
+    /// CSS inset box-shadow casts the outside silhouette into the padding box.
+    Inner,
+}
+
 /// Crop-bounded SourceAlpha shadow. Coordinates are normalized source texture UVs.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AlphaShadow {
@@ -197,7 +214,7 @@ pub struct AlphaShadow {
     pub offset: [f32; 2],
     pub sigma: [f32; 2],
     pub color: [f32; 4],
-    pub only: bool,
+    pub output: ShadowOutput,
 }
 
 /// Where a quad's texels come from and where they land.
@@ -668,7 +685,15 @@ impl Renderer {
                 self.gl.uniform4fv_with_f32_array(Some(&self.u_shadow_color), &shadow.color);
                 self.gl.uniform2fv_with_f32_array(Some(&self.u_shadow_offset), &shadow.offset);
                 self.gl.uniform2fv_with_f32_array(Some(&self.u_shadow_sigma), &shadow.sigma);
-                self.gl.uniform1f(Some(&self.u_shadow_only), if shadow.only { 1.0 } else { 0.0 });
+                self.gl.uniform1f(
+                    Some(&self.u_shadow_only),
+                    match shadow.output {
+                        ShadowOutput::Source => 0.0,
+                        ShadowOutput::Shadow => 1.0,
+                        ShadowOutput::Outer => 2.0,
+                        ShadowOutput::Inner => 3.0,
+                    },
+                );
             } else {
                 self.gl.uniform2f(Some(&self.u_shadow_sigma), -1.0, -1.0);
             }

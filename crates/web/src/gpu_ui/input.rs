@@ -80,9 +80,37 @@ impl InputQueue {
             events: self.events.len(),
             codes: self.codes.len(),
             edits: self.edits.len(),
+            click_count: None,
         };
-        if self.dispatches.last().copied().unwrap_or_default() != end {
+        if !self.dispatches.last().copied().unwrap_or_default().same_endpoint(end) {
             self.dispatches.push(end);
+        }
+    }
+
+    fn record_click(&mut self, pos: Pos2, count: i32) {
+        if count <= 0 {
+            return;
+        }
+        // Browser click follows pointerup synchronously. Retain its native series
+        // on that release, before the animation frame drains the queued dispatches.
+        for index in (0..self.dispatches.len()).rev() {
+            let start = if index == 0 { 0 } else { self.dispatches[index - 1].events };
+            let end = self.dispatches[index].events;
+            let release = self.events[start..end].iter().rev().find_map(|event| match event {
+                UiEvent::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    ..
+                } => Some(*pos),
+                _ => None,
+            });
+            if let Some(release) = release {
+                if release == pos && self.dispatches[index].click_count.is_none() {
+                    self.dispatches[index].click_count = Some(count as u32);
+                }
+                return;
+            }
         }
     }
 
@@ -497,11 +525,15 @@ impl BrowserInput {
             let canvas = canvas.clone();
             listen(canvas.clone().as_ref(), "click", &mut listeners, move |event| {
                 let Some(click) = event.dyn_ref::<web_sys::MouseEvent>() else { return };
-                if click.detail() < 2 {
+                if click.button() != 0 {
                     return;
                 }
                 let mut queue = queue.borrow_mut();
                 let pos = point(&canvas, &queue, click.client_x(), click.client_y());
+                queue.record_click(pos, click.detail());
+                if click.detail() < 2 {
+                    return;
+                }
                 let Some(session) = queue
                     .session
                     .as_ref()
@@ -850,6 +882,7 @@ impl BrowserInput {
                 events: raw.events.len(),
                 codes: codes.len(),
                 edits: edits.len(),
+                click_count: None,
             });
         }
         Ok(into_passes(raw, codes, edits, dispatches))
@@ -1015,6 +1048,48 @@ impl Drop for BrowserInput {
 mod tests {
     use super::*;
     use solomon_sim::input::{MenuDirection, MenuGamepadState};
+
+    #[test]
+    fn browser_click_series_stays_on_its_real_release_and_never_replays_in_layout() {
+        let mut queue = InputQueue::default();
+        for (position, count) in
+            [(pos2(20.0, 20.0), 1), (pos2(90.0, 90.0), 1), (pos2(90.0, 90.0), 2)]
+        {
+            for pressed in [true, false] {
+                queue.events.push(UiEvent::PointerButton {
+                    pos: position,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                });
+                queue.finish_dispatch();
+            }
+            queue.record_click(position, count);
+            queue.finish_dispatch();
+        }
+        assert_eq!(queue.dispatches.len(), 6, "click metadata does not duplicate the release");
+        queue.record_click(pos2(20.0, 20.0), 2);
+        let passes = into_passes(
+            egui::RawInput { events: queue.events, ..Default::default() },
+            Vec::new(),
+            Vec::new(),
+            queue.dispatches,
+        );
+        assert_eq!(passes.len(), 12);
+        assert_eq!(
+            passes.iter().filter_map(|pass| pass.click_count).collect::<Vec<_>>(),
+            [1, 1, 2]
+        );
+        assert!(
+            passes
+                .iter()
+                .filter(|pass| pass.raw.events.is_empty())
+                .all(|pass| pass.click_count.is_none())
+        );
+        assert!(passes.iter().filter(|pass| pass.click_count.is_some()).all(|pass| {
+            matches!(pass.raw.events.last(), Some(UiEvent::PointerButton { pressed: false, .. }))
+        }));
+    }
 
     #[test]
     fn foreground_admission_requires_neutral_without_polling_the_gameplay_controller() {

@@ -236,7 +236,13 @@ impl PlayerPanels {
             ))
             .constrain(false)
             .show(frame.ctx, |ui| {
-                ui.set_min_width(self.viewport_size.0 as f32);
+                let width = self.viewport_size.0 as f32;
+                let bar = egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(width, COMPACT_NAVIGATION_HEIGHT),
+                );
+                ui.set_min_size(bar.size());
+                ui.painter().rect_filled(bar, 0.0, egui::Color32::from_rgb(16, 13, 10));
                 if !(!self.input_suspended
                     && !self.skill_book_result_open()
                     && self.notice.is_none()
@@ -245,30 +251,65 @@ impl PlayerPanels {
                 {
                     ui.disable();
                 }
-                frame.record_rect(
-                    "panel:navigation",
-                    "Panel sections",
-                    "navigation",
-                    egui::Rect::from_min_size(
-                        egui::Pos2::ZERO,
-                        egui::vec2(self.viewport_size.0 as f32, COMPACT_NAVIGATION_HEIGHT),
-                    ),
-                    false,
+                frame.record_rect("panel:navigation", "Panel sections", "navigation", bar, false);
+                let gap = 2.0;
+                let button_width = ((width - 12.0 - gap * (actions.len() - 1) as f32)
+                    / actions.len() as f32)
+                    .max(48.0);
+                let content_width =
+                    button_width * actions.len() as f32 + gap * (actions.len() - 1) as f32;
+                let mut scroll_ui = super::chrome::child_ui(
+                    ui,
+                    "compact-navigation-scroll",
+                    bar.shrink2(egui::vec2(6.0, 0.0)),
                 );
-                ui.horizontal(|ui| {
-                    for (action, label) in actions {
-                        let response = ui.add_sized(
-                            [self.viewport_size.0 as f32 / actions.len() as f32 - 8.0, 40.0],
-                            egui::Button::new(*label),
-                        );
-                        frame.record(&format!("panel:{action}"), label, "button", &response);
-                        if response.clicked() {
-                            self.events.push(PanelEvent::Activate(
-                                super::target_from_action(action).expect("section action"),
-                            ));
+                egui::ScrollArea::horizontal()
+                    .id_salt("panel-section-scroll")
+                    .auto_shrink([false, false])
+                    .max_height(COMPACT_NAVIGATION_HEIGHT)
+                    .show(&mut scroll_ui, |ui| {
+                        ui.set_min_size(egui::vec2(content_width, COMPACT_NAVIGATION_HEIGHT));
+                        let origin = ui.min_rect().min;
+                        let enabled = ui.is_enabled();
+                        let mut labels = Vec::with_capacity(actions.len());
+                        for (index, (action, label)) in actions.iter().enumerate() {
+                            let rect = egui::Rect::from_min_size(
+                                origin + egui::vec2(index as f32 * (button_width + gap), 4.0),
+                                egui::vec2(button_width, 40.0),
+                            );
+                            let response = crate::menu::widgets::interact(
+                                frame,
+                                ui,
+                                &format!("panel:{action}"),
+                                label,
+                                "button",
+                                rect,
+                                enabled,
+                            );
+                            let paint = frame.with_brightness(
+                                if enabled && frame.focus_visible(&response) { 1.2 } else { 1.0 },
+                            );
+                            crate::menu::widgets::paint_stock_button(
+                                &paint, ui, &response, rect, 1.0, enabled,
+                            );
+                            if response.clicked() {
+                                self.events.push(PanelEvent::Activate(
+                                    super::target_from_action(action).expect("section action"),
+                                ));
+                            }
+                            labels.push((response, rect, *label));
                         }
-                    }
-                });
+                        // Source labels have z-index 1 across sibling buttons,
+                        // so neighbouring corners cannot cover their glyphs.
+                        for (response, rect, label) in labels {
+                            let paint = frame.with_brightness(
+                                if enabled && frame.focus_visible(&response) { 1.2 } else { 1.0 },
+                            );
+                            crate::menu::widgets::paint_stock_button_label(
+                                &paint, ui, &response, label, rect, 1.0, enabled,
+                            );
+                        }
+                    });
             });
         Ok(())
     }

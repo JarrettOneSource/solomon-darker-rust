@@ -1,6 +1,6 @@
 //! GPU ally health rows from the host's canonical projection.
 
-use egui::{Color32, FontFamily, FontId, Id, Order, Rect, Stroke, pos2, vec2};
+use egui::{Color32, FontFamily, FontId, Rect, Stroke, pos2, vec2};
 use solomon_sim::social::{AllyHudIdentity, GameChatWorldKind, clamp_ally_hud_health_ratio};
 
 use super::SocialUi;
@@ -16,8 +16,8 @@ impl SocialUi {
             return Ok(());
         }
         let ctx = frame.ctx.clone();
-        let area =
-            egui::Area::new(Id::unique("social/allies")).order(Order::Middle).constrain(false);
+        let layer = Self::allies_layer();
+        let area = egui::Area::new(layer.id).order(layer.order).constrain(false);
         ctx.set_transform_layer(
             area.layer(),
             egui::emath::TSTransform {

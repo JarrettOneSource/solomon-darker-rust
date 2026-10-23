@@ -112,6 +112,7 @@ pub(super) async fn load(document: &Document, ctx: &Context) -> Result<BrowserFo
         "Arial",
         "Palatino",
         "Cinzel",
+        "Cinzel Semibold",
         "Cinzel Bold",
         "Cinzel ExtraBold",
         "Alegreya",
@@ -153,6 +154,7 @@ pub(super) fn font_css(family: &FontFamily, size: f32) -> String {
     };
     let (weight, style, family) = match name {
         "Cinzel" => ("500", "normal", "'SDGPU Cinzel',Georgia,serif"),
+        "Cinzel Semibold" => ("600", "normal", "'SDGPU Cinzel',Georgia,serif"),
         "Cinzel Bold" => ("700", "normal", "'SDGPU Cinzel',Georgia,serif"),
         "Cinzel ExtraBold" => ("800", "normal", "'SDGPU Cinzel',Georgia,serif"),
         "Alegreya" => ("400", "normal", "'SDGPU Alegreya',Georgia,serif"),

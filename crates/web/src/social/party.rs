@@ -5,14 +5,14 @@ mod invitation;
 mod menu;
 pub(super) use interaction::{PartyClipboard, PartyMenuInteraction};
 
-use egui::{Color32, Id, Order, Rect, Sense, pos2, vec2};
+use egui::{Color32, Id, Rect, Sense, pos2, vec2};
 use solomon_sim::native_ui_text::{
     NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec, measure_native_ui_text,
 };
 use solomon_sim::social::party_ui::{fit_native_party_menu_text, native_party_menu_name_font};
 use solomon_sim::social::{GameChatWorldKind, party_member_display_name};
 
-use super::{Intent, SocialUi, gpu};
+use super::{SocialUi, gpu};
 use crate::gpu_ui::UiFrame;
 
 impl SocialUi {
@@ -66,8 +66,8 @@ impl SocialUi {
         let height = if tall { y + rows.len() as f64 * 36.0 - 4.0 + 12.0 } else { 50.0 };
         let ctx = frame.ctx.clone();
         let mut action = None;
-        let area =
-            egui::Area::new(Id::unique("social/party-chip")).order(Order::Middle).constrain(false);
+        let layer = Self::party_layer();
+        let area = egui::Area::new(layer.id).order(layer.order).constrain(false);
         ctx.set_transform_layer(
             area.layer(),
             egui::emath::TSTransform {
@@ -254,7 +254,7 @@ impl SocialUi {
             })
             .inner?;
         if let Some(action) = action {
-            self.intents.borrow_mut().push(Intent::Action(action));
+            self.activate(&action)?;
         }
         Ok(())
     }

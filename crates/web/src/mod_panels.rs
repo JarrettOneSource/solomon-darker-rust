@@ -2,7 +2,7 @@
 
 use crate::gpu_ui::UiFrame;
 use crate::ui::javascript_string;
-use egui::{Color32, FontFamily, FontId, Id, Order, RichText, Stroke, vec2};
+use egui::{Color32, FontFamily, FontId, Id, Order, Stroke, vec2};
 use solomon_sim::Vec2;
 use solomon_sim::economy::{HubInventoryItem, HubItemKind};
 use solomon_sim::hub::regions::HubRegion;
@@ -79,30 +79,50 @@ impl ModPanelsView {
         egui::Area::new(Id::unique("mod/panels"))
             .order(Order::Middle)
             .anchor(egui::Align2::RIGHT_BOTTOM, vec2(-16.0, -80.0))
-            .show(&ctx, |ui| {
+            .show(&ctx, |ui| -> Result<(), String> {
                 ui.set_width(256.0_f32.min(ctx.content_rect().width() * 0.42));
                 egui::ScrollArea::vertical()
                     .id_salt("mod/panels-scroll")
                     .max_height(ctx.content_rect().height() * 0.4)
-                    .show(ui, |ui| {
+                    .show(ui, |ui| -> Result<(), String> {
                         ui.spacing_mut().item_spacing.y = 5.6;
                         for row in &self.rows {
-                            let response = ui.add_enabled(
-                                !row.disabled,
-                                egui::Button::new(
-                                    RichText::new(&row.label)
-                                        .font(FontId::new(12.0, FontFamily::Name("Cinzel".into())))
-                                        .color(Color32::from_rgb(230, 217, 178)),
-                                )
-                                .fill(Color32::from_rgba_unmultiplied(10, 12, 17, 224))
-                                .stroke(Stroke::new(
+                            let width = ui.available_width();
+                            let label = crate::gpu_ui::font_run_with_options(
+                                frame.ctx,
+                                FontId::new(12.0, FontFamily::Name("Cinzel Semibold".into())),
+                                Color32::from_rgb(230, 217, 178),
+                                &row.label,
+                                crate::gpu_ui::FontRunOptions {
+                                    wrap_width: Some((width - 22.8).max(1.0)),
+                                    line_height: Some(14.4),
+                                    ..Default::default()
+                                },
+                            )?;
+                            // Source 7.2px/10.4px padding inside its 1px border.
+                            let (bounds, response) = ui
+                                .add_enabled_ui(!row.disabled, |ui| {
+                                    ui.allocate_exact_size(
+                                        vec2(width, label.size().y + 16.4),
+                                        egui::Sense::click(),
+                                    )
+                                })
+                                .inner;
+                            ui.painter().rect_filled(
+                                bounds,
+                                0.0,
+                                Color32::from_rgba_unmultiplied(10, 12, 17, 224),
+                            );
+                            ui.painter().rect_stroke(
+                                bounds,
+                                0.0,
+                                Stroke::new(
                                     1.0,
                                     Color32::from_rgba_unmultiplied(210, 190, 139, 191),
-                                ))
-                                .corner_radius(0.0)
-                                .wrap()
-                                .min_size(vec2(ui.available_width(), 30.0)),
+                                ),
+                                egui::StrokeKind::Inside,
                             );
+                            label.paint(frame, ui.painter(), bounds.min + vec2(11.4, 8.2), 1.0)?;
                             frame.record(
                                 &format!("mod/panel:{}", row.key),
                                 &row.label,
@@ -115,8 +135,12 @@ impl ModPanelsView {
                                 self.actions.push(action.clone());
                             }
                         }
-                    });
-            });
+                        Ok(())
+                    })
+                    .inner?;
+                Ok(())
+            })
+            .inner?;
         Ok(())
     }
 }

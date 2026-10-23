@@ -174,7 +174,7 @@ impl ModMinimapView {
                 if let Some(binding) = &model.binding {
                     crate::social::gpu::browser_text(
                         frame,
-                        &painter,
+                        painter,
                         bounds.left_bottom() + vec2(7.2, -5.6),
                         egui::Align2::LEFT_BOTTOM,
                         binding,

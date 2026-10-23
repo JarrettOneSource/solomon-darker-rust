@@ -2,7 +2,7 @@
 //! ports `DarkCloudModDetail`, `DarkCloudGallery` and `DarkCloudComments` lifetimes.
 use super::rows::{ink, ink_with_fallback};
 use super::{super::widgets, art::CloudArt, format, images::CloudImages};
-use crate::gpu_ui::UiFrame;
+use crate::gpu_ui::{FontRunOptions, NativeFontRun, UiFrame, font_run, font_run_with_options};
 use crate::hosted::{ModComments, ModDetail, ModSubscription, ModSummary};
 use crate::menu::{HostedMenuAction, ModSubscriptionAction};
 use egui::{Color32, Rect, Ui, Vec2};
@@ -20,7 +20,7 @@ pub(super) struct ModDetailView {
     image_index: usize,
     body: String,
     actions: Vec<HostedMenuAction>,
-    swiping: bool,
+    swipe_start_x: Option<f32>,
     reset_scroll: bool,
     comment_height: f32,
     comment_resize_origin: Option<f32>,
@@ -40,7 +40,7 @@ impl ModDetailView {
             image_index: 0,
             body: String::new(),
             actions: Vec::new(),
-            swiping: false,
+            swipe_start_x: None,
             reset_scroll: true,
             comment_height: 100.0,
             comment_resize_origin: None,
@@ -276,7 +276,7 @@ impl ModDetailView {
                 Vec2::new(rect.width() - title_pad * 2.0, 34.0),
             ),
             true,
-        );
+        )?;
         ink_with_fallback(
             frame,
             ui,
@@ -290,7 +290,7 @@ impl ModDetailView {
             ),
             true,
             "IM FELL English",
-        );
+        )?;
         let back = Rect::from_min_size(
             egui::pos2(
                 rect.right() - 108.0,
@@ -396,13 +396,14 @@ impl ModDetailView {
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
         if let Some(error) = &self.detail_error {
-            let message = narrative(ui, error, width - 140.0);
+            let message = narrative_tinted(ui, error, width - 140.0, widgets::ERROR)?;
             let (_, r) = ui.allocate_space(Vec2::new(width, message.size().y.max(44.0)));
-            ui.painter().galley_with_override_text_color(
+            message.paint(
+                frame,
+                ui.painter(),
                 egui::pos2(r.left(), r.center().y - message.size().y / 2.0),
-                message,
-                widgets::ERROR,
-            );
+                1.0,
+            )?;
             if widgets::cloud_button(
                 frame,
                 ui,
@@ -459,7 +460,7 @@ impl ModDetailView {
         let end = summary_ui.min_rect().bottom().max(gallery.bottom());
         ui.allocate_space(Vec2::new(width, end - origin.y));
         ui.add_space(24.0);
-        heading(frame, ui, "DESCRIPTION", None, width);
+        heading(frame, ui, "DESCRIPTION", None, width)?;
         let summary = self.detail.as_ref().map_or(&self.summary, |d| &d.summary);
         let description = self
             .detail
@@ -472,12 +473,12 @@ impl ModDetailView {
         let releases = self.detail.as_ref().map_or("LOADING".to_owned(), |d| {
             format!("{} RELEASE{}", d.versions.len(), if d.versions.len() == 1 { "" } else { "S" })
         });
-        heading(frame, ui, "VERSION HISTORY", Some(&releases), width);
+        heading(frame, ui, "VERSION HISTORY", Some(&releases), width)?;
         self.paint_versions(frame, ui, art, width)?;
         ui.add_space(24.0);
         let comment_count =
             self.comments.as_ref().map_or("LOADING".to_owned(), |c| format!("{} TOTAL", c.total));
-        heading(frame, ui, "COMMENTS", Some(&comment_count), width);
+        heading(frame, ui, "COMMENTS", Some(&comment_count), width)?;
         if self.account.is_none() {
             let (_, r) = ui.allocate_space(Vec2::new(width, 50.0));
             if control(
@@ -512,7 +513,7 @@ impl ModDetailView {
                     Vec2::new(r.width() - 28.0, 16.0),
                 ),
                 false,
-            );
+            )?;
             let (_, field) = ui.allocate_space(Vec2::new(width - 6.0, self.comment_height));
             widgets::control_panel(frame, ui, &art.controls, field, true)?;
             let response = widgets::edit(
@@ -575,16 +576,16 @@ impl ModDetailView {
                     Vec2::new(row.width() - 28.0, 44.0),
                 ),
                 false,
-            );
+            )?;
             let busy = self.comment_mutation.is_some();
             let admitted = !busy && !self.body.trim().is_empty();
             let label = if busy { "POSTING..." } else { "POST COMMENT" };
-            let button_width = content_width(ui, label, 1.0) + 20.0;
+            let button_width = content_width(ui, label, 1.0)? + 20.0;
             let b = Rect::from_min_size(
                 egui::pos2(row.right() - button_width, row.top()),
                 Vec2::new(button_width, 44.0),
             );
-            if control_action(frame, ui, "cloud-post-comment", label, b, admitted).clicked()
+            if control_action(frame, ui, "cloud-post-comment", label, b, admitted)?.clicked()
                 && admitted
             {
                 actions.push("cloud-post-comment".to_owned());
@@ -592,7 +593,7 @@ impl ModDetailView {
             ui.add_space(6.0);
         }
         if let Some(error) = &self.comment_error {
-            flow(ui, error, width, widgets::ERROR);
+            flow(frame, ui, error, width, widgets::ERROR)?;
         }
         self.paint_comment_list(frame, ui, art, width, actions)?;
         Ok(())
@@ -612,7 +613,7 @@ impl ModDetailView {
         } else {
             format!("{} / {}", self.image_index + 1, screenshots.len())
         };
-        caption(frame, ui, "SCREENSHOTS", Some(&status), rect);
+        caption(frame, ui, "SCREENSHOTS", Some(&status), rect)?;
         let stage = Rect::from_min_size(
             rect.min + Vec2::new(6.0, 34.0),
             gallery_stage_size(rect.width(), frame.ctx.content_rect().size()),
@@ -625,7 +626,7 @@ impl ModDetailView {
             &self.summary.name,
             stage.shrink(6.0),
             true,
-        );
+        )?;
         frame.record_clipped_rect(
             "cloud-gallery-image",
             &format!("SCREENSHOTS   {status}"),
@@ -636,18 +637,8 @@ impl ModDetailView {
         );
         frame.record_value("cloud-gallery-image", &status, None);
         let swipe = ui.interact(stage, egui::Id::unique("cloud-gallery-swipe"), egui::Sense::DRAG);
-        if swipe.drag_started() {
-            self.swiping = ui.input(|i| i.any_touches());
-        }
-        if swipe.drag_stopped() && self.swiping {
-            self.swiping = false;
-            let travel = swipe.drag_delta().x;
-            if travel.abs() >= 40.0 {
-                actions.push(
-                    if travel < 0.0 { "cloud-gallery-next" } else { "cloud-gallery-previous" }
-                        .to_owned(),
-                );
-            }
+        if let Some(action) = gallery_swipe(&swipe, &mut self.swipe_start_x) {
+            actions.push(action.to_owned());
         }
         for (label, id, x) in [
             ("PREV", "cloud-gallery-previous", stage.left() + 4.0),
@@ -678,7 +669,7 @@ impl ModDetailView {
                             ui.cursor().min + Vec2::new(index as f32 * 88.0, 0.0),
                             Vec2::new(80.0, 54.0),
                         );
-                        images.paint(frame, ui, Some(&image.url), &self.summary.name, r, false);
+                        images.paint(frame, ui, Some(&image.url), &self.summary.name, r, false)?;
                         let id = format!("cloud-gallery:{index}");
                         if widgets::interact(
                             frame,
@@ -703,7 +694,9 @@ impl ModDetailView {
                         }
                     }
                     ui.allocate_space(Vec2::new(screenshots.len() as f32 * 88.0, 54.0));
-                });
+                    Ok::<(), String>(())
+                })
+                .inner?;
         }
         Ok(())
     }
@@ -723,9 +716,9 @@ impl ModDetailView {
         let available = width - 34.0;
         let mut layouts = Vec::new();
         for comment in &comments.items {
-            let author_width = content_width(ui, &comment.author.username, 1.0);
+            let author_width = content_width(ui, &comment.author.username, 1.0)?;
             let time = format::time_ago(&comment.created_at_utc);
-            let time_width = content_width(ui, &time, 0.85);
+            let time_width = content_width(ui, &time, 0.85)?;
             let wraps = author_width + 16.0 + time_width > available;
             let time_position =
                 if wraps { egui::pos2(0.0, 26.0) } else { egui::pos2(author_width + 16.0, 0.0) };
@@ -736,7 +729,7 @@ impl ModDetailView {
                 header_height = header_height.max(y + 44.0);
                 Rect::from_min_size(egui::pos2(available - 105.0, y), Vec2::new(105.0, 44.0))
             });
-            let body = narrative(ui, &comment.body, available);
+            let body = narrative(ui, &comment.body, available)?;
             let height = 24.0 + header_height + 8.0 + body.size().y;
             layouts.push(CommentLayout {
                 id: comment.id,
@@ -782,7 +775,7 @@ impl ModDetailView {
                     ),
                 ),
                 false,
-            );
+            )?;
             ink(
                 frame,
                 ui,
@@ -802,7 +795,7 @@ impl ModDetailView {
                     ),
                 ),
                 false,
-            );
+            )?;
             if let Some(delete) = layout.delete {
                 let id = format!("cloud-delete-comment:{}", layout.id);
                 if widgets::cloud_button(
@@ -820,11 +813,12 @@ impl ModDetailView {
                     actions.push(id);
                 }
             }
-            ui.painter().galley(
+            layout.body.paint(
+                frame,
+                ui.painter(),
                 origin + Vec2::new(0.0, layout.header_height + 8.0),
-                layout.body,
-                widgets::GOLD,
-            );
+                1.0,
+            )?;
             top += layout.height;
         }
         Ok(())
@@ -856,7 +850,7 @@ impl ModDetailView {
             let mut x = 0.0;
             let mut y = 0.0;
             for (label, scale) in metadata {
-                let ink_width = content_width(ui, &label, scale);
+                let ink_width = content_width(ui, &label, scale)?;
                 let gap = if x == 0.0 { 0.0 } else { 16.0 };
                 if x != 0.0 && x + gap + ink_width > available {
                     x = 0.0;
@@ -873,8 +867,11 @@ impl ModDetailView {
                 x += ink_width;
             }
             let header_height = y + 16.0;
-            let changelog = (!version.changelog.is_empty())
-                .then(|| narrative(ui, &version.changelog, available));
+            let changelog = if version.changelog.is_empty() {
+                None
+            } else {
+                Some(narrative(ui, &version.changelog, available)?)
+            };
             let height = 24.0
                 + header_height
                 + 8.0
@@ -908,14 +905,15 @@ impl ModDetailView {
                         Vec2::new(field.width, 16.0),
                     ),
                     false,
-                );
+                )?;
             }
             if let Some(changelog) = layout.changelog {
-                ui.painter().galley(
+                changelog.paint(
+                    frame,
+                    ui.painter(),
                     egui::pos2(panel.left() + 14.0, top + 12.0 + layout.header_height + 8.0),
-                    changelog,
-                    widgets::GOLD,
-                );
+                    1.0,
+                )?;
             }
             top += layout.height;
         }
@@ -936,9 +934,9 @@ impl ModDetailView {
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
         let summary = self.detail.as_ref().map_or(&self.summary, |d| &d.summary);
-        heading(frame, ui, "ABOUT THIS MOD", None, width);
+        heading(frame, ui, "ABOUT THIS MOD", None, width)?;
         let inner_width = width - 6.0;
-        let deck = narrative(ui, &summary.summary, inner_width - 28.0);
+        let deck = narrative(ui, &summary.summary, inner_width - 28.0)?;
         let deck_height = if summary.summary.is_empty() { 28.0 } else { deck.size().y + 28.0 };
         let tag_width = inner_width
             - 28.0
@@ -947,7 +945,7 @@ impl ModDetailView {
         let mut tag_lines: Vec<Vec<(&str, f32)>> = Vec::new();
         let mut line_width = 0.0;
         for tag in &summary.tags {
-            let tag_ink = content_width(ui, tag, 1.0);
+            let tag_ink = content_width(ui, tag, 1.0)?;
             if tag_lines.is_empty() || line_width + 12.0 + tag_ink > tag_width {
                 tag_lines.push(Vec::new());
                 line_width = 0.0;
@@ -964,7 +962,7 @@ impl ModDetailView {
         let (_, panel) =
             ui.allocate_space(Vec2::new(width, deck_height + 160.0 + tag_height + 6.0));
         widgets::control_panel(frame, ui, &art.controls, panel, false)?;
-        ui.painter().galley(panel.min + Vec2::splat(14.0), deck, widgets::GOLD);
+        deck.paint(frame, ui.painter(), panel.min + Vec2::splat(14.0), 1.0)?;
         let content_right = panel.right() - 20.0;
         for (index, (label, value)) in [
             ("VERSION:", summary.latest_version.clone()),
@@ -992,8 +990,8 @@ impl ModDetailView {
                     Vec2::new(inner_width - 28.0, 40.0),
                 ),
                 false,
-            );
-            let value_width = content_width(ui, &value, 1.0);
+            )?;
+            let value_width = content_width(ui, &value, 1.0)?;
             ink(
                 frame,
                 ui,
@@ -1006,7 +1004,7 @@ impl ModDetailView {
                     Vec2::new(value_width, 40.0),
                 ),
                 false,
-            );
+            )?;
         }
         if !tag_lines.is_empty() {
             let top = panel.top() + deck_height + 160.0;
@@ -1022,7 +1020,7 @@ impl ModDetailView {
                     Vec2::new(inner_width - 28.0, tag_height),
                 ),
                 false,
-            );
+            )?;
             for (index, line) in tag_lines.iter().enumerate() {
                 let line_width = line.iter().map(|(_, width)| *width).sum::<f32>()
                     + line.len().saturating_sub(1) as f32 * 12.0;
@@ -1040,7 +1038,7 @@ impl ModDetailView {
                             Vec2::new(*width, 16.0),
                         ),
                         false,
-                    );
+                    )?;
                     x += width + 12.0;
                 }
             }
@@ -1052,7 +1050,7 @@ impl ModDetailView {
                 .map_or("NOT SUBSCRIBED", |s| if s.enabled { "ENABLED" } else { "DISABLED" })
         };
         ui.add_space(24.0);
-        heading(frame, ui, "SUBSCRIPTION", Some(state), width);
+        heading(frame, ui, "SUBSCRIPTION", Some(state), width)?;
         let choices = if self.account.is_none() {
             vec![("SIGN IN TO SUBSCRIBE".to_owned(), "cloud-detail-signin-subscribe".to_owned())]
         } else if let Some(s) = subscription {
@@ -1092,7 +1090,7 @@ impl ModDetailView {
             }
             let r =
                 Rect::from_min_size(egui::pos2(panel.left(), top), Vec2::new(width - 6.0, 44.0));
-            if control_action(frame, ui, &id, &label, r, !busy).clicked() && !busy {
+            if control_action(frame, ui, &id, &label, r, !busy)?.clicked() && !busy {
                 actions.push(if id == "cloud-detail-signin-subscribe" {
                     "cloud-sign-in".to_owned()
                 } else {
@@ -1101,7 +1099,7 @@ impl ModDetailView {
             }
         }
         if let Some(error) = error {
-            flow(ui, error, width, widgets::ERROR);
+            flow(frame, ui, error, width, widgets::ERROR)?;
         }
         Ok(())
     }
@@ -1134,7 +1132,7 @@ struct CommentLayout {
     time_width: f32,
     time_position: egui::Pos2,
     delete: Option<Rect>,
-    body: std::sync::Arc<egui::Galley>,
+    body: std::sync::Arc<NativeFontRun>,
     header_height: f32,
     height: f32,
 }
@@ -1142,7 +1140,7 @@ struct CommentLayout {
 struct ReleaseLayout {
     fields: Vec<MetadataField>,
     header_height: f32,
-    changelog: Option<std::sync::Arc<egui::Galley>>,
+    changelog: Option<std::sync::Arc<NativeFontRun>>,
     height: f32,
 }
 
@@ -1171,8 +1169,41 @@ fn empty_panel(
         0xd9ba70,
         Rect::from_min_size(panel.min + Vec2::splat(14.0), Vec2::new(width - 34.0, 22.0)),
         false,
-    );
+    )?;
     Ok(())
+}
+
+// DarkCloudGallery.tsx compares the original touch with its released clientX.
+// egui's drag_delta is a per-frame movement and becomes zero on release.
+fn gallery_swipe(response: &egui::Response, start_x: &mut Option<f32>) -> Option<&'static str> {
+    let cancelled = response.ctx.input(|input| {
+        input.events.iter().any(|event| {
+            matches!(event, egui::Event::Touch { phase: egui::TouchPhase::Cancel, .. })
+        })
+    });
+    if !response.enabled() || cancelled {
+        *start_x = None;
+        return None;
+    }
+    if response.drag_started() {
+        *start_x = if response.ctx.input(|input| input.any_touches()) {
+            response.interact_pointer_pos().map(|position| position.x)
+        } else {
+            None
+        };
+    }
+    if !response.drag_stopped() {
+        return None;
+    }
+    let start = start_x.take()?;
+    let travel = response.interact_pointer_pos()?.x - start;
+    if travel.abs() < 40.0 {
+        None
+    } else if travel < 0.0 {
+        Some("cloud-gallery-next")
+    } else {
+        Some("cloud-gallery-previous")
+    }
 }
 
 fn gallery_stage_size(width: f32, view: Vec2) -> Vec2 {
@@ -1189,12 +1220,24 @@ fn gallery_stage_size(width: f32, view: Vec2) -> Vec2 {
     Vec2::new(width, (width * 9.0 / 16.0).clamp(minimum, maximum))
 }
 
-fn heading(frame: &UiFrame<'_>, ui: &mut Ui, text: &str, status: Option<&str>, width: f32) {
+fn heading(
+    frame: &UiFrame<'_>,
+    ui: &mut Ui,
+    text: &str,
+    status: Option<&str>,
+    width: f32,
+) -> Result<(), String> {
     let (_, r) = ui.allocate_space(Vec2::new(width, 28.0));
-    caption(frame, ui, text, status, r);
+    caption(frame, ui, text, status, r)
 }
 
-fn caption(frame: &UiFrame<'_>, ui: &Ui, text: &str, status: Option<&str>, rect: Rect) {
+fn caption(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    text: &str,
+    status: Option<&str>,
+    rect: Rect,
+) -> Result<(), String> {
     ink(
         frame,
         ui,
@@ -1204,7 +1247,7 @@ fn caption(frame: &UiFrame<'_>, ui: &Ui, text: &str, status: Option<&str>, rect:
         0xd9ba70,
         Rect::from_min_size(rect.min, Vec2::new(rect.width(), 16.0)),
         false,
-    );
+    )?;
     if let Some(status) = status {
         let width = measure_native_ui_text(status, NativeUiFontName::Medium, 0.85) as f32;
         ink(
@@ -1219,10 +1262,11 @@ fn caption(frame: &UiFrame<'_>, ui: &Ui, text: &str, status: Option<&str>, rect:
                 Vec2::new(width, 16.0),
             ),
             false,
-        );
+        )?;
     }
+    Ok(())
 }
-fn content_width(ui: &Ui, text: &str, scale: f32) -> f32 {
+fn content_width(ui: &Ui, text: &str, scale: f32) -> Result<f32, String> {
     let spec = solomon_sim::native_ui_text::NativeUiTextSpec {
         scale: f64::from(scale),
         ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
@@ -1234,35 +1278,51 @@ fn content_width(ui: &Ui, text: &str, scale: f32) -> f32 {
     };
     let layout = solomon_sim::native_ui_text::layout_native_ui_text(&spec);
     if layout.unsupported_code_points.is_empty() {
-        layout.width as f32
+        Ok(layout.width as f32)
     } else {
-        ui.painter()
-            .layout_no_wrap(
-                text.to_owned(),
-                egui::FontId::new(16.0 * scale, egui::FontFamily::Name("Alegreya".into())),
-                widgets::GOLD,
-            )
-            .size()
-            .x
+        Ok(font_run(
+            ui.ctx(),
+            egui::FontId::new(16.0 * scale, egui::FontFamily::Name("Alegreya".into())),
+            widgets::GOLD,
+            text,
+            None,
+        )?
+        .size()
+        .x)
     }
 }
 
-fn narrative(ui: &Ui, text: &str, width: f32) -> std::sync::Arc<egui::Galley> {
-    let mut job = egui::text::LayoutJob::simple(
-        text.to_owned(),
-        egui::FontId::new(16.0, egui::FontFamily::Name("IM FELL English".into())),
-        widgets::GOLD,
-        width,
-    );
-    job.sections[0].format.line_height = Some(23.2);
-    ui.painter().layout_job(job)
+fn narrative(ui: &Ui, text: &str, width: f32) -> Result<std::sync::Arc<NativeFontRun>, String> {
+    narrative_tinted(ui, text, width, widgets::GOLD)
 }
 
-fn flow(ui: &mut Ui, text: &str, width: f32, tint: Color32) {
-    let galley = narrative(ui, text, width - 28.0);
-    let (_, r) = ui.allocate_space(Vec2::new(width, galley.size().y + 28.0));
-    ui.painter().galley_with_override_text_color(r.min + Vec2::splat(14.0), galley, tint);
+fn narrative_tinted(
+    ui: &Ui,
+    text: &str,
+    width: f32,
+    color: Color32,
+) -> Result<std::sync::Arc<NativeFontRun>, String> {
+    font_run_with_options(
+        ui.ctx(),
+        egui::FontId::new(16.0, egui::FontFamily::Name("IM FELL English".into())),
+        color,
+        text,
+        FontRunOptions { wrap_width: Some(width), line_height: Some(23.2), ..Default::default() },
+    )
 }
+
+fn flow(
+    frame: &UiFrame<'_>,
+    ui: &mut Ui,
+    text: &str,
+    width: f32,
+    tint: Color32,
+) -> Result<(), String> {
+    let run = narrative_tinted(ui, text, width - 28.0, tint)?;
+    let (_, r) = ui.allocate_space(Vec2::new(width, run.size().y + 28.0));
+    run.paint(frame, ui.painter(), r.min + Vec2::splat(14.0), 1.0)
+}
+
 fn panel_text(
     frame: &UiFrame<'_>,
     ui: &mut Ui,
@@ -1270,13 +1330,13 @@ fn panel_text(
     text: &str,
     width: f32,
 ) -> Result<(), String> {
-    let galley = narrative(ui, text, width - 34.0);
-    let height = if text.is_empty() { 34.0 } else { galley.size().y + 34.0 };
+    let run = narrative(ui, text, width - 34.0)?;
+    let height = if text.is_empty() { 34.0 } else { run.size().y + 34.0 };
     let (_, r) = ui.allocate_space(Vec2::new(width, height));
     widgets::control_panel(frame, ui, &art.controls, r, false)?;
-    ui.painter().galley(r.min + Vec2::splat(14.0), galley, widgets::GOLD);
-    Ok(())
+    run.paint(frame, ui.painter(), r.min + Vec2::splat(14.0), 1.0)
 }
+
 fn control(
     frame: &UiFrame<'_>,
     ui: &Ui,
@@ -1287,14 +1347,14 @@ fn control(
     enabled: bool,
 ) -> Result<egui::Response, String> {
     widgets::control_panel(frame, ui, &art.controls, rect, false)?;
-    Ok(control_action(
+    control_action(
         frame,
         ui,
         id,
         label,
         Rect::from_min_max(rect.min, rect.max - Vec2::splat(6.0)),
         enabled,
-    ))
+    )
 }
 
 fn control_action(
@@ -1304,7 +1364,7 @@ fn control_action(
     label: &str,
     rect: Rect,
     enabled: bool,
-) -> egui::Response {
+) -> Result<egui::Response, String> {
     let response = widgets::interact_unstyled(frame, ui, id, label, "button", rect, enabled);
     ink(
         frame,
@@ -1315,9 +1375,9 @@ fn control_action(
         if enabled { 0xd9ba70 } else { 0x8e7c4d },
         rect.shrink2(Vec2::new(10.0, 0.0)),
         false,
-    );
+    )?;
     widgets::focus_outline(frame, ui, &response, 1.0, -3.0, widgets::GOLD);
-    response
+    Ok(response)
 }
 pub(super) fn subscription_action(value: &str) -> Option<ModSubscriptionAction> {
     match value {
@@ -1326,5 +1386,113 @@ pub(super) fn subscription_action(value: &str) -> Option<ModSubscriptionAction> 
         "disable" => Some(ModSubscriptionAction::Disable),
         "unsubscribe" => Some(ModSubscriptionAction::Unsubscribe),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gallery_swipe;
+    use egui::{Event, PointerButton, TouchPhase};
+
+    fn pass(
+        ctx: &egui::Context,
+        start_x: &mut Option<f32>,
+        events: Vec<Event>,
+    ) -> Option<&'static str> {
+        let mut action = None;
+        ctx.run_pass(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400.0, 300.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                ctx.root_ui(|ui| {
+                    let response = ui.interact(
+                        egui::Rect::from_min_max(egui::pos2(20.0, 20.0), egui::pos2(380.0, 280.0)),
+                        egui::Id::unique("gallery-touch-test"),
+                        egui::Sense::DRAG,
+                    );
+                    action = gallery_swipe(&response, start_x);
+                });
+            },
+        )
+        .drop_without_applying_deltas();
+        action
+    }
+
+    fn pointer(x: f32, phase: TouchPhase, touch: bool) -> Vec<Event> {
+        let position = egui::pos2(x, 100.0);
+        let mut events = Vec::new();
+        if touch {
+            events.push(Event::Touch {
+                device_id: egui::TouchDeviceId(0),
+                id: egui::TouchId(1),
+                phase,
+                pos: position,
+                force: None,
+            });
+        }
+        events.push(Event::PointerMoved(position));
+        if phase != TouchPhase::Move {
+            events.push(Event::PointerButton {
+                pos: position,
+                button: PointerButton::Primary,
+                pressed: phase == TouchPhase::Start,
+                modifiers: egui::Modifiers::NONE,
+            });
+            if touch && phase != TouchPhase::Start {
+                events.push(Event::PointerGone);
+            }
+        }
+        events
+    }
+
+    fn swipe(distance: f32, touch: bool, cancel: bool) -> Option<&'static str> {
+        let ctx = egui::Context::default();
+        let mut start_x = None;
+        pass(&ctx, &mut start_x, Vec::new());
+        assert_eq!(pass(&ctx, &mut start_x, pointer(200.0, TouchPhase::Start, touch)), None);
+        for step in 1..=12 {
+            assert_eq!(
+                pass(
+                    &ctx,
+                    &mut start_x,
+                    pointer(200.0 + distance * step as f32 / 12.0, TouchPhase::Move, touch),
+                ),
+                None,
+                "movement does not switch before release",
+            );
+        }
+        let action = pass(
+            &ctx,
+            &mut start_x,
+            pointer(
+                200.0 + distance,
+                if cancel { TouchPhase::Cancel } else { TouchPhase::End },
+                touch,
+            ),
+        );
+        assert_eq!(start_x, None, "release retires the original touch");
+        assert_eq!(pass(&ctx, &mut start_x, Vec::new()), None, "a swipe is emitted once");
+        action
+    }
+
+    #[test]
+    fn gallery_uses_total_touch_travel_at_the_actual_release() {
+        assert_eq!(swipe(-72.0, true, false), Some("cloud-gallery-next"));
+        assert_eq!(swipe(72.0, true, false), Some("cloud-gallery-previous"));
+    }
+
+    #[test]
+    fn gallery_retains_source_threshold_and_excludes_mouse_drag_and_touch_cancel() {
+        assert_eq!(swipe(-39.0, true, false), None);
+        assert_eq!(swipe(-40.0, true, false), Some("cloud-gallery-next"));
+        assert_eq!(swipe(40.0, true, false), Some("cloud-gallery-previous"));
+        assert_eq!(swipe(-72.0, false, false), None);
+        assert_eq!(swipe(-72.0, true, true), None);
     }
 }

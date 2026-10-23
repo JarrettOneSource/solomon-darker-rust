@@ -305,7 +305,8 @@ async function revealHallRun(page, runId) {
   await gpu.wheel(page, 'hall-records', 0, -30000);
   for (let attempt = 0; attempt < 45; attempt += 1) {
     const snapshot = await gpu.readUi(page);
-    if (snapshot.widgets.some(widget => widget.id.startsWith('hall-toggle:') && widget.value === runId)) return;
+    const row = snapshot.widgets.find(widget => widget.id.startsWith('hall-toggle:') && widget.value === runId);
+    if (row) return row;
     await gpu.wheel(page, 'hall-records', 0, 600);
     await page.waitForTimeout(100);
   }
@@ -323,7 +324,15 @@ async function globalHall(page, runId, mode) {
     `persisted actual Global Hall ${board} entry`);
     await gpu.waitForUi(page, snapshot => gpu.findWidget(snapshot, `hall-board:${board}`)?.selected === true,
       `painted selected Global ${board} board`);
-    await revealHallRun(page, runId);
+    const row = await revealHallRun(page, runId);
+    if (board === 'awesomeness') {
+      for (const expanded of [!row.selected, row.selected]) {
+        await activateHall(page, row.id, mode);
+        await gpu.waitForUi(page, snapshot => snapshot.widgets.some(widget => widget.id === row.id
+          && widget.value === runId && widget.selected === expanded), 'actual persisted Hall detail toggle');
+      }
+      checked(`the earned Hall row expands and collapses through ordinary ${mode} input`);
+    }
     await page.screenshot({path: path.join(output, `persisted-global-hall-${board}.png`)});
   }
   await activateHall(page, 'hall-scope:local', mode);
@@ -470,6 +479,7 @@ async function main() {
     const submit = 'settings-toggle:submit-runs';
     if ((await gpu.widget(page, submit)).value !== 'true') await gpu.click(page, submit);
     await gpu.value(page, submit, 'true');
+    await gpu.wheel(page, 'settings-content', 0, 600);
     await gpu.value(page, 'settings-toggle:cheats', 'false');
     await gpu.click(page, 'settings-back');
     await gpu.click(page, 'settings-back');
@@ -477,7 +487,7 @@ async function main() {
     checked('ordinary Settings show Submit Runs enabled and cheats disabled');
 
     step = 'fresh eligible Global admission';
-    await startNewGame(page, {name:'Score Witness', element:'fire', discipline:'arcane'});
+    await startNewGame(page, {name:'ScoreWitness', element:'fire', discipline:'arcane'});
     await waitUntil(() => welcomes.length === 1, 'real Global Welcome');
     await gpu.surface(page, 'hidden');
     assert.equal(admissions.length, 1);

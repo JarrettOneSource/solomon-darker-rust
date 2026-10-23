@@ -32,7 +32,8 @@ impl JoystickGeometry {
 }
 fn geometry(state: &GameplayInputState, lane: JoystickLane) -> JoystickGeometry {
     let (width, height, percent) = state.viewport;
-    let display_scale = (width as f32 / 1600.0).min(height as f32 / 900.0).min(1.0);
+    let display_scale = solomon_sim::viewport::game_viewport(Vec2::new(width as f64, height as f64))
+        .display_scale as f32;
     let root = display_scale * percent as f32 / 100.0;
     let id = if lane == JoystickLane::Movement {
         MobileUiElementId::LeftJoystick

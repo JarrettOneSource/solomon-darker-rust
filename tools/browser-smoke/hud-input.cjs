@@ -6,6 +6,7 @@ const {chromium}=require(path.resolve(process.env.PW));
 const {startNewGame}=require('./menu-journey.cjs');
 const ui=require('./gpu-ui.cjs');
 const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
+const {observeGpuResources,gpuResources}=require('./gpu-resources.cjs');
 const url=process.env.URL||'http://127.0.0.1:4185/';
 const output=process.env.OUT||'/tmp';
 fs.mkdirSync(output,{recursive:true});
@@ -117,6 +118,7 @@ async function joystickLabel(page,opacity) {
     const touch=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
     await ui.watchErrors(touch,{errors}).ready;
     await ui.observeGpu(touch);
+    await observeGpuResources(touch);
     await ready(touch,{touch:true});
     await touch.setViewportSize({width:390,height:844});
     await ui.widget(touch,'landscape-guidance');
@@ -128,6 +130,19 @@ async function joystickLabel(page,opacity) {
     const joystick=ui.bounds(await ui.widget(touch,'hud:joystick:movement'));
     assert.ok(joystick.width>=90,'the actual touch joystick remains usable');
     const neutralLabel=await joystickLabel(touch,1);
+    const resourcesBefore=await gpuResources(touch);
+    await ticks(touch,8);
+    const resourcesIdle=await gpuResources(touch);
+    const allocations=resources=>[resources.texturesCreated,resources.framebuffersCreated];
+    assert.deepEqual(allocations(resourcesIdle),allocations(resourcesBefore),
+      'settled GPU groups reuse their actual textures and framebuffers');
+    const groupTargets=resourcesIdle.targets.filter(target=>target.canvas==='game'
+      &&!target.deleted&&target.texture?.width>0&&target.texture?.height>0
+      &&target.texture.width!==target.texture.height&&target.draws>0);
+    assert.ok(groupTargets.length>0,'the visible joystick label submits actual non-square GPU targets');
+    assert.ok(groupTargets.some(target=>target.draws
+      >(resourcesBefore.targets.find(before=>before.id===target.id)?.draws??0)),
+      'those real GPU targets keep receiving draws while the label is visible');
     const client=await touch.context().newCDPSession(touch);
     try {
       const point={x:joystick.x+joystick.width*0.8,y:joystick.y+joystick.height*0.7,id:1};
@@ -141,6 +156,9 @@ async function joystickLabel(page,opacity) {
       assert.equal((await ui.widget(touch,'hud:joystick:movement')).focused,false,
         'the source drag-only joystick does not take keyboard focus');
       const activeLabel=await joystickLabel(touch,.45);
+      const resourcesActive=await gpuResources(touch);
+      assert.deepEqual(allocations(resourcesActive),allocations(resourcesIdle),
+        'active label opacity reuses the GPU target pool');
       await client.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
       await ticks(touch,40);
       const cancelStart=await state(touch);
@@ -153,6 +171,9 @@ async function joystickLabel(page,opacity) {
       assert.equal((await ui.widget(touch,'hud:joystick:movement')).focused,false,
         'touch cancellation leaves keyboard focus with the ordinary owner');
       const cancelledLabel=await joystickLabel(touch,1);
+      const resourcesCancelled=await gpuResources(touch);
+      assert.deepEqual(allocations(resourcesCancelled),allocations(resourcesIdle),
+        'native cancellation and neutral label reuse the GPU target pool');
       const movement=await touch.evaluate(()=>Array.from(wasmBindings.gameplay_input_state()).slice(0,2));
       assert.deepEqual(movement,[0,0],'cancel clears the accepted movement input');
       await ui.assertGpuOnly(touch);
@@ -163,9 +184,11 @@ async function joystickLabel(page,opacity) {
         'd-pad priority','stick drift','actual tab blur release','source portrait guidance','landscape touch movement',
         'touch cancellation and GPU neutral state','Source joystick label size and active appearance'],desktopSubmissions,
         touchSubmissions:await ui.gpuDraws(touch),beforeTouch,afterTouch,cancelStart,cancelEnd,movement,
-        labels:{neutral:neutralLabel,active:activeLabel,cancelled:cancelledLabel},errors};
+        labels:{neutral:neutralLabel,active:activeLabel,cancelled:cancelledLabel},
+        resources:{before:resourcesBefore,idle:resourcesIdle,active:resourcesActive,cancelled:resourcesCancelled},errors};
       fs.writeFileSync(path.join(output,'hud-input-receipt.json'),JSON.stringify(receipt,null,2));
-      console.log(JSON.stringify(receipt));
+      console.log(JSON.stringify({passed:true,checks:receipt.checks,errors,
+        textures:resourcesCancelled.texturesCreated,framebuffers:resourcesCancelled.framebuffersCreated}));
     } finally {
       await client.detach();
     }

@@ -476,9 +476,11 @@ async function runLua(page, code) {
         check('the real spare robe remains in the root backpack for the remaining reforge phase');
       } else {
         if (!player().economy.backpack.some(item => item.id === bag.id)) {
+          mark('retrieve the real scavenged bag from Luthacus');
           await moveTo(page, 1640, 520);
           await ui.click(page,'hud:shortcut:2');
-          await ui.widget(page,'panel:luthacus');
+          const service=await ui.widget(page,'panel:service');
+          assert.equal(service.label,"LUTHACUS' SCAVENGED GOODS");
           await ui.click(page,`panel:storage:${bag.id}`,{clickCount:2});
           await until(() => player().economy.backpack.some(item => item.id === bag.id),
             'actual scavenged bag transfer');

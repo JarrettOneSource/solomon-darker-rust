@@ -8,6 +8,8 @@ mod chat;
 pub(crate) mod gpu;
 mod hosted;
 mod hub_players;
+#[cfg(test)]
+mod layer_tests;
 mod party;
 
 use std::cell::RefCell;
@@ -56,6 +58,16 @@ enum Intent {
     NextChannel,
     Close,
     PartyCopied { code: String, copied: bool },
+}
+
+pub(crate) fn layers_above_hud(ctx: &egui::Context, hud_layer: egui::LayerId) {
+    // Source HUD z10 is below the Social z60 parent. Keep its world children
+    // in that order when an interacted or newly visible Area rises.
+    let allies = SocialUi::allies_layer();
+    let party = SocialUi::party_layer();
+    ctx.set_sublayer(hud_layer, allies);
+    ctx.set_sublayer(allies, party);
+    ctx.set_sublayer(party, SocialUi::chat_layer(false));
 }
 
 pub struct SocialUi {
@@ -253,6 +265,30 @@ impl SocialUi {
         Ok(())
     }
 
+    pub fn paint_above_hud(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        hud_layer: egui::LayerId,
+    ) -> Result<(), String> {
+        layers_above_hud(frame.ctx, hud_layer);
+        self.paint(frame)
+    }
+
+    fn allies_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Middle, Id::unique("social/allies"))
+    }
+
+    fn party_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Middle, Id::unique("social/party-chip"))
+    }
+
+    fn chat_layer(open: bool) -> egui::LayerId {
+        egui::LayerId::new(
+            if open { Order::Foreground } else { Order::Middle },
+            Id::unique("social/chat"),
+        )
+    }
+
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         self.clipboard.clear();
         if !self.context.visible || self.snapshot.is_none() {
@@ -316,7 +352,7 @@ impl SocialUi {
                 })
                 .inner?;
             if close {
-                self.intents.borrow_mut().push(Intent::Close);
+                self.handle_intent(Intent::Close)?;
             }
         }
         if let Some(notice) = &self.hosted_notice {
@@ -329,12 +365,6 @@ impl SocialUi {
                 });
         }
         self.clipboard.finish_frame();
-        // Commit surface changes after painting, so the opening pointer release
-        // belongs to its original control rather than the new modal backdrop.
-        let intents = std::mem::take(&mut *self.intents.borrow_mut());
-        for intent in intents {
-            self.handle_intent(intent)?;
-        }
         Ok(())
     }
 

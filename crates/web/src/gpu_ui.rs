@@ -201,9 +201,16 @@ pub struct UiFrame<'a> {
     editor_receipts: &'a [edit::model::Receipt],
     editors: &'a RefCell<Vec<edit::EditorDescriptor>>,
     editor_errors: &'a RefCell<Vec<String>>,
+    native_click_count: Option<u32>,
 }
 
 impl UiFrame<'_> {
+    /// Native browser double-click count, gated by this real widget's pointer response.
+    pub fn double_clicked(&self, response: &Response) -> bool {
+        response.enabled()
+            && response.clicked_by(egui::PointerButton::Primary)
+            && self.native_click_count == Some(2)
+    }
     pub(crate) fn fail(&self, error: String) {
         self.editor_errors.borrow_mut().push(error);
     }
@@ -211,7 +218,52 @@ impl UiFrame<'_> {
     pub fn paint_group(
         &self,
         painter: &Painter,
+        effect: GroupEffect,
+        paint: impl FnOnce(&UiFrame<'_>, &Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_group_output(painter, effect, solomon_graphics::ShadowOutput::Source, paint)
+    }
+
+    /// Source outer box-shadow: paint an opaque rounded GPU caster, never its pixels.
+    pub fn paint_outer_shadow(
+        &self,
+        painter: &Painter,
+        shadow: ImageShadow,
+        caster: impl FnOnce(&Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_box_shadow(painter, shadow, solomon_graphics::ShadowOutput::Outer, caster)
+    }
+
+    /// Source inset box-shadow: the opaque caster is the rounded padding box.
+    pub fn paint_inner_shadow(
+        &self,
+        painter: &Painter,
+        shadow: ImageShadow,
+        caster: impl FnOnce(&Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_box_shadow(painter, shadow, solomon_graphics::ShadowOutput::Inner, caster)
+    }
+
+    fn paint_box_shadow(
+        &self,
+        painter: &Painter,
+        shadow: ImageShadow,
+        output: solomon_graphics::ShadowOutput,
+        caster: impl FnOnce(&Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_group_output(
+            painter,
+            GroupEffect { shadows: vec![shadow], ..Default::default() },
+            output,
+            |_, painter| caster(painter),
+        )
+    }
+
+    fn paint_group_output(
+        &self,
+        painter: &Painter,
         mut effect: GroupEffect,
+        output: solomon_graphics::ShadowOutput,
         paint: impl FnOnce(&UiFrame<'_>, &Painter) -> Result<(), String>,
     ) -> Result<(), String> {
         assert!(effect.opacity.is_finite() && (0.0..=1.0).contains(&effect.opacity));
@@ -223,21 +275,25 @@ impl UiFrame<'_> {
             shadow.blur *= scale;
         }
         effect.opacity *= painter.opacity();
-        let style = effects::Style { effect, filter: self.color_filter, blend: self.blend };
+        let style = effects::Style { effect, filter: self.color_filter, blend: self.blend, output };
         let marker = |boundary| {
             egui::Shape::Callback(egui::epaint::PaintCallback {
                 rect: painter.clip_rect(),
                 callback: std::sync::Arc::new(boundary),
             })
         };
-        painter.add(marker(effects::Boundary::Begin(style)));
+        // Egui drops shapes at opacity0. Keep data markers so reset child opacity
+        // cannot release ungrouped geometry from a fully transparent parent.
+        let mut boundaries = painter.clone();
+        boundaries.set_opacity(1.0);
+        boundaries.add(marker(effects::Boundary::Begin(style)));
         let mut group_painter = painter.clone();
         group_painter.set_clip_rect(Rect::EVERYTHING);
         group_painter.set_opacity(1.0);
         let mut frame = self.with_blend(BlendMode::Normal);
         frame.color_filter = ColorFilter::default();
         let result = paint(&frame, &group_painter);
-        painter.add(marker(effects::Boundary::End));
+        boundaries.add(marker(effects::Boundary::End));
         result
     }
 
@@ -275,6 +331,7 @@ impl UiFrame<'_> {
             editor_receipts: self.editor_receipts,
             editors: self.editors,
             editor_errors: self.editor_errors,
+            native_click_count: self.native_click_count,
         }
     }
     /// Sets the image RGB gain for this view; stock bitmap text inherits it.
@@ -885,7 +942,7 @@ impl GpuUi {
         let raw = run.layout_input.clone();
         self.paint_pass(
             run,
-            batches::InputPass { raw, codes: Vec::new(), edits: Vec::new() },
+            batches::InputPass { raw, codes: Vec::new(), edits: Vec::new(), click_count: None },
             &mut paint,
         )
     }
@@ -939,6 +996,7 @@ impl GpuUi {
                 editor_receipts: &pass.edits,
                 editors: &editors,
                 editor_errors: &editor_errors,
+                native_click_count: pass.click_count,
             });
         });
         run.textures.append(std::mem::take(&mut output.textures_delta));
