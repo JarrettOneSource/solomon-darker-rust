@@ -86,3 +86,27 @@ for(const [name,change] of [
   change(retirement);
   assert.equal(documentRetirement(failure,retirement),null);
 });
+
+test('an exact pending resident request can retire with its actually removed child frame',()=>{
+  const {failure,captured}=evidence();
+  const retirement={kind:'frame-removal',pendingRequest:true,completed:true,before:captured,
+    beforeTargetId:123,detachedTargetId:123,detached:true};
+  assert.equal(documentRetirement(failure,retirement)?.reason,
+    'ready resident channel retired by the observed frame removal');
+});
+
+for(const [name,change] of [
+  ['an attached frame',r=>{r.detached=false}],
+  ['another removed document',r=>{r.detachedTargetId=124}],
+  ['an incomplete action',r=>{r.completed=false}],
+  ['a request outside the pending set',r=>{r.pendingRequest=false}],
+  ['a channel that never became ready',r=>{r.before.channels[0].ready=1}],
+  ['an actual media error',r=>{r.before.channels[0].error=3}],
+  ['a replaced media source',r=>{r.before.channels[0].sources.push('https://example.com/other.mp3')}],
+])test(`frame removal does not excuse ${name}`,()=>{
+  const {failure,captured}=evidence();
+  const retirement={kind:'frame-removal',pendingRequest:true,completed:true,before:captured,
+    beforeTargetId:123,detachedTargetId:123,detached:true};
+  change(retirement);
+  assert.equal(documentRetirement(failure,retirement),null);
+});
