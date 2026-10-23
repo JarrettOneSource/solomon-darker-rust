@@ -440,9 +440,10 @@ impl SettingsView {
         view: Rect,
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
+        widgets::scrollbar_style(ui, 0x9f8547, 0x17130e, false);
         if self.page == Page::MobileUi && self.mobile_fullscreen {
             if let Some(editor) = &mut self.mobile_editor {
-                editor.paint(frame)?;
+                editor.paint_in(frame, view, ui)?;
                 if editor.take_save_request() {
                     actions.push("settings-back".to_owned());
                 }
@@ -458,20 +459,7 @@ impl SettingsView {
                 700.0_f32.min(view.height() - pad * 2.0),
             ),
         );
-        frame.image(
-            ui.painter(),
-            "assets/stock/settings-leather.png",
-            panel,
-            None,
-            widgets::color(0xddd9ce),
-        );
-        ui.painter().rect_filled(panel, 0.0, widgets::alpha(0x0e0d0c, 0.42));
-        ui.painter().rect_stroke(
-            panel,
-            0.0,
-            egui::Stroke::new(3.0, widgets::color(0x9f8547)),
-            egui::StrokeKind::Inside,
-        );
+        paint_panel_background(frame, ui, panel)?;
         frame.record_rect("settings-panel", self.page.title(), "dialog", panel, ui.is_enabled());
         let compact = view.width() < 700.0 || view.height() < 540.0;
         let band = if compact { 54.0 } else { 70.0 };
@@ -500,7 +488,7 @@ impl SettingsView {
         );
         if self.page == Page::MobileUi {
             if let Some(editor) = &mut self.mobile_editor {
-                editor.paint_in(frame, content)?;
+                editor.paint_in(frame, content, ui)?;
                 if editor.take_save_request() {
                     actions.push("settings-back".to_owned());
                 }
@@ -509,6 +497,7 @@ impl SettingsView {
             let mut child =
                 ui.new_child(egui::UiBuilder::new().id_salt("settings-content").max_rect(content));
             child.set_clip_rect(content);
+            child.spacing_mut().item_spacing = Vec2::ZERO;
             let mut scroll = egui::ScrollArea::vertical()
                 .id_salt(self.navigation_scope())
                 .auto_shrink([false, false]);
@@ -545,6 +534,12 @@ impl SettingsView {
         {
             actions.push("settings-back".to_owned());
         }
+        ui.painter().rect_stroke(
+            panel,
+            0.0,
+            egui::Stroke::new(3.0, widgets::color(0x9f8547)),
+            egui::StrokeKind::Inside,
+        );
         for (x, y, flip_x, flip_y) in [
             (panel.left() - 13.0, panel.top() - 13.0, false, false),
             (panel.right() - 67.0, panel.top() - 13.0, true, false),
@@ -630,7 +625,7 @@ impl SettingsView {
     ) -> Result<(), String> {
         match self.page {
             Page::Root => {
-                group(frame, ui, "SOUND AND MUSIC", width);
+                group_heading(frame, ui, "SOUND AND MUSIC", width);
                 self.range(frame, ui, NumericSetting::Sound, width)?;
                 self.range(frame, ui, NumericSetting::Music, width)?;
                 group(frame, ui, "VIDEO SETTINGS", width);
@@ -652,7 +647,7 @@ impl SettingsView {
                 }
             }
             Page::Cloud => {
-                group(frame, ui, "DARK ACCOUNT", width);
+                group_heading(frame, ui, "DARK ACCOUNT", width);
                 let text = format!(
                     "ACCOUNT: {}",
                     self.account_username.as_deref().unwrap_or("GUEST").to_uppercase()
@@ -711,7 +706,7 @@ DevTools: solomonDark.lua.help()",
                 }
             }
             Page::Controls => {
-                group(frame, ui, "HOTBAR CYCLING", width);
+                group_heading(frame, ui, "HOTBAR CYCLING", width);
                 self.toggle(frame, ui, ToggleSetting::ReverseHotbar, width, actions)?;
                 for (title, actions_group) in
                     [("WIZARD CONTROLS", 0), ("STATS AND STUFF", 1), ("BELT HOTKEYS", 2)]
@@ -733,7 +728,7 @@ DevTools: solomonDark.lua.help()",
                 }
             }
             Page::Performance => {
-                group(frame, ui, "LIGHTING", width);
+                group_heading(frame, ui, "LIGHTING", width);
                 for setting in [
                     ToggleSetting::Lighting,
                     ToggleSetting::Shadows,
@@ -870,13 +865,12 @@ DevTools: solomonDark.lua.help()",
             if disabled { 0x746c58 } else { 0xdbc174 },
             NativeUiTextAlign::Left,
         );
-        self.control_panel.paint_centered(
+        toggle_art(
             frame,
-            ui.painter(),
-            if checked { 9 } else { 8 },
-            egui::pos2(rect.right() - 32.0, rect.center().y),
-            1.0,
-            0.0,
+            ui,
+            &self.control_panel,
+            rect,
+            checked,
             widgets::alpha(0xffffff, if disabled { 0.58 } else { 1.0 }),
         )?;
         if response.clicked() && !disabled {
@@ -910,6 +904,7 @@ DevTools: solomonDark.lua.help()",
         self.control_panel.paint_strip(frame, ui.painter(), 4, track, Color32::WHITE)?;
         let id = format!("settings-range:{id}");
         let response = ui.interact(track, egui::Id::unique(&id), egui::Sense::click_and_drag());
+        widgets::focus_on_pointer(&response);
         frame.record(&id, label, "slider", &response);
         let mut value = setting.value(&self.settings);
         let before = value;
@@ -954,6 +949,14 @@ DevTools: solomonDark.lua.help()",
                     ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
                 }
             }
+        }
+        if response.has_focus() || ui.rect_contains_pointer(rect) {
+            ui.painter().rect_stroke(
+                rect,
+                0.0,
+                egui::Stroke::new(1.0, widgets::alpha(0xdbc594, 0.8)),
+                egui::StrokeKind::Inside,
+            );
         }
         if value != before {
             setting.set(&mut self.settings, value);
@@ -1054,8 +1057,87 @@ impl ToggleSetting {
         Self::EnhancedEffects,
     ];
 }
+fn paint_panel_background(frame: &UiFrame<'_>, ui: &Ui, panel: Rect) -> Result<(), String> {
+    ui.painter().add(
+        egui::Shadow { offset: [0, 14], blur: 60, spread: 0, color: Color32::BLACK }
+            .as_shape(panel, 0.0),
+    );
+    let path = "assets/stock/settings-leather.png";
+    let size = frame.image_size(path).ok_or("Settings leather is not ready")?;
+    StockAtlas::from_image(path, size)?.paint_tiles(
+        frame,
+        ui.painter(),
+        0,
+        panel,
+        1.0,
+        Color32::WHITE,
+    )?;
+    let painter = ui.painter().with_clip_rect(panel.intersect(ui.clip_rect()));
+    let center = panel.center_top();
+    let radius = Vec2::new(panel.width() / 2.0, panel.height()).length() * 0.36;
+    let mut radial = egui::Mesh::default();
+    radial.colored_vertex(center, widgets::alpha(0x5f5230, 0.26));
+    for index in 0..=64 {
+        let angle = index as f32 / 64.0 * std::f32::consts::TAU;
+        radial.colored_vertex(
+            center + Vec2::new(angle.cos(), angle.sin()) * radius,
+            Color32::TRANSPARENT,
+        );
+        if index > 0 {
+            radial.add_triangle(0, index, index + 1);
+        }
+    }
+    painter.add(egui::Shape::mesh(radial));
+    for outside in [
+        Rect::from_min_max(
+            panel.min - Vec2::splat(40.0),
+            egui::pos2(panel.left(), panel.bottom() + 40.0),
+        ),
+        Rect::from_min_max(
+            egui::pos2(panel.right(), panel.top() - 40.0),
+            panel.max + Vec2::splat(40.0),
+        ),
+        Rect::from_min_max(
+            panel.min - Vec2::splat(40.0),
+            egui::pos2(panel.right() + 40.0, panel.top()),
+        ),
+        Rect::from_min_max(
+            egui::pos2(panel.left() - 40.0, panel.bottom()),
+            panel.max + Vec2::splat(40.0),
+        ),
+    ] {
+        painter.add(
+            egui::epaint::RectShape::filled(outside, 0.0, widgets::alpha(0xb9974e, 0.12))
+                .with_blur_width(40.0),
+        );
+    }
+    Ok(())
+}
+fn toggle_art(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    atlas: &StockAtlas,
+    rect: Rect,
+    checked: bool,
+    tint: Color32,
+) -> Result<(), String> {
+    let index = if checked { 9 } else { 8 };
+    let record = atlas.record(index)?;
+    atlas.paint_centered(
+        frame,
+        ui.painter(),
+        index,
+        egui::pos2(rect.right() - 10.0 - record.logical_width as f32 / 2.0, rect.center().y),
+        1.0,
+        0.0,
+        tint,
+    )
+}
 fn group(frame: &UiFrame<'_>, ui: &mut Ui, title: &str, width: f32) {
     ui.add_space(12.0);
+    group_heading(frame, ui, title, width);
+}
+fn group_heading(frame: &UiFrame<'_>, ui: &mut Ui, title: &str, width: f32) {
     let (_, r) = ui.allocate_space(Vec2::new(width, 23.0));
     widgets::native(
         frame,
@@ -1068,11 +1150,14 @@ fn group(frame: &UiFrame<'_>, ui: &mut Ui, title: &str, width: f32) {
         NativeUiTextAlign::Left,
     );
 }
-fn flow(ui: &mut Ui, text: &str, width: f32, size: f32, tint: Color32) {
+fn flow(ui: &mut Ui, text: &str, width: f32, size: f32, tint: Color32) -> Rect {
     let font = egui::FontId::new(size, egui::FontFamily::Name("Cinzel".into()));
     let galley = ui.painter().layout(text.to_owned(), font, tint, width - 16.0);
-    let (_, r) = ui.allocate_space(Vec2::new(width, galley.size().y + 16.0));
-    ui.painter().galley(r.min + Vec2::splat(8.0), galley, tint);
+    let size = galley.size();
+    let (_, r) = ui.allocate_space(Vec2::new(width, size.y + 16.0));
+    let origin = r.min + Vec2::splat(8.0);
+    ui.painter().galley(origin, galley, tint);
+    Rect::from_min_size(origin, size)
 }
 fn binding_label(action: GameControlAction) -> String {
     match action {

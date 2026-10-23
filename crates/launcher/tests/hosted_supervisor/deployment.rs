@@ -15,6 +15,21 @@ fn website_only_cutover_keeps_signed_game_revision_and_retires_the_old_transport
             json!({"targetRevision":game_revision}),
             true,
             invalid,
+            Some(1),
+        );
+        assert_eq!(status, 400);
+        let (_, health) = host.request("GET", "/health", Value::Null, false);
+        assert_eq!(health["draining"], false);
+    }
+    for sequence in [None, Some(0)] {
+        let (status, _) = request_at_with_deployment(
+            host.address,
+            "POST",
+            "/admin/deployments/restart",
+            json!({"targetRevision":game_revision}),
+            true,
+            Some(&publication),
+            sequence,
         );
         assert_eq!(status, 400);
         let (_, health) = host.request("GET", "/health", Value::Null, false);
@@ -39,6 +54,7 @@ fn website_only_cutover_keeps_signed_game_revision_and_retires_the_old_transport
                 json!({"targetRevision":target}),
                 true,
                 Some(&id),
+                Some(1),
             ))
             .unwrap();
     });
@@ -74,6 +90,7 @@ fn website_only_cutover_keeps_signed_game_revision_and_retires_the_old_transport
                 checkpoint_sequence,
                 target_revision,
                 deployment_id,
+                deployment_sequence,
             },
     } = announcement
     else {
@@ -82,6 +99,7 @@ fn website_only_cutover_keeps_signed_game_revision_and_retires_the_old_transport
     assert_eq!(checkpoint_sequence, sequence);
     assert_eq!(target_revision, game_revision);
     assert_eq!(deployment_id, publication);
+    assert_eq!(deployment_sequence, 1);
     assert!(matches!(result.try_recv(), Err(mpsc::TryRecvError::Empty)));
     client.send(ClientMessage::Hosted {
         command: HostedCommand::DeploymentReady {
@@ -94,6 +112,7 @@ fn website_only_cutover_keeps_signed_game_revision_and_retires_the_old_transport
     worker.join().unwrap();
     assert_eq!(status, 200);
     assert_eq!(body["deploymentId"], publication);
+    assert_eq!(body["deploymentSequence"], 1);
     assert_eq!(body["targetRevision"], game_revision);
     assert_eq!(body["savedPlayers"], 1);
     let (_, health) = host.request("GET", "/health", Value::Null, false);

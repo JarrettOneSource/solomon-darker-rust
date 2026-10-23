@@ -872,8 +872,8 @@ pub(crate) fn native_area(
     egui::Area::new(layer.id)
         .order(layer.order)
         .fixed_pos(Pos2::ZERO)
+        .constrain_to(transform.inverse() * ctx.content_rect())
         .constrain(false)
-        .constrain_rect(transform.inverse() * ctx.content_rect())
 }
 
 #[cfg(test)]

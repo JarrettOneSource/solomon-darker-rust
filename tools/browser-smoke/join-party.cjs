@@ -6,9 +6,9 @@ const gpu = require('./gpu-ui.cjs');
 (async () => {
   const browser = await chromium.launch({headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
+    args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
   try {
-    const page = await browser.newPage({viewport: {width: 1600, height: 900}});
+    const page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
     const {errors} = gpu.watchErrors(page);
     const responses = [];
     page.on('response', response => {

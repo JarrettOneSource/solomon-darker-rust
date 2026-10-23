@@ -162,6 +162,9 @@ impl SocialUi {
     ) -> Result<(), String> {
         let Some(invitation) = self.college_invitations.first() else { return Ok(()) };
         let inviter = invitation.inviter.display_name.clone();
+        let message = format!("{inviter} invited you to their private College.");
+        let details =
+            "You will preview its mods and cheat policy before leaving your current session.";
         let busy = self.resolving_college.is_some();
         let width = (self.size.0 as f32 - 40.0).clamp(220.0, 560.0);
         let bounds = egui::Rect::from_center_size(
@@ -169,21 +172,55 @@ impl SocialUi {
             egui::vec2(width, 260.0),
         );
         ui.interact(bounds, egui::Id::unique("social/college-panel-block"), egui::Sense::click());
-        let response=ui.scope_builder(egui::UiBuilder::new().max_rect(bounds),|ui|{
-            egui::Frame::new().fill(egui::Color32::from_rgb(12,13,20)).stroke(egui::Stroke::new(1.0,super::gpu::GOLD)).inner_margin(24.0).show(ui,|ui|{
-                ui.set_min_width(width-48.0);
-                ui.label(super::gpu::rich("COLLEGE INVITATION",21.0,super::gpu::GOLD));ui.add_space(18.0);
-                ui.label(super::gpu::rich(format!("{inviter} invited you to their private College."),17.0,super::gpu::PALE));ui.add_space(12.0);
-                ui.label(super::gpu::rich("You will preview its mods and cheat policy before leaving your current session.",15.0,super::gpu::PALE));ui.add_space(20.0);
-                let mut action=None;
-                ui.horizontal(|ui|{
-                    let decline=super::gpu::browser_button(frame,ui,"college-decline","DECLINE",egui::vec2(140.0,36.0),!busy);
-                    if self.focus_college&&!busy{decline.request_focus();self.focus_college=false;}
-                    if decline.clicked(){action=Some(false);}
-                    if super::gpu::browser_button(frame,ui,"college-accept",if busy{"RESOLVING…"}else{"VIEW & JOIN"},egui::vec2(160.0,36.0),!busy).clicked(){action=Some(true);}
-                });action
-            }).inner
-        }).inner;
+        let response = ui
+            .scope_builder(egui::UiBuilder::new().max_rect(bounds), |ui| {
+                egui::Frame::new()
+                    .fill(egui::Color32::from_rgb(12, 13, 20))
+                    .stroke(egui::Stroke::new(1.0, super::gpu::GOLD))
+                    .inner_margin(24.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(width - 48.0);
+                        ui.label(super::gpu::rich("COLLEGE INVITATION", 21.0, super::gpu::GOLD));
+                        ui.add_space(18.0);
+                        ui.label(super::gpu::rich(&message, 17.0, super::gpu::PALE));
+                        ui.add_space(12.0);
+                        ui.label(super::gpu::rich(details, 15.0, super::gpu::PALE));
+                        ui.add_space(20.0);
+                        let mut action = None;
+                        ui.horizontal(|ui| {
+                            let decline = super::gpu::browser_button(
+                                frame,
+                                ui,
+                                "college-decline",
+                                "DECLINE",
+                                egui::vec2(140.0, 36.0),
+                                !busy,
+                            );
+                            if self.focus_college && !busy {
+                                decline.request_focus();
+                                self.focus_college = false;
+                            }
+                            if decline.clicked() {
+                                action = Some(false);
+                            }
+                            if super::gpu::browser_button(
+                                frame,
+                                ui,
+                                "college-accept",
+                                if busy { "RESOLVING…" } else { "VIEW & JOIN" },
+                                egui::vec2(160.0, 36.0),
+                                !busy,
+                            )
+                            .clicked()
+                            {
+                                action = Some(true);
+                            }
+                        });
+                        action
+                    })
+                    .inner
+            })
+            .inner;
         frame.record_rect(
             "social/college-invitation",
             "Private College invitation",
@@ -191,6 +228,7 @@ impl SocialUi {
             bounds,
             true,
         );
+        frame.record_value("social/college-invitation", &format!("{message} {details}"), None);
         match response {
             Some(true) => self.accept_college_invitation(),
             Some(false) => self.decline_college_invitation(),

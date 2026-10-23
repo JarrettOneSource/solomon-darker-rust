@@ -178,6 +178,10 @@ pub struct MenuUi {
     document: Document,
     navigation: MenuNavigation,
 }
+pub(crate) fn scene_layer() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Middle, Id::unique("game-menu-scene"))
+}
+
 impl MenuUi {
     pub fn discard_gameplay_keys(&mut self) {
         if self.screen == Screen::Hidden {
@@ -364,10 +368,9 @@ impl MenuUi {
             || self.prompt.kind.is_some()
             || self.routing.active();
         let enabled = !self.input_suspended && !overlay;
-        egui::Area::new(Id::unique("game-menu-scene"))
-            .fixed_pos(view.min)
-            .order(egui::Order::Middle)
-            .show(&ctx, |ui| {
+        egui::Area::new(scene_layer().id).fixed_pos(view.min).order(scene_layer().order).show(
+            &ctx,
+            |ui| {
                 ui.set_min_size(view.size());
                 ui.set_clip_rect(view);
                 if !enabled {
@@ -392,7 +395,8 @@ impl MenuUi {
                 if result.is_ok() && self.screen == Screen::Settings && self.routing.active() {
                     result = self.settings_view.paint(frame, ui, view, &mut Vec::new());
                 }
-            });
+            },
+        );
         std::mem::replace(&mut result, Ok(()))?;
         if overlay {
             egui::Modal::new(Id::unique("game-menu-modal"))
@@ -570,13 +574,6 @@ impl MenuUi {
             && !self.routing.active()
             && self.cloud.boneyards_selected()
     }
-    pub fn request_boneyard_library_menu(&mut self) -> Result<(), String> {
-        if self.screen == Screen::Cloud {
-            self.handle_event(UiEvent::Key(self.settings.controls.open_menu.clone(), false))?;
-        }
-        Ok(())
-    }
-
     pub fn complete_dark_cloud_catalog(
         &mut self,
         id: u64,

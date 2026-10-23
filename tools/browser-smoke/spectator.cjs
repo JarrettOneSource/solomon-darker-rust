@@ -173,7 +173,7 @@ async function registerPeer(client, account) {
   client.accountNavigating = true;
   const catalog = page.waitForResponse(response => new URL(response.url()).pathname
     === '/game-stg/api/mods' && response.request().method() === 'GET');
-  await ui.click(page,'dark-cloud');
+  await ui.click(page,'explore');
   const response = await catalog;
   assert.equal(response.status(), 200);
   await response.finished();

@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require(path.resolve(process.env.PW));
+const gpu = require('./gpu-ui.cjs');
 const base = new URL(process.env.URL || 'https://127.0.0.1:9449/game-stg/');
 const out = path.resolve(process.env.OUT);
 const fixture = JSON.parse(fs.readFileSync(path.resolve(__dirname,
@@ -191,6 +192,8 @@ async function waitForEditorAssets(messageOffset, label, started) {
     await page.locator('[data-editor-test-state="playing"]').waitFor();
     const frame = page.frames().find(frame => new URL(frame.url()).pathname === `${mount}/editor-test/`);
     assert.ok(frame);
+    await gpu.ready(frame);
+    await gpu.assertGpuOnly(frame);
     const firstTick = await frame.evaluate(() => window.wasmBindings.wizard_state()[5]);
     await frame.waitForFunction(tick => window.wasmBindings.wizard_state()[5] > tick + 20, firstTick);
     await page.screenshot({ path: path.join(out, 'editor-playing.png') });
@@ -212,7 +215,7 @@ async function waitForEditorAssets(messageOffset, label, started) {
       failure.messages = await page.evaluate(() => window.editorTestMessages).catch(() => []);
       failure.frames = await Promise.all(page.frames().map(async frame => ({
         path: new URL(frame.url()).pathname,
-        status: await frame.locator('#status').textContent({ timeout: 1000 }).catch(() => null),
+        gpu: await gpu.readUi(frame).catch(() => null),
       })));
       await page.screenshot({ path: path.join(out, 'failure.png') }).catch(() => {});
     }

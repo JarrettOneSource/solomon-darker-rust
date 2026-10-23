@@ -6,23 +6,21 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const {createNativeMessageReader} = require('./native-wire.cjs');
-const obsoleteMenuImage = require('./obsolete-menu-image.cjs');
+const gpu = require('./gpu-ui.cjs');
+const {startNewGame} = require('./menu-journey.cjs');
 const {chromium} = require(path.resolve(process.env.PW));
 
 const url = new URL(process.env.URL || 'https://127.0.0.1:9449/game-stg/');
 const mount = url.pathname.replace(/\/$/, '');
 const output = path.resolve(process.env.OUT);
 // Only initial asset residency uses this override; later behavior waits are unchanged.
-const coldStartTimeout = Number(process.env.COLD_START_TIMEOUT_MS || 30000);
+const coldStartTimeout = Number(process.env.COLD_START_TIMEOUT_MS || 240000);
 assert.ok(Number.isSafeInteger(coldStartTimeout) && coldStartTimeout > 0,
   'COLD_START_TIMEOUT_MS must be a positive integer');
 const checks = [];
 const errors = [];
-const cancelledMedia = [];
-const cancelledImages = [];
 const failedResources = [];
 const pendingPageArt = new Set();
-const resourceChecks = [];
 const apiRequests = [];
 const registrationRequests = [];
 const scoreReceipts = [];
@@ -150,15 +148,7 @@ function observe(page) {
     failedResources.push({path: new URL(request.url()).pathname,
       type: request.resourceType(), failure: request.failure()?.errorText,
       step, pagePath: new URL(page.url()).pathname});
-    const check = (async () => {
-      const cancelled = await obsoleteMenuImage(page, request);
-      if (cancelled) { cancelledImages.push(cancelled); return; }
-      const failure = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
-      if (request.resourceType() === 'media' && request.failure()?.errorText === 'net::ERR_ABORTED') {
-        cancelledMedia.push(failure);
-      } else errors.push(redact(failure));
-    })();
-    resourceChecks.push(check);
+    errors.push(redact(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
   });
   page.on('websocket', socket => {
     const read = createNativeMessageReader();
@@ -210,15 +200,14 @@ function observe(page) {
 async function gameTitle(page, username) {
   await page.waitForURL(current => current.origin === url.origin
     && current.pathname === `${mount}/`);
-  await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-    && document.querySelector('#status')?.textContent === '', null, {timeout: coldStartTimeout});
-  const prompt = page.locator('.title-prompt:not([hidden])');
-  if (await prompt.isVisible()) {
-    await prompt.locator('[data-menu-action="prompt-secondary"]').click();
+  await gpu.ready(page, {timeout: coldStartTimeout});
+  if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) {
+    await gpu.click(page, 'prompt-secondary');
+    await gpu.noWidget(page, 'prompt-secondary');
   }
-  await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
-  await page.waitForFunction(expected => document.querySelector('.game-account-name-title')
-    ?.getAttribute('data-account-username') === expected, username || 'Not logged in');
+  await gpu.surface(page, 'title');
+  await gpu.value(page, 'title-account', username || 'Not logged in');
+  await gpu.assertGpuOnly(page);
   await settlePageArt(page);
 }
 
@@ -250,10 +239,10 @@ async function register(page) {
   const privateFile = path.join(output, 'private-account.json');
   fs.writeFileSync(privateFile, JSON.stringify(account, null, 2), {mode: 0o600, flag: 'wx'});
   fs.chmodSync(privateFile, 0o600);
-  await page.locator('[data-menu-action="explore"]').click();
-  await page.locator('[data-menu-action="cloud-sign-in"]').waitFor({state: 'visible'});
+  await gpu.click(page, 'explore');
+  await gpu.widget(page, 'cloud-sign-in', {enabled:true});
   await settlePageArt(page);
-  await page.locator('[data-menu-action="cloud-sign-in"]').click();
+  await gpu.click(page, 'cloud-sign-in');
   await page.waitForURL(current => current.pathname === `${mount}/login`);
   await settledAccountForm(page);
   await page.getByRole('link', {name: 'Create an account', exact: true}).click();
@@ -278,10 +267,10 @@ async function register(page) {
 }
 
 async function signIn(page) {
-  await page.locator('[data-menu-action="explore"]').click();
-  await page.locator('[data-menu-action="cloud-sign-in"]').waitFor({state: 'visible'});
+  await gpu.click(page, 'explore');
+  await gpu.widget(page, 'cloud-sign-in', {enabled:true});
   await settlePageArt(page);
-  await page.locator('[data-menu-action="cloud-sign-in"]').click();
+  await gpu.click(page, 'cloud-sign-in');
   await page.waitForURL(current => current.pathname === `${mount}/login`);
   await settledAccountForm(page);
   for (const [autocomplete, value] of [['username', account.username],
@@ -301,39 +290,52 @@ async function signIn(page) {
 }
 
 async function activateHall(page, action, mode) {
-  const button = page.locator(`[data-menu-action="${action}"]`);
-  await button.waitFor({state: 'visible'});
-  const hitTarget = await button.evaluate(button => {
-    const bounds = button.getBoundingClientRect();
-    const hit = document.elementFromPoint(bounds.x + bounds.width / 2,
-      bounds.y + bounds.height / 2);
-    return {buttonClass: button.className, hitClass: hit?.className,
-      hitAction: hit?.closest('[data-menu-action]')?.getAttribute('data-menu-action')};
-  });
-  hallActivations.push({action, mode, hitTarget});
-  if (mode === 'keyboard') await button.press('Enter');
-  else await button.click();
+  const target = await gpu.widget(page, action, {enabled:true});
+  hallActivations.push({action, mode, hitTarget: {rect:target.rect, role:target.role, enabled:target.enabled}});
+  if (mode === 'keyboard') {
+    for (let attempt = 0; attempt < 160; attempt += 1) {
+      const snapshot = await gpu.readUi(page);
+      const actual = snapshot.widgets.find(widget => widget.focused);
+      if (actual?.id === action) break;
+      const backwards = actual?.id === 'hall-back'
+        || (actual?.id.startsWith('hall-') && !actual.id.startsWith('hall-toggle:')
+          && actual.rect[0] > target.rect[0]);
+      await page.keyboard.press(backwards ? 'Shift+Tab' : 'Tab');
+      await gpu.nextFrame(page);
+    }
+    await gpu.focused(page, action);
+    await page.keyboard.press('Enter');
+  } else await gpu.click(page, action);
+}
+
+async function revealHallRun(page, runId) {
+  await gpu.wheel(page, 'hall-records', 0, -30000);
+  for (let attempt = 0; attempt < 45; attempt += 1) {
+    const snapshot = await gpu.readUi(page);
+    if (snapshot.widgets.some(widget => widget.id.startsWith('hall-toggle:') && widget.value === runId)) return;
+    await gpu.wheel(page, 'hall-records', 0, 600);
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`The actual Global Hall did not paint persisted run ${runId}`);
 }
 
 async function globalHall(page, runId, mode) {
-  await page.locator('[data-menu-action="hall"]').click();
+  await gpu.click(page, 'hall');
   await activateHall(page, 'hall-scope:global', mode);
+  await gpu.value(page, 'hall-scope:global', 'true');
   for (const board of ['awesomeness', 'wave', 'kills', 'time']) {
-    if (board !== 'awesomeness') {
-      await activateHall(page, `hall-board:${board}`, mode);
-    }
+    if (board !== 'awesomeness') await activateHall(page, `hall-board:${board}`, mode);
     await waitUntil(() => hallRequests.some(request => request.status === 200
       && request.board === board && request.entries.some(entry => entry.runId === runId)),
     `persisted actual Global Hall ${board} entry`);
-    await page.waitForFunction(({runId, board}) => {
-      const hall = document.querySelector('.hall-screen');
-      return hall?.dataset.hallScope === 'global' && hall?.dataset.hallBoard === board
-        && [...document.querySelectorAll('.hall-row')].some(row => row.dataset.hallRun === runId);
-    }, {runId, board});
+    await gpu.waitForUi(page, snapshot => gpu.findWidget(snapshot, `hall-board:${board}`)?.selected === true,
+      `painted selected Global ${board} board`);
+    await revealHallRun(page, runId);
     await page.screenshot({path: path.join(output, `persisted-global-hall-${board}.png`)});
   }
   await activateHall(page, 'hall-scope:local', mode);
-  await page.waitForFunction(() => document.querySelector('.hall-screen')?.dataset.hallScope === 'local');
+  await gpu.value(page, 'hall-scope:local', 'true');
+  await gpu.assertGpuOnly(page);
 }
 
 async function approachSolomon(page) {
@@ -419,7 +421,7 @@ async function main() {
     driverSha256: digest(fs.readFileSync(__filename)),
     sourceRevision: process.env.SOURCE_REV || 'fa08ae249ff5563570bdb2a653e2ef9358ce7b83',
     scope: 'Real registration, unmodified hosted gameplay, passive combat death, signed score POST and Global Hall',
-    checks, errors, cancelledMedia, cancelledImages, failedResources, apiRequests, registrationRequests,
+    checks, errors, failedResources, apiRequests, registrationRequests,
     admissions, welcomes, commands, inputSamples,
     scoreReceipts, scorePosts, hallRequests, hallActivations, healthSamples};
   let browserServer;
@@ -457,7 +459,6 @@ async function main() {
       checked('a fresh browser signs into the actual account through the unchanged mounted form');
       step = `persisted Global Hall via ordinary ${mode}`;
       await globalHall(page, entry.runId, mode);
-      await Promise.all(resourceChecks);
       assert.deepEqual(errors, []);
       checked(`the persisted run appears on all four Global boards via ordinary ${mode} activation`);
       receipt.passed = true;
@@ -470,27 +471,21 @@ async function main() {
     checked('unchanged mounted registration creates a fresh real authenticated account');
 
     step = 'ordinary score preferences';
-    await page.locator('[data-menu-action="settings"]').click();
-    await page.locator('[data-menu-action="settings-page:cloud"]').click();
-    const submit = page.locator('[data-setting="submit-runs"]');
-    if (await submit.getAttribute('aria-pressed') !== 'true') await submit.click();
-    assert.equal(await submit.getAttribute('aria-pressed'), 'true');
-    assert.equal(await page.locator('[data-setting="cheats"]').getAttribute('aria-pressed'), 'false');
-    await page.locator('[data-menu-action="settings-back"]').click();
-    await page.locator('[data-menu-action="settings-back"]').click();
-    await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
+    await gpu.click(page, 'settings');
+    await gpu.click(page, 'settings-page:cloud');
+    const submit = 'settings-toggle:submit-runs';
+    if ((await gpu.widget(page, submit)).value !== 'true') await gpu.click(page, submit);
+    await gpu.value(page, submit, 'true');
+    await gpu.value(page, 'settings-toggle:cheats', 'false');
+    await gpu.click(page, 'settings-back');
+    await gpu.click(page, 'settings-back');
+    await gpu.surface(page, 'title');
     checked('ordinary Settings show Submit Runs enabled and cheats disabled');
 
     step = 'fresh eligible Global admission';
-    await page.locator('[data-menu-action="play"]').click();
-    await page.locator('[data-menu-action="new-game"]').click();
-    await page.getByRole('textbox', {name: 'Wizard name', exact: true}).fill('Score Witness');
-    // Allow the existing UI frame to accept the typed name before changing panels.
-    await page.waitForTimeout(100);
-    await page.locator('[data-menu-action="element:fire"]').click();
-    await page.locator('[data-menu-action="discipline:arcane"]').click();
+    await startNewGame(page, {name:'Score Witness', element:'fire', discipline:'arcane'});
     await waitUntil(() => welcomes.length === 1, 'real Global Welcome');
-    await page.locator('.game-menus[data-menu-screen="hidden"]').waitFor({state: 'attached'});
+    await gpu.surface(page, 'hidden');
     assert.equal(admissions.length, 1);
     assert.deepEqual(admissions[0], {path: `${mount}/game-hub`, hasInitialSave: false,
       cheatsEnabled: false, submitRuns: true});
@@ -499,7 +494,7 @@ async function main() {
     checked('fresh Global authority admits the authenticated wizard without saves, cheats or mods');
 
     step = 'actual Boneyard readiness and entrance';
-    await page.getByRole('button', {name: 'Enter the Boneyard', exact: true}).click();
+    await gpu.click(page, 'hud:map');
     await waitUntil(() => state.frame?.snapshot.boneyard && !state.frame.host.loading_run_id
       && !state.frame.host.resume_grace && !state.frame.host.pause, 'real Boneyard readiness', 120000);
     const runId = state.frame.snapshot.boneyard.run_id;
@@ -513,7 +508,7 @@ async function main() {
 
     step = 'ordinary enemy combat death';
     await waitUntil(() => state.frame.snapshot.run.phase === 'GameOver', 'actual combat death', 180000);
-    await page.locator('.game-over-overlay:not([hidden])').waitFor();
+    await gpu.widget(page, 'game-over:continue');
     // Source archives the portrait/elapsed score at death age 300, after Game Over starts.
     await waitUntil(() => participant().score.elapsed_ticks !== null
       && participant().score.portrait_heading_index !== null, 'Source post-death score archive');
@@ -540,39 +535,31 @@ async function main() {
     assert.equal(published.body.accountUsername, account.username);
     assert.equal(published.body.elapsedTicks, receipt.completedScore.elapsed_ticks);
     assert.equal(published.body.awesomeness, receipt.completedScore.awesomeness);
-    await Promise.all(resourceChecks);
     assert.deepEqual(errors, []);
     checked('the real signed completion receipt is POSTed once and the unchanged API returns 201');
 
     step = 'ordinary post-run continuation and Global Hall';
-    const continueButton = page.locator('.boneyard-game-over[data-input-ready="true"]');
-    await continueButton.waitFor();
-    await continueButton.click();
-    await page.locator('.game-menus[data-menu-screen="create"]').waitFor();
-    await page.locator('[data-menu-action="element:fire"]').click();
-    await page.locator('[data-menu-action="discipline:arcane"]').click();
+    await gpu.click(page, 'game-over:continue');
+    await gpu.surface(page, 'create');
+    await gpu.click(page, 'element:fire');
+    await gpu.click(page, 'discipline:arcane');
     await waitUntil(() => state.frame.snapshot.boneyard === null
       && state.frame.snapshot.run.phase === 'Hub', 'ordinary post-run College');
-    await page.locator('.game-menus[data-menu-screen="hidden"]').waitFor({state: 'attached'});
+    await gpu.surface(page, 'hidden');
     await page.keyboard.press('Escape');
-    await page.locator('.game-menus[data-menu-screen="pause"] [data-menu-action="leave"]').click();
-    await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
+    await gpu.surface(page, 'pause');
+    await gpu.click(page, 'leave');
+    await gpu.surface(page, 'title');
     assert.ok(state.leaveReceipts > 0);
     await globalHall(page, runId, 'pointer');
     assert.equal(commands.some(command => command.kind === 'set_cheats'), false);
-    await Promise.all(resourceChecks);
     assert.deepEqual(errors, []);
     checked('normal continuation and save-before-leave reach a Global Hall row backed by the actual API');
     receipt.passed = true;
   } catch (error) {
     receipt.failure = {step, message: redact(error.message), stack: redact(error.stack)};
     if (page) {
-      receipt.failureUi = await page.evaluate(() => ({
-        status: document.querySelector('#status')?.textContent,
-        menu: document.querySelector('.game-menus')?.dataset.menuScreen,
-        text: document.body.innerText.slice(-1800),
-        acceptedTick: window.wasmBindings?.wizard_state()[5],
-      })).catch(() => null);
+      receipt.failureUi = await gpu.readUi(page).catch(() => null);
       await page.screenshot({path: path.join(output, 'failure.png')}).catch(() => {});
     }
     throw error;

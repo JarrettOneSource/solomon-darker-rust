@@ -55,16 +55,22 @@ green rather than assuming every library version has identical collation.
 **Deployment publications have identities separate from signed game recovery revisions.**
 The native drain still signs the target Rust revision into the final save and accepts
 the existing checkpoint-sequence/revision acknowledgement. Its authenticated
-`X-Solomon-Deployment-Id` header additionally names the fresh Website cutover; that ID
-travels in the restart announcement and drain receipt. Website owns the mutable
+`X-Solomon-Deployment-Id` and `X-Solomon-Deployment-Sequence` headers name the fresh
+Website cutover and next publication sequence; both
+travel in the restart announcement and drain receipt. Website owns the mutable
 `/api/game/deployment` publication with `revision` (Website), `gameRevision`,
-`deploymentId` and `ready`. Its worker stages `ready: false` and atomically publishes
+`deploymentId`, monotonic `deploymentSequence` and `ready`. Its worker stages `ready: false` and atomically publishes
 `true` only after the replacement game and Website pass health and integrity checks.
 The immutable game's deployment document, manifest membership and hashes remain intact.
 
 The page can reload an announced update only after its final save receipt commits,
-its actual old transport retires, and a healthy publication matches both the announced
-ID and signed target game revision. Active sessions cannot reload through idle polling.
+its actual old transport retires, and a healthy publication has the announced sequence
+or a later sequence, with the same signed target game revision.
+The UUID correlates one drain/receipt; the sequence proves replacement ordering.
+Exact UUID matching would strand a sleeping tab that missed its publication or a
+healthy retry with another UUID. Failed candidates restore the prior publication;
+only readiness after verified health fulfills the announced sequence. Active sessions
+cannot reload through idle polling.
 Title/idle observes healthy publication changes, including Website-only replacements.
 This corrects the inherited `live game revision != current game revision` condition,
 which stranded a saved client when Website redeployed the same immutable game.
@@ -204,11 +210,15 @@ Cost: the browser artifact includes the 1.8 MB geometry bank and a small explici
 supersedes the earlier DOM presentation decision below. Menus, HUD, panels, social/mod
 screens and lifecycle overlays use the existing WebGL2 canvas, stock atlases and native
 layout rules. The shared `gpu_ui` module uses egui for Rust interaction, text/layout and
-tessellation; it does not replace the game loop or simulation. Browser glyph rasterization,
+tessellation; it does not replace the game loop or simulation. Browser font rasterization,
 text composition, clipboard, file access and other platform capabilities remain adapters,
 not a visual HTML/CSS implementation. A CSS interpreter, DOM screenshot renderer, hidden
 legacy UI or synthetic-action test facade would not satisfy this contract. The live migration
 inventory and acceptance state are in `RUST-UI-MIGRATION.md`; implementation is in progress.
+Stock bitmap text keeps its recovered glyph layout. Ordinary system/licensed font glyphs
+use the browser font adapter; Sack names preserve Source's complete font-run shaping and
+wrapping, including Arabic joins and emoji sequences, in bounded egui-owned GPU textures.
+The font adapter paints only text into an unattached canvas, never HTML or game controls.
 
 **Superseded: the HUD used browser DOM with stock atlas sprites and repeated strips.** The world stays
 in WebGL; the screen-space HUD uses the browser's existing layout, hit testing and accessible
@@ -219,7 +229,7 @@ The HUD reads an explicit `HudState`; the local courtyard begins with the Websit
 Ether loadout, and an authoritative runtime can replace those values without DOM ownership.
 
 **Menus emit typed commands; the session owns game state and persistence.** Title/Create,
-pause and settings share stock art and browser hit testing. Create emits `NewGameSelection`,
+pause and settings share stock art and Rust GPU hit testing. Create emits `NewGameSelection`,
 and settings emits `GameSettings`; views never grant ranks or fabricate inventory. Modal
 input is scoped to its active surface and requires a controller-neutral handoff. Cost:
 the host must apply the preferences and supply the actual saved session behind Continue.

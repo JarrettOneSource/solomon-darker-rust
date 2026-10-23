@@ -246,6 +246,8 @@ impl SaveTransferView {
             );
         }
         if let Some(preview) = &self.pending {
+            let top = ui.cursor().min;
+            let mut summary = vec![preview.display_name.clone()];
             super::group(frame, ui, &preview.display_name, width);
             for text in [
                 format!(
@@ -271,9 +273,11 @@ impl SaveTransferView {
                 },
             ] {
                 super::flow(ui, &text, width, 13.0, widgets::color(0xc8b988));
+                summary.push(text);
             }
             for warning in &preview.warnings {
                 super::flow(ui, warning, width, 13.0, widgets::ERROR);
+                summary.push(warning.clone());
             }
             let (_, r) = ui.allocate_space(Vec2::new(width, 46.0));
             let half = (width - 10.0) / 2.0;
@@ -295,8 +299,17 @@ impl SaveTransferView {
                     actions.push(id.to_owned());
                 }
             }
+            frame.record_rect(
+                "save-preview",
+                &preview.display_name,
+                "region",
+                Rect::from_min_max(top, egui::pos2(top.x + width, ui.cursor().min.y)),
+                false,
+            );
+            frame.record_value("save-preview", &summary.join("\n"), None);
         }
         if let Some(exported) = &self.export_pending {
+            let top = ui.cursor().min;
             super::group(frame, ui, "EXPORT LIMITATIONS", width);
             super::flow(
                 ui,
@@ -313,12 +326,26 @@ impl SaveTransferView {
             {
                 settings.action_row(frame, ui, label, id, width, true, actions)?;
             }
+            frame.record_rect(
+                "save-export-limitations",
+                "EXPORT LIMITATIONS",
+                "region",
+                Rect::from_min_max(top, egui::pos2(top.x + width, ui.cursor().min.y)),
+                false,
+            );
+            frame.record_value("save-export-limitations", &exported.warnings.join("\n"), None);
         }
         if let Some(error) = &self.error {
-            super::flow(ui, error, width, 13.0, widgets::ERROR);
+            let rect = super::flow(ui, error, width, 13.0, widgets::ERROR);
+            frame.record_rect("save-error", error, "alert", rect, false);
+            frame.record_value("save-error", error, None);
+            frame.announce(error);
         }
         if let Some(status) = &self.status {
-            super::flow(ui, status, width, 13.0, widgets::color(0xb9d6ab));
+            let rect = super::flow(ui, status, width, 13.0, widgets::color(0xb9d6ab));
+            frame.record_rect("save-status", status, "status", rect, false);
+            frame.record_value("save-status", status, None);
+            frame.announce(status);
         }
         Ok(())
     }

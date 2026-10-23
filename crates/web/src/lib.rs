@@ -137,10 +137,7 @@ fn set_status(text: &str) {
 }
 
 async fn run() -> Result<(), String> {
-    // Loading retains the world, the checkpoint, and pending GPU resources across awaits.
-    // Keep that large future on the heap: nesting its unoptimized state in this poll frame
-    // exhausted the wasm stack while decoding a saved PlayerState (save-resume journey).
-    let game = Rc::new(RefCell::new(Box::pin(Game::load()).await?));
+    let game = Game::load().await?;
     runtime_ui::completed("runtime", "Game resources ready", 1)?;
     let window = web_sys::window().ok_or("no window")?;
     GAME.with(|slot| *slot.borrow_mut() = Some(game.clone()));

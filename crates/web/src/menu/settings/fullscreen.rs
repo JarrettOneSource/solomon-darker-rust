@@ -84,13 +84,12 @@ impl SettingsFullscreen {
                 NativeUiTextAlign::Right,
             );
         } else {
-            atlas.paint_centered(
+            super::toggle_art(
                 frame,
-                ui.painter(),
-                if fullscreen_active(&self.document) { 9 } else { 8 },
-                egui::pos2(rect.right() - 32.0, rect.center().y),
-                1.0,
-                0.0,
+                ui,
+                atlas,
+                rect,
+                fullscreen_active(&self.document),
                 egui::Color32::WHITE,
             )?;
         }

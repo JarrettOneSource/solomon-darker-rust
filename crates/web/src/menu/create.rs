@@ -206,9 +206,11 @@ impl CreateView {
             ] {
                 let reveal = menu::create_element_reveal_motion_at(element, elapsed);
                 let center = stage.at(reveal.position.x, reveal.position.y);
+                let mut painter = ui.painter().clone();
+                painter.multiply_opacity(reveal.opacity as f32);
                 paint_vfx(
                     frame,
-                    ui.painter(),
+                    &painter,
                     &self.bad_guys,
                     center,
                     scale,
@@ -218,8 +220,15 @@ impl CreateView {
                 let size = Vec2::new(metrics.width as f32, metrics.height as f32) * scale;
                 let rect = Rect::from_center_size(center, size.max(Vec2::splat(44.0)));
                 let id = format!("element:{}", element.as_str());
-                let response =
-                    widgets::interact(frame, ui, &id, element.as_str(), "button", rect, enabled);
+                let response = widgets::interact_unstyled(
+                    frame,
+                    ui,
+                    &id,
+                    element.as_str(),
+                    "button",
+                    rect,
+                    enabled,
+                );
                 self.create.paint_centered(
                     frame,
                     ui.painter(),
@@ -229,6 +238,7 @@ impl CreateView {
                     0.0,
                     widgets::alpha(0xffffff, reveal.opacity),
                 )?;
+                widgets::focus_outline(frame, ui, &response, 2.0, 8.0, widgets::GOLD);
                 if response.clicked() && enabled {
                     actions.push(id);
                 }
@@ -274,7 +284,7 @@ impl CreateView {
                 let size =
                     Vec2::new(metrics.logical_width as f32, metrics.logical_height as f32) * scale;
                 let id = format!("discipline:{}", discipline.as_str());
-                let response = widgets::interact(
+                let response = widgets::interact_unstyled(
                     frame,
                     ui,
                     &id,
@@ -292,6 +302,7 @@ impl CreateView {
                     0.0,
                     Color32::WHITE,
                 )?;
+                widgets::focus_outline(frame, ui, &response, 2.0, 8.0, widgets::GOLD);
                 if response.clicked() && enabled {
                     actions.push(id);
                 }
@@ -305,7 +316,7 @@ impl CreateView {
                 Color32::WHITE,
             )?;
         }
-        self.paint_name(frame, ui, name_stage, enabled, actions)?;
+        self.paint_name(frame, ui, name_stage, admitted, actions)?;
         let back = Rect::from_min_size(view.min + Vec2::splat(4.0), Vec2::splat(44.0));
         let response = widgets::interact(
             frame,
@@ -386,7 +397,10 @@ impl CreateView {
             Color32::WHITE,
         );
         let previous = self.name.clone();
-        let edit = egui::TextEdit::singleline(&mut self.name)
+        let mut locked = previous.as_str();
+        let text: &mut dyn egui::TextBuffer =
+            if self.finalizing { &mut locked } else { &mut self.name };
+        let edit = egui::TextEdit::singleline(text)
             .id(Id::unique("create-name"))
             .font(FontId::new(40.0 * stage.scale, egui::FontFamily::Name("Georgia".into())))
             .text_color(Color32::TRANSPARENT)
@@ -432,10 +446,20 @@ impl CreateView {
                 },
             );
         }
+        widgets::focus_outline(frame, ui, &response, 2.0, 2.0, widgets::alpha(0xffffff, 0.8));
+        let editable = enabled && !self.finalizing;
         let clear = stage.rect(958.0, 38.0, 30.0, 30.0);
-        if widgets::interact(frame, ui, "clear-name", "Clear wizard name", "button", clear, enabled)
-            .clicked()
-            && enabled
+        if widgets::interact(
+            frame,
+            ui,
+            "clear-name",
+            "Clear wizard name",
+            "button",
+            clear,
+            editable,
+        )
+        .clicked()
+            && editable
         {
             actions.push("clear-name".to_owned());
         }
@@ -454,10 +478,10 @@ impl CreateView {
             "Randomize wizard name",
             "button",
             random,
-            enabled,
+            editable,
         )
         .clicked()
-            && enabled
+            && editable
         {
             actions.push("randomize-name".to_owned());
         }

@@ -254,11 +254,14 @@ impl LayoutsView {
                     enabled && !busy,
                     false,
                 );
-                frame.record_value("dark-cloud-layout-code", &self.input, None);
                 if response.changed() {
                     self.normalize();
                 }
+                frame.record_value("dark-cloud-layout-code", &self.input, None);
                 let admitted = enabled && !busy && self.input.len() == 9;
+                if admitted && widgets::submitted_on_enter(&response) {
+                    actions.push("cloud-layout-load".to_owned());
+                }
                 let b = Rect::from_min_size(
                     panel.min + Vec2::new(10.0, 84.0),
                     Vec2::new(panel.width() - 26.0, 44.0),

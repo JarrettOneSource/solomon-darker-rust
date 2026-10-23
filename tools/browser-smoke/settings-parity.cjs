@@ -15,10 +15,10 @@ async function reveal(page, id) {
 (async () => {
   const browser = await chromium.launch({headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
+    args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
   const checks = [];
   try {
-    const page = await browser.newPage({viewport: {width: 1600, height: 900}});
+    const page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
     const {errors} = gpu.watchErrors(page);
     await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
     await gpu.ready(page);
@@ -28,6 +28,8 @@ async function reveal(page, id) {
     assert.deepEqual(gpu.bounds(await gpu.widget(page, 'settings-panel')), {x: 500, y: 100, width: 600, height: 700});
     await gpu.setSlider(page, 'settings-range:sound', 37);
     await gpu.value(page, 'settings-range:sound', '37');
+    await gpu.setSlider(page, 'settings-range:music', 61);
+    await gpu.value(page, 'settings-range:music', '61');
     checks.push('native centered panel and actual keyboard slider');
     await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'settings-root.png')});
     await gpu.click(page, 'settings-page:cloud');
@@ -69,6 +71,7 @@ async function reveal(page, id) {
     const before = (await gpu.widget(page, 'settings-toggle:lighting')).value;
     await gpu.click(page, 'settings-toggle:lighting');
     await gpu.value(page, 'settings-toggle:lighting', before === 'true' ? 'false' : 'true');
+    await gpu.focused(page, 'settings-toggle:lighting');
     await gpu.setSlider(page, 'settings-range:light-quality', 47);
     await gpu.value(page, 'settings-range:light-quality', '47');
     await reveal(page, 'settings-toggle:enhanced-effects');

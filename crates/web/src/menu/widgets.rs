@@ -67,18 +67,66 @@ pub(crate) fn interact(
     rect: Rect,
     enabled: bool,
 ) -> Response {
+    let response = interact_unstyled(frame, ui, id, label, role, rect, enabled);
+    if enabled && ui.is_enabled() && frame.focus_visible(&response) {
+        ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0, GOLD), StrokeKind::Inside);
+    }
+    response
+}
+
+pub(super) fn focus_outline(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    response: &Response,
+    width: f32,
+    offset: f32,
+    color: Color32,
+) {
+    if response.enabled() && frame.focus_visible(response) {
+        ui.painter().rect_stroke(
+            response.rect.expand(offset),
+            0.0,
+            Stroke::new(width, color),
+            StrokeKind::Outside,
+        );
+    }
+}
+
+pub(crate) fn interact_unstyled(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    label: &str,
+    role: &str,
+    rect: Rect,
+    enabled: bool,
+) -> Response {
     let enabled = enabled && ui.is_enabled();
     let response =
         ui.interact(rect, Id::unique(id), if enabled { Sense::click() } else { Sense::hover() });
+    focus_on_pointer(&response);
     if enabled {
         frame.record(id, label, role, &response);
     } else {
         frame.record_rect(id, label, role, rect, false);
     }
-    if enabled && response.has_focus() {
-        ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0, GOLD), StrokeKind::Inside);
-    }
     response
+}
+
+/// Match native form controls: the actual pointer target retains keyboard focus.
+pub(crate) fn focus_on_pointer(response: &Response) {
+    if response.enabled()
+        && response.visible()
+        && (response.is_pointer_button_down_on()
+            || response.clicked_by(egui::PointerButton::Primary))
+    {
+        response.request_focus();
+    }
+}
+
+pub(super) fn submitted_on_enter(response: &Response) -> bool {
+    // Single-line TextEdit surrenders focus while processing its Enter event.
+    response.lost_focus() && response.ctx.input(|input| input.key_pressed(egui::Key::Enter))
 }
 pub(super) fn native(
     frame: &UiFrame<'_>,
@@ -109,14 +157,14 @@ pub(super) fn label(
     font: &str,
     size: f32,
     tint: Color32,
-) {
+) -> Rect {
     ui.painter().text(
         position,
         align,
         text,
         FontId::new(size, egui::FontFamily::Name(font.into())),
         tint,
-    );
+    )
 }
 pub(super) fn paragraph(
     ui: &Ui,
@@ -147,8 +195,11 @@ pub(crate) fn stock_button(
 ) -> Response {
     let response = interact(frame, ui, id, text, "button", rect, enabled);
     paint_stock_button(frame, ui, &response, rect, scale, enabled);
-    let pressed =
-        if response.is_pointer_button_down_on() { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
+    let pressed = if enabled && stock_button_pressed(ui, &response) {
+        Vec2::splat(6.0 * scale)
+    } else {
+        Vec2::ZERO
+    };
     if !text.is_empty() {
         crate::gpu_ui::native_text(
             frame,
@@ -168,6 +219,14 @@ pub(crate) fn stock_button(
     }
     response
 }
+pub(crate) fn stock_button_pressed(ui: &Ui, response: &Response) -> bool {
+    response.is_pointer_button_down_on()
+        || (response.has_focus()
+            && ui.input(|input| {
+                input.key_down(egui::Key::Enter) || input.key_down(egui::Key::Space)
+            }))
+}
+
 /// Paint stock chrome around an existing real interaction without recording another widget.
 pub(crate) fn paint_stock_button(
     frame: &UiFrame<'_>,
@@ -183,7 +242,7 @@ pub(crate) fn paint_stock_button(
         rect,
         scale,
         enabled,
-        response.hovered() || response.has_focus(),
+        response.hovered() || frame.focus_visible(response),
     );
 }
 /// Shared nativeUI54 chrome; each source family chooses its actual highlighted state.
@@ -206,10 +265,13 @@ pub(crate) fn paint_stock_button_tinted(
     highlight: bool,
     tint: Color32,
 ) {
-    image(frame, ui, "main-menu-button", rect, tint);
-    if enabled && highlight {
-        image(frame, ui, "main-menu-button-hover", rect, tint);
-    }
+    image(
+        frame,
+        ui,
+        if enabled && highlight { "main-menu-button-hover" } else { "main-menu-button" },
+        rect,
+        tint,
+    );
     let surround = 6.0 * scale;
     let end = Vec2::new(70.0, 85.0) * scale;
     let left = rect.min - Vec2::splat(surround);
@@ -241,11 +303,11 @@ pub(super) fn stone_button(
     rect: Rect,
     enabled: bool,
 ) -> Result<Response, String> {
-    let response = interact(frame, ui, id, text, "button", rect, enabled);
+    let response = interact_unstyled(frame, ui, id, text, "button", rect, enabled);
     atlas.paint_raw(
         frame,
         ui.painter(),
-        if enabled && response.is_pointer_button_down_on() { 106 } else { 105 },
+        if enabled && stock_button_pressed(ui, &response) { 106 } else { 105 },
         rect,
         alpha(0xffffff, if enabled { 1.0 } else { 0.36 }),
     )?;
@@ -259,6 +321,7 @@ pub(super) fn stone_button(
         0xf2f0dc,
         NativeUiTextAlign::Center,
     );
+    focus_outline(frame, ui, &response, 2.0, 3.0, alpha(0xefd17d, 0.9));
     Ok(response)
 }
 pub(super) fn flat_button(
@@ -283,6 +346,23 @@ pub(super) fn flat_button(
     );
     response
 }
+pub(crate) fn scrollbar_style(ui: &mut Ui, thumb: u32, track: u32, thin: bool) {
+    let style = ui.style_mut();
+    if thin {
+        style.spacing.scroll = egui::style::ScrollStyle::solid();
+        style.spacing.scroll.bar_inner_margin = 0.0;
+    }
+    style.spacing.scroll.foreground_color = false;
+    style.visuals.extreme_bg_color = color(track);
+    for visual in [
+        &mut style.visuals.widgets.inactive,
+        &mut style.visuals.widgets.hovered,
+        &mut style.visuals.widgets.active,
+    ] {
+        visual.bg_fill = color(thumb);
+    }
+}
+
 pub(super) fn gradient(ui: &Ui, rect: Rect, top: Color32, bottom: Color32) {
     let mut mesh = egui::Mesh::default();
     mesh.colored_vertex(rect.left_top(), top);
@@ -363,9 +443,9 @@ pub(crate) fn cloud_button_with_label(
     scale: f32,
     enabled: bool,
 ) -> Response {
-    let response = interact(frame, ui, id, accessible_label, "button", rect, enabled);
+    let response = interact_unstyled(frame, ui, id, accessible_label, "button", rect, enabled);
     let opacity = if enabled { 1.0 } else { 0.5 };
-    let pressed = enabled && response.is_pointer_button_down_on();
+    let pressed = enabled && stock_button_pressed(ui, &response);
     paint_stock_button_tinted(frame, ui, rect, scale, enabled, pressed, alpha(0xffffff, opacity));
     let press = if pressed { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
     crate::gpu_ui::native_text(
@@ -386,5 +466,67 @@ pub(crate) fn cloud_button_with_label(
     if !enabled {
         ui.painter().rect_filled(rect, 0.0, alpha(0x808080, 0.25));
     }
+    if enabled {
+        focus_outline(frame, ui, &response, 2.0, 3.0, alpha(0xefd17d, 0.9));
+    }
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn form_pass(ctx: &egui::Context, text: &mut String, events: Vec<egui::Event>) -> (bool, bool) {
+        let mut state = (false, false);
+        ctx.run_pass(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(400.0, 300.0))),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                ctx.root_ui(|ui| {
+                    let response = ui.put(
+                        Rect::from_min_size(Pos2::new(20.0, 20.0), Vec2::new(240.0, 44.0)),
+                        egui::TextEdit::singleline(text).id(Id::unique("native-form-input")),
+                    );
+                    state = (response.has_focus(), submitted_on_enter(&response));
+                });
+            },
+        )
+        .drop_without_applying_deltas();
+        state
+    }
+
+    #[test]
+    fn actual_single_line_enter_submits_once_after_the_field_surrenders_focus() {
+        let ctx = egui::Context::default();
+        let mut text = "a real query".to_owned();
+        form_pass(&ctx, &mut text, Vec::new());
+        let pos = Pos2::new(50.0, 40.0);
+        let click = [true, false].map(|pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+        let (focused, submitted) = form_pass(
+            &ctx,
+            &mut text,
+            std::iter::once(egui::Event::PointerMoved(pos)).chain(click).collect(),
+        );
+        assert!(focused);
+        assert!(!submitted);
+        let enter = || egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: Some(egui::Key::Enter),
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let (focused, submitted) = form_pass(&ctx, &mut text, vec![enter()]);
+        assert!(!focused);
+        assert!(submitted);
+        assert!(!form_pass(&ctx, &mut text, vec![enter()]).1);
+    }
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,6 +19,7 @@ const generatedResources = [
   'solomon-loader-1111111111111111.js', 'solomon-loader-2222222222222222_bg.wasm',
   'solomon-web-d693347574b3e849.js', 'solomon-web-852180e6d53c052b_bg.wasm',
 ];
+const digest = bytes => createHash('sha256').update(bytes).digest('hex').slice(0, 16);
 
 async function distribution(context, document) {
   const root = await mkdtemp(join(tmpdir(), 'solomon-desktop-build-'));
@@ -50,6 +52,35 @@ test('desktop artifacts externalize the root initializer and retain prepared bui
     'a prebuilt desktop distribution also excludes the Trunk build lock');
   assert.equal(await readFile(join(root, 'index.html'), 'utf8'), document);
   assert.equal((await readdir(root)).filter(name => name.endsWith('.mjs')).length, 1);
+});
+
+test('worker outputs hash WASM before rewriting and hashing the JavaScript binding', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'solomon-worker-build-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  await writeFile(join(root, 'index.html'), trunkDocument());
+  const expected = [];
+  for (const name of ['solomon-loader', 'solomon-web']) {
+    const wasm = Buffer.from(`${name} WASM fixture`);
+    const wasmName = `${name}-${digest(wasm)}_bg.wasm`;
+    const binding = `export default () => new URL('${name}_bg.wasm', import.meta.url);${name === 'solomon-web' ? '\r\n' : '\n'}`;
+    const rewritten = binding.replace(`${name}_bg.wasm`, wasmName);
+    const moduleName = `${name}-${digest(rewritten)}.js`;
+    await writeFile(join(root, `${name}_bg.wasm`), wasm);
+    await writeFile(join(root, `${name}.js`), binding);
+    expected.push(wasmName, moduleName);
+  }
+  const options = {skipBuild: true, nativeHost: process.execPath, clientRoot: root};
+  await desktopArtifacts(options);
+  const files = await readdir(root);
+  for (const name of expected) assert.ok(files.includes(name), `missing content-hashed ${name}`);
+  assert.equal(files.some(name => /solomon-(?:loader|web)(?:_bg\.wasm|\.js)$/.test(name)), false);
+  for (const name of expected.filter(name => name.endsWith('.js'))) {
+    const binding = await readFile(join(root, name), 'utf8');
+    assert.equal(name.match(/-([a-f0-9]{16})\.js$/)[1], digest(binding));
+    assert.match(binding, /new URL\('solomon-(?:loader|web)-[a-f0-9]{16}_bg\.wasm', import.meta.url\)/);
+  }
+  await desktopArtifacts(options);
+  assert.deepEqual((await readdir(root)).sort(), files.sort(), 'preparation is idempotent');
 });
 
 test('desktop preparation rejects a hosted distribution without changing it', async context => {

@@ -284,7 +284,7 @@ impl TitleView {
                 actions.push(action.to_owned());
             }
             let tint = widgets::alpha(0xffffff, if available { 1.0 } else { 0.36 });
-            let press = if response.is_pointer_button_down_on() {
+            let press = if available && widgets::stock_button_pressed(ui, &response) {
                 Vec2::splat(6.0 * controls_scale)
             } else {
                 Vec2::ZERO
@@ -334,15 +334,18 @@ impl TitleView {
             row += 1;
         }
         if !self.prompt_visible {
-            widgets::label(
+            let account = self.account.as_deref().unwrap_or("Not logged in");
+            let rect = widgets::label(
                 ui,
-                self.account.as_deref().unwrap_or("Not logged in"),
+                account,
                 view.min + Vec2::new(11.0, 12.0),
                 Align2::LEFT_TOP,
                 "JetBrains Mono",
                 14.0,
                 widgets::GOLD,
             );
+            frame.record_rect("title-account", account, "status", rect, false);
+            frame.record_value("title-account", account, None);
         }
         Ok(())
     }

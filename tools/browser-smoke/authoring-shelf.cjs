@@ -23,7 +23,7 @@ const account = {
 const localName = `Library ${Date.now().toString(36)}`;
 const importName = `${localName} import`;
 const nativeName = `${localName} native`;
-const checks = [], errors = [], requests = [], cancelled = [], sockets = [], lifecycle = [];
+const checks = [], errors = [], requests = [], failedResources = [], sockets = [], lifecycle = [];
 const assetStartups = [];
 const errorCounts = {};
 const redact = value => String(value).replaceAll(account.password, '[password]')
@@ -219,8 +219,8 @@ async function confirmDelete(shelf, name) {
     });
     page.on('requestfailed', request => {
       const receipt = { path: new URL(request.url()).pathname, reason: request.failure()?.errorText };
-      if (receipt.reason === 'net::ERR_ABORTED') cancelled.push(receipt);
-      else recordError(`${receipt.path}: ${receipt.reason}`);
+      failedResources.push(receipt);
+      recordError(`${receipt.path}: ${receipt.reason}`);
     });
     page.on('response', response => {
       const pathname = new URL(response.url()).pathname;
@@ -277,6 +277,8 @@ async function confirmDelete(shelf, name) {
     checked('Explore paints the Rust GPU Shelf, responds to the parent viewport and preserves the focused menu key');
 
     step = 'New, export and cloud save';
+    // Clicking the parent scene must keep its embedded Shelf above that scene.
+    await gpu.click(page, 'cloud-tab:boneyards');
     await gpu.click(page, 'boneyards/new');
     await editor();
     await saveName(importName);
@@ -353,7 +355,7 @@ async function confirmDelete(shelf, name) {
     // Retain the app result before browser-process shutdown, which can hang
     // independently of the accepted UI journey on a busy GPU machine.
     fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ target: game.href, tls_verified: !localTls, checks, failure, errors,
-      errorCounts, requests, cancelled, sockets, lifecycle, assetStartups }, null, 2));
+      errorCounts, requests, failedResources, sockets, lifecycle, assetStartups }, null, 2));
     console.log(JSON.stringify({ checks: checks.length, failure, output: out }));
     if (browser) await browser.close();
     if (failure) process.exitCode = 1;

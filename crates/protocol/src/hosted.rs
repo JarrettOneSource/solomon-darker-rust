@@ -139,6 +139,7 @@ pub enum HostedServerMessage {
         checkpoint_sequence: u64,
         target_revision: String,
         deployment_id: String,
+        deployment_sequence: u64,
     },
     LeaderboardReceipt {
         receipt: String,

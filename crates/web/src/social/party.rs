@@ -123,10 +123,15 @@ impl SocialUi {
                 if gear {
                     let response = ui.interact(
                         Rect::from_min_size(origin + vec2(168.0, 3.0), vec2(40.0, 44.0)),
-                        Id::unique("social/party-settings"),
+                        Id::unique("social/party-settings-shortcut"),
                         Sense::click(),
                     );
-                    frame.record("social/party-settings", "Party settings", "button", &response);
+                    frame.record(
+                        "social/party-settings-shortcut",
+                        "Party settings",
+                        "button",
+                        &response,
+                    );
                     let record = self.bonedit.record(54)?;
                     let [x, y] = record.registered_origin();
                     let image = frame

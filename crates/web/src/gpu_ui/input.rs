@@ -11,6 +11,7 @@ use web_sys::{
     HtmlTextAreaElement, InputEvent, KeyboardEvent, PointerEvent, WheelEvent,
 };
 
+use super::batches::{DispatchEnd, InputPass, into_passes};
 use super::{HitRegion, UiCapture, WidgetGeometry};
 
 pub fn canvas_point(client: [f32; 2], bounds: [f32; 4], logical: [f32; 2]) -> Pos2 {
@@ -48,6 +49,7 @@ pub struct BrowserKey {
 struct InputQueue {
     events: Vec<UiEvent>,
     codes: Vec<BrowserKey>,
+    dispatches: Vec<DispatchEnd>,
     focused: bool,
     composing: bool,
     capture: UiCapture,
@@ -66,9 +68,16 @@ struct InputQueue {
 }
 
 impl InputQueue {
+    fn finish_dispatch(&mut self) {
+        let end = DispatchEnd { events: self.events.len(), codes: self.codes.len() };
+        if self.dispatches.last().copied().unwrap_or_default() != end {
+            self.dispatches.push(end);
+        }
+    }
+
     fn set_scope(&mut self, scope: Option<&str>) {
         if self.scope.as_deref() != scope {
-            self.require_gamepad_neutral |= self.gamepad_active;
+            self.require_gamepad_neutral = scope.is_some();
             self.gamepad_direction = None;
             self.next_gamepad_repeat_at = 0.0;
             self.scope = scope.map(str::to_owned);
@@ -248,6 +257,7 @@ impl BrowserInput {
                 if queue.capture.keyboard {
                     event.stop_propagation();
                 }
+                queue.finish_dispatch();
             })?;
         }
         for (name, phase) in [
@@ -302,6 +312,9 @@ impl BrowserInput {
                         queue.primary_touch = Some(pointer.pointer_id());
                     }
                     if queue.primary_touch != Some(pointer.pointer_id()) {
+                        if !matches!(phase, TouchPhase::Move) {
+                            queue.finish_dispatch();
+                        }
                         return;
                     }
                 }
@@ -332,13 +345,16 @@ impl BrowserInput {
                         queue.primary_touch = None;
                         queue.events.push(UiEvent::PointerGone);
                     }
+                    queue.finish_dispatch();
                 }
             })?;
         }
         {
             let queue = queue.clone();
             listen(canvas.as_ref(), "pointerleave", &mut listeners, move |_| {
-                queue.borrow_mut().events.push(UiEvent::PointerGone)
+                let mut queue = queue.borrow_mut();
+                queue.events.push(UiEvent::PointerGone);
+                queue.finish_dispatch();
             })?;
         }
         {
@@ -362,6 +378,7 @@ impl BrowserInput {
                         wheel.meta_key(),
                     ),
                 });
+                queue.finish_dispatch();
                 if queue.capture.pointer {
                     event.prevent_default();
                 }
@@ -379,6 +396,7 @@ impl BrowserInput {
                     queue.owned_pointers.clear();
                     queue.events.push(UiEvent::PointerGone);
                 }
+                queue.finish_dispatch();
             })?;
         }
         for (name, phase) in
@@ -406,6 +424,7 @@ impl BrowserInput {
                         textarea.set_value("");
                     }
                 }
+                queue.finish_dispatch();
             })?;
         }
         {
@@ -435,6 +454,7 @@ impl BrowserInput {
                         });
                     }
                     event.prevent_default();
+                    queue.finish_dispatch();
                 }
             })?;
         }
@@ -453,6 +473,7 @@ impl BrowserInput {
                         queue.events.push(UiEvent::Text(text));
                     }
                     textarea.set_value("");
+                    queue.finish_dispatch();
                 }
             })?;
         }
@@ -475,6 +496,7 @@ impl BrowserInput {
                         }
                     }
                 }
+                queue.finish_dispatch();
             })?;
         }
         Ok(Self { document: document.clone(), canvas: canvas.clone(), textarea, queue, listeners })
@@ -485,7 +507,7 @@ impl BrowserInput {
         viewport: [f32; 2],
         pixels_per_point: f32,
         time: f64,
-    ) -> Result<egui::RawInput, String> {
+    ) -> Result<Vec<InputPass>, String> {
         let mut queue = self.queue.borrow_mut();
         queue.logical = viewport;
         let mut raw = egui::RawInput {
@@ -497,14 +519,22 @@ impl BrowserInput {
         };
         raw.viewports.entry(egui::ViewportId::ROOT).or_default().native_pixels_per_point =
             Some(pixels_per_point);
+        let mut dispatches = std::mem::take(&mut queue.dispatches);
+        let codes = std::mem::take(&mut queue.codes);
         if let Some(error) = queue.clipboard_error.take() {
             return Err(error);
         }
-        let navigator =
-            self.document.default_view().ok_or("no window for gamepad input")?.navigator();
-        let gamepads = navigator
-            .get_gamepads()
-            .map_err(|error| format!("GPU UI gamepad sample: {error:?}"))?;
+        let native_events = raw.events.len();
+        let gamepads = if queue.scope.is_some() {
+            self.document
+                .default_view()
+                .ok_or("no window for gamepad input")?
+                .navigator()
+                .get_gamepads()
+                .map_err(|error| format!("GPU UI gamepad sample: {error:?}"))?
+        } else {
+            js_sys::Array::new()
+        };
         use solomon_sim::input::{
             MenuDirection, MenuGamepadButtons, MenuGamepadState, advance_menu_direction_repeat,
             read_menu_gamepad,
@@ -585,7 +615,10 @@ impl BrowserInput {
         queue.gamepad_keys = held;
         queue.gamepad_direction = current.direction;
         queue.next_gamepad_repeat_at = next_repeat;
-        Ok(raw)
+        if raw.events.len() != native_events {
+            dispatches.push(DispatchEnd { events: raw.events.len(), codes: codes.len() });
+        }
+        Ok(into_passes(raw, codes, dispatches))
     }
 
     pub fn set_widgets(&mut self, widgets: &std::collections::BTreeMap<String, WidgetGeometry>) {
@@ -594,6 +627,7 @@ impl BrowserInput {
             .filter(|widget| {
                 matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
                     && widget.enabled
+                    && widget.is_interactive()
             })
             .map(|widget| {
                 Rect::from_min_size(
@@ -615,10 +649,6 @@ impl BrowserInput {
 
     pub fn set_scope(&mut self, scope: Option<&str>) {
         self.queue.borrow_mut().set_scope(scope);
-    }
-
-    pub fn take_key_codes(&mut self) -> Vec<BrowserKey> {
-        std::mem::take(&mut self.queue.borrow_mut().codes)
     }
 
     pub fn apply_output(
@@ -741,6 +771,16 @@ impl Drop for BrowserInput {
 mod tests {
     use super::*;
     use solomon_sim::input::{MenuDirection, MenuGamepadState};
+
+    #[test]
+    fn foreground_admission_requires_neutral_without_polling_the_gameplay_controller() {
+        let mut queue = InputQueue::default();
+        queue.set_scope(Some("pause"));
+        let held = MenuGamepadState { back: true, ..Default::default() };
+        assert!(!queue.scoped_gamepad(held).active());
+        queue.scoped_gamepad(MenuGamepadState::default());
+        assert_eq!(queue.scoped_gamepad(held), held);
+    }
 
     #[test]
     fn gameplay_keeps_the_controller_and_foreground_scope_changes_require_a_neutral_handoff() {

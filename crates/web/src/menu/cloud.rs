@@ -828,6 +828,7 @@ impl CloudView {
         enabled: bool,
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
+        widgets::scrollbar_style(ui, 0x876d37, 0x080808, true);
         ui.painter().rect_filled(view, 0.0, Color32::BLACK);
         self.images.begin_paint();
         let phone = view.width() <= 700.0;
@@ -936,6 +937,15 @@ impl CloudView {
                 );
             }
         }
+        let frame_rect = if !compact && !short {
+            Rect::from_min_max(view.min + Vec2::new(55.0, 173.0), view.max - Vec2::new(55.0, 100.0))
+        } else {
+            Rect::from_min_max(
+                view.min + Vec2::new(outer, heading_height + tab_height),
+                view.max - Vec2::new(outer, footer_height + 6.0),
+            )
+        };
+        self.art.list(frame, ui, frame_rect, if phone || short { 0.58 } else { 1.0 })?;
         let tabs_width =
             if short { view.width() - 124.0 } else { 1122.0_f32.min(view.width() - outer * 2.0) };
         let tabs = Rect::from_min_size(
@@ -946,8 +956,10 @@ impl CloudView {
         frame.record_rect("cloud-tabs", "Dark Cloud sections", "region", tabs, admitted);
         let mut child = ui.new_child(egui::UiBuilder::new().id_salt("cloud-tabs").max_rect(tabs));
         child.set_clip_rect(tabs);
-        let mut scroll =
-            egui::ScrollArea::horizontal().id_salt("cloud-tabs-scroll").auto_shrink([false, false]);
+        let mut scroll = egui::ScrollArea::horizontal()
+            .id_salt("cloud-tabs-scroll")
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
+            .auto_shrink([false, false]);
         if self.tab_scroll_reset {
             let b = strip.bounds(self.tab);
             scroll =
@@ -982,15 +994,6 @@ impl CloudView {
             }
         });
         std::mem::replace(&mut result, Ok(()))?;
-        let frame_rect = if !compact && !short {
-            Rect::from_min_max(view.min + Vec2::new(55.0, 173.0), view.max - Vec2::new(55.0, 100.0))
-        } else {
-            Rect::from_min_max(
-                view.min + Vec2::new(outer, heading_height + tab_height),
-                view.max - Vec2::new(outer, footer_height + 6.0),
-            )
-        };
-        self.art.list(frame, ui, frame_rect, if phone || short { 0.58 } else { 1.0 })?;
         let pad = if phone {
             14.0
         } else if compact || short {
@@ -1696,7 +1699,7 @@ impl CloudView {
                 false,
             );
             frame.record_value("dark-cloud-search-input", input, None);
-            if response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if widgets::submitted_on_enter(&response) {
                 actions.push("cloud-search-submit".to_owned());
             }
             let clear =

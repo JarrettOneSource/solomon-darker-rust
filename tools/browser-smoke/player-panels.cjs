@@ -5,7 +5,6 @@ const fs = require('node:fs');
 const { chromium } = require(path.resolve(process.env.PW));
 const { startNewGame } = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
-const {waitForSave,localParticipant} = require('./saved-game.cjs');
 const output = process.env.OUT || '/tmp';
 fs.mkdirSync(output,{recursive:true});
 const state = page => page.evaluate(() => Array.from(window.wasmBindings.wizard_state()));
@@ -26,10 +25,6 @@ const notice = (page, title) => ui.waitForUi(page, snapshot => {
     const { errors } = ui.watchErrors(page);
     await page.goto(process.env.URL || 'http://127.0.0.1:4185/'); await ui.ready(page);
     await startNewGame(page, {name:process.env.GENERATED_NAME==='1'?null:'Felix'});
-    await waitForSave(page, record => {
-      const selected=localParticipant(record).player.selection;
-      return selected.element==='Ether'&&selected.discipline==='Arcane';
-    });
     await page.keyboard.press('KeyI'); await ui.widget(page, 'panel:surface:inventory');
     const frozen = await state(page);
     await page.keyboard.down('KeyS'); await ui.nextFrame(page); await page.keyboard.up('KeyS');
