@@ -17,8 +17,9 @@ async function reveal(page, id) {
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
   const checks = [];
+  let page;
   try {
-    const page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
+    page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
     const {errors} = gpu.watchErrors(page);
     await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
     await gpu.ready(page);
@@ -84,6 +85,7 @@ async function reveal(page, id) {
     await gpu.click(page, 'settings');
     await gpu.value(page, 'settings-range:sound', '37');
     await gpu.click(page, 'settings-back');
+    await gpu.settleErrors(page);
     await page.reload();
     await gpu.ready(page);
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) await gpu.click(page, 'prompt-secondary');
@@ -95,8 +97,12 @@ async function reveal(page, id) {
     assert.ok(panel.x >= 0 && panel.x + panel.width <= 390);
     await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'phone-settings.png')});
     await gpu.assertGpuOnly(page);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checks.push('accepted preferences survive actual reload; compact GPU panel');
     console.log(JSON.stringify({checks, errors}));
-  } finally { await browser.close(); }
+  } finally {
+    try { if (page && !page.isClosed()) await gpu.settleErrors(page); }
+    finally { await browser.close(); }
+  }
 })().catch(error => {console.error(error); process.exitCode = 1;});
