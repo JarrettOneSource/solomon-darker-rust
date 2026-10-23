@@ -58,6 +58,14 @@ The file-selection preview recreates a current save, which must restore again
 before that first actor tick. Rejecting the constructor's zero timer breaks this
 ordinary import/Continue boundary; negative values and 30 remain invalid.
 
+Custom Sack names retain `renderer/hub-inventory/sack-name.ts` and its Pixi
+wrapping contract. A detached native font canvas measures the authored `|ÉqÅM`
+Arial probe, complete token advances and ink overhang, then shapes each complete
+font run into an egui-managed GPU texture. This preserves real baseline/height,
+kerning, Arabic joining and emoji clusters. The texture cache belongs to the
+current egui context and retires old runs through the same managed GPU lifetime;
+panel geometry, clipping and input remain in Rust.
+
 The accepted economy receipt owns the result. Independent cursor consumers seed
 the current sequence on connection and advance over every newer receipt; restored,
 stale, duplicate, rejected and unrelated actions never reopen it. An accepted choice

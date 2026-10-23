@@ -86,9 +86,10 @@ impl PlayerPanels {
             + 40.0;
         c.frame(&self.ui, 4, HudRect::new(center - width / 2.0, top, width, 40.0), 5.0, 0xffffff)?;
         if let Some(name) = fallback {
+            let mut painter = c.painter.clone();
+            painter.multiply_opacity(c.alpha);
             name.paint(
-                c.frame,
-                &c.painter,
+                &painter,
                 egui::pos2(
                     (center - name.size.x / 2.0) as f32,
                     (baseline - name.baseline_offset) as f32,
