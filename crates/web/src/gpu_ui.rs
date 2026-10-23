@@ -20,7 +20,7 @@ use egui::{Color32, Context, Painter, Pos2, Rect, Response, Vec2, pos2, vec2};
 use serde::Serialize;
 use web_sys::{Document, HtmlCanvasElement};
 
-use crate::render::{BlendMode, Renderer};
+use solomon_graphics::{BlendMode, Renderer};
 
 pub use geometry::clip_polygon_ellipse;
 pub use input::{BrowserKey, canvas_point, key_from_browser};
@@ -140,7 +140,7 @@ impl WidgetGeometry {
 
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct UiDiagnostics {
-    pub frame:u64,
+    pub frame: u64,
     pub viewport: [f32; 2],
     pub pixels_per_point: f32,
     pub meshes: usize,
@@ -166,9 +166,14 @@ pub struct UiFrame<'a> {
     rotation: egui::emath::Rot2,
     translation: Vec2,
     input_scope: &'a RefCell<Option<String>>,
+    retired_images: &'a RefCell<Vec<String>>,
 }
 
 impl UiFrame<'_> {
+    /// Retires a dynamic image after every mesh from this frame has been submitted.
+    pub fn forget_image(&self, path: &str) {
+        self.retired_images.borrow_mut().push(path.to_owned());
+    }
     /// The last foreground owner painted this frame owns controller navigation.
     /// Frames without an owner leave the gamepad with gameplay.
     pub fn input_scope(&self, scope: &str) {
@@ -189,6 +194,7 @@ impl UiFrame<'_> {
             rotation: self.rotation,
             translation: self.translation,
             input_scope: self.input_scope,
+            retired_images: self.retired_images,
         }
     }
     pub fn with_rotation(&self, pivot: Pos2, radians: f32) -> UiFrame<'_> {
@@ -490,6 +496,14 @@ pub struct GpuUi {
 }
 
 impl GpuUi {
+    pub(crate) fn startup_asset_count() -> usize {
+        fonts::asset_count()
+            + include_str!("gpu_ui/stock-images.txt")
+                .lines()
+                .filter(|path| !path.is_empty())
+                .count()
+    }
+
     pub async fn load(
         document: &Document,
         canvas: &HtmlCanvasElement,
@@ -555,6 +569,7 @@ impl GpuUi {
         let widgets = RefCell::new(BTreeMap::new());
         let announcements = RefCell::new(Vec::new());
         let input_scope = RefCell::new(None);
+        let retired_images = RefCell::new(Vec::new());
         let mut output = self.ctx.run_pass(raw, |ctx| {
             paint(&mut UiFrame {
                 ctx,
@@ -567,6 +582,7 @@ impl GpuUi {
                 rotation: egui::emath::Rot2::IDENTITY,
                 translation: Vec2::ZERO,
                 input_scope: &input_scope,
+                retired_images: &retired_images,
             });
         });
         self.widgets = widgets.into_inner();
@@ -608,16 +624,20 @@ impl GpuUi {
             return Err(error);
         }
         let primitives = self.ctx.tessellate(output.shapes, output.pixels_per_point);
-        let (meshes, triangles) = self.painter.paint(
+        let painted = self.painter.paint(
             renderer,
             physical,
             viewport,
             &self.images,
             primitives,
             output.textures_delta,
-        )?;
+        );
+        for path in retired_images.into_inner() {
+            self.images.forget(&path, &self.painter.gl);
+        }
+        let (meshes, triangles) = painted?;
         self.diagnostics = UiDiagnostics {
-            frame:self.diagnostics.frame+1,
+            frame: self.diagnostics.frame + 1,
             viewport,
             pixels_per_point,
             meshes,

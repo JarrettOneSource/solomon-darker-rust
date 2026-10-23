@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import re
 
-from trunk_bootstrap import externalize_trunk_bootstrap
+from trunk_bootstrap import prepare_trunk_bootstrap
 
 
 def main():
@@ -27,14 +27,13 @@ def main():
     index = args.dist / "index.html"
     document = index.read_text(encoding="utf-8")
     try:
-        document, name, bootstrap = externalize_trunk_bootstrap(document, args.mount)
+        document, name, bootstrap = prepare_trunk_bootstrap(args.dist, args.mount)
     except ValueError as error:
         parser.error(str(error))
     (args.dist / name).write_text(bootstrap, encoding="utf-8")
     if 'name="solomon-build-revision"' in document or document.count("</head>") != 1:
         parser.error("expected one document head without preexisting deployment metadata")
     document = document.replace("</head>", (
-        f'<base href="{args.mount}/">\n'
         f'<meta name="solomon-build-revision" content="{args.revision}">\n'
         f'<meta name="solomon-game-mount" content="{args.mount}">\n'
         f'<meta name="solomon-website-mount" content="{website_mount}">\n</head>'

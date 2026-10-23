@@ -9,7 +9,8 @@ const cleanup = () => {
   // Hidden frames can suspend rAF. Only handshake/disposal is polled here;
   // gameplay remains on the ordinary frame loop and canonical native host.
   cleanupTimer = window.setInterval(() => {
-    if (window.wasmBindings?.editor_test_cleanup()) {
+    if (window.wasmBindings?.editor_test_cleanup?.()) {
+      window.solomonLoader?.finish()
       window.clearInterval(cleanupTimer)
       cleanupTimer = undefined
     }

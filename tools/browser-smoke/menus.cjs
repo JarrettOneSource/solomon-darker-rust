@@ -18,19 +18,6 @@ async function ticks(page,count) {
     start+count,{timeout:20000});
 }
 
-async function slider(page,id,target) {
-  await ui.click(page,id);
-  await ui.nextFrame(page);
-  const current=Number((await ui.widget(page,id)).value);
-  assert.ok(Number.isFinite(current),'the real slider reports its accepted number');
-  const key=current<target?'ArrowRight':'ArrowLeft';
-  for(let count=0;count<Math.abs(target-current);count++) {
-    await page.keyboard.press(key);
-    await ui.nextFrame(page);
-  }
-  await ui.value(page,id,String(target));
-}
-
 (async()=>{
   const browser=await chromium.launch({headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -39,6 +26,7 @@ async function slider(page,id,target) {
     const page=await browser.newPage({viewport:{width:1600,height:900}});
     const observed=ui.watchErrors(page);
     await ui.observeGpu(page);
+    await ui.observeAnnouncements(page);
     await page.goto(url,{waitUntil:'domcontentloaded'});
     await ui.ready(page);
     await screen(page,'title');
@@ -61,7 +49,8 @@ async function slider(page,id,target) {
     await ui.fill(page,'create-name','Solon-Solus');
     await ui.value(page,'create-name','AAAAAAAAAAA');
     await ui.fill(page,'create-name','');
-    await ui.value(page,'create-validation','');
+    await ui.value(page,'create-name','');
+    await ui.noWidget(page,'create-validation');
     await ui.waitForUi(page,snapshot=>ui.findWidget(snapshot,'randomize-loadout')?.enabled,
       'completed native Create entry');
     await ui.fill(page,'create-name','Felix');
@@ -98,7 +87,10 @@ async function slider(page,id,target) {
     await shot(page,'menu-pause.png');
     await ui.click(page,'pause-settings');
     await screen(page,'settings');
-    await slider(page,'settings-range:ui-scale',135);
+    const announcementsBefore=(await ui.announcements(page)).length;
+    await ui.setSlider(page,'settings-range:ui-scale',135);
+    await ui.announced(page,'UI SCALE',{afterIndex:announcementsBefore});
+    await ui.announced(page,'135',{afterIndex:announcementsBefore});
     await shot(page,'menu-settings-root.png');
     await ui.click(page,'settings-page:controls');
     await ui.widget(page,'bind:move-up');
@@ -171,7 +163,7 @@ async function slider(page,id,target) {
     console.log(JSON.stringify({checks:['title clock','College admission before the sole loadout',
       'accepted/rejected stock Create names','stock Create effects','new-game HUD',
       'College pause seals input while actors advance','real settings slider',
-      'key rebinding and capture rejection','HUD scale','Continue','actual GPU UI'],
-      gpu:gpu.gpu.draw,errors:observed.errors}));
+      'key rebinding and capture rejection','HUD scale','screen-reader focus/value announcements',
+      'Continue','actual GPU UI'],gpu:gpu.gpu.draw,announcements:await ui.announcements(page),errors:observed.errors}));
   } finally {await browser.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});

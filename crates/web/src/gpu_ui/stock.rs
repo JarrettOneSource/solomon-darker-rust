@@ -12,7 +12,7 @@ use solomon_sim::native_ui_text::{
 
 use super::UiFrame;
 use super::geometry::clip_image_rect;
-use crate::assets;
+use solomon_graphics::assets;
 
 pub struct StockAtlas {
     name: &'static str,

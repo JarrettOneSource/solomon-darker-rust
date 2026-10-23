@@ -279,6 +279,14 @@ async function geometry(page, id) {
     assert.ok(!state.runtime.skill_ranks.some(row => row.content_id === gravitySkill),
       'use a fresh QA profile: Source intentionally retains authored ranks across New Game');
     check('the actual authority admits private cheats and the exact accepted content digest');
+    await ui.click(page,'social/party');await ui.click(page,'social/party-mods');
+    const packageRow=await ui.widget(page,`social/party-mod:${acceptedPackage.packageId}`);
+    assert.ok(packageRow.label.includes(acceptedPackage.name || 'Gravity Lesson'));
+    assert.equal(packageRow.value,acceptedPackage.version);
+    await ui.assertGpuOnly(page);await page.screenshot({path:path.join(output,'gravity-party-mods.png')});
+    await page.keyboard.press('Escape');await ui.noWidget(page,'social/party-menu');
+    check('Party Mods lists the actually admitted package name and version inside stock chrome');
+
 
     mark('earn the native offer with the real stock Grant XP control');
     // Source grantPlayerExperience requires XP strictly above the threshold.

@@ -1178,6 +1178,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solomon-graphics"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "solomon-sim",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "solomon-launcher"
 version = "0.1.0"
 dependencies = [
@@ -1198,6 +1209,20 @@ dependencies = [
  "tungstenite",
  "ureq",
  "url",
+]
+
+[[package]]
+name = "solomon-loader"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "js-sys",
+ "serde_json",
+ "solomon-graphics",
+ "solomon-sim",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -1257,6 +1282,7 @@ dependencies = [
  "serde",
  "serde_json",
  "solomon-assets",
+ "solomon-graphics",
  "solomon-protocol",
  "solomon-sim",
  "wasm-bindgen",

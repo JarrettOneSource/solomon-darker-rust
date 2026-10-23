@@ -11,10 +11,7 @@ mod settings;
 mod title;
 pub(crate) mod widgets;
 
-use crate::{
-    assets,
-    gpu_ui::{StockAtlas, UiFrame},
-};
+use crate::gpu_ui::{StockAtlas, UiFrame};
 use cloud::CloudView;
 use create::CreateView;
 use egui::{Color32, Id, Rect, Vec2};
@@ -27,6 +24,7 @@ pub use routing::RoutingDownloadProgress;
 use routing::RoutingView;
 pub use settings::SettingsContext;
 use settings::SettingsView;
+use solomon_graphics::assets;
 use solomon_sim::NativeRng;
 use solomon_sim::audio::{
     AudioCue, AudioEvent, AudioOptions, MusicScene, create_entry_audio_events,
@@ -266,7 +264,21 @@ impl MenuUi {
             Screen::Settings => "settings",
         }
     }
+    fn navigation_scope(&self) -> String {
+        if self.routing.active() {
+            "routing".to_owned()
+        } else if self.prompt.kind.is_some() {
+            "title-prompt".to_owned()
+        } else if self.screen == Screen::Settings {
+            self.settings_view.navigation_scope()
+        } else if self.screen == Screen::Cloud {
+            self.cloud.navigation_scope()
+        } else {
+            format!("{:?}-{:?}", self.screen, self.selected_element)
+        }
+    }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        self.cloud.retire_images(frame);
         let keys = frame.key_codes().to_vec();
         let editing = frame.ctx.text_edit_focused();
         let capturing_binding =
@@ -306,6 +318,7 @@ impl MenuUi {
             }
         }
         if self.orientation_blocked {
+            frame.input_scope("landscape-guidance");
             let view = frame.ctx.input(|i| i.content_rect());
             let ctx = frame.ctx.clone();
             egui::Modal::new(Id::unique("landscape-guidance"))
@@ -333,6 +346,9 @@ impl MenuUi {
                 });
             return Ok(());
         }
+        if !self.input_suspended && self.pending_start.is_none() && self.is_blocking() {
+            frame.input_scope(&self.navigation_scope());
+        }
         if self.screen == Screen::Hidden && !self.routing.active() {
             return Ok(());
         }
@@ -354,23 +370,27 @@ impl MenuUi {
             .show(&ctx, |ui| {
                 ui.set_min_size(view.size());
                 ui.set_clip_rect(view);
-                if self.input_suspended {
+                if !enabled {
                     ui.disable();
+                    ui.set_opacity(1.0);
                 }
                 if self.cloud_visible(self.screen) {
-                    result = self.cloud.paint(frame, ui, view, enabled, &mut actions);
+                    result = self.cloud.paint(frame, ui, view, true, &mut actions);
                 } else if matches!(self.screen, Screen::Title | Screen::Play)
                     || (self.screen == Screen::Settings
                         && matches!(self.settings_back, Screen::Title | Screen::Play))
                 {
-                    result = self.title.paint(frame, ui, view, enabled, &mut actions);
+                    result = self.title.paint(frame, ui, view, true, &mut actions);
                 } else {
                     result = match self.screen {
-                        Screen::Create => self.create.paint(frame, ui, view, enabled, &mut actions),
+                        Screen::Create => self.create.paint(frame, ui, view, true, &mut actions),
                         Screen::Hall => self.hall.paint(frame, ui, view, &mut actions),
                         Screen::Join => self.join.paint_gpu(frame, ui, view, &mut actions),
                         _ => Ok(()),
                     };
+                }
+                if result.is_ok() && self.screen == Screen::Settings && self.routing.active() {
+                    result = self.settings_view.paint(frame, ui, view, &mut Vec::new());
                 }
             });
         std::mem::replace(&mut result, Ok(()))?;
@@ -388,6 +408,7 @@ impl MenuUi {
                     ui.set_clip_rect(view);
                     if self.input_suspended {
                         ui.disable();
+                        ui.set_opacity(1.0);
                     }
                     result = if self.routing.active() {
                         self.routing.paint(frame, ui, view, &mut actions)
@@ -402,17 +423,20 @@ impl MenuUi {
             std::mem::replace(&mut result, Ok(()))?;
         }
         if !self.input_suspended && self.pending_start.is_none() {
-            let scope = if self.routing.active() {
-                "routing".to_owned()
-            } else if self.prompt.kind.is_some() {
-                "title-prompt".to_owned()
-            } else if self.screen == Screen::Settings {
-                self.settings_view.navigation_scope()
-            } else if self.screen == Screen::Cloud {
-                self.cloud.navigation_scope()
-            } else {
-                format!("{:?}-{:?}", self.screen, self.selected_element)
-            };
+            let scope = self.navigation_scope();
+            let navigation_requested = !ctx.text_edit_focused()
+                && ctx.input(|input| {
+                    [
+                        egui::Key::Enter,
+                        egui::Key::Tab,
+                        egui::Key::ArrowUp,
+                        egui::Key::ArrowDown,
+                        egui::Key::ArrowLeft,
+                        egui::Key::ArrowRight,
+                    ]
+                    .into_iter()
+                    .any(|key| input.key_pressed(key))
+                });
             let preferred = if self.routing.active() {
                 Some("routing-back".to_owned())
             } else if self.prompt.kind.is_some() {
@@ -420,16 +444,25 @@ impl MenuUi {
             } else {
                 match self.screen {
                     Screen::Title | Screen::Play => Some(self.title.default_focus().to_owned()),
-                    Screen::Create => self.create.default_focus().map(str::to_owned),
+                    Screen::Create if navigation_requested => {
+                        self.create.default_focus().map(str::to_owned)
+                    }
+                    Screen::Create => None,
                     Screen::Pause => Some("resume".to_owned()),
                     Screen::Settings => self.settings_view.default_focus(),
                     Screen::Hall => Some("hall-back".to_owned()),
-                    Screen::Join => Some("join-party-code".to_owned()),
+                    Screen::Join if navigation_requested => Some("join-party-code".to_owned()),
+                    Screen::Join => None,
                     Screen::Cloud => self.cloud.default_focus(),
                     Screen::Hidden => None,
                 }
             };
             self.navigation.update(&ctx, &scope, preferred.as_deref());
+            if let Some(action) = self.navigation.take_confirmation() {
+                if !matches!(action.as_str(), "join-party-code") {
+                    actions.push(action);
+                }
+            }
             if frame.key_codes().is_empty() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.back()?;
             }
@@ -531,6 +564,12 @@ impl MenuUi {
         self.cloud.boneyards_selected()
     }
 
+    pub fn boneyards_interactive(&self) -> bool {
+        self.screen == Screen::Cloud
+            && !self.input_suspended
+            && !self.routing.active()
+            && self.cloud.boneyards_selected()
+    }
     pub fn request_boneyard_library_menu(&mut self) -> Result<(), String> {
         if self.screen == Screen::Cloud {
             self.handle_event(UiEvent::Key(self.settings.controls.open_menu.clone(), false))?;
@@ -1605,7 +1644,7 @@ impl PauseView {
         let spread = solomon_sim::float::fround((1.0 - self.reveal) * 25.0 + 40.0);
         let top = (900.0 - self.body_height()) / 2.0 - spread;
         let bottom = top + self.body_height() + spread * 2.0;
-        self.atlas.paint_native_frame(
+        self.atlas.paint_native_frame_scaled(
             frame,
             ui.painter(),
             17,
@@ -1615,6 +1654,7 @@ impl PauseView {
                 353.0 + spread * 2.0,
                 self.body_height() + spread * 2.0,
             ),
+            scale,
             true,
             Color32::WHITE,
         )?;

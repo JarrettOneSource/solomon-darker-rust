@@ -27,7 +27,7 @@ pub(crate) struct PanelCanvas<'a, 'gpu> {
     pub alpha: f32,
     pub enabled: bool,
     direct: bool,
-    blend: crate::render::BlendMode,
+    blend: solomon_graphics::BlendMode,
     namespace: &'static str,
     hits: &'a RefCell<Vec<PanelHit>>,
     events: &'a RefCell<Vec<PanelEvent>>,
@@ -51,7 +51,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
             hits,
             events,
             direct: false,
-            blend: crate::render::BlendMode::Normal,
+            blend: solomon_graphics::BlendMode::Normal,
             namespace: "panel",
         }
     }
@@ -97,7 +97,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
     }
     pub fn additive(&self) -> Self {
         let mut c = self.at(0.0, 0.0);
-        c.blend = crate::render::BlendMode::Add;
+        c.blend = solomon_graphics::BlendMode::Add;
         c
     }
     pub fn target_rect(&self, target: Target) -> Option<Rect> {
@@ -834,7 +834,7 @@ pub(crate) fn paint_split_art(
         [dest.left_top(), dest.right_top(), dest.left_bottom()],
         [uv.left_top(), uv.right_top(), uv.left_bottom()],
         color(tints[0]).gamma_multiply(alpha),
-        crate::render::BlendMode::Normal,
+        solomon_graphics::BlendMode::Normal,
     );
     frame.image_triangle(
         painter,
@@ -842,7 +842,7 @@ pub(crate) fn paint_split_art(
         [dest.right_top(), dest.right_bottom(), dest.left_bottom()],
         [uv.right_top(), uv.right_bottom(), uv.left_bottom()],
         color(tints[1]).gamma_multiply(alpha),
-        crate::render::BlendMode::Normal,
+        solomon_graphics::BlendMode::Normal,
     );
     Ok(())
 }

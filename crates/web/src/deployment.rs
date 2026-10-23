@@ -5,16 +5,16 @@
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{
-    AbortController, AbortSignal, Document, HtmlElement, RequestCache, RequestInit, Response,
-    Window,
+    AbortController, AbortSignal, Document, RequestCache, RequestInit, Response, Window,
 };
 
+use crate::gpu_ui::UiFrame;
 use crate::hosted::WebsiteMount;
-use crate::ui::{append, element};
+use egui::{Color32, FontFamily, FontId, Id, Order, RichText, Stroke, vec2};
 
 pub struct DeploymentUpdate {
-    root: HtmlElement,
-    message: HtmlElement,
+    message: Option<&'static str>,
+    target_revision: Option<String>,
     mount: WebsiteMount,
     revision: Option<String>,
     polling: Option<AbortController>,
@@ -39,25 +39,14 @@ impl DeploymentUpdate {
             .map_err(|_| "Could not read the game build revision")?
             .and_then(|meta| meta.get_attribute("content"))
             .and_then(|revision| watch_server.then(|| normalized_revision(&revision)).flatten());
-        let root = element(document, "div", "game-deployment-update")?;
-        root.set_hidden(true);
-        root.set_attribute("role", "status").map_err(|_| "Update status role")?;
-        root.set_attribute("aria-live", "assertive").map_err(|_| "Update announcement")?;
-        let css = element(document, "style", "game-deployment-update-style")?;
-        css.set_text_content(Some(include_str!("../../../web/game-deployment-update.css")));
-        append(&root, &css)?;
-        let panel = element(document, "section", "game-deployment-update-panel")?;
-        let kicker = element(document, "p", "game-deployment-update-kicker")?;
-        kicker.set_text_content(Some("Server update"));
-        append(&panel, &kicker)?;
-        let title = element(document, "h1", "")?;
-        title.set_text_content(Some("Game updating"));
-        append(&panel, &title)?;
-        let message = element(document, "p", "")?;
-        append(&panel, &message)?;
-        append(&root, &panel)?;
-        append(&document.body().ok_or("The game update needs a document body")?, &root)?;
-        let mut update = Self { root, message, mount, revision, polling: None, restarting: false };
+        let mut update = Self {
+            message: None,
+            target_revision: None,
+            mount,
+            revision,
+            polling: None,
+            restarting: false,
+        };
         update.poll_revision(None)?;
         Ok(update)
     }
@@ -71,20 +60,94 @@ impl DeploymentUpdate {
             return Ok(());
         }
         self.restarting = true;
-        self.root.set_hidden(false);
-        self.message.set_text_content(Some(
-            "Saving your game before the update. Solomon Dark will restart automatically.",
-        ));
+        self.message =
+            Some("Saving your game before the update. Solomon Dark will restart automatically.");
         self.poll_revision(Some(target.to_owned()))
     }
 
     pub fn saved(&mut self) -> Result<(), String> {
-        self.message.set_text_content(Some(
+        self.message = Some(
             "Your game is saved. Solomon Dark will restart automatically when the update is ready.",
-        ));
+        );
         // Source restarts the polling effect when the saved state object changes.
-        let target = self.root.get_attribute("data-target-revision");
+        let target = self.target_revision.clone();
         self.poll_revision(target)
+    }
+
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        if !self.restarting {
+            return Ok(());
+        }
+        let Some(message) = self.message else { return Ok(()) };
+        frame.input_scope("deployment/update");
+        let ctx = frame.ctx.clone();
+        let screen = ctx.content_rect();
+        let area = egui::Area::new(Id::unique("deployment/update"))
+            .order(Order::Foreground)
+            .fixed_pos(egui::Pos2::ZERO)
+            .show(&ctx, |ui| {
+                ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
+                ui.set_min_size(screen.size());
+                ui.interact(screen, Id::unique("deployment/block"), egui::Sense::CLICK);
+                ui.painter().rect_filled(
+                    screen,
+                    0.0,
+                    Color32::from_rgba_unmultiplied(4, 4, 6, 224),
+                );
+                let width = (screen.width() - 48.0).min(520.0).max(120.0);
+                let height = 240.0_f32.min(screen.height() - 48.0);
+                let bounds = egui::Rect::from_center_size(screen.center(), vec2(width, height));
+                egui::ScrollArea::vertical()
+                    .id_salt("deployment/status-scroll")
+                    .max_height(screen.height() - 48.0)
+                    .show(ui, |ui| {
+                        ui.scope_builder(egui::UiBuilder::new().max_rect(bounds), |ui| {
+                            egui::Frame::new()
+                                .fill(Color32::from_rgb(12, 11, 10))
+                                .stroke(Stroke::new(1.0, Color32::from_rgb(128, 109, 63)))
+                                .inner_margin(egui::Margin::symmetric(34, 30))
+                                .show(ui, |ui| {
+                                    ui.set_width((width - 70.0).max(50.0));
+                                    ui.vertical_centered(|ui| {
+                                        ui.label(
+                                            RichText::new("SERVER UPDATE")
+                                                .font(FontId::new(
+                                                    12.0,
+                                                    FontFamily::Name("Cinzel".into()),
+                                                ))
+                                                .color(Color32::from_rgb(157, 137, 83)),
+                                        );
+                                        ui.add_space(8.0);
+                                        ui.label(
+                                            RichText::new("Game updating")
+                                                .font(FontId::new(
+                                                    32.0,
+                                                    FontFamily::Name("Georgia".into()),
+                                                ))
+                                                .color(Color32::from_rgb(240, 217, 142)),
+                                        );
+                                        ui.add_space(14.0);
+                                        ui.label(
+                                            RichText::new(message)
+                                                .font(FontId::new(
+                                                    16.0,
+                                                    FontFamily::Name("Alegreya".into()),
+                                                ))
+                                                .color(Color32::from_rgb(201, 190, 162)),
+                                        );
+                                    });
+                                });
+                        });
+                    });
+                bounds
+            });
+        frame.record_rect("deployment/update", message, "status", area.inner, true);
+        frame.record_value(
+            "deployment/update",
+            self.target_revision.as_deref().unwrap_or(""),
+            None,
+        );
+        Ok(())
     }
 
     fn poll_revision(&mut self, target: Option<String>) -> Result<(), String> {
@@ -92,9 +155,7 @@ impl DeploymentUpdate {
             previous.abort();
         }
         if let Some(target) = &target {
-            self.root
-                .set_attribute("data-target-revision", target)
-                .map_err(|_| "Update revision")?;
+            self.target_revision = Some(target.clone());
         }
         let Some(current) = self.revision.clone() else { return Ok(()) };
         let controller =
@@ -132,7 +193,6 @@ impl Drop for DeploymentUpdate {
         if let Some(polling) = &self.polling {
             polling.abort();
         }
-        self.root.remove();
     }
 }
 

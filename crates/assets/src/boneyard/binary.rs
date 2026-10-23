@@ -8,21 +8,17 @@ use solomon_sim::boneyard::{
 
 use crate::native_save::NativeChunkNode;
 
+#[path = "editor_document.rs"]
+mod editor_document;
+pub use editor_document::parse_editor_boneyard;
+
 const MAX_CHUNKS: usize = 1_000_000;
 const MAX_NAMED_BUFFERS: usize = 65_536;
 
 /// Decode the actual authored file before content admission validates the scene.
 /// Unknown object/recipe payloads have the same opaque projection as the editor.
 pub fn decode_boneyard(bytes: &[u8]) -> Result<BoneyardScene, String> {
-    if bytes.len() > 256 * 1024 * 1024 {
-        return Err("Boneyard: file exceeds 256 MiB".into());
-    }
-    let mut reader = BoneyardReader { bytes, offset: 0, chunks: 0, named_buffers: 0 };
-    let root = reader.buffer(0)?;
-    if reader.offset != bytes.len() {
-        return Err(format!("Boneyard: trailing bytes at {}", reader.offset));
-    }
-    validate_envelope(&root)?;
+    let root = read_envelope(bytes)?;
     let arena = &root.children[0];
     let layout = &arena.children[12].children[0];
     let (name, environment_mode, bounds) = header(&arena.children[0].payload)?;
@@ -113,6 +109,19 @@ pub fn decode_boneyard(bytes: &[u8]) -> Result<BoneyardScene, String> {
     materialize_native_scenery(&mut scene);
     materialize_opening_solomon(&mut scene);
     Ok(scene)
+}
+
+fn read_envelope(bytes: &[u8]) -> Result<NativeChunkNode, String> {
+    if bytes.len() > 256 * 1024 * 1024 {
+        return Err("Boneyard: file exceeds 256 MiB".into());
+    }
+    let mut reader = BoneyardReader { bytes, offset: 0, chunks: 0, named_buffers: 0 };
+    let root = reader.buffer(0)?;
+    if reader.offset != bytes.len() {
+        return Err(format!("Boneyard: trailing bytes at {}", reader.offset));
+    }
+    validate_envelope(&root)?;
+    Ok(root)
 }
 
 // Save files and authored Boneyards share chunk storage, but their readers have

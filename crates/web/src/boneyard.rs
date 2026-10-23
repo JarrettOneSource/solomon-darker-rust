@@ -44,7 +44,9 @@ use web_sys::HtmlImageElement;
 
 use crate::courtyard::{ActorPainters, Camera};
 use crate::presentation::PresentationClocks;
-use crate::render::{BlendMode, Quad, RenderTarget, Renderer, Texture, TextureColorMode, Vertex};
+use solomon_graphics::{
+    BlendMode, Quad, RenderTarget, Renderer, Texture, TextureColorMode, Vertex,
+};
 
 use shadow::{SceneryShadowGlyph, SceneryShadowPlans, ScrubDocument, ScrubView};
 

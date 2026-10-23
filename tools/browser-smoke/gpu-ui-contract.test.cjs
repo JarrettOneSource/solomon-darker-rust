@@ -10,7 +10,7 @@ function rustFiles(directory) {
     return entry.isDirectory()?rustFiles(filename):filename.endsWith('.rs')?[filename]:[];
   });
 }
-const sources=rustFiles(path.join(root,'crates/web/src')).map(filename=>({
+const sources=rustFiles(path.join(root,'crates')).map(filename=>({
   filename:path.relative(root,filename),text:fs.readFileSync(filename,'utf8'),
 }));
 
@@ -30,7 +30,10 @@ test('Rust creates only platform adapter DOM elements',()=>{
   const forbidden=[];
   for(const {filename,text}of sources) {
     for(const match of text.matchAll(/\.create_element\s*\(\s*([^)]*)\)/g)) {
-      if(!/^"(?:canvas|input|textarea|audio)"\s*$/.test(match[1])) {
+      const announcement=filename==='crates/web/src/gpu_ui/accessibility.rs'
+        && /^"div"\s*$/.test(match[1]) && text.includes('data-gpu-announcer');
+      // Unmounted anchors invoke the browser's native file-download capability.
+      if(!announcement&&!/^"(?:canvas|input|textarea|audio|a)"\s*$/.test(match[1])) {
         forbidden.push(`${filename}: ${match[0]}`);
       }
     }

@@ -165,7 +165,15 @@ impl CloudArt {
             scale,
             Color32::WHITE,
         )?;
-        self.ui.paint_native_frame(frame, ui.painter(), 17, rect, true, Color32::WHITE)?;
+        self.ui.paint_native_frame_scaled(
+            frame,
+            ui.painter(),
+            17,
+            rect,
+            scale,
+            true,
+            Color32::WHITE,
+        )?;
         for (index, dest) in [
             (
                 10,
@@ -307,43 +315,72 @@ impl CloudArt {
     ) -> Result<bool, String> {
         let response = widgets::interact(frame, ui, id, label, "button", rect, enabled);
         let scale = rect.height() / 52.0;
-        self.ui.paint_raw(
+        let pressed = enabled && response.is_pointer_button_down_on();
+        self.ui.paint_centered(
             frame,
-            ui.painter(),
-            if response.is_pointer_button_down_on() { 104 } else { 103 },
-            rect,
+            &ui.painter().with_clip_rect(rect.intersect(ui.clip_rect())),
+            if pressed { 104 } else { 103 },
+            rect.center(),
+            scale,
+            0.0,
             Color32::WHITE,
         )?;
+        let press = if pressed { Vec2::splat(4.0 * scale) } else { Vec2::ZERO };
+        let alpha = if enabled { 1.0 } else { 0.5 };
         if let Some(icon) = icon {
             self.ui.paint_centered(
                 frame,
                 ui.painter(),
                 icon,
-                rect.center(),
+                rect.center() + press,
                 scale,
                 0.0,
-                Color32::WHITE,
+                widgets::alpha(0xffffff, alpha),
             )?;
         } else {
-            widgets::native(
+            crate::gpu_ui::native_text(
                 frame,
-                ui,
-                &label.to_lowercase(),
-                NativeUiFontName::Menu,
-                rect.center() + Vec2::new(0.0, 8.0 * scale),
-                scale,
-                0xd9ba70,
-                NativeUiTextAlign::Center,
+                ui.painter(),
+                &solomon_sim::native_ui_text::NativeUiTextSpec {
+                    alpha,
+                    scale: f64::from(scale),
+                    tint: 0xd9ba70,
+                    ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
+                        NativeUiFontName::Menu,
+                        &label.to_lowercase(),
+                        f64::from(rect.center().x + press.x),
+                        f64::from(rect.center().y + 8.0 * scale + press.y),
+                    )
+                },
             );
         }
-        self.ui.paint_native_frame(
-            frame,
-            ui.painter(),
-            53,
-            rect.expand(6.0 * scale),
-            false,
-            Color32::WHITE,
-        )?;
+        if !enabled {
+            ui.painter().rect_filled(rect, 0.0, widgets::alpha(0x808080, 0.25));
+        }
+        for (position, mirror) in [
+            (rect.min - Vec2::splat(6.0 * scale), [false, false]),
+            (rect.right_top() + Vec2::new(6.0, -6.0) * scale, [true, false]),
+        ] {
+            self.sprite(frame, ui, 53, position, [0.0, 0.0], scale, mirror)?;
+        }
+        let record = self.ui.record(53)?;
+        let connector = rect.width() - 42.0 * scale;
+        if connector > 0.0 {
+            self.ui.paint_slice(
+                frame,
+                ui.painter(),
+                53,
+                Rect::from_min_size(
+                    egui::pos2(record.width as f32 * 0.95, 0.0),
+                    Vec2::new(record.width as f32 * 0.05, record.height as f32),
+                ),
+                Rect::from_min_size(
+                    rect.min + Vec2::new(21.0, -6.0) * scale,
+                    Vec2::new(connector, 62.0 * scale),
+                ),
+                Color32::WHITE,
+            )?;
+        }
         Ok(response.clicked() && enabled)
     }
 }

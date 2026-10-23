@@ -43,9 +43,10 @@ function pending(snapshot) {
   assert.ok(snapshot.loading, 'loading owns a truthful readiness report');
   const load = snapshot.loading;
   assert.ok(Number.isInteger(load.completed) && Number.isInteger(load.total)
-    && load.total > 0 && load.completed >= 0 && load.completed <= load.total,
+    && load.total >= 0 && load.completed >= 0 && load.completed <= load.total,
   'readiness counts concrete completed work');
-  assert.ok(Math.abs(load.progress-load.completed/load.total) < 1e-9,
+  const progress=load.total===0?0:load.completed/load.total;
+  assert.ok(Math.abs(load.progress-progress) < 1e-7,
     'progress is completed work divided by the complete manifest');
   assert.ok(load.stage.length > 0, 'current loading stage is visible');
   if (load.completed < load.total) {
@@ -92,8 +93,17 @@ async function visual(page, name) {
   // Canvas2D reference and premultiplied WebGL may round a channel by one byte.
   assert.ok(result.maximum<=1,`native Loader logo pixels match source: ${JSON.stringify(result)}`);
   const draws=await ui.gpuDraws(page);
-  assert.ok(draws.canvasCalls.game>0,'the actual game canvas has submitted GPU draws');
+  assert.ok(draws.canvasCalls['[data-gpu-loader]']>0,'the actual Rust loader canvas submitted GPU draws');
   return {...result,draws};
+}
+
+async function finishedLoader(page) {
+  await page.waitForFunction(()=>!document.querySelector('canvas[data-gpu-loader]'));
+  const before=(await ui.gpuDraws(page)).canvasCalls['[data-gpu-loader]']||0;
+  await ui.nextFrame(page);
+  const after=(await ui.gpuDraws(page)).canvasCalls['[data-gpu-loader]']||0;
+  assert.equal(after,before,'the retired loader stops submitting GPU frames');
+  return {removed:true,drawsBefore:before,drawsAfter:after};
 }
 
 async function collect(page, name, navigate) {
@@ -102,6 +112,7 @@ async function collect(page, name, navigate) {
   await navigate();
   const deadline=Date.now()+240000;
   let previous=0;
+  let previousProgress=0;
   let lastLoading;
   while(Date.now()<deadline) {
     const snapshot=await ui.readUi(page);
@@ -109,7 +120,10 @@ async function collect(page, name, navigate) {
     if(snapshot?.loading) {
       pending(snapshot);
       assert.ok(snapshot.loading.completed>=previous,'startup never regresses across batches');
+      assert.ok(snapshot.loading.progress+1e-7>=previousProgress,
+        'the overall fill never regresses when the stage or pending item changes');
       previous=snapshot.loading.completed;
+      previousProgress=snapshot.loading.progress;
       lastLoading=snapshot;
       samples.push(snapshot);
     }
@@ -117,10 +131,11 @@ async function collect(page, name, navigate) {
       assert.equal(snapshot.loading,null);
       assert.equal(snapshot.surface,'title');
       assert.ok(snapshot.draw.triangles>0&&snapshot.draw.textures>0,'ready includes actual GPU painting');
+      const handoff=await finishedLoader(page);
       await ui.assertGpuOnly(page);
       await page.screenshot({path:path.join(output,`${name}-title.png`)});
       assert.deepEqual(observed.errors,[],'ordinary startup has no runtime or required asset errors');
-      return {samples,lastLoading,ready:snapshot,errors:observed.errors,warnings:observed.warnings,
+      return {samples,lastLoading,ready:snapshot,handoff,errors:observed.errors,warnings:observed.warnings,
         submissions:await ui.gpuDraws(page)};
     }
     await page.waitForTimeout(50);
@@ -152,7 +167,8 @@ async function heldAsset(browser, name, pattern, {wasm=false}={}) {
         && ui.findWidget(snapshot,'loader:logo'),`${name} native loader`,{timeout:45000});
       pending(before);
     }
-    await page.waitForFunction(()=>window.__solomonGpuDraws?.canvasCalls.game>0,null,{timeout:45000});
+    await page.waitForFunction(()=>window.__solomonGpuDraws?.canvasCalls['[data-gpu-loader]']>0,
+      null,{timeout:45000});
     const first=await visual(page,`${name}-held`);
     await page.waitForTimeout(500);
     const still=await ui.readUi(page);
@@ -160,17 +176,35 @@ async function heldAsset(browser, name, pattern, {wasm=false}={}) {
       pending(still);
       if(before)assert.ok(still.loading.completed>=before.loading.completed,
         'parallel completions cannot regress while another required item remains held');
-      assert.ok(still.loading.completed<still.loading.total,
+      if(still.loading.total>0)assert.ok(still.loading.completed<still.loading.total,
         'a held required item prevents completion regardless of elapsed time');
+      else assert.equal(still.loading.progress,0,'unknown code loading invents no percentage');
     }
     const second=await visual(page,`${name}-still-held`);
+    const resizes=[];
+    if(wasm) {
+      for(const viewport of [{width:1920,height:1080},{width:390,height:844}]) {
+        await page.setViewportSize(viewport);
+        const resized=await ui.waitForUi(page,snapshot=>snapshot.loading
+          &&snapshot.canvas.width===viewport.width&&snapshot.canvas.height===viewport.height,
+        'the actual loader canvas resize');
+        pending(resized);
+        await page.screenshot({path:path.join(output,
+          `${name}-${viewport.width}x${viewport.height}.png`)});
+        resizes.push(resized);
+      }
+      await page.setViewportSize({width:1600,height:900});
+      await ui.waitForUi(page,snapshot=>snapshot.canvas.width===1600&&snapshot.canvas.height===900,
+        'the restored loading viewport');
+    }
     release();
     await ui.ready(page);
     await ui.surface(page,'title');
+    const handoff=await finishedLoader(page);
     await ui.assertGpuOnly(page);
     await page.screenshot({path:path.join(output,`${name}-title.png`)});
     assert.deepEqual(observed.errors,[],'delayed successful work has no runtime/asset errors');
-    return {requestUrl,before,still,first,second,ready:await ui.readUi(page),...observed};
+    return {requestUrl,before,still,first,second,resizes,handoff,ready:await ui.readUi(page),...observed};
   } finally {release();await context.close()}
 }
 

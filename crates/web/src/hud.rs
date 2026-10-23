@@ -584,7 +584,7 @@ impl Hud {
             multiplier = t.scale as f32;
             rotation = t.rotation.to_radians() as f32;
         }
-        let additive = frame.with_blend(crate::render::BlendMode::Add);
+        let additive = frame.with_blend(solomon_graphics::BlendMode::Add);
         let rotated = additive.with_rotation(center, rotation);
         for (health_meter, track, core, label) in [
             (true, health.track_width, health.core_width, "Health"),

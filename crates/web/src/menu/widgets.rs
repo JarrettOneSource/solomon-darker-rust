@@ -58,7 +58,7 @@ pub(super) fn mirrored_image(
     );
     frame.image(ui.painter(), &format!("assets/stock/menu/{name}.png"), rect, Some(uv), tint);
 }
-pub(super) fn interact(
+pub(crate) fn interact(
     frame: &UiFrame<'_>,
     ui: &Ui,
     id: &str,
@@ -150,15 +150,20 @@ pub(crate) fn stock_button(
     let pressed =
         if response.is_pointer_button_down_on() { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
     if !text.is_empty() {
-        native(
+        crate::gpu_ui::native_text(
             frame,
-            ui,
-            text,
-            NativeUiFontName::Menu,
-            rect.center() + Vec2::new(0.0, 9.0 * scale) + pressed,
-            scale,
-            if enabled { 0xd9ba70 } else { 0x5b4e2f },
-            NativeUiTextAlign::Center,
+            ui.painter(),
+            &NativeUiTextSpec {
+                scale: f64::from(scale),
+                alpha: if enabled { 1.0 } else { 0.36 },
+                tint: 0xd9ba70,
+                ..NativeUiTextSpec::new(
+                    NativeUiFontName::Menu,
+                    text,
+                    f64::from(rect.center().x + pressed.x),
+                    f64::from(rect.center().y + 9.0 * scale + pressed.y),
+                )
+            },
         );
     }
     response
@@ -172,10 +177,37 @@ pub(crate) fn paint_stock_button(
     scale: f32,
     enabled: bool,
 ) {
-    let opacity = if enabled { 1.0 } else { 0.36 };
-    let tint = alpha(0xffffff, opacity);
+    paint_stock_button_highlight(
+        frame,
+        ui,
+        rect,
+        scale,
+        enabled,
+        response.hovered() || response.has_focus(),
+    );
+}
+/// Shared nativeUI54 chrome; each source family chooses its actual highlighted state.
+pub(crate) fn paint_stock_button_highlight(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+    highlight: bool,
+) {
+    paint_stock_button_tinted(frame, ui, rect, scale, enabled, highlight, Color32::WHITE);
+}
+pub(crate) fn paint_stock_button_tinted(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+    highlight: bool,
+    tint: Color32,
+) {
     image(frame, ui, "main-menu-button", rect, tint);
-    if enabled && (response.hovered() || response.has_focus()) {
+    if enabled && highlight {
         image(frame, ui, "main-menu-button-hover", rect, tint);
     }
     let surround = 6.0 * scale;
@@ -199,6 +231,7 @@ pub(crate) fn paint_stock_button(
         image(frame, ui, "main-menu-button-rail", rail, tint);
     }
 }
+
 pub(super) fn stone_button(
     frame: &UiFrame<'_>,
     ui: &Ui,
@@ -305,4 +338,53 @@ pub(super) fn control_panel(
         if field { 3.0 } else { 6.0 },
         Color32::WHITE,
     )
+}
+
+/// Source Dark Cloud/Shelf button policy uses pressed chrome and half-opacity disabled art.
+pub(crate) fn cloud_button(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    label: &str,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+) -> Response {
+    cloud_button_with_label(frame, ui, id, label, label, rect, scale, enabled)
+}
+
+pub(crate) fn cloud_button_with_label(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    label: &str,
+    accessible_label: &str,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+) -> Response {
+    let response = interact(frame, ui, id, accessible_label, "button", rect, enabled);
+    let opacity = if enabled { 1.0 } else { 0.5 };
+    let pressed = enabled && response.is_pointer_button_down_on();
+    paint_stock_button_tinted(frame, ui, rect, scale, enabled, pressed, alpha(0xffffff, opacity));
+    let press = if pressed { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
+    crate::gpu_ui::native_text(
+        frame,
+        ui.painter(),
+        &solomon_sim::native_ui_text::NativeUiTextSpec {
+            alpha: opacity,
+            scale: f64::from(scale),
+            tint: 0xd9ba70,
+            ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
+                NativeUiFontName::Menu,
+                label,
+                f64::from(rect.center().x + press.x),
+                f64::from(rect.center().y + 9.0 * scale + press.y),
+            )
+        },
+    );
+    if !enabled {
+        ui.painter().rect_filled(rect, 0.0, alpha(0x808080, 0.25));
+    }
+    response
 }

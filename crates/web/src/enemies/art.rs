@@ -9,9 +9,9 @@ use solomon_sim::float;
 use solomon_sim::float::hypot;
 
 use super::{EnemyDraw, EnemyDrawGroup, EnemyView};
-use crate::assets::{fetch_bytes, load_image};
 use crate::courtyard::Camera;
-use crate::render::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
+use solomon_graphics::assets::{fetch_bytes, load_image};
+use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
 
 struct EnemyAtlas {
     records: Vec<SpriteRecord>,

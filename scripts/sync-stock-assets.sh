@@ -25,6 +25,10 @@ done
 # in sim::native_ui_text, not in the sprite-only bundle parser.
 cp "$stock/Fonts.png" "$out/Fonts.png"
 cp "$website/dark-cloud/leather.png" "$out/settings-leather.png"
+# MyLoader's four stock records retain their final native screen orientation.
+for name in logo url frame fill; do
+  cp "$website/loader-$name.png" "$out/loader-$name.png"
+done
 # ControlPanel also stores font metrics; the shared sprite parser consumes the manifest's
 # exact sprite-only projection, rather than interpreting glyph metrics as point counts.
 python3 "$root/scripts/sync-ui-sprite-bundle.py" \

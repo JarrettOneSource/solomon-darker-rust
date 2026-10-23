@@ -8,6 +8,7 @@ import { loadKernel } from '../website-oracle/oracle.mjs'
 const require = createRequire(import.meta.url)
 const { chromium } = require(resolve(process.env.PW))
 const { startNewGame } = require('./menu-journey.cjs')
+const ui = require('./gpu-ui.cjs')
 const regions = await loadKernel('core-kernels/hub-regions.ts')
 const url = process.env.URL || 'http://127.0.0.1:4183/'
 const output = resolve(process.env.SHOTS || 'room-smoke')
@@ -19,13 +20,7 @@ const browser = await chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 })
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
-page.on('pageerror', error => receipt.errors.push(error.message))
-page.on('console', message => {
-  if (message.type() === 'error') receipt.errors.push(message.text())
-})
-page.on('response', response => {
-  if (response.status() >= 400) receipt.errors.push(`${response.status()} ${response.url()}`)
-})
+ui.watchErrors(page, { errors: receipt.errors })
 const state = () => page.evaluate(() => Array.from(window.wasmBindings.wizard_state()))
 const held = new Set()
 
@@ -136,8 +131,7 @@ async function through(direction, expectedRegion) {
 
 try {
   await page.goto(url, { waitUntil: 'load' })
-  await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-    && document.getElementById('status').textContent === '', null, { timeout: 60000 })
+  await ui.ready(page)
   await startNewGame(page)
   const rooms = [
     { name:'mortuary', id:1, approach:{x:260,y:610}, keys:['KeyA','KeyW'] },
@@ -170,7 +164,8 @@ try {
     writeFileSync(`${output}/receipt.json`,`${JSON.stringify(receipt,null,2)}\n`)
     console.log(`${room.name}: entered and returned`)
   }
-  if (receipt.errors.length) throw new Error(`browser errors: ${receipt.errors.join('; ')}`)
+  await ui.assertGpuOnly(page)
+  if (receipt.errors.length) throw new Error(`browser errors: ${JSON.stringify(receipt.errors)}`)
   receipt.passed = true
 } catch (error) {
   receipt.passed = false

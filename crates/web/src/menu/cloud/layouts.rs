@@ -263,7 +263,7 @@ impl LayoutsView {
                     panel.min + Vec2::new(10.0, 84.0),
                     Vec2::new(panel.width() - 26.0, 44.0),
                 );
-                if widgets::stock_button(
+                if widgets::cloud_button(
                     frame,
                     ui,
                     "cloud-layout-load",
@@ -295,7 +295,7 @@ impl LayoutsView {
             } else {
                 let admitted = enabled && !busy && self.account.is_some() && self.customized;
                 let b = panel.shrink(8.0);
-                if widgets::stock_button(
+                if widgets::cloud_button(
                     frame,
                     ui,
                     "cloud-layout-publish",
@@ -371,7 +371,7 @@ impl LayoutsView {
                 egui::pos2(r.right() - 160.0, r.top() + 12.0),
                 Vec2::new(150.0, 44.0),
             );
-            if widgets::stock_button(
+            if widgets::cloud_button(
                 frame,
                 ui,
                 "cloud-copy-layout",

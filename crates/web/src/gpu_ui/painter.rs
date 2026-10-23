@@ -7,8 +7,8 @@ use std::rc::Rc;
 use egui::{ClippedPrimitive, Rect, TextureId, Vec2, vec2};
 use web_sys::{HtmlImageElement, WebGl2RenderingContext};
 
-use crate::assets;
-use crate::render::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
+use solomon_graphics::assets;
+use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
 
 enum ImageState {
     Loading,
@@ -107,6 +107,8 @@ impl Images {
             let path = path.to_owned();
             promises.push(&wasm_bindgen_futures::future_to_promise(async move {
                 let image = assets::load_image(&path).await.map_err(wasm_bindgen::JsValue::from)?;
+                crate::runtime_ui::completed("interface", &path, 1)
+                    .map_err(wasm_bindgen::JsValue::from)?;
                 let mut cache = images.0.borrow_mut();
                 cache.next_id += 1;
                 let id = cache.next_id;

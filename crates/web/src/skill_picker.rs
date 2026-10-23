@@ -357,7 +357,7 @@ impl SkillPicker {
     ) -> Result<(), String> {
         let p = ui.painter();
         let white = egui::Color32::WHITE.gamma_multiply(panel_alpha);
-        let ambient = frame.with_blend(crate::render::BlendMode::Add);
+        let ambient = frame.with_blend(solomon_graphics::BlendMode::Add);
         for index in 0..8 {
             self.ui.paint_centered(
                 &ambient,

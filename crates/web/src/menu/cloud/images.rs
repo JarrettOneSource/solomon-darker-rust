@@ -14,20 +14,39 @@ pub(super) struct CloudImages {
     entries: BTreeMap<String, Image>,
     used: BTreeSet<String>,
     next_request: u64,
+    retired: Vec<String>,
     actions: Vec<HostedMenuAction>,
 }
 impl CloudImages {
     pub fn begin_paint(&mut self) {
         self.used.clear();
     }
-    pub fn finish_paint(&mut self) {
+    pub fn finish_paint(&mut self, frame: &UiFrame<'_>) {
+        for (source, image) in &self.entries {
+            if !self.used.contains(source)
+                && let Image::Ready(url) = image
+            {
+                self.retired.push(url.url().to_owned());
+            }
+        }
         self.entries.retain(|url, _| self.used.contains(url));
         self.actions.retain(|action| match action {
             HostedMenuAction::LoadModImage { url, .. } => self.used.contains(url),
             _ => true,
         });
+        self.drain_retired(frame);
+    }
+    pub fn drain_retired(&mut self, frame: &UiFrame<'_>) {
+        for path in self.retired.drain(..) {
+            frame.forget_image(&path);
+        }
     }
     pub fn clear(&mut self) {
+        for image in self.entries.values() {
+            if let Image::Ready(url) = image {
+                self.retired.push(url.url().to_owned());
+            }
+        }
         self.entries.clear();
         self.used.clear();
         self.actions.clear();
@@ -78,6 +97,7 @@ impl CloudImages {
             return;
         };
         if frame.image_error(url.url()).is_some() {
+            self.retired.push(url.url().to_owned());
             self.entries.insert(source.to_owned(), Image::Failed);
             missing(ui, rect, alt);
             return;

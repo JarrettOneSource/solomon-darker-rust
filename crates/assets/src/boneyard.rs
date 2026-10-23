@@ -7,7 +7,7 @@
 mod binary;
 mod source_value;
 
-pub use binary::decode_boneyard;
+pub use binary::{decode_boneyard, parse_editor_boneyard};
 pub use source_value::boneyard_scene_source_value;
 
 use std::collections::BTreeMap;

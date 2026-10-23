@@ -3,8 +3,8 @@
 
 use super::widgets::{self, Stage};
 use crate::gpu_ui::{StockAtlas, UiFrame, paint_text_layout};
-use crate::render::BlendMode;
 use egui::{Align2, Color32, FontId, Id, Pos2, Rect, Ui, Vec2};
+use solomon_graphics::BlendMode;
 use solomon_sim::element_vfx::{self, ElementVfxBlend, ElementVfxDraw};
 use solomon_sim::menu::create_name::{
     finalize_create_wizard_name, layout_create_wizard_name, validate_create_wizard_name,
@@ -395,7 +395,6 @@ impl CreateView {
             .interactive(enabled);
         let response = ui.put(field, edit);
         frame.record("create-name", "Wizard name", "textbox", &response);
-        frame.record_value("create-name", &self.name, None);
         if self.focus_name {
             response.request_focus();
             self.focus_name = false;
@@ -406,10 +405,12 @@ impl CreateView {
             {
                 self.name = previous;
                 self.message = Some(reason.message().to_owned());
+                frame.announce(reason.message());
             } else {
                 self.restart();
             }
         }
+        frame.record_value("create-name", &self.name, None);
         if !self.name.is_empty() && validate_create_wizard_name(&self.name).is_none() {
             let mut name = layout_create_wizard_name(&self.name);
             for glyph in &mut name.glyphs {
@@ -468,15 +469,18 @@ impl CreateView {
             stage.scale * 0.525,
             widgets::alpha(0xffffff, 0.78),
         )?;
-        frame.record_rect(
-            "create-validation",
-            "Wizard name validation",
-            "status",
-            stage.rect(558.0, 125.0, 484.0, 24.0),
-            false,
-        );
-        frame.record_value("create-validation", self.message.as_deref().unwrap_or(""), None);
         if let Some(error) = &self.message {
+            let font =
+                egui::FontId::new(14.0 * stage.scale, egui::FontFamily::Name("Georgia".into()));
+            let size = ui.painter().layout_no_wrap(error.clone(), font, widgets::ERROR).size();
+            frame.record_rect(
+                "create-validation",
+                error,
+                "status",
+                Rect::from_min_size(stage.at(800.0, 132.0) - Vec2::new(size.x / 2.0, 0.0), size),
+                false,
+            );
+            frame.record_value("create-validation", error, None);
             widgets::label(
                 ui,
                 error,

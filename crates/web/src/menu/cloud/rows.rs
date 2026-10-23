@@ -1,5 +1,5 @@
 //! GPU catalog, directory and developer presence rows from `DarkCloudRows.tsx`.
-use super::{super::widgets, art::CloudArt, images::CloudImages};
+use super::{super::widgets, images::CloudImages};
 use crate::gpu_ui::UiFrame;
 use crate::hosted::{
     ConnectedGamePlayer, ConnectedPlayerActivity, DeveloperGameMatch, ModSubscription, ModSummary,
@@ -11,7 +11,7 @@ use solomon_sim::menu::party_directory::{
 };
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
 use solomon_sim::social::{GameSessionKind, PartyVisibility};
-fn ink(
+pub(super) fn ink(
     frame: &UiFrame<'_>,
     ui: &Ui,
     text: &str,
@@ -22,19 +22,25 @@ fn ink(
     center: bool,
 ) {
     let spec = solomon_sim::native_ui_text::NativeUiTextSpec {
+        placement: solomon_sim::native_ui_text::NativeUiTextPlacement::Box,
         scale: f64::from(scale),
         tint,
         align: if center { NativeUiTextAlign::Center } else { NativeUiTextAlign::Left },
         ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
             font,
             text,
-            f64::from(if center { rect.center().x } else { rect.left() }),
-            f64::from(rect.center().y + 6.0 * scale),
+            if center { f64::from(rect.width() / 2.0) } else { 0.0 },
+            0.0,
         )
     };
-    let layout = solomon_sim::native_ui_text::layout_native_ui_text(&spec);
+    let mut layout = solomon_sim::native_ui_text::layout_native_ui_text(&spec);
     let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
     if layout.unsupported_code_points.is_empty() {
+        let offset = rect.min + Vec2::new(0.0, (rect.height() - layout.height as f32) / 2.0);
+        for glyph in &mut layout.glyphs {
+            glyph.center_x += f64::from(offset.x);
+            glyph.center_y += f64::from(offset.y);
+        }
         crate::gpu_ui::paint_text_layout(frame, &painter, &layout);
     } else {
         let font = egui::FontId::new(
@@ -50,10 +56,10 @@ fn ink(
         );
     }
 }
+
 pub(super) fn mod_row(
     frame: &mut UiFrame<'_>,
     ui: &mut Ui,
-    _art: &CloudArt,
     content: &ModSummary,
     subscription: Option<&ModSubscription>,
     selected: bool,
@@ -275,7 +281,7 @@ pub(super) fn mod_row(
                 r.min + Vec2::new(index as f32 * (w + 10.0), 0.0),
                 Vec2::new(w, 44.0),
             );
-            if widgets::stock_button(frame, ui, &id, label, b, 0.55, enabled && admit).clicked()
+            if widgets::cloud_button(frame, ui, &id, label, b, 0.55, enabled && admit).clicked()
                 && enabled
                 && admit
             {
@@ -288,7 +294,6 @@ pub(super) fn mod_row(
 pub(super) fn party_row(
     frame: &mut UiFrame<'_>,
     ui: &mut Ui,
-    _art: &CloudArt,
     party: &PublicGameParty,
     selected: bool,
     busy: bool,
@@ -463,7 +468,7 @@ pub(super) fn party_row(
         };
         let id = format!("cloud-join-party:{}", party.id);
         let admitted = enabled && !busy && action != DirectoryPartyAction::Wait;
-        if widgets::stock_button(frame, ui, &id, label, b, 0.55, admitted).clicked() && admitted {
+        if widgets::cloud_button(frame, ui, &id, label, b, 0.55, admitted).clicked() && admitted {
             actions.push(id);
         }
     }
@@ -472,7 +477,6 @@ pub(super) fn party_row(
 pub(super) fn developer_presence(
     frame: &mut UiFrame<'_>,
     ui: &mut Ui,
-    _art: &CloudArt,
     players: &[ConnectedGamePlayer],
     matches: &[DeveloperGameMatch],
     loading: bool,
@@ -559,7 +563,7 @@ pub(super) fn developer_presence(
         );
         let id = format!("cloud-observe:{}", game.id);
         let admitted = enabled && observing.is_none();
-        if widgets::stock_button(
+        if widgets::cloud_button(
             frame,
             ui,
             &id,

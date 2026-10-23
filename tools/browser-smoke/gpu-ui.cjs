@@ -27,8 +27,11 @@ function findWidget(ui, id) {
   return matches[0];
 }
 
-async function widget(page, id, options) {
-  const ui = await waitForUi(page, ui => Boolean(findWidget(ui, id)), `GPU widget ${id}`, options);
+async function widget(page, id, {enabled = false, ...options} = {}) {
+  const ui = await waitForUi(page, ui => {
+    const target = findWidget(ui, id);
+    return target && (!enabled || target.enabled === true);
+  }, `${enabled ? 'enabled ' : ''}GPU widget ${id}`, options);
   return findWidget(ui, id);
 }
 
@@ -57,8 +60,8 @@ async function ready(page, options) {
   'complete assets and an actual GPU UI draw', { timeout: 240000, ...options });
 }
 
-function bounds(target) {
-  const [x, y, width, height] = target.rect;
+function bounds(target, {paint = false} = {}) {
+  const [x, y, width, height] = paint ? target.paintRect : target.rect;
   return { x, y, width, height };
 }
 
@@ -69,14 +72,14 @@ function center(bounds) {
 }
 
 async function click(page, id, options) {
-  const target = await widget(page, id);
+  const target = await widget(page, id, {enabled:true});
   assert.equal(target.enabled, true, `GPU widget is enabled: ${id}`);
   const point = center(bounds(target));
   await page.mouse.click(point.x, point.y, options);
 }
 
 async function tap(page, id) {
-  const target = await widget(page, id);
+  const target = await widget(page, id, {enabled:true});
   assert.equal(target.enabled, true, `GPU widget is enabled: ${id}`);
   const point = center(bounds(target));
   await page.touchscreen.tap(point.x, point.y);
@@ -87,8 +90,9 @@ async function fill(page, id, text, { touch = false } = {}) {
   else await click(page, id);
   await focused(page, id);
   await page.keyboard.press('ControlOrMeta+A');
-  await page.keyboard.press('Backspace');
+  // One replacement preserves the previous accepted draft when native validation rejects it.
   if (text) await page.keyboard.insertText(text);
+  else await page.keyboard.press('Backspace');
   await nextFrame(page);
 }
 
@@ -100,6 +104,20 @@ async function value(page, id, expected, options) {
 async function focused(page, id, options) {
   return waitForUi(page, ui => findWidget(ui, id)?.focused === true,
     `GPU focus on ${id}`, options);
+}
+
+async function setSlider(page, id, target) {
+  await click(page, id);
+  await focused(page, id);
+  await nextFrame(page);
+  const current = Number((await widget(page, id)).value);
+  assert.ok(Number.isFinite(current), `the actual slider reports its accepted number: ${id}`);
+  const key = current < target ? 'ArrowRight' : 'ArrowLeft';
+  for (let count = 0; count < Math.abs(target - current); count += 1) {
+    await page.keyboard.press(key);
+    await nextFrame(page);
+  }
+  await value(page, id, String(target));
 }
 
 async function wheel(page, id, deltaX, deltaY) {
@@ -138,17 +156,33 @@ async function drag(page, fromId, toId, { touch = false } = {}) {
 async function assertGpuOnly(page) {
   const evidence = await page.evaluate(() => {
     const passive = new Set(['CANVAS', 'SCRIPT', 'STYLE', 'LINK', 'NOSCRIPT']);
+    const nonvisual = element => {
+      const bounds = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return element.hidden || style.display === 'none' || style.visibility === 'hidden'
+        || style.opacity === '0' || bounds.width === 0 || bounds.height === 0
+        || bounds.right <= 0 || bounds.bottom <= 0
+        || bounds.left >= innerWidth || bounds.top >= innerHeight
+        || /^rect\(0px,? 0px,? 0px,? 0px\)$/.test(style.clip)
+        || style.clipPath === 'inset(50%)';
+    };
     const unexpected = [...document.body.querySelectorAll('*')].filter(element => {
       if (passive.has(element.tagName)) return false;
-      const adapter = element.hasAttribute('data-gpu-text-input')
-        || (element.tagName === 'INPUT' && element.type === 'file');
-      if (adapter) {
-        const bounds = element.getBoundingClientRect();
+      if (element.tagName === 'AUDIO' && element.hidden && !element.controls) return false;
+      if (element.hasAttribute('data-gpu-announcer')) {
         const style = getComputedStyle(element);
-        return !element.hidden && style.display !== 'none' && style.visibility !== 'hidden'
-          && style.opacity !== '0' && bounds.width > 0 && bounds.height > 0
-          && bounds.right > 0 && bounds.bottom > 0;
+        return !['DIV', 'SPAN'].includes(element.tagName) || !nonvisual(element)
+          || !['polite', 'assertive'].includes(element.getAttribute('aria-live'))
+          || element.children.length !== 0 || element.hasAttribute('tabindex')
+          || element.hidden || element.getAttribute('aria-hidden') === 'true'
+          || style.display === 'none' || style.visibility === 'hidden'
+          || element.hasAttribute('data-menu-action') || element.hasAttribute('data-panel-action');
       }
+      const textAdapter = element.hasAttribute('data-gpu-text-input')
+        && (element.tagName === 'TEXTAREA' || (element.tagName === 'INPUT'
+          && ['text', 'search', 'email', 'password', 'url', 'tel', 'number'].includes(element.type)));
+      const adapter = textAdapter || (element.tagName === 'INPUT' && element.type === 'file');
+      if (adapter) return !nonvisual(element);
       return true;
     }).map(element => ({ tag: element.tagName, id: element.id, class: element.className }));
     const text = [...document.body.childNodes]
@@ -169,9 +203,7 @@ async function assertGpuOnly(page) {
   return { ...evidence, gpu: ui };
 }
 
-function watchErrors(page) {
-  const errors = [];
-  const warnings = [];
+function watchErrors(page, {errors = [], warnings = []} = {}) {
   page.on('pageerror', error => errors.push({ type: 'pageerror', message: error.message }));
   page.on('console', message => {
     if (message.type() === 'error') errors.push({ type: 'console', message: message.text(), location: message.location() });
@@ -200,7 +232,9 @@ async function observeGpu(page) {
           if (count > 0) {
             counts.calls += 1;
             counts.vertices += count;
-            const id = this.canvas.id || '(unattached canvas)';
+            const id = this.canvas instanceof HTMLCanvasElement
+              && this.canvas.hasAttribute('data-gpu-loader')
+              ? '[data-gpu-loader]' : this.canvas.id || '(unattached canvas)';
             counts.canvasCalls[id] = (counts.canvasCalls[id] || 0) + 1;
           }
           return result;
@@ -214,12 +248,52 @@ async function gpuDraws(page) {
   return page.evaluate(() => window.__solomonGpuDraws);
 }
 
+async function observeAnnouncements(page) {
+  await page.addInitScript(() => {
+    const announcements = [];
+    Object.defineProperty(window, '__solomonAnnouncements', {value:announcements});
+    for (const type of [Document, Element]) {
+      const notify = type.prototype.ariaNotify;
+      if (typeof notify !== 'function') continue;
+      type.prototype.ariaNotify = function (text, options) {
+        const result = Reflect.apply(notify, this, [text, options]);
+        announcements.push({source:'ariaNotify',text});
+        return result;
+      };
+    }
+    const observe = () => {
+      const observer = new MutationObserver(records => {
+        for (const record of records) {
+          const element = record.target.nodeType === Node.ELEMENT_NODE
+            ? record.target : record.target.parentElement;
+          const announcer = element?.closest('[data-gpu-announcer]');
+          if (announcer?.textContent) announcements.push({source:'aria-live',text:announcer.textContent});
+        }
+      });
+      observer.observe(document.body, {subtree:true,childList:true,characterData:true});
+    };
+    if (document.body) observe();
+    else document.addEventListener('DOMContentLoaded', observe, {once:true});
+  });
+}
+
+async function announcements(page) {
+  return page.evaluate(() => window.__solomonAnnouncements);
+}
+
+async function announced(page, text, {afterIndex = 0, timeout = 10000} = {}) {
+  await page.waitForFunction(({text,afterIndex}) => window.__solomonAnnouncements
+    .slice(afterIndex).some(event => event.text.toLowerCase().includes(text.toLowerCase())),
+  {text,afterIndex}, {timeout});
+}
+
 // Native Gamepad prototypes feed the production navigator adapter, never game commands.
 async function installController(page) {
   await page.evaluate(() => {
-    window.gpuTestPad = { buttons: [], x: 0, y: 0 };
+    window.gpuTestPad = { buttons: [], x: 0, y: 0, connected: true };
     const gamepad = Object.create(Gamepad.prototype, {
-      index: { value: 0 }, connected: { value: true }, mapping: { value: 'standard' },
+      index: { value: 0 }, connected: { get: () => window.gpuTestPad.connected },
+      mapping: { value: 'standard' },
       axes: { get: () => [window.gpuTestPad.x, window.gpuTestPad.y] },
       buttons: { get: () => Array.from({ length: 17 }, (_, index) =>
         Object.create(GamepadButton.prototype, {
@@ -233,7 +307,7 @@ async function installController(page) {
 
 async function controller(page, buttons = [], x = 0, y = 0) {
   await page.evaluate(({ buttons, x, y }) => {
-    window.gpuTestPad = { buttons, x, y };
+    window.gpuTestPad = { ...window.gpuTestPad, buttons, x, y };
   }, { buttons, x, y });
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 }
@@ -245,6 +319,7 @@ async function nextFrame(page) {
 
 module.exports = {
   readUi, waitForUi, findWidget, widget, noWidget, byLabel, surface, ready, bounds, center, click, tap,
-  fill, value, focused, wheel, drag, assertGpuOnly, watchErrors, installController, controller, nextFrame,
+  fill, value, focused, setSlider, wheel, drag, assertGpuOnly, watchErrors, installController, controller, nextFrame,
   observeGpu, gpuDraws,
+  observeAnnouncements, announcements, announced,
 };

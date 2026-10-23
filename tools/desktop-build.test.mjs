@@ -7,24 +7,23 @@ import test from 'node:test';
 
 import { desktopArtifacts, repositoryRoot } from './desktop-build.mjs';
 
-// Trunk 0.22's real initializer shape, including its two generated resource
-// paths. These checks exercise build preparation without compiling another game.
+// Both wasm-bindgen modules are built without auto-start; the shared bootstrap
+// is produced from their content-hashed resources by the ordinary Trunk hook.
 function trunkDocument(mount = '') {
   return `<!doctype html><html><head><title>Solomon Darker</title>
-<script type="module">
-import init, * as bindings from '${mount}/solomon-web-d693347574b3e849.js';
-const wasm = await init({ module_or_path: '${mount}/solomon-web-852180e6d53c052b_bg.wasm' });
-window.wasmBindings = bindings;
-dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
-</script>
-<link rel="stylesheet" href="${mount}/hud-b771245a093ca7fb.css">
+<meta name="solomon-bootstrap" content="gpu-loader-v1"><base href="${mount}/">
 </head><body><canvas id="game"></canvas></body></html>`;
 }
+const generatedResources = [
+  'solomon-loader-1111111111111111.js', 'solomon-loader-2222222222222222_bg.wasm',
+  'solomon-web-d693347574b3e849.js', 'solomon-web-852180e6d53c052b_bg.wasm',
+];
 
 async function distribution(context, document) {
   const root = await mkdtemp(join(tmpdir(), 'solomon-desktop-build-'));
   context.after(() => rm(root, {recursive: true, force: true}));
   await writeFile(join(root, 'index.html'), document);
+  for (const name of generatedResources) await writeFile(join(root, name), 'fixture generated resource');
   return root;
 }
 
@@ -42,8 +41,9 @@ test('desktop artifacts externalize the root initializer and retain prepared bui
   const initializer = /<script type="module" src="\/(solomon-boot-[a-f0-9]{16}\.mjs)"><\/script>/.exec(document);
   assert.ok(initializer, 'the ordinary script policy can load the generated external initializer');
   const bootstrap = await readFile(join(root, initializer[1]), 'utf8');
-  assert.match(bootstrap, /from '\/solomon-web-[a-f0-9]+\.js'/);
-  assert.match(bootstrap, /module_or_path: '\/solomon-web-[a-f0-9]+_bg\.wasm'/);
+  assert.match(bootstrap, /"loaderModule": "solomon-loader-[a-f0-9]+\.js"/);
+  assert.match(bootstrap, /"mainWasm": "solomon-web-[a-f0-9]+_bg\.wasm"/);
+  assert.ok(bootstrap.indexOf('await loader.boot_loader()') < bootstrap.indexOf('await fetch(resourceUrl(resources.mainWasm))'));
   await writeFile(join(root, '.trunk-lock'), '');
   await desktopArtifacts(options);
   assert.equal((await readdir(root)).includes('.trunk-lock'), false,
@@ -58,7 +58,7 @@ test('desktop preparation rejects a hosted distribution without changing it', as
   await assert.rejects(desktopArtifacts({skipBuild: true, nativeHost: process.execPath, clientRoot: root}),
     /python.*failed/);
   assert.equal(await readFile(join(root, 'index.html'), 'utf8'), hosted);
-  assert.deepEqual(await readdir(root), ['index.html']);
+  assert.deepEqual((await readdir(root)).sort(), ['index.html', ...generatedResources].sort());
 });
 
 test('shared externalization preserves the separate Website mount and editor entry', async context => {

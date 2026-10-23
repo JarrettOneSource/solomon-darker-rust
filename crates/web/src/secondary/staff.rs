@@ -11,7 +11,7 @@ use solomon_sim::spells::staff::{
 
 use super::{SecondaryPainter, SecondaryView};
 use crate::courtyard::Camera;
-use crate::render::Renderer;
+use solomon_graphics::Renderer;
 
 impl SecondaryView {
     /// Joins visible children directly from PrimarySpellTransient::Staff. Action
