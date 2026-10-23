@@ -10,7 +10,7 @@ function rustFiles(directory) {
     return entry.isDirectory()?rustFiles(filename):filename.endsWith('.rs')?[filename]:[];
   });
 }
-const sources=rustFiles(path.join(root,'crates/web/src')).map(filename=>({
+const sources=rustFiles(path.join(root,'crates')).map(filename=>({
   filename:path.relative(root,filename),text:fs.readFileSync(filename,'utf8'),
 }));
 
