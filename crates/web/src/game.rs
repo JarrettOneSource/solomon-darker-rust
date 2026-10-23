@@ -194,257 +194,262 @@ struct ActiveBattle {
 }
 
 impl Game {
-    pub async fn load() -> Result<Self, String> {
-        crate::runtime_ui::begin(
-            GpuUi::startup_asset_count() + GameAudio::startup_asset_count() + 3,
-        )?;
-        let window = web_sys::window().ok_or("no window")?;
-        let document = window.document().ok_or("no document")?;
-        let playtime = if editor_test::configured(&document)? {
-            None
-        } else {
-            Some(storage::PlaytimeRecorder::start(&window)?)
-        };
-        let canvas: HtmlCanvasElement = document
-            .get_element_by_id("game")
-            .ok_or("the page has no #game canvas")?
-            .dyn_into()
-            .map_err(|_| "#game is not a canvas")?;
+    /// Construct the retained startup state before its first poll. Keeping this
+    /// allocation in the constructor avoids nesting its large debug temporaries
+    /// inside run's poll frame while child UI/resource futures are also polled.
+    pub fn load() -> impl std::future::Future<Output = Result<Self, String>> {
+        Box::pin(async {
+            crate::runtime_ui::begin(
+                GpuUi::startup_asset_count() + GameAudio::startup_asset_count() + 3,
+            )?;
+            let window = web_sys::window().ok_or("no window")?;
+            let document = window.document().ok_or("no document")?;
+            let playtime = if editor_test::configured(&document)? {
+                None
+            } else {
+                Some(storage::PlaytimeRecorder::start(&window)?)
+            };
+            let canvas: HtmlCanvasElement = document
+                .get_element_by_id("game")
+                .ok_or("the page has no #game canvas")?
+                .dyn_into()
+                .map_err(|_| "#game is not a canvas")?;
 
-        set_status("Loading stock assets…");
-        let college = parse_bundle(&assets::fetch_bytes("assets/stock/College.bundle").await?)
-            .map_err(|error| format!("College.bundle: {error}"))?;
-        let clothes = parse_bundle(&assets::fetch_bytes("assets/stock/Clothes.bundle").await?)
-            .map_err(|error| format!("Clothes.bundle: {error}"))?;
-        let college_image = assets::load_image("assets/stock/College.png").await?;
-        let clothes_image = assets::load_image("assets/stock/Clothes.png").await?;
-        let shadow_image = assets::load_image("assets/stock/player-shadow.png").await?;
+            set_status("Loading stock assets…");
+            let college = parse_bundle(&assets::fetch_bytes("assets/stock/College.bundle").await?)
+                .map_err(|error| format!("College.bundle: {error}"))?;
+            let clothes = parse_bundle(&assets::fetch_bytes("assets/stock/Clothes.bundle").await?)
+                .map_err(|error| format!("Clothes.bundle: {error}"))?;
+            let college_image = assets::load_image("assets/stock/College.png").await?;
+            let clothes_image = assets::load_image("assets/stock/Clothes.png").await?;
+            let shadow_image = assets::load_image("assets/stock/player-shadow.png").await?;
 
-        let attachment_back =
-            assets::load_image("assets/stock/player-character-unselected-attachment-back.png")
-                .await?;
-        let attachment_front =
-            assets::load_image("assets/stock/player-character-unselected-attachment-front.png")
-                .await?;
-        let robe_attachment =
-            assets::load_image("assets/stock/player-character-unselected-robe-attachment.png")
-                .await?;
+            let attachment_back =
+                assets::load_image("assets/stock/player-character-unselected-attachment-back.png")
+                    .await?;
+            let attachment_front =
+                assets::load_image("assets/stock/player-character-unselected-attachment-front.png")
+                    .await?;
+            let robe_attachment =
+                assets::load_image("assets/stock/player-character-unselected-robe-attachment.png")
+                    .await?;
 
-        let renderer = Renderer::new(webgl2_context(&canvas)?)?;
-        let gpu_ui = GpuUi::load(&document, &canvas, &renderer).await?;
-        let teacher_view = TeacherView::load(&renderer).await?;
-        let spell_view = SpellView::load(&renderer).await?;
-        let college_texture = renderer.upload(&college_image)?;
-        let clothes_texture = renderer.upload(&clothes_image)?;
-        let shadow_texture = renderer.upload(&shadow_image)?;
-        let npc_view = NpcView::new(
-            college.clone(),
-            clothes.clone(),
-            college_texture.clone(),
-            clothes_texture.clone(),
-            shadow_texture.clone(),
-        )?;
-        let scene = CourtyardScene::new(college, college_texture)?;
-        let rooms = PrivateRoomScenes::load(&renderer).await?;
-        let economy = HubEconomyState::new(js_sys::Date::now() as i64, WizardElement::Ether);
-        let [primary_tint, secondary_tint] = economy
-            .equipment
-            .hat
-            .as_ref()
-            .and_then(|hat| hat.clothing_tints())
-            .expect("the fresh wizard owns a tinted starter hat");
-        let appearance = StarterEquipmentAppearance { primary_tint, secondary_tint };
-        let wizard_view = WizardView::new(
-            clothes,
-            clothes_texture,
-            shadow_texture,
-            appearance,
-            renderer.upload(&attachment_back)?,
-            renderer.upload(&attachment_front)?,
-            renderer.upload(&robe_attachment)?,
-            &renderer,
-        )?;
-        let hotbar = HotbarSelection::attach(&window)?;
-        let input = MovementInput::attach(&window, hotbar.clone())?;
-        input.set_blocked(true)?;
-        input.set_primary_casting_enabled(false)?;
-        let mut hud = Hud::attach(&document, hotbar.clone()).await?;
-        hud.set_actions_enabled(true)?;
+            let renderer = Renderer::new(webgl2_context(&canvas)?)?;
+            let gpu_ui = GpuUi::load(&document, &canvas, &renderer).await?;
+            let teacher_view = TeacherView::load(&renderer).await?;
+            let spell_view = SpellView::load(&renderer).await?;
+            let college_texture = renderer.upload(&college_image)?;
+            let clothes_texture = renderer.upload(&clothes_image)?;
+            let shadow_texture = renderer.upload(&shadow_image)?;
+            let npc_view = NpcView::new(
+                college.clone(),
+                clothes.clone(),
+                college_texture.clone(),
+                clothes_texture.clone(),
+                shadow_texture.clone(),
+            )?;
+            let scene = CourtyardScene::new(college, college_texture)?;
+            let rooms = PrivateRoomScenes::load(&renderer).await?;
+            let economy = HubEconomyState::new(js_sys::Date::now() as i64, WizardElement::Ether);
+            let [primary_tint, secondary_tint] = economy
+                .equipment
+                .hat
+                .as_ref()
+                .and_then(|hat| hat.clothing_tints())
+                .expect("the fresh wizard owns a tinted starter hat");
+            let appearance = StarterEquipmentAppearance { primary_tint, secondary_tint };
+            let wizard_view = WizardView::new(
+                clothes,
+                clothes_texture,
+                shadow_texture,
+                appearance,
+                renderer.upload(&attachment_back)?,
+                renderer.upload(&attachment_front)?,
+                renderer.upload(&robe_attachment)?,
+                &renderer,
+            )?;
+            let hotbar = HotbarSelection::attach(&window)?;
+            let input = MovementInput::attach(&window, hotbar.clone())?;
+            input.set_blocked(true)?;
+            input.set_primary_casting_enabled(false)?;
+            let mut hud = Hud::attach(&document, hotbar.clone()).await?;
+            hud.set_actions_enabled(true)?;
 
-        hud.set_action_enabled(HudAction::Pause, true)?;
-        let menu = MenuUi::attach(&document).await?;
-        let panels = PlayerPanels::attach(&document, hotbar.clone()).await?;
-        let skill_picker = SkillPicker::attach(&document).await?;
-        set_status("Loading stock audio…");
-        let audio = GameAudio::load(&document).await?;
-        audio.set_scene(MusicScene::Title)?;
-        let battle_views = BattleViews::load(&renderer, &spell_view).await?;
-        let world_overlays = WorldOverlaysView::load(&renderer).await?;
-        let tutorial_ui = TutorialUi::attach(&document).await?;
-        let college_overlay = CollegeIntroOverlay::attach(&document).await?;
-        let game_over = GameOverOverlay::attach(&document)?;
-        let session = GameSession::new(
-            LOCAL_PLAYER_ID.to_owned(),
-            NewGameSelection {
-                name: "Sirmin".into(),
-                element: WizardElement::Ether,
-                discipline: WizardDiscipline::Arcane,
-            },
-            GameSessionOptions::default(),
-        );
-        let mut game = Self {
-            canvas,
-            renderer,
-            gpu_ui,
-            ui_ready: false,
-            frame_time: 0.0,
-            scene,
-            rooms,
-            wizard_view,
-            teacher_view,
-            spell_view,
-            world_overlays,
-            notifications: crate::loot::WorldNotifications::default(),
-            world_screen_feedback: WorldScreenFeedback::default(),
-            npc_view,
-            session,
-            local_player_id: LOCAL_PLAYER_ID.into(),
-            native: None,
-            hosted: None,
-            editor_test: None,
-            desktop_bridge: None,
-            desktop_close_callback: None,
-            desktop_close: None,
-            _playtime: playtime,
-            mobile_layout_store: crate::mobile_layout::MobileUiLayoutStore::new(
-                &window,
-                &crate::hosted::WebsiteMount::configured(&window)?
-                    .unwrap_or(crate::hosted::WebsiteMount::new("")?),
-            )?,
-            mod_assets: None,
-            mod_content: crate::mod_content_projection::ModContentState::default(),
-            mod_minimap: crate::mod_minimap::ModMinimapView::new(&document)?,
-            mod_panels: crate::mod_panels::ModPanelsView::new(&document)?,
-            mod_skills: crate::mod_skills::ModSkillsUi::new(&document)?,
-            mod_skill_quickbar: crate::mod_skill_quickbar::ModSkillQuickbarView::new(&window)?,
-            mod_audio: None,
-            mod_overlays: crate::mod_world_overlays::ModWorldOverlays::new(&document)?,
-            mod_projection: None,
-            mod_viewport_size: None,
-            input_aim: None,
-            has_game: false,
-            battle: None,
-            battle_views,
-            input,
-            hotbar,
-            hud,
-            menu,
-            match_loading: None,
-            match_loading_view: crate::match_loading::MatchLoadingView::attach(&document)?,
-            panels,
-            book_feedback_scope: None,
-            skill_picker,
-            social: SocialUi::attach(&document).await?,
-            cheats: crate::cheats::CheatUi::attach(&document)?,
-            pending_cheat_open: false,
-            observer_ui: crate::observer::ObserverUi::attach(&document)?,
-            spectator_camera: Default::default(),
-            spectator_ui: crate::spectator::SpectatorStatusView::attach(&document).await?,
-            shared_gameplay: SharedGameplayUi::attach(&document)?,
-            fullscreen: FullscreenControl::attach(&document)?,
-            audio,
-            combat_audio: None,
-            level_up: Default::default(),
-            hall_entries: Vec::new(),
-            archived_hall_run: None,
-            tutorial_ui,
-            tutorial_scene: TutorialScene::default(),
-            college_overlay,
-            game_over,
-            last_input: None,
-            input_belt_press_count: 0,
-            hud_state: HudState::new_game(),
-            accumulator: 0.0,
-            last_time: None,
-            pending_world: None,
-            world_loading: false,
-            world_generation: 0,
-            save_store: None,
-            save_revision: 0,
-            save_requested: false,
-            save_in_flight: false,
-            last_saved_tick: 0,
-            save_error: None,
-            save_listeners: Vec::new(),
-        };
-        set_status("");
-        game.update_mobile_layout()?;
-        match storage::load_settings() {
-            Ok(settings) => {
-                game.apply_settings(&settings)?;
-                game.menu.set_settings(settings)?;
+            hud.set_action_enabled(HudAction::Pause, true)?;
+            let menu = MenuUi::attach(&document).await?;
+            let panels = PlayerPanels::attach(&document, hotbar.clone()).await?;
+            let skill_picker = SkillPicker::attach(&document).await?;
+            set_status("Loading stock audio…");
+            let audio = GameAudio::load(&document).await?;
+            audio.set_scene(MusicScene::Title)?;
+            let battle_views = BattleViews::load(&renderer, &spell_view).await?;
+            let world_overlays = WorldOverlaysView::load(&renderer).await?;
+            let tutorial_ui = TutorialUi::attach(&document).await?;
+            let college_overlay = CollegeIntroOverlay::attach(&document).await?;
+            let game_over = GameOverOverlay::attach(&document)?;
+            let session = GameSession::new(
+                LOCAL_PLAYER_ID.to_owned(),
+                NewGameSelection {
+                    name: "Sirmin".into(),
+                    element: WizardElement::Ether,
+                    discipline: WizardDiscipline::Arcane,
+                },
+                GameSessionOptions::default(),
+            );
+            let mut game = Self {
+                canvas,
+                renderer,
+                gpu_ui,
+                ui_ready: false,
+                frame_time: 0.0,
+                scene,
+                rooms,
+                wizard_view,
+                teacher_view,
+                spell_view,
+                world_overlays,
+                notifications: crate::loot::WorldNotifications::default(),
+                world_screen_feedback: WorldScreenFeedback::default(),
+                npc_view,
+                session,
+                local_player_id: LOCAL_PLAYER_ID.into(),
+                native: None,
+                hosted: None,
+                editor_test: None,
+                desktop_bridge: None,
+                desktop_close_callback: None,
+                desktop_close: None,
+                _playtime: playtime,
+                mobile_layout_store: crate::mobile_layout::MobileUiLayoutStore::new(
+                    &window,
+                    &crate::hosted::WebsiteMount::configured(&window)?
+                        .unwrap_or(crate::hosted::WebsiteMount::new("")?),
+                )?,
+                mod_assets: None,
+                mod_content: crate::mod_content_projection::ModContentState::default(),
+                mod_minimap: crate::mod_minimap::ModMinimapView::new(&document)?,
+                mod_panels: crate::mod_panels::ModPanelsView::new(&document)?,
+                mod_skills: crate::mod_skills::ModSkillsUi::new(&document)?,
+                mod_skill_quickbar: crate::mod_skill_quickbar::ModSkillQuickbarView::new(&window)?,
+                mod_audio: None,
+                mod_overlays: crate::mod_world_overlays::ModWorldOverlays::new(&document)?,
+                mod_projection: None,
+                mod_viewport_size: None,
+                input_aim: None,
+                has_game: false,
+                battle: None,
+                battle_views,
+                input,
+                hotbar,
+                hud,
+                menu,
+                match_loading: None,
+                match_loading_view: crate::match_loading::MatchLoadingView::attach(&document)?,
+                panels,
+                book_feedback_scope: None,
+                skill_picker,
+                social: SocialUi::attach(&document).await?,
+                cheats: crate::cheats::CheatUi::attach(&document)?,
+                pending_cheat_open: false,
+                observer_ui: crate::observer::ObserverUi::attach(&document)?,
+                spectator_camera: Default::default(),
+                spectator_ui: crate::spectator::SpectatorStatusView::attach(&document).await?,
+                shared_gameplay: SharedGameplayUi::attach(&document)?,
+                fullscreen: FullscreenControl::attach(&document)?,
+                audio,
+                combat_audio: None,
+                level_up: Default::default(),
+                hall_entries: Vec::new(),
+                archived_hall_run: None,
+                tutorial_ui,
+                tutorial_scene: TutorialScene::default(),
+                college_overlay,
+                game_over,
+                last_input: None,
+                input_belt_press_count: 0,
+                hud_state: HudState::new_game(),
+                accumulator: 0.0,
+                last_time: None,
+                pending_world: None,
+                world_loading: false,
+                world_generation: 0,
+                save_store: None,
+                save_revision: 0,
+                save_requested: false,
+                save_in_flight: false,
+                last_saved_tick: 0,
+                save_error: None,
+                save_listeners: Vec::new(),
+            };
+            set_status("");
+            game.update_mobile_layout()?;
+            match storage::load_settings() {
+                Ok(settings) => {
+                    game.apply_settings(&settings)?;
+                    game.menu.set_settings(settings)?;
+                }
+                Err(error) => Self::show_storage_error(&error),
             }
-            Err(error) => Self::show_storage_error(&error),
-        }
-        if editor_test::configured(&document)? {
-            game.load_editor_test(&window).await?;
-            return Ok(game);
-        }
-        match storage::read_hall() {
-            Ok(entries) => game.hall_entries = entries,
-            Err(error) => Self::show_storage_error(&error),
-        }
-        if let Some(endpoint) = crate::desktop::configured(&window)? {
-            game.load_hosted(&window, crate::hosted::WebsiteMount::default(), Some(endpoint))
-                .await?;
-            return Ok(game);
-        }
-        if let Some(mount) = crate::hosted::WebsiteMount::configured(&window)? {
-            game.load_hosted(&window, mount, None).await?;
-            return Ok(game);
-        }
-        if crate::network::native_host_requested(&window)? {
-            game.native = Some(NativeGame::inspect(&window)?);
-            game.menu.show_title(false)?;
-            set_status("Checking saved game…");
-            return Ok(game);
-        }
-        let mut no_saved_game = false;
-        match SaveStore::open().await {
-            Ok(store) => {
-                let stored = store.read().await;
-                game.save_store = Some(store);
-                match stored {
-                    Ok(Some(record)) => {
-                        game.save_revision = record.revision;
-                        let restored = match save_document::decode(&record.document) {
-                            Ok(checkpoint) => game.restore_checkpoint(checkpoint).await,
-                            Err(error) => Err(error),
-                        };
-                        if let Err(error) = restored {
+            if editor_test::configured(&document)? {
+                game.load_editor_test(&window).await?;
+                return Ok(game);
+            }
+            match storage::read_hall() {
+                Ok(entries) => game.hall_entries = entries,
+                Err(error) => Self::show_storage_error(&error),
+            }
+            if let Some(endpoint) = crate::desktop::configured(&window)? {
+                game.load_hosted(&window, crate::hosted::WebsiteMount::default(), Some(endpoint))
+                    .await?;
+                return Ok(game);
+            }
+            if let Some(mount) = crate::hosted::WebsiteMount::configured(&window)? {
+                game.load_hosted(&window, mount, None).await?;
+                return Ok(game);
+            }
+            if crate::network::native_host_requested(&window)? {
+                game.native = Some(NativeGame::inspect(&window)?);
+                game.menu.show_title(false)?;
+                set_status("Checking saved game…");
+                return Ok(game);
+            }
+            let mut no_saved_game = false;
+            match SaveStore::open().await {
+                Ok(store) => {
+                    let stored = store.read().await;
+                    game.save_store = Some(store);
+                    match stored {
+                        Ok(Some(record)) => {
+                            game.save_revision = record.revision;
+                            let restored = match save_document::decode(&record.document) {
+                                Ok(checkpoint) => game.restore_checkpoint(checkpoint).await,
+                                Err(error) => Err(error),
+                            };
+                            if let Err(error) = restored {
+                                game.save_error = Some(error.clone());
+                                Self::show_storage_error(&error);
+                            }
+                        }
+                        Ok(None) => {
+                            no_saved_game = true;
+                        }
+                        Err(error) => {
                             game.save_error = Some(error.clone());
                             Self::show_storage_error(&error);
                         }
                     }
-                    Ok(None) => {
-                        no_saved_game = true;
-                    }
-                    Err(error) => {
-                        game.save_error = Some(error.clone());
-                        Self::show_storage_error(&error);
-                    }
+                }
+                Err(error) => {
+                    game.save_error = Some(error.clone());
+                    Self::show_storage_error(&error);
                 }
             }
-            Err(error) => {
-                game.save_error = Some(error.clone());
-                Self::show_storage_error(&error);
+            game.menu.show_title(game.has_game)?;
+            if no_saved_game && !storage::tutorial_declined().unwrap_or(true) {
+                game.menu.offer_tutorial()?;
             }
-        }
-        game.menu.show_title(game.has_game)?;
-        if no_saved_game && !storage::tutorial_declined().unwrap_or(true) {
-            game.menu.offer_tutorial()?;
-        }
-        Ok(game)
+            Ok(game)
+        })
     }
 
     pub fn wizard_snapshot(&self) -> Vec<f64> {
