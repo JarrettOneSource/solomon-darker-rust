@@ -937,6 +937,15 @@ impl CloudView {
                 );
             }
         }
+        let frame_rect = if !compact && !short {
+            Rect::from_min_max(view.min + Vec2::new(55.0, 173.0), view.max - Vec2::new(55.0, 100.0))
+        } else {
+            Rect::from_min_max(
+                view.min + Vec2::new(outer, heading_height + tab_height),
+                view.max - Vec2::new(outer, footer_height + 6.0),
+            )
+        };
+        self.art.list(frame, ui, frame_rect, if phone || short { 0.58 } else { 1.0 })?;
         let tabs_width =
             if short { view.width() - 124.0 } else { 1122.0_f32.min(view.width() - outer * 2.0) };
         let tabs = Rect::from_min_size(
@@ -985,15 +994,6 @@ impl CloudView {
             }
         });
         std::mem::replace(&mut result, Ok(()))?;
-        let frame_rect = if !compact && !short {
-            Rect::from_min_max(view.min + Vec2::new(55.0, 173.0), view.max - Vec2::new(55.0, 100.0))
-        } else {
-            Rect::from_min_max(
-                view.min + Vec2::new(outer, heading_height + tab_height),
-                view.max - Vec2::new(outer, footer_height + 6.0),
-            )
-        };
-        self.art.list(frame, ui, frame_rect, if phone || short { 0.58 } else { 1.0 })?;
         let pad = if phone {
             14.0
         } else if compact || short {
