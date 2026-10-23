@@ -291,8 +291,15 @@ impl HallView {
         let mut child =
             ui.new_child(egui::UiBuilder::new().id_salt("hall-content").max_rect(box_rect));
         child.set_clip_rect(box_rect);
-        let mut scroll =
-            egui::ScrollArea::both().id_salt("hall-records").auto_shrink([false, false]);
+        widgets::scrollbar_style(&mut child, 0x8e7950, 0x151311, true);
+        let mut scroll = egui::ScrollArea::both()
+            .id_salt("hall-records")
+            .scroll_bar_visibility(if compact {
+                egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
+            } else {
+                egui::scroll_area::ScrollBarVisibility::AlwaysHidden
+            })
+            .auto_shrink([false, false]);
         if !compact {
             scroll = scroll.horizontal_scroll_offset(0.0);
         }
@@ -390,6 +397,7 @@ impl HallView {
             if widgets::interact(frame, ui, id, label, "tab", rect, true).clicked() {
                 actions.push(id.to_owned());
             }
+            frame.record_value(id, if active { "true" } else { "false" }, Some(active));
             hall_text(
                 frame,
                 ui,
@@ -420,7 +428,7 @@ impl HallView {
                 let label = board.as_str().to_uppercase();
                 let width = measure(&label, HallFont::Body);
                 let id = format!("hall-board:{}", board.as_str());
-                if widgets::interact(
+                let response = widgets::interact(
                     frame,
                     ui,
                     &id,
@@ -428,9 +436,9 @@ impl HallView {
                     "tab",
                     head_stage.rect(x - 8.0, 14.0, width + 16.0, 32.0),
                     true,
-                )
-                .clicked()
-                {
+                );
+                frame.record_value(&id, board.as_str(), Some(self.board == board));
+                if response.clicked() {
                     actions.push(id);
                 }
                 hall_text(
@@ -587,6 +595,7 @@ impl HallView {
             Rect::from_center_size(center, Vec2::splat(44.0 * stage.scale)),
             true,
         );
+        frame.record_value(&id, &entry.run_id, Some(expanded));
         if response.clicked() {
             actions.push(id);
         }

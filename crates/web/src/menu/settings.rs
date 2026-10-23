@@ -440,9 +440,10 @@ impl SettingsView {
         view: Rect,
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
+        widgets::scrollbar_style(ui, 0x9f8547, 0x17130e, false);
         if self.page == Page::MobileUi && self.mobile_fullscreen {
             if let Some(editor) = &mut self.mobile_editor {
-                editor.paint(frame)?;
+                editor.paint_in(frame, view, ui)?;
                 if editor.take_save_request() {
                     actions.push("settings-back".to_owned());
                 }
@@ -500,7 +501,7 @@ impl SettingsView {
         );
         if self.page == Page::MobileUi {
             if let Some(editor) = &mut self.mobile_editor {
-                editor.paint_in(frame, content)?;
+                editor.paint_in(frame, content, ui)?;
                 if editor.take_save_request() {
                     actions.push("settings-back".to_owned());
                 }
@@ -1068,11 +1069,14 @@ fn group(frame: &UiFrame<'_>, ui: &mut Ui, title: &str, width: f32) {
         NativeUiTextAlign::Left,
     );
 }
-fn flow(ui: &mut Ui, text: &str, width: f32, size: f32, tint: Color32) {
+fn flow(ui: &mut Ui, text: &str, width: f32, size: f32, tint: Color32) -> Rect {
     let font = egui::FontId::new(size, egui::FontFamily::Name("Cinzel".into()));
     let galley = ui.painter().layout(text.to_owned(), font, tint, width - 16.0);
-    let (_, r) = ui.allocate_space(Vec2::new(width, galley.size().y + 16.0));
-    ui.painter().galley(r.min + Vec2::splat(8.0), galley, tint);
+    let size = galley.size();
+    let (_, r) = ui.allocate_space(Vec2::new(width, size.y + 16.0));
+    let origin = r.min + Vec2::splat(8.0);
+    ui.painter().galley(origin, galley, tint);
+    Rect::from_min_size(origin, size)
 }
 fn binding_label(action: GameControlAction) -> String {
     match action {
