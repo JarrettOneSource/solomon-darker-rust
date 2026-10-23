@@ -208,11 +208,12 @@ impl HotbarControls {
                 egui::pos2(x, top),
                 egui::vec2(width, if coarse && !self.modal { 40.0 } else { 32.0 }),
             );
-            let response = ui.interact(
-                rect,
-                egui::Id::unique(&id),
-                if self.disabled.get() { egui::Sense::hover() } else { egui::Sense::click() },
-            );
+            let mut child =
+                crate::player_panels::chrome::child_ui(ui, "hotbar-admission", ui.max_rect());
+            if self.disabled.get() {
+                child.disable();
+            }
+            let response = child.interact(rect, egui::Id::unique(&id), egui::Sense::click());
             let alpha = if self.disabled.get() { 0.4 } else { 1.0 };
             let painter = ui.painter();
             painter.rect_filled(
