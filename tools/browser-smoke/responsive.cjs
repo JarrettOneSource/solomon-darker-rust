@@ -48,20 +48,29 @@ async function walkToFomentius(page) {
     await session.detach();
   }
   const [x,y]=await page.evaluate(()=>Array.from(wasmBindings.wizard_state()));
-  const originX=Math.max(0,Math.min(2000-1600/1.2,x-800/1.2));
-  const originY=Math.max(0,Math.min(1024-900/1.2,y-450/1.2));
   const viewport=page.viewportSize();
-  const scale=Math.min(viewport.width/1600,viewport.height/900);
-  const target={x:(viewport.width-1600*scale)/2+(1397-originX)*1.2*scale,
-    y:(viewport.height-900*scale)/2+(664-originY)*1.2*scale};
+  // Source game-viewport.ts and hub-math.ts expand the world view before its
+  // regional camera clamp; the world does not use the fixed UI stage's offset.
+  const scale=Math.min(1,viewport.width/1600,viewport.height/900);
+  const logical={width:viewport.width/scale,height:viewport.height/scale};
+  const boundedScale=Math.max(scale,viewport.width/Math.max(1600,2000*1.2),
+    viewport.height/Math.max(900,1024*1.2));
+  const cameraScale=1.2*boundedScale/scale;
+  const view={width:logical.width/cameraScale,height:logical.height/cameraScale};
+  const originX=Math.max(0,Math.min(2000-view.width,x-view.width/2));
+  const originY=Math.max(0,Math.min(1024-view.height,y-view.height/2));
+  const target={x:(1397-originX)*cameraScale*scale,
+    y:(664-originY)*cameraScale*scale};
+  const entry={before:[x,y],viewport,logical,cameraScale,origin:[originX,originY],target};
   await page.touchscreen.tap(target.x,target.y);
   try {
     const dialogue=await ui.widget(page,'panel:dialogue',{timeout:3000});
     assert.equal(dialogue.label,'Fomentius');
+    fs.writeFileSync(path.join(output,'phone-world-entry.json'),JSON.stringify({...entry,dialogue},null,2));
   } catch(error) {
     const after=await page.evaluate(()=>({wizard:Array.from(wasmBindings.wizard_state()),
       input:Array.from(wasmBindings.gameplay_input_state()),gpu:JSON.parse(wasmBindings.gpu_ui_state())}));
-    fs.writeFileSync(path.join(output,'phone-world-entry-failure.json'),JSON.stringify({before:[x,y],target,after},null,2));
+    fs.writeFileSync(path.join(output,'phone-world-entry-failure.json'),JSON.stringify({...entry,after},null,2));
     await shot(page,'phone-world-entry-failure.png');
     throw error;
   }
