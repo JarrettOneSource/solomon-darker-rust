@@ -1,52 +1,53 @@
-//! DOM painter for the canonical stock Party plan. The 1600×900 stage follows
-//! HubScene's native UI placement and never substitutes browser font measurements.
+//! GPU painter for the canonical 1600×900 stock Party plan.
 
+use egui::{Color32, Id, Rect, Sense, Ui, vec2};
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec};
+use solomon_sim::native_ui_text::NativeUiTextSpec;
 use solomon_sim::social::party_ui::{
-    NATIVE_PARTY_MENU_FRAME, NATIVE_PARTY_MENU_VIEWPORT, NATIVE_PARTY_VISIBILITIES,
-    NativePartyMenuMember, NativePartyMenuRequest, NativePartyMenuSpec, NativePartyMenuTag,
-    plan_native_party_menu, visibility_id,
+    NATIVE_PARTY_MENU_FRAME, NATIVE_PARTY_MENU_VIEWPORT, NATIVE_PARTY_MENU_WHEEL_STEP,
+    NATIVE_PARTY_VISIBILITIES, NativePartyMenuMember, NativePartyMenuRequest, NativePartyMenuSpec,
+    NativePartyMenuTag, clamp_native_party_menu_scroll, plan_native_party_menu, visibility_id,
 };
 use solomon_sim::social::{party_member_display_name, party_menu_leave_label};
 use wasm_bindgen::JsCast;
-use web_sys::HtmlElement;
 
-use super::super::PartyTab;
-use super::{SocialUi, action_button, attribute, brackets, stock_button, tab_chrome};
-use crate::ui::text::native_text;
-use crate::ui::{append, element, message_frame, style};
+use super::super::{Intent, PartyTab, SocialUi, gpu};
+use crate::gpu_ui::{UiFrame, message_frame};
 
 impl SocialUi {
-    pub(in crate::social) fn draw_native_party_menu(
-        &self,
+    pub(in crate::social) fn paint_native_party_menu(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
         tab: PartyTab,
-        focused: Option<&str>,
     ) -> Result<(), String> {
         let Some(snapshot) = &self.snapshot else { return Ok(()) };
         let Some(state) = &snapshot.party_state else { return Ok(()) };
         let leader = state.party.leader_player_id == snapshot.local_player_id;
-        let mut members = Vec::new();
-        for id in &state.party.member_player_ids {
-            let mut tags = Vec::new();
-            if *id == snapshot.local_player_id {
-                tags.push(NativePartyMenuTag::You);
-            }
-            if *id == state.party.leader_player_id {
-                tags.push(NativePartyMenuTag::Leader);
-            }
-            if state.party_roster.iter().any(|player| player.player_id == *id && !player.connected)
-            {
-                tags.push(NativePartyMenuTag::Offline);
-            }
-            members.push(NativePartyMenuMember {
-                id: id.clone(),
-                name: party_member_display_name(state, id).to_owned(),
-                removable: leader && *id != snapshot.local_player_id,
-                tags,
-            });
-        }
-        let requests = if leader {
+        let members: Vec<_> = state
+            .party
+            .member_player_ids
+            .iter()
+            .map(|id| {
+                let mut tags = Vec::new();
+                if *id == snapshot.local_player_id {
+                    tags.push(NativePartyMenuTag::You);
+                }
+                if *id == state.party.leader_player_id {
+                    tags.push(NativePartyMenuTag::Leader);
+                }
+                if state.party_roster.iter().any(|row| row.player_id == *id && !row.connected) {
+                    tags.push(NativePartyMenuTag::Offline);
+                }
+                NativePartyMenuMember {
+                    id: id.clone(),
+                    name: party_member_display_name(state, id).to_owned(),
+                    removable: leader && *id != snapshot.local_player_id,
+                    tags,
+                }
+            })
+            .collect();
+        let requests: Vec<_> = if leader {
             state
                 .join_requests
                 .iter()
@@ -54,14 +55,13 @@ impl SocialUi {
                     id: request.id.clone(),
                     name: request.requester.display_name.clone(),
                 })
-                .collect::<Vec<_>>()
+                .collect()
         } else {
             Vec::new()
         };
-        let controls = self.party_ui.borrow();
         let plan = plan_native_party_menu(&NativePartyMenuSpec {
             code: if leader { state.party.join_code.as_deref() } else { None },
-            copied: controls.copied,
+            copied: self.party_ui.copied,
             error: self.party_status.as_deref(),
             leader,
             leave_label: party_menu_leave_label(
@@ -70,7 +70,7 @@ impl SocialUi {
             ),
             members: &members,
             requests: &requests,
-            scroll_y: controls.scroll_y,
+            scroll_y: self.party_ui.scroll_y,
             selected_tab: tab,
             visibility: state.party.visibility,
             visibility_options: if snapshot.directory_available {
@@ -79,302 +79,282 @@ impl SocialUi {
                 &[]
             },
         });
-        drop(controls);
-        let scale = (f64::from(self.size.0) / 1600.0).min(f64::from(self.size.1) / 900.0);
-        let origin = [
-            (f64::from(self.size.0) - 1600.0 * scale) / 2.0,
-            (f64::from(self.size.1) - 900.0 * scale) / 2.0,
-        ];
-        self.party_ui.borrow_mut().configure(&plan, origin, scale);
-        let stage =
-            element(&self.document, "section", "hub-party-menu-stage native-ui-party-menu")?;
-        for (name, value) in [
-            ("role", "dialog"),
-            ("aria-modal", "true"),
-            ("aria-label", "PARTY"),
-            ("data-native-ui-party-menu", ""),
-        ] {
-            attribute(&stage, name, value)?;
-        }
-        attribute(&stage, "data-native-ui-party-scroll-max", &plan.maximum_scroll_y.to_string())?;
-        attribute(&stage, "data-native-ui-party-scroll-y", &plan.scroll_y.to_string())?;
-        attribute(&stage, "data-native-ui-party-tab", tab.id())?;
-        style(
-            &stage,
-            &format!("left:{}px;top:{}px;transform:scale({scale})", origin[0], origin[1]),
-        )?;
-        let frame = element(&self.document, "div", "")?;
-        place(&frame, NATIVE_PARTY_MENU_FRAME)?;
-        append(&frame, &message_frame(&self.document, &self.ui, 820.0, 680.0)?)?;
-        append(&stage, &frame)?;
-
-        let tabs = element(&self.document, "div", "")?;
-        attribute(&tabs, "role", "tablist")?;
-        attribute(&tabs, "aria-label", "Party menu sections")?;
-        place(&tabs, HudRect::new(431.0, 190.0, 738.0, 69.0))?;
+        let code = state.party.join_code.clone();
+        let visibility = state.party.visibility;
+        let (origin, scale) = gpu::stage(self.size);
+        let panel = gpu::rect(NATIVE_PARTY_MENU_FRAME, origin, scale);
+        ui.interact(panel, Id::unique("social/party-panel-block"), Sense::click());
+        message_frame(frame, ui.painter(), &self.ui, panel)?;
+        frame.record_rect("social/party-menu", "PARTY", "dialog", panel, true);
+        let viewport = gpu::rect(NATIVE_PARTY_MENU_VIEWPORT, origin, scale);
+        let mut activated = None;
         for (index, candidate) in PartyTab::ALL.iter().enumerate() {
-            let selected = *candidate == tab;
-            let button = action_button(
-                &self.document,
+            let bounds = gpu::rect(
+                HudRect::new(431.0 + index as f64 * 246.0, 190.0, 246.0, 69.0),
+                origin,
+                scale,
+            );
+            let response =
+                ui.interact(bounds, Id::unique(("social/tab", candidate.id())), Sense::click());
+            frame.record(
+                &format!("social/party-{}", candidate.id()),
                 candidate.label(),
-                &format!("party-{}", candidate.id()),
-                "native-ui-party-menu-action",
-            )?;
-            attribute(&button, "role", "tab")?;
-            attribute(&button, "aria-selected", &selected.to_string())?;
-            attribute(&button, "tabindex", if selected { "0" } else { "-1" })?;
-            attribute(&button, "data-native-ui-party-tab-action", candidate.id())?;
-            attribute(&button, "data-party-focus-key", &format!("tab:{}", candidate.id()))?;
-            button.set_text_content(None);
-            place(&button, HudRect::new(index as f64 * 246.0, 0.0, 246.0, 69.0))?;
-            append(&button, &tab_chrome(&self.document, &self.ui, 246.0, 69.0, selected)?)?;
-            append(
-                &button,
-                &native_text(
-                    &self.document,
-                    &NativeUiTextSpec {
-                        tint: if selected { 0xffffff } else { 0xaaa2a6 },
-                        ..NativeUiTextSpec::new(
-                            NativeUiFontName::Menu,
-                            candidate.label(),
-                            123.0,
-                            if selected { 45.0 } else { 53.0 },
-                        )
-                    },
-                    "",
-                )?,
-            )?;
-            append(&tabs, &button)?;
-        }
-        append(&stage, &tabs)?;
-        let viewport = element(&self.document, "div", "native-ui-party-menu-viewport")?;
-        attribute(&viewport, "data-native-ui-party-viewport", "")?;
-        place(&viewport, NATIVE_PARTY_MENU_VIEWPORT)?;
-        for row in &plan.rows {
-            if row.visible_bounds.is_none() {
-                continue;
+                "tab",
+                &response,
+            );
+            let selected = *candidate == tab;
+            let top = if selected { 0.0 } else { 8.0 };
+            let height = if selected { 65.0 } else { 51.0 };
+            for (source, target) in [
+                (
+                    Rect::from_min_size(egui::Pos2::ZERO, vec2(34.0, height)),
+                    Rect::from_min_size(
+                        bounds.min + vec2(0.0, top) * scale,
+                        vec2(34.0, height) * scale,
+                    ),
+                ),
+                (
+                    Rect::from_min_max(egui::pos2(34.0, 0.0), egui::pos2(0.0, height)),
+                    Rect::from_min_size(
+                        egui::pos2(bounds.right() - 34.0 * scale, bounds.top() + top * scale),
+                        vec2(34.0, height) * scale,
+                    ),
+                ),
+                (
+                    Rect::from_min_size(egui::pos2(32.3, 0.0), vec2(1.7, height)),
+                    Rect::from_min_size(
+                        bounds.min + vec2(34.0, top) * scale,
+                        vec2(178.0, height) * scale,
+                    ),
+                ),
+            ] {
+                self.ui.paint_slice(frame, ui.painter(), 13, source, target, Color32::WHITE)?;
             }
-            self.party_row_frame(&viewport, offset(row.bounds, NATIVE_PARTY_MENU_VIEWPORT))?;
+            let mut spec = NativeUiTextSpec::new(
+                solomon_sim::native_ui_text::NativeUiFontName::Menu,
+                candidate.label(),
+                554.0 + index as f64 * 246.0,
+                if selected { 235.0 } else { 243.0 },
+            );
+            spec.tint = if selected { 0xffffff } else { 0xaaa2a6 };
+            gpu::native_text(frame, ui.painter(), &spec, origin, scale);
+            if response.clicked() {
+                activated = Some(format!("party-{}", candidate.id()));
+            }
+            if response.has_focus() {
+                let direction = ui.input_mut(|input| {
+                    if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft) {
+                        -1
+                    } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight) {
+                        1
+                    } else {
+                        0
+                    }
+                });
+                if direction != 0 {
+                    let next =
+                        (index as i32 + direction).rem_euclid(PartyTab::ALL.len() as i32) as usize;
+                    activated = Some(format!("party-{}", PartyTab::ALL[next].id()));
+                    ui.memory_mut(|memory| {
+                        memory.request_focus(Id::unique(("social/tab", PartyTab::ALL[next].id())))
+                    });
+                }
+            }
+        }
+        if tab == PartyTab::Members {
+            let scroll = ui.interact(viewport, Id::unique("social/party-scroll"), Sense::drag());
+            let wheel =
+                if scroll.hovered() { ui.input(|input| input.smooth_scroll_delta.y) } else { 0.0 };
+            let mut requested = self.party_ui.scroll_y;
+            if wheel != 0.0 {
+                requested -= f64::from(wheel.signum()) * NATIVE_PARTY_MENU_WHEEL_STEP;
+            }
+            if scroll.dragged() {
+                requested -= f64::from(scroll.drag_delta().y / scale);
+            }
+            if scroll.has_focus() {
+                requested += ui.input_mut(|input| {
+                    if input.consume_key(egui::Modifiers::NONE, egui::Key::PageDown) {
+                        NATIVE_PARTY_MENU_VIEWPORT.height
+                    } else if input.consume_key(egui::Modifiers::NONE, egui::Key::PageUp) {
+                        -NATIVE_PARTY_MENU_VIEWPORT.height
+                    } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
+                        NATIVE_PARTY_MENU_WHEEL_STEP
+                    } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
+                        -NATIVE_PARTY_MENU_WHEEL_STEP
+                    } else {
+                        0.0
+                    }
+                });
+            }
+            self.party_ui.scroll_y = clamp_native_party_menu_scroll(requested, plan.content_height);
+            let painter = ui.painter().with_clip_rect(viewport);
+            for row in &plan.rows {
+                if row.visible_bounds.is_some() {
+                    gpu::brackets(
+                        frame,
+                        &painter,
+                        &self.ui,
+                        gpu::rect(row.bounds, origin, scale),
+                        scale,
+                    )?;
+                }
+            }
         }
         for bounds in &plan.settings_rows {
-            self.party_row_frame(&stage, *bounds)?;
+            gpu::brackets(frame, ui.painter(), &self.ui, gpu::rect(*bounds, origin, scale), scale)?;
         }
         for text in &plan.texts {
             if text.label.starts_with("visibility:") && text.label.ends_with(":label") {
                 continue;
             }
-            let origin = if text.clipped {
-                [NATIVE_PARTY_MENU_VIEWPORT.x, NATIVE_PARTY_MENU_VIEWPORT.y]
+            let painter = if text.clipped {
+                ui.painter().with_clip_rect(viewport)
             } else {
-                [0.0; 2]
+                ui.painter().clone()
             };
-            let node = native_text(
-                &self.document,
+            gpu::native_text(
+                frame,
+                &painter,
                 &NativeUiTextSpec {
                     align: text.align,
                     scale: text.scale,
                     tint: text.tint,
-                    ..NativeUiTextSpec::new(
-                        text.font,
-                        &text.text,
-                        text.x - origin[0],
-                        text.y - origin[1],
-                    )
+                    ..NativeUiTextSpec::new(text.font, &text.text, text.x, text.y)
                 },
-                "",
-            )?;
-            attribute(&node, "data-native-ui-node-label", &text.label)?;
-            append(if text.clipped { &viewport } else { &stage }, &node)?;
+                origin,
+                scale,
+            );
         }
-        for action in &plan.row_actions {
-            let row = members
-                .iter()
-                .find(|member| action.row_id == format!("member:{}", member.id))
-                .map(|member| member.name.as_str())
-                .or_else(|| {
-                    requests
-                        .iter()
-                        .find(|request| action.row_id == format!("request:{}", request.id))
-                        .map(|request| request.name.as_str())
-                })
-                .unwrap_or("");
-            let button = self.party_stock_action(
-                &action.label,
-                &action.id,
-                offset(action.bounds, NATIVE_PARTY_MENU_VIEWPORT),
-                0.55,
-            )?;
-            attribute(&button, "aria-label", format!("{} {row}", action.label).trim())?;
-            attribute(&button, "data-native-ui-party-row-id", &action.row_id)?;
-            append(&viewport, &button)?;
-        }
-        if tab == PartyTab::Members {
-            append(&stage, &viewport)?;
-        }
-        let visibility = element(&self.document, "div", "")?;
-        attribute(&visibility, "role", "radiogroup")?;
-        attribute(&visibility, "aria-label", "Visibility")?;
         for action in &plan.actions {
-            if action.id.starts_with("tab:")
-                || plan.row_actions.iter().any(|row| row.id == action.id)
-            {
+            if action.id.starts_with("tab:") {
                 continue;
             }
-            if let Some(id) = action.id.strip_prefix("visibility:") {
-                let selected = id == visibility_id(state.party.visibility);
-                let button = action_button(
-                    &self.document,
-                    &action.label,
-                    &action.id,
-                    "native-ui-party-menu-action",
+            let bounds = gpu::rect(action.bounds, origin, scale);
+            let clipped = plan.row_actions.iter().any(|row| row.id == action.id);
+            if clipped && !bounds.intersects(viewport) {
+                continue;
+            }
+            let old_clip = ui.clip_rect();
+            if clipped {
+                ui.set_clip_rect(viewport);
+            }
+            let response = if let Some(id) = action.id.strip_prefix("visibility:") {
+                let selected = id == visibility_id(visibility);
+                let response = ui.interact(
+                    bounds,
+                    Id::unique(("social", &action.id)),
+                    if action.disabled { Sense::hover() } else { Sense::click() },
+                );
+                self.ui.paint_raw(
+                    frame,
+                    ui.painter(),
+                    if selected { 105 } else { 67 },
+                    bounds,
+                    Color32::WHITE,
                 )?;
-                button.set_text_content(None);
-                attribute(&button, "role", "radio")?;
-                attribute(&button, "aria-checked", &selected.to_string())?;
-                attribute(&button, "tabindex", if selected { "0" } else { "-1" })?;
-                attribute(&button, "data-native-ui-party-visibility", id)?;
-                attribute(
-                    &button,
-                    "data-party-selected-visibility",
-                    visibility_id(state.party.visibility),
-                )?;
-                attribute(&button, "data-party-focus-key", &action.id)?;
-                button
-                    .toggle_attribute_with_force("disabled", action.disabled)
-                    .map_err(|_| "party visibility admission")?;
-                place(&button, action.bounds)?;
-                let plate = self.ui.sprite(&self.document, if selected { 105 } else { 67 }, "")?;
-                style(
-                    &plate,
-                    &format!(
-                        "position:absolute;left:0;top:0;width:{}px;height:{}px;pointer-events:none",
-                        action.bounds.width, action.bounds.height
-                    ),
-                )?;
-                append(&button, &plate)?;
-                // The plan's label shares the same pen but must paint over the plate.
-                let label = plan
-                    .texts
-                    .iter()
-                    .find(|text| text.label == format!("{}:label", action.id))
-                    .expect("each visibility action has its authored label");
-                append(
-                    &button,
-                    &native_text(
-                        &self.document,
+                if let Some(label) =
+                    plan.texts.iter().find(|text| text.label == format!("{}:label", action.id))
+                {
+                    gpu::native_text(
+                        frame,
+                        ui.painter(),
                         &NativeUiTextSpec {
                             scale: label.scale,
                             tint: label.tint,
-                            ..NativeUiTextSpec::new(
-                                label.font,
-                                &label.text,
-                                label.x - action.bounds.x,
-                                label.y - action.bounds.y,
-                            )
+                            ..NativeUiTextSpec::new(label.font, &label.text, label.x, label.y)
                         },
-                        "",
-                    )?,
-                )?;
-                append(&visibility, &button)?;
-                continue;
-            }
-            let producer = match action.id.as_str() {
-                "copy" => "party-copy",
-                "generate" => "party-generate",
-                id => id,
+                        origin,
+                        scale,
+                    );
+                }
+                frame.record(&format!("social/{}", action.id), &action.label, "radio", &response);
+                if response.has_focus() {
+                    let direction = ui.input_mut(|input| {
+                        if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft)
+                            || input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)
+                        {
+                            -1
+                        } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight)
+                            || input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)
+                        {
+                            1
+                        } else {
+                            0
+                        }
+                    });
+                    if direction != 0 {
+                        let index = NATIVE_PARTY_VISIBILITIES
+                            .iter()
+                            .position(|value| *value == visibility)
+                            .unwrap_or(0);
+                        let next = NATIVE_PARTY_VISIBILITIES
+                            [(index as i32 + direction).rem_euclid(3) as usize];
+                        activated = Some(format!("visibility:{}", visibility_id(next)));
+                    }
+                }
+                response
+            } else {
+                gpu::stock_button(
+                    frame,
+                    ui,
+                    &self.ui,
+                    &action.id,
+                    &action.label,
+                    bounds,
+                    !action.disabled,
+                )?
             };
-            let scale = if matches!(action.id.as_str(), "copy" | "generate") { 0.55 } else { 1.0 };
-            let button = self.party_stock_action(&action.label, producer, action.bounds, scale)?;
-            attribute(&button, "data-native-ui-party-action", &action.id)?;
-            attribute(&button, "data-party-focus-key", &action.id)?;
-            if action.id == "close" {
-                attribute(&button, "data-social-focus", "true")?;
-                attribute(&button, "data-game-default-focus", "true")?;
-                attribute(&button, "data-game-back", "true")?;
+            if self.focus_modal && action.id == "close" {
+                response.request_focus();
+                self.focus_modal = false;
             }
-            if action.id == "copy" {
-                attribute(
-                    &button,
-                    "aria-label",
-                    if self.party_ui.borrow().copied { "Party ID copied" } else { "Copy party ID" },
-                )?;
-                if let Some(code) = &state.party.join_code {
-                    attribute(&button, "data-party-code", code)?;
+            if response.gained_focus() && clipped {
+                if bounds.top() < viewport.top() {
+                    self.party_ui.scroll_y -= f64::from((viewport.top() - bounds.top()) / scale);
+                } else if bounds.bottom() > viewport.bottom() {
+                    self.party_ui.scroll_y +=
+                        f64::from((bounds.bottom() - viewport.bottom()) / scale);
                 }
-            } else if action.id == "generate" {
-                attribute(&button, "aria-label", "Generate a new party ID")?;
+                self.party_ui.scroll_y =
+                    clamp_native_party_menu_scroll(self.party_ui.scroll_y, plan.content_height);
             }
-            append(&stage, &button)?;
+            if response.clicked() && !action.disabled {
+                activated = Some(action.id.clone());
+            }
+            ui.set_clip_rect(old_clip);
         }
-        if tab == PartyTab::Settings {
-            append(&stage, &visibility)?;
-        }
-        append(&self.modal, &stage)?;
-        let focus =
-            self.party_ui.borrow_mut().focus_action.take().or_else(|| focused.map(str::to_owned));
-        if let Some(focus) = focus {
-            let nodes = stage
-                .query_selector_all("[data-party-focus-key]")
-                .map_err(|_| "party retained focus")?;
-            for index in 0..nodes.length() {
-                let Some(node) =
-                    nodes.item(index).and_then(|node| node.dyn_into::<HtmlElement>().ok())
-                else {
-                    continue;
-                };
-                if node.get_attribute("data-party-focus-key").as_deref() == Some(&focus) {
-                    let options = web_sys::FocusOptions::new();
-                    options.set_prevent_scroll(true);
-                    node.focus_with_options(&options).map_err(|_| "restore party focus")?;
-                    break;
+        if let Some(action) = activated {
+            if action == "copy" {
+                if let Some(code) = code {
+                    self.copy_party_code(code);
                 }
+            } else {
+                self.activate(match action.as_str() {
+                    "generate" => "party-generate",
+                    _ => &action,
+                })?;
             }
         }
         Ok(())
     }
 
-    fn party_row_frame(&self, parent: &HtmlElement, bounds: HudRect) -> Result<(), String> {
-        let row = element(&self.document, "div", "")?;
-        place(&row, bounds)?;
-        append(&row, &brackets(&self.document, &self.ui, bounds.width, bounds.height)?)?;
-        append(parent, &row)
+    fn copy_party_code(&mut self, code: String) {
+        let promise = (|| {
+            let navigator = web_sys::window()?.navigator();
+            let clipboard = js_sys::Reflect::get(&navigator, &"clipboard".into()).ok()?;
+            let write: js_sys::Function =
+                js_sys::Reflect::get(&clipboard, &"writeText".into()).ok()?.dyn_into().ok()?;
+            write.call1(&clipboard, &code.clone().into()).ok()?.dyn_into::<js_sys::Promise>().ok()
+        })();
+        let Some(promise) = promise else {
+            self.party_status = Some("Could not copy the party ID.".into());
+            return;
+        };
+        let pending = self.intents.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let copied = wasm_bindgen_futures::JsFuture::from(promise).await.is_ok();
+            pending.borrow_mut().push(Intent::PartyCopied { code, copied });
+        });
     }
-
-    pub(in crate::social) fn party_stock_action(
-        &self,
-        label: &str,
-        action: &str,
-        bounds: HudRect,
-        scale: f64,
-    ) -> Result<HtmlElement, String> {
-        let button = stock_button(&self.document, label, action)?;
-        button.set_class_name("native-button party-native-button native-ui-party-menu-action");
-        attribute(&button, "data-native-ui-party-action", action)?;
-        attribute(&button, "data-party-focus-key", action)?;
-        style(
-            &button,
-            &format!(
-                "position:absolute;left:{}px;top:{}px;width:{}px;height:{}px;transform:scale({scale});transform-origin:top left",
-                bounds.x,
-                bounds.y,
-                bounds.width / scale,
-                bounds.height / scale
-            ),
-        )?;
-        Ok(button)
-    }
-}
-
-fn offset(bounds: HudRect, origin: HudRect) -> HudRect {
-    HudRect::new(bounds.x - origin.x, bounds.y - origin.y, bounds.width, bounds.height)
-}
-
-fn place(node: &HtmlElement, bounds: HudRect) -> Result<(), String> {
-    style(
-        node,
-        &format!(
-            "position:absolute;left:{}px;top:{}px;width:{}px;height:{}px",
-            bounds.x, bounds.y, bounds.width, bounds.height
-        ),
-    )
 }

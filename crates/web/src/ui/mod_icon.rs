@@ -1,17 +1,14 @@
-//! A custom Pixi-style trimmed frame, borrowing the session's verified image.
-//! Source `renderer/mod-presentation-assets.ts` uses this registration for icons.
+//! GPU custom Pixi-style trimmed icons from `renderer/mod-presentation-assets.ts`.
+//! The session owns verified image URLs, dimensions and authored tint layers.
 
-use solomon_sim::Vec2;
+use egui::{Color32, Painter, Pos2, Rect, pos2, vec2};
 use solomon_sim::economy::HubInventoryItem;
 use solomon_sim::modding::assets::ModSpriteFrame;
 use solomon_sim::modding::inventory::ModWearableSlot;
-use web_sys::{Document, HtmlElement};
 
-use super::{append, element, style, tint};
+use crate::gpu_ui::UiFrame;
 use crate::mod_presentation_assets::ModPresentationAssets;
 
-/// Resolved presentation only. Keeping the verified URL in the equality key
-/// invalidates old belt art when the session revokes/replaces its asset owner.
 #[derive(Clone, PartialEq)]
 pub(crate) struct ModIconLayer {
     image_url: String,
@@ -21,17 +18,20 @@ pub(crate) struct ModIconLayer {
 }
 
 pub fn mod_icon(
-    document: &Document,
+    gpu: &UiFrame<'_>,
+    painter: &Painter,
     images: &ModPresentationAssets,
     mod_id: &str,
     path: &str,
     frame: ModSpriteFrame,
-    center: Vec2,
+    center: Pos2,
+    scale: f32,
     mirrored: bool,
-) -> Result<HtmlElement, String> {
+) -> Result<(), String> {
     let image = images.image(mod_id, path)?;
     frame_icon(
-        document,
+        gpu,
+        painter,
         &ModIconLayer {
             image_url: image.url().to_owned(),
             dimensions: image.dimensions(),
@@ -39,55 +39,60 @@ pub fn mod_icon(
             tint: 0xffffff,
         },
         center,
+        scale,
         mirrored,
-    )
+    );
+    Ok(())
 }
 
 fn frame_icon(
-    document: &Document,
+    gpu: &UiFrame<'_>,
+    painter: &Painter,
     layer: &ModIconLayer,
-    center: Vec2,
+    center: Pos2,
+    scale: f32,
     mirrored: bool,
-) -> Result<HtmlElement, String> {
-    let [width, height] = layer.dimensions;
+) {
     let frame = layer.frame;
-    let root = element(document, "span", "mod-frame-icon")?;
-    style(
-        &root,
-        &format!(
-            "position:absolute;display:block;left:{}px;top:{}px;width:{}px;height:{}px;transform:scaleX({});pointer-events:none",
-            center.x - frame.logical_width / 2.0,
-            center.y - frame.logical_height / 2.0,
-            frame.logical_width,
-            frame.logical_height,
-            if mirrored { -1 } else { 1 },
+    let left = (-frame.width / 2.0 + frame.center_offset_x) as f32 * scale;
+    let top = (-frame.height / 2.0 + frame.center_offset_y) as f32 * scale;
+    let width = frame.width as f32 * scale;
+    let height = frame.height as f32 * scale;
+    let target = Rect::from_min_size(
+        center + vec2(if mirrored { -left - width } else { left }, top),
+        vec2(width, height),
+    );
+    let [image_width, image_height] = layer.dimensions.map(|v| v as f32);
+    let mut uv = Rect::from_min_max(
+        pos2(frame.x as f32 / image_width, frame.y as f32 / image_height),
+        pos2(
+            (frame.x + frame.width) as f32 / image_width,
+            (frame.y + frame.height) as f32 / image_height,
         ),
-    )?;
-    let crop = element(document, "span", "mod-frame-crop")?;
-    let left = (frame.logical_width - frame.width) / 2.0 + frame.center_offset_x;
-    let top = (frame.logical_height - frame.height) / 2.0 + frame.center_offset_y;
-    style(
-        &crop,
-        &format!(
-            "position:absolute;display:block;left:{left}px;top:{top}px;width:{}px;height:{}px;background-image:url('{}');background-size:{width}px {height}px;background-position:{}px {}px;background-repeat:no-repeat;pointer-events:none",
-            frame.width, frame.height, layer.image_url, -frame.x, -frame.y,
-        ),
-    )?;
-    append(&root, &crop)?;
-    tint(document, &root, layer.tint)?;
-    Ok(root)
+    );
+    if mirrored {
+        std::mem::swap(&mut uv.min.x, &mut uv.max.x);
+    }
+    gpu.image(
+        painter,
+        &layer.image_url,
+        target,
+        Some(uv),
+        Color32::from_rgb((layer.tint >> 16) as u8, (layer.tint >> 8) as u8, layer.tint as u8),
+    );
 }
 
-/// Source `hub-inventory/items.ts:addModItemIcon`: custom icons use no stock
-/// equipment rotation/offset. Only authored Hat/Robe layers receive clothing tints.
 pub fn mod_item_icon(
-    document: &Document,
+    gpu: &UiFrame<'_>,
+    painter: &Painter,
     images: Option<&ModPresentationAssets>,
     item: &HubInventoryItem,
-    center: Vec2,
-) -> Result<Option<HtmlElement>, String> {
-    let Some(layers) = mod_item_icon_layers(images, item)? else { return Ok(None) };
-    Ok(Some(paint_mod_item_icon_layers(document, &layers, center)?))
+    center: Pos2,
+    scale: f32,
+) -> Result<bool, String> {
+    let Some(layers) = mod_item_icon_layers(images, item)? else { return Ok(false) };
+    paint_mod_item_icon_layers(gpu, painter, &layers, center, scale);
+    Ok(true)
 }
 
 pub(crate) fn mod_item_icon_layers(
@@ -132,14 +137,13 @@ pub(crate) fn mod_item_icon_layers(
 }
 
 pub(crate) fn paint_mod_item_icon_layers(
-    document: &Document,
+    gpu: &UiFrame<'_>,
+    painter: &Painter,
     layers: &[ModIconLayer],
-    center: Vec2,
-) -> Result<HtmlElement, String> {
-    let root = element(document, "span", "mod-item-icon")?;
-    style(&root, "position:absolute;left:0;top:0;width:0;height:0;pointer-events:none")?;
+    center: Pos2,
+    scale: f32,
+) {
     for layer in layers {
-        append(&root, &frame_icon(document, layer, center, false)?)?;
+        frame_icon(gpu, painter, layer, center, scale, false);
     }
-    Ok(root)
 }

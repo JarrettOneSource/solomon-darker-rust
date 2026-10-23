@@ -1,21 +1,16 @@
-//! Browser-owned fullscreen control from Website GameFullscreenButton/game-fullscreen.
-//! Requests run in the original trusted click; only promise completion is asynchronous.
+//! GPU fullscreen control and essential browser fullscreen/installation bridge.
+//! Platform requests run inside the original trusted canvas click.
 
+use crate::gpu_ui::UiFrame;
+use egui::{Color32, Id, Order, Rect, Stroke, pos2, vec2};
+use js_sys::{Function, Object, Promise, Reflect};
 use std::cell::RefCell;
 use std::rc::Rc;
-
-use js_sys::{Function, Object, Promise, Reflect};
-use wasm_bindgen::JsCast;
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::{JsCast, prelude::*};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Document, Element, Event, HtmlElement, Window};
-
-use crate::ui::{append, element, style};
+use web_sys::{Document, Element, Event, MouseEvent, Window};
 
 const CHANGE_EVENTS: [&str; 2] = ["fullscreenchange", "webkitfullscreenchange"];
-const ENTER_PATH: &str = "M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6";
-const EXIT_PATH: &str = "M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6";
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FullscreenPlacement {
     Hidden,
@@ -24,210 +19,205 @@ pub enum FullscreenPlacement {
     DarkCloud,
     Create { frame_scale: f64 },
 }
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ControlMode {
     Fullscreen,
     Install,
     Hidden,
 }
-
 struct FullscreenState {
     mode: ControlMode,
     active: bool,
     show_help: bool,
     error: Option<String>,
-    button: HtmlElement,
-    path: Element,
-    help: HtmlElement,
-    alert: HtmlElement,
+    bounds: Option<Rect>,
+    gesture_handled: bool,
 }
-
-impl FullscreenState {
-    fn paint(&self) -> Result<(), String> {
-        let label = match self.mode {
-            ControlMode::Install => "Fullscreen options",
-            _ if self.active => "Exit fullscreen",
-            _ => "Enter fullscreen",
-        };
-        self.button.set_attribute("aria-label", label).map_err(|_| "fullscreen label")?;
-        self.button.set_attribute("title", label).map_err(|_| "fullscreen title")?;
-        self.path
-            .set_attribute("d", if self.active { EXIT_PATH } else { ENTER_PATH })
-            .map_err(|_| "fullscreen icon")?;
-        if self.mode == ControlMode::Install {
-            self.button
-                .set_attribute("aria-controls", "game-fullscreen-help")
-                .map_err(|_| "fullscreen help link")?;
-            self.button
-                .set_attribute("aria-expanded", if self.show_help { "true" } else { "false" })
-                .map_err(|_| "fullscreen help state")?;
-        } else {
-            self.button
-                .set_attribute("aria-pressed", if self.active { "true" } else { "false" })
-                .map_err(|_| "fullscreen state")?;
-        }
-        self.help.set_hidden(!self.show_help);
-        self.alert.set_hidden(self.error.is_none());
-        self.alert.set_text_content(self.error.as_deref());
-        Ok(())
-    }
-}
-
 pub struct FullscreenControl {
     document: Document,
-    root: HtmlElement,
     state: Rc<RefCell<FullscreenState>>,
     click: Closure<dyn FnMut(Event)>,
     change: Closure<dyn FnMut(Event)>,
     placement: FullscreenPlacement,
 }
-
 impl FullscreenControl {
     pub fn attach(document: &Document) -> Result<Self, String> {
-        let mode = game_fullscreen_control_mode(document)?;
-        let root = element(document, "div", "game-fullscreen-control")?;
-        let button = element(document, "button", "game-fullscreen-button")?;
-        button.set_attribute("type", "button").map_err(|_| "fullscreen button type")?;
-        button.set_attribute("data-game-fullscreen", "").map_err(|_| "fullscreen hook")?;
-        button
-            .set_attribute(
-                "data-game-fullscreen-mode",
-                if mode == ControlMode::Fullscreen { "fullscreen" } else { "install" },
-            )
-            .map_err(|_| "fullscreen mode")?;
-        let svg = document
-            .create_element_ns(Some("http://www.w3.org/2000/svg"), "svg")
-            .map_err(|_| "fullscreen SVG")?;
-        svg.set_attribute("viewBox", "0 0 24 24").map_err(|_| "fullscreen SVG viewport")?;
-        svg.set_attribute("aria-hidden", "true").map_err(|_| "fullscreen SVG semantics")?;
-        let path = document
-            .create_element_ns(Some("http://www.w3.org/2000/svg"), "path")
-            .map_err(|_| "fullscreen SVG path")?;
-        svg.append_child(&path).map_err(|_| "fullscreen path parent")?;
-        button.append_child(&svg).map_err(|_| "fullscreen SVG parent")?;
-        let help = element(document, "div", "game-fullscreen-message")?;
-        help.set_id("game-fullscreen-help");
-        help.set_attribute("role", "status").map_err(|_| "fullscreen help role")?;
-        for (tag, text) in [
-            ("strong", "Fullscreen on iPhone or iPad"),
-            (
-                "span",
-                "Tap Share, Add to Home Screen, keep Open as Web App enabled if shown, then launch Solomon Darker from its icon.",
-            ),
-            ("span", "Otherwise, open the game in a browser that supports fullscreen."),
-        ] {
-            let node = element(document, tag, "")?;
-            node.set_text_content(Some(text));
-            append(&help, &node)?;
-        }
-        let alert = element(document, "div", "game-fullscreen-message")?;
-        alert.set_attribute("role", "alert").map_err(|_| "fullscreen error role")?;
-        for node in [&button, &help, &alert] {
-            append(&root, node)?;
-        }
         let state = Rc::new(RefCell::new(FullscreenState {
-            mode,
+            mode: game_fullscreen_control_mode(document)?,
             active: fullscreen_active(document),
             show_help: false,
             error: None,
-            button,
-            path,
-            help,
-            alert,
+            bounds: None,
+            gesture_handled: false,
         }));
-        state.borrow().paint()?;
-        let clicked_state = state.clone();
+        let clicked = state.clone();
         let clicked_document = document.clone();
         let click = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            event.prevent_default();
-            let mut state = clicked_state.borrow_mut();
-            state.error = None;
-            if state.mode == ControlMode::Install {
-                state.show_help = !state.show_help;
-                report(state.paint());
+            let Some(mouse) = event.dyn_ref::<MouseEvent>() else { return };
+            let point = pos2(mouse.client_x() as f32, mouse.client_y() as f32);
+            if !clicked.borrow().bounds.is_some_and(|bounds| bounds.contains(point)) {
                 return;
             }
-            report(state.paint());
-            drop(state);
-            // Invoke requestFullscreen synchronously, before yielding the click's user activation.
-            let request = toggle_fullscreen(&clicked_document);
-            let completed = clicked_state.clone();
-            wasm_bindgen_futures::spawn_local(async move {
-                let result = match request {
-                    Ok(value) => JsFuture::from(Promise::resolve(&value)).await,
-                    Err(error) => Err(error),
-                };
-                if let Err(error) = result {
-                    let mut state = completed.borrow_mut();
-                    state.error = Some(error_message(error));
-                    report(state.paint());
-                }
-            });
+            event.prevent_default();
+            event.stop_propagation();
+            clicked.borrow_mut().gesture_handled = true;
+            activate(&clicked_document, &clicked);
         });
-        state
-            .borrow()
-            .button
-            .add_event_listener_with_callback("click", click.as_ref().unchecked_ref())
-            .map_err(|_| "fullscreen click listener")?;
-        let changed_state = state.clone();
+        document
+            .add_event_listener_with_callback_and_bool(
+                "click",
+                click.as_ref().unchecked_ref(),
+                true,
+            )
+            .map_err(|_| "fullscreen trusted click")?;
+        let changed = state.clone();
         let changed_document = document.clone();
         let change = Closure::<dyn FnMut(Event)>::new(move |_| {
-            let mut state = changed_state.borrow_mut();
+            let mut state = changed.borrow_mut();
             state.active = fullscreen_active(&changed_document);
             state.error = None;
             state.show_help = false;
-            report(state.paint());
         });
-        for event in CHANGE_EVENTS {
+        for name in CHANGE_EVENTS {
             document
-                .add_event_listener_with_callback(event, change.as_ref().unchecked_ref())
+                .add_event_listener_with_callback(name, change.as_ref().unchecked_ref())
                 .map_err(|_| "fullscreen change listener")?;
         }
-        append(&document.body().ok_or("fullscreen body")?, &root)?;
-        root.set_hidden(true);
         Ok(Self {
             document: document.clone(),
-            root,
             state,
             click,
             change,
             placement: FullscreenPlacement::Hidden,
         })
     }
-
-    /// Root projects the source scene visibility; Skills, open Chat and pre-loadout
-    /// College admission use Hidden. Title includes the Play/Hall title routes.
     pub fn update(&mut self, placement: FullscreenPlacement) -> Result<(), String> {
-        if self.placement == placement {
+        self.placement = placement;
+        if placement == FullscreenPlacement::Hidden {
+            self.state.borrow_mut().bounds = None;
+        }
+        Ok(())
+    }
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        let (mode, active, show_help, error) = {
+            let state = self.state.borrow();
+            (state.mode, state.active, state.show_help, state.error.clone())
+        };
+        if self.placement == FullscreenPlacement::Hidden || mode == ControlMode::Hidden {
+            self.state.borrow_mut().bounds = None;
             return Ok(());
         }
-        self.placement = placement;
-        self.root.set_hidden(
-            placement == FullscreenPlacement::Hidden
-                || self.state.borrow().mode == ControlMode::Hidden,
-        );
-        let (id, css) = match placement {
-            FullscreenPlacement::Hidden => ("hidden", "".to_owned()),
-            FullscreenPlacement::Gameplay => {
-                ("gameplay", "top:8px;right:49px;bottom:auto".to_owned())
+        let ctx = frame.ctx.clone();
+        let screen = ctx.content_rect();
+        let size = vec2(33.0, 33.0);
+        let point = match self.placement {
+            FullscreenPlacement::Gameplay => pos2(screen.right() - 82.0, 8.0),
+            FullscreenPlacement::Title => pos2(screen.right() - 41.0, screen.bottom() - 41.0),
+            FullscreenPlacement::DarkCloud => pos2(screen.right() - 41.0, 8.0),
+            FullscreenPlacement::Create { frame_scale } => {
+                pos2(screen.right() - 41.0 - 80.0 * frame_scale as f32, 10.0 * frame_scale as f32)
             }
-            FullscreenPlacement::Title => ("title", "top:auto;right:8px;bottom:8px".to_owned()),
-            FullscreenPlacement::DarkCloud => {
-                ("dark-cloud", "top:8px;right:8px;bottom:auto".to_owned())
-            }
-            FullscreenPlacement::Create { frame_scale } => (
-                "create",
-                format!(
-                    "top:{}px;right:{}px;bottom:auto",
-                    10.0 * frame_scale,
-                    8.0 + 80.0 * frame_scale
-                ),
-            ),
+            FullscreenPlacement::Hidden => return Ok(()),
         };
-        self.root.set_attribute("data-placement", id).map_err(|_| "fullscreen placement")?;
-        style(&self.root, &css)
+        let label = if mode == ControlMode::Install {
+            "Fullscreen options"
+        } else if active {
+            "Exit fullscreen"
+        } else {
+            "Enter fullscreen"
+        };
+        let mut keyboard_activation = false;
+        egui::Area::new(Id::unique("fullscreen/control"))
+            .order(Order::Foreground)
+            .fixed_pos(point)
+            .show(&ctx, |ui| {
+                let (bounds, response) = ui.allocate_exact_size(size, egui::Sense::click());
+                self.state.borrow_mut().bounds = Some(bounds);
+                let painter = ui.painter();
+                painter.rect_filled(bounds, 3.0, Color32::from_black_alpha(178));
+                painter.rect_stroke(
+                    bounds,
+                    3.0,
+                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(215, 190, 133, 128)),
+                    egui::StrokeKind::Inside,
+                );
+                let origin = bounds.min + vec2(5.0, 5.0);
+                let color = Color32::from_rgb(224, 211, 171);
+                for (x, y, sx, sy) in [
+                    (3.0, 3.0, 1.0, 1.0),
+                    (21.0, 3.0, -1.0, 1.0),
+                    (3.0, 21.0, 1.0, -1.0),
+                    (21.0, 21.0, -1.0, -1.0),
+                ] {
+                    let corner = if active {
+                        origin + vec2(x + 6.0 * sx, y + 6.0 * sy)
+                    } else {
+                        origin + vec2(x, y)
+                    };
+                    let sign = if active { -1.0 } else { 1.0 };
+                    painter.line_segment(
+                        [corner, corner + vec2(6.0 * sx * sign, 0.0)],
+                        Stroke::new(1.7, color),
+                    );
+                    painter.line_segment(
+                        [corner, corner + vec2(0.0, 6.0 * sy * sign)],
+                        Stroke::new(1.7, color),
+                    );
+                }
+                frame.record("fullscreen/toggle", label, "button", &response);
+                keyboard_activation = response.clicked() && !self.state.borrow().gesture_handled;
+            });
+        if keyboard_activation {
+            activate(&self.document, &self.state);
+        }
+        self.state.borrow_mut().gesture_handled = false;
+        if show_help || error.is_some() {
+            let message=error.unwrap_or_else(||"Fullscreen on iPhone or iPad\nTap Share, Add to Home Screen, keep Open as Web App enabled if shown, then launch Solomon Darker from its icon.\nOtherwise, open the game in a browser that supports fullscreen.".into());
+            egui::Area::new(Id::unique("fullscreen/help"))
+                .order(Order::Tooltip)
+                .fixed_pos(pos2(
+                    (point.x - 290.0).max(8.0),
+                    (point.y + 40.0).min(screen.bottom() - 180.0).max(8.0),
+                ))
+                .show(&ctx, |ui| {
+                    egui::Frame::new()
+                        .fill(Color32::from_rgb(10, 12, 17))
+                        .stroke(Stroke::new(1.0, Color32::from_rgb(216, 188, 114)))
+                        .inner_margin(12.0)
+                        .show(ui, |ui| {
+                            ui.set_max_width(320.0);
+                            let response = ui.label(
+                                egui::RichText::new(&message)
+                                    .color(Color32::from_rgb(238, 227, 196))
+                                    .size(14.0),
+                            );
+                            frame.record("fullscreen/message", &message, "status", &response);
+                        });
+                });
+        }
+        Ok(())
     }
+}
+fn activate(document: &Document, state: &Rc<RefCell<FullscreenState>>) {
+    {
+        let mut state = state.borrow_mut();
+        state.error = None;
+        if state.mode == ControlMode::Install {
+            state.show_help = !state.show_help;
+            return;
+        }
+    }
+    let request = toggle_fullscreen(document);
+    let completed = state.clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        let result = match request {
+            Ok(value) => JsFuture::from(Promise::resolve(&value)).await,
+            Err(error) => Err(error),
+        };
+        if let Err(error) = result {
+            completed.borrow_mut().error = Some(error_message(error));
+        }
+    });
 }
 
 fn property(target: &JsValue, name: &str) -> JsValue {
@@ -329,24 +319,22 @@ pub(crate) fn error_message(error: JsValue) -> String {
         .unwrap_or_else(|| "Fullscreen could not be changed.".to_owned())
 }
 
-fn report(result: Result<(), String>) {
-    if let Err(error) = result {
-        web_sys::console::error_1(&JsValue::from_str(&error));
-    }
-}
-
 impl Drop for FullscreenControl {
     fn drop(&mut self) {
-        let _ = self
-            .state
-            .borrow()
-            .button
-            .remove_event_listener_with_callback("click", self.click.as_ref().unchecked_ref());
-        for event in CHANGE_EVENTS {
-            let _ = self
-                .document
-                .remove_event_listener_with_callback(event, self.change.as_ref().unchecked_ref());
+        if let Err(error) = self.document.remove_event_listener_with_callback_and_bool(
+            "click",
+            self.click.as_ref().unchecked_ref(),
+            true,
+        ) {
+            web_sys::console::error_1(&error);
         }
-        self.root.remove();
+        for name in CHANGE_EVENTS {
+            if let Err(error) = self
+                .document
+                .remove_event_listener_with_callback(name, self.change.as_ref().unchecked_ref())
+            {
+                web_sys::console::error_1(&error);
+            }
+        }
     }
 }
