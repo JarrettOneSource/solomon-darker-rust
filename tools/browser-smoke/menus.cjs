@@ -49,7 +49,8 @@ async function ticks(page,count) {
     await ui.fill(page,'create-name','Solon-Solus');
     await ui.value(page,'create-name','AAAAAAAAAAA');
     await ui.fill(page,'create-name','');
-    await ui.value(page,'create-validation','');
+    await ui.value(page,'create-name','');
+    await ui.noWidget(page,'create-validation');
     await ui.waitForUi(page,snapshot=>ui.findWidget(snapshot,'randomize-loadout')?.enabled,
       'completed native Create entry');
     await ui.fill(page,'create-name','Felix');
