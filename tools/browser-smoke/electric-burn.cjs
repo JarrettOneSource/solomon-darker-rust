@@ -163,6 +163,7 @@ async function setEnhancedEffects(page, enabled) {
     {key:mount?`sdr.token:${mount}`:'sdr.token',token:account.token});
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
+  ui.watchRequestFailures(page,{errors});
   await ui.observeGpu(page);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', entry => {
@@ -183,10 +184,6 @@ async function setEnhancedEffects(page, enabled) {
     if (response.status() === 404 && /\/api\/game\/(saves\/0|rejoin)$/.test(pathname)) expectedNotFound.push({type:'response',url:response.url(),status:404,
       ownership:'A fresh configured account has no checkpoint or rejoin ticket; only these exact discovery404s are expected.'});
     else if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
-  });
-  page.on('requestfailed', request => {
-    const row = {path: new URL(request.url()).pathname, error: request.failure()?.errorText};
-    errors.push(`${row.error} ${row.path}`);
   });
   page.on('websocket', socket => {
     const read = createNativeMessageReader();
@@ -350,6 +347,7 @@ return true`);
     assert.ok(state.leaveReceipts > 0);
     await ui.assertGpuOnly(page);
     await page.screenshot({path:path.join(output,'electric-final-title.png')});
+    await ui.settleErrors(page);
     assert.deepEqual(errors, []);
     checks.push('ordinary saved Leave returns to Title');
     fs.writeFileSync(path.join(output, qualityOnly ? 'storm-quality.json' : 'electric-burn.json'), JSON.stringify({passed: true,

@@ -159,6 +159,7 @@ async function ticks(page,count) {
       'Continue returns to the same local world');
     const gpu=await ui.assertGpuOnly(page);
     await shot(page,'menu-continued.png');
+    await ui.settleErrors(page);
     assert.deepEqual(observed.errors,[]);
     console.log(JSON.stringify({checks:['title clock','College admission before the sole loadout',
       'accepted/rejected stock Create names','stock Create effects','new-game HUD',

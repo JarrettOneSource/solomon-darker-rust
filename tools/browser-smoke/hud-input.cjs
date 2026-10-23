@@ -94,6 +94,7 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
     await focusTarget.close();
     await screenshot(desktop,'hud-input-desktop-final.png');
     const desktopSubmissions=await ui.gpuDraws(desktop);
+    await ui.settleErrors(desktop);
     await desktopContext.close();
 
     const touch=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
@@ -136,6 +137,7 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
       assert.deepEqual(movement,[0,0],'cancel clears the accepted movement input');
       await ui.assertGpuOnly(touch);
       await screenshot(touch,'hud-input-touch-final.png');
+      await ui.settleErrors(touch);
       assert.deepEqual(errors,[]);
       console.log(JSON.stringify({checks:['native GPU HUD bounds','wide layout','gamepad stick',
         'd-pad priority','stick drift','actual tab blur release','source portrait guidance','landscape touch movement',

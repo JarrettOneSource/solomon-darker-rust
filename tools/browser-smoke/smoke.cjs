@@ -111,6 +111,7 @@ async function clickThenEscape(page,id) {
     const gameplayGpu = await ui.assertGpuOnly(page);
     const submissions = await ui.gpuDraws(page);
     await page.screenshot({path:screenshot});
+    await ui.settleErrors(page);
     const checks = {
       settledFromOffice: spawned[0]===officeArrival.scriptedTarget[0]
         &&spawned[1]===officeArrival.scriptedTarget[1]&&spawned[6]===0&&spawned[7]===-1,

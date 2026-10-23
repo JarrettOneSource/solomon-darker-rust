@@ -146,6 +146,7 @@ async function collect(page, name, navigate) {
       const handoff=await finishedLoader(page);
       await ui.assertGpuOnly(page);
       await page.screenshot({path:path.join(output,`${name}-title.png`)});
+      await ui.settleErrors(page);
       assert.deepEqual(observed.errors,[],'ordinary startup has no runtime or required asset errors');
       return {samples,lastLoading,ready:snapshot,handoff,errors:observed.errors,warnings:observed.warnings,
         submissions:await ui.gpuDraws(page)};
@@ -264,6 +265,7 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
     }
     await ui.assertGpuOnly(page);
     await page.screenshot({path:path.join(output,`${name}-title.png`)});
+    await ui.settleErrors(page);
     assert.deepEqual(observed.errors,[],'delayed successful work has no runtime/asset errors');
     return {requestUrl,expectedCompleted,before,waiting,still,first,second,resizes,handoff,heldAnnouncements,announcementHandoff,
       ready:await ui.readUi(page),...observed};
@@ -304,6 +306,7 @@ async function failedAsset(browser) {
     assert.ok(display&&display.label.includes('Title.png'),'the GPU paints the actionable failure');
     await ui.assertGpuOnly(page);
     await page.screenshot({path:path.join(output,'failed-required-title.png')});
+    await ui.settleErrors(page);
     const unexpected=observed.errors.filter(error=>{
       if(error.type==='response')return !(error.url===failedUrl&&error.status===503);
       if(error.type==='console')return !(error.location.url===failedUrl
