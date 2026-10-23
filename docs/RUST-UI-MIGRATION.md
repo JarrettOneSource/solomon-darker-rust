@@ -701,3 +701,17 @@ visual exposure beneath the match-loading layer. Pinned fa08 `MainMenuScene.tsx`
 The book driver must observe its actual imported selection, ready authority flags and
 released match-loading scope before sending the same immediate first KeyI. A timer,
 repeat key or pointer substitution would not validate that admission boundary.
+
+With that real admission boundary, hosted 24382f0 completes the Hub book journey:
+two accepted rank reads, OKAY/Escape, independent movement seal, actual native +1
+notifications, consumed-book persistence after normal reload and a genuine choice-book
+offer, all with errors[]. The complete two-world receipt remains failed because the
+Boneyard input restored `save-active-goldens.json`'s minimal Save Actor Arena. Its
+unshipped 5849488c… navigation identity is explicitly rejected by the native content
+loader. `skill-book-24382f0-admitted-verified/receipt.json` and screenshots preserve
+both boundaries. Keep that historical actor/kernel fixture unchanged. Generate the
+browser's Boneyard case through pinned Source `createGameSimulation`,
+`enterBoneyardWorld` and stock `NATIVE_GENERATED_BONEYARDS`, then the same public book
+insertion/read/create/restore APIs. The native import regression must also decode its
+actual shipped navigation; no test-only navigation or fabricated runtime messages are
+added to the product. This remains imported-inventory acceptance, not earned loot.
