@@ -569,3 +569,13 @@ right-edge origin is 376.923 and Fomentius' x1397 projects to x530.44. The test'
 projection using the same bounded viewport/camera contract, retain the real joystick
 route and single native touch, and record its actual dialogue result. This evidence
 establishes a driver projection error; it does not establish a game input defect.
+
+The Tutorial text-bounds helper currently has no executable caller, so its syntax check
+does not qualify Tutorial layout. Pinned fa08 `core-kernels/native-tutorial.ts`
+`nativeTutorialPresentation`/`nativeTutorialInstructionBaselines` owns the Movement
+lesson's two-line desktop/mobile headings and subheading after the actual intro; the
+first accepted requested movement acknowledges and hides that lesson. Exercise the
+ordinary Title YES admission in fresh contexts, preserve the actual intro/save/run,
+check the full painted glyph bounds at native and phone landscape sizes, then send real
+keyboard/joystick movement and require the lesson to disappear with accepted displacement.
+Later combat, Inventory/Skills and potion-stage callouts remain separate required gates.
