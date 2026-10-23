@@ -206,8 +206,8 @@ impl<'a> NativeTextEdit<'a> {
             let units = self.text.encode_utf16().count();
             state.model.select(TextSelection { anchor: 0, focus: units });
         }
-        if !has_focus {
-            state.model.end_group();
+        if !has_focus && state.model.end_group() {
+            state.transport = None;
         }
         let before = self.text.clone();
         let mut submitted = false;
