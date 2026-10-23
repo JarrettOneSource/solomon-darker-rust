@@ -64,6 +64,24 @@ fn focus_ring_modality_tracks_actual_pointer_and_keyboard_dispatches() {
     assert!(focus_modality(true, &[]));
 }
 
+#[test]
+fn native_color_filter_uses_css_luminance_and_preserves_outline_alpha() {
+    let ctx = Context::default();
+    frame(&ctx, Vec::new(), |frame| {
+        let source = Color32::from_rgba_unmultiplied(255, 0, 0, 128);
+        assert_eq!(frame.filtered_color(source), source);
+        let filtered = frame.with_saturation(0.0).filtered_color(source);
+        assert_eq!(filtered.a(), source.a());
+        for channel in &filtered.to_srgba_unmultiplied()[..3] {
+            assert!(channel.abs_diff(54) <= 1);
+        }
+    });
+    let disabled = ColorFilter { brightness: 0.62, saturation: 0.35 }.rgb([1.0, 0.0, 0.0]);
+    for (actual, expected) in disabled.into_iter().zip([0.302839, 0.085839, 0.085839]) {
+        assert!((actual - expected).abs() < 0.000001);
+    }
+}
+
 fn browser_key(code: &str, key: &str) -> BrowserKey {
     BrowserKey {
         code: code.to_owned(),

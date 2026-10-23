@@ -127,6 +127,18 @@ impl Default for ColorFilter {
     }
 }
 
+impl ColorFilter {
+    /// The same Source filter for solid/text colours that do not sample an image.
+    pub fn rgb(self, rgb: [f32; 3]) -> [f32; 3] {
+        let grey = rgb[0] * 0.213 + rgb[1] * 0.715 + rgb[2] * 0.072;
+        rgb.map(|channel| {
+            let saturated =
+                (grey * (1.0 - self.saturation) + channel * self.saturation).clamp(0.0, 1.0);
+            (saturated * self.brightness).clamp(0.0, 1.0)
+        })
+    }
+}
+
 /// Where a quad's texels come from and where they land.
 #[derive(Clone, Copy, Debug)]
 pub struct Quad {
