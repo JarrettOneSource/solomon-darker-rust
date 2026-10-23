@@ -26,7 +26,7 @@ const rows = snapshot => snapshot.widgets.filter(widget=>widget.id.startsWith('p
     page=await browser.newPage({viewport:{width:1600,height:900}});
     observed=ui.watchErrors(page);
     await page.goto(url);await ui.ready(page);
-    await startNewGame(page,{name:'Felix'});
+    await startNewGame(page,{name:process.env.GENERATED_NAME==='1'?null:'Felix'});
     await shortcut(page,'Fomentius');await ui.widget(page,'panel:service');await settle(page);
     await screenshot(page,'service-fomentius-rust.png');
     const healthOffer=(await ui.readUi(page)).widgets.find(widget=>widget.id.startsWith('panel:shop:')&&widget.label==='Buy Health Potion for 150 gold');
@@ -85,7 +85,7 @@ const rows = snapshot => snapshot.widgets.filter(widget=>widget.id.startsWith('p
     assert.equal((await ui.readUi(page)).surface,'hidden','closing the conversation returns directly to play');
     await ui.assertGpuOnly(page);assert.deepEqual(observed.errors,[]);
     checks.push('all5 native boasts preserve frame/text geometry and accepted dialogue lifecycle');
-    console.log(JSON.stringify({passed:true,checks,errors:observed.errors,screenshots:output}));
+    console.log(JSON.stringify({passed:true,generatedName:process.env.GENERATED_NAME==='1',checks,errors:observed.errors,screenshots:output}));
   }catch(error){
     if(page)await screenshot(page,'hub-services-failure.png');
     fs.writeFileSync(path.join(output,'hub-services-failure.json'),JSON.stringify({error:error.stack,checks,errors:observed?.errors,ui:page?await ui.readUi(page):null},null,2));

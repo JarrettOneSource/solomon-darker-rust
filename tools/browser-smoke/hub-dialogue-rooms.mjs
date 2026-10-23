@@ -14,7 +14,7 @@ const regions = await loadKernel('core-kernels/hub-regions.ts')
 const url = process.env.URL || 'http://127.0.0.1:4185/'
 const output = resolve(process.env.SHOTS || 'dialogue-room-smoke')
 mkdirSync(output, { recursive: true })
-const receipt = { url, journeys: [], errors: [] }
+const receipt = { url, generatedName:process.env.GENERATED_NAME==='1', journeys: [], errors: [] }
 const browser = await chromium.launch({
   headless: true,
   executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -167,7 +167,7 @@ async function scanRowsUntil(target,expected) {
 }
 try {
   await page.goto(url,{waitUntil:'load'});await ui.ready(page)
-  await startNewGame(page)
+  await startNewGame(page,{name:process.env.GENERATED_NAME==='1'?null:'Helvidius'})
   let [x,y]=await state()
   for(const point of courtyardPath({x,y},{x:620,y:745}))await walkTo(point)
   // The real pointer projects the native NPC point through the live camera.
