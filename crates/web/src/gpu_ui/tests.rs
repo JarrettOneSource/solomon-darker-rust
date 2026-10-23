@@ -14,7 +14,7 @@ fn frame_codes(
     codes: &[BrowserKey],
     paint: impl FnMut(&mut UiFrame<'_>),
 ) -> BTreeMap<String, WidgetGeometry> {
-    frame_native(ctx, events, codes, &[], paint)
+    frame_native(ctx, events, codes, &[], None, paint)
 }
 
 fn frame_native(
@@ -22,6 +22,7 @@ fn frame_native(
     events: Vec<egui::Event>,
     codes: &[BrowserKey],
     receipts: &[edit::model::Receipt],
+    click_count: Option<u32>,
     paint: impl FnMut(&mut UiFrame<'_>),
 ) -> BTreeMap<String, WidgetGeometry> {
     let images = painter::Images::default();
@@ -56,6 +57,7 @@ fn frame_native(
             editor_receipts: receipts,
             editors: &editors,
             editor_errors: &editor_errors,
+            native_click_count: click_count,
         })
     })
     .drop_without_applying_deltas();
@@ -133,6 +135,7 @@ fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_onc
                 editor_receipts: &[],
                 editors: &editors,
                 editor_errors: &editor_errors,
+                native_click_count: None,
             };
             let mut painter = ctx.layer_painter(egui::LayerId::new(
                 egui::Order::Middle,
@@ -273,9 +276,9 @@ fn a_clicked_binding_row_commits_before_the_following_escape_dispatch() {
         vec![browser_key("Escape", "Escape")],
         Vec::new(),
         vec![
-            batches::DispatchEnd { events: 2, codes: 0, edits: 0 },
-            batches::DispatchEnd { events: 4, codes: 0, edits: 0 },
-            batches::DispatchEnd { events: 5, codes: 1, edits: 0 },
+            batches::DispatchEnd { events: 2, codes: 0, edits: 0, click_count: None },
+            batches::DispatchEnd { events: 4, codes: 0, edits: 0, click_count: None },
+            batches::DispatchEnd { events: 5, codes: 1, edits: 0, click_count: None },
         ],
     );
     for pass in passes {
@@ -290,6 +293,7 @@ fn a_clicked_binding_row_commits_before_the_following_escape_dispatch() {
 fn a_distant_sort_click_does_not_turn_the_following_row_double_click_into_a_triple() {
     let ctx = Context::default();
     let mut row_counts = Vec::new();
+    let mut egui_counts = Vec::new();
     let mut paint = |frame: &mut UiFrame<'_>| {
         frame.ctx.root_ui(|ui| {
             let _ = ui.interact(
@@ -303,24 +307,38 @@ fn a_distant_sort_click_does_not_turn_the_following_row_double_click_into_a_trip
                 egui::Sense::click(),
             );
             if row.clicked() {
-                row_counts.push(if row.triple_clicked() {
+                egui_counts.push(if row.triple_clicked() {
                     3
                 } else if row.double_clicked() {
                     2
                 } else {
                     1
                 });
+                row_counts.push(if frame.double_clicked(&row) { 2 } else { 1 });
             }
         });
     };
     frame(&ctx, Vec::new(), &mut paint);
-    for point in [pos2(50.0, 50.0), pos2(260.0, 150.0), pos2(260.0, 150.0)] {
+    for (point, count) in [
+        (pos2(50.0, 50.0), 1),
+        (pos2(260.0, 150.0), 1),
+        (pos2(260.0, 150.0), 2),
+        (pos2(260.0, 150.0), 3),
+    ] {
         for pressed in [true, false] {
-            frame(&ctx, pointer(pressed, point), &mut paint);
+            frame_native(
+                &ctx,
+                pointer(pressed, point),
+                &[],
+                &[],
+                (!pressed).then_some(count),
+                &mut paint,
+            );
             frame(&ctx, Vec::new(), &mut paint);
         }
     }
-    assert_eq!(row_counts, [1, 2], "the distant prior click is not part of the row's click series");
+    assert_eq!(egui_counts, [1, 3, 3], "installed egui retains the original negative control");
+    assert_eq!(row_counts, [1, 2, 1], "only the native double-click activates the row twice");
 }
 
 #[test]
@@ -365,15 +383,22 @@ fn a_new_field_has_committed_geometry_before_an_immediate_click_and_submit() {
         vec![browser_key("Enter", "Enter")],
         vec![receipt],
         vec![
-            batches::DispatchEnd { events: 2, codes: 0, edits: 0 },
-            batches::DispatchEnd { events: 4, codes: 0, edits: 0 },
-            batches::DispatchEnd { events: 6, codes: 0, edits: 0 },
-            batches::DispatchEnd { events: 7, codes: 1, edits: 1 },
+            batches::DispatchEnd { events: 2, codes: 0, edits: 0, click_count: None },
+            batches::DispatchEnd { events: 4, codes: 0, edits: 0, click_count: None },
+            batches::DispatchEnd { events: 6, codes: 0, edits: 0, click_count: None },
+            batches::DispatchEnd { events: 7, codes: 1, edits: 1, click_count: None },
         ],
     );
     for pass in passes {
         focus_pointer_text(&ctx, &widgets, &pass.raw.events);
-        widgets = frame_native(&ctx, pass.raw.events, &pass.codes, &pass.edits, &mut paint);
+        widgets = frame_native(
+            &ctx,
+            pass.raw.events,
+            &pass.codes,
+            &pass.edits,
+            pass.click_count,
+            &mut paint,
+        );
     }
     assert!(opened);
     assert_eq!(text, "");
@@ -411,13 +436,15 @@ fn native_editor_enter_is_per_dispatch_and_keeps_the_real_singleline_focus() {
     frame(&ctx, Vec::new(), &mut paint);
     let mut session = edit::session::Session::new(descriptor.borrow().clone().unwrap());
     let first = session.receipt(1, 1.0, edit::model::Intent::Submit, None, None);
-    let widgets = frame_native(&ctx, vec![enter_key(egui::Key::Enter)], &[], &[first], &mut paint);
+    let widgets =
+        frame_native(&ctx, vec![enter_key(egui::Key::Enter)], &[], &[first], None, &mut paint);
     assert!(submitted.get());
     assert!(widgets["native-form"].focused);
     frame(&ctx, Vec::new(), &mut paint);
     assert!(!submitted.get());
     let next = session.receipt(2, 1.0, edit::model::Intent::Submit, None, None);
-    let widgets = frame_native(&ctx, vec![enter_key(egui::Key::Enter)], &[], &[next], &mut paint);
+    let widgets =
+        frame_native(&ctx, vec![enter_key(egui::Key::Enter)], &[], &[next], None, &mut paint);
     assert!(submitted.get());
     assert!(widgets["native-form"].focused);
     assert_eq!(text, "");
@@ -441,7 +468,7 @@ fn a_remounted_field_does_not_accept_a_native_receipt_from_its_retired_instance(
     let old_input = old_session.receipt(1, 1.0, edit::model::Intent::Submit, None, None);
     frame(&ctx, Vec::new(), |_| {});
     let mut submitted = false;
-    frame_native(&ctx, Vec::new(), &[], &[old_input], |frame| {
+    frame_native(&ctx, Vec::new(), &[], &[old_input], None, |frame| {
         frame.ctx.root_ui(|ui| {
             submitted = NativeTextEdit::singleline(&mut text, "rename", "Name")
                 .native_name(Pos2::ZERO, 1.0)

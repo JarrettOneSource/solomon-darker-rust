@@ -480,6 +480,15 @@ with the naturally generated save is the regression witness; a compile alone is 
 
 ## Ordered UI dispatch
 
+The actual rapid Cloud Sort→row double-click journey exposed a separate installed
+egui0.37 count mismatch. Its click counter checks distance only to the latest click,
+then classifies a triple from two prior timestamps even when the first click was far
+away. The native Context regression confirms row counts1,3 instead of browser1,2.
+The browser already supplies the correct click series in the canvas `click.detail`
+event used by native editor selection. That receipt belongs to the preceding actual
+pointer-release dispatch; preserving it beside that dispatch lets row double activation
+retain the real Response hit/enabled result without accepting genuine triples as doubles.
+
 The actual Settings binding journey reproduced a binding click followed by Escape being
 interpreted in reverse order. The shared GPU batch previously handled every queued key before
 resolving pointer clicks, and `Game::frame` consumed typed HUD/panel actions before the GPU

@@ -200,9 +200,16 @@ pub struct UiFrame<'a> {
     editor_receipts: &'a [edit::model::Receipt],
     editors: &'a RefCell<Vec<edit::EditorDescriptor>>,
     editor_errors: &'a RefCell<Vec<String>>,
+    native_click_count: Option<u32>,
 }
 
 impl UiFrame<'_> {
+    /// Native browser double-click count, gated by this real widget's pointer response.
+    pub fn double_clicked(&self, response: &Response) -> bool {
+        response.enabled()
+            && response.clicked_by(egui::PointerButton::Primary)
+            && self.native_click_count == Some(2)
+    }
     pub(crate) fn fail(&self, error: String) {
         self.editor_errors.borrow_mut().push(error);
     }
@@ -323,6 +330,7 @@ impl UiFrame<'_> {
             editor_receipts: self.editor_receipts,
             editors: self.editors,
             editor_errors: self.editor_errors,
+            native_click_count: self.native_click_count,
         }
     }
     /// Sets the image RGB gain for this view; stock bitmap text inherits it.
@@ -933,7 +941,7 @@ impl GpuUi {
         let raw = run.layout_input.clone();
         self.paint_pass(
             run,
-            batches::InputPass { raw, codes: Vec::new(), edits: Vec::new() },
+            batches::InputPass { raw, codes: Vec::new(), edits: Vec::new(), click_count: None },
             &mut paint,
         )
     }
@@ -987,6 +995,7 @@ impl GpuUi {
                 editor_receipts: &pass.edits,
                 editors: &editors,
                 editor_errors: &editor_errors,
+                native_click_count: pass.click_count,
             });
         });
         run.textures.append(std::mem::take(&mut output.textures_delta));
