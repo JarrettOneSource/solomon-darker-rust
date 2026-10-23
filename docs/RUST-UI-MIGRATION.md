@@ -507,3 +507,12 @@ wheel admission, explicitly keep navigation above the body, and retain a drag's 
 owner through release/cancel outside its viewport. Preserve normal modal ownership.
 The original failing browser path remains the acceptance case; no second tap, wait or
 weaker equipment assertion substitutes for the first-tap transition.
+
+The same recovery identifies the toolbar's visual producer as unfinished: its GPU code
+uses default grey egui buttons. Established c14068b3 `ui.rs::native_button` instead uses
+the stock main-menu plate/hover/corner/rail images and native Menu bitmap labels;
+`web/player-panels.css:91–93` specifies solid #100d0a, 6px horizontal padding, 2px gaps,
+40px controls centered in the 48px bar and horizontal overflow scrolling. Reuse the
+existing Rust `menu::widgets::stock_button` to preserve that art, pressed/focus/disabled
+appearance and actual semantic egui interaction IDs. Keep the fixed bar's scroll/input
+owner separate from the scrolling body; no default-widget placeholder remains in it.
