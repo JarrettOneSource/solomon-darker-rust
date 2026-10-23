@@ -7,8 +7,8 @@ use std::rc::Rc;
 use egui::{ClippedPrimitive, Rect, TextureId, Vec2, vec2};
 use web_sys::{HtmlImageElement, WebGl2RenderingContext};
 
-use solomon_graphics::ColorFilter;
 use solomon_graphics::assets;
+use solomon_graphics::{AlphaShadow, ColorFilter};
 use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
 
 use super::material::{Material, Materials};
@@ -208,6 +208,7 @@ impl Images {
         blend: BlendMode,
         mask: bool,
         filter: ColorFilter,
+        shadow: Option<AlphaShadow>,
     ) -> Option<TextureId> {
         self.request(path);
         let mut cache = self.0.borrow_mut();
@@ -215,7 +216,10 @@ impl Images {
         if !matches!(entry.state, ImageState::Ready(_)) {
             return None;
         }
-        let material = Material::new(entry.id, blend, mask, filter);
+        let mut material = Material::new(entry.id, blend, mask, filter);
+        if let Some(shadow) = shadow {
+            material = material.with_shadow(shadow);
+        }
         Some(cache.materials.texture_id(material))
     }
 
@@ -349,7 +353,7 @@ impl GpuPainter {
                 if !mesh.is_valid() {
                     return Err("GPU UI produced an invalid mesh".to_owned());
                 }
-                let (texture, blend, mode, sampling, filter) = match mesh.texture_id {
+                let (texture, blend, mode, sampling, filter, shadow) = match mesh.texture_id {
                     TextureId::Managed(_) => (
                         self.textures
                             .get(&mesh.texture_id)
@@ -359,6 +363,7 @@ impl GpuPainter {
                         TextureColorMode::Texture,
                         None,
                         ColorFilter::default(),
+                        None,
                     ),
                     TextureId::User(id) => {
                         let (texture, owned, material) =
@@ -374,6 +379,7 @@ impl GpuPainter {
                             },
                             owned.then_some(mask),
                             material.filter(),
+                            material.shadow(),
                         )
                     }
                 };
@@ -414,10 +420,17 @@ impl GpuPainter {
                             mode,
                         );
                     };
-                    if filter == ColorFilter::default() {
-                        draw(renderer);
+                    let filtered = |renderer: &mut Renderer| {
+                        if filter == ColorFilter::default() {
+                            draw(renderer);
+                        } else {
+                            renderer.draw_color_filtered(filter, draw);
+                        }
+                    };
+                    if let Some(shadow) = shadow {
+                        renderer.draw_image_shadow(shadow, filtered);
                     } else {
-                        renderer.draw_color_filtered(filter, draw);
+                        filtered(renderer);
                     }
                 });
                 meshes += 1;

@@ -42,9 +42,39 @@ uniform float u_alpha_mask;
 uniform float u_white_alpha_filter;
 uniform float u_premultiply_rgb;
 uniform vec2 u_color_filter;
+uniform vec4 u_shadow_bounds;
+uniform vec4 u_shadow_color;
+uniform vec2 u_shadow_offset;
+uniform vec2 u_shadow_sigma;
 out vec4 o_color;
+vec4 cropped_texture(vec2 uv) {
+    if (any(lessThan(uv, u_shadow_bounds.xy)) || any(greaterThanEqual(uv, u_shadow_bounds.zw))) {
+        return vec4(0.0);
+    }
+    vec2 halfTexel = 0.5 / vec2(textureSize(u_texture, 0));
+    return textureLod(u_texture, clamp(uv, u_shadow_bounds.xy + halfTexel, u_shadow_bounds.zw - halfTexel), 0.0);
+}
+float shadow_alpha(vec2 uv) {
+    if (u_shadow_sigma.x == 0.0 || u_shadow_sigma.y == 0.0) {
+        return cropped_texture(uv).a;
+    }
+    // Normalized Gaussian sampled at one-third-sigma intervals, truncated at 3 sigma.
+    const float weights[10] = float[10](
+        0.1331759960, 0.1259790945, 0.1066390012, 0.0807753247, 0.0547502888,
+        0.0332077288, 0.0180234111, 0.0087534623, 0.0038042390, 0.0014794517);
+    vec2 stepSize = u_shadow_sigma / 3.0;
+    float alpha = 0.0;
+    for (int y = -9; y <= 9; ++y) {
+        for (int x = -9; x <= 9; ++x) {
+            alpha += cropped_texture(uv + vec2(float(x), float(y)) * stepSize).a
+                * weights[abs(x)] * weights[abs(y)];
+        }
+    }
+    return alpha;
+}
 void main() {
-    vec4 texel = texture(u_texture, v_uv);
+    bool shadow = u_shadow_sigma.x >= 0.0;
+    vec4 texel = shadow ? cropped_texture(v_uv) : texture(u_texture, v_uv);
     texel.rgb = mix(texel.rgb, vec3(1.0), u_alpha_mask);
     float alpha = texel.a * v_color.a;
     alpha = mix(alpha, alpha * alpha, u_white_alpha_filter);
@@ -57,7 +87,16 @@ void main() {
         colour = clamp(mix(vec3(grey), colour, u_color_filter.y), 0.0, 1.0);
         colour = clamp(colour * u_color_filter.x, 0.0, 1.0);
     }
-    o_color = vec4(colour * mix(1.0, alpha, u_premultiply_rgb), alpha);
+    if (shadow) {
+        float shadowAlpha = shadow_alpha(v_uv - u_shadow_offset) * u_shadow_color.a;
+        float composedAlpha = texel.a + shadowAlpha * (1.0 - texel.a);
+        vec3 composedRGB = colour * texel.a + u_shadow_color.rgb * shadowAlpha * (1.0 - texel.a);
+        vec3 straightRGB = composedAlpha > 0.0 ? composedRGB / composedAlpha : vec3(0.0);
+        alpha = composedAlpha * v_color.a;
+        o_color = vec4(straightRGB * mix(1.0, alpha, u_premultiply_rgb), alpha);
+    } else {
+        o_color = vec4(colour * mix(1.0, alpha, u_premultiply_rgb), alpha);
+    }
 }
 ";
 
@@ -139,6 +178,15 @@ impl ColorFilter {
     }
 }
 
+/// Crop-bounded SourceAlpha shadow. Coordinates are normalized source texture UVs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AlphaShadow {
+    pub bounds: [f32; 4],
+    pub offset: [f32; 2],
+    pub sigma: [f32; 2],
+    pub color: [f32; 4],
+}
+
 /// Where a quad's texels come from and where they land.
 #[derive(Clone, Copy, Debug)]
 pub struct Quad {
@@ -170,6 +218,11 @@ pub struct Renderer {
     u_premultiply_rgb: WebGlUniformLocation,
     u_color_filter: WebGlUniformLocation,
     color_filter: Option<ColorFilter>,
+    u_shadow_bounds: WebGlUniformLocation,
+    u_shadow_color: WebGlUniformLocation,
+    u_shadow_offset: WebGlUniformLocation,
+    u_shadow_sigma: WebGlUniformLocation,
+    shadow: Option<AlphaShadow>,
     texture_color_mode: TextureColorMode,
     forced_texture_color_mode: Option<TextureColorMode>,
     forced_opacity: Option<f32>,
@@ -243,6 +296,18 @@ impl Renderer {
         let u_color_filter = gl
             .get_uniform_location(&program, "u_color_filter")
             .ok_or("u_color_filter is missing")?;
+        let u_shadow_bounds = gl
+            .get_uniform_location(&program, "u_shadow_bounds")
+            .ok_or("u_shadow_bounds is missing")?;
+        let u_shadow_color = gl
+            .get_uniform_location(&program, "u_shadow_color")
+            .ok_or("u_shadow_color is missing")?;
+        let u_shadow_offset = gl
+            .get_uniform_location(&program, "u_shadow_offset")
+            .ok_or("u_shadow_offset is missing")?;
+        let u_shadow_sigma = gl
+            .get_uniform_location(&program, "u_shadow_sigma")
+            .ok_or("u_shadow_sigma is missing")?;
         gl.uniform1i(Some(&u_texture), 0);
         gl.uniform2f(Some(&u_pixel_center_offset), 0.0, 0.0);
         gl.uniform1f(Some(&u_saturation), 1.0);
@@ -250,6 +315,7 @@ impl Renderer {
         gl.uniform1f(Some(&u_white_alpha_filter), 0.0);
         gl.uniform1f(Some(&u_premultiply_rgb), 1.0);
         gl.uniform2f(Some(&u_color_filter), -1.0, 1.0);
+        gl.uniform2f(Some(&u_shadow_sigma), -1.0, -1.0);
         gl.active_texture(Gl::TEXTURE0);
         gl.enable(Gl::BLEND);
         let (source, destination, source_alpha, destination_alpha) = BlendMode::Normal.factors();
@@ -283,6 +349,11 @@ impl Renderer {
             u_premultiply_rgb,
             u_color_filter,
             color_filter: None,
+            u_shadow_bounds,
+            u_shadow_color,
+            u_shadow_offset,
+            u_shadow_sigma,
+            shadow: None,
             texture_color_mode: TextureColorMode::Texture,
             forced_texture_color_mode: None,
             forced_opacity: None,
@@ -535,6 +606,29 @@ impl Renderer {
                 filter.map_or([-1.0, 1.0], |filter| [filter.brightness, filter.saturation]);
             self.gl.uniform2f(Some(&self.u_color_filter), values[0], values[1]);
             self.color_filter = filter;
+        }
+    }
+
+    /// Combines the filtered source with its blurred alpha before group opacity.
+    pub fn draw_image_shadow(&mut self, shadow: AlphaShadow, draw: impl FnOnce(&mut Self)) {
+        let previous = self.shadow;
+        self.set_shadow(Some(shadow));
+        draw(self);
+        self.set_shadow(previous);
+    }
+
+    fn set_shadow(&mut self, shadow: Option<AlphaShadow>) {
+        if shadow != self.shadow {
+            self.flush();
+            if let Some(shadow) = shadow {
+                self.gl.uniform4fv_with_f32_array(Some(&self.u_shadow_bounds), &shadow.bounds);
+                self.gl.uniform4fv_with_f32_array(Some(&self.u_shadow_color), &shadow.color);
+                self.gl.uniform2fv_with_f32_array(Some(&self.u_shadow_offset), &shadow.offset);
+                self.gl.uniform2fv_with_f32_array(Some(&self.u_shadow_sigma), &shadow.sigma);
+            } else {
+                self.gl.uniform2f(Some(&self.u_shadow_sigma), -1.0, -1.0);
+            }
+            self.shadow = shadow;
         }
     }
 

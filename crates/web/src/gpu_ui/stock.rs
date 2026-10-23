@@ -85,6 +85,37 @@ impl StockAtlas {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn paint_shadowed(
+        &self,
+        frame: &UiFrame<'_>,
+        painter: &Painter,
+        index: usize,
+        origin: Pos2,
+        scale: f32,
+        shadow: super::ImageShadow,
+        tint: Color32,
+    ) -> Result<(), String> {
+        let record = self.record(index)?;
+        let [x, y] = record.registered_origin();
+        let destination = Rect::from_min_size(
+            origin + vec2(x, y) * scale,
+            vec2(record.width as f32, record.height as f32) * scale,
+        );
+        if frame.atlas_image_shadowed(
+            painter,
+            &self.path,
+            record_rect(record),
+            destination,
+            shadow,
+            tint,
+        ) {
+            Ok(())
+        } else {
+            Err(format!("{} is not ready", self.path))
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn paint_centered(
         &self,
         frame: &UiFrame<'_>,
