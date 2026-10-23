@@ -23,6 +23,7 @@ async function until(predicate, label) {
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
     for (const client of clients) {
+      if (client.errors.length) await ui.settleErrors(client.page);
       if (client.errors.length) throw new Error(`${client.label}: ${client.errors.join('; ')}`);
     }
     if (await predicate()) return;
@@ -105,6 +106,7 @@ async function open(account, label) {
     flame: {active: false, births: new Map(), frames: [], actors: []},
     checkpoints: 0, leaves: 0, wasm: new Set()};
   clients.push(client);
+  await ui.watchRequestFailures(page, {errors: client.errors}).ready;
   page.setDefaultTimeout(30000);
   page.setDefaultNavigationTimeout(30000);
   page.on('pageerror', error => client.errors.push(error.message));
@@ -112,10 +114,6 @@ async function open(account, label) {
     if (message.type() !== 'error') return;
     if (message.text().includes('404') && /\/api\/game\/(rejoin|saves\/0)$/.test(message.location().url)) return;
     client.errors.push(message.text());
-  });
-  page.on('requestfailed', item => {
-    const failure = `${new URL(item.url()).pathname}: ${item.failure()?.errorText}`;
-    client.errors.push(failure);
   });
   page.on('response', response => {
     const pathname = new URL(response.url()).pathname;
@@ -177,6 +175,7 @@ async function registerPeer(client, account) {
   const response = await catalog;
   assert.equal(response.status(), 200);
   await response.finished();
+  await ui.settleErrors(page);
   await ui.click(page,'cloud-sign-in');
   await page.waitForURL(current => current.pathname === '/game-stg/login');
   await page.getByRole('link', {name: 'Create an account', exact: true}).click();
@@ -605,6 +604,7 @@ async function close(client) {
     await until(() => !guest.frame.snapshot.boneyard
       && guest.frame.snapshot.run.phase === 'Hub', 'the surviving peer returns to College');
     checked('saved leader Leave resets spectator presentation and returns the peer to College');
+    for (const client of clients) await ui.settleErrors(client.page);
     assert.deepEqual(clients.flatMap(client => client.errors), []);
     if (build) {
       const wasm = Object.keys(build.files).find(file => /^solomon-web-.*\.wasm$/.test(file));
@@ -614,6 +614,7 @@ async function close(client) {
   } catch (error) {
     failure = {step, error: error.stack};
     for (const client of clients) {
+      await ui.settleErrors(client.page);
       await inputBoundary(client, 'failure').catch(() => {});
       await client.page.screenshot({path: path.join(output, `${client.label}-failure.png`)}).catch(() => {});
       failure[client.label] = await ui.readUi(client.page).catch(()=>'page closed');

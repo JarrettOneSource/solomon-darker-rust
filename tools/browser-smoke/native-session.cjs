@@ -67,6 +67,7 @@ async function stopHost() {
 
 function observe(page) {
   const state = {frame: null, id: null, token: null, status: null, social: null, messages: [], sent: [], commands: [], results: [], saves: 0};
+  state.failureObserverReady = ui.watchRequestFailures(page, {errors}).ready;
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
     if (message.type() !== 'error') return;
@@ -111,6 +112,8 @@ const playing = state => state.frame?.snapshot.boneyard && !state.frame.host.loa
   && !state.frame.host.resume_grace && !state.frame.host.pause;
 
 async function loaded(page, state) {
+  await state.failureObserverReady;
+  if (page.url() !== 'about:blank') await ui.settleErrors(page);
   state.status = null;
   await page.goto(`${origin}/?host=1`);
   await ui.ready(page,{timeout:120000});
@@ -129,7 +132,7 @@ async function continueGame(page) {
 async function gameplayInputReady(page) {
   // Socket delivery can precede the frame that removes the client's loading/grace hold.
   await page.bringToFront();
-  await ui.waitForUi(page,snapshot => snapshot.surface === 'hidden' && !snapshot.input_scope
+  await ui.waitForUi(page,snapshot => snapshot.surface === 'hidden' && !snapshot.inputScope
     && !snapshot.capture.text && ui.findWidget(snapshot,'hud:health')
     && !ui.findWidget(snapshot,'shared/pause') && !ui.findWidget(snapshot,'shared/resume'),
     'actual HUD and world input handoff');
@@ -386,6 +389,7 @@ async function approachSolomon(page, state) {
       await ui.waitForUi(first.page,snapshot => ui.findWidget(snapshot,'game-over:continue')?.label.includes('Continue'),
         'actual native Game Over input admission');
       await first.page.screenshot({path: path.join(output, 'native-game-over.png')});
+      for (const client of [first, second]) await ui.settleErrors(client.page);
       assert.deepEqual(errors, [], 'no errors before the intentional host shutdown');
       intentionalHostShutdown = true;
       await stopHost();
@@ -395,6 +399,7 @@ async function approachSolomon(page, state) {
       checks.push('Game Over reaches Continue readiness and leaves with its disconnected session');
     }
     assert.ok([...requests].some(url => url.endsWith('.wasm')));
+    for (const client of [first, second]) await ui.settleErrors(client.page);
     assert.deepEqual(errors, []);
     const commandEvidence = [first, second].map(client => ({commands: client.state.commands, results: client.state.results}));
     fs.writeFileSync(path.join(output, 'native-command-results.json'), JSON.stringify(commandEvidence, null, 2));
@@ -415,6 +420,7 @@ async function approachSolomon(page, state) {
     const state = {};
     for (const [name, client] of [['first', first], ['second', second]]) {
       if (!client) continue;
+      await ui.settleErrors(client.page);
       state[name] = {id: client.state.id, tick: client.state.frame?.snapshot.ticks, host: client.state.frame?.host,
         commands: client.state.commands, results: client.state.results,
         inputAcknowledgements: client.state.frame?.input_acknowledgements, recentSent: client.state.sent.slice(-12),
