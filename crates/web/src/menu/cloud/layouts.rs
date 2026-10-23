@@ -9,6 +9,10 @@ enum LayoutAction {
     Load,
     Publish,
 }
+struct CopyCompletion {
+    generation: u64,
+    result: Result<(), String>,
+}
 pub(super) struct LayoutsView {
     account: Option<String>,
     customized: bool,
@@ -18,7 +22,7 @@ pub(super) struct LayoutsView {
     actions: Vec<HostedMenuAction>,
     error: Option<String>,
     copied: bool,
-    copy_result: Rc<RefCell<Option<(u64, Result<(), String>)>>>,
+    copy_result: Rc<RefCell<Option<CopyCompletion>>>,
     copy_generation: u64,
 }
 impl LayoutsView {
@@ -73,13 +77,13 @@ impl LayoutsView {
                 let generation = self.copy_generation;
                 let result = self.copy_result.clone();
                 wasm_bindgen_futures::spawn_local(async move {
-                    *result.borrow_mut() = Some((
+                    *result.borrow_mut() = Some(CopyCompletion {
                         generation,
-                        wasm_bindgen_futures::JsFuture::from(promise)
+                        result: wasm_bindgen_futures::JsFuture::from(promise)
                             .await
                             .map(|_| ())
                             .map_err(|_| "The code could not be copied.".to_owned()),
-                    ));
+                    });
                 });
             }
             return Ok(true);
@@ -144,10 +148,10 @@ impl LayoutsView {
         Ok(true)
     }
     pub fn update(&mut self) -> Result<(), String> {
-        if let Some((generation, result)) = self.copy_result.borrow_mut().take()
-            && generation == self.copy_generation
+        if let Some(completion) = self.copy_result.borrow_mut().take()
+            && completion.generation == self.copy_generation
         {
-            match result {
+            match completion.result {
                 Ok(()) => {
                     self.copied = true;
                     self.error = None;

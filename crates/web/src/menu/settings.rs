@@ -798,6 +798,8 @@ DevTools: solomonDark.lua.help()",
         );
         Ok(())
     }
+    // This native row binds an action and enabled policy to authored text and geometry.
+    #[allow(clippy::too_many_arguments)]
     fn action_row(
         &self,
         frame: &mut UiFrame<'_>,
@@ -936,12 +938,12 @@ DevTools: solomonDark.lua.help()",
         self.control_panel.paint_strip(&paint, ui.painter(), 4, track, Color32::WHITE)?;
         let mut value = setting.value(&self.settings);
         let before = value;
-        if response.dragged() || response.clicked() {
-            if let Some(pos) = response.interact_pointer_pos() {
-                let fraction = ((pos.x - track.left() - 32.0) / (track.width() - 64.0).max(1.0))
-                    .clamp(0.0, 1.0);
-                value = (f32::from(min) + fraction * f32::from(max - min)).round() as u16;
-            }
+        if (response.dragged() || response.clicked())
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let fraction =
+                ((pos.x - track.left() - 32.0) / (track.width() - 64.0).max(1.0)).clamp(0.0, 1.0);
+            value = (f32::from(min) + fraction * f32::from(max - min)).round() as u16;
         }
         if response.has_focus() {
             ui.memory_mut(|memory| {
