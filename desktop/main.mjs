@@ -45,6 +45,7 @@ else {
   })
   void app.whenReady().then(start).catch(async error => {
     dialog.showErrorBox('Solomon Darker could not start', error.message)
+    closing = true
     await shutdown()
     app.exit(1)
   })
@@ -218,6 +219,7 @@ async function returnToLauncher() {
   closing = true
   try {
     if (!await saveBeforeClose()) return
+    await window.loadURL('about:blank')
     await stopSession()
     await window.loadURL(LAUNCHER_URL)
     installMenu()
@@ -228,8 +230,8 @@ async function exit() {
   if (closing) return
   closing = true
   if (window && !await saveBeforeClose()) { closing = false; return }
-  quitting = true
   await shutdown()
+  quitting = true
   app.quit()
 }
 
@@ -244,6 +246,14 @@ async function stopSession() {
 }
 
 async function shutdown() {
+  // Retire the saved document before removing the services it still uses.
+  if (window && !window.isDestroyed()) {
+    try { await window.loadURL('about:blank') }
+    catch {
+      // A close no longer needs its renderer if navigation was interrupted.
+      if (!window.isDestroyed()) window.destroy()
+    }
+  }
   await stopSession()
   await clientServer?.close()
 }

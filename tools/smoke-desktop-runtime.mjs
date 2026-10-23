@@ -35,10 +35,11 @@ await mkdir(evidence, {
   recursive: true
 });
 const profiles = await mkdtemp(join(tmpdir(), 'solomon-darker-smoke-'));
+await writeFile(join(evidence, 'owned-profile.json'), JSON.stringify({profiles}));
 const running = new Set();
 const errors = [];
 const resourceChecks = [];
-const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [] };
+const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [], serviceStops: [] };
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
 const playing = instance => instance.state.frame?.snapshot.boneyard && !instance.state.frame.host.loading_run_id && !instance.state.frame.host.resume_grace && !instance.state.frame.host.pause;
@@ -83,7 +84,7 @@ try {
   const updateStatus = await solo.page.evaluate(() => window.solomonDarkRuntime.desktop.checkUpdates());
   assert.equal(updateStatus.update, null);
   assert.ok(updateStatus.updateError, 'offline update failure does not block play');
-  await close(solo);
+  receipts.repeatedClose = await proveRepeatedClose(solo);
   assert.ok(solo.state.leaveReceipts > 0, 'ordinary app close awaited the actual host save receipt');
   await waitForExit(child.pid);
   const resumed = await launch('resume', join(profiles, 'solo'));
@@ -126,6 +127,7 @@ try {
   };
   receipts.updatePrompt = await proveUpdatePrompt(resumed);
   receipts.failedClose = await proveFailedClose(resumed);
+  receipts.returnToLauncher = await proveReturnToLauncher();
   const host = await launch('host', join(profiles, 'host'));
   const port = await freePort();
   await host.page.getByLabel('Your reachable IP or hostname').fill('127.0.0.1');
@@ -267,6 +269,8 @@ try {
   }), 5000, 'Desktop profile cleanup timed out');
 }
 async function launch(label, userData) {
+  const stopJournal = join(evidence, `${label}-service-stops.jsonl`);
+  await writeFile(stopJournal, '');
   const app = await electron.launch({
     executablePath: executable,
     // Windows' native ANGLE backend avoids the measured SwiftShader CPU stall.
@@ -282,7 +286,7 @@ async function launch(label, userData) {
   });
   let nativeChildren, appPid, page;
   try {
-    nativeChildren = await app.evaluateHandle(observeNativeChildren);
+    nativeChildren = await app.evaluateHandle(observeNativeChildren, stopJournal);
     appPid = await nativeChildren.evaluate(observer => observer.parentPid);
     page = await app.firstWindow({timeout: 30000});
   } catch (error) {
@@ -295,6 +299,7 @@ async function launch(label, userData) {
     app,
     appPid,
     nativeChildren,
+    stopJournal,
     page,
     label,
     state: {
@@ -540,6 +545,7 @@ async function proveFailedClose(instance) {
   } finally { clearTimeout(timer); }
   running.delete(instance);
   await waitForExit(child.pid);
+  await verifyServiceStops(instance);
   return {
     fault: 'A native IndexedDB concurrent writer advances only the committed Source slot revision.',
     dialogAutomation: 'Only Electron showMessageBox responses are automated; no save callback is replaced.',
@@ -560,6 +566,71 @@ async function hostProcess(application) {
   assert.equal(children.length, 1, 'the app owns one live separate native authority');
   const [child] = children;
   return {pid: child.pid, command: child.arguments.join(' ')};
+}
+async function proveRepeatedClose(instance) {
+  // Hold only the final navigation, after the real save, to send real repeated
+  // close/quit requests while the existing document and services remain alive.
+  await instance.app.evaluate(({BrowserWindow}) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    const loadURL = window.loadURL;
+    const state = globalThis.__desktopRetirementSmoke = {entered: false, release: null};
+    window.loadURL = function(url, ...options) {
+      if (url !== 'about:blank') return Reflect.apply(loadURL, this, [url, ...options]);
+      state.entered = true;
+      return new Promise((resolveNavigation, reject) => {
+        state.release = () => {
+          window.loadURL = loadURL;
+          Reflect.apply(loadURL, window, [url, ...options]).then(resolveNavigation, reject);
+        };
+      });
+    };
+  });
+  const exited = once(instance.app, 'close');
+  let released = false;
+  try {
+    await bounded((async () => {
+      await instance.app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].close());
+      await waitFor(() => instance.app.evaluate(() => globalThis.__desktopRetirementSmoke.entered),
+        'the saved document retirement');
+      assert.ok(await instance.app.evaluate(({app, BrowserWindow}) => {
+        const window = BrowserWindow.getAllWindows()[0];
+        window.close();
+        app.quit();
+        return !window.isDestroyed();
+      }), 'repeated close and quit leave the saved document owned until retirement');
+      await instance.app.evaluate(() => { globalThis.__desktopRetirementSmoke.release(); });
+      released = true;
+      await exited;
+    })(), 30000, 'Repeated close did not finish owned shutdown');
+  } finally {
+    if (!released) await bounded(instance.app.evaluate(() => {
+      globalThis.__desktopRetirementSmoke.release?.();
+    }), 5000, 'Retirement test cleanup timed out').catch(() => {});
+  }
+  running.delete(instance);
+  await verifyServiceStops(instance);
+  return {repeatedWindowClose: true, repeatedAppQuit: true, savedRetirementCompleted: true};
+}
+async function proveReturnToLauncher() {
+  const instance = await launch('return', join(profiles, 'return'));
+  await instance.page.getByRole('button', {name: 'Play offline'}).click();
+  await enterHub(instance, 'Return', 'fire');
+  const child = await hostProcess(instance.app);
+  await instance.app.evaluate(({Menu}) => {
+    Menu.getApplicationMenu().items.find(row => row.label === 'Game').submenu.items
+      .find(row => row.label === 'Save and return to launcher').click();
+  });
+  await instance.page.getByRole('button', {name: 'Play offline'}).waitFor();
+  await waitForExit(child.pid);
+  assert.ok(instance.state.leaveReceipts > 0, 'returning to the launcher awaited the actual host save receipt');
+  assert.equal(await instance.page.evaluate(() => window.solomonDarkRuntime.gameEndpoint), undefined,
+    'the new launcher has no retired native endpoint');
+  const saved = await readSave(instance.page);
+  assert.equal(saved.document.schemaVersion, 51);
+  assert.equal(saved.document.continuation.summary.playerId, instance.state.id);
+  await close(instance);
+  return {hostSaveReceipt: true, nativeHostExited: true, endpointCleared: true,
+    savedPlayer: saved.document.continuation.summary.playerId};
 }
 async function proveUpdatePrompt(instance) {
   const fixture = {
@@ -646,6 +717,14 @@ async function cleanupApp(app, appPid) {
 async function close(instance) {
   await bounded(instance.app.close(), 30000, `${instance.label} did not close after saving`);
   running.delete(instance);
+  await verifyServiceStops(instance);
+}
+async function verifyServiceStops(instance) {
+  const stops = (await readFile(instance.stopJournal, 'utf8')).trim().split('\n').filter(Boolean).map(row => JSON.parse(row));
+  assert.ok(stops.length > 0, 'the real app requested its owned services to stop');
+  assert.ok(stops.every(stop => !stop.gameDocumentLive),
+    'the game document retires before any owned service receives its stop request');
+  receipts.serviceStops.push({label: instance.label, stops});
 }
 async function bounded(operation, timeout, message) {
   let timer;
