@@ -22,6 +22,7 @@ const account = {
 };
 const localName = `Library ${Date.now().toString(36)}`;
 const importName = `${localName} import`;
+const nativeName = `${localName} native`;
 const checks = [], errors = [], requests = [], cancelled = [], sockets = [], lifecycle = [];
 const assetStartups = [];
 const errorCounts = {};
@@ -154,6 +155,7 @@ async function confirmDelete(shelf, name) {
   await gpu.click(page, safe);
   await gpu.click(page, safe.replace('boneyards/safe:', 'boneyards/confirm:'));
   const location = shelf === 'In the cloud' ? 'the cloud' : 'this device';
+  await gpu.wheel(page, 'cloud-boneyards-content', 0, -2500);
   await gpu.value(page, 'boneyards/status', `Deleted ${name} from ${location}.`);
   await gpu.focused(page, 'boneyards/new');
 }
@@ -284,6 +286,12 @@ async function confirmDelete(shelf, name) {
     const download = await downloading;
     const exported = path.join(out, 'actual-export.sdr-boneyard.json');
     await download.saveAs(exported);
+    await saveName(nativeName);
+    await page.getByRole('button', { name: 'File ▾', exact: true }).click();
+    const compiling = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download .boneyard', exact: true }).click();
+    const nativeExported = path.join(out, 'actual-export.boneyard');
+    await (await compiling).saveAs(nativeExported);
     await saveName(localName);
     const cloudWrite = page.waitForResponse(response => new URL(response.url()).pathname
       .startsWith(`${mount}/api/boneyards/`) && response.request().method() === 'PUT' && response.ok());
@@ -300,6 +308,12 @@ async function confirmDelete(shelf, name) {
     await gpu.click(page, 'boneyards/import');
     await (await choosing).setFiles(exported);
     await shelfWidget('On this device', importName);
+    const nativeChoosing = page.waitForEvent('filechooser');
+    await gpu.click(page, 'boneyards/import');
+    await (await nativeChoosing).setFiles(nativeExported);
+    await shelfWidget('On this device', nativeName);
+    await confirmDelete('On this device', nativeName);
+    checked('the ordinary editor .boneyard export imports through the full Rust native-document reader');
     await gpu.click(page, (await shelfWidget('On this device', localName)).id);
     await editor();
     assert.equal(await page.getByLabel('Name', { exact: true }).inputValue(), localName);

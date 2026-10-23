@@ -599,8 +599,42 @@ impl BoneyardLibrary {
         actions: &mut Vec<String>,
     ) {
         let confirming = self.confirming.as_ref() == Some(row);
-        let narrow = width < 660.0;
-        let height = if narrow { 130.0 } else { 76.0 };
+        let viewport = frame.ctx.input(|input| input.content_rect());
+        let phone = viewport.width() <= 700.0;
+        let count = if confirming { 2 } else { 3 };
+        let horizontal_pad = if phone { 4.0 } else { 10.0 };
+        let right_pad = if phone { 4.0 } else { 8.0 };
+        let vertical_pad = if phone { 10.0 } else { 6.0 };
+        let natural_tools = count as f32 * 130.0 + (count - 1) as f32 * 10.0;
+        let wrapped = phone || width < 220.0 + 16.0 + natural_tools + 18.0;
+        let button_width = if phone {
+            (width - horizontal_pad - right_pad - (count - 1) as f32 * 10.0) / count as f32
+        } else {
+            130.0
+        };
+        let tool_width = count as f32 * button_width + (count - 1) as f32 * 10.0;
+        let copy_width =
+            width - horizontal_pad - right_pad - if wrapped { 0.0 } else { tool_width + 16.0 };
+        let detail_color = if confirming {
+            Color32::from_rgb(228, 163, 154)
+        } else {
+            Color32::from_rgb(178, 167, 141)
+        };
+        let font = FontId::new(14.0, FontFamily::Name("IM FELL English".into()));
+        let text = if confirming { prompt } else { detail };
+        let galley = if confirming {
+            ui.painter().layout(text.to_owned(), font, detail_color, copy_width)
+        } else {
+            ui.painter().layout_no_wrap(text.to_owned(), font, detail_color)
+        };
+        let name_height = 24.0 * 0.85;
+        let detail_height = 17.5 * galley.rows.len() as f32;
+        let copy_height = name_height + 3.0 + detail_height;
+        let minimum = if viewport.height() <= 620.0 && !phone { 64.0_f32 } else { 76.0_f32 };
+        let height = minimum.max(
+            vertical_pad * 2.0
+                + if wrapped { copy_height + 8.0 + 44.0 } else { copy_height.max(44.0) },
+        );
         let (_, rect) = ui.allocate_space(Vec2::new(width, height));
         if confirming {
             ui.painter().rect_filled(rect, 0.0, Color32::from_rgba_unmultiplied(228, 163, 154, 15));
@@ -609,35 +643,25 @@ impl BoneyardLibrary {
             [rect.left_bottom(), rect.right_bottom()],
             egui::Stroke::new(1.0, Color32::from_rgba_unmultiplied(210, 178, 99, 31)),
         );
-        let count = if confirming { 2 } else { 3 };
-        let button_width = if narrow {
-            ((width - 20.0) - (count - 1) as f32 * 10.0) / count as f32
-        } else {
-            130.0
-        };
-        let tool_width = count as f32 * button_width + (count - 1) as f32 * 10.0;
-        let copy_width = if narrow { width - 20.0 } else { (width - tool_width - 34.0).max(100.0) };
-        let copy =
-            Rect::from_min_size(rect.min + Vec2::new(10.0, 8.0), Vec2::new(copy_width, 30.0));
+        let copy_top =
+            if wrapped { rect.top() + vertical_pad } else { rect.center().y - copy_height / 2.0 };
+        let copy = Rect::from_min_size(
+            egui::pos2(rect.left() + horizontal_pad, copy_top),
+            Vec2::new(copy_width, name_height),
+        );
         stock_text(frame, ui, name, NativeUiFontName::Menu, 0.85, 0xd9ba70, copy, false);
         let text_rect = Rect::from_min_size(
-            copy.min + Vec2::new(0.0, 34.0),
-            Vec2::new(copy_width, if narrow { 28.0 } else { 20.0 }),
+            copy.left_bottom() + Vec2::new(0.0, 3.0),
+            Vec2::new(copy_width, detail_height),
         );
-        ui.painter().with_clip_rect(text_rect.intersect(ui.clip_rect())).text(
+        ui.painter().with_clip_rect(text_rect.intersect(ui.clip_rect())).galley(
             text_rect.min,
-            Align2::LEFT_TOP,
-            if confirming { prompt } else { detail },
-            FontId::new(14.0, FontFamily::Name("IM FELL English".into())),
-            if confirming {
-                Color32::from_rgb(228, 163, 154)
-            } else {
-                Color32::from_rgb(178, 167, 141)
-            },
+            galley,
+            detail_color,
         );
         let key = row.key();
-        let top = if narrow { rect.top() + 78.0 } else { rect.center().y - 22.0 };
-        let right = rect.right() - 8.0;
+        let top = if wrapped { copy_top + copy_height + 8.0 } else { rect.center().y - 22.0 };
+        let right = rect.right() - right_pad;
         let left = right - tool_width;
         let busy_action = match &self.busy {
             Some(Busy::Row { row: busy, action }) if busy == row => Some(*action),
