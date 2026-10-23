@@ -784,30 +784,25 @@ impl PlayerPanels {
         let hits = RefCell::new(Vec::new());
         let events = RefCell::new(Vec::new());
         let layer = egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique(id));
-        frame
-            .ctx
-            .set_transform_layer(layer, egui::emath::TSTransform::new(origin.to_vec2(), scale));
+        let transform = egui::emath::TSTransform::new(origin.to_vec2(), scale);
         let mut result = Ok(());
-        egui::Area::new(layer.id).order(layer.order).fixed_pos(Pos2::ZERO).constrain(false).show(
-            frame.ctx,
-            |ui| {
-                frame.input_scope(id);
-                let c = PanelCanvas::new(frame, ui, &hits, &events, 1.0, !self.input_suspended)
-                    .direct();
-                let size = frame.ctx.content_rect().size();
-                c.fill(
-                    HudRect::new(
-                        -origin.x as f64 / scale as f64,
-                        -origin.y as f64 / scale as f64,
-                        size.x as f64 / scale as f64,
-                        size.y as f64 / scale as f64,
-                    ),
-                    0,
-                    curtain,
-                );
-                result = draw(self, &c);
-            },
-        );
+        native_area(frame.ctx, layer, transform).show(frame.ctx, |ui| {
+            frame.input_scope(id);
+            let c =
+                PanelCanvas::new(frame, ui, &hits, &events, 1.0, !self.input_suspended).direct();
+            let size = frame.ctx.content_rect().size();
+            c.fill(
+                HudRect::new(
+                    -origin.x as f64 / scale as f64,
+                    -origin.y as f64 / scale as f64,
+                    size.x as f64 / scale as f64,
+                    size.y as f64 / scale as f64,
+                ),
+                0,
+                curtain,
+            );
+            result = draw(self, &c);
+        });
         self.events.extend(events.into_inner());
         result
     }
@@ -866,4 +861,91 @@ pub(crate) fn child_ui(parent: &egui::Ui, salt: &str, bounds: Rect) -> egui::Ui 
         ui.disable();
     }
     ui
+}
+
+pub(crate) fn native_area(
+    ctx: &egui::Context,
+    layer: egui::LayerId,
+    transform: egui::emath::TSTransform,
+) -> egui::Area {
+    ctx.set_transform_layer(layer, transform);
+    egui::Area::new(layer.id)
+        .order(layer.order)
+        .fixed_pos(Pos2::ZERO)
+        .constrain_to(transform.inverse() * ctx.content_rect())
+        .constrain(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn landscape_native_controls_keep_their_real_pointer_hits_after_scaling() {
+        let ctx = egui::Context::default();
+        let screen = Rect::from_min_size(Pos2::ZERO, egui::vec2(844.0, 390.0));
+        let scale = 390.0 / 900.0;
+        let transform = egui::emath::TSTransform::from_scaling(scale);
+        let native_width = screen.width() / scale;
+        let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::unique("native-hud"));
+        let controls = [
+            Rect::from_center_size(egui::pos2(native_width / 2.0, 25.5), egui::vec2(40.0, 65.0)),
+            Rect::from_center_size(egui::pos2(native_width / 2.0, 870.0), egui::vec2(53.0, 53.0)),
+        ];
+        let mut clicks = [0, 0];
+        for step in 0..6 {
+            let events = if step < 2 {
+                Vec::new()
+            } else {
+                let index = (step - 2) / 2;
+                let pos = transform * controls[index].center();
+                vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed: step % 2 == 0,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ]
+            };
+            ctx.run_pass(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    time: Some(step as f64 / 60.0),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    native_area(ctx, layer, transform).show(ctx, |ui| {
+                        ui.set_min_size(egui::vec2(native_width, 900.0));
+                        for (index, rect) in controls.into_iter().enumerate() {
+                            if step == 0 {
+                                assert!(ui.is_sizing_pass());
+                            } else {
+                                assert!(
+                                    ui.is_rect_visible(rect),
+                                    "scaled native control {index} stays visible"
+                                );
+                            }
+                            let response = ui.interact(
+                                rect,
+                                egui::Id::unique(("native-control", index)),
+                                egui::Sense::click(),
+                            );
+                            if response.clicked() {
+                                clicks[index] += 1;
+                            }
+                        }
+                    });
+                },
+            )
+            .drop_without_applying_deltas();
+        }
+        assert_eq!(
+            clicks,
+            [1, 1],
+            "the real CSS pointer reaches the top-center and bottom controls once each"
+        );
+    }
 }
