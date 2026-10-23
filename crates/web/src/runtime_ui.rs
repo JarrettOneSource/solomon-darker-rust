@@ -6,6 +6,10 @@ use egui::{Align2, Color32, FontFamily, FontId, Id, Order, pos2};
 use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 
+mod startup;
+pub(crate) use startup::{ACCOUNT, FIRST_FRAME, RUNTIME, StartupResource};
+use startup::{Snapshot, StartupProgress};
+
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "solomonLoader"], js_name = progress, catch)]
@@ -31,42 +35,40 @@ thread_local! {
     static STARTUP: RefCell<Option<StartupProgress>> = const { RefCell::new(None) };
 }
 
-#[derive(Clone, Copy)]
-struct StartupProgress {
-    completed: u32,
-    total: u32,
+pub(crate) fn begin(resources: impl IntoIterator<Item = StartupResource>) -> Result<(), String> {
+    let progress = StartupProgress::new(resources)?;
+    let snapshot = progress.snapshot();
+    STARTUP.with(|state| *state.borrow_mut() = Some(progress));
+    publish(snapshot)
 }
 
-pub(crate) fn begin(total: usize) -> Result<(), String> {
-    let total = u32::try_from(total).map_err(|_| "Too many startup resources")?;
-    STARTUP.with(|progress| *progress.borrow_mut() = Some(StartupProgress { completed: 0, total }));
-    loading("assets", "Loading stock assets", 0, total)
+pub(crate) fn enter_phase(stage: &'static str) -> Result<(), String> {
+    update(|progress| progress.enter_phase(stage))
 }
 
-/// Each completed item is a decoded image/font/audio resource or one of the three
-/// declared runtime, account/save and first-frame readiness checks.
-pub(crate) fn completed(stage: &str, item: &str, count: u32) -> Result<(), String> {
-    let progress = STARTUP.with(|progress| {
-        let mut progress = progress.borrow_mut();
-        let Some(progress) = progress.as_mut() else { return Ok(None) };
-        let completed = progress.completed.checked_add(count).ok_or("Startup counter overflow")?;
-        if completed > progress.total {
-            return Err("Startup work exceeded its declared resources");
-        }
-        progress.completed = completed;
-        Ok(Some(*progress))
+pub(crate) fn completed(source: &str) -> Result<(), String> {
+    update(|progress| progress.complete(source))
+}
+
+fn update(change: impl FnOnce(&mut StartupProgress) -> Result<(), String>) -> Result<(), String> {
+    let snapshot = STARTUP.with(|state| -> Result<Option<Snapshot>, String> {
+        let mut state = state.borrow_mut();
+        let Some(progress) = state.as_mut() else { return Ok(None) };
+        change(progress)?;
+        Ok(Some(progress.snapshot()))
     })?;
-    if let Some(progress) = progress {
-        loading(stage, item, progress.completed, progress.total)?;
+    if let Some(snapshot) = snapshot {
+        publish(snapshot)?;
     }
     Ok(())
 }
 
-pub(crate) fn loading(stage: &str, item: &str, completed: u32, total: u32) -> Result<(), String> {
-    loader_progress(stage, item, completed, total)
+fn publish(snapshot: Snapshot) -> Result<(), String> {
+    loader_progress(snapshot.stage, &snapshot.source, snapshot.completed, snapshot.total)
         .map_err(|error| format!("Startup progress: {error:?}"))
 }
 pub(crate) fn finish() -> Result<(), String> {
+    STARTUP.with(|state| state.borrow().as_ref().map_or(Ok(()), StartupProgress::finish))?;
     loader_finish().map_err(|error| format!("Startup handoff: {error:?}"))?;
     STARTUP.with(|progress| progress.borrow_mut().take());
     Ok(())

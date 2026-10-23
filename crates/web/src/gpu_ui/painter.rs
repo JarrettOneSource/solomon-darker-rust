@@ -129,6 +129,7 @@ impl Images {
     }
 
     pub async fn load_stock(&self, renderer: &Renderer) -> Result<(), String> {
+        crate::runtime_ui::enter_phase("interface")?;
         // These are presentation inputs, not world/death sprite banks. The inventory is
         // tracked beside the painter so missing files fail readiness before a menu opens.
         let paths = include_str!("stock-images.txt").lines().filter(|path| !path.is_empty());
@@ -138,15 +139,13 @@ impl Images {
             let path = path.to_owned();
             promises.push(&wasm_bindgen_futures::future_to_promise(async move {
                 let image = assets::load_image(&path).await.map_err(wasm_bindgen::JsValue::from)?;
-                crate::runtime_ui::completed("interface", &path, 1)
-                    .map_err(wasm_bindgen::JsValue::from)?;
                 let mut cache = images.0.borrow_mut();
                 cache.next_id += 1;
                 let id = cache.next_id;
                 let size = vec2(image.natural_width() as f32, image.natural_height() as f32);
                 cache.paths.insert(id, path.clone());
                 cache.images.insert(
-                    path,
+                    path.clone(),
                     ImageEntry {
                         id,
                         state: ImageState::Decoded(image),
@@ -154,6 +153,8 @@ impl Images {
                         owned: true,
                     },
                 );
+                drop(cache);
+                crate::runtime_ui::completed(&path).map_err(wasm_bindgen::JsValue::from)?;
                 Ok(wasm_bindgen::JsValue::UNDEFINED)
             }));
         }

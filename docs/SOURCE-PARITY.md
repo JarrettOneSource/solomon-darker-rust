@@ -76,6 +76,14 @@ speech key or selector kind, preserving real Enter routing at the same time.
 An invisible initial Area sizing pass cannot consume that default-focus request;
 the request remains pending until the real enabled control is registered.
 
+Native HUD, books, pickers and notices use design coordinates inside a transformed
+egui layer. The browser viewport is therefore inverse-transformed before clipping
+that Area. The actual `58df78d` landscape selector witness at 844×390 retained only
+controls inside the unscaled CSS rectangle: the primary selector near native x974,
+the books and the belt disappeared before their layer transform. The current
+`hud-browser-58df78d/selector-witness` receipt and screenshot establish that clip
+ownership defect; stock geometry, scale and interaction behavior remain unchanged.
+
 The accepted economy receipt owns the result. Independent cursor consumers seed
 the current sequence on connection and advance over every newer receipt; restored,
 stale, duplicate, rejected and unrelated actions never reopen it. An accepted choice

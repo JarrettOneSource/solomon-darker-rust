@@ -9,6 +9,9 @@ const ui = require('./gpu-ui.cjs');
 const url = process.env.URL || 'http://127.0.0.1:4181/';
 const screenshot = process.env.SHOT || path.join(process.env.OUT || '.', 'rust-game-smoke.png');
 const receiptPath = path.join(path.dirname(screenshot),'smoke-receipt.json');
+const officeArrival=JSON.parse(fs.readFileSync(path.resolve(__dirname,
+  '../../crates/sim/tests/fixtures/website/hub-regions-goldens.json'),'utf8')).placements
+  .find(placement=>placement.source==='office'&&placement.destination==='courtyard');
 fs.mkdirSync(path.dirname(screenshot),{recursive:true});
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -70,7 +73,10 @@ async function clickThenEscape(page,id) {
     assert.deepEqual(acceptedSelection,{name:'Helvidius',element:'Ether',discipline:'Arcane'},
       'the actual admitted player retains the requested name, element and discipline');
     await ui.widget(page, 'hud:pause');
-    await page.waitForTimeout(300);
+    await page.waitForFunction(target=>{
+      const state=window.wasmBindings.wizard_state();
+      return state[6]===0&&state[7]===-1&&state[0]===target[0]&&state[1]===target[1];
+    },officeArrival.scriptedTarget,{timeout:20000});
     const spawned = await state();
     const initialStudents = await page.evaluate(() => Array.from(window.wasmBindings.npc_state()));
     step='real HUD Inventory click immediately followed by Escape';
@@ -106,7 +112,8 @@ async function clickThenEscape(page,id) {
     const submissions = await ui.gpuDraws(page);
     await page.screenshot({path:screenshot});
     const checks = {
-      spawnedInArch: Math.abs(spawned[0] - 950.64) < 0.01 && Math.abs(spawned[1] - 164.04) < 0.01,
+      settledFromOffice: spawned[0]===officeArrival.scriptedTarget[0]
+        &&spawned[1]===officeArrival.scriptedTarget[1]&&spawned[6]===0&&spawned[7]===-1,
       walkedSouth: afterSouth[1] - spawned[1] > 30 && afterSouth[2] === 12,
       walkedEast: afterEast[0] - afterSouth[0] > 20 && afterEast[2] === 6,
       ticking: afterEast[5] > afterSouth[5] && afterSouth[5] > spawned[5],

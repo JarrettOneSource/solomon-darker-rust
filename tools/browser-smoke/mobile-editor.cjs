@@ -47,9 +47,10 @@ async function saved(page) {
 
 (async () => {
   fs.mkdirSync(out, {recursive:true});
-  const browser = await chromium.launch({headless:true,
+  const server = await chromium.launchServer({headless:true,host:'127.0.0.1',
     executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
+  const browser = await chromium.connect(server.wsEndpoint());
   let current;
   try {
     const desktop = await browser.newContext({viewport:{width:1600,height:900},ignoreHTTPSErrors:true});
@@ -69,6 +70,7 @@ async function saved(page) {
     await ui.click(page, 'mobile/redo');
     await changed(page, 'pause', ([x,y]) => x === moved.x && y === moved.y, 'redo restores movement');
     await ui.click(page, 'mobile/control:pause');
+    await ui.focused(page, 'mobile/control:pause');
     const beforeNudge = await transform(page, 'pause');
     await page.keyboard.press('ArrowRight');
     await changed(page, 'pause', ([x]) => x > beforeNudge.x, 'focused native keyboard nudge');
@@ -144,5 +146,21 @@ async function saved(page) {
         observations,ui:await ui.readUi(current)}, null, 2));
     }
     throw error;
-  } finally {await browser.close();}
+  } finally {
+    let timer;
+    try {
+      await Promise.race([browser.close(), new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Playwright disconnect timed out')), 5000);
+      })]);
+      clearTimeout(timer);
+      await Promise.race([server.close(), new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Chrome close timed out')), 15000);
+      })]);
+    } catch {
+      clearTimeout(timer);
+      await Promise.race([server.kill(), new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Chrome termination timed out')), 5000);
+      })]);
+    } finally {clearTimeout(timer);}
+  }
 })().catch(error => {console.error(error); process.exitCode = 1;});

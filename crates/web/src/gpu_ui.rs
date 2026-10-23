@@ -573,12 +573,15 @@ pub struct UiRun {
 }
 
 impl GpuUi {
-    pub(crate) fn startup_asset_count() -> usize {
-        fonts::asset_count()
-            + include_str!("gpu_ui/stock-images.txt")
+    pub(crate) fn startup_resources() -> Vec<crate::runtime_ui::StartupResource> {
+        let mut resources = fonts::startup_resources();
+        resources.extend(
+            include_str!("gpu_ui/stock-images.txt")
                 .lines()
                 .filter(|path| !path.is_empty())
-                .count()
+                .map(|path| crate::runtime_ui::StartupResource::new("interface", path)),
+        );
+        resources
     }
 
     pub async fn load(

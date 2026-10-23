@@ -71,6 +71,7 @@ thread_local! {
     // Native announcements can synchronously query the bridge while render owns
     // its mutable borrow. Activity belongs to the lifecycle, not that borrow.
     static ACTIVE:Cell<bool>=const{Cell::new(false)};
+    static PAINTED_STATE:RefCell<String>=const{RefCell::new(String::new())};
 }
 
 #[wasm_bindgen]
@@ -80,12 +81,13 @@ pub fn active() -> bool {
 
 #[wasm_bindgen]
 pub fn gpu_ui_state() -> String {
-    LOADER.with(|slot|{
-        let slot=slot.borrow();let Some(loader)=slot.as_ref() else{return serde_json::json!({"schemaVersion":1,"surface":"hidden","ready":true,"loading":null,"error":null,"widgets":[],"draw":{"meshes":0,"triangles":0,"textures":0}}).to_string()};
-        serde_json::json!({"schemaVersion":1,"surface":"loading","ready":false,"frame":loader.frame,
-            "loading":{"stage":loader.progress.stage,"completed":loader.progress.completed,"total":loader.progress.total,"currentItem":loader.progress.item,"progress":loader.progress.ratio()},"error":loader.progress.error,
-            "canvas":{"width":loader.viewport[0],"height":loader.viewport[1],"pixelsPerPoint":loader.window.device_pixel_ratio()},
-            "capture":{"pointer":true,"keyboard":true,"text":false},"draw":{"meshes":loader.meshes,"triangles":loader.triangles,"textures":loader.art.len()+usize::from(loader.font.is_some())},"splashImagesReady":loader.art.len(),"widgets":loader.widgets}).to_string()
+    PAINTED_STATE.with(|state| {
+        let state = state.borrow();
+        if state.is_empty() {
+            serde_json::json!({"schemaVersion":1,"surface":"hidden","ready":true,"loading":null,"error":null,"widgets":[],"draw":{"meshes":0,"triangles":0,"textures":0}}).to_string()
+        } else {
+            state.clone()
+        }
     })
 }
 
@@ -116,6 +118,7 @@ pub fn error(message: &str) {
 #[wasm_bindgen]
 pub fn finish() {
     ACTIVE.with(|active| active.set(false));
+    PAINTED_STATE.with(|state| state.borrow_mut().clear());
     ANIMATION.with(|slot| {
         if let Some(animation) = slot.borrow_mut().take()
             && let Some(request) = animation.request
@@ -209,6 +212,7 @@ async fn boot() -> Result<(), String> {
         })
     });
     ACTIVE.with(|active| active.set(true));
+    LOADER.with(|slot| slot.borrow_mut().as_mut().expect("loader is installed").render())?;
     start_animation()?;
     let bytes =
         js_sys::Uint8Array::from(include_bytes!("../../../web/assets/stock/Fonts.png").as_slice());
@@ -404,6 +408,23 @@ impl Loader {
             }
         }
         self.renderer.flush();
+        self.frame += 1;
+        // Publish one submitted frame atomically. Completion callbacks may update
+        // progress before the next paint; its fill geometry must stay consistent.
+        PAINTED_STATE.with(|state| {
+            *state.borrow_mut() = serde_json::json!({
+                "schemaVersion":1,"surface":"loading","ready":false,"frame":self.frame,
+                "loading":{"stage":self.progress.stage,"completed":self.progress.completed,
+                    "total":self.progress.total,"currentItem":self.progress.item,"progress":self.progress.ratio()},
+                "error":self.progress.error,
+                "canvas":{"width":self.viewport[0],"height":self.viewport[1],
+                    "pixelsPerPoint":f64::from(self.canvas.width())/f64::from(self.viewport[0])},
+                "capture":{"pointer":true,"keyboard":true,"text":false},
+                "draw":{"meshes":self.meshes,"triangles":self.triangles,
+                    "textures":self.art.len()+usize::from(self.font.is_some())},
+                "splashImagesReady":self.art.len(),"widgets":self.widgets,
+            }).to_string();
+        });
         let caption = self.progress.error.clone().unwrap_or_else(|| {
             format!("{} {}%", stage_label(&self.progress.stage), self.progress.percentage())
         });
@@ -411,7 +432,6 @@ impl Loader {
             self.reader.announce(&caption)?;
             self.last_announced = caption;
         }
-        self.frame += 1;
         Ok(())
     }
     fn text(
@@ -546,6 +566,7 @@ mod tests {
         LOADER.with(|slot| {
             let _render = slot.borrow_mut();
             assert!(!active());
+            assert!(gpu_ui_state().contains("\"surface\":\"hidden\""));
         });
     }
 

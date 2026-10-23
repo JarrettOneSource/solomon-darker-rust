@@ -103,9 +103,14 @@ async function pad(page,buttons=[],axes=[0,0,0,0],analog={}){
     await pad(page,[]);await pad(page,[9]);
     await ui.surface(page,'pause');
     await ui.assertGpuOnly(page);
-    assert.deepEqual(errors,[]);
     if(process.env.OUT)fs.mkdirSync(process.env.OUT,{recursive:true});
     if(process.env.OUT)await page.screenshot({path:path.join(process.env.OUT,'gameplay-input-pause.png')});
-    console.log(JSON.stringify({passed:true,errors,gamepadReadsPerFrame:1,submissions:await ui.gpuDraws(page),primaryContext:'College-disabled; live Boneyard acceptance follows coordinator integration'}));
+    const receipt={passed:errors.length===0,errors,gamepadReads:reads,gamepadFrames:8,
+      gamepadReadsPerFrame:reads/8,selection:(await ui.readUi(page)).acceptedSelection,
+      focusEvents:await page.evaluate(()=>__solomonFocusEvents),submissions:await ui.gpuDraws(page),
+      primaryContext:'College-disabled; live Boneyard acceptance follows coordinator integration'};
+    if(process.env.OUT)fs.writeFileSync(path.join(process.env.OUT,'gameplay-input.json'),JSON.stringify(receipt,null,2));
+    console.log(JSON.stringify(receipt));
+    assert.deepEqual(errors,[]);
   }finally{await browser.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});

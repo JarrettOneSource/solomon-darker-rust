@@ -10,7 +10,7 @@ const {waitForSave,localParticipant}=require('./saved-game.cjs');
 const output=process.env.OUT||'/tmp/sack-rename';
 const url=process.env.URL||'http://127.0.0.1:4181/';
 fs.mkdirSync(output,{recursive:true});
-const receipt={passed:false,generatedName:process.env.GENERATED_NAME==='1',checks:[],errors:[]};
+const receipt={passed:false,generatedName:process.env.GENERATED_NAME==='1',checks:[],errors:[],pageErrors:[]};
 const names=['AV fi 🧙','تراث fi 🧙','A🧑‍💻é🧙🏽B'];
 async function pagePath(page,expected){
   await ui.waitForUi(page,snapshot=>{
@@ -34,6 +34,7 @@ async function expectedFont(page,text){
     args:['--use-angle=metal','--ignore-gpu-blocklist']});
   const page=await browser.newPage({viewport:{width:1600,height:900}});
   const observed=ui.watchErrors(page);
+  page.on('pageerror',error=>receipt.pageErrors.push(error.stack||error.message));
   try{
     await page.goto(url);await ui.ready(page);
     await startNewGame(page,{name:receipt.generatedName?null:'Felix'});
@@ -72,8 +73,11 @@ async function expectedFont(page,text){
       receipt.checks.push({name,metrics,actualQuad:painted.paintRect});
     }
     const last=names.at(-1);
-    await waitForSave(page,record=>localParticipant(record).player.economy.backpack.some(item=>item.id===id&&item.name===last));
+    const saved=await waitForSave(page,record=>localParticipant(record).player.economy.backpack.some(item=>item.id===id&&item.name===last));
+    fs.writeFileSync(path.join(output,'accepted-save.json'),JSON.stringify(saved,null,2));
     await page.keyboard.press('Escape');await ui.noWidget(page,'panel:surface:inventory');
+    await page.context().storageState({path:path.join(output,'browser-storage.json'),indexedDB:true});
+    receipt.reproduction={url,save:'accepted-save.json',storage:'browser-storage.json'};
     await page.reload();await ui.ready(page);await ui.click(page,'play');await ui.click(page,'continue');
     await ui.widget(page,'hud:inventory',{enabled:true});
     await page.keyboard.press('KeyI');await ui.widget(page,'panel:surface:inventory');

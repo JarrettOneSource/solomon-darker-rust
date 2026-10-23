@@ -1,7 +1,9 @@
 //! Browser game owner: assets and UI project the authoritative simulation state.
 //! Loading prepares resources before installation; fixed ticks remain in the Rust kernels.
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
 
 mod cheats;
 mod desktop;
@@ -193,13 +195,21 @@ struct ActiveBattle {
 }
 
 impl Game {
-    /// Construct the retained startup state before its first poll. Keeping this
-    /// allocation in the constructor avoids nesting its large debug temporaries
-    /// inside run's poll frame while child UI/resource futures are also polled.
-    pub fn load() -> impl std::future::Future<Output = Result<Self, String>> {
+    /// Resource construction retires before saved-session parsing begins. Return
+    /// the permanent owner so callers never retain another large Game return slot.
+    pub fn load() -> impl std::future::Future<Output = Result<Rc<RefCell<Self>>, String>> {
+        Box::pin(async {
+            let mut game = Self::load_resources().await?;
+            game.initialize_session().await?;
+            Ok(Rc::new(RefCell::new(game)))
+        })
+    }
+
+    /// Allocate the retained resource future before polling its child loaders.
+    fn load_resources() -> impl std::future::Future<Output = Result<Self, String>> {
         Box::pin(async {
             crate::runtime_ui::begin(
-                GpuUi::startup_asset_count() + GameAudio::startup_asset_count() + 3,
+                GpuUi::startup_resources().into_iter().chain(GameAudio::startup_resources()),
             )?;
             let window = web_sys::window().ok_or("no window")?;
             let document = window.document().ok_or("no document")?;
@@ -295,7 +305,7 @@ impl Game {
                 },
                 GameSessionOptions::default(),
             );
-            let mut game = Self {
+            let game = Self {
                 canvas,
                 renderer,
                 gpu_ui,
@@ -379,75 +389,81 @@ impl Game {
                 save_error: None,
                 save_listeners: Vec::new(),
             };
-            set_status("");
-            game.update_mobile_layout()?;
-            match storage::load_settings() {
-                Ok(settings) => {
-                    game.apply_settings(&settings)?;
-                    game.menu.set_settings(settings)?;
-                }
-                Err(error) => Self::show_storage_error(&error),
+            Ok(game)
+        })
+    }
+
+    async fn initialize_session(&mut self) -> Result<(), String> {
+        let window = web_sys::window().ok_or("no window")?;
+        let document = window.document().ok_or("no document")?;
+        set_status("");
+        self.update_mobile_layout()?;
+        match storage::load_settings() {
+            Ok(settings) => {
+                self.apply_settings(&settings)?;
+                self.menu.set_settings(settings)?;
             }
-            if editor_test::configured(&document)? {
-                game.load_editor_test(&window).await?;
-                return Ok(game);
-            }
-            match storage::read_hall() {
-                Ok(entries) => game.hall_entries = entries,
-                Err(error) => Self::show_storage_error(&error),
-            }
-            if let Some(endpoint) = crate::desktop::configured(&window)? {
-                game.load_hosted(&window, crate::hosted::WebsiteMount::default(), Some(endpoint))
-                    .await?;
-                return Ok(game);
-            }
-            if let Some(mount) = crate::hosted::WebsiteMount::configured(&window)? {
-                game.load_hosted(&window, mount, None).await?;
-                return Ok(game);
-            }
-            if crate::network::native_host_requested(&window)? {
-                game.native = Some(NativeGame::inspect(&window)?);
-                game.menu.show_title(false)?;
-                set_status("Checking saved game…");
-                return Ok(game);
-            }
-            let mut no_saved_game = false;
-            match SaveStore::open().await {
-                Ok(store) => {
-                    let stored = store.read().await;
-                    game.save_store = Some(store);
-                    match stored {
-                        Ok(Some(record)) => {
-                            game.save_revision = record.revision;
-                            let restored = match save_document::decode(&record.document) {
-                                Ok(checkpoint) => game.restore_checkpoint(checkpoint).await,
-                                Err(error) => Err(error),
-                            };
-                            if let Err(error) = restored {
-                                game.save_error = Some(error.clone());
-                                Self::show_storage_error(&error);
-                            }
-                        }
-                        Ok(None) => {
-                            no_saved_game = true;
-                        }
-                        Err(error) => {
-                            game.save_error = Some(error.clone());
+            Err(error) => Self::show_storage_error(&error),
+        }
+        if editor_test::configured(&document)? {
+            self.load_editor_test(&window).await?;
+            return Ok(());
+        }
+        match storage::read_hall() {
+            Ok(entries) => self.hall_entries = entries,
+            Err(error) => Self::show_storage_error(&error),
+        }
+        if let Some(endpoint) = crate::desktop::configured(&window)? {
+            self.load_hosted(&window, crate::hosted::WebsiteMount::default(), Some(endpoint))
+                .await?;
+            return Ok(());
+        }
+        if let Some(mount) = crate::hosted::WebsiteMount::configured(&window)? {
+            self.load_hosted(&window, mount, None).await?;
+            return Ok(());
+        }
+        if crate::network::native_host_requested(&window)? {
+            self.native = Some(NativeGame::inspect(&window)?);
+            self.menu.show_title(false)?;
+            set_status("Checking saved game…");
+            return Ok(());
+        }
+        let mut no_saved_game = false;
+        match SaveStore::open().await {
+            Ok(store) => {
+                let stored = store.read().await;
+                self.save_store = Some(store);
+                match stored {
+                    Ok(Some(record)) => {
+                        self.save_revision = record.revision;
+                        let restored = match save_document::decode(&record.document) {
+                            Ok(checkpoint) => self.restore_checkpoint(checkpoint).await,
+                            Err(error) => Err(error),
+                        };
+                        if let Err(error) = restored {
+                            self.save_error = Some(error.clone());
                             Self::show_storage_error(&error);
                         }
                     }
-                }
-                Err(error) => {
-                    game.save_error = Some(error.clone());
-                    Self::show_storage_error(&error);
+                    Ok(None) => {
+                        no_saved_game = true;
+                    }
+                    Err(error) => {
+                        self.save_error = Some(error.clone());
+                        Self::show_storage_error(&error);
+                    }
                 }
             }
-            game.menu.show_title(game.has_game)?;
-            if no_saved_game && !storage::tutorial_declined().unwrap_or(true) {
-                game.menu.offer_tutorial()?;
+            Err(error) => {
+                self.save_error = Some(error.clone());
+                Self::show_storage_error(&error);
             }
-            Ok(game)
-        })
+        }
+        self.menu.show_title(self.has_game)?;
+        if no_saved_game && !storage::tutorial_declined().unwrap_or(true) {
+            self.menu.offer_tutorial()?;
+        }
+        Ok(())
     }
 
     pub fn wizard_snapshot(&self) -> Vec<f64> {
@@ -621,7 +637,7 @@ impl Game {
         self.menu.set_enhanced_effects_authority(self.enhanced_effects_authority())?;
         self.hud.update_diagnostics(time, self.native.as_ref().and_then(NativeGame::ping_ms))?;
         let last = self.last_time.replace(time).unwrap_or(time);
-        self.commit_ui(time)?;
+        self.commit_ui(time, self.menu.is_blocking())?;
         if self.editor_test_disposed() {
             return Ok(());
         }
@@ -630,6 +646,7 @@ impl Game {
         let mut run = self.gpu_ui.begin_frame(&mut self.renderer, viewport, time / 1000.0)?;
         let result = (|| {
             loop {
+                let menu_was_open = self.menu.is_blocking();
                 let more = {
                     let (gpu_ui, paint) = self.ui_painter();
                     gpu_ui.paint_next(&mut run, paint)?
@@ -637,7 +654,7 @@ impl Game {
                 if !more {
                     break;
                 }
-                self.commit_ui(time)?;
+                self.commit_ui(time, menu_was_open)?;
                 if self.editor_test_disposed() {
                     return Ok(());
                 }
@@ -669,7 +686,7 @@ impl Game {
         self.hosted.as_ref().is_some_and(|hosted| hosted.deployment_update.restarting())
     }
 
-    fn commit_ui(&mut self, time: f64) -> Result<(), String> {
+    fn commit_ui(&mut self, time: f64, menu_was_open: bool) -> Result<(), String> {
         if self.deployment_restarting() {
             return self.input.set_blocked(true);
         }
@@ -677,7 +694,6 @@ impl Game {
             return self.commit_hosted_observer_ui(time);
         }
         let skills_were_open = self.panels.panel() == Some(PlayerPanel::Skills);
-        let menu_was_open = self.menu.is_blocking();
         self.update_skill_picker(time)?;
         self.update_social(time)?;
         self.update_cheats()?;
@@ -2319,8 +2335,8 @@ impl Game {
             if diagnostics.meshes > 0
                 && diagnostics.static_images_ready == diagnostics.static_images_total
             {
-                crate::runtime_ui::completed("account", "Account and saved game ready", 1)?;
-                crate::runtime_ui::completed("ready", "First game frame ready", 1)?;
+                crate::runtime_ui::completed(crate::runtime_ui::ACCOUNT)?;
+                crate::runtime_ui::completed(crate::runtime_ui::FIRST_FRAME)?;
                 crate::runtime_ui::finish()?;
                 self.ui_ready = true;
             }

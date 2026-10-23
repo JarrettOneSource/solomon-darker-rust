@@ -137,6 +137,7 @@ impl SocialUi {
             );
             spec.tint = if selected { 0xffffff } else { 0xaaa2a6 };
             gpu::native_text(frame, ui.painter(), &spec, origin, scale);
+            gpu::focus_outline(frame, ui, &response, scale);
             if response.clicked() {
                 activated = Some(format!("party-{}", candidate.id()));
             }
@@ -274,6 +275,7 @@ impl SocialUi {
                     );
                 }
                 frame.record(&format!("social/{}", action.id), &action.label, "radio", &response);
+                gpu::focus_outline(frame, ui, &response, scale);
                 if response.has_focus() {
                     let direction = ui.input_mut(|input| {
                         if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft)

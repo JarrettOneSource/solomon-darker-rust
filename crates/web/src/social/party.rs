@@ -106,6 +106,7 @@ impl SocialUi {
                     Sense::click(),
                 );
                 frame.record("social/party", "PARTY", "button", &header);
+                gpu::focus_outline(frame, ui, &header, 1.0);
                 if header.clicked() {
                     action = Some("party".to_owned());
                 }
@@ -123,10 +124,15 @@ impl SocialUi {
                 if gear {
                     let response = ui.interact(
                         Rect::from_min_size(origin + vec2(168.0, 3.0), vec2(40.0, 44.0)),
-                        Id::unique("social/party-settings"),
+                        Id::unique("social/party-settings-shortcut"),
                         Sense::click(),
                     );
-                    frame.record("social/party-settings", "Party settings", "button", &response);
+                    frame.record(
+                        "social/party-settings-shortcut",
+                        "Party settings",
+                        "button",
+                        &response,
+                    );
                     let record = self.bonedit.record(54)?;
                     let [x, y] = record.registered_origin();
                     let image = frame
@@ -161,6 +167,7 @@ impl SocialUi {
                         gpu::GOLD,
                         solomon_graphics::BlendMode::Normal,
                     );
+                    gpu::focus_outline(frame, ui, &response, 1.0);
                     if response.clicked() {
                         action = Some("party-settings".to_owned());
                     }
@@ -197,6 +204,7 @@ impl SocialUi {
                         action = Some(id);
                     }
                     gpu::brackets(frame, ui.painter(), &self.ui, bounds, 1.0)?;
+                    gpu::focus_outline(frame, ui, &response, 1.0);
                     let tags_width: f64 = tags
                         .iter()
                         .enumerate()
