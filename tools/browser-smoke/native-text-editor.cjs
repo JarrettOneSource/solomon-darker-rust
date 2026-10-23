@@ -62,6 +62,17 @@ async function paintedSelection(page,count){
     await ui.focused(page,field);
     receipt.checks.push('ordinary paid Sack purchase and real rename-field focus');
 
+    await ui.installController(page);await ui.controller(page,[]);await ui.nextFrame(page);
+    await ui.controller(page,[0]);await ui.nextFrame(page);
+    await ui.focused(page,field);await ui.widget(page,'panel:sack-rename');
+    await ui.value(page,field,'Sack');
+    await ui.controller(page,[]);await ui.controller(page,[13]);
+    await ui.waitForUi(page,state=>state.widgets.some(widget=>widget.focused
+      && ['panel:sack-rename:save','panel:sack-rename:cancel'].includes(widget.id)),
+      'controller Down leaves the field for a genuine spatial action',{timeout:3000});
+    await ui.controller(page,[]);await ui.click(page,field);await ui.focused(page,field);
+    receipt.checks.push('controller A clicks without Enter submission; Down moves spatial focus out of the field');
+
     const joined='تراث 🧑‍💻é';
     await ui.fill(page,field,joined);await ui.value(page,field,joined);
     await page.screenshot({path:path.join(output,'joined-script.png')});

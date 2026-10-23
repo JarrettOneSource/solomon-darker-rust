@@ -161,15 +161,7 @@ impl<'a> NativeTextEdit<'a> {
         let has_focus = response.has_focus() && enabled;
         if has_focus {
             frame.ctx.memory_mut(|memory| {
-                memory.set_focus_lock_filter(
-                    id,
-                    egui::EventFilter {
-                        horizontal_arrows: true,
-                        vertical_arrows: true,
-                        tab: false,
-                        escape: false,
-                    },
-                )
+                memory.set_focus_lock_filter(id, egui::EventFilter::default())
             });
         }
         let key = id.with("native-editor-state");
