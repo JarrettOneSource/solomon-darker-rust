@@ -99,7 +99,7 @@ const cases = [
         atlas.set([255,0,255,255],(y*12+x)*4);
         if(x>=2&&x<10&&y>=2&&y<10) {
           const sx=x-2,sy=y-2;
-          const alpha=sx>=2&&sx<=5&&sy>=1&&sy<=6?255
+          const alpha=sx>=2&&sx<=4&&sy>=1&&sy<=6?255
             :sx>=1&&sx<=6&&sy>=1&&sy<=6?128:0;
           const pixel=[200,160,50,alpha];
           atlas.set(pixel,(y*12+x)*4);sprite.set(pixel,(sy*8+sx)*4);
@@ -113,6 +113,7 @@ const cases = [
         {name:'idle source shadow and outer opacity',sigma:1,offset:[0,1],color:[0,0,0,1],opacity:0.78,brightness:1,tolerance:9},
         {name:'hover brightness then colored source shadow',sigma:3,offset:[0,0],color:[255,240,183,0.55],opacity:1,brightness:1.25,tolerance:9},
         {name:'source and shadow compose before group opacity',sigma:0,offset:[0,0],color:[0,0,0,0.55],opacity:0.78,brightness:1,tolerance:1},
+        {name:'mirrored crop preserves screen-space shadow offset',sigma:1,offset:[1,1],color:[0,0,0,1],opacity:1,brightness:1,mirror:true,tolerance:9},
       ];
       canvas.width=96;canvas.height=64;gl.viewport(0,0,96,64);
       gl.uniform2f(uniform('u_logical_size'),96,64);
@@ -124,7 +125,13 @@ const cases = [
         const effect=document.createElement('canvas');effect.width=96;effect.height=64;
         const ctx=effect.getContext('2d');
         ctx.filter=`brightness(${test.brightness}) drop-shadow(${test.offset[0]}px ${test.offset[1]}px ${test.sigma}px rgba(${test.color.join(',')}))`;
-        ctx.drawImage(spriteCanvas,32,24);
+        let inputSprite=spriteCanvas;
+        if(test.mirror) {
+          inputSprite=document.createElement('canvas');inputSprite.width=inputSprite.height=8;
+          const mirrorContext=inputSprite.getContext('2d');mirrorContext.translate(8,0);mirrorContext.scale(-1,1);
+          mirrorContext.drawImage(spriteCanvas,0,0);
+        }
+        ctx.drawImage(inputSprite,32,24);
         const result=document.createElement('canvas');result.width=96;result.height=64;
         const resultCtx=result.getContext('2d');resultCtx.globalAlpha=test.opacity;resultCtx.drawImage(effect,0,0);
         const reference=resultCtx.getImageData(0,0,96,64).data;
@@ -132,13 +139,13 @@ const cases = [
         const left=32+Math.min(0,test.offset[0]-padding),top=24+Math.min(0,test.offset[1]-padding);
         const right=40+Math.max(0,test.offset[0]+padding),bottom=32+Math.max(0,test.offset[1]+padding);
         const positions=[[left,top],[right,top],[right,bottom],[left,bottom]];
-        const uv=positions.map(([x,y])=>[(2+x-32)/12,(2+y-24)/12]);
+        const uv=positions.map(([x,y])=>[(test.mirror?10-x+32:2+x-32)/12,(2+y-24)/12]);
         const data=[];
         for(const index of [0,1,2,0,2,3])data.push(...positions[index],...uv[index],1,1,1,test.opacity);
         gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);
         gl.uniform2f(uniform('u_color_filter'),test.brightness,1);
         gl.uniform2f(uniform('u_shadow_sigma'),test.sigma/12,test.sigma/12);
-        gl.uniform2f(uniform('u_shadow_offset'),test.offset[0]/12,test.offset[1]/12);
+        gl.uniform2f(uniform('u_shadow_offset'),(test.mirror?-1:1)*test.offset[0]/12,test.offset[1]/12);
         gl.uniform4f(uniform('u_shadow_color'),...test.color.map((value,index)=>index===3?value:value/255));
         gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.drawArrays(gl.TRIANGLES,0,6);
         const actual=new Uint8Array(96*64*4);gl.readPixels(0,0,96,64,gl.RGBA,gl.UNSIGNED_BYTE,actual);

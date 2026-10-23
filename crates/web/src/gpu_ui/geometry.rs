@@ -81,12 +81,13 @@ pub(super) fn shadow_geometry(
         uv.max + (expanded.max - destination.max) * uv_per_point,
     );
     let offset = shadow.offset * uv_per_point;
-    let sigma = uv_per_point * shadow.blur;
+    let sigma = uv_per_point.abs() * shadow.blur;
+    let bounds = Rect::from_two_pos(uv.min, uv.max);
     (
         expanded,
         expanded_uv,
         solomon_graphics::AlphaShadow {
-            bounds: [uv.left(), uv.top(), uv.right(), uv.bottom()],
+            bounds: [bounds.left(), bounds.top(), bounds.right(), bounds.bottom()],
             offset: [offset.x, offset.y],
             sigma: [sigma.x, sigma.y],
             color: shadow.color.to_srgba_unmultiplied().map(|channel| f32::from(channel) / 255.0),
@@ -98,6 +99,25 @@ pub(super) fn shadow_geometry(
 mod tests {
     use super::*;
     use egui::{pos2, vec2};
+
+    #[test]
+    fn mirrored_shadow_uvs_keep_positive_sigma_and_screen_direction_offsets() {
+        let uv = Rect::from_min_max(pos2(0.6, 0.3), pos2(0.2, 0.5));
+        let destination = Rect::from_min_size(pos2(20.0, 30.0), vec2(40.0, 20.0));
+        let (_, expanded_uv, material) = shadow_geometry(
+            uv,
+            destination,
+            super::super::ImageShadow {
+                offset: vec2(2.0, 1.0),
+                blur: 3.0,
+                color: egui::Color32::BLACK,
+            },
+        );
+        assert_eq!(material.bounds, [0.2, 0.3, 0.6, 0.5]);
+        assert!(expanded_uv.left() > expanded_uv.right());
+        assert!(material.sigma.into_iter().all(|sigma| sigma > 0.0));
+        assert!(material.offset[0] < 0.0 && material.offset[1] > 0.0);
+    }
 
     #[test]
     fn shadow_padding_preserves_the_registered_crop_and_design_stage_scaling() {

@@ -156,10 +156,22 @@ convolves only the selected record's alpha, composites the filtered source over 
 shadow, then applies group opacity. Sampling clamps to the record's texel centers and
 returns transparent outside its bounds, preventing neighboring atlas records from
 entering the blur. It creates no additional texture or persistent effect cache.
-The canonical-shader probe now passes nine cases. Native idle/hover shadow comparisons
-differ by at most 4/2 channel bytes; the exact group-opacity case differs by at most 1.
+The canonical-shader probe now passes ten cases, including an asymmetric mirrored crop.
+Native idle/hover shadow comparisons differ by at most 5/2 channel bytes; the exact
+group-opacity case differs by at most 1 and the mirrored-offset case by at most 6.
 These Gaussian cases allow the specification's finite-kernel implementation variance;
 the original source without a shadow material fails the atlas-isolation case by 199.
+
+The retained authored-enemy producer applies its filter and outer opacity to the whole
+root: the background sprite, name span and health rail. Rust `c14068b3`
+`mod_world_overlays.rs:183–188,205` and `mod-world.css` establish that boundary. Its
+original sources are pinned `mod-ui/ModEnemies.tsx:58,73–74` and `mod-enemies.css`.
+blur is `max(light_radius/10,4)`; the name also has two black text shadows. A sprite-only
+filter does not reproduce that source group. The required extension is a GPU geometry
+group captured into a reusable render target, with the same alpha-shadow material
+and opacity applied to the composed result. No HTML/control rasterization is involved.
+The complete group effect remains unaccepted until that backend and the authored
+producer are wired and verified.
 
 ## World notifications recovered before repair
 
