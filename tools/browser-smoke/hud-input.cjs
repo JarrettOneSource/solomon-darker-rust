@@ -30,6 +30,20 @@ async function ticks(page,count) {
     start+count,{timeout:20000});
 }
 const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
+async function joystickLabel(page,opacity) {
+  const label=await ui.widget(page,'hud:joystick:movement:label');
+  const style=JSON.parse(label.value);
+  assert.equal(label.label,'MOVE');
+  assert.equal(label.role,'text');
+  assert.equal(label.enabled,false,'the painted joystick label is passive');
+  assert.equal(style.fontFamily,'Cinzel Bold');
+  assert.ok(Math.abs(style.fontSize-11)<1e-4,'Source inverse display scaling preserves its 11px label');
+  assert.ok(Math.abs(style.lineHeight-11)<1e-4);
+  assert.ok(Math.abs(style.letterSpacing-.66)<1e-4);
+  assert.ok(Math.abs(style.opacity-opacity)<1e-4,'actual joystick activity owns label opacity');
+  assert.ok(label.paintRect[3]>=7,'the actual painted glyphs remain readable at phone size');
+  return label;
+}
 
 (async()=>{
   const owned=await launchOwnedBrowser(chromium,{headless:true,
@@ -113,6 +127,7 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
     await screenshot(touch,'hud-touch-landscape.png');
     const joystick=ui.bounds(await ui.widget(touch,'hud:joystick:movement'));
     assert.ok(joystick.width>=90,'the actual touch joystick remains usable');
+    const neutralLabel=await joystickLabel(touch,1);
     const client=await touch.context().newCDPSession(touch);
     try {
       const point={x:joystick.x+joystick.width*0.8,y:joystick.y+joystick.height*0.7,id:1};
@@ -125,6 +140,7 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
         'the GPU joystick shows the active touch');
       assert.equal((await ui.widget(touch,'hud:joystick:movement')).focused,false,
         'the source drag-only joystick does not take keyboard focus');
+      const activeLabel=await joystickLabel(touch,.45);
       await client.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
       await ticks(touch,40);
       const cancelStart=await state(touch);
@@ -136,16 +152,20 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
         'the GPU joystick returns to its neutral presentation');
       assert.equal((await ui.widget(touch,'hud:joystick:movement')).focused,false,
         'touch cancellation leaves keyboard focus with the ordinary owner');
+      const cancelledLabel=await joystickLabel(touch,1);
       const movement=await touch.evaluate(()=>Array.from(wasmBindings.gameplay_input_state()).slice(0,2));
       assert.deepEqual(movement,[0,0],'cancel clears the accepted movement input');
       await ui.assertGpuOnly(touch);
       await screenshot(touch,'hud-input-touch-final.png');
       await ui.settleErrors(touch);
       assert.deepEqual(errors,[]);
-      console.log(JSON.stringify({checks:['native GPU HUD bounds','wide layout','gamepad stick',
+      const receipt={passed:true,checks:['native GPU HUD bounds','wide layout','gamepad stick',
         'd-pad priority','stick drift','actual tab blur release','source portrait guidance','landscape touch movement',
-        'touch cancellation and GPU neutral state'],desktopSubmissions,
-        touchSubmissions:await ui.gpuDraws(touch),errors}));
+        'touch cancellation and GPU neutral state','Source joystick label size and active appearance'],desktopSubmissions,
+        touchSubmissions:await ui.gpuDraws(touch),beforeTouch,afterTouch,cancelStart,cancelEnd,movement,
+        labels:{neutral:neutralLabel,active:activeLabel,cancelled:cancelledLabel},errors};
+      fs.writeFileSync(path.join(output,'hud-input-receipt.json'),JSON.stringify(receipt,null,2));
+      console.log(JSON.stringify(receipt));
     } finally {
       await client.detach();
     }
