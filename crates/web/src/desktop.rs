@@ -11,7 +11,7 @@ use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::Window;
 
 use crate::gpu_ui::UiFrame;
-use egui::{Color32, FontFamily, FontId, Id, RichText, Stroke, vec2};
+use egui::{Color32, FontFamily, FontId, RichText, Stroke, vec2};
 
 /// Credentials are intentionally absent from Debug/log output.
 #[derive(Clone)]

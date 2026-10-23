@@ -551,7 +551,7 @@ fn native_editor_honors_readonly_and_async_disabled_admission_without_retiring_i
     };
     let before_readonly = session.receipt(1, typed(), None, None);
     readonly.set(true);
-    let widgets = frame_native(&ctx, Vec::new(), &[], &[before_readonly], &mut paint);
+    let widgets = frame_native(&ctx, Vec::new(), &[], &[before_readonly], None, &mut paint);
     assert_eq!(widgets["pending-field"].value.as_deref(), Some(""));
     assert!(widgets["pending-field"].enabled && widgets["pending-field"].focused);
     readonly.set(false);
@@ -559,7 +559,7 @@ fn native_editor_honors_readonly_and_async_disabled_admission_without_retiring_i
     let mut session = edit::session::Session::new(descriptor.borrow().clone().unwrap());
     let before_disabled = session.receipt(2, typed(), None, None);
     enabled.set(false);
-    let widgets = frame_native(&ctx, Vec::new(), &[], &[before_disabled], &mut paint);
+    let widgets = frame_native(&ctx, Vec::new(), &[], &[before_disabled], None, &mut paint);
     assert_eq!(widgets["pending-field"].value.as_deref(), Some(""));
     assert!(!widgets["pending-field"].enabled && !widgets["pending-field"].focused);
     assert_eq!(descriptor.borrow().as_ref().unwrap().owner, initial.owner);

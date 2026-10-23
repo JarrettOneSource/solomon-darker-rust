@@ -2,7 +2,7 @@
 
 use crate::gpu_ui::UiFrame;
 use crate::mod_presentation_assets::ModPresentationAssets;
-use egui::{Color32, FontFamily, FontId, Id, Stroke, vec2};
+use egui::{Color32, FontFamily, FontId, Stroke, vec2};
 use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::assets::GameModAsset;
 use solomon_sim::modding::skill_quickbar::{

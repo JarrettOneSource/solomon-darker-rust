@@ -1,7 +1,7 @@
 //! GPU native spectator rails/text from `NativeSpectatorStatus.tsx`.
 
 use crate::gpu_ui::{self, StockAtlas, UiFrame};
-use egui::{Color32, Id, Rect, pos2, vec2};
+use egui::{Color32, Rect, pos2, vec2};
 use solomon_sim::boneyard::spectator::{
     BoneyardSpectatorStatusPresentation, NativeSpectatorHudLayout, native_spectator_hud_layout,
 };

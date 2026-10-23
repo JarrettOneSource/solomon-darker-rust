@@ -2,7 +2,7 @@
 
 use crate::gpu_ui::UiFrame;
 use crate::ui::javascript_string;
-use egui::{Color32, FontFamily, FontId, Id, Stroke, vec2};
+use egui::{Color32, FontFamily, FontId, Stroke, vec2};
 use solomon_sim::Vec2;
 use solomon_sim::economy::{HubInventoryItem, HubItemKind};
 use solomon_sim::hub::regions::HubRegion;

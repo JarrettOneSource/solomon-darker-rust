@@ -311,6 +311,7 @@ impl CheatUi {
     }
 
     pub fn paint(&mut self, gpu: &mut UiFrame<'_>) -> Result<(), String> {
+        let layer = self.layer_id();
         let (Some(view), Some(frame)) = (&mut self.view, &self.frame) else { return Ok(()) };
         gpu.input_scope(if view.console_tab { "cheats/console" } else { "cheats/controls" });
         let ctx = gpu.ctx.clone();
@@ -321,9 +322,9 @@ impl CheatUi {
         );
         let mut action = None;
         let mut console_error = None;
-        egui::Area::new(self.layer_id().id)
+        egui::Area::new(layer.id)
             .fade_in(false)
-            .order(self.layer_id().order)
+            .order(layer.order)
             .fixed_pos(egui::Pos2::ZERO)
             .show(&ctx, |ui| {
                 ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
