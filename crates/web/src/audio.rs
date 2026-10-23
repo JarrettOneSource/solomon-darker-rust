@@ -221,6 +221,7 @@ impl GameAudio {
             .await
             .map_err(|error| audio_error("load stock audio", error))?;
         let mut listeners = Vec::new();
+        let window = document.default_view().ok_or("audio activation window")?;
         for name in ["pointerdown", "keydown"] {
             let state = state.clone();
             let listener = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
@@ -228,8 +229,14 @@ impl GameAudio {
                     web_sys::console::error_1(&JsValue::from_str(&error));
                 }
             });
-            document
-                .add_event_listener_with_callback(name, listener.as_ref().unchecked_ref())
+            // Source MainMenuScene captures before a focused canvas/control owns
+            // the event and stops propagation. Resume must run in that gesture.
+            window
+                .add_event_listener_with_callback_and_bool(
+                    name,
+                    listener.as_ref().unchecked_ref(),
+                    true,
+                )
                 .map_err(|_| "audio activation listener")?;
             listeners.push(listener);
         }
