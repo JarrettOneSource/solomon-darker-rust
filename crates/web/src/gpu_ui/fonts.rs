@@ -116,6 +116,7 @@ pub(super) async fn load(document: &Document, ctx: &Context) -> Result<BrowserFo
         "Cinzel ExtraBold",
         "Alegreya",
         "Alegreya Medium",
+        "Alegreya Semibold",
         "Alegreya Bold",
         "Alegreya Italic",
         "JetBrains Mono",
@@ -156,6 +157,8 @@ pub(super) fn font_css(family: &FontFamily, size: f32) -> String {
         "Cinzel ExtraBold" => ("800", "normal", "'SDGPU Cinzel',Georgia,serif"),
         "Alegreya" => ("400", "normal", "'SDGPU Alegreya',Georgia,serif"),
         "Alegreya Medium" => ("500", "normal", "'SDGPU Alegreya',Georgia,serif"),
+        // Source requests600 with only its400/500/700 faces imported; keep native matching.
+        "Alegreya Semibold" => ("600", "normal", "'SDGPU Alegreya',Georgia,serif"),
         "Alegreya Bold" => ("700", "normal", "'SDGPU Alegreya',Georgia,serif"),
         "Alegreya Italic" => ("400", "italic", "'SDGPU Alegreya',Georgia,serif"),
         "JetBrains Mono" => ("400", "normal", "'SDGPU JetBrains Mono',monospace"),

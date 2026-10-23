@@ -182,6 +182,11 @@ HTML/control rasterization is involved. The small graphics `composition_probe` e
 and `gpu-composition.cjs` exercise the actual renderer's nesting and hand-derived pixels;
 their runtime and the authored producer proof remain pending the canonical build.
 
+Enemy names and authored shop labels request Alegreya600. Pinned `main.tsx` imports
+only its400/500/700 faces, so `Alegreya Semibold` keeps that native CSS600 request
+against the same loaded faces. A browser font-only probe confirms its glyph pixels
+and width exactly match700 and differ from500. No new face or startup resource is added.
+
 ## World notifications recovered before repair
 
 The visual-producer inventory found `crates/web/src/loot/messages.rs` still constructing
