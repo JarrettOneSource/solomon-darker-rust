@@ -15,12 +15,22 @@ use web_sys::{
 
 use super::geometry::{Caret, Cluster, Geometry, Line, PaintSpan};
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NativeFontStroke {
+    pub width: f32,
+    pub color: Color32,
+}
+
+const TILE_WIDTH: u32 = 2048;
+const TILE_CONTENT: f32 = (TILE_WIDTH - 2) as f32;
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FontRunOptions {
     pub wrap_width: Option<f32>,
     pub line_height: Option<f32>,
     pub tab_size: Option<f32>,
     pub letter_spacing: Option<f32>,
+    pub stroke: Option<NativeFontStroke>,
 }
 
 struct FontProbe {
@@ -452,6 +462,7 @@ struct RunKey {
     line_height: Option<u32>,
     tab_size: Option<u32>,
     letter_spacing: Option<u32>,
+    stroke: Option<(u32, Color32)>,
     pixels: u32,
 }
 
@@ -467,6 +478,7 @@ pub struct NativeFontRun {
     pub(crate) geometry: Arc<Geometry>,
     pixels: f32,
     letter_spacing: f32,
+    stroke: Option<NativeFontStroke>,
     raster: Vec<RasterLine>,
     tiles: Mutex<BTreeMap<(usize, i32), TextureHandle>>,
 }
@@ -521,12 +533,20 @@ impl NativeFontRun {
                 if !bounds.intersects(source_clip) {
                     continue;
                 }
-                let left = (source_clip.min.x.max(bounds.min.x) * pixels / 2048.0).floor() as i32;
-                let right = (source_clip.max.x.min(bounds.max.x) * pixels / 2048.0).floor() as i32;
+                let left =
+                    (source_clip.min.x.max(bounds.min.x) * pixels / TILE_CONTENT).floor() as i32;
+                let right =
+                    (source_clip.max.x.min(bounds.max.x) * pixels / TILE_CONTENT).floor() as i32;
                 for tile in left..=right {
                     let (handle, offset, size) = self.tile(painter.ctx(), index, tile, pixels)?;
                     let whole = Rect::from_min_size(origin + offset + vec2(span.offset, 0.0), size);
-                    let destination = whole.intersect(
+                    // The one-pixel texture gutter is sampled across a tile edge,
+                    // but its geometry is cropped so adjacent tiles never overdraw.
+                    let core = Rect::from_min_max(
+                        whole.min + vec2(1.0 / pixels, 0.0),
+                        whole.max - vec2(1.0 / pixels, 0.0),
+                    );
+                    let destination = whole.intersect(core).intersect(
                         source_clip.translate(origin.to_vec2() + vec2(span.offset, 0.0)),
                     );
                     if !destination.is_positive() {
@@ -563,12 +583,15 @@ impl NativeFontRun {
         if let Some(handle) = cache.get(&(index, tile)) {
             return Ok((
                 handle.clone(),
-                vec2(tile as f32 * 2048.0 / pixels, line.baseline - baseline / pixels),
-                vec2(2048.0 / pixels, height as f32 / pixels),
+                vec2(
+                    (tile as f32 * TILE_CONTENT - 1.0) / pixels,
+                    line.baseline - baseline / pixels,
+                ),
+                vec2(TILE_WIDTH as f32 / pixels, height as f32 / pixels),
             ));
         }
         let image = with_probe(|probe| {
-            probe.canvas.set_width(2048);
+            probe.canvas.set_width(TILE_WIDTH);
             probe.canvas.set_height(height);
             probe.set_canvas_font(&css, self.letter_spacing * pixels)?;
             let [red, green, blue, alpha] = self.color.to_srgba_unmultiplied();
@@ -579,16 +602,31 @@ impl NativeFontRun {
                 blue,
                 f32::from(alpha) / 255.0
             ));
+            let x = 1.0 - f64::from(tile) * f64::from(TILE_CONTENT);
+            if let Some(stroke) = self.stroke {
+                let [red, green, blue, alpha] = stroke.color.to_srgba_unmultiplied();
+                probe.context.set_stroke_style_str(&format!(
+                    "rgba({red},{green},{blue},{})",
+                    f32::from(alpha) / 255.0
+                ));
+                probe.context.set_line_width(f64::from(stroke.width * pixels));
+                probe.context.set_line_join("miter");
+                probe.context.set_miter_limit(4.0);
+                probe
+                    .context
+                    .stroke_text(&line.raster_text, x, f64::from(baseline))
+                    .map_err(|error| format!("font run stroke: {error:?}"))?;
+            }
             probe
                 .context
-                .fill_text(&line.raster_text, -f64::from(tile) * 2048.0, f64::from(baseline))
+                .fill_text(&line.raster_text, x, f64::from(baseline))
                 .map_err(|e| format!("font run paint: {e:?}"))?;
             let data = probe
                 .context
-                .get_image_data(0.0, 0.0, 2048.0, f64::from(height))
+                .get_image_data(0.0, 0.0, f64::from(TILE_WIDTH), f64::from(height))
                 .map_err(|e| format!("font run bitmap: {e:?}"))?
                 .data();
-            Ok(ColorImage::from_rgba_unmultiplied([2048, height as usize], &data.0))
+            Ok(ColorImage::from_rgba_unmultiplied([TILE_WIDTH as usize, height as usize], &data.0))
         })?;
         let handle = ctx.load_texture("native font run", image, egui::TextureOptions::LINEAR);
         if cache.len() >= 64 {
@@ -598,8 +636,8 @@ impl NativeFontRun {
         cache.insert((index, tile), handle.clone());
         Ok((
             handle,
-            vec2(tile as f32 * 2048.0 / pixels, line.baseline - baseline / pixels),
-            vec2(2048.0 / pixels, height as f32 / pixels),
+            vec2((tile as f32 * TILE_CONTENT - 1.0) / pixels, line.baseline - baseline / pixels),
+            vec2(TILE_WIDTH as f32 / pixels, height as f32 / pixels),
         ))
     }
 }
@@ -635,6 +673,7 @@ pub fn font_run_with_options(
         line_height: options.line_height.map(f32::to_bits),
         tab_size: options.tab_size.map(f32::to_bits),
         letter_spacing: options.letter_spacing.map(f32::to_bits),
+        stroke: options.stroke.map(|stroke| (stroke.width.to_bits(), stroke.color)),
         pixels: ctx.pixels_per_point().to_bits(),
     };
     let id = egui::Id::unique("native-font-run-cache");
@@ -662,18 +701,27 @@ pub fn font_run_with_options(
                     .context
                     .measure_text(&line.raster_text)
                     .map_err(|e| format!("font ink measurement: {e:?}"))?;
-                let ascent = metrics.actual_bounding_box_ascent().ceil() as f32;
-                let descent = metrics.actual_bounding_box_descent().ceil() as f32;
+                // SVG's default miter limit4 can extend two full stroke widths.
+                let stroke_bleed =
+                    options.stroke.map_or(0.0, |stroke| stroke.width * pixels * 2.0).ceil();
+                let ascent = metrics.actual_bounding_box_ascent().ceil() as f32 + stroke_bleed;
+                let descent = metrics.actual_bounding_box_descent().ceil() as f32 + stroke_bleed;
                 Ok(RasterLine {
                     height: (ascent + descent + 2.0).max(1.0) as u32,
                     baseline: ascent + 1.0,
                     bounds: Rect::from_min_max(
                         pos2(
-                            -(metrics.actual_bounding_box_left().ceil() as f32 + 1.0) / pixels,
+                            -(metrics.actual_bounding_box_left().ceil() as f32
+                                + stroke_bleed
+                                + 1.0)
+                                / pixels,
                             line.baseline - (ascent + 1.0) / pixels,
                         ),
                         pos2(
-                            (metrics.actual_bounding_box_right().ceil() as f32 + 1.0) / pixels,
+                            (metrics.actual_bounding_box_right().ceil() as f32
+                                + stroke_bleed
+                                + 1.0)
+                                / pixels,
                             line.baseline + (descent + 1.0) / pixels,
                         ),
                     ),
@@ -687,6 +735,7 @@ pub fn font_run_with_options(
         geometry,
         pixels,
         letter_spacing: options.letter_spacing.unwrap_or(0.0),
+        stroke: options.stroke,
         raster,
         tiles: Mutex::new(BTreeMap::new()),
     });
