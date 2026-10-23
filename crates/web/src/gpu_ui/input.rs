@@ -58,7 +58,36 @@ struct InputQueue {
     gamepad_keys: [bool; 8],
     gamepad_direction: Option<solomon_sim::input::MenuDirection>,
     next_gamepad_repeat_at: f64,
+    scope: Option<String>,
+    gamepad_active: bool,
+    require_gamepad_neutral: bool,
     clipboard_error: Option<String>,
+}
+
+impl InputQueue {
+    fn set_scope(&mut self, scope: Option<&str>) {
+        if self.scope.as_deref() != scope {
+            self.require_gamepad_neutral |= self.gamepad_active;
+            self.gamepad_direction = None;
+            self.next_gamepad_repeat_at = 0.0;
+            self.scope = scope.map(str::to_owned);
+        }
+    }
+
+    fn scoped_gamepad(
+        &mut self,
+        current: solomon_sim::input::MenuGamepadState,
+    ) -> solomon_sim::input::MenuGamepadState {
+        self.gamepad_active = current.active();
+        if !self.gamepad_active {
+            self.require_gamepad_neutral = false;
+        }
+        if self.scope.is_none() || self.require_gamepad_neutral {
+            solomon_sim::input::MenuGamepadState::default()
+        } else {
+            current
+        }
+    }
 }
 
 struct Listener {
@@ -497,6 +526,7 @@ impl BrowserInput {
                 break;
             }
         }
+        let current = queue.scoped_gamepad(current);
         let held = [
             current.direction == Some(MenuDirection::Up),
             current.direction == Some(MenuDirection::Down),
@@ -566,6 +596,10 @@ impl BrowserInput {
                 )
             })
             .collect();
+    }
+
+    pub fn set_scope(&mut self, scope: Option<&str>) {
+        self.queue.borrow_mut().set_scope(scope);
     }
 
     pub fn take_key_codes(&mut self) -> Vec<BrowserKey> {
@@ -685,5 +719,32 @@ impl Drop for BrowserInput {
     fn drop(&mut self) {
         self.listeners.clear();
         self.textarea.remove();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use solomon_sim::input::{MenuDirection, MenuGamepadState};
+
+    #[test]
+    fn gameplay_keeps_the_controller_and_foreground_scope_changes_require_a_neutral_handoff() {
+        let mut queue = InputQueue::default();
+        let held = MenuGamepadState {
+            confirm: true,
+            direction: Some(MenuDirection::Down),
+            ..Default::default()
+        };
+        assert!(!queue.scoped_gamepad(held).active());
+        queue.set_scope(Some("title"));
+        assert!(!queue.scoped_gamepad(held).active());
+        assert!(!queue.scoped_gamepad(MenuGamepadState::default()).active());
+        assert_eq!(queue.scoped_gamepad(held), held);
+        queue.set_scope(Some("create"));
+        assert!(!queue.scoped_gamepad(held).active());
+        queue.scoped_gamepad(MenuGamepadState::default());
+        assert_eq!(queue.scoped_gamepad(held), held);
+        queue.set_scope(None);
+        assert!(!queue.scoped_gamepad(held).active());
     }
 }

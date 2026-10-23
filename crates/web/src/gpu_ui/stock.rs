@@ -268,6 +268,30 @@ impl StockAtlas {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn paint_native_frame_scaled(
+        &self,
+        frame: &UiFrame<'_>,
+        painter: &Painter,
+        index: usize,
+        destination: Rect,
+        scale: f32,
+        fill: bool,
+        tint: Color32,
+    ) -> Result<(), String> {
+        if !scale.is_finite() || scale <= 0.0 {
+            return Err("stock frame scale must be finite and positive".to_owned());
+        }
+        self.paint_native_frame(
+            &frame.with_scale(destination.min, scale),
+            painter,
+            index,
+            Rect::from_min_size(destination.min, destination.size() / scale),
+            fill,
+            tint,
+        )
+    }
+
     pub fn paint_strip(
         &self,
         frame: &UiFrame<'_>,
@@ -276,14 +300,27 @@ impl StockAtlas {
         destination: Rect,
         tint: Color32,
     ) -> Result<(), String> {
+        self.paint_strip_clipped(frame, painter, index, destination, destination, tint)
+    }
+
+    pub fn paint_strip_clipped(
+        &self,
+        frame: &UiFrame<'_>,
+        painter: &Painter,
+        index: usize,
+        destination: Rect,
+        clip: Rect,
+        tint: Color32,
+    ) -> Result<(), String> {
         if !destination.is_positive() {
             return Ok(());
         }
         let record = self.record(index)?;
         let third = record.width as f32 / 3.0;
         let height = record.height as f32;
+        let clip = clip.intersect(destination);
         let paint_piece = |source, dest| -> Result<(), String> {
-            if let Some((source, dest)) = clip_image_rect(source, dest, destination) {
+            if let Some((source, dest)) = clip_image_rect(source, dest, clip) {
                 self.paint_slice(frame, painter, index, source, dest, tint)?;
             }
             Ok(())
@@ -360,6 +397,24 @@ pub fn message_frame(
         )?;
     }
     atlas.paint_native_frame(frame, painter, 17, destination.shrink(5.0), true, Color32::WHITE)
+}
+
+pub fn message_frame_scaled(
+    frame: &UiFrame<'_>,
+    painter: &Painter,
+    atlas: &StockAtlas,
+    destination: Rect,
+    scale: f32,
+) -> Result<(), String> {
+    if !scale.is_finite() || scale <= 0.0 {
+        return Err("message frame scale must be finite and positive".to_owned());
+    }
+    message_frame(
+        &frame.with_scale(destination.min, scale),
+        painter,
+        atlas,
+        Rect::from_min_size(destination.min, destination.size() / scale),
+    )
 }
 
 pub fn native_text(
