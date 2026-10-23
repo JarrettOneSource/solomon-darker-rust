@@ -12,7 +12,6 @@ mod title;
 pub(crate) mod widgets;
 
 use crate::gpu_ui::{StockAtlas, UiFrame};
-use solomon_graphics::assets;
 use cloud::CloudView;
 use create::CreateView;
 use egui::{Color32, Id, Rect, Vec2};
@@ -25,6 +24,7 @@ pub use routing::RoutingDownloadProgress;
 use routing::RoutingView;
 pub use settings::SettingsContext;
 use settings::SettingsView;
+use solomon_graphics::assets;
 use solomon_sim::NativeRng;
 use solomon_sim::audio::{
     AudioCue, AudioEvent, AudioOptions, MusicScene, create_entry_audio_events,

@@ -7,8 +7,8 @@ use egui::{Color32, Painter, Pos2, Rect, pos2, vec2};
 use serde::Deserialize;
 use solomon_sim::profile::WizardElement;
 
-use solomon_graphics::assets;
 use crate::gpu_ui::UiFrame;
+use solomon_graphics::assets;
 
 #[derive(Deserialize)]
 pub(crate) struct StockPortraits {
