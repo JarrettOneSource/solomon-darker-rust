@@ -151,6 +151,29 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
             },
         );
     }
+    pub fn labeled_text(&self, id: &str, spec: &NativeUiTextSpec<'_>) {
+        let layout = crate::gpu_ui::native_text(
+            self.frame,
+            &self.painter,
+            &NativeUiTextSpec {
+                x: spec.x + self.origin.x as f64,
+                y: spec.y + self.origin.y as f64,
+                alpha: spec.alpha * self.alpha as f64,
+                ..*spec
+            },
+        );
+        let bounds = layout.glyphs.iter().fold(Rect::NOTHING, |bounds, glyph| {
+            let ink = solomon_sim::native_ui_text::native_ui_glyph_ink_bounds(glyph);
+            bounds.union(Rect::from_min_size(
+                egui::pos2(ink.left as f32, ink.top as f32),
+                egui::vec2(ink.width as f32, ink.height as f32),
+            ))
+        });
+        let transform =
+            self.frame.ctx.layer_transform_to_global(self.painter.layer_id()).unwrap_or_default();
+        self.frame.record_rect(id, spec.text, "text", transform * bounds, false);
+        self.frame.record_value(id, spec.text, None);
+    }
     pub fn layout(&self, layout: &NativeUiTextLayout) {
         let mut layout = layout.clone();
         for glyph in &mut layout.glyphs {

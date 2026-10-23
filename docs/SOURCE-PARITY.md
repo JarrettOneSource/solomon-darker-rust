@@ -44,6 +44,25 @@ Paths in this table are relative to `crates/sim` unless a crate is named explici
 | Learned bots | Existing model, observer and controller | Exact inference and observation/action programs plus a real admitted bot moving, casting and spending resources. |
 | Lua definitions, shops, items, skills, actors, scenes, overlays and Console | `solomon-modding`, `sim::modding`, prepared Session extensions and web projections | Source preparation/runtime fixtures, admitted supervisor programs, actual authored shop/skill/scene/save journeys and CLI tests. |
 
+The rank-book confirmation follows `skill-book-feedback.ts`,
+`use-skill-book-feedback.ts`, `SkillBookFeedback.tsx` and `MainMenuScene.tsx` at
+`fa08ae24`. Their retained native evidence is `0x0056D570..0x0056D7A0`: the
+screen-centered MsgBox has a Menu “Skill improved” line, gap 10, a Medium native
+skill name followed by “ +1”, both tinted `0xb2b2ff`, and one OKAY button. Every
+catalog row 8 through 81 uses the same recovered message-layout kernel.
+
+The accepted economy receipt owns the result. Independent cursor consumers seed
+the current sequence on connection and advance over every newer receipt; restored,
+stale, duplicate, rejected and unrelated actions never reopen it. An accepted choice
+book or a rank outcome without an eligible skill plays the book stream without a
+confirmation. A rank award closes Inventory first and keeps its pause/input hold
+until OKAY or Escape dismisses the result. Changing session/world, missing the local
+player, entering Game Over or returning to loadout clears the result and stops the
+book stream. The modal and the separate floating world text consume the same
+accepted outcome independently. These are recovered source contracts; GPU modal
+rendering, lifecycle tests and an ordinary earned-book journey are the validation
+boundary for the Rust consumer.
+
 ## Runtime, Website and delivery
 
 | Boundary | Owner and contract | Verification |
