@@ -471,6 +471,11 @@ mod tests {
             true,
         );
         assert_eq!(model.text(), original);
+        model.select(Selection { anchor: 0, focus: original.encode_utf16().count() });
+        let mut copy = insert(2, &original, model.selection(), "");
+        copy.intent = Intent::Copy;
+        assert_eq!(model.apply(&copy, rules, true).copied.as_deref(), Some(original.as_str()));
+        assert_eq!(model.text(), original);
         assert_eq!(replacement("A🧙B", "A🧙🏽B"), (Selection::caret(3), "🏽".to_owned()));
         assert_eq!(boundary("A🧙B", 2), 1);
     }

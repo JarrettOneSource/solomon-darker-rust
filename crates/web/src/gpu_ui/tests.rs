@@ -376,6 +376,48 @@ fn a_remounted_field_does_not_accept_a_native_receipt_from_its_retired_instance(
     );
 }
 
+#[test]
+fn native_editor_honors_readonly_and_async_disabled_admission_without_retiring_its_mount() {
+    let ctx = Context::default();
+    let mut text = String::new();
+    let readonly = std::cell::Cell::new(false);
+    let enabled = std::cell::Cell::new(true);
+    let descriptor = RefCell::new(None);
+    let mut paint = |frame: &mut UiFrame<'_>| {
+        frame.ctx.root_ui(|ui| {
+            NativeTextEdit::singleline(&mut text, "pending-field", "Name")
+                .native_name(Pos2::ZERO, 1.0)
+                .request_focus(true)
+                .readonly(readonly.get())
+                .enabled(enabled.get())
+                .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(250.0, 45.0)));
+            *descriptor.borrow_mut() = frame.editors.borrow().last().cloned();
+        })
+    };
+    frame(&ctx, Vec::new(), &mut paint);
+    let initial = descriptor.borrow().clone().unwrap();
+    let mut session = edit::session::Session::new(initial.clone());
+    let typed = || edit::model::Intent::Replace {
+        range: TextSelection::caret(0),
+        text: "A".into(),
+        group: Some(edit::model::EditGroup::Typing),
+    };
+    let before_readonly = session.receipt(1, typed(), None, None);
+    readonly.set(true);
+    let widgets = frame_native(&ctx, Vec::new(), &[], &[before_readonly], &mut paint);
+    assert_eq!(widgets["pending-field"].value.as_deref(), Some(""));
+    assert!(widgets["pending-field"].enabled && widgets["pending-field"].focused);
+    readonly.set(false);
+    frame(&ctx, Vec::new(), &mut paint);
+    let mut session = edit::session::Session::new(descriptor.borrow().clone().unwrap());
+    let before_disabled = session.receipt(2, typed(), None, None);
+    enabled.set(false);
+    let widgets = frame_native(&ctx, Vec::new(), &[], &[before_disabled], &mut paint);
+    assert_eq!(widgets["pending-field"].value.as_deref(), Some(""));
+    assert!(!widgets["pending-field"].enabled && !widgets["pending-field"].focused);
+    assert_eq!(descriptor.borrow().as_ref().unwrap().owner, initial.owner);
+}
+
 fn pointer(pressed: bool, pos: Pos2) -> Vec<egui::Event> {
     vec![
         egui::Event::PointerMoved(pos),
