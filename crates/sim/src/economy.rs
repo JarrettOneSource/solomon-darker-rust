@@ -16,7 +16,8 @@ pub use catalog::{
     NATIVE_SKILL_BOOK_DEFINITIONS,
 };
 pub use feedback::{
-    HubActionFeedback, HubActionFeedbackAction, HubTransferGesture, NativeSkillBookOutcome,
+    HubActionFeedback, HubActionFeedbackAction, HubTransferGesture, NativeSkillBookFeedbackCursor,
+    NativeSkillBookOutcome, NativeSkillBookReceipt, native_skill_book_result_text,
 };
 pub(crate) use inventory::base_item;
 pub use inventory::{
