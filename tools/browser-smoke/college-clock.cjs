@@ -3,12 +3,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const { chromium } = require(path.resolve(process.env.PW));
 const { startNewGame } = require('./menu-journey.cjs');
 (async () => {
   const out = process.env.OUT || path.resolve('college-clock-smoke');
   await fs.mkdir(out, {recursive:true});
-  const browser = await chromium.launch({headless:true, executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+  const owned = await launchOwnedBrowser(chromium,{headless:true, executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+  const {browser}=owned;
   const errors = [];
   const receipt = {errors};
   const page = await browser.newPage({viewport:{width:1600,height:900}});
@@ -32,8 +34,14 @@ const { startNewGame } = require('./menu-journey.cjs');
     receipt.status='failed'; receipt.failure=error.stack;
     await page.screenshot({path:path.join(out,'failure.png')}); process.exitCode=1;
   } finally {
-    await fs.writeFile(path.join(out,'receipt.json'), JSON.stringify(receipt,null,2)+'\n');
-    await browser.close();
+    try { receipt.cleanup = await owned.close(); }
+    catch(error) {
+      receipt.status='failed';
+      receipt.cleanup=error.cleanup||{error:error.stack};
+      throw error;
+    } finally {
+      await fs.writeFile(path.join(out,'receipt.json'), JSON.stringify(receipt,null,2)+'\n');
+    }
   }
   console.log(JSON.stringify(receipt));
 })().catch(e=>{console.error(e);process.exitCode=1;});
