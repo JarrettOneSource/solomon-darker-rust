@@ -54,6 +54,14 @@ records native `MyLoader::Render` at `0x005BCA40`, numerator `0x0081F6A8`, denom
 - Progress is de-duplicated completed work divided by total required work across sequential
   loader/resident phases. Concurrent work remains concurrent. It never regresses and never
   claims 100 percent before completion. There is no timer, easing or minimum duration.
+- Resident music follows pinned `game-audio-browser.ts::loadMusicChannel`: its Promise
+  executor creates the channel, installs loadeddata/error handlers and calls load in one
+  JavaScript task. The Rust candidate initially constructed channels with src before an
+  asynchronously polled readiness future called load again. The actual named smoke
+  retained cancelled academy/combat/death MP3 requests before browser close. This is a
+  producer-ordering defect, not an allowed navigation cancellation. Root's repair must
+  start empty media, attach handlers, then set src/load together; loadeddata stays required
+  and every unexpected request failure remains fatal in the next composed startup.
 - Pinned Website also shows truthful stage, whole percentage, pending filename and ready
   item count. Those are explicit browser enhancements; stock per-file order/weighting is
   unknown. The separate match-loading lifecycle is not the startup denominator.
