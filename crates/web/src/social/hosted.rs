@@ -4,10 +4,8 @@
 
 use solomon_protocol::hosted::{HostedCommand, HostedServerMessage};
 use solomon_sim::social::{GameCollegeInvitation, GamePlayerCardProfile};
-use web_sys::HtmlElement;
 
-use super::{SocialUi, Surface, action_button, attribute};
-use crate::ui::{append, element};
+use super::{SocialUi, Surface};
 
 #[derive(Clone, Debug)]
 pub enum HostedSocialAction {
@@ -28,7 +26,6 @@ impl SocialUi {
         self.college_invitations.clear();
         self.resolving_college = None;
         self.hosted_actions.clear();
-        self.party_dirty = true;
     }
 
     pub fn take_hosted_actions(&mut self) -> Vec<HostedSocialAction> {
@@ -50,14 +47,12 @@ impl SocialUi {
                 self.requested_card = None;
                 self.surface = profile.clone().map(Surface::Card);
                 self.focus_modal = self.surface.is_some();
-                self.party_dirty = true;
-                self.hosted_notice.set_text_content(None);
+                self.hosted_notice = None;
             }
             HostedServerMessage::CollegeInvitations { invitations } => {
                 if self.college_invitations != *invitations {
                     self.college_invitations.clone_from(invitations);
                     self.focus_college = true;
-                    self.party_dirty = true;
                 }
             }
             HostedServerMessage::PartyAction { accepted, reason, .. } => {
@@ -70,7 +65,6 @@ impl SocialUi {
                             .to_owned(),
                     )
                 };
-                self.party_dirty = true;
             }
             _ => return Ok(false),
         }
@@ -87,8 +81,7 @@ impl SocialUi {
         }
         self.resolving_college = None;
         self.dismiss_college_invitation(invitation_id);
-        self.hosted_notice.set_text_content(result.as_ref().err().map(String::as_str));
-        self.party_dirty = true;
+        self.hosted_notice = result.as_ref().err().cloned();
     }
 
     pub(super) fn request_hosted_card(&mut self, by_reference: bool, target: &str) {
@@ -110,7 +103,7 @@ impl SocialUi {
             .map_or_else(|| target.to_owned(), |card| card.player_reference.clone());
         self.next_hosted_request += 1;
         self.hosted_card_request = Some(self.next_hosted_request);
-        self.hosted_notice.set_text_content(Some("Opening Player Card…"));
+        self.hosted_notice = Some("Opening Player Card…".into());
         self.hosted_actions.push(HostedSocialAction::Command(Box::new(
             HostedCommand::RequestPlayerCard {
                 request_id: self.next_hosted_request,
@@ -140,10 +133,9 @@ impl SocialUi {
         }
         let Some(invitation) = self.college_invitations.first() else { return };
         self.resolving_college = Some(invitation.id.clone());
-        self.hosted_notice.set_text_content(None);
+        self.hosted_notice = None;
         self.hosted_actions
             .push(HostedSocialAction::ResolveCollegeInvitation { invitation: invitation.clone() });
-        self.party_dirty = true;
     }
 
     pub(super) fn decline_college_invitation(&mut self) {
@@ -161,67 +153,49 @@ impl SocialUi {
             HostedCommand::DismissCollegeInvitation { invitation_id: invitation_id.to_owned() },
         )));
         self.focus_college = true;
-        self.party_dirty = true;
     }
 
-    pub(super) fn draw_college_invitation(&mut self) -> Result<(), String> {
-        self.college_dialog.set_text_content(None);
-        self.college_dialog.set_hidden(!self.college_visible());
-        if !self.college_visible() {
-            return Ok(());
-        }
-        let invitation = &self.college_invitations[0];
-        let dialog = element(&self.document, "section", "play-routing-dialog")?;
-        attribute(&dialog, "role", "dialog")?;
-        attribute(&dialog, "aria-modal", "true")?;
-        attribute(&dialog, "aria-label", "Private College invitation")?;
-        copy(&self.document, &dialog, "h2", "COLLEGE INVITATION")?;
-        let invitation_text = element(&self.document, "p", "")?;
-        copy(&self.document, &invitation_text, "strong", &invitation.inviter.display_name)?;
-        copy(&self.document, &invitation_text, "span", " invited you to their private College.")?;
-        append(&dialog, &invitation_text)?;
-        copy(
-            &self.document,
-            &dialog,
-            "p",
-            "You will preview its mods and cheat policy before leaving your current session.",
-        )?;
-        let footer = element(&self.document, "footer", "")?;
+    pub(super) fn paint_college_invitation(
+        &mut self,
+        frame: &mut crate::gpu_ui::UiFrame<'_>,
+        ui: &mut egui::Ui,
+    ) -> Result<(), String> {
+        let Some(invitation) = self.college_invitations.first() else { return Ok(()) };
+        let inviter = invitation.inviter.display_name.clone();
         let busy = self.resolving_college.is_some();
-        let decline = action_button(&self.document, "DECLINE", "college-decline", "")?;
-        attribute(&decline, "data-game-back", "true")?;
-        attribute(&decline, "data-college-focus", "true")?;
-        decline
-            .toggle_attribute_with_force("disabled", busy)
-            .map_err(|_| "College decline availability")?;
-        append(&footer, &decline)?;
-        let accept = action_button(
-            &self.document,
-            if busy { "RESOLVING…" } else { "VIEW & JOIN" },
-            "college-accept",
-            "",
-        )?;
-        accept
-            .toggle_attribute_with_force("disabled", busy)
-            .map_err(|_| "College acceptance availability")?;
-        append(&footer, &accept)?;
-        append(&dialog, &footer)?;
-        append(&self.college_dialog, &dialog)?;
-        if self.focus_college && !busy {
-            decline.focus().map_err(|_| "College invitation focus")?;
-            self.focus_college = false;
+        let width = (self.size.0 as f32 - 40.0).clamp(220.0, 560.0);
+        let bounds = egui::Rect::from_center_size(
+            frame.ctx.content_rect().center(),
+            egui::vec2(width, 260.0),
+        );
+        ui.interact(bounds, egui::Id::unique("social/college-panel-block"), egui::Sense::click());
+        let response=ui.scope_builder(egui::UiBuilder::new().max_rect(bounds),|ui|{
+            egui::Frame::new().fill(egui::Color32::from_rgb(12,13,20)).stroke(egui::Stroke::new(1.0,super::gpu::GOLD)).inner_margin(24.0).show(ui,|ui|{
+                ui.set_min_width(width-48.0);
+                ui.label(super::gpu::rich("COLLEGE INVITATION",21.0,super::gpu::GOLD));ui.add_space(18.0);
+                ui.label(super::gpu::rich(format!("{inviter} invited you to their private College."),17.0,super::gpu::PALE));ui.add_space(12.0);
+                ui.label(super::gpu::rich("You will preview its mods and cheat policy before leaving your current session.",15.0,super::gpu::PALE));ui.add_space(20.0);
+                let mut action=None;
+                ui.horizontal(|ui|{
+                    let decline=super::gpu::browser_button(frame,ui,"college-decline","DECLINE",egui::vec2(140.0,36.0),!busy);
+                    if self.focus_college&&!busy{decline.request_focus();self.focus_college=false;}
+                    if decline.clicked(){action=Some(false);}
+                    if super::gpu::browser_button(frame,ui,"college-accept",if busy{"RESOLVING…"}else{"VIEW & JOIN"},egui::vec2(160.0,36.0),!busy).clicked(){action=Some(true);}
+                });action
+            }).inner
+        }).inner;
+        frame.record_rect(
+            "social/college-invitation",
+            "Private College invitation",
+            "dialog",
+            bounds,
+            true,
+        );
+        match response {
+            Some(true) => self.accept_college_invitation(),
+            Some(false) => self.decline_college_invitation(),
+            None => {}
         }
         Ok(())
     }
-}
-
-fn copy(
-    document: &web_sys::Document,
-    parent: &HtmlElement,
-    tag: &str,
-    text: &str,
-) -> Result<(), String> {
-    let node = element(document, tag, "")?;
-    node.set_text_content(Some(text));
-    append(parent, &node)
 }

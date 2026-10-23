@@ -1,105 +1,47 @@
-//! Source `mod-ui/ModMinimap.tsx`. The accepted model owns every marker and action;
-//! the browser retains only keyed nodes and the last displayed action arguments.
+//! GPU authored minimap from `mod-ui/ModMinimap.tsx`.
+//! The accepted projection supplies every marker and the exact displayed action center.
 
-use std::cell::RefCell;
-use std::collections::BTreeMap;
-use std::rc::Rc;
-
+use crate::gpu_ui::UiFrame;
+use crate::ui::javascript_string;
+use egui::{Color32, FontFamily, FontId, Id, Order, Pos2, Rect, Stroke, pos2, vec2};
 use solomon_sim::Vec2;
 use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::projection::ModContentProjection;
 use solomon_sim::modding::ui::{
-    ModMinimapMarkerId, ModMinimapModel, ModMinimapSnapshot, project_mod_minimap,
+    ModMinimapMarkerId, ModMinimapMarkerKind, ModMinimapSnapshot, project_mod_minimap,
 };
-use wasm_bindgen::{JsCast, prelude::*};
-use web_sys::{Document, Element, Event, HtmlElement};
+use wasm_bindgen::JsValue;
+use web_sys::Document;
 
-use crate::ui::{append, element, javascript_string, style};
-
-/// Root adds its request ID and sends the actual `ui-action` command with
-/// `{action, arguments:{x,y}}`. A click keeps the center that was displayed then.
 pub struct ModMinimapAction {
     pub content_id: String,
     pub action: String,
     pub center: Vec2,
 }
-
-struct ActionContext {
+struct Marker {
+    id: String,
+    kind: ModMinimapMarkerKind,
+    position: Vec2,
+}
+struct Minimap {
+    label: String,
     content_id: String,
+    mount: String,
+    size: Vec2,
+    range: f64,
     center: Vec2,
+    markers: Vec<Marker>,
+    binding: Option<String>,
+    actions: Vec<String>,
 }
-
 pub struct ModMinimapView {
-    document: Document,
-    root: HtmlElement,
-    markers: HtmlElement,
-    bindings: HtmlElement,
-    buttons: HtmlElement,
-    marker_nodes: BTreeMap<String, HtmlElement>,
-    binding_nodes: BTreeMap<String, HtmlElement>,
-    action_labels: Vec<String>,
-    current: Rc<RefCell<Option<ActionContext>>>,
-    actions: Rc<RefCell<Vec<ModMinimapAction>>>,
-    click: Closure<dyn FnMut(Event)>,
+    model: Option<Minimap>,
+    actions: Vec<ModMinimapAction>,
 }
-
 impl ModMinimapView {
-    pub fn new(document: &Document) -> Result<Self, String> {
-        let root = element(document, "section", "mod-minimap")?;
-        root.set_hidden(true);
-        let css = element(document, "style", "mod-minimap-styles")?;
-        css.set_text_content(Some(include_str!("../../../web/mod-minimap.css")));
-        append(&root, &css)?;
-        let markers = element(document, "div", "")?;
-        let bindings = element(document, "div", "")?;
-        let buttons = element(document, "div", "")?;
-        for group in [&markers, &bindings, &buttons] {
-            append(&root, group)?;
-        }
-        let current: Rc<RefCell<Option<ActionContext>>> = Rc::new(RefCell::new(None));
-        let actions = Rc::new(RefCell::new(Vec::new()));
-        let context = current.clone();
-        let outbox = actions.clone();
-        let click = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(target) = event.target().and_then(|target| target.dyn_into::<Element>().ok())
-            else {
-                return;
-            };
-            let target = target
-                .closest("[data-mod-minimap-action]")
-                .expect("the minimap action selector is valid");
-            let Some(action) =
-                target.and_then(|target| target.get_attribute("data-mod-minimap-action"))
-            else {
-                return;
-            };
-            if let Some(context) = context.borrow().as_ref() {
-                outbox.borrow_mut().push(ModMinimapAction {
-                    content_id: context.content_id.clone(),
-                    action,
-                    center: context.center,
-                });
-            }
-        });
-        root.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())
-            .map_err(|_| "Could not listen to the authored minimap")?;
-        append(&document.body().ok_or("The minimap needs a game document")?, &root)?;
-        Ok(Self {
-            document: document.clone(),
-            root,
-            markers,
-            bindings,
-            buttons,
-            marker_nodes: BTreeMap::new(),
-            binding_nodes: BTreeMap::new(),
-            action_labels: Vec::new(),
-            current,
-            actions,
-            click,
-        })
+    pub fn new(_document: &Document) -> Result<Self, String> {
+        Ok(Self { model: None, actions: Vec::new() })
     }
-
-    /// Call on actual accepted snapshot/content/runtime updates, as Source's subscriptions do.
     pub fn update(
         &mut self,
         snapshot: &ModMinimapSnapshot<'_>,
@@ -109,121 +51,178 @@ impl ModMinimapView {
     ) -> Result<(), String> {
         let model =
             content.and_then(|content| project_mod_minimap(snapshot, content, viewer_id, runtime));
-        let Some(model) = model else {
-            self.hide();
-            return Ok(());
-        };
-        self.paint(&model)
-    }
-
-    pub fn hide(&mut self) {
-        self.root.set_hidden(true);
-        *self.current.borrow_mut() = None;
-        self.markers.set_text_content(None);
-        self.bindings.set_text_content(None);
-        self.buttons.set_text_content(None);
-        self.marker_nodes.clear();
-        self.binding_nodes.clear();
-        self.action_labels.clear();
-    }
-
-    pub fn reset(&mut self) {
-        self.hide();
-        self.actions.borrow_mut().clear();
-    }
-
-    pub fn take_actions(&mut self) -> Vec<ModMinimapAction> {
-        std::mem::take(&mut *self.actions.borrow_mut())
-    }
-
-    fn paint(&mut self, model: &ModMinimapModel<'_>) -> Result<(), String> {
-        self.root.set_hidden(false);
-        attribute(&self.root, "aria-label", model.accessible_name)?;
-        attribute(&self.root, "data-mount", model.mount)?;
-        attribute(
-            &self.root,
-            "data-interactive",
-            if model.actions.is_empty() { "false" } else { "true" },
-        )?;
-        style(&self.root, &format!("width:{}px;height:{}px", model.size.x, model.size.y))?;
-        let mut retained = BTreeMap::new();
-        for (index, marker) in model.markers.iter().enumerate() {
-            let id = marker_id(marker.id);
-            let key = format!("{}:{id}", marker.kind.as_str());
-            let node = if let Some(node) = self.marker_nodes.remove(&key) {
-                node
-            } else {
-                element(
-                    &self.document,
-                    "span",
-                    &format!("mod-minimap__marker mod-minimap__marker--{}", marker.kind.as_str()),
-                )?
-            };
-            let x = 50.0
-                + (marker.position.x - model.center.x).clamp(-model.range, model.range)
-                    / model.range
-                    * 50.0;
-            let y = 50.0
-                + (marker.position.y - model.center.y).clamp(-model.range, model.range)
-                    / model.range
-                    * 50.0;
-            style(&node, &format!("left:{x}%;top:{y}%"))?;
-            attribute(&node, "data-mod-minimap-marker", &id)?;
-            insert_at(&self.markers, &node, index)?;
-            retained.insert(key, node);
-        }
-        for node in self.marker_nodes.values() {
-            node.remove();
-        }
-        self.marker_nodes = retained;
-        let mut retained = BTreeMap::new();
-        if let Some(bindings) = model.bindings {
-            for (index, (name, value)) in bindings.iter().enumerate() {
-                let node = if let Some(node) = self.binding_nodes.remove(name) {
-                    node
-                } else {
-                    element(&self.document, "output", "")?
-                };
+        self.model = if let Some(model) = model {
+            let binding = if let Some((name, value)) =
+                model.bindings.and_then(|bindings| bindings.iter().next())
+            {
                 let json = serde_json::to_string(value).map_err(|error| error.to_string())?;
                 let value = js_sys::JSON::parse(&json)
-                    .map_err(|_| "Could not read an authored minimap binding")?;
-                node.set_text_content(Some(&format!("{name}: {}", javascript_string(&value))));
-                insert_at(&self.bindings, &node, index)?;
-                retained.insert(name.to_owned(), node);
+                    .map_err(|_| "Could not read authored minimap binding")?;
+                Some(format!("{name}: {}", javascript_string(&value)))
+            } else {
+                None
+            };
+            Some(Minimap {
+                label: model.accessible_name.to_owned(),
+                content_id: model.content_id.to_owned(),
+                mount: model.mount.to_owned(),
+                size: model.size,
+                range: model.range,
+                center: model.center,
+                markers: model
+                    .markers
+                    .iter()
+                    .map(|marker| Marker {
+                        id: marker_id(marker.id),
+                        kind: marker.kind,
+                        position: marker.position,
+                    })
+                    .collect(),
+                binding,
+                actions: model.actions.iter().map(|action| (*action).to_owned()).collect(),
+            })
+        } else {
+            None
+        };
+        Ok(())
+    }
+    pub fn hide(&mut self) {
+        self.model = None;
+    }
+    pub fn reset(&mut self) {
+        self.hide();
+        self.actions.clear();
+    }
+    pub fn take_actions(&mut self) -> Vec<ModMinimapAction> {
+        std::mem::take(&mut self.actions)
+    }
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        let Some(model) = &self.model else { return Ok(()) };
+        let ctx = frame.ctx.clone();
+        let screen = ctx.content_rect();
+        let size = vec2(
+            (model.size.x as f32).min(screen.width() * 0.42).min(352.0),
+            (model.size.y as f32).min(screen.height() * 0.42).min(352.0),
+        );
+        let point = match model.mount.as_str() {
+            "hud.top_left" => pos2(16.0, 16.0),
+            "hud.bottom_left" => pos2(16.0, screen.height() - 80.0 - size.y),
+            "hud.bottom_right" => {
+                pos2(screen.width() - 16.0 - size.x, screen.height() - 80.0 - size.y)
             }
-        }
-        for node in self.binding_nodes.values() {
-            node.remove();
-        }
-        self.binding_nodes = retained;
-        let action_labels: Vec<String> =
-            model.actions.iter().map(|action| (*action).to_owned()).collect();
-        if self.action_labels != action_labels {
-            self.buttons.set_text_content(None);
-            for action in &model.actions {
-                let button = element(&self.document, "button", "")?;
-                attribute(&button, "type", "button")?;
-                attribute(&button, "data-mod-minimap-action", action)?;
-                button.set_text_content(Some(action));
-                append(&self.buttons, &button)?;
-            }
-            self.action_labels = action_labels;
-        }
-        *self.current.borrow_mut() =
-            Some(ActionContext { content_id: model.content_id.to_owned(), center: model.center });
+            "hud.overlay" => screen.center() - size / 2.0,
+            _ => pos2(screen.width() - 16.0 - size.x, 16.0),
+        };
+        egui::Area::new(Id::unique("mod/minimap")).order(Order::Middle).fixed_pos(point).show(
+            &ctx,
+            |ui| {
+                let bounds = Rect::from_min_size(ui.min_rect().min, size);
+                ui.set_min_size(size);
+                let painter = ui.painter();
+                let outline: Vec<_> = (0..64)
+                    .map(|i| {
+                        let angle = i as f32 * std::f32::consts::TAU / 64.0;
+                        bounds.center()
+                            + vec2(angle.cos() * size.x / 2.0, angle.sin() * size.y / 2.0)
+                    })
+                    .collect();
+                painter.add(egui::Shape::convex_polygon(
+                    outline,
+                    Color32::from_rgba_unmultiplied(10, 12, 17, 199),
+                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(210, 190, 139, 178)),
+                ));
+                for marker in &model.markers {
+                    let x = 0.5
+                        + ((marker.position.x - model.center.x).clamp(-model.range, model.range)
+                            / model.range
+                            * 0.5) as f32;
+                    let y = 0.5
+                        + ((marker.position.y - model.center.y).clamp(-model.range, model.range)
+                            / model.range
+                            * 0.5) as f32;
+                    let center = bounds.min + vec2(x * size.x, y * size.y);
+                    let color = match marker.kind {
+                        ModMinimapMarkerKind::SelfPlayer => Color32::WHITE,
+                        ModMinimapMarkerKind::Party => Color32::from_rgb(87, 200, 255),
+                        ModMinimapMarkerKind::Enemy => Color32::from_rgb(238, 68, 68),
+                        ModMinimapMarkerKind::Powerup => Color32::from_rgb(121, 240, 107),
+                    };
+                    let points: Vec<_> = (0..24)
+                        .map(|i| {
+                            let angle = i as f32 * std::f32::consts::TAU / 24.0;
+                            center + vec2(angle.cos(), angle.sin()) * 3.6
+                        })
+                        .collect();
+                    let points = clip_ellipse(points, bounds);
+                    if points.len() > 2 {
+                        painter.add(egui::Shape::convex_polygon(points, color, Stroke::NONE));
+                    }
+                    frame.record_rect(
+                        &format!("mod/minimap-marker:{}:{}", marker.kind.as_str(), marker.id),
+                        marker.kind.as_str(),
+                        "img",
+                        Rect::from_center_size(center, vec2(7.2, 7.2)).intersect(bounds),
+                        true,
+                    );
+                }
+                if let Some(binding) = &model.binding {
+                    painter.text(
+                        bounds.left_bottom() + vec2(7.2, -5.6),
+                        egui::Align2::LEFT_BOTTOM,
+                        binding,
+                        FontId::new(10.0, FontFamily::Name("Alegreya".into())),
+                        Color32::from_rgb(238, 227, 196),
+                    );
+                }
+                // Source overlays each declared action at the same anchor, preserving order.
+                for action in &model.actions {
+                    let font = FontId::new(10.0, FontFamily::Name("Alegreya".into()));
+                    let galley = ui.painter().layout_no_wrap(
+                        action.clone(),
+                        font,
+                        Color32::from_rgb(238, 227, 196),
+                    );
+                    let rect = Rect::from_center_size(
+                        bounds.center_bottom() - vec2(0.0, 22.0),
+                        galley.size() + vec2(11.2, 6.4),
+                    );
+                    let response = ui.interact(
+                        rect,
+                        Id::unique(("mod/minimap-action", action)),
+                        egui::Sense::click(),
+                    );
+                    ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(24, 21, 33));
+                    ui.painter().rect_stroke(
+                        rect,
+                        0.0,
+                        Stroke::new(1.0, Color32::from_rgb(210, 190, 139)),
+                        egui::StrokeKind::Inside,
+                    );
+                    ui.painter().galley(
+                        rect.center() - galley.size() / 2.0,
+                        galley,
+                        Color32::WHITE,
+                    );
+                    frame.record(
+                        &format!("mod/minimap-action:{action}"),
+                        action,
+                        "button",
+                        &response,
+                    );
+                    if response.clicked() {
+                        self.actions.push(ModMinimapAction {
+                            content_id: model.content_id.clone(),
+                            action: action.clone(),
+                            center: model.center,
+                        });
+                    }
+                }
+                frame.record_rect("mod/minimap", &model.label, "img", bounds, true);
+            },
+        );
         Ok(())
     }
 }
-
-impl Drop for ModMinimapView {
-    fn drop(&mut self) {
-        self.root
-            .remove_event_listener_with_callback("click", self.click.as_ref().unchecked_ref())
-            .expect("remove the installed minimap listener");
-        self.root.remove();
-    }
-}
-
 fn marker_id(id: ModMinimapMarkerId<'_>) -> String {
     match id {
         ModMinimapMarkerId::Player(id) => id.to_owned(),
@@ -238,17 +237,33 @@ fn marker_id(id: ModMinimapMarkerId<'_>) -> String {
         }
     }
 }
-
-fn insert_at(parent: &HtmlElement, node: &HtmlElement, index: usize) -> Result<(), String> {
-    let next = parent.children().item(index as u32);
-    if next.as_ref() != Some(node.as_ref()) {
-        parent
-            .insert_before(node, next.as_ref().map(|node| node.as_ref()))
-            .map_err(|_| "Could not retain authored minimap order")?;
+fn clip_ellipse(mut points: Vec<Pos2>, bounds: Rect) -> Vec<Pos2> {
+    let center = bounds.center();
+    let radius = bounds.size() / 2.0;
+    for i in 0..64 {
+        if points.is_empty() {
+            break;
+        }
+        let angle = (i as f32 + 0.5) * std::f32::consts::TAU / 64.0;
+        let normal = vec2(angle.cos() / radius.x, angle.sin() / radius.y);
+        let limit = (std::f32::consts::PI / 64.0).cos();
+        let input = std::mem::take(&mut points);
+        let mut previous = *input.last().expect("nonempty clipped polygon");
+        let mut previous_distance = (previous - center).dot(normal) - limit;
+        for point in input {
+            let distance = (point - center).dot(normal) - limit;
+            if (distance <= 0.0) != (previous_distance <= 0.0) {
+                points.push(
+                    previous
+                        + (point - previous) * (previous_distance / (previous_distance - distance)),
+                );
+            }
+            if distance <= 0.0 {
+                points.push(point);
+            }
+            previous = point;
+            previous_distance = distance;
+        }
     }
-    Ok(())
-}
-
-fn attribute(node: &HtmlElement, name: &str, value: &str) -> Result<(), String> {
-    node.set_attribute(name, value).map_err(|_| format!("Could not set minimap {name}"))
+    points
 }
