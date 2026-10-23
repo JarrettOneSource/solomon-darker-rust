@@ -186,8 +186,23 @@ PW="$PWD/node_modules/playwright-core" URL=http://127.0.0.1:4181/ node tools/bro
 
 Launches headless Google Chrome (software WebGL), starts a wizard through the title/Create flow, checks the wizard
 spawns in the north arch, walks south and east on key presses at the 100 Hz tick, fails on any
-console error, and writes `rust-game-smoke.png`. `URL`, `SHOT` and `CHROME` override the
-defaults. The `wizard_state()` export the script reads exists only for this purpose.
+runtime or required-resource error, and writes current title and gameplay screenshots.
+It requires actual WebGL submissions, visible GPU widget geometry and absence of legacy
+visual DOM controls. `URL`, `SHOT` and `CHROME` override the defaults. `wizard_state()` and
+`gpu_ui_state()` are read-only observations; browser interactions use ordinary input.
+
+The source contract and startup journey verify the complete GPU cutover and the recovered
+native splash, including cold/warm reload, held title/font/main-WASM responses, exact Loader
+geometry/source artwork and a visible required-asset failure:
+
+```sh
+node --test tools/browser-smoke/gpu-ui-contract.test.cjs
+PW="$PWD/node_modules/playwright-core" URL=http://127.0.0.1:4181/ \
+  OUT=/tmp/solomon-gpu-startup node tools/browser-smoke/startup.cjs
+```
+
+The [migration matrix](docs/RUST-UI-MIGRATION.md) distinguishes implemented checks from
+actual accepted browser evidence for every UI family.
 
 The room journey smoke walks from the spawn through each private room and back with actual
 keyboard input, validates settled transitions, captures every room and its return, and fails

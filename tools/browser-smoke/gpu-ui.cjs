@@ -102,6 +102,20 @@ async function focused(page, id, options) {
     `GPU focus on ${id}`, options);
 }
 
+async function setSlider(page, id, target) {
+  await click(page, id);
+  await focused(page, id);
+  await nextFrame(page);
+  const current = Number((await widget(page, id)).value);
+  assert.ok(Number.isFinite(current), `the actual slider reports its accepted number: ${id}`);
+  const key = current < target ? 'ArrowRight' : 'ArrowLeft';
+  for (let count = 0; count < Math.abs(target - current); count += 1) {
+    await page.keyboard.press(key);
+    await nextFrame(page);
+  }
+  await value(page, id, String(target));
+}
+
 async function wheel(page, id, deltaX, deltaY) {
   const point = center(bounds(await widget(page, id)));
   await page.mouse.move(point.x, point.y);
@@ -140,6 +154,7 @@ async function assertGpuOnly(page) {
     const passive = new Set(['CANVAS', 'SCRIPT', 'STYLE', 'LINK', 'NOSCRIPT']);
     const unexpected = [...document.body.querySelectorAll('*')].filter(element => {
       if (passive.has(element.tagName)) return false;
+      if (element.tagName === 'AUDIO' && element.hidden && !element.controls) return false;
       const adapter = element.hasAttribute('data-gpu-text-input')
         || (element.tagName === 'INPUT' && element.type === 'file');
       if (adapter) {
@@ -169,9 +184,7 @@ async function assertGpuOnly(page) {
   return { ...evidence, gpu: ui };
 }
 
-function watchErrors(page) {
-  const errors = [];
-  const warnings = [];
+function watchErrors(page, {errors = [], warnings = []} = {}) {
   page.on('pageerror', error => errors.push({ type: 'pageerror', message: error.message }));
   page.on('console', message => {
     if (message.type() === 'error') errors.push({ type: 'console', message: message.text(), location: message.location() });
@@ -245,6 +258,6 @@ async function nextFrame(page) {
 
 module.exports = {
   readUi, waitForUi, findWidget, widget, noWidget, byLabel, surface, ready, bounds, center, click, tap,
-  fill, value, focused, wheel, drag, assertGpuOnly, watchErrors, installController, controller, nextFrame,
+  fill, value, focused, setSlider, wheel, drag, assertGpuOnly, watchErrors, installController, controller, nextFrame,
   observeGpu, gpuDraws,
 };
