@@ -14,6 +14,16 @@ fn frame_codes(
     codes: &[BrowserKey],
     paint: impl FnMut(&mut UiFrame<'_>),
 ) -> BTreeMap<String, WidgetGeometry> {
+    frame_native(ctx, events, codes, &[], paint)
+}
+
+fn frame_native(
+    ctx: &Context,
+    events: Vec<egui::Event>,
+    codes: &[BrowserKey],
+    receipts: &[edit::model::Receipt],
+    paint: impl FnMut(&mut UiFrame<'_>),
+) -> BTreeMap<String, WidgetGeometry> {
     let images = painter::Images::default();
     let widgets = RefCell::new(BTreeMap::new());
     let announcements = RefCell::new(Vec::new());
@@ -43,12 +53,14 @@ fn frame_codes(
             input_scope: &input_scope,
             retired_images: &retired_images,
             focus_from_keyboard: true,
-            editor_receipts: &[],
+            editor_receipts: receipts,
             editors: &editors,
             editor_errors: &editor_errors,
         })
     })
     .drop_without_applying_deltas();
+    edit::set_focus(ctx, &editors.into_inner());
+    assert!(editor_errors.into_inner().is_empty());
     widgets.into_inner()
 }
 
@@ -239,11 +251,12 @@ fn a_new_field_has_committed_geometry_before_an_immediate_click_and_first_charac
     let mut paint = |frame: &mut UiFrame<'_>| {
         frame.ctx.root_ui(|ui| {
             if opened {
-                let response = ui.put(
-                    Rect::from_min_size(pos2(20.0, 100.0), vec2(250.0, 45.0)),
-                    egui::TextEdit::singleline(&mut text).id_salt("new-name"),
-                );
-                frame.record("new-name", "Name", "textbox", &response);
+                // A stock space exercises actual editing/focus without requiring
+                // a browser image upload in this native interaction regression.
+                NativeTextEdit::singleline(&mut text, "new-name", "Name")
+                    .native_name(Pos2::ZERO, 1.0)
+                    .margin(Vec2::ZERO)
+                    .show(frame, ui, Rect::from_min_size(pos2(20.0, 100.0), vec2(250.0, 45.0)));
             } else {
                 let response = ui.interact(
                     Rect::from_min_size(pos2(20.0, 30.0), vec2(100.0, 45.0)),
@@ -261,32 +274,110 @@ fn a_new_field_has_committed_geometry_before_an_immediate_click_and_first_charac
     let mut events = pointer(true, pos2(50.0, 50.0));
     events.extend(pointer(false, pos2(50.0, 50.0)));
     events.extend(pointer(true, pos2(50.0, 120.0)));
-    events.push(egui::Event::Key {
-        key: egui::Key::F,
-        physical_key: None,
-        pressed: true,
-        repeat: false,
-        modifiers: egui::Modifiers::NONE,
-    });
-    events.push(egui::Event::Text("F".to_owned()));
+    events.push(enter_key(egui::Key::Space));
+    let receipt = edit::model::Receipt::unbound(
+        1,
+        1.0,
+        edit::model::Intent::Replace { range: TextSelection::caret(0), text: " ".into() },
+    );
     let passes = batches::into_passes(
         egui::RawInput { events, ..Default::default() },
-        vec![browser_key("KeyF", "F")],
-        Vec::new(),
+        vec![browser_key("Space", " ")],
+        vec![receipt],
         vec![
             batches::DispatchEnd { events: 2, codes: 0, edits: 0 },
             batches::DispatchEnd { events: 4, codes: 0, edits: 0 },
             batches::DispatchEnd { events: 6, codes: 0, edits: 0 },
-            batches::DispatchEnd { events: 8, codes: 1, edits: 0 },
+            batches::DispatchEnd { events: 7, codes: 1, edits: 1 },
         ],
     );
     for pass in passes {
         focus_pointer_text(&ctx, &widgets, &pass.raw.events);
-        widgets = frame_codes(&ctx, pass.raw.events, &pass.codes, &mut paint);
+        widgets = frame_native(&ctx, pass.raw.events, &pass.codes, &pass.edits, &mut paint);
     }
     assert!(opened);
-    assert_eq!(text, "F");
+    assert_eq!(text, " ");
     assert!(widgets["new-name"].focused);
+    assert!(text_edit_focused(&ctx));
+}
+
+fn enter_key(key: egui::Key) -> egui::Event {
+    egui::Event::Key {
+        key,
+        physical_key: Some(key),
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    }
+}
+
+#[test]
+fn native_editor_enter_is_per_dispatch_and_keeps_the_real_singleline_focus() {
+    let ctx = Context::default();
+    let mut text = " ".to_owned();
+    let descriptor = RefCell::new(None);
+    let submitted = std::cell::Cell::new(false);
+    let mut paint = |frame: &mut UiFrame<'_>| {
+        frame.ctx.root_ui(|ui| {
+            let response = NativeTextEdit::singleline(&mut text, "native-form", "Query")
+                .native_name(Pos2::ZERO, 1.0)
+                .request_focus(true)
+                .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(250.0, 45.0)));
+            submitted.set(response.submitted);
+            *descriptor.borrow_mut() = frame.editors.borrow().last().cloned();
+        });
+    };
+    frame(&ctx, Vec::new(), &mut paint);
+    let mut session = edit::session::Session::new(descriptor.borrow().clone().unwrap());
+    let first = session.receipt(1, 1.0, edit::model::Intent::Submit, None, None);
+    let widgets = frame_native(&ctx, vec![enter_key(egui::Key::Enter)], &[], &[first], &mut paint);
+    assert!(submitted.get());
+    assert!(widgets["native-form"].focused);
+    frame(&ctx, Vec::new(), &mut paint);
+    assert!(!submitted.get());
+    let next = session.receipt(2, 1.0, edit::model::Intent::Submit, None, None);
+    let widgets = frame_native(&ctx, vec![enter_key(egui::Key::Enter)], &[], &[next], &mut paint);
+    assert!(submitted.get());
+    assert!(widgets["native-form"].focused);
+    assert_eq!(text, " ");
+}
+
+#[test]
+fn a_remounted_field_does_not_accept_a_native_receipt_from_its_retired_instance() {
+    let ctx = Context::default();
+    let mut text = " ".to_owned();
+    let mut descriptor = None;
+    frame(&ctx, Vec::new(), |frame| {
+        frame.ctx.root_ui(|ui| {
+            NativeTextEdit::singleline(&mut text, "rename", "Name")
+                .native_name(Pos2::ZERO, 1.0)
+                .request_focus(true)
+                .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(250.0, 45.0)));
+            descriptor = frame.editors.borrow().last().cloned();
+        })
+    });
+    let mut old_session = edit::session::Session::new(descriptor.unwrap());
+    let old_input = old_session.receipt(
+        1,
+        1.0,
+        edit::model::Intent::Replace { range: TextSelection::caret(1), text: " ".into() },
+        None,
+        None,
+    );
+    frame(&ctx, Vec::new(), |_| {});
+    text.clear();
+    frame_native(&ctx, Vec::new(), &[], &[old_input], |frame| {
+        frame.ctx.root_ui(|ui| {
+            NativeTextEdit::singleline(&mut text, "rename", "Name")
+                .native_name(Pos2::ZERO, 1.0)
+                .request_focus(true)
+                .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(250.0, 45.0)));
+        })
+    });
+    assert_eq!(
+        text, "",
+        "the same public field name does not revive a retired native editing owner"
+    );
 }
 
 fn pointer(pressed: bool, pos: Pos2) -> Vec<egui::Event> {

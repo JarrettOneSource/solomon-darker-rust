@@ -83,6 +83,23 @@ pub struct Receipt {
     pub clipboard_handled: bool,
 }
 
+impl Receipt {
+    pub fn unbound(sequence: u64, time: f64, intent: Intent) -> Self {
+        Self {
+            id: None,
+            sequence,
+            time,
+            before: "".into(),
+            text: "".into(),
+            selection: Selection::caret(0),
+            intent,
+            composing: false,
+            caret: None,
+            clipboard_handled: false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct Value {
     text: String,
