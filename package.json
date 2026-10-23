@@ -12,7 +12,8 @@
     "package:desktop:mac": "node tools/package-desktop.mjs --platform darwin --arch arm64",
     "package:desktop:linux": "node tools/package-desktop.mjs --platform linux --arch x64",
     "archive:desktop": "node tools/archive-desktop.mjs",
-    "smoke:desktop": "node tools/smoke-desktop-runtime.mjs"
+    "smoke:desktop": "node tools/smoke-desktop-runtime.mjs",
+    "test:browser-support": "node --test tools/browser-smoke/gpu-ui-contract.test.cjs tools/browser-smoke/browser-errors.test.cjs tools/browser-smoke/browser-lifecycle.test.cjs"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",
