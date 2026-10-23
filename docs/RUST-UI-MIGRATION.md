@@ -75,7 +75,7 @@ Owner names match the parallel implementation lanes. Scripts are under `tools/br
 | Surface and required variants | Owner | Implementation/reference and acceptance route | Current blocker/evidence |
 | --- | --- | --- | --- |
 | Process startup; cold, warm, held image/font/wasm; failed required asset; no partial Title or HUD | foundation + root; acceptance tests | Startup evidence above; `startup.cjs`; loader geometry, monotonic work, immediate readiness transition, screenshots | Baseline reproduces absent splash/premature Title; GPU repair and acceptance pending |
-| GPU runtime; stock bundle crops/rotation/registered origins, glyph masks, browser fonts, dynamic images, blend/clips | foundation | `gpu_ui.rs`, existing `render.rs`, stock manifest; read-only `gpu_ui_state`, GPU meshes/textures and final screenshots | Pending foundation and composed GPU evidence |
+| GPU runtime; stock bundle crops/rotation/registered origins, glyph masks, browser fonts, dynamic images, blend/clips | foundation | `gpu_ui.rs`, existing `render.rs`, stock manifest; read-only `gpu_ui_state`, GPU meshes/textures and final screenshots | Core probe 15/15; composed game/art acceptance pending |
 | Title/Play; clouds, moon, graves, Solomon animation, logo/art, Continue policy, account/desktop links | menus | `menu/title.rs`, pinned Main Menu; `smoke.cjs`, `menus.cjs`, `menu-input.cjs` | Pending GPU port/current art |
 | Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | Pending GPU modal input |
 | College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | Pending GPU controls and ordinary admission path |
@@ -140,6 +140,14 @@ remains the pointer target, so clipping cannot make an overflowing title, toolti
 instruction appear to pass. HUD blur uses an actual browser tab focus change; touch cancellation
 uses the native touch-cancel input and verifies both the neutral painted joystick and accepted
 zero movement. No synthetic browser blur event stands in for platform focus behavior.
+
+The foundation's retained `foundation-probe/result.json` and `extended-result.json` were
+reviewed with `gpu-unicode-scroll.png`: all 15 checks pass for real GPU submission, loaded
+static inputs, pointer button/checkbox, text editing, Unicode/IME commit, native clipboard
+copy/cut/paste, wheel scrolling and absence of scrolled-out rows. The body contains only the
+GPU canvas and marked text adapter in that probe, with no runtime errors. This is core runtime
+evidence; it does not accept the game menus, mobile layout, startup or the later accessibility
+follow-up by implication.
 
 Checks must drive ordinary pointer, keyboard, touch or controller input against visible GPU
 widgets. The read-only snapshot locates those widgets and reports accepted outcomes; it
