@@ -222,11 +222,11 @@ impl ModSkillQuickbarView {
         let callback = self.key_down.as_ref().unchecked_ref();
         if listening {
             self.window
-                .add_event_listener_with_callback("keydown", callback)
+                .add_event_listener_with_callback_and_bool("keydown", callback, true)
                 .map_err(|_| "Could not attach the mod quickbar keyboard")?;
         } else {
             self.window
-                .remove_event_listener_with_callback("keydown", callback)
+                .remove_event_listener_with_callback_and_bool("keydown", callback, true)
                 .map_err(|_| "Could not remove the mod quickbar keyboard")?;
         }
         self.listening = listening;
