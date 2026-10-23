@@ -54,10 +54,8 @@ impl SocialUi {
             .show(&ctx, |ui| {
                 ui.set_min_width(width);
                 ui.set_max_width(width);
-                if self.coarse && !open {
-                    if self.paint_chat_opener(frame, ui).clicked() {
-                        intent = Some(Intent::Action("chat-open".into()));
-                    }
+                if self.coarse && !open && self.paint_chat_opener(frame, ui).clicked() {
+                    intent = Some(Intent::Action("chat-open".into()));
                 }
                 if open {
                     egui::Frame::new()

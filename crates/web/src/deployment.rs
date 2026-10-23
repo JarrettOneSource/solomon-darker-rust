@@ -119,7 +119,7 @@ impl DeploymentUpdate {
                     0.0,
                     Color32::from_rgba_unmultiplied(4, 4, 6, 224),
                 );
-                let width = (screen.width() - 48.0).min(520.0).max(120.0);
+                let width = (screen.width() - 48.0).clamp(120.0, 520.0);
                 let height = 240.0_f32.min(screen.height() - 48.0);
                 let bounds = egui::Rect::from_center_size(screen.center(), vec2(width, height));
                 egui::ScrollArea::vertical()
