@@ -145,6 +145,35 @@ fn geometry_excludes_widgets_clipped_out_of_the_scrolling_panel() {
 }
 
 #[test]
+fn authored_clip_reports_visible_notification_ink_and_preserves_original_paint_bounds() {
+    let ctx = Context::default();
+    let widgets = frame(&ctx, vec![], |frame| {
+        let clip = Rect::from_min_max(pos2(0.0, 50.0), pos2(400.0, 300.0));
+        frame.record_clipped_rect(
+            "notification:first",
+            "Level up",
+            "status",
+            Rect::from_min_size(pos2(10.0, 40.0), vec2(100.0, 25.0)),
+            clip,
+            true,
+        );
+        frame.record_clipped_rect(
+            "notification:retired",
+            "Old message",
+            "status",
+            Rect::from_min_size(pos2(10.0, 20.0), vec2(100.0, 25.0)),
+            clip,
+            true,
+        );
+    });
+    let visible = &widgets["notification:first"];
+    assert_eq!((visible.bounds.y, visible.bounds.height), (50.0, 15.0));
+    assert_eq!((visible.paint_bounds.y, visible.paint_bounds.height), (40.0, 25.0));
+    assert!(!visible.is_interactive());
+    assert!(!widgets.contains_key("notification:retired"));
+}
+
+#[test]
 fn a_real_text_pointer_focus_preserves_characters_queued_in_the_same_frame() {
     let ctx = Context::default();
     let mut text = String::new();

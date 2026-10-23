@@ -416,8 +416,29 @@ impl UiFrame<'_> {
     }
 
     pub fn record_rect(&self, id: &str, label: &str, role: &str, rect: Rect, enabled: bool) {
-        let paint_bounds = rect.into();
-        let rect = rect.intersect(self.ctx.input(|input| input.content_rect()));
+        self.record_clipped_rect(
+            id,
+            label,
+            role,
+            rect,
+            self.ctx.input(|input| input.content_rect()),
+            enabled,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_clipped_rect(
+        &self,
+        id: &str,
+        label: &str,
+        role: &str,
+        paint_rect: Rect,
+        clip_rect: Rect,
+        enabled: bool,
+    ) {
+        let paint_bounds = paint_rect.into();
+        let rect =
+            paint_rect.intersect(clip_rect).intersect(self.ctx.input(|input| input.content_rect()));
         if !rect.is_positive() || !rect.is_finite() {
             return;
         }
