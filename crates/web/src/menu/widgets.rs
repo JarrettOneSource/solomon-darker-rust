@@ -74,7 +74,7 @@ pub(crate) fn interact(
     response
 }
 
-pub(super) fn focus_outline(
+pub(crate) fn focus_outline(
     frame: &UiFrame<'_>,
     ui: &Ui,
     response: &Response,
