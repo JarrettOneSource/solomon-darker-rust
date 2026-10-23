@@ -1119,19 +1119,14 @@ fn paint_panel_background(frame: &UiFrame<'_>, ui: &Ui, panel: Rect) -> Result<(
     let painter = ui.painter().with_clip_rect(panel.intersect(ui.clip_rect()));
     let center = panel.center_top();
     let radius = Vec2::new(panel.width() / 2.0, panel.height()).length() * 0.36;
-    let mut radial = egui::Mesh::default();
-    radial.colored_vertex(center, widgets::alpha(0x5f5230, 0.26));
-    for index in 0..=64 {
-        let angle = index as f32 / 64.0 * std::f32::consts::TAU;
-        radial.colored_vertex(
-            center + Vec2::new(angle.cos(), angle.sin()) * radius,
-            Color32::TRANSPARENT,
-        );
-        if index > 0 {
-            radial.add_triangle(0, index, index + 1);
-        }
-    }
-    painter.add(egui::Shape::mesh(radial));
+    widgets::radial_gradient(
+        ui,
+        panel,
+        center,
+        radius,
+        widgets::alpha(0x5f5230, 0.26),
+        Color32::TRANSPARENT,
+    );
     for outside in [
         Rect::from_min_max(
             panel.min - Vec2::splat(40.0),

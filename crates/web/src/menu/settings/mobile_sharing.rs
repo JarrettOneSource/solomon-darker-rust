@@ -142,7 +142,7 @@ impl SettingsLayoutPublication {
                 code,
                 egui::pos2(r.right() - 102.0, r.center().y),
                 Align2::RIGHT_CENTER,
-                "JetBrains Mono Bold",
+                "JetBrains Mono Semibold",
                 16.0,
                 widgets::color(0xf3e2a9),
             );

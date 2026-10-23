@@ -694,22 +694,14 @@ fn background(
             Color32::WHITE,
         )?;
     } else {
-        painter.rect_filled(panel, 0.0, widgets::color(0x090806));
-        let center = panel.center_top();
-        let radius = Vec2::new(panel.width() / 2.0, panel.height()).length() * 0.72;
-        let mut mesh = egui::Mesh::default();
-        mesh.colored_vertex(center, widgets::color(0x352a16));
-        for index in 0..=64 {
-            let angle = index as f32 / 64.0 * std::f32::consts::TAU;
-            mesh.colored_vertex(
-                center + Vec2::new(angle.cos(), angle.sin()) * radius,
-                widgets::color(0x090806),
-            );
-            if index > 0 {
-                mesh.add_triangle(0, index, index + 1);
-            }
-        }
-        painter.with_clip_rect(panel.intersect(ui.clip_rect())).add(egui::Shape::mesh(mesh));
+        widgets::radial_gradient(
+            ui,
+            panel,
+            panel.center_top(),
+            Vec2::new(panel.width() / 2.0, panel.height()).length() * 0.72,
+            widgets::color(0x352a16),
+            widgets::color(0x090806),
+        );
     }
     let border = if mismatch { 3.0 * scale } else { 1.0 };
     frame.paint_inner_shadow(
