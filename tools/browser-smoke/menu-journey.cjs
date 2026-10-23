@@ -97,8 +97,12 @@ async function startNewGame(page, {
     || ui.findWidget(snapshot, 'panel:dialogue'), 'Create or College admission', {timeout:120000});
   if (introOnly) return;
   if ((await ui.readUi(page)).surface !== 'create') await reachCollegeLoadout(page, {touch});
-  await ui.fill(page, 'create-name', name, {touch});
-  await ui.value(page, 'create-name', name);
+  // A real player may keep Create's generated name. Name-edit acceptance keeps
+  // its explicit draft; unrelated family routes can choose this ordinary path.
+  if(name!==null) {
+    await ui.fill(page, 'create-name', name, {touch});
+    await ui.value(page, 'create-name', name);
+  }
   await activate(page, `element:${element}`);
   await activate(page, `discipline:${discipline}`);
   await ui.surface(page, 'hidden');
