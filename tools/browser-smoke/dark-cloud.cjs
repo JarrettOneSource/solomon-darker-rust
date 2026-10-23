@@ -100,11 +100,15 @@ async function revealTab(page, id) {
     await gpu.click(page, 'leave');
     await gpu.surface(page, 'title');
     await gpu.assertGpuOnly(page);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checks.push('source Cloud pause/settings return, compact landscape, portrait tabs/layout edit/admission');
     console.log(JSON.stringify({checks, actualMods: actual.size, errors}));
   } catch (error) {
     if (page) await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'dark-cloud-failure.png')});
     throw error;
-  } finally { await browser.close(); }
+  } finally {
+    try { if (page && !page.isClosed()) await gpu.settleErrors(page); }
+    finally { await browser.close(); }
+  }
 })().catch(error => {console.error(error); process.exitCode = 1;});

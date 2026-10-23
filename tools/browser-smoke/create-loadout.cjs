@@ -53,6 +53,7 @@ fs.mkdirSync(output, {recursive:true});
     await page.screenshot({path:path.join(output, 'create-randomized-admitted.png')});
     // Each variant enters through an ordinary fresh-player College journey.
     // The first-visit dialogue is not repeated by an existing player's New Game.
+    await gpu.settleErrors(page);
     receipt.errors = [...observed.errors];
     await page.close();
     page = await browser.newPage({viewport:{width:1600,height:900},
@@ -65,6 +66,7 @@ fs.mkdirSync(output, {recursive:true});
     receipt.checks.push('an actual blank draft admits Genericus with the requested Earth/Mind selection');
     await gpu.assertGpuOnly(page);
     await page.screenshot({path:path.join(output, 'create-genericus-admitted.png')});
+    await gpu.settleErrors(page);
     assert.deepEqual(receipt.errors, []);
     console.log(JSON.stringify(receipt));
   } catch (error) {
@@ -75,7 +77,9 @@ fs.mkdirSync(output, {recursive:true});
     }
     throw error;
   } finally {
-    fs.writeFileSync(path.join(output, 'create-loadout-receipt.json'), JSON.stringify(receipt,null,2));
-    await browser.close();
+    try {
+      if (page && !page.isClosed()) await gpu.settleErrors(page);
+      fs.writeFileSync(path.join(output, 'create-loadout-receipt.json'), JSON.stringify(receipt,null,2));
+    } finally { await browser.close(); }
   }
 })().catch(error => {console.error(error);process.exitCode = 1});

@@ -8,8 +8,9 @@ const gpu = require('./gpu-ui.cjs');
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
   const checks = [];
+  let page;
   try {
-    const page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
+    page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
     const {errors} = gpu.watchErrors(page);
     await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
     await gpu.ready(page);
@@ -41,8 +42,12 @@ const gpu = require('./gpu-ui.cjs');
     await gpu.click(page, 'hall-back');
     await gpu.surface(page, 'title');
     await gpu.assertGpuOnly(page);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checks.push('native Hall canvas scroll and compact touch target');
     console.log(JSON.stringify({checks, errors}));
-  } finally { await browser.close(); }
+  } finally {
+    try { if (page && !page.isClosed()) await gpu.settleErrors(page); }
+    finally { await browser.close(); }
+  }
 })().catch(error => {console.error(error); process.exitCode = 1;});
