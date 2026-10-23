@@ -413,6 +413,9 @@ impl PlayerPanels {
         self.navigation.release();
         let previous = self.panel.take();
         self.viewport_panel = None;
+        self.closing_at = None;
+        self.replace_with = None;
+        self.alpha = 0.0;
         self.bursts.borrow_mut().clear();
         self.press = None;
         self.pressed_npc_selector = None;

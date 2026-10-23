@@ -74,6 +74,10 @@ const notice = (page, title) => ui.waitForUi(page, snapshot => {
     await ui.waitForUi(page, snapshot => ui.findWidget(snapshot,'panel:belt:2')?.label.includes('assign or drag away'),'real Skillbook belt binding');
     await page.keyboard.press('Escape'); await ui.noWidget(page,'panel:surface:skills');
     assert.equal((await ui.readUi(page)).surface,'hidden','panel Escape does not also open pause');
+    await page.keyboard.press('KeyI');await ui.widget(page,'panel:surface:inventory');
+    await page.keyboard.press('Escape');await ui.noWidget(page,'panel:surface:inventory');
+    await page.keyboard.press('KeyK');await ui.widget(page,'panel:surface:skills');
+    await page.keyboard.press('Escape');await ui.noWidget(page,'panel:surface:skills');
     await page.waitForFunction(tick => window.wasmBindings.wizard_state()[5] > tick,frozen[5]);
     await ui.assertGpuOnly(page); assert.deepEqual(errors,[]);
     console.log(JSON.stringify({passed:true,generatedName:process.env.GENERATED_NAME==='1',errors,screenshots:output}));
