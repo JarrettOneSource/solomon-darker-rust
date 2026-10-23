@@ -85,6 +85,8 @@ struct MusicChannel {
     cue: AudioCue,
     media: HtmlAudioElement,
     envelope: f64,
+    priming: bool,
+    primed: bool,
 }
 struct MusicFade {
     started_at: f64,
@@ -159,7 +161,13 @@ impl GameAudio {
                 .ok_or("audio document body")?
                 .append_child(&media)
                 .map_err(|_| "music channel attach")?;
-            music.push(MusicChannel { cue: definition.cue, media, envelope: 0.0 });
+            music.push(MusicChannel {
+                cue: definition.cue,
+                media,
+                envelope: 0.0,
+                priming: false,
+                primed: false,
+            });
         }
         let state = Rc::new(RefCell::new(AudioState {
             context: context.clone(),
@@ -298,7 +306,7 @@ impl GameAudio {
             outgoing_start,
         });
         if state.unlocked && !state.music_paused {
-            play_music(&state.music[index].media);
+            play_stock_music(&self.state, index, &mut state.music[index], false)?;
         }
         Ok(())
     }
@@ -522,14 +530,13 @@ impl GameAudio {
     pub fn set_music_paused(&self, paused: bool) -> Result<(), String> {
         let mut state = self.state.borrow_mut();
         state.music_paused = paused;
-        for index in [state.incoming, state.outgoing].into_iter().flatten() {
-            if paused {
-                state.music[index]
-                    .media
-                    .pause()
-                    .map_err(|error| audio_error("pause music", error))?;
-            } else if state.unlocked {
-                play_music(&state.music[index].media);
+        if paused {
+            for channel in &state.music {
+                channel.media.pause().map_err(|error| audio_error("pause music", error))?;
+            }
+        } else if state.unlocked {
+            for index in [state.incoming, state.outgoing].into_iter().flatten() {
+                play_stock_music(&self.state, index, &mut state.music[index], false)?;
             }
         }
         for channel in state.asset_music.values() {
@@ -649,8 +656,23 @@ fn unlock(state: &Rc<RefCell<AudioState>>) -> Result<(), String> {
     if !inner.music_paused {
         for index in [inner.incoming, inner.outgoing].into_iter().flatten() {
             if inner.music[index].media.paused() {
-                play_music(&inner.music[index].media);
+                play_stock_music(state, index, &mut inner.music[index], false)?;
             }
+        }
+        for index in 0..inner.music.len() {
+            if inner.incoming == Some(index)
+                || inner.outgoing == Some(index)
+                || inner.music[index].primed
+                || inner.music[index].priming
+            {
+                continue;
+            }
+            let channel = &mut inner.music[index];
+            channel.media.set_current_time(0.0);
+            channel.media.set_loop(true);
+            channel.media.set_muted(false);
+            channel.media.set_volume(0.0);
+            play_stock_music(state, index, channel, true)?;
         }
         for channel in inner.asset_music.values() {
             if channel.media.paused() {
@@ -660,20 +682,66 @@ fn unlock(state: &Rc<RefCell<AudioState>>) -> Result<(), String> {
     }
     Ok(())
 }
+/// Source primes the resident songs in the trusted gesture. The native play call
+/// stays synchronous; completion only touches this still-owned channel and checks
+/// whether a scene/pause transition changed its role while the promise was pending.
+fn play_stock_music(
+    state: &Rc<RefCell<AudioState>>,
+    index: usize,
+    channel: &mut MusicChannel,
+    prime: bool,
+) -> Result<(), String> {
+    let promise = channel.media.play().map_err(|error| audio_error("play music", error))?;
+    if prime {
+        channel.priming = true;
+    }
+    let state = Rc::downgrade(state);
+    spawn_local(async move {
+        let result = JsFuture::from(promise).await;
+        let Some(state) = state.upgrade() else { return };
+        let mut inner = state.borrow_mut();
+        let owned = inner.incoming == Some(index) || inner.outgoing == Some(index);
+        let paused = inner.music_paused;
+        let channel = &mut inner.music[index];
+        if prime {
+            channel.priming = false;
+        }
+        channel.primed |= result.is_ok();
+        let cleanup = if !owned {
+            reset_music(channel)
+        } else if paused {
+            channel.media.pause().map_err(|error| audio_error("pause music", error))
+        } else {
+            Ok(())
+        };
+        if let Err(error) = cleanup {
+            web_sys::console::error_1(&JsValue::from_str(&error));
+        }
+        if let Err(error) = result {
+            report_music_rejection(&error);
+        }
+    });
+    Ok(())
+}
+
+fn report_music_rejection(error: &JsValue) {
+    // A fresh trusted gesture retries browser autoplay rejection. Other playback
+    // errors are defects and remain visible to the browser acceptance observer.
+    if js_sys::Reflect::get(error, &JsValue::from_str("name"))
+        .ok()
+        .and_then(|name| name.as_string())
+        .as_deref()
+        != Some("NotAllowedError")
+    {
+        web_sys::console::error_1(error);
+    }
+}
+
 fn play_music(media: &HtmlAudioElement) {
     match media.play() {
         Ok(promise) => spawn_local(async move {
             if let Err(error) = JsFuture::from(promise).await {
-                // Browser autoplay rejection is expected before a fresh trusted gesture.
-                // The next gesture retries the still-owned paused channel.
-                if js_sys::Reflect::get(&error, &JsValue::from_str("name"))
-                    .ok()
-                    .and_then(|name| name.as_string())
-                    .as_deref()
-                    != Some("NotAllowedError")
-                {
-                    web_sys::console::error_1(&error);
-                }
+                report_music_rejection(&error);
             }
         }),
         Err(error) => web_sys::console::error_1(&error),

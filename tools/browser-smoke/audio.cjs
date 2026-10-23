@@ -30,6 +30,9 @@ await page.addInitScript(({files})=>{
       const result=Reflect.apply(original,this,args);
       media.push({action:name,cue:this.dataset.audioCue,time:performance.now(),
         volume:this.volume,currentTime:this.currentTime});
+      if(name==='play')result.then(
+        ()=>media.push({action:'played',cue:this.dataset.audioCue,time:performance.now()}),
+        error=>media.push({action:'rejected',cue:this.dataset.audioCue,name:error.name,time:performance.now()}));
       return result;
     };
   }
@@ -73,6 +76,8 @@ const primedBeforeKeyboard=await page.evaluate(()=>audioReceipt.media);
 for(const track of tracks.filter(track=>track.cue!=='solomondarktheme')) {
   const starts=primedBeforeKeyboard.filter(event=>event.cue===track.cue&&event.action==='play');
   assert.equal(starts.length,1,`${track.cue} is primed once in the actual pointer gesture`);
+  assert.equal(primedBeforeKeyboard.filter(event=>event.cue===track.cue&&event.action==='played').length,1,
+    'the actual native prime promise fulfilled');
   assert.equal(starts[0].volume,0,'unused music primes silently');
   assert.ok(track.paused&&track.time===0,'a completed unused prime resets and pauses');
 }
