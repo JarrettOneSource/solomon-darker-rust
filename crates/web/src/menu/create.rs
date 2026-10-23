@@ -2,13 +2,12 @@
 //! native motion, name admission and element VFX plans remain in `solomon-sim`.
 
 use super::widgets::{self, Stage};
-use crate::gpu_ui::{ImageShadow, StockAtlas, UiFrame, paint_text_layout};
-use egui::{Align2, Color32, FontId, Id, Pos2, Rect, Ui, Vec2};
+use crate::gpu_ui::{ImageShadow, StockAtlas, UiFrame};
+use egui::{Align2, Color32, Pos2, Rect, Ui, Vec2};
 use solomon_graphics::BlendMode;
 use solomon_sim::element_vfx::{self, ElementVfxBlend, ElementVfxDraw};
 use solomon_sim::menu::create_name::{finalize_create_wizard_name, validate_create_wizard_name};
 use solomon_sim::menu::{self, CreateHandPose};
-use solomon_sim::native_ui_text::NativeUiFontName;
 use solomon_sim::profile::create::NATIVE_CREATE_ENTRY_FADE_MS;
 use solomon_sim::profile::{WizardDiscipline, WizardElement};
 

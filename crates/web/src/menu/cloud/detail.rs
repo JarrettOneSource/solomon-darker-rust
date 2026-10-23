@@ -515,7 +515,7 @@ impl ModDetailView {
             );
             let (_, field) = ui.allocate_space(Vec2::new(width - 6.0, self.comment_height));
             widgets::control_panel(frame, ui, &art.controls, field, true)?;
-            widgets::edit(
+            let response = widgets::edit(
                 frame,
                 ui,
                 "dark-cloud-comment",
