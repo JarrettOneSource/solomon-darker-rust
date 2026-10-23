@@ -53,17 +53,32 @@ async function reveal(page, id) {
     else if (message.type === 'snapshot') accepted = message.frame;
     else if (message.type === 'error') errors.push(`host ${message.code}: ${message.reason}`);
   }));
-  const storedSave = () => page.evaluate(() => new Promise((resolve, reject) => {
-    const mount = document.querySelector('meta[name="solomon-website-mount"]')?.content.replace(/\/$/, '') || '';
-    const opening = indexedDB.open(`solomon-darker-rust-saves${mount ? `:${mount}` : ''}`);
-    opening.onerror = () => reject(opening.error);
-    opening.onsuccess = () => {
-      const db = opening.result;
-      const reading = db.transaction('slots', 'readonly').objectStore('slots').get(0);
-      reading.onerror = () => {db.close(); reject(reading.error);};
-      reading.onsuccess = () => {db.close(); resolve(reading.result ?? null);};
-    };
-  }));
+  const storedSave = () => page.evaluate(async () => {
+    const configuration = document.querySelector('meta[name="solomon-website-mount"]');
+    const mount = configuration?.content.replace(/\/$/, '') || '';
+    const name = `${configuration ? 'solomon-dark-game-saves' : 'solomon-darker-rust-saves'}${mount ? `:${mount}` : ''}`;
+    if (!(await indexedDB.databases()).some(database => database.name === name)) return null;
+    return new Promise((resolve, reject) => {
+      const opening = indexedDB.open(name);
+      opening.onerror = () => reject(opening.error);
+      opening.onupgradeneeded = () => {
+        opening.transaction.abort();
+        reject(new Error('The observed save database disappeared before its read-only open.'));
+      };
+      opening.onsuccess = () => {
+        const db = opening.result;
+        try {
+          const reading = db.transaction('slots', 'readonly').objectStore('slots').get(0);
+          reading.onerror = () => {db.close(); reject(reading.error);};
+          reading.onsuccess = () => {
+            db.close();
+            const value = reading.result;
+            resolve(value == null ? null : typeof value === 'string' ? value : JSON.stringify(value));
+          };
+        } catch (error) {db.close(); reject(error);}
+      };
+    });
+  });
   const choose = async files => {
     const opening = page.waitForEvent('filechooser');
     await reveal(page, 'save-import');
