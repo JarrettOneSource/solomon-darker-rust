@@ -79,10 +79,15 @@ impl GameOverOverlay {
             .order(egui::Order::Foreground)
             .fixed_pos(bounds.min)
             .show(frame.ctx, |ui| {
-                let response = ui.interact(
+                let mut input =
+                    crate::player_panels::chrome::child_ui(ui, "game-over-input", bounds);
+                if !view.accepts_input {
+                    input.disable();
+                }
+                let response = input.interact(
                     bounds,
                     egui::Id::unique("game-over:continue"),
-                    if view.accepts_input { egui::Sense::click() } else { egui::Sense::hover() },
+                    egui::Sense::click(),
                 );
                 if self.focus_next {
                     response.request_focus();
