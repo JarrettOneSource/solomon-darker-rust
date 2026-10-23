@@ -33,7 +33,6 @@ impl PlayerPanels {
         }
         self.draw_equipment(c, snapshot)?;
         if self.panel == Some(PlayerPanel::Inventory) {
-            c.faded(0.32).art(&self.ui, 62, [800.0, 249.0], [1.25, 1.25], 0.0, 0xffffff)?;
             for (line, y) in [
                 (format!("KILLS: {}", snapshot.kills), 337.0),
                 (format!("AWESOMENESS: {}", snapshot.awesomeness), 359.0),
