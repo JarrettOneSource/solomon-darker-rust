@@ -12,6 +12,12 @@ fs.mkdirSync(output,{recursive:true});
 async function ready(page,{touch=false}={}) {
   await page.goto(url,{waitUntil:'domcontentloaded'});
   await ui.ready(page);
+  if(touch) {
+    assert.match((await ui.widget(page,'landscape-guidance')).label,/Rotate your device to landscape/);
+    await screenshot(page,'hud-touch-before-admission-portrait-guidance.png');
+    await page.setViewportSize({width:844,height:390});
+    await ui.noWidget(page,'landscape-guidance');
+  }
   await startNewGame(page,{touch});
   await ui.widget(page,'hud:health');
 }
@@ -90,8 +96,11 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
     ui.watchErrors(touch,{errors});
     await ui.observeGpu(touch);
     await ready(touch,{touch:true});
-    await screenshot(touch,'hud-touch-portrait.png');
+    await touch.setViewportSize({width:390,height:844});
+    await ui.widget(touch,'landscape-guidance');
+    await screenshot(touch,'hud-touch-portrait-guidance.png');
     await touch.setViewportSize({width:844,height:390});
+    await ui.noWidget(touch,'landscape-guidance');
     await ticks(touch,3);
     await screenshot(touch,'hud-touch-landscape.png');
     const joystick=ui.bounds(await ui.widget(touch,'hud:joystick:movement'));
@@ -121,7 +130,7 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
       await screenshot(touch,'hud-input-touch-final.png');
       assert.deepEqual(errors,[]);
       console.log(JSON.stringify({checks:['native GPU HUD bounds','wide layout','gamepad stick',
-        'd-pad priority','stick drift','actual tab blur release','touch movement',
+        'd-pad priority','stick drift','actual tab blur release','source portrait guidance','landscape touch movement',
         'touch cancellation and GPU neutral state'],desktopSubmissions,
         touchSubmissions:await ui.gpuDraws(touch),errors}));
     } finally {
