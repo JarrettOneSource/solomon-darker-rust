@@ -58,7 +58,7 @@ pub(super) fn mirrored_image(
     );
     frame.image(ui.painter(), &format!("assets/stock/menu/{name}.png"), rect, Some(uv), tint);
 }
-pub(super) fn interact(
+pub(crate) fn interact(
     frame: &UiFrame<'_>,
     ui: &Ui,
     id: &str,
@@ -147,8 +147,11 @@ pub(crate) fn stock_button(
 ) -> Response {
     let response = interact(frame, ui, id, text, "button", rect, enabled);
     paint_stock_button(frame, ui, &response, rect, scale, enabled);
-    let pressed =
-        if response.is_pointer_button_down_on() { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
+    let pressed = if enabled && stock_button_pressed(ui, &response) {
+        Vec2::splat(6.0 * scale)
+    } else {
+        Vec2::ZERO
+    };
     if !text.is_empty() {
         crate::gpu_ui::native_text(
             frame,
@@ -168,6 +171,14 @@ pub(crate) fn stock_button(
     }
     response
 }
+pub(crate) fn stock_button_pressed(ui: &Ui, response: &Response) -> bool {
+    response.is_pointer_button_down_on()
+        || (response.has_focus()
+            && ui.input(|input| {
+                input.key_down(egui::Key::Enter) || input.key_down(egui::Key::Space)
+            }))
+}
+
 /// Paint stock chrome around an existing real interaction without recording another widget.
 pub(crate) fn paint_stock_button(
     frame: &UiFrame<'_>,
@@ -206,10 +217,13 @@ pub(crate) fn paint_stock_button_tinted(
     highlight: bool,
     tint: Color32,
 ) {
-    image(frame, ui, "main-menu-button", rect, tint);
-    if enabled && highlight {
-        image(frame, ui, "main-menu-button-hover", rect, tint);
-    }
+    image(
+        frame,
+        ui,
+        if enabled && highlight { "main-menu-button-hover" } else { "main-menu-button" },
+        rect,
+        tint,
+    );
     let surround = 6.0 * scale;
     let end = Vec2::new(70.0, 85.0) * scale;
     let left = rect.min - Vec2::splat(surround);
@@ -245,7 +259,7 @@ pub(super) fn stone_button(
     atlas.paint_raw(
         frame,
         ui.painter(),
-        if enabled && response.is_pointer_button_down_on() { 106 } else { 105 },
+        if enabled && stock_button_pressed(ui, &response) { 106 } else { 105 },
         rect,
         alpha(0xffffff, if enabled { 1.0 } else { 0.36 }),
     )?;
@@ -338,4 +352,53 @@ pub(super) fn control_panel(
         if field { 3.0 } else { 6.0 },
         Color32::WHITE,
     )
+}
+
+/// Source Dark Cloud/Shelf button policy uses pressed chrome and half-opacity disabled art.
+pub(crate) fn cloud_button(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    label: &str,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+) -> Response {
+    cloud_button_with_label(frame, ui, id, label, label, rect, scale, enabled)
+}
+
+pub(crate) fn cloud_button_with_label(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    label: &str,
+    accessible_label: &str,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+) -> Response {
+    let response = interact(frame, ui, id, accessible_label, "button", rect, enabled);
+    let opacity = if enabled { 1.0 } else { 0.5 };
+    let pressed = enabled && stock_button_pressed(ui, &response);
+    paint_stock_button_tinted(frame, ui, rect, scale, enabled, pressed, alpha(0xffffff, opacity));
+    let press = if pressed { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
+    crate::gpu_ui::native_text(
+        frame,
+        ui.painter(),
+        &solomon_sim::native_ui_text::NativeUiTextSpec {
+            alpha: opacity,
+            scale: f64::from(scale),
+            tint: 0xd9ba70,
+            ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
+                NativeUiFontName::Menu,
+                label,
+                f64::from(rect.center().x + press.x),
+                f64::from(rect.center().y + 9.0 * scale + press.y),
+            )
+        },
+    );
+    if !enabled {
+        ui.painter().rect_filled(rect, 0.0, alpha(0x808080, 0.25));
+    }
+    response
 }

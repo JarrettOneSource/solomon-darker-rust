@@ -15,7 +15,7 @@ async function revealTab(page, id) {
 (async () => {
   const browser = await chromium.launch({headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
+    args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
   const checks = [];
   let page;
   try {

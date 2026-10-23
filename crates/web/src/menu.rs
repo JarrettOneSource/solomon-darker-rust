@@ -11,10 +11,7 @@ mod settings;
 mod title;
 pub(crate) mod widgets;
 
-use crate::{
-    assets,
-    gpu_ui::{StockAtlas, UiFrame},
-};
+use crate::gpu_ui::{StockAtlas, UiFrame};
 use cloud::CloudView;
 use create::CreateView;
 use egui::{Color32, Id, Rect, Vec2};
@@ -27,6 +24,7 @@ pub use routing::RoutingDownloadProgress;
 use routing::RoutingView;
 pub use settings::SettingsContext;
 use settings::SettingsView;
+use solomon_graphics::assets;
 use solomon_sim::NativeRng;
 use solomon_sim::audio::{
     AudioCue, AudioEvent, AudioOptions, MusicScene, create_entry_audio_events,
@@ -280,6 +278,7 @@ impl MenuUi {
         }
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        self.cloud.retire_images(frame);
         let keys = frame.key_codes().to_vec();
         let editing = frame.ctx.text_edit_focused();
         let capturing_binding =
@@ -371,23 +370,27 @@ impl MenuUi {
             .show(&ctx, |ui| {
                 ui.set_min_size(view.size());
                 ui.set_clip_rect(view);
-                if self.input_suspended {
+                if !enabled {
                     ui.disable();
+                    ui.set_opacity(1.0);
                 }
                 if self.cloud_visible(self.screen) {
-                    result = self.cloud.paint(frame, ui, view, enabled, &mut actions);
+                    result = self.cloud.paint(frame, ui, view, true, &mut actions);
                 } else if matches!(self.screen, Screen::Title | Screen::Play)
                     || (self.screen == Screen::Settings
                         && matches!(self.settings_back, Screen::Title | Screen::Play))
                 {
-                    result = self.title.paint(frame, ui, view, enabled, &mut actions);
+                    result = self.title.paint(frame, ui, view, true, &mut actions);
                 } else {
                     result = match self.screen {
-                        Screen::Create => self.create.paint(frame, ui, view, enabled, &mut actions),
+                        Screen::Create => self.create.paint(frame, ui, view, true, &mut actions),
                         Screen::Hall => self.hall.paint(frame, ui, view, &mut actions),
                         Screen::Join => self.join.paint_gpu(frame, ui, view, &mut actions),
                         _ => Ok(()),
                     };
+                }
+                if result.is_ok() && self.screen == Screen::Settings && self.routing.active() {
+                    result = self.settings_view.paint(frame, ui, view, &mut Vec::new());
                 }
             });
         std::mem::replace(&mut result, Ok(()))?;
@@ -405,6 +408,7 @@ impl MenuUi {
                     ui.set_clip_rect(view);
                     if self.input_suspended {
                         ui.disable();
+                        ui.set_opacity(1.0);
                     }
                     result = if self.routing.active() {
                         self.routing.paint(frame, ui, view, &mut actions)
@@ -560,13 +564,12 @@ impl MenuUi {
         self.cloud.boneyards_selected()
     }
 
-    pub fn request_boneyard_library_menu(&mut self) -> Result<(), String> {
-        if self.screen == Screen::Cloud {
-            self.handle_event(UiEvent::Key(self.settings.controls.open_menu.clone(), false))?;
-        }
-        Ok(())
+    pub fn boneyards_interactive(&self) -> bool {
+        self.screen == Screen::Cloud
+            && !self.input_suspended
+            && !self.routing.active()
+            && self.cloud.boneyards_selected()
     }
-
     pub fn complete_dark_cloud_catalog(
         &mut self,
         id: u64,

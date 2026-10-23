@@ -303,49 +303,6 @@ impl CloudArt {
         );
         Ok(())
     }
-    pub fn button(
-        &self,
-        frame: &UiFrame<'_>,
-        ui: &Ui,
-        id: &str,
-        label: &str,
-        rect: Rect,
-        scale: f32,
-        enabled: bool,
-    ) -> egui::Response {
-        let response = widgets::interact(frame, ui, id, label, "button", rect, enabled);
-        let alpha = if enabled { 1.0 } else { 0.5 };
-        let pressed = enabled && response.is_pointer_button_down_on();
-        widgets::paint_stock_button_tinted(
-            frame,
-            ui,
-            rect,
-            scale,
-            enabled,
-            pressed,
-            widgets::alpha(0xffffff, alpha),
-        );
-        let press = if pressed { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
-        crate::gpu_ui::native_text(
-            frame,
-            ui.painter(),
-            &solomon_sim::native_ui_text::NativeUiTextSpec {
-                alpha,
-                scale: f64::from(scale),
-                tint: 0xd9ba70,
-                ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
-                    NativeUiFontName::Menu,
-                    label,
-                    f64::from(rect.center().x + press.x),
-                    f64::from(rect.center().y + 9.0 * scale + press.y),
-                )
-            },
-        );
-        if !enabled {
-            ui.painter().rect_filled(rect, 0.0, widgets::alpha(0x808080, 0.25));
-        }
-        response
-    }
     pub fn tool(
         &self,
         frame: &mut UiFrame<'_>,

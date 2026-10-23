@@ -284,7 +284,7 @@ impl TitleView {
                 actions.push(action.to_owned());
             }
             let tint = widgets::alpha(0xffffff, if available { 1.0 } else { 0.36 });
-            let press = if response.is_pointer_button_down_on() {
+            let press = if available && widgets::stock_button_pressed(ui, &response) {
                 Vec2::splat(6.0 * controls_scale)
             } else {
                 Vec2::ZERO
