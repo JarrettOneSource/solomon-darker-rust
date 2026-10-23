@@ -51,7 +51,7 @@ impl SocialUi {
         egui::Area::new(Id::unique("social/chat"))
             .order(if open { Order::Foreground } else { Order::Middle })
             .anchor(anchor, offset)
-            .show(&ctx, |ui| {
+            .show(&ctx, |ui| -> Result<(), String> {
                 ui.set_min_width(width);
                 ui.set_max_width(width);
                 if self.coarse && !open && self.paint_chat_opener(frame, ui).clicked() {
@@ -66,7 +66,7 @@ impl SocialUi {
                         ))
                         .corner_radius(4.0)
                         .inner_margin(9.0)
-                        .show(ui, |ui| {
+                        .show(ui, |ui| -> Result<(), String> {
                             ui.set_min_width(width - 22.0);
                             ui.horizontal(|ui| {
                                 for channel in self.channels() {
@@ -120,7 +120,7 @@ impl SocialUi {
                                 .max_height(height)
                                 .min_scrolled_height(if self.coarse { 64.0 } else { 104.0 })
                                 .stick_to_bottom(true)
-                                .show(ui, |ui| {
+                                .show(ui, |ui| -> Result<(), String> {
                                     let messages: Vec<_> = snapshot
                                         .chat_messages
                                         .iter()
@@ -138,12 +138,14 @@ impl SocialUi {
                                     }
                                     for message in messages {
                                         if let Some(action) =
-                                            self.paint_chat_message(frame, ui, message, true)
+                                            self.paint_chat_message(frame, ui, message, true)?
                                         {
                                             intent = Some(Intent::Action(action));
                                         }
                                     }
-                                });
+                                    Ok(())
+                                })
+                                .inner?;
                             if let Some(status) = &self.chat_status {
                                 let response =
                                     ui.label(text(status, 13.0, Color32::from_rgb(255, 154, 138)));
@@ -217,7 +219,9 @@ impl SocialUi {
                                         .color(Color32::from_rgb(129, 123, 107)),
                                 );
                             }
-                        });
+                            Ok(())
+                        })
+                        .inner?;
                 } else {
                     if !faded {
                         for message in snapshot
@@ -225,7 +229,8 @@ impl SocialUi {
                             .iter()
                             .skip(snapshot.chat_messages.len().saturating_sub(5))
                         {
-                            if let Some(action) = self.paint_chat_message(frame, ui, message, false)
+                            if let Some(action) =
+                                self.paint_chat_message(frame, ui, message, false)?
                             {
                                 intent = Some(Intent::Action(action));
                             }
@@ -248,7 +253,9 @@ impl SocialUi {
                 {
                     intent = Some(Intent::Close);
                 }
-            });
+                Ok(())
+            })
+            .inner?;
         if let Some(intent) = intent {
             self.intents.borrow_mut().push(intent);
         }
@@ -319,7 +326,7 @@ impl SocialUi {
         ui: &mut egui::Ui,
         message: &GameChatMessage,
         open: bool,
-    ) -> Option<String> {
+    ) -> Result<Option<String>, String> {
         let own = self
             .snapshot
             .as_ref()
@@ -352,40 +359,59 @@ impl SocialUi {
             &message.text
         };
         let mut action = None;
-        let response = egui::Frame::new()
+        let result = egui::Frame::new()
             .fill(if open { Color32::TRANSPARENT } else { Color32::from_black_alpha(153) })
             .inner_margin(if open { 2.0 } else { 5.0 })
-            .show(ui, |ui| {
-                ui.horizontal_wrapped(|ui| {
+            .show(ui, |ui| -> Result<(), String> {
+                ui.horizontal_wrapped(|ui| -> Result<(), String> {
+                    let mut sender_style = crate::gpu_ui::NativeLabelStyle::new(
+                        FontId::new(14.0, FontFamily::Name("Alegreya Bold".into())),
+                        channel_color(message.channel),
+                    );
                     if let Some(target) = target {
-                        let response = ui.add(
-                            egui::Label::new(
-                                text(&label, 14.0, channel_color(message.channel)).strong(),
-                            )
-                            .sense(egui::Sense::click()),
-                        );
-                        frame.record(
+                        sender_style.sense = egui::Sense::click();
+                        let response = crate::gpu_ui::shaped_label(
+                            frame,
+                            ui,
                             &format!("social/chat-author:{}", message.sequence),
                             &label,
-                            "button",
-                            &response,
-                        );
+                            sender_style,
+                        )?;
                         if response.clicked() {
                             action = Some(format!("card:{}", target.player_reference));
                         }
                     } else {
-                        ui.label(text(&label, 14.0, channel_color(message.channel)).strong());
+                        crate::gpu_ui::shaped_label(
+                            frame,
+                            ui,
+                            &format!("social/chat-author:{}", message.sequence),
+                            &label,
+                            sender_style,
+                        )?;
                     }
-                    ui.label(text(suffix, 14.0, Color32::from_rgb(238, 228, 202)));
-                });
-            })
-            .response;
+                    let mut message_style = crate::gpu_ui::NativeLabelStyle::new(
+                        FontId::new(14.0, FontFamily::Name("Alegreya".into())),
+                        Color32::from_rgb(238, 228, 202),
+                    );
+                    message_style.wrap_width = Some(ui.available_width());
+                    crate::gpu_ui::shaped_label(
+                        frame,
+                        ui,
+                        &format!("social/chat-text:{}", message.sequence),
+                        suffix,
+                        message_style,
+                    )?;
+                    Ok(())
+                })
+                .inner
+            });
+        result.inner?;
         frame.record(
             &format!("social/chat-message:{}", message.sequence),
             &format!("{label} {suffix}"),
             "log",
-            &response,
+            &result.response,
         );
-        action
+        Ok(action)
     }
 }

@@ -16,6 +16,21 @@ pub(crate) fn rich(text: impl Into<String>, size: f32, color: Color32) -> RichTe
     RichText::new(text).font(FontId::new(size, FontFamily::Name("Georgia".into()))).color(color)
 }
 
+pub(crate) fn browser_text(
+    frame: &UiFrame<'_>,
+    painter: &Painter,
+    point: Pos2,
+    align: egui::Align2,
+    text: &str,
+    font: FontId,
+    color: Color32,
+) -> Result<Rect, String> {
+    let run = gpu_ui::font_run(frame.ctx, font, color, text, None)?;
+    let bounds = align.anchor_size(point, run.size());
+    run.paint(frame, painter, bounds.min, 1.0)?;
+    Ok(bounds)
+}
+
 pub(super) fn stage(size: (i32, i32)) -> (Pos2, f32) {
     let scale = (size.0 as f32 / 1600.0).min(size.1 as f32 / 900.0).max(0.01);
     (pos2((size.0 as f32 - 1600.0 * scale) / 2.0, (size.1 as f32 - 900.0 * scale) / 2.0), scale)
