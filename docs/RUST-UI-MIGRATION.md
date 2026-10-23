@@ -740,3 +740,16 @@ event for protocol commit. This proves browser IME integration, not an OS hardwa
 candidate window. The earlier failed trust assertion and stale-frame caret assertion
 remain in their original receipts; the final driver waits for the actual painted
 caret without repeating input or changing product behavior.
+
+The following f41dc57 phone continuation passes the hat warning and Skills but misses
+Fomentius with its ordinary world tap. `responsive-source-warning/phone-world-entry-failure.json`
+retains wizard position (1358.58,728.51), requested canvas point (455.11,202.8), no dialogue,
+errors[] and graceful Chrome exit0. Pinned fa08 `renderer/game-viewport.ts:110–141`,
+`core-kernels/hub-math.ts:36–56` and `HubScene.tsx:864–886` expand the logical viewport
+before clamping the camera and projecting the pointer; they do not center a 1600px world
+stage. At 844×390/default FOV the logical view is 1947.69×900, so the courtyard camera's
+right-edge origin is 376.923 and Fomentius' x1397 projects to x530.44. The test's fixed
+1600px camera plus centered-stage offset projects x455.11 instead. Correct this test
+projection using the same bounded viewport/camera contract, retain the real joystick
+route and single native touch, and record its actual dialogue result. This evidence
+establishes a driver projection error; it does not establish a game input defect.

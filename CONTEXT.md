@@ -106,8 +106,10 @@ use these terms exactly; when a new concept earns a name, add it here.
 - **Registered origin**: where a record draws inside the room's logical frame; the seal draws
   at scale 2 from a rounded registered origin.
 - **Atlas**: the stock PNG a bundle indexes (`College.bundle` for the courtyard).
-- **Camera origin** / **logical view**: the 1600 × 900 logical view at scale 1.2, clamped to
-  the world and letterboxed into the canvas.
+- **Camera origin** / **logical view**: gameplay uses a minimum 1600 × 900 logical view
+  at scale 1.2 in the College. Smaller canvases scale that minimum down; wider or taller
+  canvases reveal more world. The regional camera clamps that actual view to the world,
+  with bounded-world zoom where needed. Fixed UI stages have their own anchors.
 - **Blend mode**: Normal, Multiply (the statue aura) or Add (seals and spray), on
   premultiplied output.
 - **Tint**: a colour multiplier quantised to 8 bits per channel, with alpha separate, the way
