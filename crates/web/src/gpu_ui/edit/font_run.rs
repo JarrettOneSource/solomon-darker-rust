@@ -490,6 +490,10 @@ struct RasterLine {
     baseline: f32,
 }
 
+fn aligned_origin(line: &Line, bounds: Rect, align: egui::Align) -> Pos2 {
+    pos2(align.align_size_within_range(line.width, bounds.x_range()).min, bounds.top())
+}
+
 impl NativeFontRun {
     pub fn size(&self) -> Vec2 {
         self.geometry.size
@@ -499,13 +503,20 @@ impl NativeFontRun {
     }
 
     pub fn ink_bounds(&self) -> Rect {
+        self.ink_bounds_aligned(Rect::from_min_size(Pos2::ZERO, self.size()), egui::Align::Min)
+    }
+
+    /// Align each native wrapped row within the supplied horizontal bounds.
+    /// The top edge remains the run's first line-box edge.
+    pub fn ink_bounds_aligned(&self, bounds: Rect, align: egui::Align) -> Rect {
         self.geometry.lines.iter().zip(&self.raster).fold(Rect::NOTHING, |all, (line, raster)| {
+            let origin = aligned_origin(line, bounds, align);
             line.paint_spans.iter().fold(all, |all, span| {
                 let source = raster.bounds.intersect(Rect::from_x_y_ranges(
                     span.source.start..=span.source.end,
                     f32::NEG_INFINITY..=f32::INFINITY,
                 ));
-                all.union(source.translate(vec2(span.offset, 0.0)))
+                all.union(source.translate(origin.to_vec2() + vec2(span.offset, 0.0)))
             })
         })
     }
@@ -517,9 +528,27 @@ impl NativeFontRun {
         origin: Pos2,
         opacity: f32,
     ) -> Result<(), String> {
+        self.paint_aligned(
+            frame,
+            painter,
+            Rect::from_min_size(origin, self.size()),
+            egui::Align::Min,
+            opacity,
+        )
+    }
+
+    pub fn paint_aligned(
+        &self,
+        frame: &crate::gpu_ui::UiFrame<'_>,
+        painter: &Painter,
+        bounds: Rect,
+        align: egui::Align,
+        opacity: f32,
+    ) -> Result<(), String> {
         let pixels = self.pixels;
-        let clip = painter.clip_rect().translate(-origin.to_vec2());
         for (index, line) in self.geometry.lines.iter().enumerate() {
+            let origin = aligned_origin(line, bounds, align);
+            let clip = painter.clip_rect().translate(-origin.to_vec2());
             let bounds = self.raster[index].bounds;
             if line.text.is_empty() {
                 continue;
