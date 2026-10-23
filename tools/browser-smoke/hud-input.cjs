@@ -38,9 +38,11 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
   const {browser}=owned;
   const errors=[];
   let failure;
+  let currentPage;
   try {
     const desktopContext=await browser.newContext({viewport:{width:1600,height:900}});
     const desktop=await desktopContext.newPage();
+    currentPage=desktop;
     await ui.watchErrors(desktop,{errors}).ready;
     await ui.observeGpu(desktop);
     await ready(desktop);
@@ -101,6 +103,7 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
     await desktopContext.close();
 
     const touch=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
+    currentPage=touch;
     await ui.watchErrors(touch,{errors}).ready;
     await ui.observeGpu(touch);
     await ready(touch,{touch:true});
@@ -150,7 +153,18 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
       await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
       await client.detach();
     }
-  } catch(error) {failure=error;throw error}
+  } catch(error) {
+    failure=error;
+    const receipt={failure:error.stack,errors};
+    if(currentPage&&!currentPage.isClosed()) {
+      try {receipt.gpu=await ui.readUi(currentPage)}
+      catch(observationError) {receipt.observationError=observationError.stack}
+      try {await screenshot(currentPage,'hud-input-failure.png')}
+      catch(screenshotError) {receipt.screenshotError=screenshotError.stack}
+    }
+    fs.writeFileSync(path.join(output,'hud-input-failure.json'),JSON.stringify(receipt,null,2));
+    throw error;
+  }
   finally {
     try {
       const cleanup=await owned.close();
