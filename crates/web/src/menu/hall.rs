@@ -286,6 +286,7 @@ impl HallView {
             stage.rect(200.0, 80.0, 1200.0, 695.0)
         };
         let scale = if compact { 1.0 } else { stage.scale };
+        frame.record_rect("hall-records", "Hall records", "region", box_rect, true);
         self.ui.paint_tiles(frame, ui.painter(), 49, box_rect, scale, Color32::WHITE)?;
         let mut child =
             ui.new_child(egui::UiBuilder::new().id_salt("hall-content").max_rect(box_rect));
@@ -331,6 +332,8 @@ impl HallView {
                 } else {
                     error.unwrap_or("No records yet.")
                 };
+                frame.record_rect("hall-status", text, "status", box_rect, false);
+                frame.record_value("hall-status", text, None);
                 hall_text(
                     frame,
                     ui,

@@ -146,6 +146,32 @@ pub(crate) fn stock_button(
     enabled: bool,
 ) -> Response {
     let response = interact(frame, ui, id, text, "button", rect, enabled);
+    paint_stock_button(frame, ui, &response, rect, scale, enabled);
+    let pressed =
+        if response.is_pointer_button_down_on() { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
+    if !text.is_empty() {
+        native(
+            frame,
+            ui,
+            text,
+            NativeUiFontName::Menu,
+            rect.center() + Vec2::new(0.0, 9.0 * scale) + pressed,
+            scale,
+            if enabled { 0xd9ba70 } else { 0x5b4e2f },
+            NativeUiTextAlign::Center,
+        );
+    }
+    response
+}
+/// Paint stock chrome around an existing real interaction without recording another widget.
+pub(crate) fn paint_stock_button(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    response: &Response,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+) {
     let opacity = if enabled { 1.0 } else { 0.36 };
     let tint = alpha(0xffffff, opacity);
     image(frame, ui, "main-menu-button", rect, tint);
@@ -172,21 +198,6 @@ pub(crate) fn stock_button(
     if rail.width() > 0.0 {
         image(frame, ui, "main-menu-button-rail", rail, tint);
     }
-    let pressed =
-        if response.is_pointer_button_down_on() { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
-    if !text.is_empty() {
-        native(
-            frame,
-            ui,
-            text,
-            NativeUiFontName::Menu,
-            rect.center() + Vec2::new(0.0, 9.0 * scale) + pressed,
-            scale,
-            if enabled { 0xd9ba70 } else { 0x5b4e2f },
-            NativeUiTextAlign::Center,
-        );
-    }
-    response
 }
 pub(super) fn stone_button(
     frame: &UiFrame<'_>,

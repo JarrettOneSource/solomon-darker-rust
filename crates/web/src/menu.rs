@@ -1320,6 +1320,7 @@ impl MenuUi {
     }
 
     fn settings_changed(&mut self) -> Result<(), String> {
+        self.settings_view.take_changed();
         let settings = self.settings_view.read()?;
         if settings != self.settings {
             // The coordinator may require private-College consent. Keep accepted
@@ -1583,7 +1584,7 @@ impl PauseView {
     fn paint(
         &self,
         frame: &mut UiFrame<'_>,
-        ui: &egui::Ui,
+        ui: &mut egui::Ui,
         view: Rect,
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
@@ -1598,6 +1599,7 @@ impl PauseView {
         let stage =
             widgets::Stage { origin: view.center() - Vec2::new(800.0, 450.0) * scale, scale };
         ui.painter().rect_filled(view, 0.0, widgets::alpha(0, self.reveal * 0.85));
+        ui.set_opacity(self.reveal as f32);
         let spread = solomon_sim::float::fround((1.0 - self.reveal) * 25.0 + 40.0);
         let top = (900.0 - self.body_height()) / 2.0 - spread;
         let bottom = top + self.body_height() + spread * 2.0;
@@ -1612,7 +1614,7 @@ impl PauseView {
                 self.body_height() + spread * 2.0,
             ),
             true,
-            widgets::alpha(0xffffff, self.reveal),
+            Color32::WHITE,
         )?;
         self.atlas.paint_centered(
             frame,
@@ -1621,7 +1623,7 @@ impl PauseView {
             stage.at(800.0, top - 42.0),
             scale,
             std::f32::consts::FRAC_PI_2,
-            widgets::alpha(0xffffff, self.reveal),
+            Color32::WHITE,
         )?;
         for (x, offset, size) in [(800.0, 55.0, 1.0), (725.0, 42.0, 0.75), (875.0, 42.0, 0.75)] {
             self.atlas.paint_centered(
@@ -1631,7 +1633,7 @@ impl PauseView {
                 stage.at(x, bottom + offset),
                 scale * size,
                 0.0,
-                widgets::alpha(0xffffff, self.reveal),
+                Color32::WHITE,
             )?;
         }
         for (index, (label, id)) in self.rows.iter().enumerate() {

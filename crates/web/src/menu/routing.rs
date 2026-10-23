@@ -319,6 +319,15 @@ impl RoutingView {
                 ("THE MOD LIST HAS CHANGED".to_owned(), "CONTINUE")
             }
         };
+        frame.record_rect("routing/dialog", &heading, "dialog", panel, !self.busy);
+        frame.record_value(
+            "routing/dialog",
+            &std::iter::once(heading.as_str())
+                .chain(lines.iter().map(|(text, _)| text.as_str()))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            None,
+        );
         widgets::label(
             ui,
             &heading,

@@ -877,11 +877,13 @@ impl CloudView {
                 ),
                 Vec2::new(560.0_f32.min(view.width() - 24.0), 50.0),
             );
-            let id = if self.account.is_some() { "cloud-menu" } else { "cloud-sign-in" };
+            let id = if self.account.is_some() { "cloud-account-menu" } else { "cloud-sign-in" };
             if widgets::interact(frame, ui, id, &label, "button", rect, admitted).clicked()
                 && admitted
             {
-                actions.push(id.to_owned());
+                actions.push(
+                    if self.account.is_some() { "cloud-menu" } else { "cloud-sign-in" }.to_owned(),
+                );
             }
             let scale = 1.0_f32.min(rect.width() / 560.0);
             widgets::native(
@@ -905,6 +907,19 @@ impl CloudView {
                     0xd9ba70,
                     NativeUiTextAlign::Center,
                 );
+                ui.painter().line_segment(
+                    [
+                        egui::pos2(
+                            rect.center().x + 34.0 * scale,
+                            rect.top() + 25.0 + 20.0 * scale,
+                        ),
+                        egui::pos2(
+                            rect.center().x + 179.0 * scale,
+                            rect.top() + 25.0 + 20.0 * scale,
+                        ),
+                    ],
+                    egui::Stroke::new(2.0, widgets::GOLD),
+                );
             }
         }
         let tabs_width =
@@ -914,6 +929,7 @@ impl CloudView {
             Vec2::new(tabs_width, tab_height),
         );
         let strip = native_dark_cloud_tab_strip(f64::from(tabs.width()), f64::from(tabs.height()));
+        frame.record_rect("cloud-tabs", "Dark Cloud sections", "region", tabs, admitted);
         let mut child = ui.new_child(egui::UiBuilder::new().id_salt("cloud-tabs").max_rect(tabs));
         child.set_clip_rect(tabs);
         let mut scroll =
@@ -1115,6 +1131,8 @@ impl CloudView {
                 }
             )
         };
+        frame.record_rect("cloud-list-status", &label, "status", status, false);
+        frame.record_value("cloud-list-status", &label, None);
         widgets::native(
             frame,
             ui,
@@ -1158,6 +1176,7 @@ impl CloudView {
             }
         }
         let list = Rect::from_min_max(content.min + Vec2::new(0.0, status_height), content.max);
+        frame.record_rect("cloud-list", "Dark Cloud entries", "region", list, enabled);
         let mut child =
             ui.new_child(egui::UiBuilder::new().id_salt("cloud-rows-content").max_rect(list));
         child.set_clip_rect(list);
@@ -1459,10 +1478,43 @@ impl CloudView {
         if let Some(Sheet::Search { input }) = &mut self.sheet {
             let body =
                 panel.shrink2(Vec2::new(if view.width() < 700.0 { 8.0 } else { 30.0 }, 24.0));
-            let field = Rect::from_min_size(
-                body.min + Vec2::new(10.0, 58.0),
-                Vec2::new(body.width() - 20.0, 44.0),
+            let phone = view.width() < 700.0;
+            let caption = if self.tab == Tab::Parties {
+                "LEADER, MEMBER, OR BONEYARD:"
+            } else {
+                "MOD, AUTHOR, OR TAG:"
+            };
+            let row = Rect::from_min_size(
+                body.min + Vec2::new(0.0, 48.0),
+                Vec2::new(body.width(), if phone { 88.0 } else { 44.0 }),
             );
+            widgets::control_panel(frame, ui, &self.art.controls, row, false)?;
+            let caption_width = solomon_sim::native_ui_text::measure_native_ui_text(
+                caption,
+                NativeUiFontName::Medium,
+                1.0,
+            ) as f32;
+            widgets::native(
+                frame,
+                ui,
+                caption,
+                NativeUiFontName::Medium,
+                row.min + Vec2::new(10.0, if phone { 24.0 } else { 28.0 }),
+                1.0,
+                0xd9ba70,
+                NativeUiTextAlign::Left,
+            );
+            let field = if phone {
+                Rect::from_min_size(
+                    row.min + Vec2::new(10.0, 42.0),
+                    Vec2::new(row.width() - 26.0, 30.0),
+                )
+            } else {
+                Rect::from_min_max(
+                    row.min + Vec2::new(caption_width + 20.0, 7.0),
+                    row.max - Vec2::new(16.0, 7.0),
+                )
+            };
             widgets::control_panel(frame, ui, &self.art.controls, field, true)?;
             let response = widgets::edit(
                 frame,
@@ -1474,7 +1526,7 @@ impl CloudView {
                     "Mod, author, or tag"
                 },
                 input,
-                field,
+                field.expand2(Vec2::new(0.0, 7.0)),
                 "IM FELL English",
                 16.0,
                 true,
@@ -1509,20 +1561,30 @@ impl CloudView {
                 widgets::GOLD,
             );
             let button = Rect::from_min_size(
-                egui::pos2(field.left(), field.bottom() + 24.0),
-                Vec2::new(field.width(), 44.0),
+                egui::pos2(row.left(), row.bottom() + if phone { 14.0 } else { 24.0 }),
+                Vec2::new(row.width(), 44.0),
             );
-            if widgets::stock_button(
+            widgets::control_panel(frame, ui, &self.art.controls, button, false)?;
+            let response = widgets::interact(
                 frame,
                 ui,
                 "cloud-search-submit",
                 "SEARCH NOW",
+                "button",
                 button,
-                0.55,
                 true,
-            )
-            .clicked()
-            {
+            );
+            widgets::native(
+                frame,
+                ui,
+                "SEARCH NOW",
+                NativeUiFontName::Medium,
+                button.min + Vec2::new(10.0, 28.0),
+                1.0,
+                0xd9ba70,
+                NativeUiTextAlign::Left,
+            );
+            if response.clicked() {
                 actions.push("cloud-search-submit".to_owned());
             }
         } else {
