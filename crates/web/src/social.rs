@@ -58,6 +58,16 @@ enum Intent {
     PartyCopied { code: String, copied: bool },
 }
 
+pub(crate) fn layers_above_hud(ctx: &egui::Context, hud_layer: egui::LayerId) {
+    // Source HUD z10 is below the Social z60 parent. Keep its world children
+    // in that order when an interacted or newly visible Area rises.
+    let allies = SocialUi::allies_layer();
+    let party = SocialUi::party_layer();
+    ctx.set_sublayer(hud_layer, allies);
+    ctx.set_sublayer(allies, party);
+    ctx.set_sublayer(party, SocialUi::chat_layer(false));
+}
+
 pub struct SocialUi {
     document: Document,
     ui: StockAtlas,
@@ -258,13 +268,7 @@ impl SocialUi {
         frame: &mut UiFrame<'_>,
         hud_layer: egui::LayerId,
     ) -> Result<(), String> {
-        // Source HUD z10 is below the Social z60 parent. Keep its world children
-        // in that order when an interacted or newly visible Area rises.
-        let allies = Self::allies_layer();
-        let party = Self::party_layer();
-        frame.ctx.set_sublayer(hud_layer, allies);
-        frame.ctx.set_sublayer(allies, party);
-        frame.ctx.set_sublayer(party, Self::chat_layer(false));
+        layers_above_hud(frame.ctx, hud_layer);
         self.paint(frame)
     }
 
