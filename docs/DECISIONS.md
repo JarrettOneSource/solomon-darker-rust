@@ -55,16 +55,22 @@ green rather than assuming every library version has identical collation.
 **Deployment publications have identities separate from signed game recovery revisions.**
 The native drain still signs the target Rust revision into the final save and accepts
 the existing checkpoint-sequence/revision acknowledgement. Its authenticated
-`X-Solomon-Deployment-Id` header additionally names the fresh Website cutover; that ID
-travels in the restart announcement and drain receipt. Website owns the mutable
+`X-Solomon-Deployment-Id` and `X-Solomon-Deployment-Sequence` headers name the fresh
+Website cutover and next publication sequence; both
+travel in the restart announcement and drain receipt. Website owns the mutable
 `/api/game/deployment` publication with `revision` (Website), `gameRevision`,
-`deploymentId` and `ready`. Its worker stages `ready: false` and atomically publishes
+`deploymentId`, monotonic `deploymentSequence` and `ready`. Its worker stages `ready: false` and atomically publishes
 `true` only after the replacement game and Website pass health and integrity checks.
 The immutable game's deployment document, manifest membership and hashes remain intact.
 
 The page can reload an announced update only after its final save receipt commits,
-its actual old transport retires, and a healthy publication matches both the announced
-ID and signed target game revision. Active sessions cannot reload through idle polling.
+its actual old transport retires, and a healthy publication has the announced sequence
+or a later sequence, with the same signed target game revision.
+The UUID correlates one drain/receipt; the sequence proves replacement ordering.
+Exact UUID matching would strand a sleeping tab that missed its publication or a
+healthy retry with another UUID. Failed candidates restore the prior publication;
+only readiness after verified health fulfills the announced sequence. Active sessions
+cannot reload through idle polling.
 Title/idle observes healthy publication changes, including Website-only replacements.
 This corrects the inherited `live game revision != current game revision` condition,
 which stranded a saved client when Website redeployed the same immutable game.

@@ -130,7 +130,15 @@ fn request_at(
     authorized: bool,
 ) -> (u16, Value) {
     let publication = (path == "/admin/deployments/restart").then_some("d1".repeat(16));
-    request_at_with_deployment(address, method, path, body, authorized, publication.as_deref())
+    request_at_with_deployment(
+        address,
+        method,
+        path,
+        body,
+        authorized,
+        publication.as_deref(),
+        Some(1),
+    )
 }
 
 fn request_at_with_deployment(
@@ -140,6 +148,7 @@ fn request_at_with_deployment(
     body: Value,
     authorized: bool,
     deployment_id: Option<&str>,
+    deployment_sequence: Option<u64>,
 ) -> (u16, Value) {
     let body = if method == "GET" { String::new() } else { body.to_string() };
     let mut stream = TcpStream::connect(address).unwrap();
@@ -148,7 +157,10 @@ fn request_at_with_deployment(
         if authorized { format!("Authorization: Bearer {SECRET}\r\n") } else { String::new() };
     let publication =
         deployment_id.map(|id| format!("X-Solomon-Deployment-Id: {id}\r\n")).unwrap_or_default();
-    write!(stream,"{method} {path} HTTP/1.1\r\nHost: {address}\r\n{authorization}{publication}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
+    let publication_sequence = deployment_sequence
+        .map(|sequence| format!("X-Solomon-Deployment-Sequence: {sequence}\r\n"))
+        .unwrap_or_default();
+    write!(stream,"{method} {path} HTTP/1.1\r\nHost: {address}\r\n{authorization}{publication}{publication_sequence}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
     let mut response = String::new();
     stream.read_to_string(&mut response).unwrap();
     let (headers, body) = response.split_once("\r\n\r\n").unwrap();
@@ -1218,6 +1230,7 @@ fn supervisor_replays_source_http_colleges_broker_and_party_membership() {
                     checkpoint_sequence,
                     target_revision: announced_revision,
                     deployment_id,
+                    deployment_sequence,
                 },
         } = message
         else {
@@ -1225,6 +1238,7 @@ fn supervisor_replays_source_http_colleges_broker_and_party_membership() {
         };
         assert_eq!(announced_revision, target_revision);
         assert_eq!(deployment_id, "d1".repeat(16));
+        assert_eq!(deployment_sequence, 1);
         checkpoint_sequences.push(checkpoint_sequence);
     }
     let mut request = format!("ws://{}/game-hub", host.address).into_client_request().unwrap();
@@ -1259,6 +1273,7 @@ fn supervisor_replays_source_http_colleges_broker_and_party_membership() {
     }
     let (status, mut body) = restart.join().unwrap();
     assert_eq!(body.as_object_mut().unwrap().remove("deploymentId"), Some(json!("d1".repeat(16))));
+    assert_eq!(body.as_object_mut().unwrap().remove("deploymentSequence"), Some(json!(1)));
     rows.push(json!({"case":"deployment-ready","status":status,"body":body}));
     let (_, health) = host.request("GET", "/health", Value::Null, true);
     rows.push(json!({"case":"deployment-closed-colleges","draining":health["draining"],

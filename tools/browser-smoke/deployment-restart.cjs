@@ -24,6 +24,8 @@ const current = originalPublication.gameRevision;
 assert.match(current, /^[a-f0-9]{40}$/);
 assert.match(originalPublication.deploymentId, /^[a-f0-9]{32}$/);
 assert.equal(originalPublication.ready, true);
+assert.ok(Number.isSafeInteger(originalPublication.deploymentSequence) && originalPublication.deploymentSequence >= 0);
+const publicationSequence = originalPublication.deploymentSequence + 1;
 if (process.env.SAME_GAME === '1') assert.equal(current, target);
 else assert.notEqual(current, target);
 const targetWebsite = process.env.TARGET_WEBSITE_REVISION;
@@ -109,7 +111,8 @@ async function register(page) {
 async function adminRestart() {
   const response = await fetch(new URL('/admin/deployments/restart', adminUrl), {
     method: 'POST', headers: { authorization: `Bearer ${credentials.supervisor}`,
-      'content-type': 'application/json', 'X-Solomon-Deployment-Id': publicationId }, body: JSON.stringify({ targetRevision: target }),
+      'content-type': 'application/json', 'X-Solomon-Deployment-Id': publicationId,
+      'X-Solomon-Deployment-Sequence': String(publicationSequence) }, body: JSON.stringify({ targetRevision: target }),
   });
   const body = await response.json();
   return { status: response.status, body };
@@ -206,6 +209,7 @@ async function adminRestart() {
     await until(() => announcement && heldRoute, 'real deployment announcement and held save PUT');
     assert.equal(announcement.target_revision, target);
     assert.equal(announcement.deployment_id, publicationId);
+    assert.equal(announcement.deployment_sequence, publicationSequence);
     assert.ok(announcement.checkpoint_sequence > 0);
     assert.match((await ui.widget(page,'deployment/update')).label,/Saving your game before the update/);
     await ui.assertGpuOnly(page);
@@ -221,6 +225,7 @@ async function adminRestart() {
     const result = await restart;
     assert.equal(result.status, 200);
     assert.equal(result.body.deploymentId, publicationId);
+    assert.equal(result.body.deploymentSequence, publicationSequence);
     await until(() => socketCloses === closes + 1, 'server-owned deployment socket close');
     assert.match((await ui.widget(page,'deployment/update')).label,/Your game is saved/);
     const ack = events.findIndex(row => row.kind === 'deployment-ready');
@@ -233,11 +238,11 @@ async function adminRestart() {
     assert.notEqual(wrong, current);
     assert.notEqual(wrong, target);
     const candidate = {revision: targetWebsite, gameRevision: target,
-      deploymentId: publicationId, ready: true};
+      deploymentId: publicationId, deploymentSequence: publicationSequence, ready: true};
     for (const [label, publication] of [
       ['the old healthy publication', originalPublication],
       ['a mismatching target game', {...candidate, gameRevision: wrong}],
-      ['a mismatching publication', {...candidate, deploymentId: '00'.repeat(16)}],
+      ['an older publication sequence', {...candidate, deploymentSequence: publicationSequence - 1}],
       ['the pending replacement', {...candidate, ready: false}],
     ]) {
       publish(publication);

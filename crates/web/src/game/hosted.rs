@@ -854,6 +854,7 @@ impl Game {
                     checkpoint_sequence,
                     target_revision,
                     deployment_id,
+                    deployment_sequence,
                 } => {
                     if hosted.deployment_update.restarting() {
                         continue;
@@ -868,7 +869,11 @@ impl Game {
                         )?;
                         continue;
                     };
-                    hosted.deployment_update.begin(&target_revision, &deployment_id)?;
+                    hosted.deployment_update.begin(
+                        &target_revision,
+                        &deployment_id,
+                        deployment_sequence,
+                    )?;
                     hosted.leave_checkpoint = None;
                     hosted.pending_transfer = None;
                     hosted.transfer_save_document = None;
