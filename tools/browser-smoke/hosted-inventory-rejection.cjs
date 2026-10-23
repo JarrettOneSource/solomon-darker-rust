@@ -10,6 +10,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const gpu = require('./gpu-ui.cjs');
+const {createNativeMessageReader} = require('./native-wire.cjs');
 const {startNewGame} = require('./menu-journey.cjs');
 
 const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
@@ -83,6 +84,7 @@ function observeFrame(frame) {
 async function installRejectionRoute(page) {
   await page.routeWebSocket(() => true, route => {
     const server = route.connectToServer();
+    const readServer = createNativeMessageReader();
     const connection = {path: new URL(route.url()).pathname};
     connections.push(connection);
     route.onMessage(payload => {
@@ -94,8 +96,13 @@ async function installRejectionRoute(page) {
       server.send(payload);
     });
     server.onMessage(payload => {
-      const message = JSON.parse(payload.toString());
-      serverMessageTypes[message.type] = (serverMessageTypes[message.type] || 0) + 1;
+      const raw = JSON.parse(payload.toString());
+      serverMessageTypes[raw.type] = (serverMessageTypes[raw.type] || 0) + 1;
+      const message = readServer(raw);
+      if (!message) {
+        route.send(payload);
+        return;
+      }
       if (message.type === 'welcome') {
         welcomes.push({playerId: message.credentials.player_id,
           sessionKind: message.hosted?.session_kind});
