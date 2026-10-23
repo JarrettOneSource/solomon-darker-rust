@@ -559,6 +559,12 @@ impl MenuUi {
         self.cloud.boneyards_selected()
     }
 
+    pub fn boneyards_interactive(&self) -> bool {
+        self.screen == Screen::Cloud
+            && !self.input_suspended
+            && !self.routing.active()
+            && self.cloud.boneyards_selected()
+    }
     pub fn request_boneyard_library_menu(&mut self) -> Result<(), String> {
         if self.screen == Screen::Cloud {
             self.handle_event(UiEvent::Key(self.settings.controls.open_menu.clone(), false))?;

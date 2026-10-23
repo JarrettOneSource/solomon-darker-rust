@@ -165,7 +165,7 @@ fn decode_record(value: JsValue, source: bool) -> Result<Option<StoredSave>, Str
         .map_err(|error| format!("Could not read the save slot: {error}"))
 }
 
-async fn request_result(request: &IdbRequest) -> Result<JsValue, String> {
+pub(crate) async fn request_result(request: &IdbRequest) -> Result<JsValue, String> {
     let mut success = None;
     let mut failure = None;
     let promise = Promise::new(&mut |resolve, reject| {
@@ -200,7 +200,7 @@ async fn request_result(request: &IdbRequest) -> Result<JsValue, String> {
     result
 }
 
-async fn transaction_done(transaction: &IdbTransaction) -> Result<(), String> {
+pub(crate) async fn transaction_done(transaction: &IdbTransaction) -> Result<(), String> {
     let mut complete = None;
     let mut failure = None;
     let promise = Promise::new(&mut |resolve, reject| {

@@ -281,7 +281,9 @@ impl ModDetailView {
             egui::pos2(rect.right() - 108.0, rect.top() + if phone { 4.0 } else { 22.0 }),
             Vec2::new(100.0, 44.0),
         );
-        if art.button(frame, ui, "cloud-dialog-close", "BACK", back, 0.55, true).clicked() {
+        if widgets::cloud_button(frame, ui, "cloud-dialog-close", "BACK", back, 0.55, true)
+            .clicked()
+        {
             actions.push("cloud-dialog-close".to_owned());
         }
         let footer_height = if short { 56.0 } else { 70.0 };
@@ -347,17 +349,16 @@ impl ModDetailView {
         if let Some(error) = &self.detail_error {
             flow(ui, error, width, widgets::ERROR);
             let (_, r) = ui.allocate_space(Vec2::new(width, 48.0));
-            if art
-                .button(
-                    frame,
-                    ui,
-                    "cloud-detail-retry",
-                    "RETRY",
-                    Rect::from_min_size(r.min, Vec2::new(120.0, 44.0)),
-                    0.55,
-                    true,
-                )
-                .clicked()
+            if widgets::cloud_button(
+                frame,
+                ui,
+                "cloud-detail-retry",
+                "RETRY",
+                Rect::from_min_size(r.min, Vec2::new(120.0, 44.0)),
+                0.55,
+                true,
+            )
+            .clicked()
             {
                 actions.push("cloud-detail-retry".to_owned());
             }
@@ -566,9 +567,16 @@ impl ModDetailView {
                         egui::pos2(header.right() - 110.0, header.top()),
                         Vec2::new(105.0, 44.0),
                     );
-                    if art
-                        .button(frame, ui, &id, "DELETE", b, 0.55, self.comment_mutation.is_none())
-                        .clicked()
+                    if widgets::cloud_button(
+                        frame,
+                        ui,
+                        &id,
+                        "DELETE",
+                        b,
+                        0.55,
+                        self.comment_mutation.is_none(),
+                    )
+                    .clicked()
                         && self.comment_mutation.is_none()
                     {
                         actions.push(id);
@@ -635,7 +643,7 @@ impl ModDetailView {
             let b =
                 Rect::from_min_size(egui::pos2(x, stage.bottom() + 10.0), Vec2::new(96.0, 44.0));
             let enabled = screenshots.len() > 1;
-            if art.button(frame, ui, id, label, b, 0.55, enabled).clicked() && enabled {
+            if widgets::cloud_button(frame, ui, id, label, b, 0.55, enabled).clicked() && enabled {
                 actions.push(id.to_owned());
             }
         }

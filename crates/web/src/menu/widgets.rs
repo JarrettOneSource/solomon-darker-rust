@@ -58,7 +58,7 @@ pub(super) fn mirrored_image(
     );
     frame.image(ui.painter(), &format!("assets/stock/menu/{name}.png"), rect, Some(uv), tint);
 }
-pub(super) fn interact(
+pub(crate) fn interact(
     frame: &UiFrame<'_>,
     ui: &Ui,
     id: &str,
@@ -338,4 +338,40 @@ pub(super) fn control_panel(
         if field { 3.0 } else { 6.0 },
         Color32::WHITE,
     )
+}
+
+/// Source Dark Cloud/Shelf button policy uses pressed chrome and half-opacity disabled art.
+pub(crate) fn cloud_button(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    label: &str,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+) -> Response {
+    let response = interact(frame, ui, id, label, "button", rect, enabled);
+    let opacity = if enabled { 1.0 } else { 0.5 };
+    let pressed = enabled && response.is_pointer_button_down_on();
+    paint_stock_button_tinted(frame, ui, rect, scale, enabled, pressed, alpha(0xffffff, opacity));
+    let press = if pressed { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
+    crate::gpu_ui::native_text(
+        frame,
+        ui.painter(),
+        &solomon_sim::native_ui_text::NativeUiTextSpec {
+            alpha: opacity,
+            scale: f64::from(scale),
+            tint: 0xd9ba70,
+            ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
+                NativeUiFontName::Menu,
+                label,
+                f64::from(rect.center().x + press.x),
+                f64::from(rect.center().y + 9.0 * scale + press.y),
+            )
+        },
+    );
+    if !enabled {
+        ui.painter().rect_filled(rect, 0.0, alpha(0x808080, 0.25));
+    }
+    response
 }

@@ -1,5 +1,5 @@
 //! GPU catalog, directory and developer presence rows from `DarkCloudRows.tsx`.
-use super::{super::widgets, art::CloudArt, images::CloudImages};
+use super::{super::widgets, images::CloudImages};
 use crate::gpu_ui::UiFrame;
 use crate::hosted::{
     ConnectedGamePlayer, ConnectedPlayerActivity, DeveloperGameMatch, ModSubscription, ModSummary,
@@ -60,7 +60,6 @@ pub(super) fn ink(
 pub(super) fn mod_row(
     frame: &mut UiFrame<'_>,
     ui: &mut Ui,
-    art: &CloudArt,
     content: &ModSummary,
     subscription: Option<&ModSubscription>,
     selected: bool,
@@ -282,7 +281,7 @@ pub(super) fn mod_row(
                 r.min + Vec2::new(index as f32 * (w + 10.0), 0.0),
                 Vec2::new(w, 44.0),
             );
-            if art.button(frame, ui, &id, label, b, 0.55, enabled && admit).clicked()
+            if widgets::cloud_button(frame, ui, &id, label, b, 0.55, enabled && admit).clicked()
                 && enabled
                 && admit
             {
@@ -295,7 +294,6 @@ pub(super) fn mod_row(
 pub(super) fn party_row(
     frame: &mut UiFrame<'_>,
     ui: &mut Ui,
-    art: &CloudArt,
     party: &PublicGameParty,
     selected: bool,
     busy: bool,
@@ -470,7 +468,7 @@ pub(super) fn party_row(
         };
         let id = format!("cloud-join-party:{}", party.id);
         let admitted = enabled && !busy && action != DirectoryPartyAction::Wait;
-        if art.button(frame, ui, &id, label, b, 0.55, admitted).clicked() && admitted {
+        if widgets::cloud_button(frame, ui, &id, label, b, 0.55, admitted).clicked() && admitted {
             actions.push(id);
         }
     }
@@ -479,7 +477,6 @@ pub(super) fn party_row(
 pub(super) fn developer_presence(
     frame: &mut UiFrame<'_>,
     ui: &mut Ui,
-    art: &CloudArt,
     players: &[ConnectedGamePlayer],
     matches: &[DeveloperGameMatch],
     loading: bool,
@@ -566,17 +563,16 @@ pub(super) fn developer_presence(
         );
         let id = format!("cloud-observe:{}", game.id);
         let admitted = enabled && observing.is_none();
-        if art
-            .button(
-                frame,
-                ui,
-                &id,
-                if observing == Some(game.id.as_str()) { "OPENING..." } else { "OBSERVE" },
-                b,
-                0.55,
-                admitted,
-            )
-            .clicked()
+        if widgets::cloud_button(
+            frame,
+            ui,
+            &id,
+            if observing == Some(game.id.as_str()) { "OPENING..." } else { "OBSERVE" },
+            b,
+            0.55,
+            admitted,
+        )
+        .clicked()
             && admitted
         {
             actions.push(id);
