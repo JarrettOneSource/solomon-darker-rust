@@ -158,8 +158,9 @@ async function setEnhancedEffects(page, enabled) {
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
   const browser = await chromium.connect(server.wsEndpoint());
   const context = await browser.newContext({ignoreHTTPSErrors: true, viewport: {width: 1600, height: 900}});
+  const mount=url.pathname.replace(/\/$/,'');
   await context.addInitScript(({key,token})=>localStorage.setItem(key,token),
-    {key:`sdr.token:${url.pathname.replace(/\/$/,'')}`,token:account.token});
+    {key:mount?`sdr.token:${mount}`:'sdr.token',token:account.token});
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
   await ui.observeGpu(page);
