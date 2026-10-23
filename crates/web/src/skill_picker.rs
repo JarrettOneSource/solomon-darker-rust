@@ -85,6 +85,9 @@ impl SkillPicker {
     pub fn is_open(&self) -> bool {
         self.displayed.is_some()
     }
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("skill-picker"))
+    }
     pub fn take_actions(&mut self) -> Vec<SkillPickerAction> {
         std::mem::take(&mut self.actions)
     }
@@ -287,7 +290,7 @@ impl SkillPicker {
             ((width - 1600.0 * scale) / 2.0) as f32,
             (height / 2.0 - center_y * scale) as f32,
         );
-        let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("skill-picker"));
+        let layer = self.layer_id();
         frame.ctx.set_transform_layer(
             layer,
             egui::emath::TSTransform::new(origin.to_vec2(), scale as f32),

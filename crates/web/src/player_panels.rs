@@ -471,6 +471,9 @@ impl PlayerPanels {
     pub fn panel(&self) -> Option<PlayerPanel> {
         self.panel
     }
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("player-panels"))
+    }
 
     pub fn covers_world(&self) -> bool {
         matches!(
@@ -1352,7 +1355,7 @@ impl PlayerPanels {
 
         let hits = RefCell::new(Vec::new());
         let events = RefCell::new(Vec::new());
-        let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("player-panels"));
+        let layer = self.layer_id();
         let transform = egui::emath::TSTransform::new(
             egui::vec2(self.stage_origin.x as f32, self.stage_origin.y as f32),
             self.view_scale as f32,
