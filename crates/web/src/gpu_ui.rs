@@ -234,6 +234,19 @@ impl UiFrame<'_> {
         frame
     }
 
+    /// Applies this view's Source colour filter to direct egui text/solid paint.
+    pub fn filtered_color(&self, color: Color32) -> Color32 {
+        if self.color_filter == ColorFilter::default() {
+            return color;
+        }
+        let [red, green, blue, alpha] = color.to_srgba_unmultiplied();
+        let [red, green, blue] = self
+            .color_filter
+            .rgb([red, green, blue].map(|channel| f32::from(channel) / 255.0))
+            .map(|channel| (channel * 255.0).round() as u8);
+        Color32::from_rgba_unmultiplied(red, green, blue, alpha)
+    }
+
     pub fn with_rotation(&self, pivot: Pos2, radians: f32) -> UiFrame<'_> {
         let local = egui::emath::Rot2::from_angle(radians);
         let mut frame = self.with_blend(self.blend);
