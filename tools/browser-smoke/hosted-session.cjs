@@ -51,10 +51,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
     if (response.status() === 404 && pathname.endsWith('/api/game/rejoin')) inactiveRejoin.push(pathname);
     else if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
   });
-  page.on('requestfailed', request => {
-    const receipt = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
-    errors.push(receipt);
-  });
+  const observed = gpu.watchRequestFailures(page, {errors});
   page.on('websocket', socket => {
     const read = createNativeMessageReader();
     socket.on('framereceived', ({payload}) => {
@@ -73,6 +70,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
     });
   });
   try {
+    await observed.ready;
     await page.goto(url, {waitUntil:'domcontentloaded'});
     await gpu.ready(page);
     await gpu.assertGpuOnly(page);
@@ -150,7 +148,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
     state.frame = null;
     state.welcome = null;
     state.loaded = null;
-    await page.reload({waitUntil: 'load'});
+    await gpu.observeDocumentReplacement(page, () => page.reload({waitUntil: 'load'}));
     await gpu.ready(page);
     await gpu.click(page, 'play');
     await gpu.click(page, 'continue');
@@ -161,12 +159,14 @@ async function waitUntil(predicate, label, timeout = 30000) {
     assert.equal(state.frame.snapshot.participants[state.id].player.selection.name, 'Felix');
     checks.push('browser reload and real saved Boneyard continuation');
     assert.equal(inactiveRejoin.length, 1, 'the ended party falls back through the source inactive-rejoin contract');
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     const receipt = {passed: true, checks, requests, pingResponses: state.pongs,
       checkpoints: state.checkpoints, leaveReceipts: state.leaveReceipts, inactiveRejoin, errors, gpu:await gpu.assertGpuOnly(page), submissions:await gpu.gpuDraws(page)};
     fs.writeFileSync(path.join(output, 'hosted-session.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) {
+    await gpu.settleErrors(page);
     const ui = await gpu.readUi(page);
     await page.screenshot({path: path.join(output, 'hosted-session-failure.png')});
     fs.writeFileSync(path.join(output, 'hosted-session-failure.json'), JSON.stringify({error: error.stack,

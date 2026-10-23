@@ -96,6 +96,7 @@ async function waitForEditorAssets(messageOffset, label, started) {
     });
     page = await context.newPage();
     page.setDefaultTimeout(45000);
+    await gpu.watchRequestFailures(page, {errors}).ready;
     page.on('pageerror', error => errors.push(redact(error.message)));
     page.on('console', message => { if (message.type() === 'error') errors.push(redact(message.text())); });
     page.on('response', response => {
@@ -173,6 +174,7 @@ async function waitForEditorAssets(messageOffset, label, started) {
         admissionTimer = setTimeout(() => reject(new Error('editor admission did not arrive')), 45000);
       })]);
     } finally { clearTimeout(admissionTimer); }
+    await gpu.settleErrors(page);
     await page.getByRole('button', { name: 'Return to editing' }).click();
     assert.equal(await page.locator('iframe.editor-test-frame').getAttribute('hidden'), '');
     release();
@@ -197,6 +199,7 @@ async function waitForEditorAssets(messageOffset, label, started) {
     const firstTick = await frame.evaluate(() => window.wasmBindings.wizard_state()[5]);
     await frame.waitForFunction(tick => window.wasmBindings.wizard_state()[5] > tick + 20, firstTick);
     await page.screenshot({ path: path.join(out, 'editor-playing.png') });
+    await gpu.settleErrors(page);
     await page.getByRole('button', { name: 'Return to editing' }).click();
     await waitForDisposed(2);
     assert.equal(sockets.length, 2);
@@ -207,6 +210,7 @@ async function waitForEditorAssets(messageOffset, label, started) {
     checked('the actual disposable Boneyard advances native ticks and returns to the unchanged draft');
     const messages = await page.evaluate(() => window.editorTestMessages);
     assert.deepEqual(messages.filter(message => message.state === 'error'), []);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checked('both editor lifecycles complete without browser, API or game errors');
   } catch (error) {

@@ -37,9 +37,7 @@ async function until(predicate, label) {
     if (pathname.includes('/api/')) requests.push({path: pathname, status: response.status()});
     if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
   });
-  page.on('requestfailed', request => {
-    errors.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
-  });
+  const observed = gpu.watchRequestFailures(page, {errors});
   page.on('websocket', socket => {
     const read = createNativeMessageReader();
     socket.on('framesent', ({payload}) => {
@@ -71,6 +69,7 @@ async function until(predicate, label) {
   };
   const cheats = () => gpu.widget(page, 'settings-toggle:cheats');
   try {
+    await observed.ready;
     await page.goto(process.env.URL, {waitUntil:'domcontentloaded'});
     await gpu.ready(page);
     await gpu.assertGpuOnly(page);
@@ -89,7 +88,7 @@ async function until(predicate, label) {
     await page.waitForFunction(({key, expected}) =>
       JSON.parse(localStorage.getItem(key))?.enableActivityMessages === expected,
     {key: settingsKey, expected: !initiallyEnabled});
-    await page.reload({waitUntil: 'load'});
+    await gpu.observeDocumentReplacement(page, () => page.reload({waitUntil: 'load'}));
     await gpu.ready(page);
     await cloudSettings();
     assert.equal((await activity()).selected, !initiallyEnabled);
@@ -120,6 +119,7 @@ async function until(predicate, label) {
     await gpu.click(page, 'routing-continue');
     await gpu.surface(page, 'title');
     assert.equal((await settings()).enableCheats, true);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     assert.equal(commands.length, beforePrompt, 'Global College must never receive enabled cheats');
     assert.equal(leaveRequests.length, 1);
@@ -132,11 +132,13 @@ async function until(predicate, label) {
     assert.equal(frame.snapshot.participants[playerId].player.selection.name, 'Consent');
     checks.push('Last Game continues the same wizard in an actual private College with cheats enabled');
     await page.screenshot({path: path.join(output, 'private-cheat-college.png')});
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     const receipt = {passed:true, checks, errors, requests, commands, welcomes, leaveRequests, leaveReceipts, gpu:await gpu.assertGpuOnly(page), submissions:await gpu.gpuDraws(page)};
     fs.writeFileSync(path.join(output, 'cheat-consent.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) {
+    await gpu.settleErrors(page);
     await page.screenshot({path: path.join(output, 'cheat-consent-failure.png')});
     fs.writeFileSync(path.join(output, 'cheat-consent-failure.json'), JSON.stringify({
       error: error.stack, checks, errors, requests, commands, welcomes, leaveRequests, leaveReceipts,
@@ -146,12 +148,16 @@ async function until(predicate, label) {
   } finally {
     let timeout;
     try {
+      await browser.close();
       await Promise.race([server.close(), new Promise((resolve, reject) => {
         timeout = setTimeout(() => reject(new Error('Chrome close timed out')), 15000);
       })]);
-    } catch {
+    } catch (error) {
       // This server owns only the browser started by this harness.
       await server.kill();
+      fs.writeFileSync(path.join(output, 'browser-cleanup-failure.json'),
+        JSON.stringify({error:error.stack}, null, 2));
+      throw error;
     } finally {clearTimeout(timeout);}
   }
 })().catch(error => {console.error(error); process.exitCode = 1;});
