@@ -33,33 +33,15 @@ impl CloudArt {
                 Color32::WHITE,
             )?;
         }
-        for (index, x, y, rotation) in [
-            (29, 135.0, 83.0, std::f32::consts::PI),
-            (29, w - 135.0, 83.0, 0.0),
-            (31, w - 112.0, 18.0, 0.0),
-            (32, 104.0, 26.5, 0.0),
-            (32, w + 44.0, h - 126.5, 0.0),
-            (31, -57.0, h - 135.0, 0.0),
+        for (index, x, y, anchor, mirror) in [
+            (29, 135.0, 83.0, [0.5, 0.5], [true, true]),
+            (29, w - 135.0, 83.0, [0.5, 0.5], [false, true]),
+            (31, w - 112.0, 18.0, [0.0, 0.0], [false, false]),
+            (32, 104.0, 26.5, [0.0, 0.0], [true, false]),
+            (32, w + 44.0, h - 126.5, [0.0, 0.0], [true, false]),
+            (31, -57.0, h - 135.0, [0.0, 0.0], [false, false]),
         ] {
-            self.ui.paint(
-                frame,
-                ui.painter(),
-                index,
-                view.min + Vec2::new(x, y),
-                1.0,
-                Color32::WHITE,
-            )?;
-            if rotation != 0.0 {
-                self.ui.paint_centered(
-                    frame,
-                    ui.painter(),
-                    index,
-                    view.min + Vec2::new(x, y),
-                    1.0,
-                    rotation,
-                    Color32::WHITE,
-                )?;
-            }
+            self.sprite(frame, ui, index, view.min + Vec2::new(x, y), anchor, 1.0, mirror)?;
         }
         for (left, positions) in [
             (0.0, [[-42.5, 162.5], [-82.5, (h - 8.0) / 2.0]]),
@@ -73,12 +55,104 @@ impl CloudArt {
                 self.ui.paint(frame, &clip, 20, view.min + Vec2::new(x, y), 1.0, Color32::WHITE)?;
             }
         }
+        ui.painter().rect_filled(
+            Rect::from_min_size(view.min, Vec2::new(w, 50.0)),
+            0.0,
+            Color32::BLACK,
+        );
         widgets::gradient(
             ui,
-            Rect::from_min_size(view.min, Vec2::new(w, 150.0)),
+            Rect::from_min_size(view.min + Vec2::new(0.0, 50.0), Vec2::new(w, 100.0)),
             Color32::BLACK,
             Color32::TRANSPARENT,
         );
+        let shadow = |vertices: [egui::Pos2; 4], colors: [Color32; 4]| {
+            let mut mesh = egui::Mesh::default();
+            for (pos, color) in vertices.into_iter().zip(colors) {
+                mesh.colored_vertex(view.min + pos.to_vec2(), color);
+            }
+            mesh.add_triangle(0, 1, 2);
+            mesh.add_triangle(0, 2, 3);
+            ui.painter().add(egui::Shape::mesh(mesh));
+        };
+        let transparent = Color32::TRANSPARENT;
+        let black = Color32::BLACK;
+        shadow(
+            [
+                egui::pos2(-5.0, 113.0),
+                egui::pos2(w + 5.0, 113.0),
+                egui::pos2(w - 55.0, 173.0),
+                egui::pos2(55.0, 173.0),
+            ],
+            [transparent, transparent, black, black],
+        );
+        shadow(
+            [
+                egui::pos2(55.0, h - 100.0),
+                egui::pos2(w - 55.0, h - 100.0),
+                egui::pos2(w + 5.0, h - 40.0),
+                egui::pos2(-5.0, h - 40.0),
+            ],
+            [black, black, transparent, transparent],
+        );
+        shadow(
+            [
+                egui::pos2(-5.0, 113.0),
+                egui::pos2(55.0, 173.0),
+                egui::pos2(55.0, h - 100.0),
+                egui::pos2(-5.0, h - 40.0),
+            ],
+            [transparent, black, black, transparent],
+        );
+        shadow(
+            [
+                egui::pos2(w - 55.0, 173.0),
+                egui::pos2(w + 5.0, 113.0),
+                egui::pos2(w + 5.0, h - 40.0),
+                egui::pos2(w - 55.0, h - 100.0),
+            ],
+            [black, transparent, transparent, black],
+        );
+        Ok(())
+    }
+    fn sprite(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        index: usize,
+        position: egui::Pos2,
+        anchor: [f32; 2],
+        scale: f32,
+        mirror: [bool; 2],
+    ) -> Result<(), String> {
+        let record = self.ui.record(index)?;
+        let registered = record.registered_origin();
+        let logical = Vec2::new(record.logical_width as f32, record.logical_height as f32);
+        let origin = position - Vec2::new(logical.x * anchor[0], logical.y * anchor[1]) * scale;
+        let rect = Rect::from_min_size(
+            origin + Vec2::from(registered) * scale,
+            Vec2::new(record.width as f32, record.height as f32) * scale,
+        );
+        let size = frame.image_size(self.ui.path()).ok_or("UI atlas not ready")?;
+        let uv = Rect::from_min_max(
+            egui::pos2(record.x as f32 / size.x, record.y as f32 / size.y),
+            egui::pos2(
+                (record.x + record.width) as f32 / size.x,
+                (record.y + record.height) as f32 / size.y,
+            ),
+        );
+        let quad = [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()]
+            .map(|p| {
+                let mut delta = p - position;
+                if mirror[0] {
+                    delta.x = -delta.x;
+                }
+                if mirror[1] {
+                    delta.y = -delta.y;
+                }
+                position + delta
+            });
+        frame.image_quad(ui.painter(), self.ui.path(), quad, uv, Color32::WHITE);
         Ok(())
     }
     pub fn list(&self, frame: &UiFrame<'_>, ui: &Ui, rect: Rect, scale: f32) -> Result<(), String> {

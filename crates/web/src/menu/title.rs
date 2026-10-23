@@ -277,9 +277,8 @@ impl TitleView {
             }
             let rect = controls.rect(0.0, f64::from(row) * 76.0, 353.0, 69.0);
             let admitted = enabled && (action != "continue" || self.can_resume);
-            let response =
-                widgets::stock_button(frame, ui, action, "", rect, controls_scale, admitted);
-            frame.record_rect(action, label, "button", rect, admitted);
+            let response = widgets::interact(frame, ui, action, label, "button", rect, admitted);
+            widgets::paint_stock_button(frame, ui, &response, rect, controls_scale, admitted);
             if response.clicked() && admitted {
                 actions.push(action.to_owned());
             }

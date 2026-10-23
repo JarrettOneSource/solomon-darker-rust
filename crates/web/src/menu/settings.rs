@@ -472,6 +472,7 @@ impl SettingsView {
             egui::Stroke::new(3.0, widgets::color(0x9f8547)),
             egui::StrokeKind::Inside,
         );
+        frame.record_rect("settings-panel", self.page.title(), "dialog", panel, ui.is_enabled());
         let compact = view.width() < 700.0 || view.height() < 540.0;
         let band = if compact { 54.0 } else { 70.0 };
         let header = Rect::from_min_size(panel.min, Vec2::new(panel.width(), band));
@@ -489,6 +490,13 @@ impl SettingsView {
         let content = Rect::from_min_max(
             panel.min + Vec2::new(if compact { 14.0 } else { 20.0 }, band + 12.0),
             panel.max - Vec2::new(if compact { 14.0 } else { 20.0 }, band),
+        );
+        frame.record_rect(
+            "settings-content",
+            "Settings preferences",
+            "region",
+            content,
+            ui.is_enabled(),
         );
         if self.page == Page::MobileUi {
             if let Some(editor) = &mut self.mobile_editor {
@@ -919,9 +927,31 @@ DevTools: solomonDark.lua.help()",
                     egui::EventFilter { horizontal_arrows: true, ..Default::default() },
                 )
             });
-            for (key, delta) in [(egui::Key::ArrowLeft, -1_i32), (egui::Key::ArrowRight, 1)] {
+            for (key, delta) in [
+                (egui::Key::ArrowLeft, -1_i32),
+                (egui::Key::ArrowRight, 1),
+                (egui::Key::PageDown, -10),
+                (egui::Key::PageUp, 10),
+            ] {
                 if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, key)) {
                     value = (i32::from(value) + delta).clamp(i32::from(min), i32::from(max)) as u16;
+                }
+            }
+        }
+        if response.has_focus() {
+            for (key, next) in [(egui::Key::Home, min), (egui::Key::End, max)] {
+                if ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, key)) {
+                    value = next;
+                }
+            }
+            for (key, code, delta) in
+                [(egui::Key::ArrowUp, "ArrowUp", 1_i32), (egui::Key::ArrowDown, "ArrowDown", -1)]
+            {
+                if frame.key_codes().iter().any(|event| event.pressed && event.code == code)
+                    && ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, key))
+                {
+                    value = (i32::from(value) + delta).clamp(i32::from(min), i32::from(max)) as u16;
+                    ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
                 }
             }
         }
@@ -938,7 +968,7 @@ DevTools: solomonDark.lua.help()",
         self.control_panel.paint_centered(
             frame,
             ui.painter(),
-            6,
+            18,
             center,
             1.0,
             0.0,
