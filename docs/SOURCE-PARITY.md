@@ -73,6 +73,8 @@ focusable controls when the prior element is gone. A presentation timestamp is
 not that identity: speech/choices/selector transitions can share one fixed input
 dispatch time. The Rust navigation scope therefore includes content kind and
 speech key or selector kind, preserving real Enter routing at the same time.
+An invisible initial Area sizing pass cannot consume that default-focus request;
+the request remains pending until the real enabled control is registered.
 
 The accepted economy receipt owns the result. Independent cursor consumers seed
 the current sequence on connection and advance over every newer receipt; restored,

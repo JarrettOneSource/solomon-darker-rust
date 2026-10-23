@@ -706,6 +706,31 @@ mod tests {
             (HubNpcChatContent::Selector(HubNpcListSelector::TeacherSpells), "first-spell"),
             (speech("BOOK25_LACE"), "speech-next"),
         ];
+        // The first Area pass only registers layout. Its invisible controls cannot
+        // take focus; the real dispatch below must still focus the visible owner.
+        ctx.run_pass(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400.0, 300.0),
+                )),
+                time: Some(1.0),
+                ..Default::default()
+            },
+            |ctx| {
+                navigation.focus(ctx, &navigation_scope(&phases[0].0, 1000.0), Some("speech-next"));
+                egui::Area::new(egui::Id::unique("same-time-dialogue")).show(ctx, |ui| {
+                    assert!(ui.is_sizing_pass());
+                    let response = ui.interact(
+                        egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(120.0, 50.0)),
+                        egui::Id::unique("speech-next"),
+                        egui::Sense::click(),
+                    );
+                    assert!(!response.enabled());
+                });
+            },
+        )
+        .drop_without_applying_deltas();
         for (index, (content, target)) in phases.into_iter().enumerate() {
             let mut clicked = false;
             let events = if index == 0 {
