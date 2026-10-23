@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Owned parties only: real visibility, directory requests, code Enter and admission.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -13,6 +14,7 @@ const output = path.resolve(process.env.OUT);
 fs.mkdirSync(output, {recursive:true});
 const checks = [], clients = [], accounts = [];
 let step = 'registration';
+function checked(label) {checks.push(label);console.log(label);}
 
 async function until(predicate, description, timeout = 45000) {
   const end = Date.now() + timeout;
@@ -118,9 +120,10 @@ async function refresh(visitor, id, label) {
 }
 
 (async () => {
-  const browser = await chromium.launch({headless:true,
+  const owned = await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=metal','--ignore-gpu-blocklist']});
+  const browser = owned.browser;
   let failure;
   try {
     const leader = await client(browser,'A');
@@ -131,6 +134,7 @@ async function refresh(visitor, id, label) {
     await gpu.value(leader.page,'settings-toggle:shared-hub','false');
     await gpu.click(leader.page,'settings-back');
     await gpu.click(leader.page,'settings-back');
+    await gpu.surface(leader.page,'title');
     await startNewGame(leader.page,{name:'Leader'});
     await until(() => leader.state.social?.party_state?.party.listing_id, 'owned private College party');
     const party = leader.state.social.party_state.party;
@@ -138,14 +142,14 @@ async function refresh(visitor, id, label) {
     const code = party.join_code;
     assert.equal(typeof code,'string');
     assert.equal(party.leader_player_id,leader.state.id);
-    checks.push('ordinary registration and real College admission create an isolated owned party');
+    checked('ordinary registration and real College admission create an isolated owned party');
 
     const visitor = await client(browser,'B');
     await joinMenu(visitor);
     step = 'private visibility';
     await visibility(leader,'private','Private');
     await refresh(visitor,listing,null);
-    checks.push('the owned Private party remains absent from the actual broker and GPU directory');
+    checked('the owned Private party remains absent from the actual broker and GPU directory');
 
     step = 'public directory admission cancellation';
     await visibility(leader,'public','Public');
@@ -158,7 +162,7 @@ async function refresh(visitor, id, label) {
     await gpu.click(visitor.page,'routing-back');
     await joinMenu(visitor);
     assert.equal(visitor.state.id,null);
-    checks.push('the real public row opens owned-party consent and Back cancels before membership');
+    checked('the real public row opens owned-party consent and Back cancels before membership');
 
     step = 'invite-only request';
     await visibility(leader,'invite-only','InviteOnly');
@@ -171,13 +175,14 @@ async function refresh(visitor, id, label) {
       request.requester.account_username === accounts[1].username);
     assert.ok(request,'only the owned visitor request is acted on');
     await gpu.useNativeFocus(leader.page);
+    await leader.page.bringToFront();
     await gpu.click(leader.page,'social/party');
     await gpu.click(leader.page,'social/tab:members');
     await gpu.click(leader.page,`social/deny:${request.id}`);
     await gpu.click(leader.page,'social/close');
     await until(() => !leader.state.social.party_state.join_requests.some(row => row.id === request.id), 'actual leader denial');
     await refresh(visitor,listing,'REQUEST');
-    checks.push('Invite Only publishes REQUEST, records REQUESTED, and the actual leader can deny it');
+    checked('Invite Only publishes REQUEST, records REQUESTED, and the actual leader can deny it');
 
     step = 'code Enter admission';
     await visibility(leader,'public','Public');
@@ -196,10 +201,11 @@ async function refresh(visitor, id, label) {
       && leader.state.frame?.host.connected_player_ids.includes(visitor.state.id),'actual owned-party authority admission');
     const selection = (await gpu.readUi(visitor.page)).acceptedSelection;
     assert.deepEqual(selection,{name:'Visitor',element:'Ether',discipline:'Arcane'});
-    checks.push('real Party ID typing and Enter resolve, consent and admit the requested wizard to the owned authority');
+    checked('real Party ID typing and Enter resolve, consent and admit the requested wizard to the owned authority');
 
     step = 'playing directory policy';
     await gpu.useNativeFocus(leader.page);
+    await leader.page.bringToFront();
     await gpu.click(leader.page,'hud:map');
     await until(() => leader.state.frame?.snapshot.boneyard && visitor.state.frame?.snapshot.boneyard,'actual shared Boneyard entry',120000);
     const spectator = await client(browser,'C',false);
@@ -207,9 +213,10 @@ async function refresh(visitor, id, label) {
     const playing = await refresh(spectator,listing,'IN GAME');
     assert.equal(playing.enabled,false,'the actual playing party cannot be joined through its row');
     await spectator.page.screenshot({path:path.join(output,'owned-party-in-game.png')});
-    checks.push('the actual running owned party is displayed IN GAME with its Join action disabled');
+    checked('the actual running owned party is displayed IN GAME with its Join action disabled');
     for (const owner of [leader,visitor]) {
       await gpu.useNativeFocus(owner.page);
+      await owner.page.bringToFront();
       const before = owner.state.saveWrites.length;
       await gpu.click(owner.page,'hud:pause');
       await gpu.surface(owner.page,'pause');
@@ -218,7 +225,7 @@ async function refresh(visitor, id, label) {
       await until(() => owner.state.saveWrites.length > before,'actual final account checkpoint persistence');
       assert.equal(owner.state.saveWrites.at(-1),200);
     }
-    checks.push('both admitted players leave through the real menu and persist their actual final checkpoint');
+    checked('both admitted players leave through the real menu and persist their actual final checkpoint');
     for (const owner of clients) {
       await gpu.assertGpuOnly(owner.page);
       await gpu.settleErrors(owner.page);
@@ -240,6 +247,6 @@ async function refresh(visitor, id, label) {
           directories:state.directories,errors:observation.errors,sockets:state.sockets,saveWrites:state.saveWrites,
           failureUi:state.failureUi}))},null,2));
       console.log(JSON.stringify({checks,failure}));
-    } finally {await browser.close();}
+    } finally {console.log(JSON.stringify({browserCleanup:await owned.close()}));}
   }
 })().catch(error => {console.error(error);process.exitCode = 1});

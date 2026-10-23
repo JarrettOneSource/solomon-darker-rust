@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Actual Rust GPU Shelf and Website editor journey. No state setters,
 // synthetic documents, API writes or socket sends are used by this driver.
 const assert = require('node:assert/strict');
@@ -166,11 +167,12 @@ async function confirmDelete(shelf, name) {
 (async () => {
   fs.mkdirSync(out, { recursive: true });
   fs.writeFileSync(path.join(out, 'private-account.json'), JSON.stringify(account), { mode: 0o600, flag: 'wx' });
-  let failure;
+  let failure, browserOwner;
   try {
-    browser = await chromium.launch({ headless: true,
+    browserOwner = await launchOwnedBrowser(chromium,{ headless: true,
       executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
+    browser = browserOwner.browser;
     const context = await browser.newContext({ ignoreHTTPSErrors: localTls, acceptDownloads: true,
       viewport: { width: 1600, height: 900 } });
     await context.addInitScript(() => {
@@ -361,14 +363,25 @@ async function confirmDelete(shelf, name) {
       await page.screenshot({ path: path.join(out, 'failure.png') }).catch(() => {});
     }
   } finally {
-    // Retain the app result before browser-process shutdown, which can hang
-    // independently of the accepted UI journey on a busy GPU machine.
+    const receipt = { target: game.href, tls_verified: !localTls, checks, failure, errors,
+      errorCounts, requests, failedResources, sockets, lifecycle, assetStartups };
     try {
       if (page && !page.isClosed()) await gpu.settleErrors(page);
-      fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ target: game.href, tls_verified: !localTls, checks, failure, errors,
-        errorCounts, requests, failedResources, sockets, lifecycle, assetStartups }, null, 2));
-      console.log(JSON.stringify({ checks: checks.length, failure, output: out }));
-    } finally {if (browser) await browser.close();}
+    } finally {
+      fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify(receipt, null, 2));
+      if (browserOwner) {
+        try {receipt.cleanup = await browserOwner.close();}
+        catch (error) {
+          receipt.cleanup = error.cleanup;
+          receipt.cleanupError = redact(error.stack || error.message);
+          process.exitCode = 1;
+        }
+      }
+      fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify(receipt, null, 2));
+      console.log(JSON.stringify({ checks: checks.length,
+        failure: failure ? {step: failure.step, error: failure.error.split('\n')[0]} : null,
+        cleanup: receipt.cleanup, cleanupError: receipt.cleanupError, output: out }));
+    }
     if (failure) process.exitCode = 1;
   }
 })();

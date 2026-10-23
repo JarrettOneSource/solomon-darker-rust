@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Real GPU Settings pages, stored preferences and native keyboard/mouse capture.
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -13,9 +14,10 @@ async function reveal(page, id) {
   throw new Error(`Settings control did not scroll into view: ${id}`);
 }
 (async () => {
-  const browser = await chromium.launch({headless: true,
+  const owned = await launchOwnedBrowser(chromium,{headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+  const browser = owned.browser;
   const checks = [];
   let page;
   try {
@@ -104,6 +106,6 @@ async function reveal(page, id) {
     console.log(JSON.stringify({checks, errors}));
   } finally {
     try { if (page && !page.isClosed()) await gpu.settleErrors(page); }
-    finally { await browser.close(); }
+    finally { console.log(JSON.stringify({browserCleanup:await owned.close()})); }
   }
 })().catch(error => {console.error(error); process.exitCode = 1;});

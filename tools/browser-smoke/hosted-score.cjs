@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Actual registered-account score publication, without injected state or protocol.
 // Source: host/game-host.ts:6863, MainMenuScene.tsx:843 and GameLeaderboardEndpoints.cs.
 // The gate approach follows native-session.cjs; all movement uses real keyboard input.
@@ -64,17 +65,6 @@ async function waitUntil(predicate, label, timeout = 30000) {
     await new Promise(resolve => setTimeout(resolve, 50));
   }
   throw new Error(`Timed out waiting for ${label}`);
-}
-
-async function bounded(promise, label, milliseconds) {
-  let timer;
-  try {
-    return await Promise.race([promise, new Promise((resolve, reject) => {
-      timer = setTimeout(() => reject(new Error(`${label} timed out`)), milliseconds);
-    })]);
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 function participant() {
@@ -427,14 +417,14 @@ async function main() {
     checks, errors, failedResources, apiRequests, registrationRequests,
     admissions, welcomes, commands, inputSamples,
     scoreReceipts, scorePosts, hallRequests, hallActivations, healthSamples};
-  let browserServer;
+  let browserOwner;
   let browser;
   let page;
   try {
-    browserServer = await chromium.launchServer({headless: true, host: '127.0.0.1',
+    browserOwner = await launchOwnedBrowser(chromium, {headless: true,
       executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-    browser = await chromium.connect(browserServer.wsEndpoint());
+    browser = browserOwner.browser;
     page = await browser.newPage({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
       viewport: {width: 1280, height: 720}});
     page.setDefaultTimeout(30000);
@@ -582,29 +572,23 @@ async function main() {
       fs.writeFileSync(path.join(output, 'solomon-approach.json'), JSON.stringify(approach, null, 2) + '\n');
       fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
       step = 'browser cleanup';
-      if (browser) {
-        await bounded(browser.close(), 'browser connection close', 5000).catch(error => {
-          receipt.connectionCloseError = error.message;
-        });
-      }
-      if (browserServer) {
-        try {
-          await bounded(browserServer.close(), 'Chrome close', 15000);
-          receipt.cleanup = 'graceful';
-        } catch (error) {
-          receipt.cleanupError = error.message;
-          await bounded(browserServer.kill(), 'owned Chrome kill', 5000).catch(error => {
-            receipt.cleanupError += `; ${error.message}`;
-          });
-          receipt.cleanup = 'forced';
+      let cleanupFailure;
+      if (browserOwner) {
+        try {receipt.cleanup = await browserOwner.close();}
+        catch (error) {
+          receipt.cleanup = error.cleanup;
+          receipt.cleanupError = redact(error.stack || error.message);
+          receipt.passed = false;
+          cleanupFailure = error;
         }
-        receipt.browserClosed = browserServer.process().exitCode !== null
-          || browserServer.process().signalCode !== null;
+        receipt.browserClosed = Boolean(receipt.cleanup
+          && (receipt.cleanup.exitCode !== null || receipt.cleanup.signalCode !== null));
         ownedBrowserClosed = receipt.browserClosed;
       }
       fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
       console.log(JSON.stringify({passed: receipt.passed, checks, failure: receipt.failure,
         wasmFiles: receipt.wasmFiles, browserClosed: receipt.browserClosed}));
+      if (cleanupFailure) throw cleanupFailure;
     }
   }
 }

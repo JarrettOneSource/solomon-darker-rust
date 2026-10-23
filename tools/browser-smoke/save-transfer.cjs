@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Browser export/import through the real File chooser, Blob download and durable save slot.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -32,9 +33,10 @@ async function reveal(page, id) {
 }
 
 (async () => {
-  const browser = await chromium.launch({headless: true,
+  const owned = await launchOwnedBrowser(chromium,{headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+  const browser = owned.browser;
   const page = await browser.newPage({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
     viewport: {width: 1280, height: 720}});
   page.setDefaultTimeout(30000);
@@ -184,6 +186,6 @@ async function reveal(page, id) {
     throw error;
   } finally {
     try {await gpu.settleErrors(page);}
-    finally {await browser.close();}
+    finally {console.log(JSON.stringify({browserCleanup:await owned.close()}));}
   }
 })().catch(error => {console.error(error); process.exitCode = 1;});

@@ -1,3 +1,4 @@
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Real ordinary upload, protected gallery, versions and GPU comment ownership.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -103,9 +104,10 @@ async function swipe(page,distance) {
 }
 
 (async()=>{
-  const browser=await chromium.launch({headless:true,
+  const owned = await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=metal','--ignore-gpu-blocklist']});
+  const browser = owned.browser;
   const context=await browser.newContext({ignoreHTTPSErrors:process.env.LOCAL_TLS==='1',hasTouch:true,
     viewport:{width:1600,height:900}});
   let page, failure, cleanup;
@@ -253,6 +255,6 @@ async function swipe(page,distance) {
         mod:{slug,name:modName,screenshots:created?.screenshots,versions:secondVersion?.versions},
         requests,comments,cleanup,errors:observations.flatMap(observation=>observation.errors)},null,2));
       console.log(JSON.stringify({passed:!failure,checks,failure:failure?.message.split(': {')[0],cleanup}));
-    }finally{await browser.close();}
+    }finally{console.log(JSON.stringify({browserCleanup:await owned.close()}));}
   }
 })().catch(error=>{console.error(error.message.split(': {')[0]);process.exitCode=1;});
