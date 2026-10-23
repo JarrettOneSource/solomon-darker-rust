@@ -252,9 +252,12 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
         return shared?.owners===1&&shared.loaders===0
           &&document.querySelectorAll('[data-gpu-announcer]').length===1;
       });
+      const beforeTab=await ui.readUi(page);
+      const previousControl=beforeTab.widgets.find(widget=>widget.focused);
       const afterIndex=(await ui.announcements(page)).length;
       await page.keyboard.press('Tab');
-      const focused=await ui.waitForUi(page,snapshot=>snapshot.widgets.some(widget=>widget.focused),
+      const focused=await ui.waitForUi(page,snapshot=>snapshot.frame>beforeTab.frame
+        &&snapshot.widgets.some(widget=>widget.focused&&widget.id!==previousControl?.id),
         'the actual first focused GPU control after loading');
       const control=focused.widgets.find(widget=>widget.focused);
       await ui.announced(page,control.label,{afterIndex});
@@ -262,6 +265,8 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
         events:window.__solomonAnnouncements,
         owners:window.__solomonAnnouncementOwnership,
       }));
+      announcementHandoff.previousControl=previousControl;
+      announcementHandoff.control=control;
       assert.ok(announcementHandoff.owners.every(row=>row.count<=1));
       assert.ok(announcementHandoff.events.slice(afterIndex).some(event=>!event.loaderActive
         &&event.text.toLowerCase().includes(control.label.toLowerCase())),
@@ -271,12 +276,16 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
     await page.screenshot({path:path.join(output,`${name}-title.png`)});
     await ui.settleErrors(page);
     assert.deepEqual(observed.errors,[],'delayed successful work has no runtime/asset errors');
-    return {requestUrl,expectedCompleted,before,waiting,still,first,second,resizes,handoff,heldAnnouncements,announcementHandoff,
-      ready:await ui.readUi(page),...observed};
+    return {...observed,requestUrl,expectedCompleted,before,waiting,still,first,second,resizes,handoff,heldAnnouncements,announcementHandoff,
+      ready:await ui.readUi(page)};
   } catch(error) {
     const failure={requestUrl,failure:error.stack,...observed};
     try {failure.snapshot=await ui.readUi(page)}
     catch(observationError) {failure.observationError=observationError.stack}
+    failure.announcements=await page.evaluate(()=>({events:window.__solomonAnnouncements,
+      owners:window.__solomonAnnouncementOwnership,
+      fallback:[...document.querySelectorAll('[data-gpu-announcer]')].map(node=>node.textContent),
+    })).catch(error=>({observationError:error.message}));
     try {await page.screenshot({path:path.join(output,`${name}-failure.png`)})}
     catch(screenshotError) {failure.screenshotError=screenshotError.stack}
     fs.writeFileSync(path.join(output,`${name}-failure.json`),JSON.stringify(failure,null,2));
