@@ -42,7 +42,7 @@ impl SocialUi {
     pub(super) fn paint_card(
         &mut self,
         frame: &mut crate::gpu_ui::UiFrame<'_>,
-        _ui: &mut egui::Ui,
+        parent: &mut egui::Ui,
     ) -> Result<(), String> {
         let actor_profile = self.hub_player_profile();
         let Some(card) = self.current_card().or(actor_profile.as_ref()).cloned() else {
@@ -112,8 +112,13 @@ impl SocialUi {
         let max_height = if coarse { screen.height() * 0.9 } else { screen.height() - 32.0 };
         let mut action = None;
         let mut portrait_error = None;
-        let area = egui::Area::new(egui::Id::unique("social/player-card-surface"))
-            .order(egui::Order::Foreground)
+        let layer = egui::LayerId::new(
+            parent.layer_id().order,
+            egui::Id::unique("social/player-card-surface"),
+        );
+        ctx.set_sublayer(parent.layer_id(), layer);
+        let area = egui::Area::new(layer.id)
+            .order(layer.order)
             .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
             .show(&ctx, |ui| {
                 egui::Frame::new()
