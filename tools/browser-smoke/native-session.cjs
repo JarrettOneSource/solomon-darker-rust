@@ -113,9 +113,9 @@ const playing = state => state.frame?.snapshot.boneyard && !state.frame.host.loa
 
 async function loaded(page, state) {
   await state.failureObserverReady;
-  if (page.url() !== 'about:blank') await ui.settleErrors(page);
   state.status = null;
-  await page.goto(`${origin}/?host=1`);
+  if (page.url() === 'about:blank') await page.goto(`${origin}/?host=1`);
+  else await ui.observeDocumentReplacement(page, () => page.goto(`${origin}/?host=1`));
   await ui.ready(page,{timeout:120000});
   await waitUntil(() => state.status, 'native title inspection');
   // Socket delivery precedes the next application frame that installs title prompts.

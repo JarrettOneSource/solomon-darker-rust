@@ -86,8 +86,7 @@ async function register(page) {
   const catalog = await catalogResponse;
   assert.equal(catalog.status(), 200);
   await catalog.finished();
-  await ui.settleErrors(page);
-  await ui.click(page,'cloud-sign-in');
+  await ui.observeDocumentReplacement(page, () => ui.click(page,'cloud-sign-in'));
   await page.waitForURL(value => value.pathname === `${mount}/login`);
   await accountForm(page);
   await page.getByRole('link', { name: 'Create an account', exact: true }).click();
@@ -106,7 +105,8 @@ async function register(page) {
   assert.equal((await registered).status(), 201);
   await page.waitForURL(value => value.pathname === `${mount}/account`);
   await page.waitForLoadState('networkidle');
-  await page.getByRole('link', { name: 'Play', exact: true }).first().click();
+  await ui.observeDocumentReplacement(page, () =>
+    page.getByRole('link', { name: 'Play', exact: true }).first().click());
   await title(page);
 }
 async function adminRestart() {
@@ -250,11 +250,12 @@ async function adminRestart() {
     }
     publish(originalPublication);
     changedManifest = false;
-    await ui.settleErrors(page);
-    fs.writeFileSync(path.join(out, 'ready-to-publish.json'), JSON.stringify({current, target,
-      publication: candidate, wizardName, runId, checkpointSequence: announcement.checkpoint_sequence, result}));
-    console.log('READY_TO_PUBLISH');
-    await until(() => documentLoads > loads, 'coordinator publication and automatic reload', 180000);
+    await ui.observeDocumentReplacement(page, async () => {
+      fs.writeFileSync(path.join(out, 'ready-to-publish.json'), JSON.stringify({current, target,
+        publication: candidate, wizardName, runId, checkpointSequence: announcement.checkpoint_sequence, result}));
+      console.log('READY_TO_PUBLISH');
+      await until(() => documentLoads > loads, 'coordinator publication and automatic reload', 180000);
+    }, {timeout:180000});
     await title(page);
     assert.equal(await page.locator('meta[name="solomon-build-revision"]').getAttribute('content'), target);
     await ui.click(page,'play');
