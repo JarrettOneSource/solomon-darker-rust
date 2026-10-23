@@ -55,6 +55,28 @@ pub fn shaped_label(
     text: &str,
     style: NativeLabelStyle,
 ) -> Result<Response, String> {
+    label(frame, ui, id, text, style, None)
+}
+
+pub fn shaped_label_with_effect(
+    frame: &UiFrame<'_>,
+    ui: &mut egui::Ui,
+    id: &str,
+    text: &str,
+    style: NativeLabelStyle,
+    effect: super::GroupEffect,
+) -> Result<Response, String> {
+    label(frame, ui, id, text, style, Some(effect))
+}
+
+fn label(
+    frame: &UiFrame<'_>,
+    ui: &mut egui::Ui,
+    id: &str,
+    text: &str,
+    style: NativeLabelStyle,
+    effect: Option<super::GroupEffect>,
+) -> Result<Response, String> {
     let run = font_run_with_options(
         frame.ctx,
         style.font,
@@ -70,8 +92,18 @@ pub fn shaped_label(
     )?;
     let (_, rect) = ui.allocate_space(run.size());
     let response = ui.interact(rect, egui::Id::unique(id), style.sense);
-    if ui.is_visible() && style.opacity > 0.0 {
-        run.paint(frame, ui.painter(), rect.min, style.opacity)?;
+    if ui.is_visible()
+        && style.opacity > 0.0
+        && effect.as_ref().is_none_or(|effect| effect.opacity > 0.0)
+    {
+        if let Some(mut effect) = effect {
+            effect.opacity *= style.opacity;
+            frame.paint_group(ui.painter(), effect, |frame, painter| {
+                run.paint(frame, painter, rect.min, 1.0)
+            })?;
+        } else {
+            run.paint(frame, ui.painter(), rect.min, style.opacity)?;
+        }
         if style.sense.interactive() {
             frame.record(id, text, "button", &response);
         } else {
