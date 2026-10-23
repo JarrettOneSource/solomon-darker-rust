@@ -86,6 +86,14 @@ records native `MyLoader::Render` at `0x005BCA40`, numerator `0x0081F6A8`, denom
   after the real Play click while waiting for AudioContext running
   (`common-browser/58df78d/audio-pointer-red/run.log`). Restore the Source capture owner;
   retain pointer-only activation and the real playback/mixer assertions.
+- The same Source director's `primeMusicChannels`/`finishMusicPrime` owns one successful
+  zero-volume play per unused stock channel during unlock. Current/outgoing, already
+  primed and pending channels are excluded; deliberate music pause excludes priming.
+  Completion resets unused channels, but must preserve a channel that became active in
+  the meantime and honor a subsequent deliberate pause. Source test
+  `game-audio-director.test.ts:538` proves later automatic Academy playback. Rust lacked
+  this established behavior. Reuse its resident channels with one per-channel promise
+  owner; the browser audio check must observe native prime calls before keyboard input.
 - Pinned Website also shows truthful stage, whole percentage, pending filename and ready
   item count. Those are explicit browser enhancements; stock per-file order/weighting is
   unknown. The separate match-loading lifecycle is not the startup denominator.
