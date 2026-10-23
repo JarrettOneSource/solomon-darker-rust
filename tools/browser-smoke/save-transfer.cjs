@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const gpu = require('./gpu-ui.cjs');
+const {createNativeMessageReader} = require('./native-wire.cjs');
 const output = path.resolve(process.env.OUT);
 const expected = JSON.parse(fs.readFileSync(path.join(output, 'archive-receipt.json')));
 const checks = [], errors = [], requests = [];
@@ -45,12 +46,16 @@ async function reveal(page, id) {
     if (pathname.includes('/api/')) requests.push({path: pathname, status: response.status()});
     if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
   });
-  page.on('websocket', socket => socket.on('framereceived', ({payload}) => {
-    const message = JSON.parse(payload.toString());
-    if (message.type === 'welcome') {accepted = message.frame; playerId = message.credentials.player_id;}
-    else if (message.type === 'snapshot') accepted = message.frame;
-    else if (message.type === 'error') errors.push(`host ${message.code}: ${message.reason}`);
-  }));
+  page.on('websocket', socket => {
+    const read = createNativeMessageReader();
+    socket.on('framereceived', ({payload}) => {
+      const message = read(JSON.parse(payload.toString()));
+      if (!message) return;
+      if (message.type === 'welcome') {accepted = message.frame; playerId = message.credentials.player_id;}
+      else if (message.type === 'snapshot') accepted = message.frame;
+      else if (message.type === 'error') errors.push(`host ${message.code}: ${message.reason}`);
+    });
+  });
   const storedSave = () => page.evaluate(async () => {
     const configuration = document.querySelector('meta[name="solomon-website-mount"]');
     const mount = configuration?.content.replace(/\/$/, '') || '';
@@ -156,7 +161,8 @@ async function reveal(page, id) {
     await gpu.ready(page);
     await gpu.click(page, 'play');
     await gpu.click(page, 'continue');
-    await waitUntil(() => accepted?.snapshot.boneyard?.run_id === expected.runId
+    await waitUntil(() => playerId && accepted?.snapshot.participants[playerId]
+      && accepted.snapshot.boneyard?.run_id === expected.runId
       && !accepted.host.loading_run_id && !accepted.host.resume_grace, 'actual imported Boneyard continuation', 120000);
     assert.equal(accepted.snapshot.participants[playerId].player.selection.name, expected.displayName);
     const restoredTick = accepted.snapshot.ticks;
@@ -165,7 +171,9 @@ async function reveal(page, id) {
     checks.push('fresh browser reload restores the exported wizard and the same Boneyard run through actual host admission');
     await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
-    const receipt = {passed: true, checks, requests, errors, archiveSha256: expected.sha256, importedRevision: record.revision};
+    const receipt = {passed: true, checks, requests, errors, archiveSha256: expected.sha256, importedRevision: record.revision,
+      continued: {playerId, runId: accepted.snapshot.boneyard.run_id, ticks: accepted.snapshot.ticks,
+        selection: accepted.snapshot.participants[playerId].player.selection}};
     fs.writeFileSync(path.join(output, 'native-save-transfer.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) {
