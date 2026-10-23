@@ -74,12 +74,13 @@ async function client(browser, label, authenticated = true) {
   } else await page.goto(game.href);
   await gpu.ready(page);
   if (gpu.findWidget(await gpu.readUi(page),'prompt-secondary')) await gpu.click(page,'prompt-secondary');
+  await gpu.useNativeFocus(page);
+  await page.bringToFront();
   return result;
 }
 
 async function visibility(owner, value, native) {
   const {page,state} = owner;
-  await gpu.useNativeFocus(page);
   await page.bringToFront();
   if (!gpu.findWidget(await gpu.readUi(page),`social/visibility:${value}`)) {
     if (gpu.findWidget(await gpu.readUi(page),'social/party-menu')) await gpu.click(page,'social/tab:settings');
@@ -92,7 +93,6 @@ async function visibility(owner, value, native) {
 
 async function joinMenu(visitor) {
   const {page} = visitor;
-  await gpu.useNativeFocus(page);
   await page.bringToFront();
   const surface = (await gpu.readUi(page)).surface;
   if (surface === 'title') {
@@ -105,7 +105,6 @@ async function joinMenu(visitor) {
 
 async function refresh(visitor, id, label) {
   const {page,state} = visitor;
-  await gpu.useNativeFocus(page);
   await page.bringToFront();
   const count = state.directories.length;
   await gpu.click(page,'join-refresh');
@@ -177,7 +176,6 @@ async function refresh(visitor, id, label) {
     const request = leader.state.social.party_state.join_requests.find(request =>
       request.requester.account_username === accounts[1].username);
     assert.ok(request,'only the owned visitor request is acted on');
-    await gpu.useNativeFocus(leader.page);
     await leader.page.bringToFront();
     await gpu.click(leader.page,'social/party');
     await gpu.click(leader.page,'social/tab:members');
@@ -207,7 +205,6 @@ async function refresh(visitor, id, label) {
     checked('real Party ID typing and Enter resolve, consent and admit the requested wizard to the owned authority');
 
     step = 'playing directory policy';
-    await gpu.useNativeFocus(leader.page);
     await leader.page.bringToFront();
     await gpu.click(leader.page,'hud:map');
     await until(() => leader.state.frame?.snapshot.boneyard && visitor.state.frame?.snapshot.boneyard,'actual shared Boneyard entry',120000);
@@ -218,7 +215,6 @@ async function refresh(visitor, id, label) {
     await spectator.page.screenshot({path:path.join(output,'owned-party-in-game.png')});
     checked('the actual running owned party is displayed IN GAME with its Join action disabled');
     for (const owner of [leader,visitor]) {
-      await gpu.useNativeFocus(owner.page);
       await owner.page.bringToFront();
       const before = owner.state.saveWrites.length;
       await gpu.click(owner.page,'hud:pause');
