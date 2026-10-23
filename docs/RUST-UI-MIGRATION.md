@@ -272,6 +272,25 @@ covers the visible center, an interior edge and an exterior point under both
 zero and45-degree rotation. Actual tap and responsive family proof remain
 required; no larger rectangular hit fallback is permitted.
 
+## HUD and Social layer lifetime
+
+Established Rust `c14068b3` places `.game-hud` at z-index10 and `.game-social`
+at60, with only their children accepting pointer input. On5f87eb2 a fresh
+College Party click works, but opening Inventory, closing it with Escape and
+waiting for the actual book surface to disappear permanently blocks that
+same Party control. The native `native-party-book-only-5f` receipt isolates
+the failure without Chat and without browser errors. Holding pointer down
+across frames still fails. The initially suspected same-dispatch Social
+mutation was not the demonstrated cause and its candidate change was removed.
+
+HUD disappears while the book covers it; egui raises its full-viewport Area
+when it reappears. Paint-call order alone therefore lets it cover Social.
+The real HUD layer owner supplies its identity to Social, which explicitly
+orders its ally, Party and collapsed-chat layers above it. The Context
+regression repeats the actual hide/reappear and pointer sequence, preserving
+the unlinked negative control. Browser acceptance must repeat the original
+book/Chat/Party journey on the combined build.
+
 ## Acceptance matrix
 
 `Pending` means current composed behavior has not been accepted. Owner names match the
