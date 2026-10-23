@@ -1,419 +1,395 @@
-//! Native browser controls and authored editor styles from `MobileUiEditor.tsx`.
-//! The editor intentionally uses the source HTML display font; gameplay stock text uses
-//! the shared bitmap painter elsewhere.
+//! GPU editor page/chrome from `MobileUiEditor.tsx` and its authored control layout.
 
+use super::preview::ElementPaint;
+use super::{EditorEvent, Hit, HitTarget, MobileUiEditor, egui_rect, hud_rect};
+use crate::gpu_ui::UiFrame;
+use egui::{Color32, FontFamily, FontId, Id, Rect, RichText, Stroke, Ui, pos2, vec2};
 use solomon_sim::mobile_ui::*;
 use solomon_sim::player_panels::native_tooltip_fixed;
-use wasm_bindgen::JsCast;
-use web_sys::{HtmlElement, HtmlInputElement, HtmlSelectElement};
 
-use super::{MobileUiEditor, append, element};
-
-impl MobileUiEditor {
-    pub(super) fn build_controls(&self) -> Result<(), String> {
-        if self.fullscreen {
-            self.dock.set_text_content(None);
-            let heading = element(&self.document, "div", "mobile-ui-editor-dock-heading")?;
-            let handle = self.button(&heading, "⠿", "dock-handle", "Move editor actions")?;
-            handle
-                .remove_attribute("data-mobile-editor-action")
-                .map_err(|_| "mobile actions handle")?;
-            handle.set_class_name("mobile-ui-editor-dock-handle");
-            self.text(&heading, "strong", "Mobile controls")?;
-            let save = element(&self.document, "button", "mobile-ui-editor-dock-save")?;
-            for (name, value) in [
-                ("type", "button"),
-                ("data-mobile-ui-save", ""),
-                ("data-menu-action", "settings-back"),
-            ] {
-                save.set_attribute(name, value).map_err(|_| "mobile editor save action")?;
-            }
-            save.set_text_content(Some("SAVE"));
-            append(&heading, &save)?;
-            append(&self.dock, &heading)?;
-            let actions = element(&self.document, "div", "mobile-ui-editor-dock-actions")?;
-            self.history_buttons(&actions)?;
-            self.button(&actions, "GRID ON", "grid", "GRID ON")?;
-            let tools = self.button(&actions, "ADJUST +", "tools", "ADJUST +")?;
-            tools
-                .set_attribute("aria-controls", "mobile-ui-adjustments")
-                .map_err(|_| "mobile inspector controls")?;
-            append(&self.dock, &actions)?;
-            let hint = element(&self.document, "p", "mobile-ui-editor-hint")?;
-            hint.set_text_content(Some("Drag to move. Pinch to resize."));
-            append(&self.dock, &hint)?;
-            self.inspector
-                .set_attribute("id", "mobile-ui-adjustments")
-                .map_err(|_| "mobile inspector identity")?;
-            self.picker(&self.inspector, "Control", "mobile-ui-editor-control-picker")?;
-            self.adjustments()?;
-            self.button(&self.inspector, "RESET LAYOUT", "reset-layout", "RESET LAYOUT")?;
-            self.text(
-                &self.inspector,
-                "small",
-                "Changes apply when you save. Undo also restores a reset.",
-            )?;
-            append(&self.dock, &self.inspector)?;
-        } else {
-            self.toolbar
-                .set_attribute("aria-label", "Mobile UI editor tools")
-                .map_err(|_| "mobile toolbar label")?;
-            self.picker(&self.toolbar, "CONTROL", "")?;
-            self.history_buttons(&self.toolbar)?;
-            self.button(&self.toolbar, "GRID ON", "grid", "GRID ON")?;
-            let zoom = element(&self.document, "div", "mobile-ui-editor-zoom-controls")?;
-            zoom.set_attribute("aria-label", "Page zoom").map_err(|_| "mobile zoom label")?;
-            self.button(&zoom, "−", "zoom-out", "Zoom out")?;
-            let level = self.text(&zoom, "output", "100%")?;
-            level
-                .set_attribute("aria-label", "Zoom level")
-                .map_err(|_| "mobile zoom value label")?;
-            self.button(&zoom, "+", "zoom-in", "Zoom in")?;
-            self.button(&zoom, "FIT", "fit", "FIT")?;
-            append(&self.toolbar, &zoom)?;
-            self.button(&self.toolbar, "RESET LAYOUT", "reset-layout", "RESET LAYOUT")?;
-            self.adjustments()?;
-        }
-        let error = element(&self.document, "p", "mobile-ui-editor-error")?;
-        error.set_attribute("role", "alert").map_err(|_| "mobile editor save error")?;
-        error.set_hidden(true);
-        append(&self.dock, &error)?;
-        Ok(())
-    }
-
-    fn picker(&self, parent: &HtmlElement, label: &str, class: &str) -> Result<(), String> {
-        let row = element(&self.document, "label", class)?;
-        self.text(&row, "span", label)?;
-        let select = element(&self.document, "select", "")?;
-        select
-            .set_attribute("aria-label", "Selected mobile UI element")
-            .map_err(|_| "mobile control selector")?;
-        select
-            .set_attribute("data-mobile-editor-select", "")
-            .map_err(|_| "mobile selector target")?;
-        for id in MobileUiElementId::ALL {
-            let option = element(&self.document, "option", "")?;
-            option.set_attribute("value", id.as_str()).map_err(|_| "mobile control option")?;
-            option.set_text_content(Some(id.label()));
-            append(&select, &option)?;
-        }
-        append(&row, &select)?;
-        append(parent, &row)
-    }
-
-    fn history_buttons(&self, parent: &HtmlElement) -> Result<(), String> {
-        self.button(parent, "UNDO", "undo", "UNDO")?;
-        self.button(parent, "REDO", "redo", "REDO")?;
-        Ok(())
-    }
-
-    fn adjustments(&self) -> Result<(), String> {
-        let root = element(&self.document, "div", "mobile-ui-editor-adjustments")?;
-        let position = element(&self.document, "div", "mobile-ui-editor-position")?;
-        self.text(&position, "span", "Move")?;
-        for (label, action, description) in [
-            ("←", "left", "Move control left"),
-            ("↑", "up", "Move control up"),
-            ("↓", "down", "Move control down"),
-            ("→", "right", "Move control right"),
-        ] {
-            self.button(&position, label, action, description)?;
-        }
-        append(&root, &position)?;
-        let size = element(&self.document, "div", "mobile-ui-editor-size")?;
-        let label = self.text(&size, "label", "Size")?;
-        label.set_attribute("for", "mobile-ui-control-size").map_err(|_| "mobile size label")?;
-        self.text(&label, "output", "100%")?;
-        self.button(&size, "−", "smaller", "Make control smaller")?;
-        let range = element(&self.document, "input", "")?;
-        for (name, value) in [
-            ("id", "mobile-ui-control-size"),
-            ("type", "range"),
-            ("min", "40"),
-            ("max", "300"),
-            ("step", "5"),
-            ("value", "100"),
-            ("data-mobile-editor-scale", ""),
-        ] {
-            range.set_attribute(name, value).map_err(|_| "mobile size control")?;
-        }
-        append(&size, &range)?;
-        self.button(&size, "+", "larger", "Make control larger")?;
-        append(&root, &size)?;
-        let rotation = element(&self.document, "div", "mobile-ui-editor-rotation")?;
-        let label = self.text(&rotation, "span", "Rotation")?;
-        self.text(&label, "output", "0°")?;
-        for (label, action, description) in [
-            ("−15°", "rotate-left", "Rotate control left"),
-            ("0°", "straighten", "Straighten control"),
-            ("+15°", "rotate-right", "Rotate control right"),
-        ] {
-            self.button(&rotation, label, action, description)?;
-        }
-        append(&root, &rotation)?;
-        let reset =
-            self.button(&root, "RESET THIS CONTROL", "reset-control", "RESET THIS CONTROL")?;
-        reset.set_class_name("mobile-ui-editor-reset-control");
-        append(&self.inspector, &root)
-    }
-
-    pub(super) fn build_elements(&mut self) -> Result<(), String> {
-        for id in MobileUiElementId::ALL {
-            let node = element(&self.document, "div", "mobile-ui-editor-element")?;
-            node.set_attribute("role", "button").map_err(|_| "mobile editable element role")?;
-            node.set_attribute("data-mobile-ui-editor-element", id.as_str())
-                .map_err(|_| "mobile editable element identity")?;
-            let preview = element(&self.document, "span", "mobile-ui-editor-preview")?;
-            preview
-                .set_attribute("aria-hidden", "true")
-                .map_err(|_| "mobile preview decoration")?;
-            preview
-                .set_attribute("data-preview-element", id.as_str())
-                .map_err(|_| "mobile preview identity")?;
-            append(&node, &preview)?;
-            for handle in MobileUiResizeHandle::ALL {
-                let button = element(&self.document, "button", "mobile-ui-editor-resize-node")?;
-                button.set_attribute("type", "button").map_err(|_| "mobile resize button")?;
-                button
-                    .set_attribute("data-resize-handle", handle.as_str())
-                    .map_err(|_| "mobile resize identity")?;
-                button
-                    .set_attribute(
-                        "aria-label",
-                        &format!("Resize {} from {}", id.label(), handle.as_str()),
-                    )
-                    .map_err(|_| "mobile resize label")?;
-                append(&node, &button)?;
-            }
-            let rotation = element(&self.document, "button", "mobile-ui-editor-rotate-handle")?;
-            rotation.set_attribute("type", "button").map_err(|_| "mobile rotation button")?;
-            rotation
-                .set_attribute("aria-label", &format!("Rotate {}", id.label()))
-                .map_err(|_| "mobile rotation label")?;
-            append(&node, &rotation)?;
-            append(&self.page_node, &node)?;
-            self.elements.push(node);
-            self.preview_nodes.push(preview);
-        }
-        Ok(())
-    }
-
-    pub(super) fn paint(&mut self) -> Result<(), String> {
-        for (name, value) in [
-            ("data-grid-snap", self.grid.to_string()),
-            ("data-restoring-default", self.restoring_default.to_string()),
-            ("data-selected-element", self.selected.as_str().to_owned()),
-        ] {
-            self.root.set_attribute(name, &value).map_err(|_| "mobile editor state")?;
-        }
-        self.page_node
-            .set_attribute("data-grid-visible", if self.grid { "true" } else { "false" })
-            .map_err(|_| "mobile grid visibility")?;
-        self.page_node
-            .set_attribute(
-                "aria-label",
-                &format!("Mobile HUD layout page, {} by {}", self.page.width, self.page.height),
-            )
-            .map_err(|_| "mobile page dimensions")?;
-        self.page_node.style().set_css_text(&format!(
-            "--mobile-ui-editor-grid:16px;width:{}px;height:{}px;transform:scale({})",
-            self.page.width, self.page.height, self.zoom
-        ));
-        let inset = if self.fullscreen { 0.0 } else { 48.0 };
-        self.shell.style().set_css_text(&format!(
-            "width:{}px;height:{}px",
-            self.page.width * self.zoom + inset,
-            self.page.height * self.zoom + inset
-        ));
-        self.guide_layer.set_text_content(None);
-        for guide in &self.guides {
-            let node = element(&self.document, "span", "mobile-ui-editor-snap-guide")?;
-            node.set_attribute("aria-hidden", "true")
-                .map_err(|_| "mobile snap guide decoration")?;
-            node.set_attribute("data-snap-guide-axis", guide.axis.as_str())
-                .map_err(|_| "mobile guide axis")?;
-            node.set_attribute("data-snap-guide-kind", guide.kind.as_str())
-                .map_err(|_| "mobile guide priority")?;
-            node.style()
-                .set_property(
-                    if guide.axis == MobileUiSnapAxis::X { "left" } else { "top" },
-                    &format!("{}px", guide.position),
-                )
-                .map_err(|_| "mobile guide position")?;
-            append(&self.guide_layer, &node)?;
-        }
-        for id in MobileUiElementId::ALL {
-            let node = &self.elements[id as usize];
-            let transform = self.layout.get(id);
-            let size = self.geometry.sizes[id as usize];
-            let active = self.selected == id;
-            node.set_attribute(
-                "aria-label",
-                &format!(
-                    "{}, x {} percent, y {} percent, scale {}, rotation {} degrees",
-                    id.label(),
-                    native_tooltip_fixed(transform.x, 1),
-                    native_tooltip_fixed(transform.y, 1),
-                    native_tooltip_fixed(transform.scale, 2),
-                    native_tooltip_fixed(transform.rotation, 0)
-                ),
-            )
-            .map_err(|_| "mobile control placement label")?;
-            for (name, value) in [
-                ("aria-pressed", active.to_string()),
-                ("data-selected", active.to_string()),
-                ("tabindex", if active { "0" } else { "-1" }.to_owned()),
-            ] {
-                node.set_attribute(name, &value).map_err(|_| "mobile control selection")?;
-            }
-            node.style().set_css_text(&format!("--mobile-ui-element-scale:{};width:{}px;height:{}px;left:{}%;top:{}%;transform:translate(-50%,-50%) rotate({}deg) scale({})",
-                transform.scale,size.width,size.height,transform.x,transform.y,transform.rotation,transform.scale));
-            let handles =
-                node.query_selector_all("button").map_err(|_| "mobile adjustment handles")?;
-            for index in 0..handles.length() {
-                let Some(node) = handles.item(index) else { continue };
-                node.dyn_into::<HtmlElement>()
-                    .map_err(|_| "mobile adjustment button")?
-                    .set_hidden(!active);
-            }
-        }
-        self.paint_controls()?;
-        if let Some(scroll) = self.pending_scroll.take() {
-            // The shell and page must have their new dimensions before native scrolling
-            // applies, matching the source's requestAnimationFrame zoom correction.
-            self.set_scroll_position(scroll)?;
-        }
-        if self.dirty_preview {
-            self.paint_previews()?;
-            self.dirty_preview = false;
-        }
-        Ok(())
-    }
-
-    fn paint_controls(&self) -> Result<(), String> {
-        for (action, disabled) in [
-            ("undo", self.past.is_empty()),
-            ("redo", self.future.is_empty()),
-            ("smaller", self.layout.get(self.selected).scale <= MOBILE_UI_SCALE_MIN),
-            ("larger", self.layout.get(self.selected).scale >= MOBILE_UI_SCALE_MAX),
-            ("straighten", self.layout.get(self.selected).rotation == 0.0),
-            ("reset-layout", self.restoring_default),
-            ("zoom-out", self.zoom <= MOBILE_UI_PAGE_ZOOM_MIN),
-            ("zoom-in", self.zoom >= MOBILE_UI_PAGE_ZOOM_MAX),
-        ] {
-            if let Some(button) = self.find(&format!("[data-mobile-editor-action='{action}']"))? {
-                button
-                    .toggle_attribute_with_force("disabled", disabled)
-                    .map_err(|_| "mobile editor control availability")?;
-            }
-        }
-        if let Some(grid) = self.find("[data-mobile-editor-action='grid']")? {
-            let text = if self.grid { "GRID ON" } else { "GRID OFF" };
-            grid.set_text_content(Some(text));
-            grid.set_attribute("aria-label", text).map_err(|_| "mobile grid action label")?;
-            grid.set_attribute("aria-pressed", if self.grid { "true" } else { "false" })
-                .map_err(|_| "mobile grid state")?;
-        }
-        if let Some(tools) = self.find("[data-mobile-editor-action='tools']")? {
-            tools.set_text_content(Some(if self.tools_open { "ADJUST −" } else { "ADJUST +" }));
-            tools
-                .set_attribute("aria-expanded", if self.tools_open { "true" } else { "false" })
-                .map_err(|_| "mobile inspector state")?;
-        }
-        if self.fullscreen {
-            self.inspector.set_hidden(!self.tools_open);
-        }
-        if let Some(hint) = self.find(".mobile-ui-editor-hint")? {
-            hint.set_hidden(self.tools_open);
-        }
-        if let Some(level) = self.find(".mobile-ui-editor-zoom-controls output")? {
-            level.set_text_content(Some(&format!("{}%", round(self.zoom * 100.0))));
-        }
-        if let Some(select) = self.find("[data-mobile-editor-select]")? {
-            select
-                .dyn_into::<HtmlSelectElement>()
-                .map_err(|_| "mobile element picker")?
-                .set_value(self.selected.as_str());
-        }
-        let transform = self.layout.get(self.selected);
-        if let Some(range) = self.find("[data-mobile-editor-scale]")? {
-            range
-                .dyn_into::<HtmlInputElement>()
-                .map_err(|_| "mobile size slider")?
-                .set_value(&round(transform.scale * 100.0));
-        }
-        if let Some(output) = self.find(".mobile-ui-editor-size output")? {
-            output.set_text_content(Some(&format!("{}%", round(transform.scale * 100.0))));
-        }
-        if let Some(output) = self.find(".mobile-ui-editor-rotation output")? {
-            output.set_text_content(Some(&format!("{}°", round(transform.rotation))));
-        }
-        if let Some(adjustments) = self.find(".mobile-ui-editor-adjustments")? {
-            adjustments
-                .set_attribute("aria-label", &format!("Adjust {}", self.selected.label()))
-                .map_err(|_| "mobile inspector selected label")?;
-        }
-        if !self.fullscreen {
-            self.status.set_text_content(None);
-            self.text(&self.status, "strong", self.selected.label())?;
-            for value in [
-                format!("X {}%", native_tooltip_fixed(transform.x, 1)),
-                format!("Y {}%", native_tooltip_fixed(transform.y, 1)),
-                format!("SIZE {}%", round(transform.scale * 100.0)),
-                format!("ROTATE {}°", round(transform.rotation)),
-            ] {
-                self.text(&self.status, "span", &value)?;
-            }
-            self.text(
-                &self.status,
-                "small",
-                "GRID snaps nearby edges and centres. Drag to move; pinch or use a node to resize.",
-            )?;
-        }
-        if let Some(error) = self.find(".mobile-ui-editor-error")? {
-            error.set_hidden(self.error.is_none());
-            error.set_text_content(self.error.as_deref());
-        }
-        Ok(())
-    }
-
-    fn find(&self, selector: &str) -> Result<Option<HtmlElement>, String> {
-        self.root
-            .query_selector(selector)
-            .map_err(|_| "mobile editor control selector".to_owned())?
-            .map(|node| {
-                node.dyn_into::<HtmlElement>()
-                    .map_err(|_| "mobile editor control element".to_owned())
-            })
-            .transpose()
-    }
-
-    fn button(
-        &self,
-        parent: &HtmlElement,
-        label: &str,
-        action: &str,
-        description: &str,
-    ) -> Result<HtmlElement, String> {
-        let button = element(&self.document, "button", "")?;
-        for (name, value) in
-            [("type", "button"), ("data-mobile-editor-action", action), ("aria-label", description)]
-        {
-            button.set_attribute(name, value).map_err(|_| "mobile editor action")?;
-        }
-        button.set_text_content(Some(label));
-        append(parent, &button)?;
-        Ok(button)
-    }
-
-    fn text(&self, parent: &HtmlElement, tag: &str, text: &str) -> Result<HtmlElement, String> {
-        let node = element(&self.document, tag, "")?;
-        node.set_text_content(Some(text));
-        append(parent, &node)?;
-        Ok(node)
-    }
+const GOLD: Color32 = Color32::from_rgb(233, 215, 157);
+fn copy(value: &str, size: f32) -> RichText {
+    RichText::new(value).font(FontId::new(size, FontFamily::Name("Cinzel Bold".into()))).color(GOLD)
 }
 
-fn round(value: f64) -> String {
-    (value + 0.5).floor().to_string()
+impl MobileUiEditor {
+    pub(super) fn paint_page(
+        &mut self,
+        frame: &UiFrame<'_>,
+        ui: &mut Ui,
+        viewport: Rect,
+    ) -> Result<(), String> {
+        let page = egui_rect(self.page_bounds);
+        let clipped = ui.painter().with_clip_rect(viewport.intersect(page));
+        clipped.rect_filled(page, 0.0, Color32::from_rgb(184, 189, 193));
+        if self.grid {
+            let step = (MOBILE_UI_GRID_SIZE * self.zoom) as f32;
+            let mut x = page.left();
+            while x < page.right() {
+                clipped.line_segment(
+                    [pos2(x, page.top()), pos2(x, page.bottom())],
+                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(57, 65, 70, 56)),
+                );
+                x += step;
+            }
+            let mut y = page.top();
+            while y < page.bottom() {
+                clipped.line_segment(
+                    [pos2(page.left(), y), pos2(page.right(), y)],
+                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(57, 65, 70, 56)),
+                );
+                y += step;
+            }
+        }
+        let mut order: Vec<_> =
+            MobileUiElementId::ALL.into_iter().filter(|id| *id != self.selected).collect();
+        order.push(self.selected);
+        for id in order {
+            if id == self.selected {
+                for guide in &self.guides {
+                    let color = match guide.kind {
+                        MobileUiSnapKind::Element => Color32::from_rgb(255, 207, 74),
+                        MobileUiSnapKind::Page => Color32::from_rgb(255, 122, 217),
+                        _ => Color32::from_rgb(0, 167, 237),
+                    };
+                    let coordinate = guide.position as f32 * self.zoom as f32;
+                    let points = if guide.axis == MobileUiSnapAxis::X {
+                        [
+                            page.min + vec2(coordinate, 0.0),
+                            page.left_bottom() + vec2(coordinate, 0.0),
+                        ]
+                    } else {
+                        [page.min + vec2(0.0, coordinate), page.right_top() + vec2(0.0, coordinate)]
+                    };
+                    clipped.line_segment(points, Stroke::new(1.0, color));
+                }
+            }
+            let transform = self.layout.get(id);
+            let natural = self.geometry.sizes[id as usize];
+            let center = page.min
+                + vec2(
+                    (transform.x / 100.0 * self.page.width * self.zoom) as f32,
+                    (transform.y / 100.0 * self.page.height * self.zoom) as f32,
+                );
+            let scale = (transform.scale * self.zoom) as f32;
+            let rotation = transform.rotation.to_radians() as f32;
+            let paint = ElementPaint {
+                center,
+                natural: vec2(natural.width as f32, natural.height as f32),
+                scale,
+                rotation,
+            };
+            let corners = paint.quad(Rect::from_min_size(egui::Pos2::ZERO, paint.natural));
+            let bounds = Rect::from_points(&corners);
+            self.elements[id as usize] = hud_rect(bounds);
+            let target =
+                HitTarget { hit: Hit::Element(id), center, size: paint.natural * scale, rotation };
+            self.hit_targets.push(target);
+            let visible = bounds.intersect(viewport);
+            let response = ui.interact(
+                visible,
+                Id::unique(("mobile/control", id.as_str())),
+                if self.busy { egui::Sense::hover() } else { egui::Sense::click_and_drag() },
+            );
+            if response.gained_focus() {
+                self.focused_element = Some(id);
+                self.events.push(EditorEvent::Select(id));
+            }
+            self.paint_preview(frame, &clipped, id, paint)?;
+            let label = format!(
+                "{}, x {} percent, y {} percent, scale {}, rotation {} degrees",
+                id.label(),
+                native_tooltip_fixed(transform.x, 1),
+                native_tooltip_fixed(transform.y, 1),
+                native_tooltip_fixed(transform.scale, 2),
+                native_tooltip_fixed(transform.rotation, 0)
+            );
+            frame.record(&format!("mobile/control:{}", id.as_str()), &label, "button", &response);
+            frame.record_value(
+                &format!("mobile/control:{}", id.as_str()),
+                &format!(
+                    "{},{},{},{}",
+                    transform.x, transform.y, transform.scale, transform.rotation
+                ),
+                Some(self.selected == id),
+            );
+            if self.selected == id {
+                let outline = paint.quad(Rect::from_min_max(
+                    pos2(-4.0, -4.0),
+                    (paint.natural + vec2(4.0, 4.0)).to_pos2(),
+                ));
+                clipped.add(egui::Shape::closed_line(
+                    outline.to_vec(),
+                    Stroke::new(2.0, Color32::from_rgb(10, 126, 219)),
+                ));
+                for (handle, direction) in MobileUiResizeHandle::ALL.into_iter().zip([
+                    vec2(-1.0, -1.0),
+                    vec2(0.0, -1.0),
+                    vec2(1.0, -1.0),
+                    vec2(1.0, 0.0),
+                    vec2(1.0, 1.0),
+                    vec2(0.0, 1.0),
+                    vec2(-1.0, 1.0),
+                    vec2(-1.0, 0.0),
+                ]) {
+                    let point = paint.point(
+                        (paint.natural / 2.0 + direction * (paint.natural / 2.0 + vec2(4.0, 4.0)))
+                            .to_pos2(),
+                    );
+                    let radius = 6.0 * scale;
+                    clipped.circle_filled(point, radius, Color32::from_rgb(10, 126, 219));
+                    clipped.circle_stroke(point, radius, Stroke::new(2.0 * scale, Color32::WHITE));
+                    let rect = Rect::from_center_size(point, vec2(radius * 2.0, radius * 2.0));
+                    self.hit_targets.push(HitTarget {
+                        hit: Hit::Resize(id, handle),
+                        center: point,
+                        size: rect.size(),
+                        rotation: 0.0,
+                    });
+                    frame.record_rect(
+                        &format!("mobile/resize:{}:{}", id.as_str(), handle.as_str()),
+                        &format!("Resize {} from {}", id.label(), handle.as_str()),
+                        "button",
+                        rect.intersect(viewport),
+                        !self.busy,
+                    );
+                }
+                let point = paint.point(pos2(paint.natural.x / 2.0, -34.0));
+                let bottom = paint.point(pos2(paint.natural.x / 2.0, -4.0));
+                clipped.line_segment(
+                    [point, bottom],
+                    Stroke::new(2.0 * scale, Color32::from_rgb(10, 126, 219)),
+                );
+                clipped.circle_filled(point, 8.0 * scale, Color32::from_rgb(245, 179, 62));
+                clipped.circle_stroke(point, 8.0 * scale, Stroke::new(2.0 * scale, Color32::WHITE));
+                let rect = Rect::from_center_size(point, vec2(16.0, 16.0) * scale);
+                self.hit_targets.push(HitTarget {
+                    hit: Hit::Rotate(id),
+                    center: point,
+                    size: rect.size(),
+                    rotation: 0.0,
+                });
+                frame.record_rect(
+                    &format!("mobile/rotate:{}", id.as_str()),
+                    &format!("Rotate {}", id.label()),
+                    "button",
+                    rect.intersect(viewport),
+                    !self.busy,
+                );
+            }
+        }
+        frame.record_rect(
+            "mobile/page",
+            &format!("Mobile HUD layout page, {} by {}", self.page.width, self.page.height),
+            "application",
+            page.intersect(viewport),
+            !self.busy,
+        );
+        Ok(())
+    }
+    pub(super) fn paint_toolbar(&mut self, frame: &UiFrame<'_>, ui: &mut Ui, bounds: Rect) {
+        self.hit_targets.push(HitTarget {
+            hit: Hit::Chrome,
+            center: bounds.center(),
+            size: bounds.size(),
+            rotation: 0.0,
+        });
+        ui.scope_builder(egui::UiBuilder::new().max_rect(bounds.shrink(4.0)), |ui| {
+            ui.horizontal_wrapped(|ui| {
+                self.picker(frame, ui);
+                self.command_button(frame, ui, "UNDO", "undo");
+                self.command_button(frame, ui, "REDO", "redo");
+                self.command_button(
+                    frame,
+                    ui,
+                    if self.grid { "GRID ON" } else { "GRID OFF" },
+                    "grid",
+                );
+                self.command_button(frame, ui, "−", "zoom-out");
+                ui.label(copy(&format!("{}%", (self.zoom * 100.0).round()), 11.0));
+                self.command_button(frame, ui, "+", "zoom-in");
+                self.command_button(frame, ui, "FIT", "fit");
+                self.command_button(frame, ui, "RESET LAYOUT", "reset-layout");
+            });
+        });
+    }
+    pub(super) fn paint_dock(
+        &mut self,
+        frame: &UiFrame<'_>,
+        ui: &mut Ui,
+        bounds: Rect,
+    ) -> Result<(), String> {
+        self.constrain_dock()?;
+        let position = self.dock_position.expect("constrained dock");
+        let width = 344.0_f32.min(bounds.width() - 16.0);
+        let height = if self.tools_open { 400.0_f32.min(bounds.height() - 16.0) } else { 126.0 };
+        let dock = Rect::from_min_size(
+            bounds.min + vec2(position.x as f32, position.y as f32),
+            vec2(width, height),
+        );
+        self.dock_bounds = hud_rect(dock);
+        ui.painter().rect_filled(dock, 10.0, Color32::from_rgba_unmultiplied(20, 19, 16, 247));
+        ui.painter().rect_stroke(
+            dock,
+            10.0,
+            Stroke::new(1.0, Color32::from_rgb(198, 168, 95)),
+            egui::StrokeKind::Inside,
+        );
+        self.hit_targets.push(HitTarget {
+            hit: Hit::Chrome,
+            center: dock.center(),
+            size: dock.size(),
+            rotation: 0.0,
+        });
+        let handle = Rect::from_min_size(dock.min, vec2(44.0, 44.0));
+        self.hit_targets.push(HitTarget {
+            hit: Hit::Dock,
+            center: handle.center(),
+            size: handle.size(),
+            rotation: 0.0,
+        });
+        ui.interact(handle, Id::unique("mobile/dock-handle"), egui::Sense::drag());
+        ui.painter().text(
+            handle.center(),
+            egui::Align2::CENTER_CENTER,
+            "⠿",
+            FontId::new(24.0, FontFamily::Name("Georgia".into())),
+            GOLD,
+        );
+        frame.record_rect(
+            "mobile/dock-handle",
+            "Move editor actions",
+            "button",
+            handle,
+            !self.busy,
+        );
+        ui.painter().text(
+            dock.min + vec2(50.0, 22.0),
+            egui::Align2::LEFT_CENTER,
+            "Mobile controls",
+            FontId::new(15.0, FontFamily::Name("Cinzel Bold".into())),
+            GOLD,
+        );
+        let save_rect = Rect::from_min_size(dock.right_top() - vec2(72.0, 0.0), vec2(72.0, 44.0));
+        let save = ui.put(
+            save_rect,
+            egui::Button::new(copy("SAVE", 12.0)).fill(Color32::from_rgb(46, 40, 23)),
+        );
+        frame.record("mobile/save", "SAVE", "button", &save);
+        if save.clicked() && !self.busy {
+            self.save_request = true;
+        }
+        ui.scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(Rect::from_min_size(dock.min + vec2(4.0, 46.0), vec2(width - 8.0, 44.0))),
+            |ui| {
+                ui.horizontal(|ui| {
+                    self.command_button(frame, ui, "UNDO", "undo");
+                    self.command_button(frame, ui, "REDO", "redo");
+                    self.command_button(
+                        frame,
+                        ui,
+                        if self.grid { "GRID ON" } else { "GRID OFF" },
+                        "grid",
+                    );
+                    self.command_button(
+                        frame,
+                        ui,
+                        if self.tools_open { "ADJUST −" } else { "ADJUST +" },
+                        "tools",
+                    );
+                });
+            },
+        );
+        if self.tools_open {
+            self.paint_inspector(
+                frame,
+                ui,
+                Rect::from_min_max(dock.min + vec2(12.0, 96.0), dock.max - vec2(12.0, 10.0)),
+            );
+        } else {
+            ui.painter().text(
+                dock.min + vec2(12.0, 108.0),
+                egui::Align2::LEFT_CENTER,
+                "Drag to move. Pinch to resize.",
+                FontId::new(13.0, FontFamily::Name("Cinzel".into())),
+                Color32::from_rgb(207, 198, 173),
+            );
+        }
+        Ok(())
+    }
+    pub(super) fn paint_inspector(&mut self, frame: &UiFrame<'_>, ui: &mut Ui, bounds: Rect) {
+        self.hit_targets.push(HitTarget {
+            hit: Hit::Chrome,
+            center: bounds.center(),
+            size: bounds.size(),
+            rotation: 0.0,
+        });
+        ui.scope_builder(egui::UiBuilder::new().max_rect(bounds.shrink(4.0)),|ui|{
+            egui::ScrollArea::vertical().id_salt("mobile/inspector-scroll").max_height(bounds.height()).show(ui,|ui|{
+                if self.fullscreen{self.picker(frame,ui);}
+                let current=self.layout.get(self.selected);
+                ui.horizontal_wrapped(|ui|{ui.label(copy("Move",11.0));for(label,action)in[("←","left"),("↑","up"),("↓","down"),("→","right")]{self.command_button(frame,ui,label,action);}});
+                ui.horizontal_wrapped(|ui|{ui.label(copy(&format!("Size {}%",(current.scale*100.0).round()),11.0));self.command_button(frame,ui,"−","smaller");let mut scale=current.scale*100.0;let response=ui.add_enabled(!self.busy,egui::Slider::new(&mut scale,40.0..=300.0).step_by(5.0).show_value(false));frame.record("mobile/scale","Size","slider",&response);frame.record_value("mobile/scale",&scale.to_string(),None);if response.drag_started(){self.events.push(EditorEvent::BeginChange);}if response.changed(){self.events.push(EditorEvent::Scale(scale/100.0));}self.command_button(frame,ui,"+","larger");});
+                ui.horizontal_wrapped(|ui|{ui.label(copy(&format!("Rotation {}°",current.rotation.round()),11.0));for(label,action)in[("−15°","rotate-left"),("0°","straighten"),("+15°","rotate-right")]{self.command_button(frame,ui,label,action);}});
+                ui.horizontal_wrapped(|ui|{self.command_button(frame,ui,"RESET THIS CONTROL","reset-control");if self.fullscreen{self.command_button(frame,ui,"RESET LAYOUT","reset-layout");}});
+                let status=format!("{}   X {}%   Y {}%   SIZE {}%   ROTATE {}°",self.selected.label(),native_tooltip_fixed(current.x,1),native_tooltip_fixed(current.y,1),(current.scale*100.0).round(),current.rotation.round());let response=ui.label(copy(&status,11.0));frame.record("mobile/selection",&status,"status",&response);
+                ui.label(copy(if self.fullscreen{"Changes apply when you save. Undo also restores a reset."}else{"GRID snaps nearby edges and centres. Drag to move; pinch or use a node to resize."},10.0));
+            });
+        });
+    }
+    fn picker(&mut self, frame: &UiFrame<'_>, ui: &mut Ui) {
+        let mut selected = self.selected;
+        let result = egui::ComboBox::from_id_salt("mobile/control-picker")
+            .selected_text(copy(selected.label(), 12.0))
+            .show_ui(ui, |ui| {
+                for id in MobileUiElementId::ALL {
+                    let response = ui.selectable_value(&mut selected, id, copy(id.label(), 12.0));
+                    frame.record(
+                        &format!("mobile/select:{}", id.as_str()),
+                        id.label(),
+                        "option",
+                        &response,
+                    );
+                }
+            });
+        frame.record(
+            "mobile/control-picker",
+            "Selected mobile UI element",
+            "combobox",
+            &result.response,
+        );
+        frame.record_value("mobile/control-picker", self.selected.as_str(), None);
+        if selected != self.selected {
+            self.events.push(EditorEvent::Select(selected));
+            self.focused_element = None;
+        }
+    }
+    fn command_button(&mut self, frame: &UiFrame<'_>, ui: &mut Ui, label: &str, action: &str) {
+        let disabled = self.busy
+            || match action {
+                "undo" => self.past.is_empty(),
+                "redo" => self.future.is_empty(),
+                "smaller" => self.layout.get(self.selected).scale <= MOBILE_UI_SCALE_MIN,
+                "larger" => self.layout.get(self.selected).scale >= MOBILE_UI_SCALE_MAX,
+                "straighten" => self.layout.get(self.selected).rotation == 0.0,
+                "reset-layout" => self.restoring_default,
+                "zoom-out" => self.zoom <= MOBILE_UI_PAGE_ZOOM_MIN,
+                "zoom-in" => self.zoom >= MOBILE_UI_PAGE_ZOOM_MAX,
+                _ => false,
+            };
+        let response = ui.add_enabled(
+            !disabled,
+            egui::Button::new(copy(label, 11.0))
+                .fill(Color32::from_rgb(23, 20, 14))
+                .stroke(Stroke::new(1.0, Color32::from_rgb(130, 114, 72)))
+                .min_size(vec2(30.0, if self.fullscreen { 38.0 } else { 30.0 })),
+        );
+        frame.record(&format!("mobile/{action}"), label, "button", &response);
+        if response.clicked() {
+            self.focused_element = None;
+            self.events.push(EditorEvent::BeginChange);
+            self.events.push(EditorEvent::Command(action.to_owned()));
+        }
+    }
 }

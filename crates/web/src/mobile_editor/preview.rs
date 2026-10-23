@@ -1,6 +1,8 @@
-//! Source `MobileUiElementPreview` and `MobileUiBeltPreview`, borrowing actual player
-//! fields. Diagnostics in the editor are the source's fixed positioning samples.
+//! GPU source MobileUiElementPreview/MobileUiBeltPreview over actual player fields.
 
+use super::MobileUiEditor;
+use crate::gpu_ui::{StockAtlas, UiFrame};
+use egui::{Color32, FontFamily, FontId, Painter, Pos2, Rect, Stroke, pos2, vec2};
 use solomon_sim::appearance::equipment::native_wizard_icon_primary_tint;
 use solomon_sim::belt::{
     NATIVE_BELT_SLOT_COUNT, NativeBeltEntry, NativeBeltPotionKind, native_belt_entry_item,
@@ -8,8 +10,7 @@ use solomon_sim::belt::{
 };
 use solomon_sim::economy::{DOWSING_EQUIPMENT_RECIPES, EquipmentType, HubInventoryItem};
 use solomon_sim::hud::quickbar::{
-    NativeSkillQuickbarCooldownPresentation, native_cooldown_sector_path,
-    native_skill_quickbar_icon_alpha,
+    NativeSkillQuickbarCooldownPresentation, native_skill_quickbar_icon_alpha,
 };
 use solomon_sim::mobile_ui::{MobileUiElementId, mobile_ui_belt_element_id};
 use solomon_sim::player::PlayerState;
@@ -17,10 +18,6 @@ use solomon_sim::profile::native_skill_category;
 use solomon_sim::secondary::{
     NativeSecondaryAbilityId, native_secondary_ability_mana_cost_with_stat_book,
 };
-use web_sys::HtmlElement;
-
-use super::{MobileUiEditor, append, element};
-use crate::player_panels::chrome::{art, tint};
 
 #[derive(Clone, Debug, PartialEq)]
 struct ItemIcon {
@@ -149,280 +146,399 @@ fn item_icon(item: &HubInventoryItem, quantity: u64, player: &PlayerState) -> It
     }
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct ElementPaint {
+    pub center: Pos2,
+    pub natural: egui::Vec2,
+    pub scale: f32,
+    pub rotation: f32,
+}
+impl ElementPaint {
+    pub fn point(self, point: Pos2) -> Pos2 {
+        self.center
+            + egui::emath::Rot2::from_angle(self.rotation)
+                * ((point.to_vec2() - self.natural / 2.0) * self.scale)
+    }
+    pub fn quad(self, rect: Rect) -> [Pos2; 4] {
+        [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()]
+            .map(|point| self.point(point))
+    }
+    fn image(
+        self,
+        frame: &UiFrame<'_>,
+        painter: &Painter,
+        path: &str,
+        rect: Rect,
+        uv: Option<Rect>,
+        tint: Color32,
+    ) {
+        frame.image_quad(
+            painter,
+            path,
+            self.quad(rect),
+            uv.unwrap_or(Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0))),
+            tint,
+        );
+    }
+    fn rounded(self, painter: &Painter, rect: Rect, radius: f32, fill: Color32, stroke: Stroke) {
+        let radius = radius.min(rect.width() / 2.0).min(rect.height() / 2.0);
+        let mut points = Vec::new();
+        for (center, angle) in [
+            (rect.right_top() + vec2(-radius, radius), -std::f32::consts::FRAC_PI_2),
+            (rect.right_bottom() - vec2(radius, radius), 0.0),
+            (rect.left_bottom() + vec2(radius, -radius), std::f32::consts::FRAC_PI_2),
+            (rect.left_top() + vec2(radius, radius), std::f32::consts::PI),
+        ] {
+            for i in 0..=8 {
+                let angle = angle + i as f32 * std::f32::consts::FRAC_PI_2 / 8.0;
+                points.push(self.point(center + vec2(angle.cos(), angle.sin()) * radius));
+            }
+        }
+        painter.add(egui::Shape::convex_polygon(
+            points,
+            fill,
+            Stroke::new(stroke.width * self.scale, stroke.color),
+        ));
+    }
+    fn circle(self, painter: &Painter, center: Pos2, radius: f32, fill: Color32, stroke: Stroke) {
+        painter.circle(
+            self.point(center),
+            radius * self.scale,
+            fill,
+            Stroke::new(stroke.width * self.scale, stroke.color),
+        );
+    }
+    fn text(
+        self,
+        painter: &Painter,
+        point: Pos2,
+        align: egui::Align2,
+        text: &str,
+        size: f32,
+        family: &str,
+        color: Color32,
+    ) {
+        let galley = painter.layout_no_wrap(
+            text.to_owned(),
+            FontId::new(size * self.scale, FontFamily::Name(family.into())),
+            color,
+        );
+        let rect = align.anchor_rect(Rect::from_min_size(self.point(point), galley.size()));
+        painter
+            .add(egui::epaint::TextShape::new(rect.min, galley, color).with_angle(self.rotation));
+    }
+    fn art(
+        self,
+        frame: &UiFrame<'_>,
+        painter: &Painter,
+        atlas: &StockAtlas,
+        index: usize,
+        center: Pos2,
+        scale: egui::Vec2,
+        rotation: f32,
+        tint: Color32,
+    ) -> Result<(), String> {
+        let record = atlas.record(index)?;
+        let [left, top] = record.registered_origin();
+        let logical = vec2(record.logical_width as f32, record.logical_height as f32);
+        let start = vec2(left, top) - logical / 2.0;
+        let rotate = egui::emath::Rot2::from_angle(rotation);
+        let corners = [
+            start,
+            start + vec2(record.width as f32, 0.0),
+            start + vec2(record.width as f32, record.height as f32),
+            start + vec2(0.0, record.height as f32),
+        ]
+        .map(|point| self.point(center + rotate * (point * scale)));
+        let image = frame
+            .image_size(atlas.path())
+            .ok_or_else(|| format!("{} is not ready", atlas.path()))?;
+        let uv = Rect::from_min_max(
+            pos2(record.x as f32 / image.x, record.y as f32 / image.y),
+            pos2(
+                (record.x + record.width) as f32 / image.x,
+                (record.y + record.height) as f32 / image.y,
+            ),
+        );
+        frame.image_quad(painter, atlas.path(), corners, uv, tint);
+        Ok(())
+    }
+}
 impl MobileUiEditor {
-    pub(super) fn paint_previews(&self) -> Result<(), String> {
-        for id in MobileUiElementId::ALL {
-            let root = &self.preview_nodes[id as usize];
-            root.set_text_content(None);
-            match id {
-                MobileUiElementId::Pause => self.preview_art(root, 42, 36.0 / 44.0)?,
-                MobileUiElementId::Inventory => self.preview_art(root, 47, 116.0 / 130.0)?,
-                MobileUiElementId::Skillbook => self.preview_art(root, 48, 116.0 / 130.0)?,
-                MobileUiElementId::Diagnostics => {
-                    let diagnostics =
-                        element(&self.document, "span", "mobile-ui-editor-diagnostics")?;
-                    for text in ["60 FPS", "0 ms"] {
-                        append_label(self, &diagnostics, "span", "", text)?;
-                    }
-                    append(root, &diagnostics)?;
+    pub(super) fn paint_preview(
+        &self,
+        frame: &UiFrame<'_>,
+        painter: &Painter,
+        id: MobileUiElementId,
+        paint: ElementPaint,
+    ) -> Result<(), String> {
+        let size = paint.natural;
+        let center = (size / 2.0).to_pos2();
+        match id {
+            MobileUiElementId::Pause
+            | MobileUiElementId::Inventory
+            | MobileUiElementId::Skillbook => {
+                let (record, fraction) = match id {
+                    MobileUiElementId::Pause => (42, 36.0 / 44.0),
+                    MobileUiElementId::Inventory => (47, 116.0 / 130.0),
+                    _ => (48, 116.0 / 130.0),
+                };
+                let definition = self.art.ui.record(record)?;
+                let scale = size.x * fraction / definition.logical_width as f32;
+                paint.art(
+                    frame,
+                    painter,
+                    &self.art.ui,
+                    record,
+                    center,
+                    vec2(scale, scale),
+                    0.0,
+                    Color32::WHITE,
+                )?;
+            }
+            MobileUiElementId::Diagnostics => paint.text(
+                painter,
+                center,
+                egui::Align2::CENTER_CENTER,
+                "60 FPS   0 ms",
+                10.2,
+                "JetBrains Mono",
+                Color32::from_rgb(216, 212, 200),
+            ),
+            MobileUiElementId::Meters => {
+                let width = size.x * 0.34375;
+                for (left, asset) in [(0.0, "red"), (size.x - width, "blue")] {
+                    let rect = Rect::from_min_size(pos2(left, 0.0), vec2(width, size.y));
+                    paint.rounded(
+                        painter,
+                        rect,
+                        size.y / 2.0,
+                        Color32::from_rgb(32, 38, 41),
+                        Stroke::new(1.0, Color32::from_rgb(169, 163, 154)),
+                    );
+                    paint.image(
+                        frame,
+                        painter,
+                        &format!("assets/stock/hub-hud-bar-{asset}.png"),
+                        Rect::from_min_size(
+                            pos2(left + width * 0.0273, size.y * 0.15),
+                            vec2(width * 0.9091, size.y * 0.5),
+                        ),
+                        None,
+                        Color32::WHITE,
+                    );
                 }
-                MobileUiElementId::Meters => {
-                    let meters = element(&self.document, "span", "mobile-ui-editor-meters")?;
-                    for (class, asset) in [("health", "red"), ("mana", "blue")] {
-                        let meter = element(
-                            &self.document,
-                            "span",
-                            &format!("mobile-ui-editor-meter {class}"),
-                        )?;
-                        // Source uses these retained stock-derived bar composites.
-                        // A horizontal strip keeps native pixel height and cannot be
-                        // scaled to the editor's percentage-sized image box.
-                        let fill = element(&self.document, "img", "")?;
-                        fill.set_attribute("src", &format!("assets/stock/hub-hud-bar-{asset}.png"))
-                            .map_err(|_| "mobile meter source")?;
-                        fill.set_attribute("alt", "").map_err(|_| "mobile meter decoration")?;
-                        fill.set_attribute("draggable", "false")
-                            .map_err(|_| "mobile meter drag admission")?;
-                        append(&meter, &fill)?;
-                        append(&meters, &meter)?;
-                    }
-                    append(root, &meters)?;
-                }
-                MobileUiElementId::LeftJoystick | MobileUiElementId::RightJoystick => {
-                    let base = element(&self.document, "span", "mobile-ui-editor-joystick")?;
-                    append(&base, &element(&self.document, "span", "")?)?;
-                    let label = append_label(
-                        self,
-                        &base,
-                        "span",
-                        "mobile-ui-editor-joystick-label",
-                        if id == MobileUiElementId::LeftJoystick { "MOVE" } else { "AIM / CAST" },
+            }
+            MobileUiElementId::LeftJoystick | MobileUiElementId::RightJoystick => {
+                paint.circle(
+                    painter,
+                    center,
+                    size.x / 2.0,
+                    Color32::from_rgba_unmultiplied(18, 25, 29, 158),
+                    Stroke::new(3.0, Color32::from_rgba_unmultiplied(238, 232, 207, 184)),
+                );
+                paint.circle(
+                    painter,
+                    center,
+                    size.x * 0.21,
+                    Color32::from_rgb(37, 43, 44),
+                    Stroke::new(2.0, Color32::from_rgba_unmultiplied(239, 232, 208, 178)),
+                );
+                paint.circle(
+                    painter,
+                    center - vec2(size.x * 0.015, size.y * 0.025),
+                    size.x * 0.15,
+                    Color32::from_rgb(85, 91, 88),
+                    Stroke::NONE,
+                );
+                paint.text(
+                    painter,
+                    pos2(size.x / 2.0, size.y * 0.85),
+                    egui::Align2::CENTER_CENTER,
+                    if id == MobileUiElementId::LeftJoystick { "MOVE" } else { "AIM / CAST" },
+                    11.0 * self.ui_scale as f32,
+                    "Cinzel Bold",
+                    Color32::from_rgb(217, 210, 188),
+                );
+            }
+            MobileUiElementId::Xp => {
+                for record in [81, 82] {
+                    let definition = self.art.ui.record(record)?;
+                    paint.art(
+                        frame,
+                        painter,
+                        &self.art.ui,
+                        record,
+                        center,
+                        vec2(
+                            size.x / definition.logical_width as f32,
+                            size.y / definition.logical_height as f32,
+                        ),
+                        0.0,
+                        Color32::WHITE,
                     )?;
-                    label
-                        .style()
-                        .set_property("font-size", &format!("{}px", 11.0 * self.ui_scale))
-                        .map_err(|_| "mobile joystick preview label size")?;
-                    append(root, &base)?;
                 }
-                MobileUiElementId::Xp => {
-                    let xp = element(&self.document, "span", "mobile-ui-editor-xp")?;
-                    for record in [81, 82] {
-                        let sprite = self.art.ui.sprite(&self.document, record, "")?;
-                        sprite
-                            .style()
-                            .set_property("position", "absolute")
-                            .map_err(|_| "mobile XP preview positioning")?;
-                        sprite
-                            .style()
-                            .set_property("inset", "0")
-                            .map_err(|_| "mobile XP preview origin")?;
-                        let record = self.art.ui.record(record)?;
-                        sprite
-                            .style()
-                            .set_property(
-                                "transform",
-                                &format!(
-                                    "scale({},{})",
-                                    self.geometry.sizes[id as usize].width
-                                        / f64::from(record.logical_width),
-                                    self.geometry.sizes[id as usize].height
-                                        / f64::from(record.logical_height)
-                                ),
-                            )
-                            .map_err(|_| "mobile XP preview scale")?;
-                        sprite
-                            .style()
-                            .set_property("transform-origin", "top left")
-                            .map_err(|_| "mobile XP preview scale origin")?;
-                        append(&xp, &sprite)?;
-                    }
-                    append(root, &xp)?;
-                }
-                MobileUiElementId::HealthPotion | MobileUiElementId::ManaPotion => {
-                    let mana = id == MobileUiElementId::ManaPotion;
-                    let fallback = BeltIcon::Potion { mana };
-                    let icon = self
-                        .preview
-                        .as_ref()
-                        .map_or(&fallback, |preview| &preview.potions[usize::from(mana)]);
-                    self.preview_belt(root, Some(icon))?;
-                }
-                _ => {
-                    let slot = MobileUiElementId::SLOTS
-                        .iter()
-                        .position(|slot| *slot == id)
-                        .expect("remaining editor elements are belt slots");
-                    let icon =
-                        self.preview.as_ref().and_then(|preview| preview.slots[slot].as_ref());
-                    self.preview_belt(root, icon)?;
-                    append_label(
-                        self,
-                        root,
-                        "span",
-                        "mobile-ui-editor-slot-number",
-                        &(slot + 1).to_string(),
-                    )?;
-                    if let Some(alias) =
-                        self.preview.as_ref().and_then(|preview| preview.aliases[slot])
-                    {
-                        let label =
-                            append_label(self, root, "span", "mobile-ui-editor-slot-alias", alias)?;
-                        append(&label, &element(&self.document, "br", "")?)?;
-                        append_label(self, &label, "span", "", "control")?;
-                    }
+            }
+            MobileUiElementId::HealthPotion | MobileUiElementId::ManaPotion => {
+                let mana = id == MobileUiElementId::ManaPotion;
+                let fallback = BeltIcon::Potion { mana };
+                let icon = self
+                    .preview
+                    .as_ref()
+                    .map_or(&fallback, |preview| &preview.potions[usize::from(mana)]);
+                self.paint_belt(frame, painter, paint, Some(icon))?;
+            }
+            _ => {
+                let slot = MobileUiElementId::SLOTS
+                    .iter()
+                    .position(|slot| *slot == id)
+                    .expect("remaining editor elements are belt slots");
+                let icon = self.preview.as_ref().and_then(|preview| preview.slots[slot].as_ref());
+                self.paint_belt(frame, painter, paint, icon)?;
+                paint.text(
+                    painter,
+                    pos2(4.0, 3.0),
+                    egui::Align2::LEFT_TOP,
+                    &(slot + 1).to_string(),
+                    10.0,
+                    "JetBrains Mono",
+                    Color32::from_rgb(255, 241, 184),
+                );
+                if let Some(alias) = self.preview.as_ref().and_then(|preview| preview.aliases[slot])
+                {
+                    paint.text(
+                        painter,
+                        center,
+                        egui::Align2::CENTER_CENTER,
+                        &format!("{alias}\ncontrol"),
+                        9.0,
+                        "Cinzel",
+                        Color32::from_rgb(238, 231, 209),
+                    );
                 }
             }
         }
         Ok(())
     }
-
-    fn preview_art(
+    fn paint_belt(
         &self,
-        root: &HtmlElement,
-        record: usize,
-        width_fraction: f64,
+        frame: &UiFrame<'_>,
+        painter: &Painter,
+        paint: ElementPaint,
+        icon: Option<&BeltIcon>,
     ) -> Result<(), String> {
-        let definition = self.art.ui.record(record)?;
-        let id = root
-            .get_attribute("data-preview-element")
-            .and_then(|id| MobileUiElementId::from_id(&id))
-            .ok_or("mobile preview identity")?;
-        let scale = self.geometry.sizes[id as usize].width * width_fraction
-            / f64::from(definition.logical_width);
-        let sprite = self.art.ui.sprite(&self.document, record, "")?;
-        sprite
-            .style()
-            .set_property("transform", &format!("scale({scale})"))
-            .map_err(|_| "mobile preview art scale")?;
-        append(root, &sprite)
-    }
-
-    fn preview_belt(&self, root: &HtmlElement, icon: Option<&BeltIcon>) -> Result<(), String> {
-        let slot =
-            element(&self.document, "span", "hub-hud-quickbar-slot mobile-ui-editor-belt-preview")?;
-        slot.set_attribute("data-populated", if icon.is_some() { "true" } else { "false" })
-            .map_err(|_| "mobile belt population")?;
-        slot.set_attribute(
-            "data-preview-in-hub",
-            if self.preview.as_ref().is_some_and(|preview| preview.in_hub) {
-                "true"
-            } else {
-                "false"
-            },
-        )
-        .map_err(|_| "mobile belt Hub visibility")?;
-        let scale = self.geometry.sizes[MobileUiElementId::LeftJoystick as usize].width / 237.5;
-        let id = root
-            .get_attribute("data-preview-element")
-            .and_then(|id| MobileUiElementId::from_id(&id))
-            .ok_or("mobile belt preview identity")?;
-        let size = self.geometry.sizes[id as usize];
-        slot.style().set_css_text(&format!("position:absolute;left:50%;top:50%;width:{}px;height:{}px;transform:translate(-50%,-50%) scale({scale});pointer-events:none",
-            size.width/scale,size.height/scale));
+        let natural = paint.natural;
+        let center = (natural / 2.0).to_pos2();
+        let base =
+            (self.geometry.sizes[MobileUiElementId::LeftJoystick as usize].width / 237.5) as f32;
+        paint.rounded(
+            painter,
+            Rect::from_min_size(Pos2::ZERO, natural),
+            14.0 * base,
+            Color32::from_rgba_unmultiplied(9, 13, 18, if icon.is_some() { 158 } else { 82 }),
+            Stroke::new(
+                2.0 * base,
+                Color32::from_rgba_unmultiplied(
+                    226,
+                    216,
+                    181,
+                    if icon.is_some() { 107 } else { 46 },
+                ),
+            ),
+        );
         match icon {
             Some(BeltIcon::Skill { record, unavailable, cooldown, .. }) => {
-                if cooldown.remaining > 0.0 {
-                    let svg = self
-                        .document
-                        .create_element_ns(Some("http://www.w3.org/2000/svg"), "svg")
-                        .map_err(|_| "mobile cooldown SVG")?;
-                    svg.set_attribute("viewBox", "0 0 53 53")
-                        .map_err(|_| "mobile cooldown square")?;
-                    svg.set_attribute("class", "mobile-ui-editor-cooldown")
-                        .map_err(|_| "mobile cooldown class")?;
-                    let path = self
-                        .document
-                        .create_element_ns(Some("http://www.w3.org/2000/svg"), "path")
-                        .map_err(|_| "mobile cooldown path")?;
-                    path.set_attribute(
-                        "d",
-                        &native_cooldown_sector_path(cooldown.remaining, cooldown.capacity),
-                    )
-                    .map_err(|_| "mobile cooldown sector")?;
-                    svg.append_child(&path).map_err(|_| "mobile cooldown path attachment")?;
-                    slot.append_child(&svg).map_err(|_| "mobile cooldown attachment")?;
+                if cooldown.remaining > 0.0 && cooldown.capacity > 0.0 {
+                    let fraction = (cooldown.remaining / cooldown.capacity).clamp(0.0, 1.0) as f32;
+                    let count = (fraction * 64.0).ceil() as usize;
+                    let mut points = vec![paint.point(center)];
+                    for i in 0..=count {
+                        let angle = -std::f32::consts::FRAC_PI_2
+                            + fraction * std::f32::consts::TAU * i as f32 / count.max(1) as f32;
+                        let direction = vec2(angle.cos(), angle.sin());
+                        let edge = direction
+                            * (natural.x.min(natural.y)
+                                / 2.0
+                                / direction.x.abs().max(direction.y.abs()));
+                        points.push(paint.point(center + edge));
+                    }
+                    painter.add(egui::Shape::convex_polygon(
+                        points,
+                        Color32::from_black_alpha(160),
+                        Stroke::NONE,
+                    ));
                 }
-                let sprite = art(
-                    &self.document,
-                    &slot,
+                let alpha =
+                    native_skill_quickbar_icon_alpha(cooldown.remaining > 0.0, *unavailable) as f32;
+                let dim = if self.preview.as_ref().is_some_and(|preview| preview.in_hub) {
+                    0.25
+                } else {
+                    1.0
+                };
+                paint.art(
+                    frame,
+                    painter,
                     &self.art.skills,
                     *record,
-                    [size.width / scale / 2.0, size.height / scale / 2.0],
-                    [1.0, 1.0],
+                    center,
+                    vec2(base, base),
                     0.0,
+                    Color32::from_rgba_unmultiplied(
+                        (255.0 * dim) as u8,
+                        (255.0 * dim) as u8,
+                        (255.0 * dim) as u8,
+                        (255.0 * alpha) as u8,
+                    ),
                 )?;
-                sprite.set_class_name("panel-art hub-hud-quickbar-skill-icon");
-                sprite
-                    .style()
-                    .set_property(
-                        "opacity",
-                        &native_skill_quickbar_icon_alpha(cooldown.remaining > 0.0, *unavailable)
-                            .to_string(),
-                    )
-                    .map_err(|_| "mobile skill opacity")?;
             }
             Some(BeltIcon::Item(item)) => {
                 let (translation, rotation) = match item.equipment_type {
-                    Some(EquipmentType::Amulet) => ([0.0, -5.0], 0.0),
-                    Some(EquipmentType::Staff) => ([-22.94306, 32.76608], 35.0),
-                    Some(EquipmentType::Wand) => ([0.0, 0.0], 45.0),
-                    _ => ([0.0, 0.0], 0.0),
+                    Some(EquipmentType::Amulet) => (vec2(0.0, -5.0), 0.0),
+                    Some(EquipmentType::Staff) => {
+                        (vec2(-22.94306, 32.76608), 35.0_f32.to_radians())
+                    }
+                    Some(EquipmentType::Wand) => (vec2(0.0, 0.0), 45.0_f32.to_radians()),
+                    _ => (egui::Vec2::ZERO, 0.0),
                 };
                 for (index, record) in item.records.iter().enumerate() {
-                    let sprite = art(
-                        &self.document,
-                        &slot,
+                    let tint = item.tints.get(index).copied().flatten().unwrap_or(0xffffff);
+                    paint.art(
+                        frame,
+                        painter,
                         &self.art.inventory,
                         *record,
-                        [
-                            size.width / scale / 2.0 + translation[0],
-                            size.height / scale / 2.0 + translation[1],
-                        ],
-                        [1.0, 1.0],
+                        center + translation * base,
+                        vec2(base, base),
                         rotation,
+                        Color32::from_rgb((tint >> 16) as u8, (tint >> 8) as u8, tint as u8),
                     )?;
-                    if let Some(Some(color)) = item.tints.get(index) {
-                        tint(&self.document, &sprite, *color)?;
-                    }
                 }
                 if item.quantity > 1 {
-                    append_label(
-                        self,
-                        &slot,
-                        "span",
-                        "mobile-ui-editor-item-count",
+                    paint.text(
+                        painter,
+                        pos2(natural.x - 4.0, natural.y - 3.0),
+                        egui::Align2::RIGHT_BOTTOM,
                         &item.quantity.to_string(),
-                    )?;
+                        12.0,
+                        "Georgia",
+                        Color32::WHITE,
+                    );
                 }
             }
-            Some(BeltIcon::Potion { mana }) => {
-                art(
-                    &self.document,
-                    &slot,
-                    &self.art.inventory,
-                    if *mana { 47 } else { 46 },
-                    [size.width / scale / 2.0, size.height / scale / 2.0],
-                    [1.0, 1.0],
-                    0.0,
-                )?;
-            }
+            Some(BeltIcon::Potion { mana }) => paint.art(
+                frame,
+                painter,
+                &self.art.inventory,
+                if *mana { 47 } else { 46 },
+                center,
+                vec2(base, base),
+                0.0,
+                Color32::WHITE,
+            )?,
             None => {}
         }
-        append(root, &slot)
+        Ok(())
     }
-}
-
-fn append_label(
-    editor: &MobileUiEditor,
-    parent: &HtmlElement,
-    tag: &str,
-    class: &str,
-    text: &str,
-) -> Result<HtmlElement, String> {
-    let node = element(&editor.document, tag, class)?;
-    node.set_text_content(Some(text));
-    append(parent, &node)?;
-    Ok(node)
 }
 
 #[cfg(test)]

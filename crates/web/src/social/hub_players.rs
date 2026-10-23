@@ -53,7 +53,6 @@ impl SocialUi {
         {
             self.surface = None;
         }
-        self.party_dirty = true;
     }
 
     /// Call after the source pointer/controller selection. The same local route
@@ -71,8 +70,6 @@ impl SocialUi {
         self.hosted_card_request = None;
         self.surface = Some(Surface::HubPlayer(player_id.to_owned()));
         self.focus_modal = true;
-        self.party_dirty = true;
-        self.capture_keys.set(true);
         true
     }
 }
