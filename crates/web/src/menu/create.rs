@@ -2,7 +2,7 @@
 //! native motion, name admission and element VFX plans remain in `solomon-sim`.
 
 use super::widgets::{self, Stage};
-use crate::gpu_ui::{StockAtlas, UiFrame, paint_text_layout};
+use crate::gpu_ui::{ImageShadow, StockAtlas, UiFrame, paint_text_layout};
 use egui::{Align2, Color32, FontId, Id, Pos2, Rect, Ui, Vec2};
 use solomon_graphics::BlendMode;
 use solomon_sim::element_vfx::{self, ElementVfxBlend, ElementVfxDraw};
@@ -501,12 +501,17 @@ impl CreateView {
         }
         let hover = response.hovered();
         let paint = frame.with_brightness(if hover { 1.25 } else { 1.0 });
-        self.create.paint(
+        self.create.paint_shadowed(
             &paint,
             ui.painter(),
             6,
             stage.at(952.0, 92.825),
             stage.scale * 0.525,
+            ImageShadow {
+                offset: Vec2::new(0.0, if hover { 0.0 } else { stage.scale }),
+                blur: stage.scale * if hover { 3.0 } else { 1.0 },
+                color: if hover { widgets::alpha(0xfff0b7, 0.55) } else { Color32::BLACK },
+            },
             widgets::alpha(0xffffff, if hover { 1.0 } else { 0.78 }),
         )?;
         widgets::focus_outline(frame, ui, &response, 2.0, 2.0, widgets::alpha(0xffffff, 0.8));
