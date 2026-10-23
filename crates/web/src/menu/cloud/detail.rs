@@ -1284,7 +1284,7 @@ fn narrative_tinted(
         egui::FontId::new(16.0, egui::FontFamily::Name("IM FELL English".into())),
         color,
         text,
-        FontRunOptions { wrap_width: Some(width), line_height: Some(23.2), tab_size: None },
+        FontRunOptions { wrap_width: Some(width), line_height: Some(23.2), ..Default::default() },
     )
 }
 
