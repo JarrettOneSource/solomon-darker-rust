@@ -2392,7 +2392,7 @@ impl Game {
             college_overlay.paint(frame)?;
             game_over.paint(frame)?;
             skill_picker.paint(frame)?;
-            social.paint(frame)?;
+            social.paint_above_hud(frame, hud.layer_id())?;
             cheats.paint(frame)?;
             observer_ui.paint(frame)?;
             spectator_ui.paint(frame)?;
