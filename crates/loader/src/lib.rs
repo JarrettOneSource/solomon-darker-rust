@@ -170,7 +170,7 @@ async fn boot() -> Result<(), String> {
         .dyn_into()
         .map_err(|_| "loader context is not WebGL2")?;
     let renderer = Renderer::new(gl)?;
-    let reader = solomon_graphics::announcements::ScreenReader::attach(&document)?;
+    let reader = solomon_graphics::announcements::ScreenReader::attach_loader(&document)?;
     let keyboard = Closure::<dyn FnMut(KeyboardEvent)>::new(|event: KeyboardEvent| {
         if !event.ctrl_key() && !event.meta_key() && !event.alt_key() {
             event.prevent_default();

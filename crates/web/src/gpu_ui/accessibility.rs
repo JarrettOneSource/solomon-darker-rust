@@ -83,6 +83,9 @@ impl Accessibility {
         narration: &[String],
         widgets: &BTreeMap<String, WidgetGeometry>,
     ) -> Result<(), String> {
+        if !self.reader.is_foreground()? {
+            return Ok(());
+        }
         let messages = self.state.messages(narration, widgets);
         for message in &messages {
             self.speak(message)?;
