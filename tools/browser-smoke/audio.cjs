@@ -6,8 +6,10 @@ const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const tree = path.resolve(__dirname,'../..');
 const output = process.env.OUT || '/tmp';
+fs.mkdirSync(output,{recursive:true});
 const catalog = fs.readFileSync(path.join(tree,'crates/sim/src/audio/catalog.rs'),'utf8');
 const files = {};
 for(const match of catalog.matchAll(/id: "([^"]+)",\s*path: "([^"]+)"/g)) {
@@ -15,10 +17,13 @@ for(const match of catalog.matchAll(/id: "([^"]+)",\s*path: "([^"]+)"/g)) {
   (files[length] ||= []).push(match[1]);
 }
 (async()=>{
-const browser = await chromium.launch({headless:true,executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',args:['--autoplay-policy=document-user-activation-required','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+const owned = await launchOwnedBrowser(chromium,{headless:true,executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',args:['--autoplay-policy=document-user-activation-required','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+const {browser}=owned;
 const errors=[];
+let page;
+let failure;
 try {
-const page=await browser.newPage({viewport:{width:1600,height:900}});
+page=await browser.newPage({viewport:{width:1600,height:900}});
 await ui.watchErrors(page,{errors}).ready;
 await page.addInitScript(({files})=>{
   const contexts=[],events=[],gains=[],metadata=new WeakMap(),connections=new WeakMap();
@@ -139,5 +144,35 @@ const receipt={passed:true,initialState,errors,primedBeforeKeyboard,hubEntryBefo
 fs.writeFileSync(path.join(output,'audio-browser-receipt.json'),JSON.stringify(receipt,null,2));
 await page.screenshot({path:path.join(output,'audio-settings-rust.png')});
 console.log(JSON.stringify({passed:true,errors,events:receipt.events.length,loadedAudioResources:receipt.loadedAudioResources}));
-}finally{await browser.close()}
+} catch(error) {
+  failure=error;
+  const receipt={failure:error.stack,errors};
+  if(page&&!page.isClosed()) {
+    try {
+      await ui.settleErrors(page);
+      receipt.gpu=await ui.readUi(page);
+      receipt.audio=await page.evaluate(()=>({
+        contexts:audioReceipt.contexts.map(context=>context.state),
+        media:audioReceipt.media,events:audioReceipt.events,
+        tracks:[...document.querySelectorAll('audio')].map(track=>({
+          cue:track.dataset.audioCue,volume:track.volume,paused:track.paused,
+          time:track.currentTime,ready:track.readyState,error:track.error?.code??null
+        }))
+      }));
+    } catch(observationError) {receipt.observationError=observationError.stack}
+    try {await page.screenshot({path:path.join(output,'audio-failure.png')})}
+    catch(screenshotError) {receipt.screenshotError=screenshotError.stack}
+  }
+  fs.writeFileSync(path.join(output,'audio-browser-failure.json'),JSON.stringify(receipt,null,2));
+  throw error;
+} finally {
+  try {
+    const cleanup=await owned.close();
+    fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(cleanup,null,2));
+  } catch(error) {
+    fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(error.cleanup,null,2));
+    if(failure)throw new AggregateError([failure,error],'Audio checks and browser cleanup failed');
+    throw error;
+  }
+}
 })().catch(error=>{console.error(error);process.exitCode=1});

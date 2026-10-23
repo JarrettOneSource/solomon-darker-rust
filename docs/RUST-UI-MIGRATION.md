@@ -294,7 +294,7 @@ static hosts answer Range requests with a full 200 response; that is a diagnosed
 limitation, not yet the demonstrated owner of the cancellations. Root owns the media
 trace. No broad cancellation allowance has been added.
 
-The shared observer now has 22 focused positive/failure regressions. It captures the
+The shared observer now has 30 focused positive/failure regressions. It captures the
 actual request's owning frame, native media source/load/events and document baseURI, then
 awaits final ownership/readiness before classifying suspension. HTTP/media errors, missing
 readiness, reload, removal, duplicate owners and unrelated cancellations stay fatal.
@@ -309,9 +309,14 @@ including named Helvidius/Ether/Arcane, exact Office arrival, both rapid-input s
 movement/students and genuine GPU-only presentation with no unexpected errors. Full
 current-art Title and Courtyard/HUD screenshots were reviewed; evidence is
 `common-browser/88c3dfe/smoke/`. The actual audio test on that artifact also passes pointer
-capture unlock/Title playback, then fails the new Source priming assertion with zero
-Academy prime calls (`audio-prime-red/run.log`). The priming implementation is committed
-but awaits the next composed artifact and actual audio verification.
+capture unlock/Title playback, then fails the Source priming assertion with zero
+Academy prime calls (`audio-prime-red/run.log`). The complete audio journey now passes on
+`24382f0c2055763bf100775b72e9e78a596dc68f`: actual pointer activation resumes the context
+and Title, all five inactive native music channels prime once silently and fulfill/reset
+before any keyboard input, then ordinary College admission automatically plays Academy.
+Choose/cast/drink effects and real music/sound sliders pass. The reviewed final GPU Settings
+image, native playback receipts, zero raw network failures and graceful owned-browser exit
+are retained in `common-browser/24382f0/audio/`.
 
 All seven startup cases are now qualified on that immutable 88c3dfe artifact across the
 retained `startup-88c3dfe-{warm-verified,held,music-verified,required-error}` receipts.
@@ -364,9 +369,9 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Process startup; cold, warm, held image/font/wasm; failed required asset; no partial Title or HUD | foundation + root; acceptance tests | Startup evidence above; `startup.cjs`; loader geometry, monotonic work, immediate readiness transition, screenshots | All seven cases pass on 88c3dfe across retained receipts; exact held counts/path, splash, no partial menus, native/fallback announcements and failure ownership proved |
 | GPU runtime; stock bundle crops/rotation/registered origins, glyph masks, browser fonts, dynamic images, blend/clips | foundation | `gpu_ui.rs`, shared `graphics/src/lib.rs`, stock manifest; read-only `gpu_ui_state`, GPU meshes/textures and final screenshots | Core probe 15/15; joined source audit 3/3; composed game/art pending complete composed browser proof |
 | Title/Play; clouds, moon, graves, Solomon animation, logo/art, Continue policy, account/desktop links | menus | `menu/title.rs`, pinned Main Menu; `smoke.cjs`, `menus.cjs`, `menu-input.cjs` | Ordinary Title/Tutorial prompt screenshot reviewed; complete Title variants pending |
-| Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | GPU source integrated; real prompt cancel/focus journey pending complete composed browser proof |
-| College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | 58df78d actual named Helvidius/Ether/Arcane, Felix and blank Genericus variants pass; remaining variants/final media gate pending |
-| Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | 58df78d rapid inputs/neutral handoff and Boneyard Pausefreeze/Leave/Continue pass; subsequent Escape Pause misses exact saved tick; shared variants/media gate pending |
+| Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | 88c3dfe prompts-observed clean: real saved wizard, Escape decline preserves exact state, narrow viewport confirmation and explicit replacement; Tutorial Yes/focus route remains in common input coverage |
+| College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | 88c3dfe required named Helvidius/Ether/Arcane smoke and default/random/blank variants clean; 24382f0 full audio activation/priming/scene/mixer journey clean; complete element/discipline/admission variants pending |
+| Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | 88c3dfe rapid inputs and complete two-seed Boneyard Pause/exact-save/Leave/Continue pass cleanly; common input neutral handoff passes; complete shared variants remain pending |
 | Settings root/cloud/performance; sliders/toggles, permissions, saved preferences, nested account policies, mobile sharing | menus | `menu/settings/**`; `settings-parity.cjs`, `menus.cjs`, `fullscreen.cjs` | 88c3dfe Settings five-group driver passes cleanly, including pointer slider and real reload; account/mobile permission variants remain owned by their family routes |
 | Control bindings; every action, duplicate swaps, Escape, modified-key rejection, allowed mouse bindings, reverse hotbar | menus + root input | `menu/settings.rs`, canonical `GameControls`; `menus.cjs`, `gameplay-input.cjs`, `hud-input.cjs` | 58df78d common gameplay-input fully passes with exact reads 8/8, raw native suspensions preserved; binding witnesses retained, complete current HUD/controller variants pending |
 | Save Transfer; multiple native/JSON/CFG/SAV/ZIP imports, inspected warnings, replace/cancel/busy/error, real export ZIP/download | menus | `menu/settings/transfer.rs`; `save-transfer.cjs`, `save-tools.cjs` | GPU source integrated; native file/confirmation/export journey pending composed browser proof |

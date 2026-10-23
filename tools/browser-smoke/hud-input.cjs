@@ -147,7 +147,6 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
         'touch cancellation and GPU neutral state'],desktopSubmissions,
         touchSubmissions:await ui.gpuDraws(touch),errors}));
     } finally {
-      await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
       await client.detach();
     }
   } catch(error) {failure=error;throw error}
