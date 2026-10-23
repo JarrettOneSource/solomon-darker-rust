@@ -277,7 +277,7 @@ async function approachSolomon(page, state) {
     await ui.byLabel(first.page,'Health Potion, quantity 2',{role:'button',prefix:'panel:item:'});
     await waitUntil(() => participant(second.state, first.state.id).player.economy.gold === 350, 'accepted purchase on both clients');
     await ui.click(first.page,'panel:close');
-    await ui.noWidget(first.page,'panel:navigation');
+    await ui.noWidget(first.page,'panel:surface:inventory');
     checks.push('real inventory transaction and authoritative feedback');
     await first.page.screenshot({path: path.join(output, 'native-college.png')});
 
@@ -300,7 +300,7 @@ async function approachSolomon(page, state) {
       assert.deepEqual(position(first.state), chatPosition, 'typing chat cannot move the wizard');
       assert.equal((await ui.readUi(first.page)).surface, 'hidden');
       await first.page.keyboard.press('Escape');
-      await ui.noWidget(first.page,'panel:navigation');
+      await ui.noWidget(first.page,'panel:surface:inventory');
       checks.push('real chat delivery and keyboard focus above Inventory');
 
       await ui.click(first.page,'social/party');
@@ -339,7 +339,7 @@ async function approachSolomon(page, state) {
     await ui.widget(second.page,'panel:surface:inventory');
     await ui.click(first.page,(await ui.byLabel(first.page,'Enter the Boneyard',{role:'button'})).id);
     await waitUntil(() => playing(first.state) && playing(second.state), 'both Boneyard renderers and resume readiness', 120000);
-    await ui.noWidget(second.page,'panel:navigation');
+    await ui.noWidget(second.page,'panel:surface:inventory');
     assert.equal(first.state.frame.snapshot.boneyard.run_id, second.state.frame.snapshot.boneyard.run_id);
     checks.push('shared Boneyard loading, old shop cleanup and renderer readiness');
     console.log(checks.at(-1));
