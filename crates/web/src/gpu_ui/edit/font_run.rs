@@ -20,6 +20,7 @@ pub struct FontRunOptions {
     pub wrap_width: Option<f32>,
     pub line_height: Option<f32>,
     pub tab_size: Option<f32>,
+    pub letter_spacing: Option<f32>,
 }
 
 struct FontProbe {
@@ -78,13 +79,36 @@ impl FontProbe {
         Ok(Self { root, text, canvas, context, document })
     }
 
-    fn set_font(&self, css: &str) -> Result<(), String> {
+    fn set_font(&self, css: &str, spacing: f32) -> Result<(), String> {
         self.text
-            .set_attribute("style", &format!("font:{css};white-space:pre"))
+            .set_attribute(
+                "style",
+                &format!("font:{css};white-space:pre;letter-spacing:{spacing}px"),
+            )
             .map_err(|e| format!("font style: {e:?}"))?;
+        self.set_canvas_font(css, spacing)
+    }
+
+    fn set_canvas_font(&self, css: &str, spacing: f32) -> Result<(), String> {
         self.context.set_font(css);
         self.context.set_text_align("left");
         self.context.set_text_baseline("alphabetic");
+        let property = wasm_bindgen::JsValue::from_str("letterSpacing");
+        let supported = js_sys::Reflect::has(self.context.as_ref(), &property)
+            .map_err(|error| format!("native font spacing capability: {error:?}"))?;
+        if supported {
+            if !js_sys::Reflect::set(
+                self.context.as_ref(),
+                &property,
+                &format!("{spacing}px").into(),
+            )
+            .map_err(|error| format!("native font spacing: {error:?}"))?
+            {
+                return Err("native font spacing is not writable".into());
+            }
+        } else if spacing != 0.0 {
+            return Err("this browser does not support native font letter spacing".into());
+        }
         Ok(())
     }
 
@@ -332,7 +356,7 @@ pub fn geometry(
 ) -> Result<Arc<Geometry>, String> {
     let css = super::super::fonts::font_css(&font.family, font.size);
     with_probe(|probe| {
-        probe.set_font(&css)?;
+        probe.set_font(&css, options.letter_spacing.unwrap_or(0.0))?;
         probe.text.set_text_content(Some("|ÉqÅM"));
         let node = probe.text.first_child().ok_or("no font reference text")?;
         let range =
@@ -427,6 +451,7 @@ struct RunKey {
     wrap: Option<u32>,
     line_height: Option<u32>,
     tab_size: Option<u32>,
+    letter_spacing: Option<u32>,
     pixels: u32,
 }
 
@@ -441,6 +466,7 @@ pub struct NativeFontRun {
     color: Color32,
     pub(crate) geometry: Arc<Geometry>,
     pixels: f32,
+    letter_spacing: f32,
     raster: Vec<RasterLine>,
     tiles: Mutex<BTreeMap<(usize, i32), TextureHandle>>,
 }
@@ -544,9 +570,7 @@ impl NativeFontRun {
         let image = with_probe(|probe| {
             probe.canvas.set_width(2048);
             probe.canvas.set_height(height);
-            probe.context.set_font(&css);
-            probe.context.set_text_align("left");
-            probe.context.set_text_baseline("alphabetic");
+            probe.set_canvas_font(&css, self.letter_spacing * pixels)?;
             let [red, green, blue, alpha] = self.color.to_srgba_unmultiplied();
             probe.context.set_fill_style_str(&format!(
                 "rgba({},{},{},{})",
@@ -610,6 +634,7 @@ pub fn font_run_with_options(
         wrap: options.wrap_width.map(f32::to_bits),
         line_height: options.line_height.map(f32::to_bits),
         tab_size: options.tab_size.map(f32::to_bits),
+        letter_spacing: options.letter_spacing.map(f32::to_bits),
         pixels: ctx.pixels_per_point().to_bits(),
     };
     let id = egui::Id::unique("native-font-run-cache");
@@ -628,7 +653,7 @@ pub fn font_run_with_options(
     let pixels = ctx.pixels_per_point();
     let raster = with_probe(|probe| {
         let css = super::super::fonts::font_css(&font.family, font.size * pixels);
-        probe.context.set_font(&css);
+        probe.set_canvas_font(&css, options.letter_spacing.unwrap_or(0.0) * pixels)?;
         geometry
             .lines
             .iter()
@@ -661,6 +686,7 @@ pub fn font_run_with_options(
         color,
         geometry,
         pixels,
+        letter_spacing: options.letter_spacing.unwrap_or(0.0),
         raster,
         tiles: Mutex::new(BTreeMap::new()),
     });

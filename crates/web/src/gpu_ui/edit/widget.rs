@@ -54,6 +54,7 @@ pub struct NativeTextEdit<'a> {
     background: Option<Color32>,
     line_height: Option<f32>,
     tab_size: Option<f32>,
+    letter_spacing: Option<f32>,
 }
 
 impl<'a> NativeTextEdit<'a> {
@@ -76,6 +77,7 @@ impl<'a> NativeTextEdit<'a> {
             background: None,
             line_height: None,
             tab_size: None,
+            letter_spacing: None,
         }
     }
     pub fn multiline(text: &'a mut String, id: &'a str, label: &'a str) -> Self {
@@ -136,6 +138,11 @@ impl<'a> NativeTextEdit<'a> {
     }
     pub fn tab_size(mut self, spaces: f32) -> Self {
         self.tab_size = Some(spaces);
+        self
+    }
+
+    pub fn letter_spacing(mut self, pixels: f32) -> Self {
+        self.letter_spacing = Some(pixels);
         self
     }
 
@@ -257,6 +264,7 @@ impl<'a> NativeTextEdit<'a> {
                         wrap_width: self.multiline.then_some(content.width()),
                         line_height: self.line_height,
                         tab_size: self.tab_size,
+                        letter_spacing: self.letter_spacing,
                     },
                 )?;
                 (run.geometry.clone(), Some(run))
@@ -410,6 +418,7 @@ impl<'a> NativeTextEdit<'a> {
                     wrap_width: self.multiline.then_some(content.width()),
                     line_height: self.line_height,
                     tab_size: self.tab_size,
+                    letter_spacing: self.letter_spacing,
                 },
             });
         }
