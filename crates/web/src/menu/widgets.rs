@@ -527,6 +527,17 @@ mod tests {
         let (focused, submitted) = form_pass(&ctx, &mut text, vec![enter()]);
         assert!(!focused);
         assert!(submitted);
+        form_pass(
+            &ctx,
+            &mut text,
+            vec![egui::Event::Key {
+                key: egui::Key::Enter,
+                physical_key: Some(egui::Key::Enter),
+                pressed: false,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+        );
         assert!(!form_pass(&ctx, &mut text, vec![enter()]).1);
     }
 }
