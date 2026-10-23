@@ -611,7 +611,11 @@ pub(super) fn paint(
     let panel =
         Rect::from_center_size(view.center(), Vec2::new(presentation.width, natural.min(maximum)));
     ui.painter().rect_filled(view, 0.0, Color32::from_black_alpha(209));
-    background(frame, ui, panel, presentation.mismatch, scale)?;
+    if presentation.mismatch {
+        background(frame, ui, panel, true, scale)?;
+    } else {
+        consent_frame(frame, ui, panel)?;
+    }
     let viewport = panel.shrink(border);
     let mut child =
         ui.new_child(egui::UiBuilder::new().id_salt("routing-scroll-viewport").max_rect(viewport));
@@ -728,6 +732,63 @@ fn background(
     );
     Ok(())
 }
+/// Shared Source play-routing panel, also used by CollegeInvitationDialog.
+pub(crate) fn consent_frame(frame: &UiFrame<'_>, ui: &Ui, panel: Rect) -> Result<(), String> {
+    background(frame, ui, panel, false, 1.0)
+}
+
+fn consent_label(ctx: &egui::Context, label: &str) -> Result<Arc<NativeFontRun>, String> {
+    crate::gpu_ui::font_run(
+        ctx,
+        FontId::new(11.0, FontFamily::Name("Cinzel Bold".into())),
+        widgets::color(0xefd68f),
+        label,
+        None,
+    )
+}
+
+pub(crate) fn consent_button_size(ctx: &egui::Context, label: &str) -> Result<Vec2, String> {
+    Ok(Vec2::new(consent_label(ctx, label)?.size().x + 34.0, 44.0))
+}
+
+pub(crate) fn consent_button(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    label: &str,
+    rect: Rect,
+    enabled: bool,
+) -> Result<egui::Response, String> {
+    let run = consent_label(ui.ctx(), label)?;
+    let response = widgets::interact_unstyled(frame, ui, id, label, "button", rect, enabled);
+    frame.paint_group(
+        ui.painter(),
+        crate::gpu_ui::GroupEffect {
+            opacity: if enabled { 1.0 } else { 0.55 },
+            ..Default::default()
+        },
+        |frame, painter| {
+            let mut mesh = egui::Mesh::default();
+            mesh.colored_vertex(rect.left_top(), widgets::color(0x3a2f1a));
+            mesh.colored_vertex(rect.right_top(), widgets::color(0x3a2f1a));
+            mesh.colored_vertex(rect.right_bottom(), widgets::color(0x151007));
+            mesh.colored_vertex(rect.left_bottom(), widgets::color(0x151007));
+            mesh.add_triangle(0, 1, 2);
+            mesh.add_triangle(0, 2, 3);
+            painter.add(egui::Shape::mesh(mesh));
+            painter.rect_stroke(
+                rect,
+                0.0,
+                Stroke::new(1.0, widgets::color(0x9c8249)),
+                StrokeKind::Inside,
+            );
+            run.paint(frame, painter, rect.center() - run.size() / 2.0, 1.0)
+        },
+    )?;
+    widgets::focus_outline(frame, ui, &response, 2.0, 2.0, widgets::alpha(0x41e3ff, 0.7));
+    Ok(response)
+}
+
 fn button(
     frame: &UiFrame<'_>,
     ui: &Ui,
@@ -736,8 +797,12 @@ fn button(
     presentation: &Presentation,
     enabled: bool,
 ) -> Result<egui::Response, String> {
+    if !presentation.mismatch {
+        return consent_button(frame, ui, action.id, action.label, rect, enabled);
+    }
     let response =
         widgets::interact_unstyled(frame, ui, action.id, action.label, "button", rect, enabled);
+    let continuing = action.id == "routing-continue";
     frame.paint_group(
         ui.painter(),
         crate::gpu_ui::GroupEffect {
@@ -745,36 +810,18 @@ fn button(
             ..Default::default()
         },
         |frame, painter| {
-            let border = if presentation.mismatch { 2.0 * presentation.scale } else { 1.0 };
-            let color = if presentation.mismatch {
-                if action.id == "routing-continue" { 0x74926e } else { 0x8e773e }
-            } else {
-                0x9c8249
-            };
-            if presentation.mismatch {
-                painter.rect_filled(
-                    rect,
-                    0.0,
-                    widgets::color(if action.id == "routing-continue" {
-                        0x1c2c1c
-                    } else {
-                        0x090908
-                    }),
-                );
-            } else {
-                let mut mesh = egui::Mesh::default();
-                mesh.colored_vertex(rect.left_top(), widgets::color(0x3a2f1a));
-                mesh.colored_vertex(rect.right_top(), widgets::color(0x3a2f1a));
-                mesh.colored_vertex(rect.right_bottom(), widgets::color(0x151007));
-                mesh.colored_vertex(rect.left_bottom(), widgets::color(0x151007));
-                mesh.add_triangle(0, 1, 2);
-                mesh.add_triangle(0, 2, 3);
-                painter.add(egui::Shape::mesh(mesh));
-            }
+            painter.rect_filled(
+                rect,
+                0.0,
+                widgets::color(if continuing { 0x1c2c1c } else { 0x090908 }),
+            );
             painter.rect_stroke(
                 rect,
                 0.0,
-                Stroke::new(border, widgets::color(color)),
+                Stroke::new(
+                    2.0 * presentation.scale,
+                    widgets::color(if continuing { 0x74926e } else { 0x8e773e }),
+                ),
                 StrokeKind::Inside,
             );
             action.run.paint(frame, painter, rect.center() - action.run.size() / 2.0, 1.0)
