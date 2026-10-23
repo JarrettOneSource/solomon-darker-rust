@@ -1,19 +1,20 @@
-// Use the actual trusted button clicks: deferring the request to a game tick loses activation.
+// Real trusted GPU pointer input and native browser fullscreen state.
 const assert = require('node:assert/strict');
+const ui = require('./gpu-ui.cjs');
 
 async function assertFullscreenToggle(page) {
-  const enter = page.getByRole('button', {name: 'Enter fullscreen', exact: true});
-  await enter.waitFor();
-  const bounds = await enter.boundingBox();
-  await enter.click();
+  const enter = await ui.widget(page, 'fullscreen/toggle');
+  assert.equal(enter.label, 'Enter fullscreen');
+  const bounds = ui.bounds(enter);
+  await ui.click(page, 'fullscreen/toggle');
   await page.waitForFunction(() => document.fullscreenElement === document.documentElement);
-  const exit = page.getByRole('button', {name: 'Exit fullscreen', exact: true});
-  assert.equal(await exit.getAttribute('aria-pressed'), 'true');
-  await exit.click();
+  await ui.value(page, 'fullscreen/toggle', 'true');
+  assert.equal((await ui.widget(page, 'fullscreen/toggle')).label, 'Exit fullscreen');
+  await ui.click(page, 'fullscreen/toggle');
   await page.waitForFunction(() => document.fullscreenElement === null);
-  await enter.waitFor();
-  assert.equal(await enter.getAttribute('aria-pressed'), 'false');
-  return {bounds, enteredDocumentRoot: true, exited: true};
+  await ui.value(page, 'fullscreen/toggle', 'false');
+  assert.equal((await ui.widget(page, 'fullscreen/toggle')).label, 'Enter fullscreen');
+  return {bounds, enteredDocumentRoot:true, exited:true};
 }
 
 module.exports = {assertFullscreenToggle};

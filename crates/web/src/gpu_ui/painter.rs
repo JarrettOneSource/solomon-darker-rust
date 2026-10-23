@@ -21,6 +21,7 @@ struct ImageEntry {
     id: u64,
     state: ImageState,
     size: Option<Vec2>,
+    owned: bool,
 }
 
 #[derive(Default)]
@@ -42,6 +43,35 @@ fn path_key(path: &str) -> String {
 }
 
 impl Images {
+    pub fn register(&self, path: &str, texture: &Texture, gl: &WebGl2RenderingContext) {
+        self.forget(path, gl);
+        let path = path_key(path);
+        let mut cache = self.0.borrow_mut();
+        cache.next_id += 1;
+        let id = cache.next_id;
+        cache.paths.insert(id, path.clone());
+        cache.images.insert(
+            path,
+            ImageEntry {
+                id,
+                state: ImageState::Ready(texture.clone()),
+                size: Some(vec2(texture.width, texture.height)),
+                owned: false,
+            },
+        );
+    }
+    pub fn borrowed_count(&self) -> usize {
+        self.0.borrow().images.values().filter(|entry| !entry.owned).count()
+    }
+    pub fn borrowed_paths(&self) -> Vec<String> {
+        self.0
+            .borrow()
+            .images
+            .iter()
+            .filter(|(_, entry)| !entry.owned)
+            .map(|(path, _)| path.clone())
+            .collect()
+    }
     pub fn cached_texture(&self, path: &str) -> Option<Texture> {
         match &self.0.borrow().images.get(&path_key(path))?.state {
             ImageState::Ready(texture) => Some(texture.clone()),
@@ -73,9 +103,10 @@ impl Images {
             cache.next_id += 1;
             let id = cache.next_id;
             cache.paths.insert(id, path.clone());
-            cache
-                .images
-                .insert(path.clone(), ImageEntry { id, state: ImageState::Loading, size: None });
+            cache.images.insert(
+                path.clone(),
+                ImageEntry { id, state: ImageState::Loading, size: None, owned: true },
+            );
             id
         };
         let images = self.clone();
@@ -116,7 +147,12 @@ impl Images {
                 cache.paths.insert(id, path.clone());
                 cache.images.insert(
                     path,
-                    ImageEntry { id, state: ImageState::Decoded(image), size: Some(size) },
+                    ImageEntry {
+                        id,
+                        state: ImageState::Decoded(image),
+                        size: Some(size),
+                        owned: true,
+                    },
                 );
                 Ok(wasm_bindgen::JsValue::UNDEFINED)
             }));
@@ -172,11 +208,11 @@ impl Images {
         Some(TextureId::User(entry.id * 8 + blend + if mask { 4 } else { 0 }))
     }
 
-    fn texture(&self, id: u64) -> Option<Texture> {
+    fn texture(&self, id: u64) -> Option<(Texture, bool)> {
         let cache = self.0.borrow();
         let entry = cache.images.get(cache.paths.get(&(id / 8))?)?;
         match &entry.state {
-            ImageState::Ready(texture) => Some(texture.clone()),
+            ImageState::Ready(texture) => Some((texture.clone(), entry.owned)),
             _ => None,
         }
     }
@@ -194,7 +230,9 @@ impl Images {
         let mut cache = self.0.borrow_mut();
         if let Some(entry) = cache.images.remove(&path_key(path)) {
             cache.paths.remove(&entry.id);
-            if let ImageState::Ready(texture) = entry.state {
+            if entry.owned
+                && let ImageState::Ready(texture) = entry.state
+            {
                 Renderer::delete_ui_texture(gl, &texture);
             }
         }
@@ -203,7 +241,9 @@ impl Images {
     pub fn destroy(&self, gl: &WebGl2RenderingContext) {
         let mut cache = self.0.borrow_mut();
         for entry in cache.images.values() {
-            if let ImageState::Ready(texture) = &entry.state {
+            if entry.owned
+                && let ImageState::Ready(texture) = &entry.state
+            {
                 Renderer::delete_ui_texture(gl, texture);
             }
         }
@@ -296,7 +336,7 @@ impl GpuPainter {
                 if !mesh.is_valid() {
                     return Err("GPU UI produced an invalid mesh".to_owned());
                 }
-                let (texture, blend, mode, nearest) = match mesh.texture_id {
+                let (texture, blend, mode, sampling) = match mesh.texture_id {
                     TextureId::Managed(_) => (
                         self.textures
                             .get(&mesh.texture_id)
@@ -304,10 +344,10 @@ impl GpuPainter {
                             .ok_or("GPU UI mesh references a missing managed texture")?,
                         BlendMode::Normal,
                         TextureColorMode::Texture,
-                        false,
+                        None,
                     ),
                     TextureId::User(id) => {
-                        let texture =
+                        let (texture, owned) =
                             images.texture(id).ok_or("GPU UI mesh references a retired image")?;
                         let blend = match id & 3 {
                             1 => BlendMode::Add,
@@ -323,11 +363,11 @@ impl GpuPainter {
                             } else {
                                 TextureColorMode::Texture
                             },
-                            mask,
+                            owned.then_some(mask),
                         )
                     }
                 };
-                if matches!(mesh.texture_id, TextureId::User(_)) {
+                if let Some(nearest) = sampling {
                     renderer.set_texture_sampling(&texture, nearest);
                 }
                 let vertices: Vec<Vertex> = mesh

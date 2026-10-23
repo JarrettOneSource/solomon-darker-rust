@@ -19,6 +19,8 @@ use solomon_sim::social::{
 
 pub const GAME_HUB_PATH: &str = "/game-hub";
 pub const GAME_SESSION_PATH_PREFIX: &str = "/game-sessions/";
+/// Publication identities are independent of the signed game recovery revision.
+pub const DEPLOYMENT_PROTOCOL_VERSION: u32 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -136,6 +138,8 @@ pub enum HostedServerMessage {
     DeploymentRestart {
         checkpoint_sequence: u64,
         target_revision: String,
+        deployment_id: String,
+        deployment_sequence: u64,
     },
     LeaderboardReceipt {
         receipt: String,

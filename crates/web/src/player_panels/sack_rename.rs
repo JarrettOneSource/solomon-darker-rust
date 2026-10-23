@@ -9,8 +9,9 @@ use solomon_sim::economy::{
 };
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
 use solomon_sim::player_panels::sack_rename::{
-    INVENTORY_SACK_RENAME_BUTTON, InventorySackRenameOwner, InventorySackRenameSelection,
-    inventory_sack_rename_dialog_layout, inventory_sack_rename_target,
+    INVENTORY_SACK_RENAME_BUTTON, INVENTORY_SACK_RENAME_BUTTON_SCALE, InventorySackRenameOwner,
+    InventorySackRenameSelection, inventory_sack_rename_dialog_layout,
+    inventory_sack_rename_target,
 };
 
 pub(super) struct SackRenameDialog {
@@ -83,12 +84,22 @@ impl PlayerPanels {
             return Ok(());
         }
         if let Some(item) = self.sack_rename_candidate(s) {
-            c.admitted(!self.inventory_transition_locked()).native_button(
+            let button = c.admitted(!self.inventory_transition_locked()).native_button_art(
                 &self.ui,
                 "rename-sack",
-                &format!("RENAME SACK: {}", item.name),
+                &format!("Rename {}", item.name),
                 INVENTORY_SACK_RENAME_BUTTON,
             )?;
+            button.text(&NativeUiTextSpec {
+                tint: 0xd9ba70,
+                scale: INVENTORY_SACK_RENAME_BUTTON_SCALE,
+                ..NativeUiTextSpec::new(
+                    NativeUiFontName::Menu,
+                    "RENAME SACK",
+                    INVENTORY_SACK_RENAME_BUTTON.width / 2.0,
+                    42.5 * INVENTORY_SACK_RENAME_BUTTON_SCALE,
+                )
+            });
         }
         Ok(())
     }
@@ -100,9 +111,8 @@ impl PlayerPanels {
         }
         Ok(())
     }
-    pub(super) fn close_sack_rename(&mut self) -> Result<(), String> {
-        if self.rename_sack.take().is_some() {}
-        Ok(())
+    pub(super) fn close_sack_rename(&mut self) {
+        self.rename_sack = None;
     }
     pub(super) fn update_sack_rename(
         &mut self,
@@ -117,7 +127,7 @@ impl PlayerPanels {
                 })
                 .is_none()
         {
-            self.close_sack_rename()?;
+            self.close_sack_rename();
         }
         Ok(())
     }

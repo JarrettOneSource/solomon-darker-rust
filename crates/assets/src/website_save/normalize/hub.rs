@@ -206,7 +206,7 @@ fn skorcha(value: &Value) -> Result<(), String> {
     }
     integer_within(&value["dismissalIndex"], "game save Skorcha dismissal", 0, 2)?;
     integer_within(&value["gesture"], "game save Skorcha gesture", 0, 2)?;
-    integer_within(&value["gestureTicksRemaining"], "game save Skorcha gesture timer", 1, 29)?;
+    integer_within(&value["gestureTicksRemaining"], "game save Skorcha gesture timer", 0, 29)?;
     let _: solomon_sim::NativeRng = decode(value["rng"].clone())?;
     Ok(())
 }

@@ -44,6 +44,50 @@ Paths in this table are relative to `crates/sim` unless a crate is named explici
 | Learned bots | Existing model, observer and controller | Exact inference and observation/action programs plus a real admitted bot moving, casting and spending resources. |
 | Lua definitions, shops, items, skills, actors, scenes, overlays and Console | `solomon-modding`, `sim::modding`, prepared Session extensions and web projections | Source preparation/runtime fixtures, admitted supervisor programs, actual authored shop/skill/scene/save journeys and CLI tests. |
 
+The rank-book confirmation follows `skill-book-feedback.ts`,
+`use-skill-book-feedback.ts`, `SkillBookFeedback.tsx` and `MainMenuScene.tsx` at
+`fa08ae24`. Their retained native evidence is `0x0056D570..0x0056D7A0`: the
+screen-centered MsgBox has a Menu “Skill improved” line, gap 10, a Medium native
+skill name followed by “ +1”, both tinted `0xb2b2ff`, and one OKAY button. Every
+catalog row 8 through 81 uses the same recovered message-layout kernel.
+
+Source-produced book import fixtures also exercise a freshly reconstructed Hub:
+`hub-skorcha.ts::createHubSkorchaAtVariant` starts its gesture timer at zero, and
+`game-save-document.ts::decodeHubSkorchaState` accepts the complete interval 0..29.
+The file-selection preview recreates a current save, which must restore again
+before that first actor tick. Rejecting the constructor's zero timer breaks this
+ordinary import/Continue boundary; negative values and 30 remain invalid.
+
+Custom Sack names retain `renderer/hub-inventory/sack-name.ts` and its Pixi
+wrapping contract. A detached native font canvas measures the authored `|ÉqÅM`
+Arial probe, complete token advances and ink overhang, then shapes each complete
+font run into an egui-managed GPU texture. This preserves real baseline/height,
+kerning, Arabic joining and emoji clusters. The texture cache belongs to the
+current egui context and retires old runs through the same managed GPU lifetime;
+panel geometry, clipping and input remain in Rust.
+
+Dialogue navigation follows the actual control owner in `HubDialogueActions.tsx`:
+speech, keyed question/command choices, and each selector branch replace their
+available controls. `gamepad-menu-navigation.ts::confirm` resolves the current
+focusable controls when the prior element is gone. A presentation timestamp is
+not that identity: speech/choices/selector transitions can share one fixed input
+dispatch time. The Rust navigation scope therefore includes content kind and
+speech key or selector kind, preserving real Enter routing at the same time.
+An invisible initial Area sizing pass cannot consume that default-focus request;
+the request remains pending until the real enabled control is registered.
+
+The accepted economy receipt owns the result. Independent cursor consumers seed
+the current sequence on connection and advance over every newer receipt; restored,
+stale, duplicate, rejected and unrelated actions never reopen it. An accepted choice
+book or a rank outcome without an eligible skill plays the book stream without a
+confirmation. A rank award closes Inventory first and keeps its pause/input hold
+until OKAY or Escape dismisses the result. Changing session/world, missing the local
+player, entering Game Over or returning to loadout clears the result and stops the
+book stream. The modal and the separate floating world text consume the same
+accepted outcome independently. These are recovered source contracts; GPU modal
+rendering, lifecycle tests and an ordinary earned-book journey are the validation
+boundary for the Rust consumer.
+
 ## Runtime, Website and delivery
 
 | Boundary | Owner and contract | Verification |

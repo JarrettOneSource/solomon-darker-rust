@@ -86,15 +86,26 @@ impl PlayerPanels {
             + 40.0;
         c.frame(&self.ui, 4, HudRect::new(center - width / 2.0, top, width, 40.0), 5.0, 0xffffff)?;
         if let Some(name) = fallback {
-            name.paint(
-                c.frame,
-                &c.painter,
+            let mut painter = c.painter.clone();
+            painter.multiply_opacity(c.alpha);
+            let painted = name.paint(
+                &painter,
                 egui::pos2(
                     (center - name.size.x / 2.0) as f32,
                     (baseline - name.baseline_offset) as f32,
                 ) + c.origin,
                 1.0,
             );
+            let transform =
+                c.frame.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
+            c.frame.record_rect(
+                "panel:sack-name",
+                label,
+                "text",
+                transform * painted.intersect(painter.clip_rect()),
+                false,
+            );
+            c.frame.record_value("panel:sack-name", &serde_json::json!({"width":name.size.x,"height":name.size.y,"baselineOffset":name.baseline_offset,"lines":name.lines}).to_string(), None);
         } else {
             c.text(&TextSpec {
                 tint: 0x808080,

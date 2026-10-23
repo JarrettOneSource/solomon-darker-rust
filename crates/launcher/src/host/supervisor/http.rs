@@ -110,6 +110,26 @@ impl HostedSupervisor {
             if !valid_revision(&target_revision) {
                 return Ok(Some(error(500, "The game update could not prepare active players.")));
             }
+            let Some(deployment_id) = request
+                .deployment_id
+                .filter(|id| id.len() == 32 && id.bytes().all(|byte| byte.is_ascii_hexdigit()))
+            else {
+                return Ok(Some(error(
+                    400,
+                    "The game update requires a valid publication identity.",
+                )));
+            };
+            let deployment_id = deployment_id.to_lowercase();
+            let Some(deployment_sequence) = request
+                .deployment_sequence
+                .and_then(|value| value.parse::<u64>().ok())
+                .filter(|sequence| *sequence > 0)
+            else {
+                return Ok(Some(error(
+                    400,
+                    "The game update requires a valid publication sequence.",
+                )));
+            };
             server.begin_hosted_deployment();
             let mut checkpoints = std::collections::BTreeMap::new();
             for college in &mut self.colleges {
@@ -143,6 +163,8 @@ impl HostedSupervisor {
                                 message: HostedServerMessage::DeploymentRestart {
                                     checkpoint_sequence: sequence,
                                     target_revision: target_revision.clone(),
+                                    deployment_id: deployment_id.clone(),
+                                    deployment_sequence,
                                 },
                             },
                         )?;
@@ -153,6 +175,8 @@ impl HostedSupervisor {
             }
             self.deployment = Some(DeploymentRestart {
                 target_revision,
+                deployment_id,
+                deployment_sequence,
                 completed: false,
                 closing: false,
                 deadline_ms: now_ms + self.config.deployment_save_timeout.as_secs_f64() * 1_000.0,
@@ -370,7 +394,9 @@ impl HostedSupervisor {
         let hub = &self.colleges[0].host;
         json(
             200,
-            json!({"status":"ok","protocol":"solomon-game-v1","draining":self.deployment.is_some(),
+            json!({"status":"ok","protocol":"solomon-game-v1",
+            "deploymentProtocol":solomon_protocol::hosted::DEPLOYMENT_PROTOCOL_VERSION,
+            "draining":self.deployment.is_some(),
             "sessions":self.colleges.len()-1+usize::from(hub.capacity_participant_count()>0),
             "privateSessions":self.colleges.len()-1,
             "privatePlayers":self.colleges.iter().skip(1).map(|college|college.host.players.len()).sum::<usize>(),

@@ -36,13 +36,7 @@ impl PlayerPanels {
                 (title.as_str(), body.as_str(), summary.as_str())
             }
         };
-        c.semantic_value(
-            "panel:notice-title",
-            title,
-            "alert",
-            HudRect::new(540.0, 350.0, 524.0, 60.0),
-            title,
-        );
+        c.frame.announce(&format!("{title}. {summary} {body}"));
         match notice {
             PlayerPanelNotice::Standard { .. } => {
                 let mut lines = vec![NativeUiMessageDataLineSpec {
@@ -69,13 +63,18 @@ impl PlayerPanels {
                     &lines,
                 )?;
                 self.notice_frame(c, layout.frame_bounds)?;
-                for line in layout.lines {
-                    c.text(&NativeUiTextSpec {
+                for (index, line) in layout.lines.iter().enumerate() {
+                    let spec = NativeUiTextSpec {
                         align: NativeUiTextAlign::Left,
                         tint: line.tint,
                         line_height: Some(line.line_height),
                         ..NativeUiTextSpec::new(line.font, &line.text, line.x, line.baseline_y)
-                    });
+                    };
+                    if index == 0 {
+                        c.labeled_text("panel:notice-title", &spec);
+                    } else {
+                        c.text(&spec);
+                    }
                 }
                 self.notice_button(
                     c,
@@ -88,13 +87,13 @@ impl PlayerPanels {
             }
             PlayerPanelNotice::UnforgeConfirmation => {
                 self.notice_frame(c, HudRect::new(539.5, 382.5, 524.0, 336.0))?;
-                self.notice_text(
-                    c,
-                    NativeUiFontName::Menu,
-                    title,
-                    Vec2::new(614.0, 478.0),
-                    0xffffff,
-                )?;
+                c.labeled_text(
+                    "panel:notice-title",
+                    &NativeUiTextSpec {
+                        align: NativeUiTextAlign::Left,
+                        ..NativeUiTextSpec::new(NativeUiFontName::Menu, title, 614.0, 478.0)
+                    },
+                );
                 c.text(&NativeUiTextSpec {
                     align: NativeUiTextAlign::Left,
                     line_height: Some(17.0),
@@ -125,13 +124,13 @@ impl PlayerPanels {
                 let inner_width = line_width + 141.0;
                 let left = 801.5 - inner_width / 2.0;
                 self.notice_frame(c, HudRect::new(left - 5.0, 391.5, inner_width + 10.0, 318.0))?;
-                self.notice_text(
-                    c,
-                    NativeUiFontName::Menu,
-                    title,
-                    Vec2::new(left + 70.5, 485.0),
-                    0xffffff,
-                )?;
+                c.labeled_text(
+                    "panel:notice-title",
+                    &NativeUiTextSpec {
+                        align: NativeUiTextAlign::Left,
+                        ..NativeUiTextSpec::new(NativeUiFontName::Menu, title, left + 70.5, 485.0)
+                    },
+                );
                 self.notice_text(
                     c,
                     NativeUiFontName::Medium,
@@ -156,6 +155,7 @@ impl PlayerPanels {
                 )?;
             }
         }
+        c.frame.record_value("panel:notice-title", title, None);
         Ok(())
     }
     pub(super) fn paint_notice_modal(

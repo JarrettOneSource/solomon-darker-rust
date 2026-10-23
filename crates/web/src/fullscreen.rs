@@ -165,6 +165,11 @@ impl FullscreenControl {
                     );
                 }
                 frame.record("fullscreen/toggle", label, "button", &response);
+                frame.record_value(
+                    "fullscreen/toggle",
+                    if active { "true" } else { "false" },
+                    Some(active),
+                );
                 keyboard_activation = response.clicked() && !self.state.borrow().gesture_handled;
             });
         if keyboard_activation {

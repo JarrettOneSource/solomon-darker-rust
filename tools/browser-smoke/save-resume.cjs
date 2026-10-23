@@ -48,7 +48,11 @@ async function resume(page) {
     const hubBeforeReload=await saved(page,record=>record.checkpoint.ticks>=paused[5]);
     await ui.click(page,'pause-settings');await screen(page,'settings');
     await ui.setSlider(page,'settings-range:ui-scale',125);
-    await page.waitForFunction(()=>JSON.parse(localStorage.getItem('solomon-darker-rust-settings-v1'))?.ui_scale_percent===125);
+    const settingsKey=await page.evaluate(()=>{
+      const mount=(document.querySelector('meta[name="solomon-website-mount"]')?.content||'').replace(/\/+$/,'');
+      return `solomon-dark-game-settings-v1${mount?`:${mount}`:''}`;
+    });
+    await page.waitForFunction(key=>JSON.parse(localStorage.getItem(key))?.uiScalePercent===125,settingsKey);
     await page.reload(); await loaded(page);
     // College keeps ticking behind Pause/Settings. Compare with the completed
     // document actually loaded at Title, including any final pagehide write.

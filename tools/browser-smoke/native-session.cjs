@@ -9,6 +9,8 @@ const {createHash} = require('node:crypto');
 const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
 const {assertFullscreenToggle} = require('./fullscreen.cjs');
+const {createNativeMessageReader} = require('./native-wire.cjs');
+const ui = require('./gpu-ui.cjs');
 
 const output = path.resolve(process.env.OUT || os.tmpdir());
 const artifact = process.env.PACKAGE && path.resolve(process.env.PACKAGE);
@@ -76,8 +78,10 @@ function observe(page) {
   });
   page.on('response', response => {if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);});
   page.on('websocket', socket => {
+    const read = createNativeMessageReader();
     socket.on('framereceived', ({payload}) => {
-      const message = JSON.parse(payload.toString());
+      const message = read(JSON.parse(payload.toString()));
+      if (!message) return;
       if (message.type === 'welcome') {
         state.id = message.credentials.player_id;
         state.token = message.credentials.token;
@@ -109,36 +113,40 @@ const playing = state => state.frame?.snapshot.boneyard && !state.frame.host.loa
 async function loaded(page, state) {
   state.status = null;
   await page.goto(`${origin}/?host=1`);
-  await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0, null, {timeout: 120000});
+  await ui.ready(page,{timeout:120000});
   await waitUntil(() => state.status, 'native title inspection');
   // Socket delivery precedes the next application frame that installs title prompts.
-  await page.waitForFunction(() => document.querySelector('#status')?.textContent === '');
+  await ui.surface(page,'title');
+  await ui.assertGpuOnly(page);
 }
 
 async function continueGame(page) {
-  await page.locator('[data-menu-action="play"]').click();
-  await page.locator('[data-menu-action="continue"]').click();
-  await page.locator('.game-menus[data-menu-screen="hidden"]').waitFor({state: 'attached'});
+  await ui.click(page,'play');
+  await ui.click(page,'continue');
+  await ui.surface(page,'hidden');
 }
 
 async function gameplayInputReady(page) {
   // Socket delivery can precede the frame that removes the client's loading/grace hold.
   await page.bringToFront();
-  await page.locator('[data-joystick="movement"]:not([data-blocked])').waitFor({state: 'attached'});
+  await ui.waitForUi(page,snapshot => snapshot.surface === 'hidden' && !snapshot.input_scope
+    && !snapshot.capture.text && ui.findWidget(snapshot,'hud:health')
+    && !ui.findWidget(snapshot,'shared/pause') && !ui.findWidget(snapshot,'shared/resume'),
+    'actual HUD and world input handoff');
 }
 
 async function pause(page) {
   await page.bringToFront();
   await page.keyboard.press('Escape');
-  await page.locator('.game-menus[data-menu-screen="pause"]').waitFor({state: 'attached'});
+  await ui.surface(page,'pause');
 }
 
 async function leaveGame(page, state) {
   await pause(page);
   const previous = state.saves;
-  await page.locator('[data-menu-action="leave"]').click();
+  await ui.click(page,'leave');
   await waitUntil(() => state.saves > previous, 'durable save acknowledgement');
-  await page.locator('.game-menus[data-menu-screen="title"]').waitFor({state: 'attached'});
+  await ui.surface(page,'title');
 }
 
 async function approachSolomon(page, state) {
@@ -246,76 +254,75 @@ async function approachSolomon(page, state) {
       && first.state.frame.input_acknowledgements[first.state.id] > 0, 'accepted movement visible to peer');
     checks.push('accepted movement, input acknowledgements and peer state');
 
-    await first.page.getByRole('button', {name: 'Fomentius', exact: true}).click();
-    const buy = first.page.getByRole('button', {name: 'Buy Health Potion for 150 gold', exact: true}).first();
-    await buy.click(); await buy.click();
-    await first.page.getByRole('button', {name: 'Health Potion, quantity 2', exact: true}).waitFor();
+    await ui.click(first.page,(await ui.byLabel(first.page,'Fomentius',{role:'button'})).id);
+    const buy = await ui.byLabel(first.page,'Buy Health Potion for 150 gold',{role:'button',prefix:'panel:'});
+    await ui.click(first.page,buy.id); await ui.click(first.page,buy.id);
+    await ui.byLabel(first.page,'Health Potion, quantity 2',{role:'button',prefix:'panel:item:'});
     await waitUntil(() => participant(second.state, first.state.id).player.economy.gold === 350, 'accepted purchase on both clients');
-    await first.page.locator('[data-panel-action="close"]').first().click();
-    await first.page.locator('.player-panels').waitFor({state: 'hidden'});
+    await ui.click(first.page,'panel:close');
+    await ui.noWidget(first.page,'panel:navigation');
     checks.push('real inventory transaction and authoritative feedback');
     await first.page.screenshot({path: path.join(output, 'native-college.png')});
 
     if (process.env.SOCIAL !== '0') {
       await first.page.keyboard.press('KeyI');
-      await first.page.locator('.player-panels').waitFor({state: 'visible'});
+      await ui.widget(first.page,'panel:surface:inventory');
       const chatPosition = {...position(first.state)};
       await first.page.keyboard.press('KeyT');
       // Actual key events exercise shortcuts in the underlying inventory as well as chat.
-      await first.page.getByRole('textbox', {name: 'Chat message', exact: true}).pressSequentially('Shared College ready wasd');
-      await first.page.getByRole('textbox', {name: 'Chat message', exact: true}).press('Enter');
+      await ui.focused(first.page,'social/chat-message');
+      await first.page.keyboard.type('Shared College ready wasd',{delay:10});
+      await first.page.keyboard.press('Enter');
       await waitUntil(() => second.state.messages.some(message => message.text === 'Shared College ready wasd'), 'accepted peer chat');
-      await first.page.locator('.game-chat[data-chat-open="false"]').waitFor({state: 'attached'});
+      await ui.noWidget(first.page,'social/chat-message');
       await first.page.keyboard.press('KeyT');
-      await first.page.getByRole('textbox', {name: 'Chat message', exact: true}).waitFor();
+      await ui.widget(first.page,'social/chat-message');
       await first.page.keyboard.press('Escape');
-      await first.page.locator('.game-chat[data-chat-open="false"]').waitFor({state: 'attached'});
-      await first.page.locator('.player-panels').waitFor({state: 'visible'});
+      await ui.noWidget(first.page,'social/chat-message');
+      await ui.widget(first.page,'panel:surface:inventory');
       assert.deepEqual(position(first.state), chatPosition, 'typing chat cannot move the wizard');
-      assert.equal(await first.page.locator('.game-menus').getAttribute('data-menu-screen'), 'hidden');
+      assert.equal((await ui.readUi(first.page)).surface, 'hidden');
       await first.page.keyboard.press('Escape');
-      await first.page.locator('.player-panels').waitFor({state: 'hidden'});
+      await ui.noWidget(first.page,'panel:navigation');
       checks.push('real chat delivery and keyboard focus above Inventory');
 
-      await first.page.locator('.social-chip-header').click();
-      const party = first.page.getByRole('dialog', {name: 'Party', exact: true});
-      await party.locator(`[data-party-member="${first.state.id}"]`).waitFor();
-      await party.locator(`[data-party-member="${second.state.id}"]`).waitFor();
-      await first.page.screenshot({path: path.join(output, 'native-party.png')});
-      await party.getByRole('button', {name: 'Caius', exact: true}).click();
-      const card = first.page.locator(`[data-profile-player="${second.state.id}"]`);
-      await card.waitFor();
-      assert.match(await card.textContent(), /Caius/);
-      await card.getByRole('button', {name: 'Message', exact: true}).click();
-      await first.page.getByRole('textbox', {name: 'Chat message', exact: true}).fill('Private College greeting');
-      await first.page.getByRole('textbox', {name: 'Chat message', exact: true}).press('Enter');
+      await ui.click(first.page,'social/party');
+      await ui.widget(first.page,'social/party-menu');
+      await ui.widget(first.page,`social/member:${first.state.id}`);
+      await ui.widget(first.page,`social/member:${second.state.id}`);
+      await first.page.screenshot({path:path.join(output,'native-party.png')});
+      await ui.click(first.page,`social/member:${second.state.id}`);
+      assert.equal((await ui.widget(first.page,'social/player-card')).label,'Caius');
+      await ui.click(first.page,'social/card-message');
+      await ui.fill(first.page,'social/chat-message','Private College greeting');
+      await first.page.keyboard.press('Enter');
       await waitUntil(() => second.state.messages.some(message => message.text === 'Private College greeting'
         && message.channel === 'Whisper'), 'host-delivered profile-card whisper');
-      await first.page.locator('.game-chat[data-chat-open="false"]').waitFor({state: 'attached'});
+      await ui.noWidget(first.page,'social/chat-message');
       checks.push('actual Party roster, player card and whisper');
 
       await pause(first.page);
       await first.page.keyboard.press('KeyT');
-      await first.page.getByRole('textbox', {name: 'Chat message', exact: true}).fill('Pause menu greeting');
-      await first.page.getByRole('textbox', {name: 'Chat message', exact: true}).press('Enter');
+      await ui.fill(first.page,'social/chat-message','Pause menu greeting');
+      await first.page.keyboard.press('Enter');
       await waitUntil(() => second.state.messages.some(message => message.text === 'Pause menu greeting'), 'chat above Pause');
-      await first.page.locator('.game-chat[data-chat-open="false"]').waitFor({state: 'attached'});
+      await ui.noWidget(first.page,'social/chat-message');
       await first.page.keyboard.press('KeyT');
-      await first.page.getByRole('textbox', {name: 'Chat message', exact: true}).waitFor();
+      await ui.widget(first.page,'social/chat-message');
       await first.page.keyboard.press('Escape');
-      await first.page.locator('.game-chat[data-chat-open="false"]').waitFor({state: 'attached'});
-      assert.equal(await first.page.locator('.game-menus').getAttribute('data-menu-screen'), 'pause', 'closing chat preserves Pause');
-      await first.page.locator('[data-menu-action="resume"]').click();
+      await ui.noWidget(first.page,'social/chat-message');
+      assert.equal((await ui.readUi(first.page)).surface, 'pause', 'closing chat preserves Pause');
+      await ui.click(first.page,'resume');
       checks.push('chat focus and dismissal above Pause');
     }
     assert.equal(first.state.commands.some(command => command.kind === 'tutorial_action'), false,
       'ordinary College panels never send Tutorial surface acknowledgements');
 
-    await second.page.getByRole('button', {name: 'Fomentius', exact: true}).click();
-    await second.page.locator('.player-panels').waitFor({state: 'visible'});
-    await first.page.getByRole('button', {name: 'Enter the Boneyard', exact: true}).click();
+    await ui.click(second.page,(await ui.byLabel(second.page,'Fomentius',{role:'button'})).id);
+    await ui.widget(second.page,'panel:surface:inventory');
+    await ui.click(first.page,(await ui.byLabel(first.page,'Enter the Boneyard',{role:'button'})).id);
     await waitUntil(() => playing(first.state) && playing(second.state), 'both Boneyard renderers and resume readiness', 120000);
-    await second.page.locator('.player-panels').waitFor({state: 'hidden'});
+    await ui.noWidget(second.page,'panel:navigation');
     assert.equal(first.state.frame.snapshot.boneyard.run_id, second.state.frame.snapshot.boneyard.run_id);
     checks.push('shared Boneyard loading, old shop cleanup and renderer readiness');
     console.log(checks.at(-1));
@@ -327,9 +334,8 @@ async function approachSolomon(page, state) {
     await first.page.keyboard.up('KeyA');
     await pause(first.page);
     await waitUntil(() => second.state.frame.host.pause?.owner_player_id === first.state.id, 'peer pause ownership');
-    await second.page.locator('.shared-gameplay-pause:not([hidden])').waitFor();
-    assert.match(await second.page.locator('.shared-gameplay-pause-label').textContent(), /Felix has paused the game/);
-    await first.page.locator('.shared-gameplay-pause').waitFor({state: 'hidden'});
+    assert.match((await ui.widget(second.page,'shared/pause')).label,/Felix has paused the game/);
+    await ui.noWidget(first.page,'shared/pause');
     await second.page.screenshot({path: path.join(output, 'native-shared-pause.png')});
     const pausedTick = second.state.frame.snapshot.ticks;
     const commands = second.state.sent.filter(message => message.kind === 'interact_goodie').length;
@@ -337,12 +343,11 @@ async function approachSolomon(page, state) {
     await second.page.waitForTimeout(300);
     assert.equal(second.state.frame.snapshot.ticks, pausedTick, 'shared Boneyard stops while paused');
     assert.equal(second.state.sent.filter(message => message.kind === 'interact_goodie').length, commands, 'remote pause blocks reliable interactions');
-    await first.page.locator('[data-menu-action="resume"]').click();
-    await second.page.locator('.shared-gameplay-resume:not([hidden])').waitFor();
-    assert.equal(await second.page.locator('.shared-gameplay-resume').getAttribute('data-gameplay-resume-grace-reason'), 'pause-menu-closed');
+    await ui.click(first.page,'resume');
+    await ui.value(second.page,'shared/resume','pause-menu-closed');
     await second.page.screenshot({path: path.join(output, 'native-shared-resume.png')});
     await waitUntil(() => playing(first.state) && playing(second.state), 'shared resume grace');
-    await second.page.locator('.shared-gameplay-resume').waitFor({state: 'hidden'});
+    await ui.noWidget(second.page,'shared/resume');
     checks.push('shared pause, named waiting view, interaction hold and resume countdown');
     await assertFullscreenToggle(first.page);
     checks.push('native gameplay fullscreen enters and exits through trusted clicks');
@@ -378,14 +383,14 @@ async function approachSolomon(page, state) {
       await approachSolomon(first.page, first.state);
       checks.push('real movement wakes Solomon and begins the opening encounter');
       await waitUntil(() => first.state.frame.snapshot.run.phase === 'GameOver', 'actual combat death', 180000);
-      await first.page.locator('.game-over-overlay:not([hidden])').waitFor();
-      await first.page.locator('.boneyard-game-over[data-input-ready="true"]').waitFor();
+      await ui.waitForUi(first.page,snapshot => ui.findWidget(snapshot,'game-over:continue')?.label.includes('Continue'),
+        'actual native Game Over input admission');
       await first.page.screenshot({path: path.join(output, 'native-game-over.png')});
       assert.deepEqual(errors, [], 'no errors before the intentional host shutdown');
       intentionalHostShutdown = true;
       await stopHost();
-      await first.page.locator('.game-menus[data-menu-screen="title"]').waitFor({state: 'attached'});
-      await first.page.locator('.game-over-overlay').waitFor({state: 'hidden'});
+      await ui.surface(first.page,'title');
+      await ui.noWidget(first.page,'game-over:continue');
       await first.page.screenshot({path: path.join(output, 'native-title-after-disconnect.png')});
       checks.push('Game Over reaches Continue readiness and leaves with its disconnected session');
     }
@@ -414,9 +419,7 @@ async function approachSolomon(page, state) {
         commands: client.state.commands, results: client.state.results,
         inputAcknowledgements: client.state.frame?.input_acknowledgements, recentSent: client.state.sent.slice(-12),
         wizard: participant(client.state)?.wizard, run: client.state.frame?.snapshot.run,
-        ui: await client.page.evaluate(() => ({menu: document.querySelector('.game-menus')?.dataset.menuScreen,
-          inputBlocked: document.querySelector('[data-joystick="movement"]')?.hasAttribute('data-blocked'),
-          status: document.querySelector('#status')?.textContent, text: document.body.innerText.slice(-2200)})).catch(() => null)};
+        ui: await ui.readUi(client.page).catch(() => null)};
       await client.page.screenshot({path: path.join(output, `native-failure-${name}.png`)}).catch(() => {});
     }
     fs.writeFileSync(path.join(output, 'native-session-failure.json'), JSON.stringify({error: error.stack, checks, errors, shutdownResourceErrors, movementEvidence, state, hostLog}, null, 2));

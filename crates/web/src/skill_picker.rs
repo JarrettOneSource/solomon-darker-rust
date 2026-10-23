@@ -14,8 +14,8 @@ use solomon_sim::player_panels::skill_text::{
 };
 use solomon_sim::profile::{PlayerSkillChoice, PlayerSkillOffer};
 use solomon_sim::skill_picker::{
-    skill_picker_card, skill_picker_centers, skill_picker_close, skill_picker_panel,
-    skill_picker_reveal,
+    SkillPickerReveal, skill_picker_card, skill_picker_centers, skill_picker_close,
+    skill_picker_panel, skill_picker_reveal,
 };
 use web_sys::Document;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,7 +31,6 @@ enum PickerTarget {
     Detail(usize),
     Reroll,
     Save,
-    CloseDetail,
 }
 enum PickerEvent {
     Activate(PickerTarget, bool, u64),
@@ -86,6 +85,9 @@ impl SkillPicker {
     pub fn is_open(&self) -> bool {
         self.displayed.is_some()
     }
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("skill-picker"))
+    }
     pub fn take_actions(&mut self) -> Vec<SkillPickerAction> {
         std::mem::take(&mut self.actions)
     }
@@ -138,7 +140,6 @@ impl SkillPicker {
                     self.choose(index, now);
                 }
             }
-            PickerEvent::Activate(PickerTarget::CloseDetail, _, _) => self.detail_index = None,
             PickerEvent::Activate(PickerTarget::Reroll, _, _) if self.special_available => {
                 let sequence = self.displayed.as_ref().expect("open offer").sequence;
                 self.actions.push(SkillPickerAction::Reroll { offer_sequence: sequence });
@@ -289,7 +290,7 @@ impl SkillPicker {
             ((width - 1600.0 * scale) / 2.0) as f32,
             (height / 2.0 - center_y * scale) as f32,
         );
-        let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("skill-picker"));
+        let layer = self.layer_id();
         frame.ctx.set_transform_layer(
             layer,
             egui::emath::TSTransform::new(origin.to_vec2(), scale as f32),
@@ -313,15 +314,7 @@ impl SkillPicker {
                     0.0,
                     egui::Color32::BLACK.gamma_multiply(reveal.curtain_alpha as f32),
                 );
-                let painted = self.paint_offer(
-                    frame,
-                    ui,
-                    &offer,
-                    reveal.panel_alpha as f32,
-                    reveal.ambient_alpha as f32,
-                    interactive,
-                    &mut events,
-                );
+                let painted = self.paint_offer(frame, ui, &offer, reveal, interactive, &mut events);
                 if let Err(message) = painted {
                     error = Some(message);
                 }
@@ -350,12 +343,13 @@ impl SkillPicker {
         frame: &UiFrame<'_>,
         ui: &egui::Ui,
         offer: &PlayerSkillOffer,
-        panel_alpha: f32,
-        ambient_alpha: f32,
+        reveal: SkillPickerReveal,
         interactive: bool,
         events: &mut Vec<PickerEvent>,
     ) -> Result<(), String> {
         let p = ui.painter();
+        let panel_alpha = reveal.panel_alpha as f32;
+        let ambient_alpha = reveal.ambient_alpha as f32;
         let white = egui::Color32::WHITE.gamma_multiply(panel_alpha);
         let ambient = frame.with_blend(solomon_graphics::BlendMode::Add);
         for index in 0..8 {
@@ -561,8 +555,8 @@ impl SkillPicker {
                     164,
                     center,
                     1.15,
-                    [card.glow_tints[0], card.glow_tints[1]],
-                    panel_alpha,
+                    [card.glow_tints[0], card.glow_tints[1]]
+                        .map(|tint| color(tint).gamma_multiply(panel_alpha)),
                 )?;
             } else {
                 self.skills.paint_centered(

@@ -54,6 +54,22 @@ records native `MyLoader::Render` at `0x005BCA40`, numerator `0x0081F6A8`, denom
 - Progress is de-duplicated completed work divided by total required work across sequential
   loader/resident phases. Concurrent work remains concurrent. It never regresses and never
   claims 100 percent before completion. There is no timer, easing or minimum duration.
+- Pinned `game-asset-readiness.ts::loadAssetBatch` owns a pending Set and reports its first
+  remaining source after every completion. The candidate's `runtime_ui::completed`
+  initially forwarded the just-finished source instead; its label could describe an
+  already decoded item while another resource was held. Font completions were also
+  reported as a group after Promise.all. This is a recovered readiness-contract gap:
+  canonical progress must identify real unfinished work and count individual completed
+  resources. Foundation owns that repair; held Title/font/music/module cases must retain
+  the held request's actual filename as currentItem before their splash is accepted.
+- Resident music follows pinned `game-audio-browser.ts::loadMusicChannel`: its Promise
+  executor creates the channel, installs loadeddata/error handlers and calls load in one
+  JavaScript task. The Rust candidate initially constructed channels with src before an
+  asynchronously polled readiness future called load again. The actual named smoke
+  retained cancelled academy/combat/death MP3 requests before browser close. This is a
+  producer-ordering defect, not an allowed navigation cancellation. Root's repair must
+  start empty media, attach handlers, then set src/load together; loadeddata stays required
+  and every unexpected request failure remains fatal in the next composed startup.
 - Pinned Website also shows truthful stage, whole percentage, pending filename and ready
   item count. Those are explicit browser enhancements; stock per-file order/weighting is
   unknown. The separate match-loading lifecycle is not the startup denominator.
@@ -67,61 +83,173 @@ frame 230 × 54 and fill 192 × 18. The source comparison receipt is
 `startup-baseline/loader-source-assets.json` in the task evidence directory. No composed
 startup acceptance is implied by that input check.
 
+## World notifications recovered before repair
+
+The visual-producer inventory found `crates/web/src/loot/messages.rs` still constructing
+DOM, with no `LootMessages` owner or callers. The pure message clock existed, but the full
+notification surface was absent. Earlier broad UI completion evidence cannot accept this
+unwired system.
+
+The complete boundary is the shared floating text owner, not loot alone. Pinned Website
+`fa08ae249ff5563570bdb2a653e2ef9358ce7b83` sources are `NativeWorldNotifications.tsx`,
+`NativeLootBitmapText.tsx`, `loot-message-presentation.{ts,css,test.ts}`,
+`loot-event-audio.ts`, `skill-book-feedback.ts`, `use-skill-book-feedback.ts`,
+`SkillBookFeedback.tsx`, and their `BoneyardScene.tsx`/`MainMenuScene.tsx` callers. Existing
+Website ledger 100 records native insert/update/draw at `0x005CA7C0`/`0x005D7EF0`/
+`0x005CF000`; ledger 229 confirms Tutorial Sack labels appear only after accepted pickup.
+
+- Membership: local loot text (including active Gold merging and all tint branches),
+  rank-book feedback in College and Boneyard, local same-run secondary `Overloaded Mana!`,
+  and local combat `CHEAT DEATH!`. Rank books use `book:-sequence` and tint `0x8080ff`;
+  loot, combat and secondary IDs may be numerically equal and remain distinct source keys.
+  Other players' notices and non-rank/rejected receipts advance cursors without painting.
+- Ownership: accepted local event lanes own births. Initial/restored scene snapshots seed
+  cursors after retained receipts; repeated display frames never re-consume an event.
+  Session/local-player/world changes, tick rewind, Game Over and loadout reset presentation
+  and baselines. One presentation advances only on accepted integer ticks, never wall time.
+- Clock: initial lifetime `f32(1.5)`, offset `f32(-18)`, one-unit rise while active offset
+  is negative, ordinary lifetime loss `f32(0.005)`. Distinct insertion repeatedly shifts all
+  rows by four until the active row reaches zero, reducing older rows by `f32(0.1)` each
+  shift. The retained older-row pressure rule and float32 boundaries remain exact. Active
+  Gold merges only above lifetime one, resets that lifetime and retains the original key.
+- Current visual projection clamps alpha to lifetime in `[0,1]`; scale first narrows
+  `1-max(offset,0)/250`, then rounds through Source `toFixed(2)` and narrows again.
+  The established loot-only `sample()` API and untouched `ed0a2d59` fixture retain their
+  historical unrounded projection. Production uses the current projection on the same
+  state/clock; no duplicate algorithm or old visual fallback remains.
+- Geometry: center the menu-font bitmap text in the full gameplay viewport. Clip from
+  native Y 50 down; each baseline is `50 + 17 + Math.round(offset)`. Both UI scale and
+  existing gameplay viewport display scale apply. Black shadow is two native units below
+  the same text and shares alpha; message scale affects glyphs, not that shadow offset.
+  These notices do not inherit a centered Inventory/modal-stage transform.
+- Render order: pinned `loot-message-presentation.css` uses z-index 45; `hub.css`
+  places the HUD at 10000 and Tutorial CSS uses 31000. Notices therefore sit above
+  world effects and below the HUD. egui drains unregistered plain layers after its
+  registered Areas, so a plain Middle notification painter cannot preserve this
+  relation. Its Background layer must be explicitly ordered above the actual
+  `mod/world` Background layer, while HUD remains Middle.
+- Visibility: alive and lethal-pending may show; dying, spectating and absent participants
+  cannot. Boneyard Game Over removes the surface and Tutorial combat-access false hides
+  it. Cursors/clocks still follow accepted state while a visibility gate hides pixels.
+  The source rank-book result modal was another missing neighboring surface, now owned
+  by HUD; its confirmation does not replace this world text.
+
+The current source clock is replayed by `world_notifications.rs` against the untouched
+fa08 oracle: nine programs and 1,960 records cover all four source keys, Gold parsing and
+merge boundaries, insertion pressure, complete fades and two-decimal scale rounding.
+Ten visibility cases, 77 book-name/error cases and 12 receipt deliveries are also exact.
+All eight focused notification/book/historical-loot tests pass locally. GPU composition
+and accepted production-event delivery remain pending. `WorldNotifications` now replaces
+the unused DOM type with one accepted-session consumer and the menu-font GPU painter.
+Five focused controller/render-queue tests cover initial/restored receipts, all local lanes and remote
+filters, repeated snapshots, world/player/missing-player/terminal/rewind resets, and hidden
+life/Tutorial clocks, and actual world/notice/HUD paint order. They pass locally; final game-loop wiring and browser proof remain
+owned by integration. Geometry diagnostics retain original glyph ink and the Y50 clip.
+
+Confidence is high for this complete pinned-source contract and the cited recovered native
+geometry/lifecycle. Unknown until measured: composed GPU glyph clipping/blending, actual
+earned-event browser visibility and live hosted event delivery. All members remain
+`recovered-pending-port` until the current fixture/regression, renderer/controller checks
+and genuine browser journey establish their supported final disposition.
+
 ## Acceptance matrix
 
-`Pending` means implementation and/or current composed browser evidence has not been accepted.
-Owner names match the parallel implementation lanes. Scripts are under `tools/browser-smoke/`.
+`Pending` means current composed behavior has not been accepted. Owner names match the
+implementation lanes; scripts are under `tools/browser-smoke/`. The GPU families, canonical
+notification composition and old visual-factory retirement are integrated. The joined
+visual-producer source contract passes 3/3; that source result does not establish runtime
+visual fidelity.
+
+Root `7884455` repairs startup future allocation after the first main-WASM trap. Foundation's
+`loader-probe/ordinary/receipt.json` now proves ordinary startup to Title in 5.891 seconds,
+no browser errors, native ariaNotify with no fallback node, loader/main ownership transfer,
+and retired loader draws staying 537→537. The separate `loader-probe/receipt.json` retains
+the earlier deliberately held-main exact GPU splash comparison: at most one channel byte
+in one of 88,076 pixels, native navy, wide/mobile resize, and one fallback announcer across
+two owners. That earlier run trapped before handoff; its partial proof is not a passed
+startup matrix. Cold/warm/delayed-resource/failure cases remain assigned to foundation.
+
+Current blockers are concrete: the required common smoke reaches Create through the real
+College dialogue and exit, then clicking its visible enabled name textbox does not focus it
+(`common-browser/smoke-7884455/receipt.json`). Menus/foundation own the repair. Independent
+input QA uses the existing generated-name/element/discipline admission path; the named smoke
+and name-validation gates stay unchanged. That route passes real pointer aim/release,
+keyboard movement, potion edge/GUI release, held-source precedence and trusted tab-blur
+clearing. It then reproduces 16 gamepad reads over eight animation frames, where the retained
+contract requires eight (`common-browser/gameplay-input-7884455-native-focus/run.log`).
+Foundation's scope-owned polling fix is awaiting composed browser verification. Create
+selection clicks now wait for stable, unobstructed GPU hit geometry; requested-versus-accepted
+selection must still be proved. No downstream surface is accepted from a partial run.
 
 | Surface and required variants | Owner | Implementation/reference and acceptance route | Current blocker/evidence |
 | --- | --- | --- | --- |
-| Process startup; cold, warm, held image/font/wasm; failed required asset; no partial Title or HUD | foundation + root; acceptance tests | Startup evidence above; `startup.cjs`; loader geometry, monotonic work, immediate readiness transition, screenshots | Baseline reproduces absent splash/premature Title; GPU repair and acceptance pending |
-| GPU runtime; stock bundle crops/rotation/registered origins, glyph masks, browser fonts, dynamic images, blend/clips | foundation | `gpu_ui.rs`, existing `render.rs`, stock manifest; read-only `gpu_ui_state`, GPU meshes/textures and final screenshots | Core probe 15/15; composed game/art acceptance pending |
-| Title/Play; clouds, moon, graves, Solomon animation, logo/art, Continue policy, account/desktop links | menus | `menu/title.rs`, pinned Main Menu; `smoke.cjs`, `menus.cjs`, `menu-input.cjs` | Pending GPU port/current art |
-| Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | Pending GPU modal input |
-| College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | Pending GPU controls and ordinary admission path |
-| Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | Pending composed input ownership |
-| Settings root/cloud/performance; sliders/toggles, permissions, saved preferences, nested account policies, mobile sharing | menus | `menu/settings/**`; `settings-parity.cjs`, `menus.cjs`, `fullscreen.cjs` | Pending real slider/key interaction |
-| Control bindings; every action, duplicate swaps, Escape, modified-key rejection, allowed mouse bindings, reverse hotbar | menus + root input | `menu/settings.rs`, canonical `GameControls`; `menus.cjs`, `gameplay-input.cjs`, `hud-input.cjs` | Pending capture observations and real input |
-| Save Transfer; multiple native/JSON/CFG/SAV/ZIP imports, inspected warnings, replace/cancel/busy/error, real export ZIP/download | menus | `menu/settings/transfer.rs`; `save-transfer.cjs`, `save-tools.cjs` | Pending GPU file/confirmation flow |
-| Hall Local/Global × four boards; top100 and current row, portrait/orb, expand/scroll/pan, ranks/perks, loading/retry/stale result | menus | `menu/hall.rs`; `hall.cjs`, `hosted-score.cjs` | Pending GPU table and scroll |
-| Join directory; normalized code, refresh, request/admission/cancel, private/mod/cheat/location policy, list scroll | menus | `menu/join.rs`; `join-party.cjs`, `hosted-social.cjs` | Pending actual host/directory journey |
-| Routing consent; vanilla/private/mod/cheat, added/missing/changed save mods, downloads/busy/error/retry and close invalidation | menus + root | `menu/routing.rs`, host routing; `cheat-consent.cjs`, `cloud-subscription.cjs`, `hosted-session.cjs` | Pending GPU consent + native authority |
-| Dark Cloud frame/tabs; Mods/Subscribed/Parties/Mobile UI/Boneyards, horizontal reveal, source-supported search/sort tools, empty/loading/error, account availability | menus; root Shelf | `menu/cloud/**`; `dark-cloud.cjs`, `cloud-subscription.cjs`, `authoring-shelf.cjs` | Pending all five GPU tabs |
-| Cloud mods/detail; thumbnail lifecycle, subscription mutation/progress, screenshot contain/swipe/wrap, metadata/releases, comments/UTF16 limit/delete, preserved focus/scroll | menus | `menu/cloud/detail.rs`, real Website storage; `dark-cloud.cjs`, `cloud-subscription.cjs` | Pending real remote assets/actions |
-| Boneyard Shelf; local/cloud content, New/Import/Edit/Test/Delete and Keep, Test/Return/editor handoff and disposal | root | `game/hosted/boneyards.rs`; `authoring-shelf.cjs`, `authored-content.cjs`; export belongs to the external editor | Pending removal of visual iframe mount and all existing Shelf actions |
-| HUD resources/XP/concentrations, native/mod belt quantity/cooldown, three banks, portraits/map, tutorial gates, custom mobile positions | HUD | `hud/**`, `hotbar.rs`; `hud-input.cjs`, `hud-selector.cjs`, `belt-pull-off-check.cjs` | Pending GPU HUD/input |
-| Inventory; column-first cells, equipment/protected clothing/third ring, nested Sack pages/back/rename, animation lock, drag/drop/restoration flybys, stats/set/wizard preview | HUD | `player_panels/inventory*`, `sack_*`; `player-panels.cjs`, `responsive.cjs`, `save-resume.cjs` | Pending GPU pointer/touch and persisted state |
-| Skills/quickbar; learned/ranked/weld pages, stock hover, every bank binding, skill/item drag and belt pull-off | HUD | `player_panels/skills.rs`, `skill_selector.rs`; `player-panels.cjs`, `hud-selector.cjs`, `mod-skills.cjs` | Pending GPU skill geometry |
-| College services; all shops/perks/prices, insufficient gold, storage, paid Dowse/ref/roll/Done, Unforge confirmation/results, dye admission/swatches/trim/cloth | HUD | `player_panels/{services,crafting,sack_rename}.rs`; `hub-services.cjs`, `player-panels.cjs`, `responsive.cjs` | Pending ordinary earned economy and GPU actions |
-| NPC chat/books/boasts/authored choices; history, progressive text/audio/acceleration, selector list drag/wheel/controller, notebox/error | HUD | `player_panels/{dialogue,notebox}.rs`; `hub-dialogue-rooms.mjs`, `menu-journey.cjs` | Pending GPU modal focus and dialogue |
-| Level-up offer sequence; reveal/clocks, cards/insight/weld, responsive detail, choice/reroll/save and rejected-action recovery | HUD | `skill_picker.rs`; `hud-selector.cjs`, actual earned gameplay | Pending earned offer and real selection |
-| Tutorial callouts/arrows; canonical text/narration and live GPU widget anchors; intro title/fade; Game Over riff/prompt/admission | HUD | `tutorial/**`, `college_intro.rs`, `game_over.rs`; `tutorial-text-bounds.cjs`, `solomon-entrance.cjs`, `boneyard.cjs` | Pending GPU anchor and terminal run evidence |
-| Social Party; collapsed/coarse/expanded, Members/Settings/Mods, roster tags/scroll, privacy, copy/regenerate, Kick/Leave, request/invite Accept/Deny | social | `social/party/**`; `hosted-social.cjs`, `join-party.cjs` | Pending actual two-human host/input |
-| Player cards/private College; Hub actor hit, Message/invite, resolve/decline/failure and owned roster | social | `social/{card,hub_players,hosted}.rs`; `hosted-social.cjs`, `hosted-session.cjs` | Pending private admission/teardown |
-| Chat; Boneyard/Global/Party/Whisper, drafts/unread/fade/channel cycle, IME, author card and disconnect/reset | social | `social/chat.rs`; `hosted-social.cjs` | Pending real text composition and delivery |
-| Shared Pause/resume waiting; other-owner activity, dim/reveal, countdown/progress/rejoin; spectator rail/target/respawn | social | `shared_gameplay.rs`, `spectator.rs`; `hosted-session.cjs`, `spectator.cjs` | Pending real lifecycle and GPU labels |
-| Cheats/Console/developer observer; permissions, all resource/skill/world/dev controls, Lua submit/history/results/error/clear and bot targets | social | `cheats/**`, `observer.rs`; `authored-content.cjs`, `learned-bot.cjs`, `cheat-consent.cjs` | Pending authorized private-account UI journey |
-| Mobile editor; all six anchors/elements, drag/resize/rotate/snap, zoom/pan/pinch, multi-touch/cancel, undo/redo/reset/pages/dock/presets/save | social | `mobile_editor/**`, `sim/mobile_ui/**`; `mobile-editor.cjs`, `responsive.cjs` | Pending real touch editing and persistence |
-| Authored mod surfaces; Cast/Shop/Reforge/Portal, skills/subskills/offers/quickbar, minimap actions, mounted HUD text/image/bar/button, party attributes | social | `mod_panels.rs`, `mod_skills.rs`, `mod_skill_quickbar.rs`, `mod_minimap.rs`, `mod_world_overlays/**`; `authored-content.cjs`, `mod-skills.cjs` | Pending all authored widgets/GPU assets |
-| Match loading; every recovered stage, progress/cancel/failure, host admission/world materialization | root | `match_loading.rs`; `hosted-session.cjs`, `deployment-restart.cjs` | Pending GPU stage visibility |
-| Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | Pending platform activation |
-| Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | Pending GPU notice and packaged journey |
-| Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | Pending GPU notice + actual update |
-| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | Pending composed runtime |
-| No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Pending complete cutover |
+| Process startup; cold, warm, held image/font/wasm; failed required asset; no partial Title or HUD | foundation + root; acceptance tests | Startup evidence above; `startup.cjs`; loader geometry, monotonic work, immediate readiness transition, screenshots | Ordinary startup and tiny-loader pixels/resize/overlap proved; cold/warm/held/failure matrix pending |
+| GPU runtime; stock bundle crops/rotation/registered origins, glyph masks, browser fonts, dynamic images, blend/clips | foundation | `gpu_ui.rs`, shared `graphics/src/lib.rs`, stock manifest; read-only `gpu_ui_state`, GPU meshes/textures and final screenshots | Core probe 15/15; joined source audit 3/3; composed game/art pending complete composed browser proof |
+| Title/Play; clouds, moon, graves, Solomon animation, logo/art, Continue policy, account/desktop links | menus | `menu/title.rs`, pinned Main Menu; `smoke.cjs`, `menus.cjs`, `menu-input.cjs` | Ordinary Title/Tutorial prompt screenshot reviewed; complete Title variants pending |
+| Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | GPU source integrated; real prompt cancel/focus journey pending complete composed browser proof |
+| College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | GPU source integrated; ordinary College/Create admission pending complete composed browser proof |
+| Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | GPU source integrated; actual pause/neutral handoff pending complete composed browser proof |
+| Settings root/cloud/performance; sliders/toggles, permissions, saved preferences, nested account policies, mobile sharing | menus | `menu/settings/**`; `settings-parity.cjs`, `menus.cjs`, `fullscreen.cjs` | GPU source integrated; real slider/key and saved preference journey pending composed browser proof |
+| Control bindings; every action, duplicate swaps, Escape, modified-key rejection, allowed mouse bindings, reverse hotbar | menus + root input | `menu/settings.rs`, canonical `GameControls`; `menus.cjs`, `gameplay-input.cjs`, `hud-input.cjs` | GPU source integrated; real binding/capture/belt input journey pending composed browser proof |
+| Save Transfer; multiple native/JSON/CFG/SAV/ZIP imports, inspected warnings, replace/cancel/busy/error, real export ZIP/download | menus | `menu/settings/transfer.rs`; `save-transfer.cjs`, `save-tools.cjs` | GPU source integrated; native file/confirmation/export journey pending composed browser proof |
+| Hall Local/Global × four boards; top100 and current row, portrait/orb, expand/scroll/pan, ranks/perks, loading/retry/stale result | menus | `menu/hall.rs`; `hall.cjs`, `hosted-score.cjs` | GPU source integrated; all board/scroll/retry variants pending composed browser proof |
+| Join directory; normalized code, refresh, request/admission/cancel, private/mod/cheat/location policy, list scroll | menus | `menu/join.rs`; `join-party.cjs`, `hosted-social.cjs` | GPU source integrated; actual host/directory admission pending composed browser proof |
+| Routing consent; vanilla/private/mod/cheat, added/missing/changed save mods, downloads/busy/error/retry and close invalidation | menus + root | `menu/routing.rs`, host routing; `cheat-consent.cjs`, `cloud-subscription.cjs`, `hosted-session.cjs` | GPU source integrated; consent/retry plus native authority proof pending composed browser proof |
+| Dark Cloud frame/tabs; Mods/Subscribed/Parties/Mobile UI/Boneyards, horizontal reveal, source-supported search/sort tools, empty/loading/error, account availability | menus; root Shelf | `menu/cloud/**`; `dark-cloud.cjs`, `cloud-subscription.cjs`, `authoring-shelf.cjs` | GPU source integrated; actual five-tab and portrait Cloud journey pending composed browser proof |
+| Cloud mods/detail; thumbnail lifecycle, subscription mutation/progress, screenshot contain/swipe/wrap, metadata/releases, comments/UTF16 limit/delete, preserved focus/scroll | menus | `menu/cloud/detail.rs`, real Website storage; `dark-cloud.cjs`, `cloud-subscription.cjs` | GPU source integrated; actual remote assets/subscriptions/comments pending composed browser proof |
+| Boneyard Shelf; local/cloud content, New/Import/Edit/Test/Delete and Keep, Test/Return/editor handoff and disposal | root | `game/hosted/boneyards.rs`; `authoring-shelf.cjs`, `authored-content.cjs`; export belongs to the external editor | Visual iframe retired in source; actual New/Import/Edit/Test/Delete/Keep journey pending composed browser proof |
+| HUD resources/XP/concentrations, native/mod belt quantity/cooldown, three banks, portraits/map, tutorial gates, custom mobile positions | HUD | `hud/**`, `hotbar.rs`; `hud-input.cjs`, `hud-selector.cjs`, `belt-pull-off-check.cjs` | GPU source integrated; HUD geometry/input plus actual cancellation journey pending composed browser proof |
+| Inventory and native rank-book confirmation; result/OKAY/Escape, retained pause/audio, column-first cells, equipment/protected clothing/third ring, nested Sack pages/back/rename, animation lock, drag/drop/restoration flybys, stats/set/wizard preview | HUD | `player_panels/{inventory*,skill_book_feedback}`, `sack_*`; `player-panels.cjs`, `skill-book-result.cjs`, `responsive.cjs`, `save-resume.cjs` | GPU source integrated; actual pointer/touch/Sack/save journey pending composed browser proof |
+| Skills/quickbar; learned/ranked/weld pages, stock hover, every bank binding, skill/item drag and belt pull-off | HUD | `player_panels/skills.rs`, `skill_selector.rs`; `player-panels.cjs`, `hud-selector.cjs`, `mod-skills.cjs` | GPU source integrated; real learned/drag/bank/pull-off journey pending composed browser proof |
+| College services; all shops/perks/prices, insufficient gold, storage, paid Dowse/ref/roll/Done, Unforge confirmation/results, dye admission/swatches/trim/cloth | HUD | `player_panels/{services,crafting,sack_rename}.rs`; `hub-services.cjs`, `player-panels.cjs`, `responsive.cjs` | GPU source integrated; actual paid/rejected shop, Dowse, dye and Unforge journey pending composed browser proof |
+| NPC chat/books/boasts/authored choices; history, progressive text/audio/acceleration, selector list drag/wheel/controller, notebox/error | HUD | `player_panels/{dialogue,notebox}.rs`; `hub-dialogue-rooms.mjs`, `menu-journey.cjs` | GPU source integrated; actual dialogue/selector/notebox focus and text journey pending composed browser proof |
+| Level-up offer sequence; reveal/clocks, cards/insight/weld, responsive detail, choice/reroll/save and rejected-action recovery | HUD | `skill_picker.rs`; `hud-selector.cjs`, actual earned gameplay | GPU source integrated; actual earned offer/card/selection journey pending composed browser proof |
+| Tutorial callouts/arrows; canonical text/narration and live GPU widget anchors; intro title/fade; Game Over riff/prompt/admission | HUD | `tutorial/**`, `college_intro.rs`, `game_over.rs`; `tutorial-text-bounds.cjs`, `solomon-entrance.cjs`, `boneyard.cjs` | GPU source integrated; actual Tutorial anchors/text and terminal run journey pending composed browser proof |
+| World notifications; local loot/Gold coalescing, Hub/Boneyard rank-book notices, Overloaded Mana and CHEAT DEATH; per-run cursors, native clip/rise/fade/shadow, life/Tutorial/Game Over gates and screen-reader text | acceptance; root wiring | Recovered notification contract above; `sim/boneyard/loot/messages.rs`, `web/loot/messages.rs`; current-source fixture and genuine earned browser events | Current-source clock and GPU controller implemented; 13 focused tests pass; integrated browser event/render proof pending |
+| Social Party; collapsed/coarse/expanded, Members/Settings/Mods, roster tags/scroll, privacy, copy/regenerate, Kick/Leave, request/invite Accept/Deny | social | `social/party/**`; `hosted-social.cjs`, `join-party.cjs` | GPU source integrated; actual two-human roster/privacy/request journey pending composed browser proof |
+| Player cards/private College; Hub actor hit, Message/invite, resolve/decline/failure and owned roster | social | `social/{card,hub_players,hosted}.rs`; `hosted-social.cjs`, `hosted-session.cjs` | GPU source integrated; actual actor card/private admission/teardown pending composed browser proof |
+| Chat; Boneyard/Global/Party/Whisper, drafts/unread/fade/channel cycle, IME, author card and disconnect/reset | social | `social/chat.rs`; `hosted-social.cjs` | GPU source integrated; actual IME/channel/whisper delivery pending composed browser proof |
+| Shared Pause/resume waiting; other-owner activity, dim/reveal, countdown/progress/rejoin; spectator rail/target/respawn | social | `shared_gameplay.rs`, `spectator.rs`; `hosted-session.cjs`, `spectator.cjs` | GPU source integrated; actual shared pause/respawn/target lifecycle pending composed browser proof |
+| Cheats/Console/developer observer; permissions, all resource/skill/world/dev controls, Lua submit/history/results/error/clear and bot targets | social | `cheats/**`, `observer.rs`; `authored-content.cjs`, `learned-bot.cjs`, `cheat-consent.cjs` | GPU source integrated; actual authorized Console/observer/bot journey pending composed browser proof |
+| Mobile editor; all six anchors/elements, drag/resize/rotate/snap, zoom/pan/pinch, multi-touch/cancel, undo/redo/reset/pages/dock/presets/save | social | `mobile_editor/**`, `sim/mobile_ui/**`; `mobile-editor.cjs`, `responsive.cjs` | GPU source integrated; actual parent-layer touch/edit/save journey pending composed browser proof |
+| Authored mod surfaces; Cast/Shop/Reforge/Portal, skills/subskills/offers/quickbar, minimap actions, mounted HUD text/image/bar/button, party attributes | social | `mod_panels.rs`, `mod_skills.rs`, `mod_skill_quickbar.rs`, `mod_minimap.rs`, `mod_world_overlays/**`; `authored-content.cjs`, `mod-skills.cjs` | GPU source integrated; actual admitted authored widgets/assets/retirement pending composed browser proof |
+| Match loading; every recovered stage, progress/cancel/failure, host admission/world materialization | root | `match_loading.rs`; `hosted-session.cjs`, `deployment-restart.cjs` | GPU source integrated; actual host/world loading stages and failures pending composed browser proof |
+| Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | GPU source integrated; real fullscreen/unsupported/standalone activation pending composed browser proof |
+| Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | GPU source integrated; actual update/close failure plus packaged journey pending composed browser proof |
+| Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | GPU source integrated; native recovery regressions retained; actual update journey pending composed browser proof |
+| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | Real input drivers migrated; composed runtime pending complete composed browser proof |
+| No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Joined source producer contract 3/3; complete runtime surface/input proof remains pending |
+
+## Ordered UI dispatch
+
+The actual Settings binding journey reproduced a binding click followed by Escape being
+interpreted in reverse order. The shared GPU batch previously handled every queued key before
+resolving pointer clicks, and `Game::frame` consumed typed HUD/panel actions before the GPU
+pass produced them. This also delayed opening Inventory until after a following Escape.
+The Source's browser callbacks commit each event before dispatching the next event.
+
+`GpuUi` now separates ordered input/layout commits from the final GPU submission. The Game
+owner commits controller actions and refreshes accepted-state models between those batches;
+transport polling, physical gameplay sampling and fixed simulation advancement retain one
+owner per browser frame. World rendering precedes the final UI draw. Texture upload/retirement
+is finalized even when a controller fails. Returning to the editor stops later queued input
+and gameplay work in the same frame while still retiring pending textures. Observer and
+deployment barriers retain their read-only/held semantics. The binding/text-focus batch regressions and actual rapid
+Settings/HUD journeys qualify this seam; the latter remain pending the combined rebuild.
 
 ## Test ownership and stopping checks
 
 Acceptance owns `gpu-ui.cjs`, `gpu-ui-contract.test.cjs`, `menu-journey.cjs`, `smoke.cjs`,
 `startup.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`, `audio.cjs`, `save-resume.cjs`,
-`saved-game.cjs`, `college-clock.cjs`, `rooms.mjs`, `hud-input.cjs` and `tutorial-text-bounds.cjs`.
+`saved-game.cjs`, `college-clock.cjs`, `rooms.mjs`, `hud-input.cjs`, `tutorial-text-bounds.cjs`,
+`boneyard.cjs`, `gameplay-input.cjs` and `electric-burn.cjs`.
 Menus owns detailed Hall/Settings/Cloud/Join/prompt
 journeys. HUD and social own their family journeys. Root owns final joined execution and
 packaged/hosted/authoring integration. Exact stable IDs and snapshot schema are in the task's
 `gpu-ui-contract.md`; that is a development handoff, not an accepted product artifact.
 
 The common scripts are migrated to read-only GPU geometry and actual browser input. Syntax
-checks pass for all fifteen files. The architectural contract was run before the cutover:
+checks pass for the migrated common files. The architectural contract was run before the cutover:
 two tests fail for actual existing visual DOM/CSS producers and one passes; its TAP output is
 retained as `gpu-ui-contract-baseline.tap`. Current composed browser acceptance is pending,
 so no matrix surface is marked accepted from syntax/source checks alone. The independent

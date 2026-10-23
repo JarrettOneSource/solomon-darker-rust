@@ -2,6 +2,7 @@
 const resources = __SOLOMON_RESOURCES__;
 const resourceUrl = name => new URL(name, import.meta.url);
 let loader;
+let loaderInitialized = false;
 let currentResource = resources.loaderModule;
 
 try {
@@ -10,6 +11,7 @@ try {
   const loaderResponse = await fetch(resourceUrl(resources.loaderWasm));
   if (!loaderResponse.ok) throw new Error(`${resources.loaderWasm}: HTTP ${loaderResponse.status}`);
   await loader.default({ module_or_path: loaderResponse });
+  loaderInitialized = true;
   window.solomonLoader = {
     progress: loader.progress,
     error: loader.error,
@@ -30,6 +32,7 @@ try {
   dispatchEvent(new CustomEvent('TrunkApplicationStarted', { detail: { wasm } }));
 } catch (error) {
   const message = `${currentResource}: ${error instanceof Error ? error.message : String(error)}`;
-  if (loader) loader.error(message);
+  if (loaderInitialized) loader.error(message);
   console.error(message);
+  throw error;
 }

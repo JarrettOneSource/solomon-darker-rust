@@ -26,7 +26,7 @@ solomon-web ──▶ solomon-sim     kernels: rules, tables, stepped state
   input, runs a local fixed-tick loop or accepts native host snapshots, and composes the
   world with Rust GPU menus, HUD and overlays. Controllers read explicit simulation state
   and return typed actions. `gpu_ui` owns egui interaction/layout, stock bitmap text,
-  licensed browser glyph rasterization and GPU resources. `web/` is the Trunk root.
+  licensed browser font rasterization and GPU resources. `web/` is the Trunk root.
 - **`solomon-protocol`** (`crates/protocol`): the native host and browser's versioned messages.
   Inputs, commands and snapshots reuse canonical simulation types. A borrowed host snapshot
   and an owned browser checkpoint have the same serialized shape.
@@ -64,8 +64,12 @@ obstacle) is in `web`, index-aligned with it.
    Scenery occlusion advances through whole display ticks using that displayed local
    position; snapshot receipt and simulation stepping do not also advance its view state.
 
-The final screen pass composes each visible controller once through `GpuUi::run`; modal
-scope and actual hit geometry route input without hidden DOM controls. Native composition,
+`GpuUi::begin_frame` collects native input in dispatch order. Each `paint_next` releases
+controller borrows so the Game owner can commit typed actions and refresh models before
+the next event. Transport polling, gameplay input and simulation advance once per browser
+frame. After the world draw, `paint_layout` refreshes the final shapes without replaying
+input; `finish_frame` submits only those shapes and completes texture retirement even on
+failure. Modal scope and actual hit geometry route input without hidden DOM controls. Native composition,
 clipboard, file, audio and accessibility APIs remain browser adapters. `runtime_ui` carries
 real completed image/font/audio counts to the separate Rust splash loader and releases it
 only after account/save admission and the first complete GPU frame. Match transitions retain

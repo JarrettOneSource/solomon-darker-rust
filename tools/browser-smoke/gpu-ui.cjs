@@ -279,16 +279,34 @@ async function gpuDraws(page) {
   return page.evaluate(() => window.__solomonGpuDraws);
 }
 
-async function observeAnnouncements(page) {
-  await page.addInitScript(() => {
+async function observeAnnouncements(page, {forceFallback = false} = {}) {
+  await page.addInitScript(({forceFallback}) => {
     const announcements = [];
     Object.defineProperty(window, '__solomonAnnouncements', {value:announcements});
+    const nativeAvailable = typeof document.ariaNotify === 'function';
+    Object.defineProperty(window, '__solomonAnnouncementPlatform', {value:{nativeAvailable,forceFallback}});
+    if(forceFallback)for(const type of [Document,Element]) {
+      Object.defineProperty(type.prototype,'ariaNotify',{configurable:true,value:undefined});
+    }
+    const ownership = [];
+    Object.defineProperty(window, '__solomonAnnouncementOwnership', {value:ownership});
+    // Native ariaNotify is called while Rust is painting. Observe the actual
+    // temporary canvas without reentering a WASM getter from its own callback.
+    const active = () => Boolean(document.querySelector('canvas[data-gpu-loader]'));
+    const sample = () => {
+      const shared = document[Symbol.for('solomon.graphics.announcements')];
+      const current = {owners:shared?.owners??0,loaders:shared?.loaders??0,
+        count:document.querySelectorAll('[data-gpu-announcer]').length};
+      if(JSON.stringify(ownership.at(-1))!==JSON.stringify(current))ownership.push(current);
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
     for (const type of [Document, Element]) {
       const notify = type.prototype.ariaNotify;
       if (typeof notify !== 'function') continue;
       type.prototype.ariaNotify = function (text, options) {
         const result = Reflect.apply(notify, this, [text, options]);
-        announcements.push({source:'ariaNotify',text});
+        announcements.push({source:'ariaNotify',text,loaderActive:active()});
         return result;
       };
     }
@@ -298,14 +316,15 @@ async function observeAnnouncements(page) {
           const element = record.target.nodeType === Node.ELEMENT_NODE
             ? record.target : record.target.parentElement;
           const announcer = element?.closest('[data-gpu-announcer]');
-          if (announcer?.textContent) announcements.push({source:'aria-live',text:announcer.textContent});
+          if (announcer?.textContent) announcements.push({source:'aria-live',text:announcer.textContent,
+            loaderActive:active()});
         }
       });
       observer.observe(document.body, {subtree:true,childList:true,characterData:true});
     };
     if (document.body) observe();
     else document.addEventListener('DOMContentLoaded', observe, {once:true});
-  });
+  }, {forceFallback});
 }
 
 async function announcements(page) {
@@ -321,25 +340,30 @@ async function announced(page, text, {afterIndex = 0, timeout = 10000} = {}) {
 // Native Gamepad prototypes feed the production navigator adapter, never game commands.
 async function installController(page) {
   await page.evaluate(() => {
-    window.gpuTestPad = { buttons: [], x: 0, y: 0, connected: true };
+    window.gpuTestPad = { buttons: [], axes: [0,0,0,0], analog: {}, reads: 0, connected: true };
     const gamepad = Object.create(Gamepad.prototype, {
       index: { value: 0 }, connected: { get: () => window.gpuTestPad.connected },
       mapping: { value: 'standard' },
-      axes: { get: () => [window.gpuTestPad.x, window.gpuTestPad.y] },
+      axes: { get: () => window.gpuTestPad.axes },
       buttons: { get: () => Array.from({ length: 17 }, (_, index) =>
         Object.create(GamepadButton.prototype, {
           pressed: { value: window.gpuTestPad.buttons.includes(index) },
-          value: { value: window.gpuTestPad.buttons.includes(index) ? 1 : 0 },
+          value: { value: window.gpuTestPad.analog[index]
+            ?? (window.gpuTestPad.buttons.includes(index) ? 1 : 0) },
         })) },
     });
-    Object.defineProperty(navigator, 'getGamepads', { value: () => [gamepad] });
+    Object.defineProperty(navigator, 'getGamepads', { value: () => {
+      window.gpuTestPad.reads += 1;
+      return [gamepad];
+    } });
   });
 }
 
-async function controller(page, buttons = [], x = 0, y = 0) {
-  await page.evaluate(({ buttons, x, y }) => {
-    window.gpuTestPad = { ...window.gpuTestPad, buttons, x, y };
-  }, { buttons, x, y });
+async function controller(page, buttons = [], x = 0, y = 0,
+  {rightX = 0, rightY = 0, analog = {}} = {}) {
+  await page.evaluate(({ buttons, axes, analog }) => {
+    window.gpuTestPad = { ...window.gpuTestPad, buttons, axes, analog };
+  }, { buttons, axes:[x,y,rightX,rightY], analog });
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 }
 
@@ -348,9 +372,26 @@ async function nextFrame(page) {
     requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
+async function useNativeFocus(...pages) {
+  for(const page of pages) {
+    await page.evaluate(()=>{
+      const events=[];
+      Object.defineProperty(window,'__solomonFocusEvents',{value:events});
+      for(const type of ['focus','blur'])addEventListener(type,event=>
+        events.push({type:event.type,trusted:event.isTrusted}));
+    });
+    const client=await page.context().newCDPSession(page);
+    try {
+      // Playwright otherwise forces document.hasFocus() true in background
+      // tabs. Restore Chrome's native focus before switching actual targets.
+      await client.send('Emulation.setFocusEmulationEnabled',{enabled:false});
+    } finally {await client.detach()}
+  }
+}
+
 module.exports = {
   readUi, waitForUi, findWidget, widget, noWidget, byLabel, surface, ready, bounds, center, actionable, click, tap,
   fill, value, focused, setSlider, wheel, drag, assertGpuOnly, watchErrors, installController, controller, nextFrame,
   observeGpu, gpuDraws,
-  observeAnnouncements, announcements, announced,
+  observeAnnouncements, announcements, announced, useNativeFocus,
 };

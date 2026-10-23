@@ -97,13 +97,26 @@ async function startNewGame(page, {
     || ui.findWidget(snapshot, 'panel:dialogue'), 'Create or College admission', {timeout:120000});
   if (introOnly) return;
   if ((await ui.readUi(page)).surface !== 'create') await reachCollegeLoadout(page, {touch});
-  await ui.fill(page, 'create-name', name, {touch});
-  await ui.value(page, 'create-name', name);
+  // A real player may keep Create's generated name. Name-edit acceptance keeps
+  // its explicit draft; unrelated family routes can choose this ordinary path.
+  if(name!==null) {
+    await ui.fill(page, 'create-name', name, {touch});
+    await ui.value(page, 'create-name', name);
+  }
+  const draft=(await ui.widget(page,'create-name')).value;
+  if(typeof draft!=='string')throw new Error('Create must expose its actual accepted name draft');
+  const expectedName=draft||'Genericus';
   await activate(page, `element:${element}`);
   await activate(page, `discipline:${discipline}`);
   await ui.surface(page, 'hidden');
   await page.waitForFunction(() => window.wasmBindings.wizard_state()[6] === 0
     && window.wasmBindings.wizard_state()[7] === -1, null, {timeout:20000});
+  const accepted=await ui.waitForUi(page,snapshot=>{
+    const selection=snapshot.acceptedSelection;
+    return selection?.name===expectedName&&selection.element.toLowerCase()===element
+      &&selection.discipline.toLowerCase()===discipline;
+  },`actual admitted ${expectedName}/${element}/${discipline}`);
+  return accepted.acceptedSelection;
 }
 
 module.exports = { leaveCollegeOffice, reachCollegeLoadout, startNewGame };

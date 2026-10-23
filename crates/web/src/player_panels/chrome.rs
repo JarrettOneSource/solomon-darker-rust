@@ -16,6 +16,7 @@ pub(super) struct PanelHit {
     pub target: Target,
     pub npc: Option<HubNpcSelectorId>,
     pub rect: Rect,
+    pub paint_rect: Rect,
     pub enabled: bool,
 }
 
@@ -100,12 +101,12 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         c.blend = solomon_graphics::BlendMode::Add;
         c
     }
-    pub fn target_rect(&self, target: Target) -> Option<Rect> {
+    pub(super) fn target_rect(&self, target: Target) -> Option<Rect> {
         self.hits
             .borrow()
             .iter()
             .find(|hit| hit.target == target && hit.rect.is_positive())
-            .map(|hit| hit.rect)
+            .map(|hit| hit.paint_rect)
     }
     pub fn faded(&self, alpha: f32) -> Self {
         let mut c = self.at(0.0, 0.0);
@@ -150,6 +151,35 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
                 ..*spec
             },
         );
+    }
+    pub fn labeled_text(&self, id: &str, spec: &NativeUiTextSpec<'_>) {
+        let layout = crate::gpu_ui::native_text(
+            self.frame,
+            &self.painter,
+            &NativeUiTextSpec {
+                x: spec.x + self.origin.x as f64,
+                y: spec.y + self.origin.y as f64,
+                alpha: spec.alpha * self.alpha as f64,
+                ..*spec
+            },
+        );
+        let bounds = layout.glyphs.iter().fold(Rect::NOTHING, |bounds, glyph| {
+            let ink = solomon_sim::native_ui_text::native_ui_glyph_ink_bounds(glyph);
+            bounds.union(Rect::from_min_size(
+                egui::pos2(ink.left as f32, ink.top as f32),
+                egui::vec2(ink.width as f32, ink.height as f32),
+            ))
+        });
+        let transform =
+            self.frame.ctx.layer_transform_to_global(self.painter.layer_id()).unwrap_or_default();
+        self.frame.record_rect(
+            id,
+            spec.text,
+            "text",
+            transform * bounds.intersect(self.painter.clip_rect()),
+            false,
+        );
+        self.frame.record_value(id, spec.text, None);
     }
     pub fn layout(&self, layout: &NativeUiTextLayout) {
         let mut layout = layout.clone();
@@ -235,8 +265,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
             index,
             egui::pos2(center[0] as f32, center[1] as f32) + self.origin,
             scale[0] as f32,
-            tints,
-            self.alpha,
+            tints.map(|tint| self.color(tint)),
         )
     }
     pub fn mod_frame(
@@ -396,12 +425,12 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         } else {
             format!("{}:{action}", self.namespace)
         };
-        let response =
-            child.interact(visible, egui::Id::unique(&id), egui::Sense::click_and_drag());
+        let response = child.interact(rect, egui::Id::unique(&id), egui::Sense::click_and_drag());
         self.hits.borrow_mut().push(PanelHit {
             target,
             npc: npc.clone(),
             rect: visible,
+            paint_rect: rect,
             enabled: self.enabled,
         });
         if response.gained_focus() {
@@ -694,10 +723,13 @@ impl PlayerPanels {
                 c.frame,
                 &c.painter,
                 &self.ui,
-                rect(hud.belt[slot % 8]).center() + c.origin,
-                self.now,
-                1.0,
-                &format!("panel:belt-burst:{slot}:{}", burst.sequence()),
+                crate::ui::belt_pull_off::BeltPullOffDraw {
+                    center: rect(hud.belt[slot % 8]).center() + c.origin,
+                    now: self.now,
+                    scale: 1.0,
+                    rotation: 0.0,
+                    id: &format!("panel:belt-burst:{slot}:{}", burst.sequence()),
+                },
             )?;
         }
         Ok(())
@@ -789,8 +821,7 @@ pub(crate) fn paint_split_art(
     index: usize,
     center: Pos2,
     scale: f32,
-    tints: [u32; 2],
-    alpha: f32,
+    tints: [Color32; 2],
 ) -> Result<(), String> {
     let r = atlas.record(index)?;
     let size = frame.image_size(atlas.path()).ok_or("Weld glow atlas is not ready")?;
@@ -810,7 +841,7 @@ pub(crate) fn paint_split_art(
         atlas.path(),
         [dest.left_top(), dest.right_top(), dest.left_bottom()],
         [uv.left_top(), uv.right_top(), uv.left_bottom()],
-        color(tints[0]).gamma_multiply(alpha),
+        tints[0],
         solomon_graphics::BlendMode::Normal,
     );
     frame.image_triangle(
@@ -818,7 +849,7 @@ pub(crate) fn paint_split_art(
         atlas.path(),
         [dest.right_top(), dest.right_bottom(), dest.left_bottom()],
         [uv.right_top(), uv.right_bottom(), uv.left_bottom()],
-        color(tints[1]).gamma_multiply(alpha),
+        tints[1],
         solomon_graphics::BlendMode::Normal,
     );
     Ok(())

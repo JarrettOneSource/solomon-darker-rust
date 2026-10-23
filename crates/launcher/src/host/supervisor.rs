@@ -119,6 +119,8 @@ struct SupervisorJoinRequest {
 }
 struct DeploymentRestart {
     target_revision: String,
+    deployment_id: String,
+    deployment_sequence: u64,
     deadline_ms: f64,
     completed: bool,
     closing: bool,
@@ -527,7 +529,8 @@ impl HostedSupervisor {
         let players = restart.checkpoints.len();
         let response = http::json(
             200,
-            serde_json::json!({"status":"ready","players":players,
+            serde_json::json!({"status":"ready","deploymentId":restart.deployment_id,
+            "deploymentSequence":restart.deployment_sequence,"players":players,
             "savedPlayers":saved,"targetRevision":restart.target_revision,"unacknowledgedPlayers":players-saved}),
         );
         let _ = restart.respond.send(response);

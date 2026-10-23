@@ -45,11 +45,23 @@ impl CollegeIntroOverlay {
         ));
         let bounds = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::from(self.viewport));
         painter.rect_filled(bounds, 0.0, egui::Color32::BLACK.gamma_multiply(cover as f32));
+        frame.record_rect("college-intro", "College admission", "group", bounds, false);
+        let sprite = self.atlas.record(record)?;
+        let [left, top] = sprite.registered_origin();
+        let center = egui::pos2(self.viewport[0] / 2.0, y as f32 * scale);
+        let title = egui::Rect::from_min_size(
+            center
+                + egui::vec2(
+                    left - sprite.logical_width as f32 / 2.0,
+                    top - sprite.logical_height as f32 / 2.0,
+                ) * scale,
+            egui::vec2(sprite.width as f32, sprite.height as f32) * scale,
+        );
         self.atlas.paint_centered(
             frame,
             &painter,
             record,
-            egui::pos2(self.viewport[0] / 2.0, y as f32 * scale),
+            center,
             scale,
             0.0,
             egui::Color32::WHITE.gamma_multiply(alpha as f32),
@@ -58,7 +70,7 @@ impl CollegeIntroOverlay {
             "college-intro:title",
             if record == 7 { "Raptisoft Games presents" } else { "Solomon Dark" },
             "image",
-            bounds,
+            title,
             false,
         );
         Ok(())

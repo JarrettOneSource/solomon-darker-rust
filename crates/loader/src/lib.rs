@@ -6,7 +6,7 @@ use solomon_sim::native_ui_text::{
     NativeUiFontName, NativeUiTextSpec, layout_native_ui_text, measure_native_ui_text,
     native_ui_font, native_ui_glyph_ink_bounds,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{HtmlCanvasElement, HtmlImageElement, KeyboardEvent, WebGl2RenderingContext, Window};
@@ -68,11 +68,14 @@ struct Animation {
 thread_local! {
     static LOADER:RefCell<Option<Loader>>=const{RefCell::new(None)};
     static ANIMATION:RefCell<Option<Animation>>=const{RefCell::new(None)};
+    // Native announcements can synchronously query the bridge while render owns
+    // its mutable borrow. Activity belongs to the lifecycle, not that borrow.
+    static ACTIVE:Cell<bool>=const{Cell::new(false)};
 }
 
 #[wasm_bindgen]
 pub fn active() -> bool {
-    LOADER.with(|slot| slot.borrow().is_some())
+    ACTIVE.with(Cell::get)
 }
 
 #[wasm_bindgen]
@@ -103,12 +106,16 @@ pub fn error(message: &str) {
     LOADER.with(|slot| {
         if let Some(loader) = slot.borrow_mut().as_mut() {
             loader.progress.error = Some(message.to_owned());
+            if let Err(render_error) = loader.render() {
+                loader.progress.error = Some(format!("{message}\n{render_error}"));
+            }
         }
     });
 }
 
 #[wasm_bindgen]
 pub fn finish() {
+    ACTIVE.with(|active| active.set(false));
     ANIMATION.with(|slot| {
         if let Some(animation) = slot.borrow_mut().take()
             && let Some(request) = animation.request
@@ -167,7 +174,7 @@ async fn boot() -> Result<(), String> {
         .dyn_into()
         .map_err(|_| "loader context is not WebGL2")?;
     let renderer = Renderer::new(gl)?;
-    let reader = solomon_graphics::announcements::ScreenReader::attach(&document)?;
+    let reader = solomon_graphics::announcements::ScreenReader::attach_loader(&document)?;
     let keyboard = Closure::<dyn FnMut(KeyboardEvent)>::new(|event: KeyboardEvent| {
         if !event.ctrl_key() && !event.meta_key() && !event.alt_key() {
             event.prevent_default();
@@ -201,6 +208,7 @@ async fn boot() -> Result<(), String> {
             last_announced: String::new(),
         })
     });
+    ACTIVE.with(|active| active.set(true));
     start_animation()?;
     let bytes =
         js_sys::Uint8Array::from(include_bytes!("../../../web/assets/stock/Fonts.png").as_slice());
@@ -321,7 +329,8 @@ impl Loader {
         self.triangles = 2;
         self.widgets.clear();
         let origin = [(self.logical[0] - 480.0) / 2.0, (self.logical[1] - 320.0) / 2.0];
-        for (index, texture) in self.art.iter().enumerate() {
+        for index in 0..self.art.len() {
+            let texture = &self.art[index];
             let mut bounds = ART[index].1;
             let mut source = [0.0, 0.0, texture.width, texture.height];
             if index == 3 {
@@ -338,6 +347,13 @@ impl Loader {
                 );
                 self.meshes += 1;
                 self.triangles += 2;
+                let (id, label) = [
+                    ("loader:logo", "Solomon Dark logo"),
+                    ("loader:url", "Solomon Dark website"),
+                    ("loader:frame", "Loading progress frame"),
+                    ("loader:fill", "Completed loading work"),
+                ][index];
+                self.record(id, label, "img", bounds);
             }
         }
         if self.font.is_some() {
@@ -345,7 +361,7 @@ impl Loader {
             let top = self.logical[1] / 2.0 + self.logical[0] * 0.11;
             self.text(
                 "loader:status",
-                &format!("{}  {}%", self.progress.stage, self.progress.percentage()),
+                &format!("{}  {}%", stage_label(&self.progress.stage), self.progress.percentage()),
                 top + size,
                 size,
                 0xffffff,
@@ -388,10 +404,9 @@ impl Loader {
             }
         }
         self.renderer.flush();
-        let caption =
-            self.progress.error.clone().unwrap_or_else(|| {
-                format!("{} {}%", self.progress.stage, self.progress.percentage())
-            });
+        let caption = self.progress.error.clone().unwrap_or_else(|| {
+            format!("{} {}%", stage_label(&self.progress.stage), self.progress.percentage())
+        });
         if caption != self.last_announced {
             self.reader.announce(&caption)?;
             self.last_announced = caption;
@@ -451,14 +466,30 @@ impl Loader {
             self.triangles += 2;
         }
         if bounds[0].is_finite() {
-            let rect = [
-                bounds[0] * self.scale,
-                bounds[1] * self.scale,
-                (bounds[2] - bounds[0]) * self.scale,
-                (bounds[3] - bounds[1]) * self.scale,
-            ];
-            self.widgets.push(serde_json::json!({"id":id,"label":text,"role":if id=="loader:error"{"alert"}else{"status"},"rect":rect,"paint_bounds":{"x":rect[0],"y":rect[1],"width":rect[2],"height":rect[3]},"enabled":true,"focused":false}));
+            self.record(
+                id,
+                text,
+                if id == "loader:error" { "alert" } else { "status" },
+                [bounds[0], bounds[1], bounds[2] - bounds[0], bounds[3] - bounds[1]],
+            );
         }
+    }
+
+    fn record(&mut self, id: &str, label: &str, role: &str, bounds: [f32; 4]) {
+        let paint = bounds.map(|value| value * self.scale);
+        let left = paint[0].max(0.0);
+        let top = paint[1].max(0.0);
+        let width = (paint[0] + paint[2]).min(self.viewport[0]) - left;
+        let height = (paint[1] + paint[3]).min(self.viewport[1]) - top;
+        if width <= 0.0 || height <= 0.0 {
+            return;
+        }
+        self.widgets.push(serde_json::json!({
+            "id": id, "label": label, "role": role,
+            "rect": [left,top,width,height],
+            "paintRect": paint,
+            "enabled": true, "focused": false,
+        }));
     }
 }
 
@@ -475,6 +506,19 @@ fn fit_text(text: &str, size: f32, width: f32) -> String {
         shortened.pop();
     }
     shortened + "..."
+}
+
+fn stage_label(stage: &str) -> &str {
+    match stage {
+        "assets" => "Loading stock artwork",
+        "fonts" => "Loading fonts",
+        "interface" => "Preparing the interface",
+        "audio" => "Loading music and sound",
+        "runtime" => "Preparing the game",
+        "account" => "Loading your wizard",
+        "ready" => "Ready",
+        other => other,
+    }
 }
 
 impl Drop for Loader {
@@ -497,6 +541,14 @@ impl Drop for Loader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bridge_activity_is_queryable_during_a_mutable_render_state_borrow() {
+        LOADER.with(|slot| {
+            let _render = slot.borrow_mut();
+            assert!(!active());
+        });
+    }
+
     #[test]
     fn progress_is_actual_bounded_work_with_unknown_code_totals() {
         let mut progress = Progress::default();

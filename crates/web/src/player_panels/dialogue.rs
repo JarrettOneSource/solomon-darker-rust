@@ -24,6 +24,17 @@ use solomon_sim::native_ui_text::{
 };
 use solomon_sim::player_panels::dialogue::{hub_chat_scroll_frame, hub_chat_text_runs};
 use solomon_sim::profile::NATIVE_SKILL_CATALOG;
+
+pub(super) fn navigation_scope(content: &HubNpcChatContent, started_at: f64) -> String {
+    let phase = started_at.to_bits();
+    match content {
+        HubNpcChatContent::Choices => format!("dialogue:{phase}:choices"),
+        HubNpcChatContent::Selector(selector) => {
+            format!("dialogue:{phase}:selector:{}", selector.as_str())
+        }
+        HubNpcChatContent::Speech { key, .. } => format!("dialogue:{phase}:speech:{key}"),
+    }
+}
 impl PlayerPanels {
     pub fn show_dialogue(
         &mut self,
@@ -333,10 +344,10 @@ impl PlayerPanels {
     }
     pub(super) fn reveal_selector_focus(&mut self, id: &HubNpcSelectorId) -> Result<(), String> {
         if let Some(hit) = self.hits.iter().find(|hit| hit.npc.as_ref() == Some(id)) {
-            let delta = if hit.rect.top() < 106.0 {
-                hit.rect.top() - 106.0
-            } else if hit.rect.bottom() > 506.0 {
-                hit.rect.bottom() - 506.0
+            let delta = if hit.paint_rect.top() < 106.0 {
+                hit.paint_rect.top() - 106.0
+            } else if hit.paint_rect.bottom() > 506.0 {
+                hit.paint_rect.bottom() - 506.0
             } else {
                 0.0
             };
@@ -485,6 +496,12 @@ impl PlayerPanels {
                 HudRect::new(15.0, 25.0 + index as f64 * 90.0, 490.0, 85.0),
                 Some(row.id.clone()),
             );
+            let semantic_key = match &row.id {
+                HubNpcSelectorId::Native(id) => id.to_string(),
+                HubNpcSelectorId::ModBoast(selection) => {
+                    format!("{}:{}", selection.mod_id, selection.content_id)
+                }
+            };
             let active = self
                 .hovered_npc_selector
                 .as_ref()
@@ -498,6 +515,12 @@ impl PlayerPanels {
                 true,
                 if selected { 0x9feb9f } else { 0xffffff },
             )?;
+            node.semantic(
+                &format!("panel:selector-frame:{semantic_key}"),
+                &row.label,
+                "image",
+                HudRect::new(0.0, 0.0, 490.0, 85.0),
+            );
             match selector {
                 HubNpcListSelector::Boast => {
                     if let Some(PreparedModBoastIcon::Stock { record, .. }) = &row.boast_icon {
@@ -535,16 +558,22 @@ impl PlayerPanels {
                             );
                         }
                     }
-                    node.text(&TextSpec {
-                        tint: color,
-                        ..TextSpec::new(Font::SpecialUppercase, &row.label, 245.0, 27.5)
-                    });
-                    node.text(&TextSpec {
-                        tint: color,
-                        max_width: Some(370.0),
-                        line_height: Some(17.0),
-                        ..TextSpec::new(Font::Medium, &row.detail, 245.0, 47.5)
-                    });
+                    node.labeled_text(
+                        &format!("panel:selector-label:{semantic_key}"),
+                        &TextSpec {
+                            tint: color,
+                            ..TextSpec::new(Font::SpecialUppercase, &row.label, 245.0, 27.5)
+                        },
+                    );
+                    node.labeled_text(
+                        &format!("panel:selector-detail:{semantic_key}"),
+                        &TextSpec {
+                            tint: color,
+                            max_width: Some(370.0),
+                            line_height: Some(17.0),
+                            ..TextSpec::new(Font::Medium, &row.detail, 245.0, 47.5)
+                        },
+                    );
                 }
                 HubNpcListSelector::Books => {
                     let record = book_art_record(&row.label);
@@ -655,4 +684,99 @@ fn book_art_record(title: &str) -> usize {
         }
     }
     13 + (hash % 4) as usize
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn same_time_dialogue_content_changes_route_enter_to_the_current_real_control() {
+        let ctx = egui::Context::default();
+        let mut navigation = crate::menu::navigation::MenuNavigation::new();
+        let speech = |key: &str| HubNpcChatContent::Speech {
+            key: key.to_owned(),
+            lines: vec!["Speech".to_owned()],
+            next: HubNpcChatNext::Choices,
+        };
+        let phases = [
+            (speech("ARCH_Q1_0"), "speech-next"),
+            (HubNpcChatContent::Choices, "first-choice"),
+            (HubNpcChatContent::Selector(HubNpcListSelector::Books), "first-book"),
+            (HubNpcChatContent::Selector(HubNpcListSelector::TeacherSpells), "first-spell"),
+            (speech("BOOK25_LACE"), "speech-next"),
+        ];
+        // The first Area pass only registers layout. Its invisible controls cannot
+        // take focus; the real dispatch below must still focus the visible owner.
+        ctx.run_pass(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400.0, 300.0),
+                )),
+                time: Some(1.0),
+                ..Default::default()
+            },
+            |ctx| {
+                navigation.focus(ctx, &navigation_scope(&phases[0].0, 1000.0), Some("speech-next"));
+                egui::Area::new(egui::Id::unique("same-time-dialogue")).show(ctx, |ui| {
+                    assert!(ui.is_sizing_pass());
+                    let response = ui.interact(
+                        egui::Rect::from_min_size(egui::pos2(20.0, 20.0), egui::vec2(120.0, 50.0)),
+                        egui::Id::unique("speech-next"),
+                        egui::Sense::click(),
+                    );
+                    assert!(!response.enabled());
+                });
+            },
+        )
+        .drop_without_applying_deltas();
+        for (index, (content, target)) in phases.into_iter().enumerate() {
+            let mut clicked = false;
+            let events = if index == 0 {
+                Vec::new()
+            } else {
+                [false, true]
+                    .into_iter()
+                    .map(|pressed| egui::Event::Key {
+                        key: egui::Key::Enter,
+                        physical_key: Some(egui::Key::Enter),
+                        pressed,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    })
+                    .collect()
+            };
+            ctx.run_pass(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(400.0, 300.0),
+                    )),
+                    time: Some(1.0),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    navigation.focus(ctx, &navigation_scope(&content, 1000.0), Some(target));
+                    egui::Area::new(egui::Id::unique("same-time-dialogue")).show(ctx, |ui| {
+                        let response = ui.interact(
+                            egui::Rect::from_min_size(
+                                egui::pos2(20.0, 20.0),
+                                egui::vec2(120.0, 50.0),
+                            ),
+                            egui::Id::unique(target),
+                            egui::Sense::click(),
+                        );
+                        assert!(response.has_focus(), "new content owns focus: {target}");
+                        clicked = response.clicked();
+                    });
+                },
+            )
+            .drop_without_applying_deltas();
+            if index > 0 {
+                assert!(clicked, "the real Enter reaches {target} at the same dispatch time");
+            }
+        }
+    }
 }

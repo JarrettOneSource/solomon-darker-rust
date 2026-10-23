@@ -237,6 +237,9 @@ impl SharedGameplayUi {
                 );
             }
             frame.record_rect("shared/resume", resume.label, "status", bounds, true);
+            if let Some(clock) = &self.resume_clock {
+                frame.record_value("shared/resume", &clock.reason, None);
+            }
         }
         Ok(())
     }

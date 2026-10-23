@@ -862,7 +862,12 @@ impl Game {
                         );
                     }
                 }
-                HostedServerMessage::DeploymentRestart { checkpoint_sequence, target_revision } => {
+                HostedServerMessage::DeploymentRestart {
+                    checkpoint_sequence,
+                    target_revision,
+                    deployment_id,
+                    deployment_sequence,
+                } => {
                     if hosted.deployment_update.restarting() {
                         continue;
                     }
@@ -876,7 +881,11 @@ impl Game {
                         )?;
                         continue;
                     };
-                    hosted.deployment_update.begin(&target_revision)?;
+                    hosted.deployment_update.begin(
+                        &target_revision,
+                        &deployment_id,
+                        deployment_sequence,
+                    )?;
                     hosted.leave_checkpoint = None;
                     hosted.pending_transfer = None;
                     hosted.transfer_save_document = None;
@@ -1132,7 +1141,7 @@ impl Game {
                         target_revision: revision.clone(),
                     };
                     hosted.deployment = None;
-                    hosted.deployment_update.saved()?;
+                    hosted.deployment_update.saved();
                     self.native.as_ref().unwrap().acknowledge_deployment(command)?;
                 }
                 SaveOutcome::Failed(error) => {

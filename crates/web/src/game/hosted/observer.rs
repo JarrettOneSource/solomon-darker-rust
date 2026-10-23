@@ -120,7 +120,7 @@ impl Game {
         self.native_disconnected("")
     }
 
-    pub(in crate::game) fn frame_hosted_observer(&mut self, now: f64) -> Result<(), String> {
+    pub(in crate::game) fn commit_hosted_observer_ui(&mut self, now: f64) -> Result<(), String> {
         for action in self.observer_ui.take_actions() {
             match action {
                 ObserverAction::Exit => return self.exit_hosted_observer(),
@@ -149,24 +149,26 @@ impl Game {
         self.game_over.take_actions();
         self.panels.take_actions();
         self.input.set_blocked(true)?;
+        self.update_social(now)
+    }
+
+    pub(in crate::game) fn frame_hosted_observer(&mut self, now: f64) -> Result<(), String> {
         self.input.sample()?;
         self.input.resize(
             self.canvas.client_width(),
             self.canvas.client_height(),
             self.menu.settings().ui_scale_percent,
         )?;
-        self.update_social(now)?;
         if !self.has_game || self.world_loading {
             self.hud.set_visible(false);
-            return self.render();
+            return Ok(());
         }
         self.sample_native_presentation(now, GameSessionInput::default(), true)?;
         self.native_input_frame(GameSessionInput::default())?;
         self.refresh_hud();
         self.hud.set_visible(true);
-        self.update_audio()?;
         self.update_overlays(now)?;
         self.hud.set_action_enabled(HudAction::Pause, true)?;
-        self.render()
+        Ok(())
     }
 }

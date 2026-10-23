@@ -30,7 +30,7 @@ test('Rust creates only platform adapter DOM elements',()=>{
   const forbidden=[];
   for(const {filename,text}of sources) {
     for(const match of text.matchAll(/\.create_element\s*\(\s*([^)]*)\)/g)) {
-      const announcement=filename==='crates/web/src/gpu_ui/accessibility.rs'
+      const announcement=filename==='crates/graphics/src/announcements.rs'
         && /^"div"\s*$/.test(match[1]) && text.includes('data-gpu-announcer');
       // Unmounted anchors invoke the browser's native file-download capability.
       if(!announcement&&!/^"(?:canvas|input|textarea|audio|a)"\s*$/.test(match[1])) {

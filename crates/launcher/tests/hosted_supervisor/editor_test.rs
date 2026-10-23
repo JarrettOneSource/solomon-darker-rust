@@ -200,12 +200,14 @@ fn editor_preview_plays_only_admitted_geometry_without_saves_or_hosted_membershi
         thread::sleep(Duration::from_millis(5));
     }
     rows.push(json!({"case":"pre-wizard-rejections-retain-unclaimed-owners","sessions":4}));
-    let (status, body) = host.request(
+    let (status, mut body) = host.request(
         "POST",
         "/admin/deployments/restart",
         json!({"targetRevision":"b".repeat(40)}),
         true,
     );
+    assert_eq!(body.as_object_mut().unwrap().remove("deploymentId"), Some(json!("d1".repeat(16))));
+    assert_eq!(body.as_object_mut().unwrap().remove("deploymentSequence"), Some(json!(1)));
     rows.push(json!({"case":"deployment-omits-disposable-wizard","status":status,"body":body}));
     client.finish_close();
     let actual: solomon_sim::modding::LuaValue = serde_json::from_value(json!(rows)).unwrap();

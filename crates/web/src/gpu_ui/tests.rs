@@ -5,6 +5,15 @@ fn frame(
     events: Vec<egui::Event>,
     paint: impl FnMut(&mut UiFrame<'_>),
 ) -> BTreeMap<String, WidgetGeometry> {
+    frame_codes(ctx, events, &[], paint)
+}
+
+fn frame_codes(
+    ctx: &Context,
+    events: Vec<egui::Event>,
+    codes: &[BrowserKey],
+    paint: impl FnMut(&mut UiFrame<'_>),
+) -> BTreeMap<String, WidgetGeometry> {
     let images = painter::Images::default();
     let widgets = RefCell::new(BTreeMap::new());
     let announcements = RefCell::new(Vec::new());
@@ -23,17 +32,165 @@ fn frame(
             images: &images,
             widgets: &widgets,
             previous_widgets: &previous_widgets,
-            key_codes: &[],
+            key_codes: codes,
             blend: BlendMode::Normal,
             announcements: &announcements,
             rotation: egui::emath::Rot2::IDENTITY,
             translation: Vec2::ZERO,
             input_scope: &input_scope,
             retired_images: &retired_images,
+            focus_from_keyboard: true,
         })
     })
     .drop_without_applying_deltas();
     widgets.into_inner()
+}
+
+#[test]
+fn focus_ring_modality_tracks_actual_pointer_and_keyboard_dispatches() {
+    let mouse = pointer(true, pos2(50.0, 50.0));
+    assert!(!focus_modality(true, &mouse));
+    assert!(!focus_modality(false, &[egui::Event::ModifiersChanged(egui::Modifiers::SHIFT)]));
+    let navigation = egui::Event::Key {
+        key: egui::Key::Tab,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    assert!(focus_modality(false, &[navigation]));
+    assert!(focus_modality(true, &[egui::Event::PointerMoved(pos2(60.0, 60.0))]));
+    assert!(focus_modality(true, &[]));
+}
+
+fn browser_key(code: &str, key: &str) -> BrowserKey {
+    BrowserKey {
+        code: code.to_owned(),
+        key: key.to_owned(),
+        pressed: true,
+        repeat: false,
+        alt: false,
+        ctrl: false,
+        shift: false,
+        meta: false,
+    }
+}
+
+#[test]
+fn a_clicked_binding_row_commits_before_the_following_escape_dispatch() {
+    let ctx = Context::default();
+    let mut controls_open = true;
+    let mut binding = false;
+    let mut cancelled = 0;
+    let mut clicked = 0;
+    let mut paint = |frame: &mut UiFrame<'_>| {
+        for key in frame.key_codes() {
+            if key.code == "Escape" {
+                if binding {
+                    binding = false;
+                    cancelled += 1;
+                } else {
+                    controls_open = false;
+                }
+            }
+        }
+        if controls_open {
+            frame.ctx.root_ui(|ui| {
+                let response = ui.interact(
+                    Rect::from_min_size(pos2(20.0, 30.0), vec2(100.0, 45.0)),
+                    egui::Id::unique("bind:move-up"),
+                    egui::Sense::click(),
+                );
+                frame.record("bind:move-up", "Move up", "button", &response);
+                if response.clicked() {
+                    binding = true;
+                    clicked += 1;
+                }
+            });
+        }
+    };
+    frame(&ctx, Vec::new(), &mut paint);
+    let mut events = pointer(true, pos2(50.0, 50.0));
+    events.extend(pointer(false, pos2(50.0, 50.0)));
+    events.push(egui::Event::Key {
+        key: egui::Key::Escape,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    let passes = batches::into_passes(
+        egui::RawInput { events, ..Default::default() },
+        vec![browser_key("Escape", "Escape")],
+        vec![
+            batches::DispatchEnd { events: 2, codes: 0 },
+            batches::DispatchEnd { events: 4, codes: 0 },
+            batches::DispatchEnd { events: 5, codes: 1 },
+        ],
+    );
+    for pass in passes {
+        frame_codes(&ctx, pass.raw.events, &pass.codes, &mut paint);
+    }
+    assert!(controls_open, "Escape cancels the newly selected binding instead of closing Controls");
+    assert!(!binding);
+    assert_eq!((clicked, cancelled), (1, 1));
+}
+
+#[test]
+fn a_new_field_has_committed_geometry_before_an_immediate_click_and_first_character() {
+    let ctx = Context::default();
+    let mut opened = false;
+    let mut text = String::new();
+    let mut paint = |frame: &mut UiFrame<'_>| {
+        frame.ctx.root_ui(|ui| {
+            if opened {
+                let response = ui.put(
+                    Rect::from_min_size(pos2(20.0, 100.0), vec2(250.0, 45.0)),
+                    egui::TextEdit::singleline(&mut text).id_salt("new-name"),
+                );
+                frame.record("new-name", "Name", "textbox", &response);
+            } else {
+                let response = ui.interact(
+                    Rect::from_min_size(pos2(20.0, 30.0), vec2(100.0, 45.0)),
+                    egui::Id::unique("open-name"),
+                    egui::Sense::click(),
+                );
+                frame.record("open-name", "Open name", "button", &response);
+                if response.clicked() {
+                    opened = true;
+                }
+            }
+        });
+    };
+    let mut widgets = frame(&ctx, Vec::new(), &mut paint);
+    let mut events = pointer(true, pos2(50.0, 50.0));
+    events.extend(pointer(false, pos2(50.0, 50.0)));
+    events.extend(pointer(true, pos2(50.0, 120.0)));
+    events.push(egui::Event::Key {
+        key: egui::Key::F,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    events.push(egui::Event::Text("F".to_owned()));
+    let passes = batches::into_passes(
+        egui::RawInput { events, ..Default::default() },
+        vec![browser_key("KeyF", "F")],
+        vec![
+            batches::DispatchEnd { events: 2, codes: 0 },
+            batches::DispatchEnd { events: 4, codes: 0 },
+            batches::DispatchEnd { events: 6, codes: 0 },
+            batches::DispatchEnd { events: 8, codes: 1 },
+        ],
+    );
+    for pass in passes {
+        focus_pointer_text(&ctx, &widgets, &pass.raw.events);
+        widgets = frame_codes(&ctx, pass.raw.events, &pass.codes, &mut paint);
+    }
+    assert!(opened);
+    assert_eq!(text, "F");
+    assert!(widgets["new-name"].focused);
 }
 
 fn pointer(pressed: bool, pos: Pos2) -> Vec<egui::Event> {
@@ -145,6 +302,35 @@ fn geometry_excludes_widgets_clipped_out_of_the_scrolling_panel() {
 }
 
 #[test]
+fn authored_clip_reports_visible_notification_ink_and_preserves_original_paint_bounds() {
+    let ctx = Context::default();
+    let widgets = frame(&ctx, vec![], |frame| {
+        let clip = Rect::from_min_max(pos2(0.0, 50.0), pos2(400.0, 300.0));
+        frame.record_clipped_rect(
+            "notification:first",
+            "Level up",
+            "status",
+            Rect::from_min_size(pos2(10.0, 40.0), vec2(100.0, 25.0)),
+            clip,
+            true,
+        );
+        frame.record_clipped_rect(
+            "notification:retired",
+            "Old message",
+            "status",
+            Rect::from_min_size(pos2(10.0, 20.0), vec2(100.0, 25.0)),
+            clip,
+            true,
+        );
+    });
+    let visible = &widgets["notification:first"];
+    assert_eq!((visible.bounds.y, visible.bounds.height), (50.0, 15.0));
+    assert_eq!((visible.paint_bounds.y, visible.paint_bounds.height), (40.0, 25.0));
+    assert!(!visible.is_interactive());
+    assert!(!widgets.contains_key("notification:retired"));
+}
+
+#[test]
 fn a_real_text_pointer_focus_preserves_characters_queued_in_the_same_frame() {
     let ctx = Context::default();
     let mut text = String::new();
@@ -163,6 +349,30 @@ fn a_real_text_pointer_focus_preserves_characters_queued_in_the_same_frame() {
     focus_pointer_text(&ctx, &widgets, &events);
     frame(&ctx, events, &mut paint);
     assert_eq!(text, "Felix");
+}
+
+#[test]
+fn a_noninteractive_text_edit_never_receives_forced_pointer_focus() {
+    let ctx = Context::default();
+    let mut text = "Finalizing wizard".to_owned();
+    let mut paint = |frame: &mut UiFrame<'_>| {
+        frame.ctx.root_ui(|ui| {
+            let response = ui.put(
+                Rect::from_min_size(pos2(20.0, 30.0), vec2(250.0, 45.0)),
+                egui::TextEdit::singleline(&mut text).id_salt("name").interactive(false),
+            );
+            frame.record("name", "Wizard name", "textbox", &response);
+        });
+    };
+    let widgets = frame(&ctx, vec![], &mut paint);
+    // TextEdit::interactive(false) preserves the containing UI's enabled state.
+    assert!(widgets["name"].enabled);
+    assert!(!widgets["name"].is_interactive());
+    let events = pointer(true, pos2(50.0, 50.0));
+    focus_pointer_text(&ctx, &widgets, &events);
+    assert!(ctx.memory(|memory| memory.focused().is_none()));
+    frame(&ctx, events, &mut paint);
+    assert!(!ctx.text_edit_focused());
 }
 
 #[test]

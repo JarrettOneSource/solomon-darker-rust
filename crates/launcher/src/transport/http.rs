@@ -21,6 +21,8 @@ pub struct HostedHttpRequest {
     pub method: String,
     pub path: String,
     pub authorization: Option<String>,
+    pub deployment_id: Option<String>,
+    pub deployment_sequence: Option<String>,
     pub body: Vec<u8>,
     pub remote_addr: SocketAddr,
 }
@@ -103,6 +105,8 @@ fn read_request(
         MAX_PROVISION_REQUEST_BYTES
     };
     let mut authorization = None;
+    let mut deployment_id = None;
+    let mut deployment_sequence = None;
     let mut content_length = None;
     let mut chunked = false;
     let mut header_bytes = line.len();
@@ -119,6 +123,14 @@ fn read_request(
         let value = value.trim();
         if name.eq_ignore_ascii_case("authorization") {
             if authorization.replace(value.to_owned()).is_some() {
+                return Err(malformed());
+            }
+        } else if name.eq_ignore_ascii_case("x-solomon-deployment-id") {
+            if deployment_id.replace(value.to_owned()).is_some() {
+                return Err(malformed());
+            }
+        } else if name.eq_ignore_ascii_case("x-solomon-deployment-sequence") {
+            if deployment_sequence.replace(value.to_owned()).is_some() {
                 return Err(malformed());
             }
         } else if name.eq_ignore_ascii_case("content-length") {
@@ -171,7 +183,15 @@ fn read_request(
         body.resize(length, 0);
         reader.read_exact(&mut body)?;
     }
-    Ok(HostedHttpRequest { method, path, authorization, body, remote_addr })
+    Ok(HostedHttpRequest {
+        method,
+        path,
+        authorization,
+        deployment_id,
+        deployment_sequence,
+        body,
+        remote_addr,
+    })
 }
 
 fn read_line(reader: &mut impl BufRead) -> io::Result<String> {

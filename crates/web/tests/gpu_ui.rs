@@ -1,6 +1,26 @@
 use solomon_web::gpu_ui::{canvas_point, clip_scissor, key_from_browser};
 
 #[test]
+fn circular_and_rotated_native_controls_do_not_capture_their_empty_box_corners() {
+    use solomon_web::gpu_ui::{HitRegion, HitShape};
+    let bounds = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(100.0, 100.0));
+    let circle =
+        HitRegion { bounds: bounds.into(), paint_bounds: bounds.into(), shape: HitShape::Ellipse };
+    assert!(circle.contains(egui::pos2(50.0, 50.0)));
+    assert!(!circle.contains(egui::pos2(1.0, 1.0)));
+    let rotated = HitRegion {
+        shape: HitShape::RotatedRect {
+            center: [50.0, 50.0],
+            size: [80.0, 20.0],
+            radians: std::f32::consts::FRAC_PI_2,
+        },
+        ..circle
+    };
+    assert!(rotated.contains(egui::pos2(50.0, 80.0)));
+    assert!(!rotated.contains(egui::pos2(80.0, 50.0)));
+}
+
+#[test]
 fn quickbar_cooldown_uses_the_stock_square_perimeter_and_svg_formatter() {
     let points = solomon_web::gpu_ui::cooldown_sector_points(1.0, 4.0);
     assert_eq!(

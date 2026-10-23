@@ -5,6 +5,7 @@
 //! input/text adapters and the renderer's GPU resource lifetime. No visual DOM is created.
 
 mod accessibility;
+mod batches;
 mod fonts;
 mod geometry;
 mod input;
@@ -14,7 +15,7 @@ mod stock;
 mod tests;
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use egui::{Color32, Context, Painter, Pos2, Rect, Response, Vec2, pos2, vec2};
 use serde::Serialize;
@@ -68,6 +69,11 @@ pub enum HitShape {
     #[default]
     Rect,
     Ellipse,
+    RotatedRect {
+        center: [f32; 2],
+        size: [f32; 2],
+        radians: f32,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -87,6 +93,11 @@ impl HitRegion {
                 let rect = self.paint_bounds.rect();
                 rect.is_positive()
                     && ((point - rect.center()) / (rect.size() / 2.0)).length_sq() <= 1.0
+            }
+            HitShape::RotatedRect { center, size, radians } => {
+                let point =
+                    egui::emath::Rot2::from_angle(-radians) * (point - pos2(center[0], center[1]));
+                point.x.abs() <= size[0] / 2.0 && point.y.abs() <= size[1] / 2.0
             }
         }
     }
@@ -146,6 +157,7 @@ pub struct UiDiagnostics {
     pub meshes: usize,
     pub triangles: usize,
     pub textures: usize,
+    pub borrowed_images: usize,
     pub static_images_ready: usize,
     pub static_images_total: usize,
     pub error: Option<String>,
@@ -167,9 +179,14 @@ pub struct UiFrame<'a> {
     translation: Vec2,
     input_scope: &'a RefCell<Option<String>>,
     retired_images: &'a RefCell<Vec<String>>,
+    focus_from_keyboard: bool,
 }
 
 impl UiFrame<'_> {
+    pub fn focus_visible(&self, response: &Response) -> bool {
+        response.has_focus() && (self.focus_from_keyboard || self.ctx.text_edit_focused())
+    }
+
     /// Retires a dynamic image after every mesh from this frame has been submitted.
     pub fn forget_image(&self, path: &str) {
         self.retired_images.borrow_mut().push(path.to_owned());
@@ -195,6 +212,7 @@ impl UiFrame<'_> {
             translation: self.translation,
             input_scope: self.input_scope,
             retired_images: self.retired_images,
+            focus_from_keyboard: self.focus_from_keyboard,
         }
     }
     pub fn with_rotation(&self, pivot: Pos2, radians: f32) -> UiFrame<'_> {
@@ -415,9 +433,51 @@ impl UiFrame<'_> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_rotated_rect(
+        &self,
+        id: &str,
+        label: &str,
+        role: &str,
+        response: &Response,
+        center: Pos2,
+        size: Vec2,
+        radians: f32,
+    ) {
+        self.record(id, label, role, response);
+        if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
+            widget.hit_shape = HitShape::RotatedRect {
+                center: [center.x, center.y],
+                size: [size.x, size.y],
+                radians,
+            };
+        }
+    }
+
     pub fn record_rect(&self, id: &str, label: &str, role: &str, rect: Rect, enabled: bool) {
-        let paint_bounds = rect.into();
-        let rect = rect.intersect(self.ctx.input(|input| input.content_rect()));
+        self.record_clipped_rect(
+            id,
+            label,
+            role,
+            rect,
+            self.ctx.input(|input| input.content_rect()),
+            enabled,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_clipped_rect(
+        &self,
+        id: &str,
+        label: &str,
+        role: &str,
+        paint_rect: Rect,
+        clip_rect: Rect,
+        enabled: bool,
+    ) {
+        let paint_bounds = paint_rect.into();
+        let rect =
+            paint_rect.intersect(clip_rect).intersect(self.ctx.input(|input| input.content_rect()));
         if !rect.is_positive() || !rect.is_finite() {
             return;
         }
@@ -493,6 +553,23 @@ pub struct GpuUi {
     accessibility: accessibility::Accessibility,
     widgets: BTreeMap<String, WidgetGeometry>,
     diagnostics: UiDiagnostics,
+    focus_from_keyboard: bool,
+}
+
+/// An input transaction whose final shapes are submitted after the world draw.
+#[must_use = "finish_frame must apply the managed texture updates and retire images"]
+pub struct UiRun {
+    pending: VecDeque<batches::InputPass>,
+    layout_input: egui::RawInput,
+    viewport: [f32; 2],
+    physical: [i32; 2],
+    pixels_per_point: f32,
+    output: Option<egui::FullOutput>,
+    textures: egui::TexturesDelta,
+    retired_images: Vec<String>,
+    keyboard_activations: BTreeSet<String>,
+    failure: Option<String>,
+    capture: UiCapture,
 }
 
 impl GpuUi {
@@ -542,6 +619,7 @@ impl GpuUi {
             accessibility,
             widgets: BTreeMap::new(),
             diagnostics: UiDiagnostics::default(),
+            focus_from_keyboard: true,
         })
     }
 
@@ -554,43 +632,132 @@ impl GpuUi {
         renderer: &mut Renderer,
         viewport: [f32; 2],
         time_seconds: f64,
-        mut paint: impl FnMut(&mut UiFrame<'_>),
+        mut paint: impl FnMut(&mut UiFrame<'_>) -> Result<(), String>,
     ) -> Result<UiCapture, String> {
         if viewport[0] <= 0.0 || viewport[1] <= 0.0 {
             return Ok(UiCapture::default());
+        }
+        let mut run = self.begin_frame(renderer, viewport, time_seconds)?;
+        let result = (|| {
+            while self.paint_next(&mut run, &mut paint)? {}
+            Ok(())
+        })();
+        self.finish_frame(renderer, run, result)
+    }
+
+    pub fn begin_frame(
+        &mut self,
+        renderer: &mut Renderer,
+        viewport: [f32; 2],
+        time_seconds: f64,
+    ) -> Result<UiRun, String> {
+        if viewport[0] <= 0.0 || viewport[1] <= 0.0 {
+            return Err("GPU UI needs a drawable viewport".to_owned());
         }
         renderer.flush();
         self.images.upload_ready(renderer)?;
         let physical = [self.canvas.width() as i32, self.canvas.height() as i32];
         let pixels_per_point = physical[0] as f32 / viewport[0];
-        let raw = self.input.take(viewport, pixels_per_point, time_seconds)?;
-        focus_pointer_text(&self.ctx, &self.widgets, &raw.events);
-        let key_codes = self.input.take_key_codes();
+        let pending = self.input.take(viewport, pixels_per_point, time_seconds)?;
+        let mut layout_input =
+            pending.first().expect("each frame has an input/layout pass").raw.clone();
+        layout_input.events.clear();
+        self.diagnostics.frame += 1;
+        Ok(UiRun {
+            pending: pending.into(),
+            layout_input,
+            viewport,
+            physical,
+            pixels_per_point,
+            output: None,
+            textures: egui::TexturesDelta::default(),
+            retired_images: Vec::new(),
+            keyboard_activations: BTreeSet::new(),
+            failure: None,
+            capture: UiCapture::default(),
+        })
+    }
+
+    /// Returns after one input/layout commit, releasing all controller borrows.
+    pub fn paint_next(
+        &mut self,
+        run: &mut UiRun,
+        mut paint: impl FnMut(&mut UiFrame<'_>) -> Result<(), String>,
+    ) -> Result<bool, String> {
+        let Some(pass) = run.pending.pop_front() else { return Ok(false) };
+        self.paint_pass(run, pass, &mut paint)?;
+        Ok(true)
+    }
+
+    /// Refreshes models after simulation/typed actions without replaying input.
+    pub fn paint_layout(
+        &mut self,
+        run: &mut UiRun,
+        mut paint: impl FnMut(&mut UiFrame<'_>) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let raw = run.layout_input.clone();
+        self.paint_pass(run, batches::InputPass { raw, codes: Vec::new() }, &mut paint)
+    }
+
+    fn paint_pass(
+        &mut self,
+        run: &mut UiRun,
+        pass: batches::InputPass,
+        paint: &mut impl FnMut(&mut UiFrame<'_>) -> Result<(), String>,
+    ) -> Result<(), String> {
+        if let Some(error) = &run.failure {
+            return Err(error.clone());
+        }
+        let result = self.prepare_pass(run, pass, paint);
+        if let Err(error) = &result {
+            run.failure = Some(error.clone());
+        }
+        result
+    }
+
+    fn prepare_pass(
+        &mut self,
+        run: &mut UiRun,
+        pass: batches::InputPass,
+        paint: &mut impl FnMut(&mut UiFrame<'_>) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.focus_from_keyboard = focus_modality(self.focus_from_keyboard, &pass.raw.events);
+        focus_pointer_text(&self.ctx, &self.widgets, &pass.raw.events);
         let widgets = RefCell::new(BTreeMap::new());
         let announcements = RefCell::new(Vec::new());
         let input_scope = RefCell::new(None);
         let retired_images = RefCell::new(Vec::new());
-        let mut output = self.ctx.run_pass(raw, |ctx| {
-            paint(&mut UiFrame {
+        let mut result = Ok(());
+        let mut output = self.ctx.run_pass(pass.raw, |ctx| {
+            result = paint(&mut UiFrame {
                 ctx,
                 images: &self.images,
                 widgets: &widgets,
                 previous_widgets: &self.widgets,
-                key_codes: &key_codes,
+                key_codes: &pass.codes,
                 blend: BlendMode::Normal,
                 announcements: &announcements,
                 rotation: egui::emath::Rot2::IDENTITY,
                 translation: Vec2::ZERO,
                 input_scope: &input_scope,
                 retired_images: &retired_images,
+                focus_from_keyboard: self.focus_from_keyboard,
             });
         });
+        run.textures.append(std::mem::take(&mut output.textures_delta));
+        run.retired_images.extend(retired_images.into_inner());
+        result?;
         self.widgets = widgets.into_inner();
         if let Some(widget) = self.widgets.values().find(|widget| widget.duplicate) {
             let error = format!("GPU UI widget id {} was painted more than once", widget.id);
-            self.diagnostics.error = Some(error.clone());
-            output.textures_delta.clear();
             return Err(error);
+        }
+        run.keyboard_activations.retain(|id| self.widgets.contains_key(id));
+        for widget in self.widgets.values_mut() {
+            if widget.keyboard_activated {
+                run.keyboard_activations.insert(widget.id.clone());
+            }
+            widget.keyboard_activated |= run.keyboard_activations.contains(&widget.id);
         }
         self.input.set_widgets(&self.widgets);
         let input_scope = input_scope.into_inner();
@@ -607,50 +774,75 @@ impl GpuUi {
             keyboard: self.ctx.egui_wants_keyboard_input(),
             text: output.platform_output.ime.is_some(),
         };
-        if let Err(error) = self.input.apply_output(&output.platform_output, capture) {
-            output.textures_delta.clear();
-            return Err(error);
-        }
-        if let Err(error) = self.accessibility.update(
+        self.input.apply_output(&output.platform_output, capture)?;
+        self.accessibility.update(
             &output.platform_output,
             &announcements.into_inner(),
             &self.widgets,
-        ) {
-            output.textures_delta.clear();
-            return Err(error);
-        }
+        )?;
         if let Some(error) = fonts::take_error() {
-            output.textures_delta.clear();
             return Err(error);
         }
-        let primitives = self.ctx.tessellate(output.shapes, output.pixels_per_point);
+        self.diagnostics.viewport = run.viewport;
+        self.diagnostics.pixels_per_point = run.pixels_per_point;
+        self.diagnostics.capture = capture;
+        self.diagnostics.input_scope = input_scope;
+        self.diagnostics.widgets = self.widgets.values().cloned().collect();
+        run.capture = capture;
+        run.output = Some(output);
+        Ok(())
+    }
+
+    /// Always finish, passing controller/action failures here so texture updates
+    /// and deferred image retirement complete even when remaining input is skipped.
+    pub fn finish_frame(
+        &mut self,
+        renderer: &mut Renderer,
+        mut run: UiRun,
+        result: Result<(), String>,
+    ) -> Result<UiCapture, String> {
+        let mut failure = run.failure.take().or_else(|| result.err());
+        let primitives = if failure.is_none() {
+            if let Some(output) = run.output.take() {
+                self.ctx.tessellate(output.shapes, output.pixels_per_point)
+            } else {
+                failure = Some("GPU UI frame was not prepared".to_owned());
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
         let painted = self.painter.paint(
             renderer,
-            physical,
-            viewport,
+            run.physical,
+            run.viewport,
             &self.images,
             primitives,
-            output.textures_delta,
+            run.textures,
         );
-        for path in retired_images.into_inner() {
+        for path in run.retired_images {
             self.images.forget(&path, &self.painter.gl);
         }
-        let (meshes, triangles) = painted?;
-        self.diagnostics = UiDiagnostics {
-            frame: self.diagnostics.frame + 1,
-            viewport,
-            pixels_per_point,
-            meshes,
-            triangles,
-            textures: self.painter.texture_count() + self.images.texture_count(),
-            static_images_ready: self.images.static_images_ready(),
-            static_images_total: self.images.static_image_count(),
-            error: None,
-            capture,
-            input_scope,
-            widgets: self.widgets.values().cloned().collect(),
-        };
-        Ok(capture)
+        if let Some(error) = failure {
+            let error = if let Err(cleanup_error) = painted {
+                format!("{error}; GPU UI texture cleanup: {cleanup_error}")
+            } else {
+                error
+            };
+            self.diagnostics.error = Some(error.clone());
+            return Err(error);
+        }
+        let (meshes, triangles) = painted.inspect_err(|error| {
+            self.diagnostics.error = Some(error.clone());
+        })?;
+        self.diagnostics.meshes = meshes;
+        self.diagnostics.triangles = triangles;
+        self.diagnostics.textures = self.painter.texture_count() + self.images.texture_count();
+        self.diagnostics.borrowed_images = self.images.borrowed_count();
+        self.diagnostics.static_images_ready = self.images.static_images_ready();
+        self.diagnostics.static_images_total = self.images.static_image_count();
+        self.diagnostics.error = None;
+        Ok(run.capture)
     }
 
     pub fn forget_image(&mut self, path: &str) {
@@ -659,12 +851,28 @@ impl GpuUi {
     pub fn image_texture(&self, path: &str) -> Option<solomon_graphics::Texture> {
         self.images.cached_texture(path)
     }
-    pub fn take_key_codes(&mut self) -> Vec<BrowserKey> {
-        self.input.take_key_codes()
+    /// Shares a decoded world-owned texture; cache retirement never deletes it.
+    pub fn register_image(&mut self, path: &str, texture: &solomon_graphics::Texture) {
+        self.images.register(path, texture, &self.painter.gl);
+    }
+    pub fn borrowed_image_paths(&self) -> Vec<String> {
+        self.images.borrowed_paths()
     }
     pub fn diagnostics(&self) -> &UiDiagnostics {
         &self.diagnostics
     }
+}
+
+fn focus_modality(mut keyboard: bool, events: &[egui::Event]) -> bool {
+    for event in events {
+        match event {
+            egui::Event::PointerButton { pressed: true, .. }
+            | egui::Event::Touch { phase: egui::TouchPhase::Start, .. } => keyboard = false,
+            egui::Event::Key { pressed: true, .. } | egui::Event::Text(_) => keyboard = true,
+            _ => {}
+        }
+    }
+    keyboard
 }
 
 fn focus_pointer_text(
@@ -685,6 +893,7 @@ fn focus_pointer_text(
         let layer = ctx.layer_id_at(*pos);
         for widget in widgets.values().rev() {
             if !widget.enabled
+                || !widget.is_interactive()
                 || !matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
                 || widget.layer_id != layer
             {

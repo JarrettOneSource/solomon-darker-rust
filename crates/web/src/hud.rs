@@ -276,7 +276,15 @@ impl Hud {
             egui::Id::unique(&id),
             egui::Sense::click(),
         );
-        frame.record(&id, label, "button", &response);
+        frame.record_rotated_rect(
+            &id,
+            label,
+            "button",
+            &response,
+            rect.center(),
+            rect.size(),
+            rotation,
+        );
         if response.has_focus() {
             ui.painter().rect_stroke(
                 rect.expand(3.0),
@@ -403,16 +411,19 @@ impl Hud {
             );
             let custom = self.mobile_scale(MobileUiElementId::Diagnostics, coarse);
             let font_size = if coarse { 12.0 * 0.85 / scale * custom } else { 12.0 };
-            paint_rotated_text(
+            let diagnostics = format!("{}   {}", self.fps, self.ping);
+            let painted = paint_rotated_text(
                 p,
-                &format!("{}   {}", self.fps, self.ping),
+                &diagnostics,
                 egui::FontId::new(font_size, egui::FontFamily::Name("JetBrains Mono".into())),
                 egui::Color32::from_rgb(216, 212, 200),
                 if coarse { rect.center() } else { rect.min },
                 if coarse { egui::Align2::CENTER_CENTER } else { egui::Align2::LEFT_TOP },
-                rect.center(),
-                rotation,
+                (rect.center(), rotation),
             );
+            let transform = frame.ctx.layer_transform_to_global(ui.layer_id()).unwrap_or_default();
+            frame.record_rect("hud:diagnostics", &diagnostics, "text", transform * painted, false);
+            frame.record_value("hud:diagnostics", &diagnostics, None);
             self.paint_meters(frame, p, state, size, scale, coarse)?;
             let (rect, rotation) = self.mobile_rect(
                 MobileUiElementId::Xp,
@@ -748,7 +759,15 @@ impl Hud {
                     egui::Id::unique(&id),
                     egui::Sense::click(),
                 );
-                frame.record(&id, "Empty belt slot, controller selected", "button", &response);
+                frame.record_rotated_rect(
+                    &id,
+                    "Empty belt slot, controller selected",
+                    "button",
+                    &response,
+                    rect.center(),
+                    rect.size(),
+                    rotation,
+                );
                 continue;
             };
             let row = self.quickbar[slot].as_ref();
@@ -847,8 +866,7 @@ impl Hud {
                     egui::Color32::from_rgb(244, 229, 180),
                     rect.right_bottom() - egui::vec2(1.0, 1.0) * control_scale,
                     egui::Align2::RIGHT_BOTTOM,
-                    rect.center(),
-                    rotation,
+                    (rect.center(), rotation),
                 );
             }
             if !coarse {
@@ -878,18 +896,18 @@ impl Hud {
                 frame.record_rect(
                     "hud:secondary-slot",
                     label,
-                    "button",
+                    "image",
                     transform * response.interact_rect,
-                    response.enabled(),
+                    false,
                 );
             }
             if health == Some(slot) {
                 frame.record_rect(
                     "hud:health-potion",
                     label,
-                    "button",
+                    "image",
                     transform * response.interact_rect,
-                    response.enabled(),
+                    false,
                 );
             }
         }
@@ -912,13 +930,16 @@ impl Hud {
                 };
                 let center = rect(belt[visible]).center();
                 burst.paint(
-                    &frame.with_rotation(center, angle),
+                    frame,
                     p,
                     &self.ui,
-                    center,
-                    self.now,
-                    self.mobile_scale(id, coarse),
-                    &format!("hud:belt-burst:{slot}:{}", burst.sequence()),
+                    crate::ui::belt_pull_off::BeltPullOffDraw {
+                        center,
+                        now: self.now,
+                        scale: self.mobile_scale(id, coarse),
+                        rotation: angle,
+                        id: &format!("hud:belt-burst:{slot}:{}", burst.sequence()),
+                    },
                 )?;
             }
         }
@@ -1032,11 +1053,13 @@ fn paint_rotated_text(
     color: egui::Color32,
     anchor: egui::Pos2,
     align: egui::Align2,
-    pivot: egui::Pos2,
-    angle: f32,
-) {
+    rotation: (egui::Pos2, f32),
+) -> egui::Rect {
+    let (pivot, angle) = rotation;
     let galley = painter.layout_no_wrap(text.into(), font, color);
     let rect = align.anchor_size(anchor, galley.size());
+    let painted = rotated_bounds(galley.mesh_bounds.translate(rect.min.to_vec2()), pivot, angle);
     let position = pivot + egui::emath::Rot2::from_angle(angle) * (rect.min - pivot);
     painter.add(egui::epaint::TextShape::new(position, galley, color).with_angle(angle));
+    painted
 }

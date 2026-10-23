@@ -18,7 +18,7 @@ async function ready(page,{touch=false}={}) {
     await page.setViewportSize({width:844,height:390});
     await ui.noWidget(page,'landscape-guidance');
   }
-  await startNewGame(page,{touch});
+  await startNewGame(page,{name:null,touch});
   await ui.widget(page,'hud:health');
 }
 
@@ -36,7 +36,8 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
   const errors=[];
   try {
-    const desktop=await browser.newPage({viewport:{width:1600,height:900}});
+    const desktopContext=await browser.newContext({viewport:{width:1600,height:900}});
+    const desktop=await desktopContext.newPage();
     ui.watchErrors(desktop,{errors});
     await ui.observeGpu(desktop);
     await ready(desktop);
@@ -77,8 +78,11 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
     // A real tab activation produces the browser blur; no synthetic blur event is sent.
     const focusTarget=await desktop.context().newPage();
     await focusTarget.goto('about:blank');
+    await ui.useNativeFocus(desktop,focusTarget);
     await focusTarget.bringToFront();
     await desktop.waitForFunction(()=>!document.hasFocus());
+    assert.ok(await desktop.evaluate(()=>__solomonFocusEvents.some(event=>event.type==='blur'&&event.trusted)),
+      'the actual tab switch emits Chrome\'s trusted blur event');
     await ticks(desktop,40);
     const blurStart=await state(desktop);
     await ticks(desktop,40);
@@ -90,7 +94,7 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
     await focusTarget.close();
     await screenshot(desktop,'hud-input-desktop-final.png');
     const desktopSubmissions=await ui.gpuDraws(desktop);
-    await desktop.close();
+    await desktopContext.close();
 
     const touch=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
     ui.watchErrors(touch,{errors});
@@ -115,6 +119,8 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
       assert.ok(afterTouch[0]>beforeTouch[0]+20,'touch walks east');
       assert.equal((await ui.widget(touch,'hud:joystick:movement')).selected,true,
         'the GPU joystick shows the active touch');
+      assert.equal((await ui.widget(touch,'hud:joystick:movement')).focused,false,
+        'the source drag-only joystick does not take keyboard focus');
       await client.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
       await ticks(touch,40);
       const cancelStart=await state(touch);
@@ -124,6 +130,8 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
         'real touch cancellation stops movement');
       assert.equal((await ui.widget(touch,'hud:joystick:movement')).selected,false,
         'the GPU joystick returns to its neutral presentation');
+      assert.equal((await ui.widget(touch,'hud:joystick:movement')).focused,false,
+        'touch cancellation leaves keyboard focus with the ordinary owner');
       const movement=await touch.evaluate(()=>Array.from(wasmBindings.gameplay_input_state()).slice(0,2));
       assert.deepEqual(movement,[0,0],'cancel clears the accepted movement input');
       await ui.assertGpuOnly(touch);
