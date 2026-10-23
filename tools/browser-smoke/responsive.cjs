@@ -5,6 +5,7 @@ const path=require('node:path');
 const {chromium}=require(path.resolve(process.env.PW));
 const {startNewGame}=require('./menu-journey.cjs');
 const ui=require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const output=process.env.OUT||'/tmp';
 const url=process.env.URL||'http://127.0.0.1:4185/';
 fs.mkdirSync(output,{recursive:true});
@@ -69,9 +70,10 @@ async function walkToFomentius(page) {
 }
 
 (async()=>{
-  const browser=await chromium.launch({headless:true,
+  const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+  const {browser}=owned;
   try {
     const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true,deviceScaleFactor:1});
     const observed=ui.watchErrors(page);
@@ -155,5 +157,11 @@ async function walkToFomentius(page) {
       portraitNativeStage:'source landscape guidance',touchWorldEntry:'Fomentius',touchDrag:true,
       submissions:await ui.gpuDraws(page)},null,2));
     console.log(JSON.stringify({passed:true,errors:observed.errors}));
-  } finally{await browser.close()}
+  } finally {
+    try {fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(await owned.close(),null,2))}
+    catch(error){
+      fs.writeFileSync(path.join(output,'browser-cleanup-failure.json'),JSON.stringify(error.cleanup||{error:error.stack},null,2));
+      throw error;
+    }
+  }
 })().catch(error=>{console.error(error);process.exitCode=1});
