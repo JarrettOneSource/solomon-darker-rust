@@ -25,6 +25,7 @@ const { startNewGame } = require('./menu-journey.cjs');
     assert.ok(receipt.after.wizard[5] > receipt.before.wizard[5], 'College ticks continue during the Archchancellor conversation');
     assert.notDeepEqual(receipt.after.npcs, receipt.before.npcs, 'College students continue their world epoch while a conversation blocks local input');
     await ui.assertGpuOnly(page);
+    await ui.settleErrors(page);
     assert.deepEqual(errors, []);
     receipt.status='passed';
   } catch (error) {

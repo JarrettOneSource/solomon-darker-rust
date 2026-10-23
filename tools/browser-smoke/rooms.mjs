@@ -165,6 +165,7 @@ try {
     console.log(`${room.name}: entered and returned`)
   }
   await ui.assertGpuOnly(page)
+  await ui.settleErrors(page)
   if (receipt.errors.length) throw new Error(`browser errors: ${JSON.stringify(receipt.errors)}`)
   receipt.passed = true
 } catch (error) {

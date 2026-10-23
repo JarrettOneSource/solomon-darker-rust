@@ -111,6 +111,7 @@ await page.waitForFunction(()=>Math.abs(audioReceipt.gains[0].gain.value-.73)<1e
 assert.ok(Math.abs(await page.evaluate(()=>audioReceipt.gains[0].gain.value)-.73)<1e-6);
 assert.ok(Math.abs((await music()).find(track=>track.cue==='academy').volume-.41)<1e-6);
 await ui.assertGpuOnly(page);
+await ui.settleErrors(page);
 assert.deepEqual(errors,[]);
 const receipt={passed:true,initialState,errors,hubEntryBeforeReady,hubMusicBeforeSettlement,tracks:await music(),events:await page.evaluate(()=>audioReceipt.events),loadedAudioResources:await page.evaluate(()=>performance.getEntriesByType('resource').filter(entry=>entry.name.includes('/audio/')).length)};
 fs.writeFileSync(path.join(output,'audio-browser-receipt.json'),JSON.stringify(receipt,null,2));
