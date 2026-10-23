@@ -1,18 +1,11 @@
-//! Stock Tutorial presentation from `TutorialOverlay.tsx`, `tutorial-hud-anchors.ts`
-//! and `tutorial-modal-callouts.ts`. The session supplies canonical text and clocks;
-//! this view only measures live controls and paints instructions over them.
-
+//! Stock Tutorial presentation. The accepted session supplies text and clocks;
+//! every control anchor comes from the actual GPU widget registry.
 mod callouts;
-
+use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
+use callouts::{TutorialTargets, modal_plans};
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec};
 use solomon_sim::{Vec2, hud::HudRect};
-use web_sys::{Document, HtmlElement};
-
-use crate::player_panels::chrome::{art, tint};
-use crate::ui::{StockAtlas, append, element, style};
-
-use callouts::{CalloutPlan, TutorialTargets, modal_plans};
-
+use web_sys::Document;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TutorialPreludeView {
     pub blend: f64,
@@ -70,74 +63,77 @@ struct PointerPlan {
     blink: bool,
 }
 
-pub struct TutorialUi {
-    document: Document,
-    root: HtmlElement,
-    prelude: HtmlElement,
-    prelude_skull: HtmlElement,
-    prelude_record: HtmlElement,
-    instructions: HtmlElement,
-    callouts: HtmlElement,
-    pointers: HtmlElement,
-    narration: HtmlElement,
-    atlas: StockAtlas,
-    text_plans: Vec<TextPlan>,
-    callout_plans: Vec<CalloutPlan>,
-    pointer_plans: Vec<PointerPlan>,
-    pointer_nodes: Vec<(HtmlElement, bool)>,
-    previous_blink: Option<bool>,
-    previous_intro: Option<(TutorialPreludeView, f64)>,
-    narration_event_id: Option<u64>,
-    viewport: (i32, i32),
+struct TutorialModel {
+    stage: u8,
+    active: bool,
+    intro: Option<TutorialPreludeView>,
+    heading: Option<String>,
+    subheading: Option<String>,
+    heading_baseline: Option<f64>,
+    subheading_baseline: Option<f64>,
+    text_scale: f64,
+    coarse_pointer: bool,
+    selected_skill_hud_acknowledged: bool,
+    resume_binding_label: String,
+    amulet_item_id: Option<u64>,
+    narration: Option<(u64, String, String)>,
+    world_target: Option<Vec2>,
+    solomon_pointer: Option<TutorialPointerView>,
 }
-
-impl TutorialUi {
-    pub async fn attach(document: &Document) -> Result<Self, String> {
-        let atlas = StockAtlas::load("UI").await?;
-        let root = element(document, "div", "tutorial-ui")?;
-        root.set_attribute("aria-live", "polite").map_err(|_| "Tutorial live instructions")?;
-        root.set_hidden(true);
-        let prelude = element(document, "div", "tutorial-prelude")?;
-        prelude.set_attribute("role", "img").map_err(|_| "Tutorial prelude role")?;
-        prelude
-            .set_attribute("aria-label", "Midnight, six months ago")
-            .map_err(|_| "Tutorial prelude label")?;
-        let prelude_skull = art(document, &prelude, &atlas, 68, [0.0, 0.0], [4.0, 4.0], 0.0)?;
-        prelude_skull.set_class_name("tutorial-prelude-skull");
-        let record = art(document, &prelude, &atlas, 43, [0.0, 0.0], [1.0, 1.0], 0.0)?;
-        record.set_class_name("tutorial-prelude-record");
-        tint(document, &record, 0xd9ba70)?;
-        let instructions = element(document, "div", "tutorial-instructions")?;
-        let callouts = element(document, "div", "tutorial-callouts")?;
-        let pointers = element(document, "div", "tutorial-pointers")?;
-        let narration = element(document, "span", "tutorial-narration")?;
-        narration.set_attribute("role", "status").map_err(|_| "Tutorial narration role")?;
-        for node in [&prelude, &instructions, &callouts, &pointers, &narration] {
-            append(&root, node)?;
+impl TutorialModel {
+    fn from_view(v: &TutorialViewSnapshot<'_>) -> Self {
+        Self {
+            stage: v.stage,
+            active: v.active,
+            intro: v.intro,
+            heading: v.heading.map(str::to_owned),
+            subheading: v.subheading.map(str::to_owned),
+            heading_baseline: v.heading_baseline,
+            subheading_baseline: v.subheading_baseline,
+            text_scale: v.text_scale,
+            coarse_pointer: v.coarse_pointer,
+            selected_skill_hud_acknowledged: v.selected_skill_hud_acknowledged,
+            resume_binding_label: v.resume_binding_label.into(),
+            amulet_item_id: v.amulet_item_id,
+            narration: v.narration.map(|n| (n.event_id, n.speaker.into(), n.text.into())),
+            world_target: v.world_target,
+            solomon_pointer: v.solomon_pointer,
         }
-        append(&document.body().ok_or("Tutorial body")?, &root)?;
-        Ok(Self {
-            document: document.clone(),
-            root,
-            prelude,
-            prelude_skull,
-            prelude_record: record,
-            instructions,
-            callouts,
-            pointers,
-            narration,
-            atlas,
-            text_plans: Vec::new(),
-            callout_plans: Vec::new(),
-            pointer_plans: Vec::new(),
-            pointer_nodes: Vec::new(),
-            previous_blink: None,
-            previous_intro: None,
-            narration_event_id: None,
-            viewport: (0, 0),
-        })
     }
-
+    fn view(&self) -> TutorialViewSnapshot<'_> {
+        TutorialViewSnapshot {
+            stage: self.stage,
+            active: self.active,
+            intro: self.intro,
+            heading: self.heading.as_deref(),
+            subheading: self.subheading.as_deref(),
+            heading_baseline: self.heading_baseline,
+            subheading_baseline: self.subheading_baseline,
+            text_scale: self.text_scale,
+            coarse_pointer: self.coarse_pointer,
+            selected_skill_hud_acknowledged: self.selected_skill_hud_acknowledged,
+            resume_binding_label: &self.resume_binding_label,
+            amulet_item_id: self.amulet_item_id,
+            narration: self.narration.as_ref().map(|(id, speaker, text)| TutorialNarrationView {
+                event_id: *id,
+                speaker,
+                text,
+            }),
+            world_target: self.world_target,
+            solomon_pointer: self.solomon_pointer,
+        }
+    }
+}
+pub struct TutorialUi {
+    atlas: StockAtlas,
+    model: Option<TutorialModel>,
+    viewport: (i32, i32),
+    now: f64,
+}
+impl TutorialUi {
+    pub async fn attach(_document: &Document) -> Result<Self, String> {
+        Ok(Self { atlas: StockAtlas::load("UI").await?, model: None, viewport: (0, 0), now: 0.0 })
+    }
     pub fn update(
         &mut self,
         snapshot: Option<&TutorialViewSnapshot<'_>>,
@@ -145,32 +141,20 @@ impl TutorialUi {
         width: i32,
         height: i32,
     ) -> Result<(), String> {
-        let Some(view) = snapshot else {
-            self.root.set_hidden(true);
-            self.narration_event_id = None;
-            return Ok(());
-        };
-        self.root.set_hidden(false);
-        self.root
-            .set_attribute("data-stage", &view.stage.to_string())
-            .map_err(|_| "Tutorial stage")?;
-        self.root
-            .set_attribute("data-active", if view.active { "true" } else { "false" })
-            .map_err(|_| "Tutorial active")?;
-        if self.viewport != (width, height) {
-            self.instructions.set_text_content(None);
-            self.callouts.set_text_content(None);
-            self.pointers.set_text_content(None);
-            self.text_plans.clear();
-            self.callout_plans.clear();
-            self.pointer_plans.clear();
-            self.pointer_nodes.clear();
-            self.viewport = (width, height);
+        self.model = snapshot.map(TutorialModel::from_view);
+        self.viewport = (width, height);
+        self.now = application_time_ms;
+        Ok(())
+    }
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        let Some(model) = &self.model else { return Ok(()) };
+        let view = &model.view();
+        if let Some(narration) = view.narration {
+            frame.announce(&format!("{}: {}", narration.speaker, narration.text));
         }
-        self.update_prelude(view.intro, view.text_scale)?;
-        self.update_narration(view.narration)?;
-        let viewport = HudRect::new(0.0, 0.0, f64::from(width), f64::from(height));
-        let targets = TutorialTargets::measure(&self.document, view, viewport)?;
+        let (width, height) = self.viewport;
+        let viewport = HudRect::new(0.0, 0.0, width as f64, height as f64);
+        let targets = TutorialTargets::measure(frame, view, viewport);
         let mut text = Vec::new();
         let mut pointers = Vec::new();
         let mut heading_baseline = view.heading_baseline;
@@ -287,93 +271,43 @@ impl TutorialUi {
         }
         let (callouts, modal_pointers) = modal_plans(view, &targets, view.coarse_pointer);
         pointers.extend(modal_pointers);
-        self.draw_text(text)?;
-        self.draw_callouts(callouts)?;
-        self.draw_pointers(pointers)?;
-        // App ticks continue while a modal pauses the simulation. Never use stage_ticks.
-        let blink = (application_time_ms / 10.0).floor() as u64 % 50 > 19;
-        if self.previous_blink != Some(blink) {
-            for (node, blinking) in &self.pointer_nodes {
-                node.style()
-                    .set_property("opacity", if !blinking || blink { "1" } else { "0" })
-                    .map_err(|_| "Tutorial pointer blink")?;
-            }
-            self.previous_blink = Some(blink);
+        let painter = frame.ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Tooltip,
+            egui::Id::unique("tutorial-overlay"),
+        ));
+        if let Some(intro) = view.intro {
+            painter.rect_filled(
+                egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(width as f32, height as f32),
+                ),
+                0.0,
+                egui::Color32::BLACK.gamma_multiply(intro.fade as f32),
+            );
+            self.atlas.paint_centered(
+                frame,
+                &painter,
+                68,
+                egui::pos2(
+                    width as f32 / 2.0,
+                    (height as f64 / 2.0 - 100.0 * (1.0 + intro.blend) * view.text_scale) as f32,
+                ),
+                (4.0 * view.text_scale) as f32,
+                0.0,
+                egui::Color32::WHITE.gamma_multiply((intro.blend * intro.blend) as f32),
+            )?;
+            self.atlas.paint_centered(
+                frame,
+                &painter,
+                43,
+                egui::pos2(width as f32 / 2.0, height as f32 / 2.0),
+                view.text_scale as f32,
+                0.0,
+                egui::Color32::from_rgb(217, 186, 112),
+            )?;
         }
-        Ok(())
-    }
-
-    fn update_prelude(
-        &mut self,
-        intro: Option<TutorialPreludeView>,
-        scale: f64,
-    ) -> Result<(), String> {
-        self.prelude.set_hidden(intro.is_none());
-        let key = intro.map(|intro| (intro, scale));
-        if self.previous_intro == key {
-            return Ok(());
-        }
-        self.previous_intro = key;
-        if let Some(intro) = intro {
-            style(&self.prelude, &format!("background-color:rgba(0,0,0,{})", intro.fade))?;
-            // Preserve the atlas's logical size, registration and tint while animating.
-            for (name, value) in [
-                ("opacity", (intro.blend * intro.blend).to_string()),
-                ("top", format!("calc(50% - {}px)", 100.0 * (1.0 + intro.blend) * scale)),
-                ("transform", format!("translate(-50%,-50%) scale({})", 4.0 * scale)),
-            ] {
-                self.prelude_skull
-                    .style()
-                    .set_property(name, &value)
-                    .map_err(|_| "Tutorial prelude skull motion")?;
-            }
-            self.prelude_record
-                .style()
-                .set_property("transform", &format!("translate(-50%,-50%) scale({scale})"))
-                .map_err(|_| "Tutorial prelude record scale")?;
-        }
-        Ok(())
-    }
-
-    fn update_narration(
-        &mut self,
-        narration: Option<TutorialNarrationView<'_>>,
-    ) -> Result<(), String> {
-        let event_id = narration.map(|narration| narration.event_id);
-        if self.narration_event_id == event_id {
-            return Ok(());
-        }
-        self.narration_event_id = event_id;
-        self.narration.set_text_content(
-            narration
-                .map(|narration| format!("{}: {}", narration.speaker, narration.text))
-                .as_deref(),
-        );
-        Ok(())
-    }
-
-    fn draw_text(&mut self, plans: Vec<TextPlan>) -> Result<(), String> {
-        if self.text_plans == plans {
-            return Ok(());
-        }
-        self.instructions.set_text_content(None);
-        if let Some(heading) = plans.iter().find(|plan| plan.id == "heading") {
-            let mut text = heading.text.replace('\n', " ");
-            if let Some(subheading) = plans.iter().find(|plan| plan.id == "subheading") {
-                text.push_str(". ");
-                text.push_str(&subheading.text);
-            }
-            let semantic = element(&self.document, "span", "tutorial-instruction-semantic")?;
-            semantic.set_text_content(Some(&text));
-            append(&self.instructions, &semantic)?;
-        }
-        for plan in &plans {
-            // TutorialShadowedText paints a second bitmap pen at +2.25 native
-            // pixels. Browser wrapping and font boxes do not alter its baseline.
-            for (tint, offset, class) in [
-                (0, 2.25 * plan.scale, "tutorial-instruction-text tutorial-instruction-shadow"),
-                (0xd9ba70, 0.0, "tutorial-instruction-text"),
-            ] {
+        for plan in text {
+            for (tint, offset) in [(0, 2.25 * plan.scale), (0xd9ba70, 0.0)] {
                 let spec = NativeUiTextSpec {
                     scale: plan.scale,
                     tint,
@@ -388,55 +322,102 @@ impl TutorialUi {
                         plan.center.y + offset,
                     )
                 };
-                let node = crate::ui::text::native_text(&self.document, &spec, class)?;
-                node.set_attribute("data-tutorial-text", plan.id)
-                    .map_err(|_| "Tutorial text id")?;
-                append(&self.instructions, &node)?;
+                let layout = native_text(frame, &painter, &spec);
+                if offset == 0.0 {
+                    frame.record_rect(
+                        &format!("tutorial:text:{}", plan.id),
+                        &plan.text,
+                        "text",
+                        layout
+                            .glyphs
+                            .iter()
+                            .map(|glyph| {
+                                let ink =
+                                    solomon_sim::native_ui_text::native_ui_glyph_ink_bounds(glyph);
+                                egui::Rect::from_min_size(
+                                    egui::pos2(ink.left as f32, ink.top as f32),
+                                    egui::vec2(ink.width as f32, ink.height as f32),
+                                )
+                            })
+                            .fold(egui::Rect::NOTHING, |a, b| a.union(b)),
+                        false,
+                    );
+                }
             }
         }
-        self.text_plans = plans;
-        Ok(())
-    }
-
-    fn draw_pointers(&mut self, plans: Vec<PointerPlan>) -> Result<(), String> {
-        if self.pointer_plans == plans {
-            return Ok(());
-        }
-        self.pointers.set_text_content(None);
-        self.pointer_nodes.clear();
-        for plan in &plans {
-            let view = plan.view;
-            let rotation =
-                (view.target.y - view.origin.y).atan2(view.target.x - view.origin.x).to_degrees()
-                    + 90.0;
-            let node = art(
-                &self.document,
-                &self.pointers,
-                &self.atlas,
-                28,
-                [view.origin.x, view.origin.y],
-                [view.scale, view.scale],
-                rotation,
+        for plan in callouts {
+            let scale = plan.scale;
+            let geometry = solomon_sim::boneyard::tutorial::tutorial_callout_geometry(
+                &plan.text,
+                plan.center.x / scale,
+                plan.center.y / scale,
             )?;
-            node.set_attribute("data-tutorial-pointer", plan.id)
-                .map_err(|_| "Tutorial pointer id")?;
-            for (name, value) in [
-                ("x", view.origin.x),
-                ("y", view.origin.y),
-                ("target-x", view.target.x),
-                ("target-y", view.target.y),
-            ] {
-                node.set_attribute(&format!("data-{name}"), &value.to_string())
-                    .map_err(|_| "Tutorial pointer geometry")?;
+            let r = egui::Rect::from_min_size(
+                egui::pos2((geometry.frame.x * scale) as f32, (geometry.frame.y * scale) as f32),
+                egui::vec2(
+                    (geometry.frame.width * scale) as f32,
+                    (geometry.frame.height * scale) as f32,
+                ),
+            );
+            self.atlas.paint_native_frame(frame, &painter, 4, r, true, egui::Color32::WHITE)?;
+            for line in &geometry.lines {
+                native_text(
+                    frame,
+                    &painter,
+                    &NativeUiTextSpec {
+                        align: solomon_sim::native_ui_text::NativeUiTextAlign::Left,
+                        tint: 0xd9ba70,
+                        scale,
+                        ..NativeUiTextSpec::new(
+                            NativeUiFontName::Menu,
+                            &line.text,
+                            line.x * scale,
+                            line.y * scale,
+                        )
+                    },
+                );
             }
-            self.pointer_nodes.push((node, plan.blink));
+            frame.record_rect(
+                &format!("tutorial:callout:{}", plan.id),
+                &plan.text,
+                "text",
+                r,
+                false,
+            );
         }
-        self.pointer_plans = plans;
-        self.previous_blink = None;
+        let blink = (self.now / 10.0).floor() as u64 % 50 > 19;
+        for plan in pointers {
+            if plan.blink && !blink {
+                continue;
+            }
+            let v = plan.view;
+            let rotation = (v.target.y - v.origin.y).atan2(v.target.x - v.origin.x)
+                + std::f64::consts::FRAC_PI_2;
+            self.atlas.paint_centered(
+                frame,
+                &painter,
+                28,
+                egui::pos2(v.origin.x as f32, v.origin.y as f32),
+                v.scale as f32,
+                rotation as f32,
+                egui::Color32::WHITE,
+            )?;
+            let record = self.atlas.record(28)?;
+            frame.record_rect(
+                &format!("tutorial:pointer:{}", plan.id),
+                "Tutorial pointer",
+                "image",
+                egui::Rect::from_center_size(
+                    egui::pos2(v.origin.x as f32, v.origin.y as f32),
+                    egui::vec2(record.logical_width as f32, record.logical_height as f32)
+                        * v.scale as f32,
+                ),
+                false,
+            );
+        }
         Ok(())
     }
 }
-
 fn push_anchor_pointer(
     plans: &mut Vec<PointerPlan>,
     id: &'static str,

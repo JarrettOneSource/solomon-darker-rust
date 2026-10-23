@@ -6,8 +6,7 @@ use solomon_sim::belt::{
     native_belt_potion_projection,
 };
 use solomon_sim::hud::quickbar::{
-    NativeSkillQuickbarCooldownPresentation, layout_native_quickbar_binding,
-    native_cooldown_sector_path, native_skill_quickbar_cooldown_presentation,
+    NativeSkillQuickbarCooldownPresentation, native_skill_quickbar_cooldown_presentation,
     native_skill_quickbar_icon_alpha,
 };
 use solomon_sim::player::PlayerState;
@@ -17,10 +16,8 @@ use solomon_sim::secondary::{
     native_secondary_ability_mana_cost_with_stat_book,
 };
 use solomon_sim::settings::{GameControlBindings, game_binding_label};
-use web_sys::HtmlElement;
 
 use super::Hud;
-use crate::ui::{append, element, style, text::paint_text_layout};
 
 #[derive(Clone, PartialEq)]
 pub(super) struct QuickbarSlot {
@@ -187,112 +184,7 @@ impl Hud {
         }
         if self.quickbar != slots {
             self.quickbar = slots;
-            self.previous = None;
         }
         Ok(())
-    }
-
-    pub(super) fn decorate_quickbar_slot(
-        &self,
-        button: &HtmlElement,
-        sprite: &HtmlElement,
-        slot: usize,
-    ) -> Result<(), String> {
-        let Some(row) = &self.quickbar[slot] else { return Ok(()) };
-        for (key, value) in [
-            ("data-binding-code", row.binding_code.as_str()),
-            ("data-entry-kind", row.entry_kind),
-            ("data-active", if row.active { "true" } else { "false" }),
-        ] {
-            button.set_attribute(key, value).map_err(|_| "Quickbar presentation state")?;
-        }
-        if let Some(cost) = row.mana_cost {
-            button
-                .set_attribute("data-mana-cost", &cost.to_string())
-                .map_err(|_| "Quickbar mana cost")?;
-        }
-        if let Some(alpha) = row.icon_alpha {
-            sprite
-                .style()
-                .set_property("opacity", &alpha.to_string())
-                .map_err(|_| "Quickbar icon opacity")?;
-            sprite
-                .style()
-                .set_property(
-                    "filter",
-                    if self.mode == super::HudMode::Hub { "brightness(0.25)" } else { "none" },
-                )
-                .map_err(|_| "Quickbar Hub icon tint")?;
-            button
-                .set_attribute("data-icon-alpha", &alpha.to_string())
-                .map_err(|_| "Quickbar icon alpha")?;
-        }
-        if row.cooldown.remaining > 0.0 && row.cooldown.capacity > 0.0 {
-            let namespace = Some("http://www.w3.org/2000/svg");
-            let svg = self
-                .document
-                .create_element_ns(namespace, "svg")
-                .map_err(|_| "Quickbar cooldown SVG")?;
-            svg.set_attribute("class", "hud-belt-cooldown")
-                .map_err(|_| "Quickbar cooldown class")?;
-            svg.set_attribute("viewBox", "0 0 53 53").map_err(|_| "Quickbar cooldown square")?;
-            svg.set_attribute("aria-hidden", "true").map_err(|_| "Quickbar cooldown decoration")?;
-            let path = self
-                .document
-                .create_element_ns(namespace, "path")
-                .map_err(|_| "Quickbar cooldown path")?;
-            path.set_attribute(
-                "d",
-                &native_cooldown_sector_path(row.cooldown.remaining, row.cooldown.capacity),
-            )
-            .map_err(|_| "Quickbar cooldown sector")?;
-            svg.append_child(&path).map_err(|_| "Quickbar cooldown path attachment")?;
-            button.append_child(&svg).map_err(|_| "Quickbar cooldown attachment")?;
-        }
-        Ok(())
-    }
-
-    pub(super) fn draw_quickbar_binding(
-        &self,
-        button: &HtmlElement,
-        slot: usize,
-    ) -> Result<(), String> {
-        let code = self.quickbar[slot].as_ref().map_or_else(
-            || if slot == 0 { "Mouse2".to_owned() } else { format!("Digit{slot}") },
-            |row| row.binding_code.clone(),
-        );
-        if code == "Mouse2" {
-            return append(button, &self.ui.sprite(&self.document, 100, "hud-belt-mouse")?);
-        }
-        let label = self.quickbar[slot]
-            .as_ref()
-            .map_or_else(|| game_binding_label(&code), |row| row.binding_label.clone())
-            .to_uppercase();
-        let layout = layout_native_quickbar_binding(&label);
-        let root = element(&self.document, "span", "hud-belt-binding")?;
-        let backing = element(&self.document, "span", "hud-belt-key-backing")?;
-        style(
-            &backing,
-            &format!("left:{}px;width:{}px", layout.backing_left, layout.backing_width),
-        )?;
-        for (left, width, source) in [
-            (0.0, 5.0, 0.0),
-            (5.0, (layout.backing_width - 10.0).max(0.0), -5.0),
-            (layout.backing_width - 5.0, 5.0, -10.0),
-        ] {
-            let piece = element(&self.document, "span", "")?;
-            style(
-                &piece,
-                &format!(
-                    "left:{left}px;width:{width}px;background-image:url('assets/stock/hub-hud-key-backing.png');background-position:{source}px 0"
-                ),
-            )?;
-            append(&backing, &piece)?;
-        }
-        append(&root, &backing)?;
-        let text = element(&self.document, "span", "hud-belt-binding-glyphs")?;
-        paint_text_layout(&self.document, &text, &layout.text)?;
-        append(&root, &text)?;
-        append(button, &root)
     }
 }
