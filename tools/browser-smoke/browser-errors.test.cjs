@@ -1,6 +1,6 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {residentSuspension}=require('./browser-errors.cjs');
+const {residentSuspension,documentRetirement}=require('./browser-errors.cjs');
 
 function evidence() {
   const url='http://127.0.0.1:4181/assets/stock/audio/music/death.mp3';
@@ -60,4 +60,28 @@ for(const [name,change] of [
 ])test(`${name} remains fatal`,()=>{
   const fixture=evidence();change(fixture);
   assert.equal(residentSuspension(fixture.failure,fixture.captured,fixture.settled),null);
+});
+
+test('an exact pending request retired by a proved replacement keeps its old channel evidence',()=>{
+  const {failure,captured}=evidence();
+  const retirement={pendingRequest:true,completed:true,before:captured,
+    beforeTargetId:123,afterTargetId:124,afterUrl:'http://127.0.0.1:4181/editor/'};
+  assert.equal(documentRetirement(failure,retirement).reason,
+    'ready resident channel retired by the observed document replacement');
+});
+
+for(const [name,change] of [
+  ['failed navigation',r=>{r.completed=false}],
+  ['same-document navigation',r=>{r.afterTargetId=r.beforeTargetId}],
+  ['already-failed request',r=>{r.pendingRequest=false}],
+  ['wrong resource owner',r=>{r.before.channels[0].url+='?other'}],
+  ['media error',r=>{r.before.channels[0].error=2}],
+  ['media abort',r=>{r.before.channels[0].events.push({type:'abort',trusted:true})}],
+  ['channel reload',r=>{r.before.channels[0].loads=2}],
+])test(`document replacement does not excuse ${name}`,()=>{
+  const {failure,captured}=evidence();
+  const retirement={pendingRequest:true,completed:true,before:captured,
+    beforeTargetId:123,afterTargetId:124,afterUrl:'http://127.0.0.1:4181/'};
+  change(retirement);
+  assert.equal(documentRetirement(failure,retirement),null);
 });

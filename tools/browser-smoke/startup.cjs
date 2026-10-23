@@ -118,8 +118,10 @@ async function finishedLoader(page) {
   return {removed:true,drawsBefore:before,drawsAfter:after};
 }
 
-async function collect(page, name, navigate) {
-  const observed=ui.watchErrors(page);
+async function collect(page, name, navigate, observed=ui.watchErrors(page)) {
+  const errorStart=observed.errors.length;
+  const warningStart=observed.warnings.length;
+  await observed.ready;
   const samples=[];
   await navigate();
   const deadline=Date.now()+240000;
@@ -147,8 +149,10 @@ async function collect(page, name, navigate) {
       await ui.assertGpuOnly(page);
       await page.screenshot({path:path.join(output,`${name}-title.png`)});
       await ui.settleErrors(page);
-      assert.deepEqual(observed.errors,[],'ordinary startup has no runtime or required asset errors');
-      return {samples,lastLoading,ready:snapshot,handoff,errors:observed.errors,warnings:observed.warnings,
+      const errors=observed.errors.slice(errorStart);
+      const warnings=observed.warnings.slice(warningStart);
+      assert.deepEqual(errors,[],'ordinary startup has no runtime or required asset errors');
+      return {samples,lastLoading,ready:snapshot,handoff,errors,warnings,
         submissions:await ui.gpuDraws(page)};
     }
     await page.waitForTimeout(50);
@@ -248,9 +252,12 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
         return shared?.owners===1&&shared.loaders===0
           &&document.querySelectorAll('[data-gpu-announcer]').length===1;
       });
+      const beforeTab=await ui.readUi(page);
+      const previousControl=beforeTab.widgets.find(widget=>widget.focused);
       const afterIndex=(await ui.announcements(page)).length;
       await page.keyboard.press('Tab');
-      const focused=await ui.waitForUi(page,snapshot=>snapshot.widgets.some(widget=>widget.focused),
+      const focused=await ui.waitForUi(page,snapshot=>snapshot.frame>beforeTab.frame
+        &&snapshot.widgets.some(widget=>widget.focused&&widget.id!==previousControl?.id),
         'the actual first focused GPU control after loading');
       const control=focused.widgets.find(widget=>widget.focused);
       await ui.announced(page,control.label,{afterIndex});
@@ -258,6 +265,8 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
         events:window.__solomonAnnouncements,
         owners:window.__solomonAnnouncementOwnership,
       }));
+      announcementHandoff.previousControl=previousControl;
+      announcementHandoff.control=control;
       assert.ok(announcementHandoff.owners.every(row=>row.count<=1));
       assert.ok(announcementHandoff.events.slice(afterIndex).some(event=>!event.loaderActive
         &&event.text.toLowerCase().includes(control.label.toLowerCase())),
@@ -267,12 +276,16 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
     await page.screenshot({path:path.join(output,`${name}-title.png`)});
     await ui.settleErrors(page);
     assert.deepEqual(observed.errors,[],'delayed successful work has no runtime/asset errors');
-    return {requestUrl,expectedCompleted,before,waiting,still,first,second,resizes,handoff,heldAnnouncements,announcementHandoff,
-      ready:await ui.readUi(page),...observed};
+    return {...observed,requestUrl,expectedCompleted,before,waiting,still,first,second,resizes,handoff,heldAnnouncements,announcementHandoff,
+      ready:await ui.readUi(page)};
   } catch(error) {
     const failure={requestUrl,failure:error.stack,...observed};
     try {failure.snapshot=await ui.readUi(page)}
     catch(observationError) {failure.observationError=observationError.stack}
+    failure.announcements=await page.evaluate(()=>({events:window.__solomonAnnouncements,
+      owners:window.__solomonAnnouncementOwnership,
+      fallback:[...document.querySelectorAll('[data-gpu-announcer]')].map(node=>node.textContent),
+    })).catch(error=>({observationError:error.message}));
     try {await page.screenshot({path:path.join(output,`${name}-failure.png`)})}
     catch(screenshotError) {failure.screenshotError=screenshotError.stack}
     fs.writeFileSync(path.join(output,`${name}-failure.json`),JSON.stringify(failure,null,2));
@@ -333,10 +346,12 @@ async function main() {
     const page=await context.newPage();
     await ui.observeGpu(page);
     await ui.observeAnnouncements(page);
-    if(selected('cold'))receipt.cold=await collect(page,'cold',()=>page.goto(url,{waitUntil:'domcontentloaded'}));
+    const observed=ui.watchErrors(page);
+    if(selected('cold'))receipt.cold=await collect(page,'cold',()=>page.goto(url,{waitUntil:'domcontentloaded'}),observed);
     if(selected('warm')) {
-      if(!selected('cold'))receipt.warmPrimer=await collect(page,'warm-primer',()=>page.goto(url,{waitUntil:'domcontentloaded'}));
-      receipt.warm=await collect(page,'warm',()=>page.reload({waitUntil:'domcontentloaded'}));
+      if(!selected('cold'))receipt.warmPrimer=await collect(page,'warm-primer',()=>page.goto(url,{waitUntil:'domcontentloaded'}),observed);
+      receipt.warm=await collect(page,'warm',()=>ui.observeDocumentReplacement(page,
+        ()=>page.reload({waitUntil:'domcontentloaded'})),observed);
     }
     receipt.announcements=await page.evaluate(()=>({platform:window.__solomonAnnouncementPlatform,
       ownership:window.__solomonAnnouncementOwnership,events:window.__solomonAnnouncements}));
