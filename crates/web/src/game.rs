@@ -2291,7 +2291,11 @@ impl Game {
                 self.mod_skill_quickbar.paint(frame)?;
                 self.shared_gameplay.paint(frame)?;
                 self.panels.paint(frame)?;
-                self.mod_skills.paint(frame)?;
+                self.mod_skills.paint(
+                    frame,
+                    self.panels.layer_id(),
+                    self.skill_picker.layer_id(),
+                )?;
                 self.mod_panels.paint(frame)?;
                 self.tutorial_ui.paint(frame)?;
                 self.college_overlay.paint(frame)?;

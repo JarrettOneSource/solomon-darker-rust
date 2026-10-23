@@ -46,6 +46,9 @@ async fn ready_music(media: &HtmlAudioElement, path: &str) -> Result<(), String>
             .map_err(|error| audio_error("music readiness cleanup", error))?;
         return Err(audio_error("music error listener", error));
     }
+    // Install readiness handlers before starting the resource selection. Setting src
+    // earlier and loading again in this async task aborts an already-started request.
+    media.set_src(&format!("assets/stock/audio/{path}"));
     media.load();
     let result = JsFuture::from(ready).await;
     media
@@ -147,8 +150,7 @@ impl GameAudio {
                 continue;
             }
             let media =
-                HtmlAudioElement::new_with_src(&format!("assets/stock/audio/{}", definition.path))
-                    .map_err(|error| audio_error("music channel", error))?;
+                HtmlAudioElement::new().map_err(|error| audio_error("music channel", error))?;
             media.set_preload("auto");
             media.set_loop(true);
             media.set_volume(0.0);
