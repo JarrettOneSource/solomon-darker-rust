@@ -282,7 +282,9 @@ impl<'a> NativeTextEdit<'a> {
                 ui.input_mut(|input| input.smooth_scroll_delta = Vec2::ZERO);
             }
         }
-        let origin = content.min - state.offset;
+        let vertical =
+            if self.multiline { 0.0 } else { (content.height() - geometry.size.y).max(0.0) / 2.0 };
+        let origin = content.min + vec2(0.0, vertical) - state.offset;
         let painter = ui.painter().with_clip_rect(content.intersect(ui.clip_rect()));
         if let Some(background) = self.background {
             ui.painter().rect_filled(response.rect, 0.0, background);
@@ -308,7 +310,7 @@ impl<'a> NativeTextEdit<'a> {
                 }
             }
             if let Some(run) = run {
-                run.paint(frame, &painter, origin, if response.enabled() { 1.0 } else { 0.5 })?;
+                run.paint(frame, &painter, origin, 1.0)?;
                 if self.text.is_empty() && !self.hint.is_empty() {
                     let EditorFont::Browser(font) = &font else { unreachable!() };
                     font_run(
