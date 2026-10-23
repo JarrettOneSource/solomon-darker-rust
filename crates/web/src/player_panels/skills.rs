@@ -267,10 +267,11 @@ impl PlayerPanels {
                     "panel:tooltip",
                     &lines.iter().map(|line| line.text.as_str()).collect::<Vec<_>>().join("\n"),
                     "tooltip",
-                    egui::Rect::from_min_size(
-                        origin,
-                        egui::vec2(layout.rect.width as f32, layout.rect.height as f32) * scale,
-                    ),
+                    c.frame.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default()
+                        * egui::Rect::from_min_size(
+                            origin,
+                            egui::vec2(layout.rect.width as f32, layout.rect.height as f32) * scale,
+                        ),
                     false,
                 );
             }
@@ -356,10 +357,11 @@ impl PlayerPanels {
             "panel:tooltip",
             &lines.iter().map(|line| line.text.as_str()).collect::<Vec<_>>().join("\n"),
             "tooltip",
-            egui::Rect::from_min_size(
-                origin,
-                egui::vec2(layout.rect.width as f32, layout.rect.height as f32) * scale,
-            ),
+            c.frame.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default()
+                * egui::Rect::from_min_size(
+                    origin,
+                    egui::vec2(layout.rect.width as f32, layout.rect.height as f32) * scale,
+                ),
             false,
         );
         Ok(())

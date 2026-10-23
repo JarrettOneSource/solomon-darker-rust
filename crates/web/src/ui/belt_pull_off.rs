@@ -4,8 +4,21 @@ use crate::gpu_ui::{StockAtlas, UiFrame};
 use solomon_sim::hud::belt_pull_off::{
     NativeBeltPullOffBurstMember, NativeBeltPullOffStep, native_belt_pull_off_burst_members,
 };
+use std::cell::Cell;
+thread_local! {
+    static NEXT_SEQUENCE: Cell<u64> = const { Cell::new(0) };
+}
+pub(crate) struct BeltPullOffDraw<'a> {
+    pub center: egui::Pos2,
+    pub now: f64,
+    pub scale: f32,
+    pub rotation: f32,
+    pub id: &'a str,
+}
 pub(crate) struct BeltPullOffBurst {
+    sequence: u64,
     started_at: f64,
+    reduced_motion: bool,
     members: Vec<NativeBeltPullOffBurstMember>,
 }
 impl BeltPullOffBurst {
@@ -16,31 +29,44 @@ impl BeltPullOffBurst {
             NativeBeltPullOffStep::Degrees120
         };
         Self {
+            sequence: NEXT_SEQUENCE.with(|next| {
+                let sequence = next.get() + 1;
+                next.set(sequence);
+                sequence
+            }),
             started_at: now,
+            reduced_motion: web_sys::window()
+                .and_then(|window| {
+                    window.match_media("(prefers-reduced-motion: reduce)").ok().flatten()
+                })
+                .is_some_and(|query| query.matches()),
             members: native_belt_pull_off_burst_members(step, &mut js_sys::Math::random),
         }
     }
     pub fn sequence(&self) -> u64 {
-        self.started_at.to_bits()
+        self.sequence
     }
     pub fn finished(&self, now: f64) -> bool {
-        self.members.iter().all(|member| now - self.started_at >= member.duration_ms)
+        self.members.iter().all(|member| now - self.started_at >= self.duration(member))
+    }
+    fn duration(&self, member: &NativeBeltPullOffBurstMember) -> f64 {
+        if self.reduced_motion { 1.0 } else { member.duration_ms }
     }
     pub fn paint(
         &self,
         frame: &UiFrame<'_>,
         painter: &egui::Painter,
         atlas: &StockAtlas,
-        center: egui::Pos2,
-        now: f64,
-        scale: f32,
-        id: &str,
+        draw: BeltPullOffDraw<'_>,
     ) -> Result<(), String> {
+        let BeltPullOffDraw { center, now, scale, rotation: control_rotation, id } = draw;
+        let frame = frame.with_rotation(center, control_rotation);
+        let control_rotation = egui::emath::Rot2::from_angle(control_rotation);
         let mut bounds = egui::Rect::NOTHING;
         let mut smoke = 0;
         let mut spokes = 0;
         for member in &self.members {
-            let progress = ((now - self.started_at) / member.duration_ms).clamp(0.0, 1.0);
+            let progress = ((now - self.started_at) / self.duration(member)).clamp(0.0, 1.0);
             if progress >= 1.0 {
                 continue;
             }
@@ -67,7 +93,8 @@ impl BeltPullOffBurst {
                 destination.right_bottom(),
                 destination.left_bottom(),
             ] {
-                bounds.extend_with(point + rotation * (corner - point));
+                let painted = point + rotation * (corner - point);
+                bounds.extend_with(center + control_rotation * (painted - center));
             }
             if member.record == 65 {
                 smoke += 1;

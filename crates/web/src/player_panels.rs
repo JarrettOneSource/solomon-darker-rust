@@ -867,7 +867,7 @@ impl PlayerPanels {
             PanelEvent::Wheel(delta) => self.scroll_selector(delta),
             PanelEvent::Focus(target) => {
                 self.hovered_skill = if let Target::Skill(id) = target { Some(id) } else { None };
-                if self.hovered_npc_selector.take().is_some() {}
+                self.hovered_npc_selector = None;
                 self.hovered_service = Some(target).filter(|target| {
                     matches!(
                         target,
