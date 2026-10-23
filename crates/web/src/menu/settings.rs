@@ -13,7 +13,7 @@ use fullscreen::SettingsFullscreen;
 use solomon_protocol::hosted::{EnhancedEffectsAuthority, EnhancedEffectsScope};
 use solomon_sim::hud::quickbar::NativeSkillQuickbarCooldownPresentation;
 use solomon_sim::mobile_ui::{MobileUiLayout, MobileUiLayoutState};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
+use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
 use solomon_sim::settings::{GameControlAction, GameSettings, game_binding_label};
 use std::rc::Rc;
 use web_sys::Document;
@@ -1041,23 +1041,36 @@ DevTools: solomonDark.lua.help()",
             egui::pos2(rect.right() - 210.0, rect.center().y - 15.0),
             Vec2::new(200.0, 30.0),
         );
-        self.control_panel.paint_raw(&paint, ui.painter(), 5, plate, Color32::WHITE)?;
         let listening = self.pending_binding == Some(action);
+        let alpha = binding_alpha(ui, response.id, listening);
+        self.control_panel.paint_raw(
+            &paint,
+            ui.painter(),
+            5,
+            plate,
+            widgets::alpha(0xffffff, f64::from(alpha)),
+        )?;
         frame.record_value(&id, self.settings.controls.code(action), Some(listening));
         let value = if listening {
             "PRESS A KEY".to_owned()
         } else {
             game_binding_label(self.settings.controls.code(action))
         };
-        widgets::native(
+        let position = plate.center() + Vec2::new(0.0, 4.0);
+        crate::gpu_ui::native_text(
             &paint,
-            ui,
-            &value,
-            NativeUiFontName::ControlPanel,
-            plate.center() + Vec2::new(0.0, 4.0),
-            1.0,
-            if listening { 0xf7e1a0 } else { 0xd9bd72 },
-            NativeUiTextAlign::Center,
+            ui.painter(),
+            &NativeUiTextSpec {
+                align: NativeUiTextAlign::Center,
+                alpha: f64::from(alpha),
+                tint: if listening { 0xf7e1a0 } else { 0xd9bd72 },
+                ..NativeUiTextSpec::new(
+                    NativeUiFontName::ControlPanel,
+                    &value,
+                    f64::from(position.x),
+                    f64::from(position.y),
+                )
+            },
         );
         if highlight {
             row_outline(&paint, ui, rect);
@@ -1149,6 +1162,19 @@ fn row_outline(frame: &UiFrame<'_>, ui: &Ui, rect: Rect) {
         egui::Stroke::new(1.0, frame.filtered_color(widgets::alpha(0xdbc594, 0.8))),
         egui::StrokeKind::Inside,
     );
+}
+
+fn binding_alpha(ui: &Ui, id: egui::Id, listening: bool) -> f32 {
+    let animation = id.with("listening-opacity");
+    if !listening {
+        ui.data_mut(|data| data.remove::<f64>(animation));
+        return 1.0;
+    }
+    let now = ui.input(|input| input.time);
+    let started = ui.data_mut(|data| *data.get_temp_mut_or_insert_with(animation, || now));
+    // Source's .8s steps(2,end) cycle has 0/50/100% keyframes at 1/.45/1.
+    let step = ((now - started).rem_euclid(0.8) / 0.2).floor() as usize;
+    [1.0, 0.725, 0.45, 0.725][step.min(3)]
 }
 
 fn toggle_art(
