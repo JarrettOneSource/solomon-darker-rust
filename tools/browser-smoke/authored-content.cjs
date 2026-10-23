@@ -365,10 +365,12 @@ async function runLua(page, code) {
       const subscribe=`cloud-subscription:subscribe:${acceptedPackage.slug}`;
       const enable=`cloud-subscription:enable:${acceptedPackage.slug}`;
       const disable=`cloud-subscription:disable:${acceptedPackage.slug}`;
-      await ui.waitForUi(page,snapshot=>[subscribe,enable,disable].some(id=>ui.findWidget(snapshot,id)),'accepted Cloud subscription row');
+      await ui.widget(page,`cloud-open-mod:${acceptedPackage.slug}`);
       let activatedHere=false;
       if(ui.findWidget(await ui.readUi(page),subscribe)){await ui.click(page,subscribe);activatedHere=true;}
-      else if(ui.findWidget(await ui.readUi(page),enable)){await ui.click(page,enable);activatedHere=true;}
+      await ui.click(page,'cloud-tab:subscribed');
+      await ui.waitForUi(page,snapshot=>[enable,disable].some(id=>ui.findWidget(snapshot,id)),'accepted Subscribed Mods row');
+      if(ui.findWidget(await ui.readUi(page),enable)){await ui.click(page,enable);activatedHere=true;}
       await ui.widget(page,disable);
       await page.screenshot({path: path.join(output, 'authored-enabled.png')});
       check(activatedHere ? 'actual account Cloud subscription enables the unchanged uploaded Source package'

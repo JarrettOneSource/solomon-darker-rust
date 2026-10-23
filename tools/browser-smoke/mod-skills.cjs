@@ -241,9 +241,13 @@ async function geometry(page, id) {
     await ui.click(page, 'settings-back'); await ui.click(page, 'settings-back');
     await ui.click(page, 'explore');
     const subscribeId = `cloud-subscription:subscribe:${acceptedPackage.slug}`;
-    await ui.waitForUi(page, snapshot => ui.findWidget(snapshot, subscribeId)
-      || ui.findWidget(snapshot, `cloud-subscription:disable:${acceptedPackage.slug}`), 'available subscription');
+    await ui.widget(page, `cloud-open-mod:${acceptedPackage.slug}`);
     if (ui.findWidget(await ui.readUi(page), subscribeId)) await ui.click(page, subscribeId);
+    await ui.click(page, 'cloud-tab:subscribed');
+    const enableId = `cloud-subscription:enable:${acceptedPackage.slug}`;
+    await ui.waitForUi(page, snapshot => ui.findWidget(snapshot, enableId)
+      || ui.findWidget(snapshot, `cloud-subscription:disable:${acceptedPackage.slug}`), 'actual subscribed row');
+    if (ui.findWidget(await ui.readUi(page), enableId)) await ui.click(page, enableId);
     await ui.widget(page, `cloud-subscription:disable:${acceptedPackage.slug}`);
     await page.screenshot({path: path.join(output, 'gravity-enabled.png')});
     check('the real QA account subscribes to the unchanged Source Gravity Lesson package');
