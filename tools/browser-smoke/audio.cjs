@@ -22,7 +22,17 @@ const page=await browser.newPage({viewport:{width:1600,height:900}});
 ui.watchErrors(page,{errors});
 await page.addInitScript(({files})=>{
   const contexts=[],events=[],gains=[],metadata=new WeakMap(),connections=new WeakMap();
-  window.audioReceipt={contexts,events,gains};
+  const media=[];
+  window.audioReceipt={contexts,events,gains,media};
+  for(const name of ['play','pause']) {
+    const original=HTMLMediaElement.prototype[name];
+    HTMLMediaElement.prototype[name]=function(...args){
+      const result=Reflect.apply(original,this,args);
+      media.push({action:name,cue:this.dataset.audioCue,time:performance.now(),
+        volume:this.volume,currentTime:this.currentTime});
+      return result;
+    };
+  }
   const Context=window.AudioContext;
   window.AudioContext=new Proxy(Context,{construct(target,args){const context=Reflect.construct(target,args);contexts.push(context);return context}});
   const decode=Context.prototype.decodeAudioData;
@@ -59,6 +69,13 @@ const music=()=>page.locator('audio').evaluateAll(nodes=>nodes.map(node=>({cue:n
 let tracks=await music();
 assert.ok(tracks.find(track=>track.cue==='solomondarktheme').time>0);
 assert.equal(tracks.filter(track=>!track.paused).length,1);
+const primedBeforeKeyboard=await page.evaluate(()=>audioReceipt.media);
+for(const track of tracks.filter(track=>track.cue!=='solomondarktheme')) {
+  const starts=primedBeforeKeyboard.filter(event=>event.cue===track.cue&&event.action==='play');
+  assert.equal(starts.length,1,`${track.cue} is primed once in the actual pointer gesture`);
+  assert.equal(starts[0].volume,0,'unused music primes silently');
+  assert.ok(track.paused&&track.time===0,'a completed unused prime resets and pauses');
+}
 await ui.click(page,'new-game');
 await reachCollegeLoadout(page);
 await page.waitForFunction(()=>audioReceipt.events.some(event=>event.action==='start'&&event.cues?.includes('choose-element')),null,{timeout:10000});
@@ -113,7 +130,7 @@ assert.ok(Math.abs((await music()).find(track=>track.cue==='academy').volume-.41
 await ui.assertGpuOnly(page);
 await ui.settleErrors(page);
 assert.deepEqual(errors,[]);
-const receipt={passed:true,initialState,errors,hubEntryBeforeReady,hubMusicBeforeSettlement,tracks:await music(),events:await page.evaluate(()=>audioReceipt.events),loadedAudioResources:await page.evaluate(()=>performance.getEntriesByType('resource').filter(entry=>entry.name.includes('/audio/')).length)};
+const receipt={passed:true,initialState,errors,primedBeforeKeyboard,hubEntryBeforeReady,hubMusicBeforeSettlement,tracks:await music(),events:await page.evaluate(()=>audioReceipt.events),loadedAudioResources:await page.evaluate(()=>performance.getEntriesByType('resource').filter(entry=>entry.name.includes('/audio/')).length)};
 fs.writeFileSync(path.join(output,'audio-browser-receipt.json'),JSON.stringify(receipt,null,2));
 await page.screenshot({path:path.join(output,'audio-settings-rust.png')});
 console.log(JSON.stringify({passed:true,errors,events:receipt.events.length,loadedAudioResources:receipt.loadedAudioResources}));
