@@ -1,0 +1,125 @@
+name: Qualify desktop lifecycle packages
+
+on:
+  push:
+    branches: [diagnostic/desktop-lifecycle-20261023]
+    paths: [.github/workflows/desktop-lifecycle.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SDR_PRODUCT_REVISION: 1a4f7063cd3f4b9cb23651bdbe7cfffa7620cf76
+  SDR_INTEL_ASSET_ID: '667524336'
+  SDR_INTEL_SHA256: ee7f4b7dfffe15a9b961e0dfc7a27003466d97bea558f97d9c73df25e9dc73c6
+
+jobs:
+  desktop:
+    name: Desktop lifecycle (${{ matrix.platform }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: windows-latest, platform: win32, arch: x64 }
+          - { runner: macos-15, platform: darwin, arch: arm64 }
+          - { runner: macos-15-intel, platform: darwin, arch: x64 }
+          - { runner: ubuntu-latest, platform: linux, arch: x64 }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SDR_PRODUCT_REVISION }}
+          fetch-depth: 0
+      - name: Obtain the exact retained Intel native input
+        if: matrix.platform == 'darwin' && matrix.arch == 'x64'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p native-input
+          gh api "repos/$GITHUB_REPOSITORY/releases/assets/$SDR_INTEL_ASSET_ID" \
+            -H 'Accept: application/octet-stream' > native-input/solomon-darker
+          printf '%s  %s\n' "$SDR_INTEL_SHA256" native-input/solomon-darker | shasum -a 256 --check
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm install --global npm@10.9.2
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 39864248104
+          name: desktop-darwin-arm64
+          path: arm-input
+      - name: Obtain the retained Windows native input
+        if: matrix.platform == 'win32'
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 39864248104
+          name: unqualified-desktop-win32-x64-39864248104-1
+          path: native-input
+      - name: Obtain the retained Linux native input
+        if: matrix.platform == 'linux'
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 39864248104
+          name: hosted-game-linux
+          path: native-input
+      - name: Obtain only the component verification tool
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: qualification-tools
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            tools/prepare-lifecycle-inputs.py
+      - name: Verify source equality and retained component bytes
+        run: python qualification-tools/tools/prepare-lifecycle-inputs.py --target ${{ matrix.platform }}-${{ matrix.arch }} --intel-sha256 "$SDR_INTEL_SHA256"
+      - run: python scripts/verify-client-assets.py
+      - run: npm run test:desktop
+      - name: Assemble the new package from unchanged verified game components
+        run: |
+          native=retained-inputs/solomon-darker
+          if [[ "$RUNNER_OS" == "Windows" ]]; then native="$native.exe"; fi
+          npm run package:desktop -- --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} \
+            --release-repository "$GITHUB_REPOSITORY" --native-host "$native" --client-root retained-inputs/client
+      - name: Archive and inspect the final package
+        run: node tools/archive-desktop.mjs
+      - name: Verify the actual Windows native runtime imports
+        if: matrix.platform == 'win32'
+        run: python tools/inspect-windows-crt.py 'dist-desktop/Solomon Darker-win32-x64/resources/app/authority/solomon-darker.exe' reports/desktop-smoke/native-imports.json static
+      - name: Verify packaged offline save, peers and shutdown
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run -a npm run smoke:desktop
+          else
+            npm run smoke:desktop
+          fi
+      - name: Retain the actual candidate bytes even when acceptance fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifecycle-candidate-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            dist-desktop/*.zip
+            dist-desktop/*.sha256
+            dist-desktop/desktop-release.json
+          if-no-files-found: ignore
+      - name: Retain acceptance and component provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifecycle-evidence-${{ matrix.platform }}-${{ matrix.arch }}
+          path: reports/desktop-smoke
+          if-no-files-found: ignore
