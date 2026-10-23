@@ -206,9 +206,11 @@ impl CreateView {
             ] {
                 let reveal = menu::create_element_reveal_motion_at(element, elapsed);
                 let center = stage.at(reveal.position.x, reveal.position.y);
+                let mut painter = ui.painter().clone();
+                painter.multiply_opacity(reveal.opacity as f32);
                 paint_vfx(
                     frame,
-                    ui.painter(),
+                    &painter,
                     &self.bad_guys,
                     center,
                     scale,
