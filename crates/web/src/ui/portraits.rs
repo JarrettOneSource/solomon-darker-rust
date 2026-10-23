@@ -90,26 +90,6 @@ impl StockPortraits {
         Ok(socket)
     }
 
-    /// AllyHud omits the weapon and orb.
-    pub fn paint_body(
-        &self,
-        gpu: &UiFrame<'_>,
-        painter: &Painter,
-        element: WizardElement,
-        heading: usize,
-        position: Pos2,
-        scale: f32,
-    ) -> Result<(), String> {
-        for layer in [
-            format!("robe-dynamic-{}", element.as_str()),
-            format!("robe-fixed-{}", element.as_str()),
-            format!("head-{}", element.as_str()),
-        ] {
-            self.paint_layer(gpu, painter, &layer, heading % 24, position, scale)?;
-        }
-        Ok(())
-    }
-
     #[allow(clippy::too_many_arguments)] // The body shares an explicit circular clip across every stock layer.
     pub fn paint_body_clipped(
         &self,

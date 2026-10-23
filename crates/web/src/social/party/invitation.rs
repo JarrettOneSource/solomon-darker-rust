@@ -46,11 +46,7 @@ impl SocialUi {
         let opening = self.shown_party_invitation.as_deref() != Some(&id);
         let (origin, scale) = super::super::gpu::stage(self.size);
         let bounds = super::super::gpu::rect(NATIVE_PARTY_INVITATION_FRAME, origin, scale);
-        ui.interact(
-            bounds,
-            egui::Id::unique("social/invitation-panel-block"),
-            egui::Sense::click(),
-        );
+        ui.interact(bounds, egui::Id::unique("social/invitation-panel-block"), egui::Sense::CLICK);
         crate::gpu_ui::message_frame_scaled(frame, ui.painter(), &self.ui, bounds, scale)?;
         frame.record_rect("social/party-invitation", &body, "dialog", bounds, true);
         for (text, font, baseline, line_height) in [
@@ -84,7 +80,6 @@ impl SocialUi {
             let response = super::super::gpu::stock_button(
                 frame,
                 ui,
-                &self.ui,
                 &action,
                 label,
                 super::super::gpu::rect(bounds, origin, scale),

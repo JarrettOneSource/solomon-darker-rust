@@ -80,6 +80,8 @@ impl SocialUi {
                 let origin = ui.min_rect().min;
                 let panel = Rect::from_min_size(origin, vec2(236.0, height as f32));
                 ui.set_min_size(panel.size());
+                let body = ui.interact(panel, Id::unique("social/party-chip-body"), Sense::CLICK);
+                frame.record("social/party-chip-body", "Party panel", "region", &body);
                 self.ui.paint_tiles(frame, ui.painter(), 49, panel, 1.0, Color32::WHITE)?;
                 self.ui.paint_native_frame_scaled(
                     frame,

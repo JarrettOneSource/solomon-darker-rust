@@ -155,7 +155,7 @@ impl SharedGameplayUi {
                 .show(&ctx, |ui| {
                     ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
                     ui.set_min_size(screen.size());
-                    ui.interact(screen, Id::unique("shared/pause-hold"), egui::Sense::click());
+                    ui.interact(screen, Id::unique("shared/pause-hold"), egui::Sense::CLICK);
                     let alpha = pause.reveal as f32;
                     let painter = ui.painter();
                     painter.rect_filled(

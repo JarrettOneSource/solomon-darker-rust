@@ -88,7 +88,7 @@ impl DeploymentUpdate {
             .show(&ctx, |ui| {
                 ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
                 ui.set_min_size(screen.size());
-                ui.interact(screen, Id::unique("deployment/block"), egui::Sense::click());
+                ui.interact(screen, Id::unique("deployment/block"), egui::Sense::CLICK);
                 ui.painter().rect_filled(
                     screen,
                     0.0,

@@ -103,6 +103,7 @@ impl SocialUi {
                 }
             ))
         };
+        let portrait_definition = self.skills.record(14)?.clone();
         let ctx = frame.ctx.clone();
         let screen = ctx.content_rect();
         let coarse = self.coarse;
@@ -158,11 +159,24 @@ impl SocialUi {
                                     ) {
                                         portrait_error = Some(error);
                                     }
+                                    let definition = &portrait_definition;
+                                    let [x, y] = definition.registered_origin();
+                                    let scale = egui::vec2(
+                                        portrait.width() / definition.logical_width as f32,
+                                        portrait.height() / definition.logical_height as f32,
+                                    );
+                                    let crop = egui::Rect::from_min_size(
+                                        portrait.min + egui::vec2(x, y) * scale,
+                                        egui::vec2(
+                                            definition.width as f32,
+                                            definition.height as f32,
+                                        ) * scale,
+                                    );
                                     if let Err(error) = self.skills.paint_raw(
                                         frame,
                                         ui.painter(),
                                         14,
-                                        portrait,
+                                        crop,
                                         egui::Color32::WHITE,
                                     ) {
                                         portrait_error = Some(error);
