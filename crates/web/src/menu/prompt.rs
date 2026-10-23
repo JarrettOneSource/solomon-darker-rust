@@ -1,56 +1,44 @@
-//! The two title confirmations share the pinned `title-menu-prompt.ts` stock message.
-
-use web_sys::{Document, HtmlElement};
-
-use crate::ui::{StockAtlas, append, element, message_frame, native_button, style};
-
+//! The pinned title confirmations retain the stock message art and modal choices.
+use super::widgets::{self, Stage};
+use crate::gpu_ui::{StockAtlas, UiFrame, message_frame};
+use egui::{Align2, Color32, Rect, Ui, Vec2};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum TitlePromptKind {
     Tutorial,
     KillWizard,
 }
-
 pub(super) struct TitlePrompt {
-    pub root: HtmlElement,
-    stage: HtmlElement,
-    heading: HtmlElement,
-    body: HtmlElement,
     pub kind: Option<TitlePromptKind>,
+    atlas: StockAtlas,
 }
-
 impl TitlePrompt {
-    pub async fn new(document: &Document) -> Result<Self, String> {
-        let atlas = StockAtlas::load("UI").await?;
-        let root = element(document, "section", "title-prompt")?;
-        root.set_hidden(true);
-        root.set_attribute("role", "dialog").map_err(|_| "title prompt role")?;
-        root.set_attribute("aria-modal", "true").map_err(|_| "title prompt modal")?;
-        root.set_attribute("aria-describedby", "title-prompt-body")
-            .map_err(|_| "title prompt description")?;
-        let stage = element(document, "div", "title-prompt-stage")?;
-        append(&stage, &message_frame(document, &atlas, 500.0, 362.0)?)?;
-        let heading = element(document, "h2", "title-prompt-heading")?;
-        let body = element(document, "p", "title-prompt-body")?;
-        body.set_id("title-prompt-body");
-        append(&stage, &heading)?;
-        append(&stage, &body)?;
-        for (label, action, left) in
-            [("YES", "prompt-primary", 45.0), ("NO", "prompt-secondary", 261.0)]
-        {
-            let button = native_button(document, label, action)?;
-            style(&button, &format!("position:absolute;left:{left}px;top:216px;width:200px"))?;
-            if action == "prompt-primary" {
-                button
-                    .set_attribute("data-game-default-focus", "true")
-                    .map_err(|_| "title prompt focus")?;
-            }
-            append(&stage, &button)?;
-        }
-        append(&root, &stage)?;
-        Ok(Self { root, stage, heading, body, kind: None })
+    pub async fn new() -> Result<Self, String> {
+        Ok(Self { kind: None, atlas: StockAtlas::load("UI").await? })
     }
-
     pub fn show(&mut self, kind: TitlePromptKind) -> Result<(), String> {
+        self.kind = Some(kind);
+        Ok(())
+    }
+    pub fn hide(&mut self) {
+        self.kind = None;
+    }
+    pub fn paint(
+        &self,
+        frame: &mut UiFrame<'_>,
+        ui: &Ui,
+        view: Rect,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let Some(kind) = self.kind else { return Ok(()) };
+        ui.painter().rect_filled(view, 0.0, Color32::from_black_alpha(187));
+        let native = (view.width() / 1600.0).min(view.height() / 900.0);
+        let scale = if native < 44.0 / 69.0 {
+            ((view.width() - 24.0) / 500.0).min((view.height() - 24.0) / 500.0)
+        } else {
+            native
+        };
+        let stage = Stage { origin: view.center() - Vec2::new(250.0, 182.0) * scale, scale };
+        message_frame(frame, ui.painter(), &self.atlas, stage.rect(0.0, 0.0, 500.0, 362.0))?;
         let (title, body) = match kind {
             TitlePromptKind::Tutorial => (
                 "PLAY THE TUTORIAL?",
@@ -61,33 +49,41 @@ impl TitlePrompt {
                 "Starting a new game will kill off your\ncurrent game and character (Lucritius\nwill scavenge his equipment)!\nAre you sure you want to do this?",
             ),
         };
-        self.heading.set_text_content(Some(title));
-        self.body.set_text_content(Some(body));
-        self.root.set_attribute("aria-label", title).map_err(|_| "title prompt name")?;
-        self.root.set_hidden(false);
-        self.kind = Some(kind);
+        widgets::label(
+            ui,
+            title,
+            stage.at(76.0, 71.0),
+            Align2::LEFT_TOP,
+            "Palatino",
+            24.0 * scale,
+            Color32::WHITE,
+        );
+        widgets::label(
+            ui,
+            body,
+            stage.at(76.0, 113.5),
+            Align2::LEFT_TOP,
+            "Palatino",
+            17.0 * scale,
+            Color32::WHITE,
+        );
+        for (text, action, x) in
+            [("YES", "prompt-primary", 45.0), ("NO", "prompt-secondary", 261.0)]
+        {
+            if widgets::stock_button(
+                frame,
+                ui,
+                action,
+                text,
+                stage.rect(x, 216.0, 200.0, 69.0),
+                scale,
+                true,
+            )
+            .clicked()
+            {
+                actions.push(action.to_owned());
+            }
+        }
         Ok(())
-    }
-
-    pub fn hide(&mut self) {
-        self.root.set_hidden(true);
-        self.kind = None;
-    }
-
-    pub fn resize(&self, width: i32, height: i32) -> Result<(), String> {
-        let native = (f64::from(width) / 1600.0).min(f64::from(height) / 900.0);
-        let scale = if native < 44.0 / 69.0 {
-            ((f64::from(width) - 24.0) / 500.0).min((f64::from(height) - 24.0) / 500.0)
-        } else {
-            native
-        };
-        style(
-            &self.stage,
-            &format!(
-                "left:{}px;top:{}px;transform:scale({scale})",
-                f64::from(width) / 2.0 - 250.0 * scale,
-                f64::from(height) / 2.0 - 182.0 * scale,
-            ),
-        )
     }
 }

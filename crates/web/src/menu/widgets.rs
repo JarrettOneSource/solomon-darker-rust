@@ -1,0 +1,297 @@
+//! GPU stock widgets shared by the menu screens. Source geometry comes from
+//! `NativeUiButton`, `NativeUiControlPanel`, and `NativeSettingsPresentation`.
+
+use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
+use egui::{
+    Align2, Color32, FontId, Id, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2,
+};
+use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
+
+pub(super) const GOLD: Color32 = Color32::from_rgb(217, 186, 112);
+pub(super) const PALE: Color32 = Color32::from_rgb(191, 255, 191);
+pub(super) const ERROR: Color32 = Color32::from_rgb(228, 163, 154);
+
+#[derive(Clone, Copy)]
+pub(super) struct Stage {
+    pub origin: Pos2,
+    pub scale: f32,
+}
+impl Stage {
+    pub fn fit(view: Rect) -> Self {
+        let scale = (view.width() / 1600.0).min(view.height() / 900.0);
+        Self { origin: view.center() - Vec2::new(800.0, 450.0) * scale, scale }
+    }
+    pub fn at(self, x: f64, y: f64) -> Pos2 {
+        self.origin + Vec2::new(x as f32, y as f32) * self.scale
+    }
+    pub fn rect(self, x: f64, y: f64, w: f64, h: f64) -> Rect {
+        Rect::from_min_size(self.at(x, y), Vec2::new(w as f32, h as f32) * self.scale)
+    }
+}
+
+pub(super) fn color(rgb: u32) -> Color32 {
+    Color32::from_rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
+}
+pub(super) fn alpha(rgb: u32, a: f64) -> Color32 {
+    Color32::from_rgba_unmultiplied(
+        (rgb >> 16) as u8,
+        (rgb >> 8) as u8,
+        rgb as u8,
+        (a.clamp(0.0, 1.0) * 255.0).round() as u8,
+    )
+}
+pub(super) fn image(frame: &UiFrame<'_>, ui: &Ui, name: &str, rect: Rect, tint: Color32) {
+    frame.image(ui.painter(), &format!("assets/stock/menu/{name}.png"), rect, None, tint);
+}
+pub(super) fn mirrored_image(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    name: &str,
+    rect: Rect,
+    flip_x: bool,
+    flip_y: bool,
+    tint: Color32,
+) {
+    let uv = Rect::from_min_max(
+        Pos2::new(if flip_x { 1.0 } else { 0.0 }, if flip_y { 1.0 } else { 0.0 }),
+        Pos2::new(if flip_x { 0.0 } else { 1.0 }, if flip_y { 0.0 } else { 1.0 }),
+    );
+    frame.image(ui.painter(), &format!("assets/stock/menu/{name}.png"), rect, Some(uv), tint);
+}
+pub(super) fn interact(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    label: &str,
+    role: &str,
+    rect: Rect,
+    enabled: bool,
+) -> Response {
+    let enabled = enabled && ui.is_enabled();
+    let response =
+        ui.interact(rect, Id::unique(id), if enabled { Sense::click() } else { Sense::hover() });
+    if enabled {
+        frame.record(id, label, role, &response);
+    } else {
+        frame.record_rect(id, label, role, rect, false);
+    }
+    if enabled && response.has_focus() {
+        ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0, GOLD), StrokeKind::Inside);
+    }
+    response
+}
+pub(super) fn native(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    text: &str,
+    font: NativeUiFontName,
+    position: Pos2,
+    scale: f32,
+    tint: u32,
+    align: NativeUiTextAlign,
+) {
+    native_text(
+        frame,
+        ui.painter(),
+        &NativeUiTextSpec {
+            align,
+            scale: f64::from(scale),
+            tint,
+            ..NativeUiTextSpec::new(font, text, f64::from(position.x), f64::from(position.y))
+        },
+    );
+}
+pub(super) fn label(
+    ui: &Ui,
+    text: &str,
+    position: Pos2,
+    align: Align2,
+    font: &str,
+    size: f32,
+    tint: Color32,
+) {
+    ui.painter().text(
+        position,
+        align,
+        text,
+        FontId::new(size, egui::FontFamily::Name(font.into())),
+        tint,
+    );
+}
+pub(super) fn paragraph(
+    ui: &Ui,
+    text: &str,
+    rect: Rect,
+    font: &str,
+    size: f32,
+    tint: Color32,
+) -> f32 {
+    let galley = ui.painter().layout(
+        text.to_owned(),
+        FontId::new(size, egui::FontFamily::Name(font.into())),
+        tint,
+        rect.width(),
+    );
+    let height = galley.size().y;
+    ui.painter().galley(rect.min, galley, tint);
+    height
+}
+pub(crate) fn stock_button(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    text: &str,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+) -> Response {
+    let response = interact(frame, ui, id, text, "button", rect, enabled);
+    let opacity = if enabled { 1.0 } else { 0.36 };
+    let tint = alpha(0xffffff, opacity);
+    image(frame, ui, "main-menu-button", rect, tint);
+    if enabled && (response.hovered() || response.has_focus()) {
+        image(frame, ui, "main-menu-button-hover", rect, tint);
+    }
+    let surround = 6.0 * scale;
+    let end = Vec2::new(70.0, 85.0) * scale;
+    let left = rect.min - Vec2::splat(surround);
+    image(frame, ui, "main-menu-button-corner", Rect::from_min_size(left, end), tint);
+    mirrored_image(
+        frame,
+        ui,
+        "main-menu-button-corner",
+        Rect::from_min_size(Pos2::new(rect.right() + surround - end.x, left.y), end),
+        true,
+        false,
+        tint,
+    );
+    let rail = Rect::from_min_max(
+        Pos2::new(left.x + 70.0 * scale, left.y),
+        Pos2::new(rect.right() - 64.0 * scale, left.y + end.y),
+    );
+    if rail.width() > 0.0 {
+        image(frame, ui, "main-menu-button-rail", rail, tint);
+    }
+    let pressed =
+        if response.is_pointer_button_down_on() { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
+    if !text.is_empty() {
+        native(
+            frame,
+            ui,
+            text,
+            NativeUiFontName::Menu,
+            rect.center() + Vec2::new(0.0, 9.0 * scale) + pressed,
+            scale,
+            if enabled { 0xd9ba70 } else { 0x5b4e2f },
+            NativeUiTextAlign::Center,
+        );
+    }
+    response
+}
+pub(super) fn stone_button(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    atlas: &StockAtlas,
+    id: &str,
+    text: &str,
+    rect: Rect,
+    enabled: bool,
+) -> Result<Response, String> {
+    let response = interact(frame, ui, id, text, "button", rect, enabled);
+    atlas.paint_raw(
+        frame,
+        ui.painter(),
+        if enabled && response.is_pointer_button_down_on() { 106 } else { 105 },
+        rect,
+        alpha(0xffffff, if enabled { 1.0 } else { 0.36 }),
+    )?;
+    native(
+        frame,
+        ui,
+        text,
+        NativeUiFontName::ControlPanel,
+        rect.center() + Vec2::new(0.0, 4.0),
+        1.15,
+        0xf2f0dc,
+        NativeUiTextAlign::Center,
+    );
+    Ok(response)
+}
+pub(super) fn flat_button(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    text: &str,
+    rect: Rect,
+    enabled: bool,
+) -> Response {
+    let response = interact(frame, ui, id, text, "button", rect, enabled);
+    gradient(ui, rect, color(0x3c301a), color(0x171108));
+    ui.painter().rect_stroke(rect, 0.0, Stroke::new(1.0, color(0x947b42)), StrokeKind::Inside);
+    label(
+        ui,
+        text,
+        rect.center(),
+        Align2::CENTER_CENTER,
+        "Cinzel Bold",
+        11.0,
+        if enabled { color(0xf0d690) } else { color(0x786b48) },
+    );
+    response
+}
+pub(super) fn gradient(ui: &Ui, rect: Rect, top: Color32, bottom: Color32) {
+    let mut mesh = egui::Mesh::default();
+    mesh.colored_vertex(rect.left_top(), top);
+    mesh.colored_vertex(rect.right_top(), top);
+    mesh.colored_vertex(rect.right_bottom(), bottom);
+    mesh.colored_vertex(rect.left_bottom(), bottom);
+    mesh.add_triangle(0, 1, 2);
+    mesh.add_triangle(0, 2, 3);
+    ui.painter().add(egui::Shape::mesh(mesh));
+}
+pub(super) fn edit(
+    frame: &UiFrame<'_>,
+    ui: &mut Ui,
+    id: &str,
+    label: &str,
+    value: &mut String,
+    rect: Rect,
+    font: &str,
+    size: f32,
+    enabled: bool,
+    multiline: bool,
+) -> Response {
+    let mut edit = if multiline {
+        egui::TextEdit::multiline(value)
+    } else {
+        egui::TextEdit::singleline(value)
+    };
+    edit = edit
+        .id(Id::unique(id))
+        .font(FontId::new(size, egui::FontFamily::Name(font.into())))
+        .text_color(GOLD)
+        .frame(egui::Frame::NONE)
+        .desired_width(rect.width())
+        .interactive(enabled)
+        .margin(Vec2::new(10.0, 7.0));
+    let response = ui.put(rect, edit);
+    frame.record(id, label, "textbox", &response);
+    frame.record_value(id, value, None);
+    response
+}
+pub(super) fn control_panel(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    atlas: &StockAtlas,
+    rect: Rect,
+    field: bool,
+) -> Result<(), String> {
+    atlas.paint_frame(
+        frame,
+        ui.painter(),
+        if field { 5 } else { 3 },
+        rect,
+        if field { 3.0 } else { 6.0 },
+        Color32::WHITE,
+    )
+}
