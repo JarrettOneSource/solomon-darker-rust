@@ -8,6 +8,7 @@ const {createNativeMessageReader} = require('./native-wire.cjs');
 const {walkSolomonEntrance} = require('./solomon-entrance.cjs');
 const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 
 const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
 const output = path.resolve(process.env.OUT);
@@ -89,10 +90,10 @@ function observeGpu() {
 }
 
 async function open(account, label) {
-  const server = await chromium.launchServer({headless: true, host: '127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, {headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const browser = browserOwner.browser;
   const context = await browser.newContext({ignoreHTTPSErrors: true,
     viewport: {width: 1600, height: 900}});
   if (account.token) {
@@ -100,7 +101,7 @@ async function open(account, label) {
   }
   await context.addInitScript(observeGpu);
   const page = await context.newPage();
-  const client = {label, browser, server, page, id: null, frame: null, loaded: null,
+  const client = {label, browserOwner, page, id: null, frame: null, loaded: null,
     errors: [], cancelledMedia: [], cancelledNavigation: [], accountNavigating: false,
     inputs: [], inputBoundaries: [], movementAttempts: [], lua: [], luaRequests: [],
     flame: {active: false, births: new Map(), frames: [], actors: []},
@@ -446,38 +447,12 @@ function summary(client) {
 }
 
 async function close(client) {
-  const owned = client.server.process();
-  client.cleanup = {mode: 'graceful', errors: []};
-  async function bounded(promise, label) {
-    let timer;
-    try {
-      await Promise.race([promise, new Promise((resolve, reject) => {
-        timer = setTimeout(() => reject(new Error(label)), 5000);
-      })]);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
   try {
-    await bounded(client.browser.close(), 'remote browser close deadline');
-    await bounded(client.server.close(), 'Chrome server close deadline');
+    client.cleanup = await client.browserOwner.close();
+    return true;
   } catch (error) {
-    client.cleanup.mode = 'forced';
-    client.cleanup.errors.push(error.message);
-    try {
-      await bounded(client.server.kill(), 'Chrome termination deadline');
-    } catch (error) {
-      client.cleanup.errors.push(error.message);
-      owned.kill('SIGKILL');
-    }
-  }
-  if (owned.exitCode !== null || owned.signalCode !== null) return true;
-  try {
-    process.kill(owned.pid, 0);
+    client.cleanup = error.cleanup ?? {errors:[error.message]};
     return false;
-  } catch (error) {
-    if (error.code === 'ESRCH') return true;
-    throw error;
   }
 }
 
@@ -633,12 +608,11 @@ async function close(client) {
         .filter(([file]) => /^solomon-web-.*\.wasm$/.test(file)))};
     const receipt = {passed: !failure, step, artifact, checks, failure};
     receipt.browserClosed = (await Promise.all(clients.map(close))).every(Boolean);
+    if (!receipt.browserClosed) receipt.passed = false;
     receipt.clients = clients.map(client => ({...summary(client), cleanup: client.cleanup}));
     fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify({passed: receipt.passed, checks, step, browserClosed: receipt.browserClosed,
       failure: failure?.error}));
-    // The launched browser server can retain an idle observation socket after
-    // its Chrome process exits. All evidence is written synchronously above.
-    process.exit(failure || !receipt.browserClosed ? 1 : 0);
+    if (!receipt.passed) process.exitCode = 1;
   }
 })().catch(error => {console.error(error.stack); process.exitCode = 1;});

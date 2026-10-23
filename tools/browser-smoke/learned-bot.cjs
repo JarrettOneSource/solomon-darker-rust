@@ -7,6 +7,7 @@ const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const output = path.resolve(process.env.OUT);
 const account = JSON.parse(fs.readFileSync(process.env.ACCOUNTS))[0];
 assert.equal(account.user.id, 3, 'the isolated configured QA3 developer account');
@@ -92,10 +93,10 @@ function decode(socket) {
 }
 (async () => {
   fs.mkdirSync(output, {recursive: true});
-  const server = await chromium.launchServer({headless: true, host: '127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, {headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const browser = browserOwner.browser;
   const context = await browser.newContext({ignoreHTTPSErrors: true, viewport: {width: 1280, height: 720}});
   await context.addInitScript(({key, token}) => localStorage.setItem(key, token),
     {key: tokenKey, token: account.token});
@@ -219,9 +220,7 @@ function decode(socket) {
       ui: await ui.readUi(page)}, null, 2));
     throw error;
   } finally {
-    let timeout;
-    try {await Promise.race([(async () => {await browser.close(); await server.close();})(), new Promise((resolve, reject) => {
-      timeout = setTimeout(() => reject(new Error('Owned browser close timed out')), 15000);
-    })]);} catch {await server.kill();} finally {clearTimeout(timeout);}
+    fs.writeFileSync(path.join(output, 'browser-cleanup.json'),
+      JSON.stringify(await browserOwner.close(), null, 2));
   }
 })().catch(error => {console.error(error.message); process.exitCode = 1;});
