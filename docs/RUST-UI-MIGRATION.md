@@ -83,6 +83,18 @@ frame 230 × 54 and fill 192 × 18. The source comparison receipt is
 `startup-baseline/loader-source-assets.json` in the task evidence directory. No composed
 startup acceptance is implied by that input check.
 
+The mandatory named smoke follows College admission, the Office doorway, loadout
+confirmation and its incoming Courtyard walk. Pinned `hub-regions.ts` defines Office
+reentry at `(952.5,67.5)` with exact scripted target `(952.5,157.5)`. Its participant
+movement enters `college-loadout` at that placement; `hub-world.ts` confirmation changes
+only that phase to `incoming`, and `game-simulation.ts` preserves the player position.
+The initial `hub-math.ts::HUB_SPAWN` `(950.64,164.04)` belongs before that whole intro.
+The former smoke compared the later arrival against this stale initial position.
+`common-browser/source-college-settle.json` independently evaluates the unmodified fa08
+function and matches the retained Hub-region fixture. Actual `58df78d` observes the exact
+Office target with transition `-1`. Acceptance must assert that completed arrival exactly,
+without broadening a tolerance or adding a fixed settling delay.
+
 ## World notifications recovered before repair
 
 The visual-producer inventory found `crates/web/src/loot/messages.rs` still constructing
