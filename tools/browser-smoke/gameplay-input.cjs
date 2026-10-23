@@ -65,9 +65,12 @@ async function pad(page,buttons=[],axes=[0,0,0,0],analog={}){
     assert.equal((await input(page))[3],1,'releasing one source restores the still-held keyboard source');
     const focusTarget=await page.context().newPage();
     await focusTarget.goto('about:blank');
+    await ui.useNativeFocus(page,focusTarget);
     await focusTarget.bringToFront();
     await page.waitForFunction(()=>!document.hasFocus());
     await frames(page);
+    assert.ok(await page.evaluate(()=>__solomonFocusEvents.some(event=>event.type==='blur'&&event.trusted)),
+      'Chrome emits a real trusted blur event for the actual tab switch');
     sample=await input(page);assert.equal(sample[3],-1);assert.equal(sample[4],0);
     await page.bringToFront();
     await page.keyboard.up('Digit1');

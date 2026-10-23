@@ -78,8 +78,11 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
     // A real tab activation produces the browser blur; no synthetic blur event is sent.
     const focusTarget=await desktop.context().newPage();
     await focusTarget.goto('about:blank');
+    await ui.useNativeFocus(desktop,focusTarget);
     await focusTarget.bringToFront();
     await desktop.waitForFunction(()=>!document.hasFocus());
+    assert.ok(await desktop.evaluate(()=>__solomonFocusEvents.some(event=>event.type==='blur'&&event.trusted)),
+      'the actual tab switch emits Chrome\'s trusted blur event');
     await ticks(desktop,40);
     const blurStart=await state(desktop);
     await ticks(desktop,40);
