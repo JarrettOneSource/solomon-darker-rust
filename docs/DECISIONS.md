@@ -220,6 +220,22 @@ use the browser font adapter; Sack names preserve Source's complete font-run sha
 wrapping, including Arabic joins and emoji sequences, in bounded egui-owned GPU textures.
 The font adapter paints only text into an unattached canvas, never HTML or game controls.
 
+**Native font geometry and Rust editing share one text layout.** The installed egui
+row/cursor model assumes increasing horizontal positions and cannot represent mixed
+bidirectional caret/selection geometry with its per-grapheme browser font hook. The shared
+GPU text editor therefore uses the browser's standard SVG text and Range font measurements
+and Canvas font rasterization, while Rust owns values, selection, interaction and drawing.
+The transient, invisible SVG is a noninteractive font-run measurement adapter; it contains
+no controls or game-layout proxy. The existing nonvisual input adapter carries native
+composition and clipboard operations. This preserves installed/licensed fonts and full-run
+joining without shipping system fonts or maintaining a second text editor.
+
+The editor reuses the already installed `unicode-segmentation`1.13.3 and the small
+`unicode-linebreak`0.1.5 UAX#14 implementation for grapheme boundaries and wrapping. This
+keeps Unicode tables in maintained libraries instead of hand-written character rules.
+Browser rendering/input acceptance must cover the complete caller cutover, including
+multiline editing, joined scripts, selection, undo and composition before completion.
+
 **Superseded: the HUD used browser DOM with stock atlas sprites and repeated strips.** The world stays
 in WebGL; the screen-space HUD uses the browser's existing layout, hit testing and accessible
 buttons. `web/ui.rs` reads the same stock bundles as the renderer and projects the sprites,
