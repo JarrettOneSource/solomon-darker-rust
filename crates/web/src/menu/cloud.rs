@@ -791,6 +791,9 @@ impl CloudView {
         self.sheet = Some(Sheet::Sort);
         Ok(())
     }
+    pub fn retire_images(&mut self, frame: &UiFrame<'_>) {
+        self.images.drain_retired(frame);
+    }
     pub fn default_focus(&self) -> Option<String> {
         if self.detail.is_some() {
             Some("cloud-dialog-close".to_owned())
@@ -1096,7 +1099,7 @@ impl CloudView {
             }
             std::mem::replace(&mut result, Ok(()))?;
         }
-        self.images.finish_paint();
+        self.images.finish_paint(frame);
         Ok(())
     }
     fn status_label(&self, count: usize) -> String {

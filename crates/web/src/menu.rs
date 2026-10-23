@@ -278,6 +278,7 @@ impl MenuUi {
         }
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        self.cloud.retire_images(frame);
         let keys = frame.key_codes().to_vec();
         let editing = frame.ctx.text_edit_focused();
         let capturing_binding =
