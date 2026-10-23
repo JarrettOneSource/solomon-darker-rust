@@ -23,6 +23,7 @@ pub struct NativeLabelStyle {
     pub wrap_width: Option<f32>,
     pub line_height: Option<f32>,
     pub tab_size: Option<f32>,
+    pub letter_spacing: Option<f32>,
     pub sense: Sense,
 }
 
@@ -35,6 +36,7 @@ impl NativeLabelStyle {
             wrap_width: None,
             line_height: None,
             tab_size: None,
+            letter_spacing: None,
             sense: Sense::hover(),
         }
     }
@@ -58,6 +60,7 @@ pub fn shaped_label(
             wrap_width: style.wrap_width,
             line_height: style.line_height,
             tab_size: style.tab_size,
+            letter_spacing: style.letter_spacing,
         },
     )?;
     let (_, rect) = ui.allocate_space(run.size());
