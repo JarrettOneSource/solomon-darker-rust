@@ -326,7 +326,7 @@ impl MenuUi {
             let view = frame.ctx.input(|i| i.content_rect());
             let ctx = frame.ctx.clone();
             egui::Modal::new(Id::unique("landscape-guidance"))
-                .area(egui::Area::new(Id::unique("landscape-guidance")).fade_in(false))
+                .area(egui::Modal::default_area(Id::unique("landscape-guidance")).fade_in(false))
                 .frame(egui::Frame::NONE)
                 .backdrop_color(Color32::BLACK)
                 .show(&ctx, |ui| {
