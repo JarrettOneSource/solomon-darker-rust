@@ -189,11 +189,15 @@ pub(super) fn paint(input: &MovementInput, frame: &UiFrame<'_>) -> Result<(), St
                 );
                 let text = if lane == JoystickLane::Movement { "MOVE" } else { "AIM / CAST" };
                 let anchor = geometry.center + rotation * egui::vec2(0.0, geometry.size * 0.38);
-                let galley = p.layout_no_wrap(
+                let galley = p.layout_job(egui::text::LayoutJob::simple_format(
                     text.into(),
-                    egui::FontId::new(9.0 * geometry.scale, egui::FontFamily::Name("Georgia".into())),
-                    Color32::from_rgb(217, 210, 188),
-                );
+                    egui::TextFormat {
+                        font_id: egui::FontId::new(9.0 * geometry.scale, egui::FontFamily::Name("Georgia Bold".into())),
+                        extra_letter_spacing: 0.06 * 9.0 * geometry.scale,
+                        color: Color32::from_rgb(217, 210, 188),
+                        ..Default::default()
+                    },
+                ));
                 let origin = anchor - rotation * egui::vec2(galley.size().x / 2.0, galley.size().y);
                 p.add(egui::epaint::TextShape::new(origin, galley, Color32::from_rgb(217, 210, 188)).with_angle(geometry.rotation));
                 frame.record_ellipse(id, label, "joystick", &response);

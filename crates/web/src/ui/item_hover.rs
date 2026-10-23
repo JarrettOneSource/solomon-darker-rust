@@ -46,7 +46,6 @@ pub(crate) fn paint_item_hover_box(
         if line.sack_name_browser_font {
             let name = gpu_sack_name(frame, &line.text, line.tint, 300.0, true)?;
             name.paint(
-                frame,
                 painter,
                 origin
                     + egui::vec2(

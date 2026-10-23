@@ -1,47 +1,47 @@
-//! Custom Sack names use individually rasterized Arial glyphs on the GPU.
-//! The source Pixi word-wrap algorithm remains shared with its retained goldens.
+//! Source `renderer/hub-inventory/sack-name.ts` typography and Pixi wrapping.
+//! The native browser shapes each complete font run; egui owns its GPU texture.
 use crate::gpu_ui::UiFrame;
 use js_sys::{Array, Intl, Object, Reflect};
 use solomon_sim::Vec2;
 use solomon_sim::native_ui_text::{NativeUiFontName, native_ui_font};
-use wasm_bindgen::JsValue;
+use std::cell::RefCell;
+use std::collections::VecDeque;
+use wasm_bindgen::{JsCast, JsValue};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
+#[derive(Clone)]
 pub(crate) struct BrowserSackName {
-    pub lines: Vec<String>,
     pub size: Vec2,
     pub baseline_offset: f64,
-    pub font_size: f32,
-    pub scale: f32,
-    pub tint: u32,
+    texture: egui::TextureHandle,
+    pixels: egui::Vec2,
+    scale: f32,
 }
 impl BrowserSackName {
-    pub fn paint(
-        &self,
-        frame: &UiFrame<'_>,
-        painter: &egui::Painter,
-        origin: egui::Pos2,
-        scale: f32,
-    ) {
-        for (index, line) in self.lines.iter().enumerate() {
-            let font = egui::FontId::new(
-                self.font_size * self.scale * scale,
-                egui::FontFamily::Name("Arial".into()),
-            );
-            painter.text(
-                origin + egui::vec2(0.0, index as f32 * self.font_size * self.scale * scale),
-                egui::Align2::LEFT_TOP,
-                line,
-                font,
-                egui::Color32::from_rgb(
-                    (self.tint >> 16) as u8,
-                    (self.tint >> 8) as u8,
-                    self.tint as u8,
-                ),
-            );
-        }
-        let _ = frame;
+    pub fn paint(&self, painter: &egui::Painter, origin: egui::Pos2, scale: f32) {
+        painter.image(
+            self.texture.id(),
+            egui::Rect::from_min_size(origin, self.pixels * self.scale * scale),
+            egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+            egui::Color32::WHITE,
+        );
     }
 }
+#[derive(Clone, PartialEq, Eq)]
+struct NameKey {
+    text: String,
+    tint: u32,
+    max_width: u64,
+    wrap: bool,
+}
+#[derive(Clone, Default)]
+struct NameCache(VecDeque<(NameKey, BrowserSackName)>);
+struct FontCanvas {
+    canvas: HtmlCanvasElement,
+    context: CanvasRenderingContext2d,
+}
+thread_local! { static FONT_CANVAS: RefCell<Option<FontCanvas>> = const { RefCell::new(None) }; }
+
 pub(crate) fn gpu_sack_name(
     frame: &UiFrame<'_>,
     text: &str,
@@ -49,31 +49,114 @@ pub(crate) fn gpu_sack_name(
     max_width: f64,
     wrap: bool,
 ) -> Result<BrowserSackName, String> {
-    let font_size = native_ui_font(NativeUiFontName::Menu).metrics[0] as f32;
-    let font = egui::FontId::new(font_size, egui::FontFamily::Name("Arial".into()));
-    let advance = |text: &str| {
-        Ok(frame.ctx.fonts_mut(|fonts| {
-            fonts.layout_no_wrap(text.into(), font.clone(), egui::Color32::WHITE).size().x
-        }) as f64)
-    };
-    let lines = if wrap {
-        wrap_name(text, max_width, advance, graphemes)?
-    } else {
-        text.replace("\r\n", "\n").replace('\r', "\n").split('\n').map(str::to_owned).collect()
-    };
-    let mut width: f64 = 0.0;
-    for line in &lines {
-        width = width.max(advance(line)?);
+    let key = NameKey { text: text.to_owned(), tint, max_width: max_width.to_bits(), wrap };
+    let cache_id = egui::Id::unique("source-sack-font-runs");
+    let cached = frame.ctx.data_mut(|data| {
+        let cache = data.get_temp_mut_or_default::<NameCache>(cache_id);
+        let index = cache.0.iter().position(|(prior, _)| prior == &key)?;
+        let entry = cache.0.remove(index).expect("located font run");
+        let name = entry.1.clone();
+        cache.0.push_back(entry);
+        Some(name)
+    });
+    if let Some(name) = cached {
+        return Ok(name);
     }
-    let scale = if !wrap && width > max_width { (max_width / width) as f32 } else { 1.0 };
-    Ok(BrowserSackName {
-        size: Vec2::new(width * scale as f64, font_size as f64 * lines.len() as f64 * scale as f64),
-        baseline_offset: font_size as f64 * 0.8 * scale as f64,
-        lines,
-        font_size,
-        scale,
-        tint,
-    })
+    let (image, size, baseline_offset, scale) = FONT_CANVAS.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_none() {
+            let document = web_sys::window()
+                .and_then(|window| window.document())
+                .ok_or("Sack font document")?;
+            let canvas: HtmlCanvasElement = document
+                .create_element("canvas")
+                .map_err(|_| "Sack font canvas")?
+                .dyn_into()
+                .map_err(|_| "Sack font canvas type")?;
+            let context: CanvasRenderingContext2d = canvas
+                .get_context("2d")
+                .map_err(|_| "Sack font rasterizer")?
+                .ok_or("Sack font rasterizer")?
+                .dyn_into()
+                .map_err(|_| "Sack font rasterizer type")?;
+            *slot = Some(FontCanvas { canvas, context });
+        }
+        let FontCanvas { canvas, context } = slot.as_ref().expect("initialized font canvas");
+        let font_size = native_ui_font(NativeUiFontName::Menu).metrics[0];
+        let font = format!("normal normal normal {font_size}px \"Arial\",sans-serif");
+        context.set_font(&font);
+        let probe = context.measure_text("|ÉqÅM").map_err(|_| "Sack font probe")?;
+        let mut ascent = probe.actual_bounding_box_ascent();
+        let mut font_height = ascent + probe.actual_bounding_box_descent();
+        if font_height == 0.0 {
+            ascent = font_size;
+            font_height = font_size;
+        }
+        let lines = if wrap {
+            wrap_name(
+                text,
+                max_width,
+                |token| {
+                    context
+                        .measure_text(token)
+                        .map(|metrics| metrics.width())
+                        .map_err(|_| "Sack font advance".into())
+                },
+                graphemes,
+            )?
+        } else {
+            text.replace("\r\n", "\n").replace('\r', "\n").split('\n').map(str::to_owned).collect()
+        };
+        let mut width = 0.0_f64;
+        for line in &lines {
+            let metrics = context.measure_text(line).map_err(|_| "Sack font line")?;
+            width = width.max(
+                metrics
+                    .width()
+                    .max(metrics.actual_bounding_box_left() + metrics.actual_bounding_box_right()),
+            );
+        }
+        let height = font_size.max(font_height) + lines.len().saturating_sub(1) as f64 * font_size;
+        let scale = if !wrap && width > max_width { max_width / width } else { 1.0 };
+        let pixel_width = width.max(1.0).ceil() as u32;
+        let pixel_height = height.max(1.0).ceil() as u32;
+        canvas.set_width(pixel_width);
+        canvas.set_height(pixel_height);
+        context.set_font(&font);
+        context.set_text_baseline("alphabetic");
+        context.set_fill_style_str(&format!("#{tint:06x}"));
+        let line_shift = ((font_size - font_height) / 2.0).max(0.0);
+        for (index, line) in lines.iter().enumerate() {
+            context
+                .fill_text(line, 0.0, ascent + line_shift + index as f64 * font_size)
+                .map_err(|_| "Sack font run")?;
+        }
+        let data = context
+            .get_image_data(0.0, 0.0, pixel_width as f64, pixel_height as f64)
+            .map_err(|_| "Sack font pixels")?
+            .data();
+        Ok::<_, String>((
+            egui::ColorImage::from_rgba_unmultiplied(
+                [pixel_width as usize, pixel_height as usize],
+                &data.0,
+            ),
+            Vec2::new(width * scale, height * scale),
+            ascent * scale,
+            scale as f32,
+        ))
+    })?;
+    let pixels = egui::vec2(image.width() as f32, image.height() as f32);
+    let texture =
+        frame.ctx.load_texture("Source Sack font run", image, egui::TextureOptions::LINEAR);
+    let name = BrowserSackName { texture, size, baseline_offset, scale, pixels };
+    frame.ctx.data_mut(|data| {
+        let cache = data.get_temp_mut_or_default::<NameCache>(cache_id);
+        cache.0.push_back((key, name.clone()));
+        if cache.0.len() > 128 {
+            cache.0.pop_front();
+        }
+    });
+    Ok(name)
 }
 /// Pixi wordWrap with the Sack's fixed whiteSpace=pre, breakWords=true and
 /// letterSpacing=0. Fitting sums advance widths; final ink is measured afterward.
