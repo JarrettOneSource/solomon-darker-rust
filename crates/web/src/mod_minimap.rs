@@ -119,6 +119,7 @@ impl ModMinimapView {
         };
         egui::Area::new(self.layer_id().id)
             .fade_in(false)
+            .background_interactable(false)
             .order(self.layer_id().order)
             .fixed_pos(point)
             .show(&ctx, |ui| -> Result<(), String> {
