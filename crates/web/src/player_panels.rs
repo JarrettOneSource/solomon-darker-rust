@@ -413,6 +413,9 @@ impl PlayerPanels {
         self.navigation.release();
         let previous = self.panel.take();
         self.viewport_panel = None;
+        self.closing_at = None;
+        self.replace_with = None;
+        self.alpha = 0.0;
         self.bursts.borrow_mut().clear();
         self.press = None;
         self.pressed_npc_selector = None;
@@ -470,6 +473,9 @@ impl PlayerPanels {
 
     pub fn panel(&self) -> Option<PlayerPanel> {
         self.panel
+    }
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("player-panels"))
     }
 
     pub fn covers_world(&self) -> bool {
@@ -867,7 +873,7 @@ impl PlayerPanels {
             PanelEvent::Wheel(delta) => self.scroll_selector(delta),
             PanelEvent::Focus(target) => {
                 self.hovered_skill = if let Target::Skill(id) = target { Some(id) } else { None };
-                if self.hovered_npc_selector.take().is_some() {}
+                self.hovered_npc_selector = None;
                 self.hovered_service = Some(target).filter(|target| {
                     matches!(
                         target,
@@ -1274,17 +1280,25 @@ impl PlayerPanels {
         let Some(panel) = self.panel else { return self.paint_skill_book_result(frame) };
         let Some(model) = self.model.take() else { return self.paint_skill_book_result(frame) };
         let snapshot = model.snapshot();
-        let scope = if self.notice.is_some() {
-            "panel-notice"
+        let scope = if let Some(notice) = &self.notice {
+            match notice {
+                PlayerPanelNotice::Standard { .. } => "panel-notice:standard",
+                PlayerPanelNotice::UnforgeConfirmation => "panel-notice:unforge-confirm",
+                PlayerPanelNotice::UnforgeResult { .. } => "panel-notice:unforge-result",
+            }
+            .to_owned()
         } else if self.dye.is_some() {
-            "fabric-dye"
+            "fabric-dye".to_owned()
         } else {
             match panel {
-                PlayerPanel::Inventory => "inventory",
-                PlayerPanel::Skills => "skills",
-                PlayerPanel::Dialogue => "dialogue",
-                PlayerPanel::SkillSelector(_) => "skill-selector",
-                PlayerPanel::Service(_) => "service",
+                PlayerPanel::Inventory => "inventory".to_owned(),
+                PlayerPanel::Skills => "skills".to_owned(),
+                PlayerPanel::Dialogue => {
+                    let dialogue = self.dialogue.as_ref().expect("open dialogue");
+                    dialogue::navigation_scope(&dialogue.content, dialogue.started_at)
+                }
+                PlayerPanel::SkillSelector(target) => format!("skill-selector:{target:?}"),
+                PlayerPanel::Service(trader) => format!("service:{trader:?}"),
             }
         };
         let preferred = if matches!(self.notice, Some(PlayerPanelNotice::UnforgeConfirmation)) {
@@ -1301,18 +1315,30 @@ impl PlayerPanels {
                         .and_then(|page| page.skills.first())
                         .map(|id| format!("panel:skill:{id}"))
                 }
-                PlayerPanel::Dialogue => Some(
-                    if self
-                        .dialogue
-                        .as_ref()
-                        .is_some_and(|d| d.content == HubNpcChatContent::Choices)
-                    {
-                        "panel:dialogue-choice:0"
-                    } else {
-                        "panel:dialogue-next"
+                PlayerPanel::Dialogue => {
+                    match &self.dialogue.as_ref().expect("open dialogue").content {
+                        HubNpcChatContent::Choices => Some("panel:dialogue-choice:0".to_owned()),
+                        HubNpcChatContent::Speech { .. } => Some("panel:dialogue-next".to_owned()),
+                        HubNpcChatContent::Selector(selector) => {
+                            solomon_sim::hub::interaction::hub_npc_selector_rows_with_mods(
+                                *selector,
+                                &snapshot.economy.npc,
+                                &snapshot.book.advanced_unlocks,
+                                snapshot.mod_content,
+                            )
+                            .first()
+                            .map(|row| match &row.id {
+                                HubNpcSelectorId::Native(id) => {
+                                    format!("panel:dialogue-selector:{id}")
+                                }
+                                HubNpcSelectorId::ModBoast(selection) => format!(
+                                    "panel:npc:{}:{}",
+                                    selection.mod_id, selection.content_id
+                                ),
+                            })
+                        }
                     }
-                    .to_owned(),
-                ),
+                }
                 PlayerPanel::SkillSelector(target) => {
                     solomon_sim::hud::skill_selector::native_hud_skill_selector_options(
                         snapshot.book,
@@ -1326,78 +1352,73 @@ impl PlayerPanels {
             }
         };
         if !self.input_suspended && self.rename_sack.is_none() && !self.skill_book_result_open() {
-            frame.input_scope(scope);
-            self.navigation.update(frame.ctx, scope, preferred.as_deref());
+            frame.input_scope(&scope);
+            self.navigation.focus(frame.ctx, &scope, preferred.as_deref());
         }
 
         let hits = RefCell::new(Vec::new());
         let events = RefCell::new(Vec::new());
-        let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("player-panels"));
+        let layer = self.layer_id();
         let transform = egui::emath::TSTransform::new(
             egui::vec2(self.stage_origin.x as f32, self.stage_origin.y as f32),
             self.view_scale as f32,
         );
-        frame.ctx.set_transform_layer(layer, transform);
         let ctx = frame.ctx.clone();
         let mut error = None;
-        egui::Area::new(layer.id)
-            .order(layer.order)
-            .fixed_pos(egui::Pos2::ZERO)
-            .constrain(false)
-            .show(&ctx, |ui| {
-                ui.set_min_size(egui::vec2(1675.0, 900.0));
-                let canvas = chrome::PanelCanvas::new(
-                    frame,
-                    ui,
-                    &hits,
-                    &events,
-                    self.alpha as f32,
-                    !self.input_suspended
-                        && !self.skill_book_result_open()
-                        && self.closing_at.is_none()
-                        && self.notice.is_none()
-                        && self.dye.is_none()
-                        && self.rename_sack.is_none(),
-                );
-                let canvas =
-                    if self.dye.is_some() { canvas.namespace("panel:background") } else { canvas };
-                let result = (|| {
-                    match panel {
-                        PlayerPanel::Inventory => self.draw_inventory(&canvas, &snapshot)?,
-                        PlayerPanel::Skills => self.draw_skills(&canvas, &snapshot)?,
-                        PlayerPanel::SkillSelector(target) => {
-                            self.draw_hud_skill_selector(&canvas, target, &snapshot)?
-                        }
-                        PlayerPanel::Dialogue => self.draw_dialogue(&canvas, &snapshot)?,
-                        PlayerPanel::Service(trader) => {
-                            self.draw_inventory(&canvas, &snapshot)?;
-                            self.draw_service(&canvas, trader, &snapshot)?;
-                        }
-                    }
-                    if !matches!(panel, PlayerPanel::Dialogue | PlayerPanel::SkillSelector(_)) {
-                        self.draw_footer(&canvas, &snapshot)?;
-                    }
-                    self.paint_inventory_flybys(&canvas, &snapshot)?;
-                    self.paint_dragger(&canvas, &snapshot)?;
-                    if self.notice.is_none() && self.dye.is_none() && self.rename_sack.is_none() {
-                        self.paint_tooltip(&canvas, &snapshot, self.now)?;
-                        self.draw_sack_rename_open(&canvas, &snapshot)?;
-                    }
-                    Ok(())
-                })();
-                if let Err(value) = result {
-                    error = Some(value);
-                }
-                if !matches!(panel, PlayerPanel::Dialogue | PlayerPanel::SkillSelector(_))
+        chrome::native_area(&ctx, layer, transform).show(&ctx, |ui| {
+            ui.set_min_size(egui::vec2(1675.0, 900.0));
+            let canvas = chrome::PanelCanvas::new(
+                frame,
+                ui,
+                &hits,
+                &events,
+                self.alpha as f32,
+                !self.input_suspended
+                    && !self.skill_book_result_open()
+                    && self.closing_at.is_none()
                     && self.notice.is_none()
                     && self.dye.is_none()
-                    && self.rename_sack.is_none()
-                {
-                    let belt =
-                        solomon_sim::hud::native_hud_control_layout(1600.0, 900.0, Some(1.0)).belt;
-                    self.hotbar_controls.paint(frame, ui, &belt, false, egui::vec2(1600.0, 900.0));
+                    && self.rename_sack.is_none(),
+            );
+            let canvas =
+                if self.dye.is_some() { canvas.namespace("panel:background") } else { canvas };
+            let result = (|| {
+                match panel {
+                    PlayerPanel::Inventory => self.draw_inventory(&canvas, &snapshot)?,
+                    PlayerPanel::Skills => self.draw_skills(&canvas, &snapshot)?,
+                    PlayerPanel::SkillSelector(target) => {
+                        self.draw_hud_skill_selector(&canvas, target, &snapshot)?
+                    }
+                    PlayerPanel::Dialogue => self.draw_dialogue(&canvas, &snapshot)?,
+                    PlayerPanel::Service(trader) => {
+                        self.draw_inventory(&canvas, &snapshot)?;
+                        self.draw_service(&canvas, trader, &snapshot)?;
+                    }
                 }
-            });
+                if !matches!(panel, PlayerPanel::Dialogue | PlayerPanel::SkillSelector(_)) {
+                    self.draw_footer(&canvas, &snapshot)?;
+                }
+                self.paint_inventory_flybys(&canvas, &snapshot)?;
+                self.paint_dragger(&canvas, &snapshot)?;
+                if self.notice.is_none() && self.dye.is_none() && self.rename_sack.is_none() {
+                    self.paint_tooltip(&canvas, &snapshot, self.now)?;
+                    self.draw_sack_rename_open(&canvas, &snapshot)?;
+                }
+                Ok(())
+            })();
+            if let Err(value) = result {
+                error = Some(value);
+            }
+            if !matches!(panel, PlayerPanel::Dialogue | PlayerPanel::SkillSelector(_))
+                && self.notice.is_none()
+                && self.dye.is_none()
+                && self.rename_sack.is_none()
+            {
+                let belt =
+                    solomon_sim::hud::native_hud_control_layout(1600.0, 900.0, Some(1.0)).belt;
+                self.hotbar_controls.paint(frame, ui, &belt, false, egui::vec2(1600.0, 900.0));
+            }
+        });
         self.hits = hits.into_inner();
         self.events.extend(events.into_inner());
         self.collect_gpu_input(&ctx);
