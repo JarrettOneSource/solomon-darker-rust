@@ -1274,17 +1274,25 @@ impl PlayerPanels {
         let Some(panel) = self.panel else { return self.paint_skill_book_result(frame) };
         let Some(model) = self.model.take() else { return self.paint_skill_book_result(frame) };
         let snapshot = model.snapshot();
-        let scope = if self.notice.is_some() {
-            "panel-notice"
+        let scope = if let Some(notice) = &self.notice {
+            match notice {
+                PlayerPanelNotice::Standard { .. } => "panel-notice:standard",
+                PlayerPanelNotice::UnforgeConfirmation => "panel-notice:unforge-confirm",
+                PlayerPanelNotice::UnforgeResult { .. } => "panel-notice:unforge-result",
+            }
+            .to_owned()
         } else if self.dye.is_some() {
-            "fabric-dye"
+            "fabric-dye".to_owned()
         } else {
             match panel {
-                PlayerPanel::Inventory => "inventory",
-                PlayerPanel::Skills => "skills",
-                PlayerPanel::Dialogue => "dialogue",
-                PlayerPanel::SkillSelector(_) => "skill-selector",
-                PlayerPanel::Service(_) => "service",
+                PlayerPanel::Inventory => "inventory".to_owned(),
+                PlayerPanel::Skills => "skills".to_owned(),
+                PlayerPanel::Dialogue => format!(
+                    "dialogue:{}",
+                    self.dialogue.as_ref().expect("open dialogue").started_at.to_bits()
+                ),
+                PlayerPanel::SkillSelector(target) => format!("skill-selector:{target:?}"),
+                PlayerPanel::Service(trader) => format!("service:{trader:?}"),
             }
         };
         let preferred = if matches!(self.notice, Some(PlayerPanelNotice::UnforgeConfirmation)) {
@@ -1301,18 +1309,30 @@ impl PlayerPanels {
                         .and_then(|page| page.skills.first())
                         .map(|id| format!("panel:skill:{id}"))
                 }
-                PlayerPanel::Dialogue => Some(
-                    if self
-                        .dialogue
-                        .as_ref()
-                        .is_some_and(|d| d.content == HubNpcChatContent::Choices)
-                    {
-                        "panel:dialogue-choice:0"
-                    } else {
-                        "panel:dialogue-next"
+                PlayerPanel::Dialogue => {
+                    match &self.dialogue.as_ref().expect("open dialogue").content {
+                        HubNpcChatContent::Choices => Some("panel:dialogue-choice:0".to_owned()),
+                        HubNpcChatContent::Speech { .. } => Some("panel:dialogue-next".to_owned()),
+                        HubNpcChatContent::Selector(selector) => {
+                            solomon_sim::hub::interaction::hub_npc_selector_rows_with_mods(
+                                *selector,
+                                &snapshot.economy.npc,
+                                &snapshot.book.advanced_unlocks,
+                                snapshot.mod_content,
+                            )
+                            .first()
+                            .map(|row| match &row.id {
+                                HubNpcSelectorId::Native(id) => {
+                                    format!("panel:dialogue-selector:{id}")
+                                }
+                                HubNpcSelectorId::ModBoast(selection) => format!(
+                                    "panel:npc:{}:{}",
+                                    selection.mod_id, selection.content_id
+                                ),
+                            })
+                        }
                     }
-                    .to_owned(),
-                ),
+                }
                 PlayerPanel::SkillSelector(target) => {
                     solomon_sim::hud::skill_selector::native_hud_skill_selector_options(
                         snapshot.book,
@@ -1326,8 +1346,8 @@ impl PlayerPanels {
             }
         };
         if !self.input_suspended && self.rename_sack.is_none() && !self.skill_book_result_open() {
-            frame.input_scope(scope);
-            self.navigation.update(frame.ctx, scope, preferred.as_deref());
+            frame.input_scope(&scope);
+            self.navigation.focus(frame.ctx, &scope, preferred.as_deref());
         }
 
         let hits = RefCell::new(Vec::new());

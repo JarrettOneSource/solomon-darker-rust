@@ -16,6 +16,7 @@ pub(super) struct PanelHit {
     pub target: Target,
     pub npc: Option<HubNpcSelectorId>,
     pub rect: Rect,
+    pub paint_rect: Rect,
     pub enabled: bool,
 }
 
@@ -105,7 +106,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
             .borrow()
             .iter()
             .find(|hit| hit.target == target && hit.rect.is_positive())
-            .map(|hit| hit.rect)
+            .map(|hit| hit.paint_rect)
     }
     pub fn faded(&self, alpha: f32) -> Self {
         let mut c = self.at(0.0, 0.0);
@@ -171,7 +172,13 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         });
         let transform =
             self.frame.ctx.layer_transform_to_global(self.painter.layer_id()).unwrap_or_default();
-        self.frame.record_rect(id, spec.text, "text", transform * bounds, false);
+        self.frame.record_rect(
+            id,
+            spec.text,
+            "text",
+            transform * bounds.intersect(self.painter.clip_rect()),
+            false,
+        );
         self.frame.record_value(id, spec.text, None);
     }
     pub fn layout(&self, layout: &NativeUiTextLayout) {
@@ -418,12 +425,12 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         } else {
             format!("{}:{action}", self.namespace)
         };
-        let response =
-            child.interact(visible, egui::Id::unique(&id), egui::Sense::click_and_drag());
+        let response = child.interact(rect, egui::Id::unique(&id), egui::Sense::click_and_drag());
         self.hits.borrow_mut().push(PanelHit {
             target,
             npc: npc.clone(),
             rect: visible,
+            paint_rect: rect,
             enabled: self.enabled,
         });
         if response.gained_focus() {
