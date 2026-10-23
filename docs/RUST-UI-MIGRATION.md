@@ -582,8 +582,9 @@ clipped widget registry correctly excludes it. Established c14068b3
 `web/player-panels.css:98–99` makes the compact dye sheet scroll, and
 `crafting.rs:538,653–658` puts DONE below the item section. Preserve this layout and
 reveal DONE with one genuine upward touch drag inside the actual dye viewport before
-tapping it. The native opacity entrance is 200ms; let the existing post-panel visual
-settle finish before the full-art screenshot, without delaying or repeating activation.
+tapping it. `native_dye_modal_opacity` adds .01 per10ms tick: the opening reaches full
+opacity at1000ms; the selected-swatch pulse is a separate200ms clock. The final art
+screenshot must observe the full opening, without delaying or repeating activation.
 
 The Tutorial text-bounds helper currently has no executable caller, so its syntax check
 does not qualify Tutorial layout. Pinned fa08 `core-kernels/native-tutorial.ts`
