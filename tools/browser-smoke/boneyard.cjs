@@ -64,12 +64,14 @@ async function scenery(page,filename) {
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
   const receipt={url,maps:[],errors:[]};
   let current;
+  let currentErrors=[];
   try {
     for(const name of ['Felix','Vitus']) {
       // Each actual new wizard receives its own ordinary random seed and fresh local save.
       const context=await browser.newContext({viewport:{width:1600,height:900},deviceScaleFactor:1});
       current=await context.newPage();
       const observed=ui.watchErrors(current);
+      currentErrors=observed.errors;
       await ui.observeGpu(current);
       await current.goto(url,{waitUntil:'domcontentloaded'});
       await ui.ready(current);
@@ -109,12 +111,20 @@ async function scenery(page,filename) {
       assert.equal((await ui.widget(current,'continue')).enabled,true);
       await ui.click(current,'continue');
       await ui.surface(current,'hidden');
-      const continued=await waitForSave(current,record=>record.checkpoint.boneyard?.run_id===world.run_id);
-      assert.equal(continued.checkpoint.boneyard.seed,world.seed,'Continue retains the same real seed');
-      assert.equal(localParticipant(continued).player.selection.name,name,'Continue retains the admitted wizard');
+      await current.waitForFunction(tick=>window.wasmBindings.wizard_state()[5]>tick,paused[5]);
       const resumed=await state(current);
       assert.ok(Math.hypot(resumed[0]-paused[0],resumed[1]-paused[1])<0.1,
         'Continue returns to the exact paused entrance position');
+      await current.keyboard.press('Escape');
+      await ui.surface(current,'pause');
+      const continuedPause=await state(current);
+      const continued=await waitForSave(current,record=>record.revision>left.revision
+        &&record.checkpoint.ticks===continuedPause[5]);
+      assert.equal(continued.checkpoint.boneyard.run_id,world.run_id,'the live continued world keeps its run');
+      assert.equal(continued.checkpoint.boneyard.seed,world.seed,'Continue retains the same real seed');
+      assert.equal(localParticipant(continued).player.selection.name,name,'Continue retains the admitted wizard');
+      await ui.click(current,'resume');
+      await ui.surface(current,'hidden');
       await ui.assertGpuOnly(current);
       const continuedPixels=await scenery(current,path.join(output,`${name}-continued.png`));
       const submissions=await ui.gpuDraws(current);
@@ -132,6 +142,7 @@ async function scenery(page,filename) {
     receipt.status='passed';
   } catch(error) {
     receipt.status='failed';receipt.failure=error.stack;
+    receipt.errors.push(...currentErrors);
     if(current)await current.screenshot({path:path.join(output,'failure.png')});
     process.exitCode=1;
   } finally {
