@@ -169,10 +169,7 @@ impl WorldNotifications {
             pos2(viewport.left(), viewport.top() + (50.0 * scale) as f32),
             viewport.right_bottom(),
         );
-        let painter = frame
-            .ctx
-            .layer_painter(LayerId::new(Order::Middle, egui::Id::unique("world-notifications")))
-            .with_clip_rect(clip);
+        let painter = frame.ctx.layer_painter(notification_layer(frame.ctx)).with_clip_rect(clip);
         for visual in state.visuals.iter().filter(|visual| visual.alpha > 0.0 && visual.scale > 0.0)
         {
             let baseline =
@@ -231,6 +228,14 @@ impl WorldNotifications {
     pub fn reset(&mut self) {
         self.state = None;
     }
+}
+
+fn notification_layer(ctx: &egui::Context) -> LayerId {
+    let layer = LayerId::new(Order::Background, egui::Id::unique("world-notifications"));
+    // Source world effects < z45 notices < z10000 HUD. Registering both layers
+    // avoids egui's unordered fallback for non-Area painters of the same order.
+    ctx.set_sublayer(LayerId::new(Order::Background, egui::Id::unique("mod/world")), layer);
+    layer
 }
 
 #[cfg(test)]

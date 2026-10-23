@@ -106,6 +106,12 @@ Website ledger 100 records native insert/update/draw at `0x005CA7C0`/`0x005D7EF0
   existing gameplay viewport display scale apply. Black shadow is two native units below
   the same text and shares alpha; message scale affects glyphs, not that shadow offset.
   These notices do not inherit a centered Inventory/modal-stage transform.
+- Render order: pinned `loot-message-presentation.css` uses z-index 45; `hub.css`
+  places the HUD at 10000 and Tutorial CSS uses 31000. Notices therefore sit above
+  world effects and below the HUD. egui drains unregistered plain layers after its
+  registered Areas, so a plain Middle notification painter cannot preserve this
+  relation. Its Background layer must be explicitly ordered above the actual
+  `mod/world` Background layer, while HUD remains Middle.
 - Visibility: alive and lethal-pending may show; dying, spectating and absent participants
   cannot. Boneyard Game Over removes the surface and Tutorial combat-access false hides
   it. Cursors/clocks still follow accepted state while a visibility gate hides pixels.
@@ -119,9 +125,9 @@ Ten visibility cases, 77 book-name/error cases and 12 receipt deliveries are als
 All eight focused notification/book/historical-loot tests pass locally. GPU composition
 and accepted production-event delivery remain pending. `WorldNotifications` now replaces
 the unused DOM type with one accepted-session consumer and the menu-font GPU painter.
-Four focused controller tests cover initial/restored receipts, all local lanes and remote
+Five focused controller/render-queue tests cover initial/restored receipts, all local lanes and remote
 filters, repeated snapshots, world/player/missing-player/terminal/rewind resets, and hidden
-life/Tutorial clocks. They pass locally; final game-loop wiring and browser proof remain
+life/Tutorial clocks, and actual world/notice/HUD paint order. They pass locally; final game-loop wiring and browser proof remain
 owned by integration. Geometry diagnostics retain original glyph ink and the Y50 clip.
 
 Confidence is high for this complete pinned-source contract and the cited recovered native
@@ -166,12 +172,13 @@ this source result does not establish runtime visual fidelity.
 | Boneyard Shelf; local/cloud content, New/Import/Edit/Test/Delete and Keep, Test/Return/editor handoff and disposal | root | `game/hosted/boneyards.rs`; `authoring-shelf.cjs`, `authored-content.cjs`; export belongs to the external editor | Visual iframe retired in source; actual New/Import/Edit/Test/Delete/Keep journey pending startup fix |
 | HUD resources/XP/concentrations, native/mod belt quantity/cooldown, three banks, portraits/map, tutorial gates, custom mobile positions | HUD | `hud/**`, `hotbar.rs`; `hud-input.cjs`, `hud-selector.cjs`, `belt-pull-off-check.cjs` | GPU source integrated; HUD geometry/input plus actual cancellation journey pending startup fix |
 | Inventory and native rank-book confirmation; result/OKAY/Escape, retained pause/audio, column-first cells, equipment/protected clothing/third ring, nested Sack pages/back/rename, animation lock, drag/drop/restoration flybys, stats/set/wizard preview | HUD | `player_panels/{inventory*,skill_book_feedback}`, `sack_*`; `player-panels.cjs`, `skill-book-result.cjs`, `responsive.cjs`, `save-resume.cjs` | GPU source integrated; actual pointer/touch/Sack/save journey pending startup fix |
+
 | Skills/quickbar; learned/ranked/weld pages, stock hover, every bank binding, skill/item drag and belt pull-off | HUD | `player_panels/skills.rs`, `skill_selector.rs`; `player-panels.cjs`, `hud-selector.cjs`, `mod-skills.cjs` | GPU source integrated; real learned/drag/bank/pull-off journey pending startup fix |
 | College services; all shops/perks/prices, insufficient gold, storage, paid Dowse/ref/roll/Done, Unforge confirmation/results, dye admission/swatches/trim/cloth | HUD | `player_panels/{services,crafting,sack_rename}.rs`; `hub-services.cjs`, `player-panels.cjs`, `responsive.cjs` | GPU source integrated; actual paid/rejected shop, Dowse, dye and Unforge journey pending startup fix |
 | NPC chat/books/boasts/authored choices; history, progressive text/audio/acceleration, selector list drag/wheel/controller, notebox/error | HUD | `player_panels/{dialogue,notebox}.rs`; `hub-dialogue-rooms.mjs`, `menu-journey.cjs` | GPU source integrated; actual dialogue/selector/notebox focus and text journey pending startup fix |
 | Level-up offer sequence; reveal/clocks, cards/insight/weld, responsive detail, choice/reroll/save and rejected-action recovery | HUD | `skill_picker.rs`; `hud-selector.cjs`, actual earned gameplay | GPU source integrated; actual earned offer/card/selection journey pending startup fix |
 | Tutorial callouts/arrows; canonical text/narration and live GPU widget anchors; intro title/fade; Game Over riff/prompt/admission | HUD | `tutorial/**`, `college_intro.rs`, `game_over.rs`; `tutorial-text-bounds.cjs`, `solomon-entrance.cjs`, `boneyard.cjs` | GPU source integrated; actual Tutorial anchors/text and terminal run journey pending startup fix |
-| World notifications; local loot/Gold coalescing, Hub/Boneyard rank-book notices, Overloaded Mana and CHEAT DEATH; per-run cursors, native clip/rise/fade/shadow, life/Tutorial/Game Over gates and screen-reader text | acceptance; root wiring | Recovered notification contract above; `sim/boneyard/loot/messages.rs`, `web/loot/messages.rs`; current-source fixture and genuine earned browser events | Current-source clock and GPU controller implemented; 12 focused tests pass; integrated browser event/render proof pending |
+| World notifications; local loot/Gold coalescing, Hub/Boneyard rank-book notices, Overloaded Mana and CHEAT DEATH; per-run cursors, native clip/rise/fade/shadow, life/Tutorial/Game Over gates and screen-reader text | acceptance; root wiring | Recovered notification contract above; `sim/boneyard/loot/messages.rs`, `web/loot/messages.rs`; current-source fixture and genuine earned browser events | Current-source clock and GPU controller implemented; 13 focused tests pass; integrated browser event/render proof pending |
 | Social Party; collapsed/coarse/expanded, Members/Settings/Mods, roster tags/scroll, privacy, copy/regenerate, Kick/Leave, request/invite Accept/Deny | social | `social/party/**`; `hosted-social.cjs`, `join-party.cjs` | GPU source integrated; actual two-human roster/privacy/request journey pending startup fix |
 | Player cards/private College; Hub actor hit, Message/invite, resolve/decline/failure and owned roster | social | `social/{card,hub_players,hosted}.rs`; `hosted-social.cjs`, `hosted-session.cjs` | GPU source integrated; actual actor card/private admission/teardown pending startup fix |
 | Chat; Boneyard/Global/Party/Whisper, drafts/unread/fade/channel cycle, IME, author card and disconnect/reset | social | `social/chat.rs`; `hosted-social.cjs` | GPU source integrated; actual IME/channel/whisper delivery pending startup fix |
