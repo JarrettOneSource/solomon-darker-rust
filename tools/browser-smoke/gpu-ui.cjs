@@ -27,8 +27,11 @@ function findWidget(ui, id) {
   return matches[0];
 }
 
-async function widget(page, id, options) {
-  const ui = await waitForUi(page, ui => Boolean(findWidget(ui, id)), `GPU widget ${id}`, options);
+async function widget(page, id, {enabled = false, ...options} = {}) {
+  const ui = await waitForUi(page, ui => {
+    const target = findWidget(ui, id);
+    return target && (!enabled || target.enabled === true);
+  }, `${enabled ? 'enabled ' : ''}GPU widget ${id}`, options);
   return findWidget(ui, id);
 }
 
@@ -69,14 +72,14 @@ function center(bounds) {
 }
 
 async function click(page, id, options) {
-  const target = await widget(page, id);
+  const target = await widget(page, id, {enabled:true});
   assert.equal(target.enabled, true, `GPU widget is enabled: ${id}`);
   const point = center(bounds(target));
   await page.mouse.click(point.x, point.y, options);
 }
 
 async function tap(page, id) {
-  const target = await widget(page, id);
+  const target = await widget(page, id, {enabled:true});
   assert.equal(target.enabled, true, `GPU widget is enabled: ${id}`);
   const point = center(bounds(target));
   await page.touchscreen.tap(point.x, point.y);
