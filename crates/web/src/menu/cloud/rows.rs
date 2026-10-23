@@ -173,7 +173,7 @@ pub(super) fn mod_row(
     );
     frame.record_value(&id, &content.slug, Some(selected));
     if enabled {
-        if response.double_clicked() {
+        if frame.double_clicked(&response) {
             actions.push(format!("cloud-open:mod:{}", content.slug));
         } else if response.clicked() {
             actions.push(id);
@@ -392,7 +392,7 @@ pub(super) fn party_row(
         enabled,
     );
     if enabled {
-        if response.double_clicked() {
+        if frame.double_clicked(&response) {
             actions.push(format!("cloud-open:party:{}", party.id));
         } else if response.clicked() {
             actions.push(id);
