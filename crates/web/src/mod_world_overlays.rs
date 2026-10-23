@@ -347,26 +347,34 @@ impl ModWorldOverlays {
                 ModSpellEffectKind::Area => {
                     let born = *self.births.entry((0, effect.id, 0)).or_insert(now);
                     let phase = if reduced { 1.0 } else { alternate(now - born, 0.55) };
-                    let radius = effect.radius * if reduced { 1.0 } else { 0.96 + 0.08 * phase };
+                    let pulse_scale = if reduced { 1.0 } else { 0.96 + 0.08 * phase };
+                    let radius = effect.radius * pulse_scale;
                     let alpha = if reduced { 1.0 } else { 0.55 + 0.45 * phase };
-                    for i in (0..12).rev() {
-                        let ratio = i as f32 / 12.0;
-                        painter.circle_filled(
-                            center,
-                            radius * ratio,
-                            Color32::from_rgba_unmultiplied(
-                                133,
-                                78,
-                                219,
-                                ((1.0 - ratio) * 56.0 * alpha) as u8,
-                            ),
+                    let border_width = 2.0 * pulse_scale;
+                    // CSS's default circle gradient ends at the padding box's farthest corner.
+                    let fade_radius =
+                        (radius - border_width).max(0.0) * std::f32::consts::SQRT_2 * 0.68;
+                    let mut gradient = egui::Mesh::default();
+                    gradient.colored_vertex(
+                        center,
+                        Color32::from_rgba_unmultiplied(133, 78, 219, (56.0 * alpha) as u8),
+                    );
+                    for index in 0..=64 {
+                        let angle = std::f32::consts::TAU * index as f32 / 64.0;
+                        gradient.colored_vertex(
+                            center + vec2(angle.cos(), angle.sin()) * fade_radius,
+                            Color32::TRANSPARENT,
                         );
+                        if index > 0 {
+                            gradient.add_triangle(0, index, index + 1);
+                        }
                     }
+                    painter.add(egui::Shape::mesh(gradient));
                     painter.circle_stroke(
                         center,
-                        radius,
+                        (radius - border_width / 2.0).max(0.0),
                         Stroke::new(
-                            2.0,
+                            border_width,
                             Color32::from_rgba_unmultiplied(176, 132, 255, (199.0 * alpha) as u8),
                         ),
                     );
