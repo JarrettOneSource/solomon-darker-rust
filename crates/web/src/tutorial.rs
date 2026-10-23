@@ -149,6 +149,16 @@ impl TutorialUi {
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let Some(model) = &self.model else { return Ok(()) };
         let view = &model.view();
+        if view.intro.is_some() {
+            frame.announce("Midnight, six months ago");
+        }
+        if let Some(heading) = view.heading {
+            frame.announce(&format!(
+                "{}. {}",
+                heading.replace('\n', " "),
+                view.subheading.unwrap_or("")
+            ));
+        }
         if let Some(narration) = view.narration {
             frame.announce(&format!("{}: {}", narration.speaker, narration.text));
         }

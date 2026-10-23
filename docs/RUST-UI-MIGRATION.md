@@ -791,6 +791,23 @@ keeps real Tab scrolling, full-row visibility, purchase rejection, reopening and
 all 26 librarian rows/one-shot Lace removal. No product catalog or focus behavior
 changes to accommodate the stale target; the original five-row failure remains.
 
+The actual f41dc57 Tutorial entry passes both input contexts, retained intro/Sirmin/run,
+four native/phone lesson layouts and real movement acknowledgement, with errors[] and
+graceful Chrome exit0 (`common-browser/f41dc57/tutorial-entry`). Reviewed screenshots
+show the native Midnight card and both lesson variants. Its unchanged native ariaNotify
+trace also establishes two required accessibility corrections. First, fa08
+`TutorialOverlay.tsx:157–163` exposes the newline-flattened heading plus subheading in
+its polite live region; the GPU painter currently announces narration only. Second,
+the shared announcement state stores only the last string from a frame's list, so an
+unchanged pair of match-loading messages alternates and repeats every frame (about
+50 pairs in this bounded entry). Preserve each current message, compare whole frame
+membership rather than one global last string, and allow real later returns after a
+message leaves the frame. Publish each newly changed batch together so the single
+fallback live region also retains every message instead of overwriting earlier ones.
+HUD handed the bounded Tutorial announcement edit to acceptance; foundation handed
+the disjoint canonical accessibility batching seam to acceptance. Actual lesson
+announcements and unchanged-batch silence must pass on the rebuilt artifact.
+
 `skill-book-24382f0-entered-notices/receipt.json` now qualifies the full imported-book
 journey in both worlds, including the shipped stock Boneyard fixture. Both OKAY and
 Escape release the independent modal/pause, and each actual accepted +1 reaches native
