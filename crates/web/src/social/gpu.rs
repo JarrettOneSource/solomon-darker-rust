@@ -60,6 +60,7 @@ pub(super) fn stock_button(
     let scale = bounds.height() / 69.0;
     let held = enabled && crate::menu::widgets::stock_button_pressed(ui, &response);
     crate::menu::widgets::paint_stock_button_highlight(frame, ui, bounds, scale, enabled, held);
+    focus_outline(frame, ui, &response, scale);
     let mut spec = NativeUiTextSpec::new(NativeUiFontName::Menu, label, 0.0, 0.0);
     let pressed = if held { 6.0 * scale } else { 0.0 };
     spec.x = f64::from(bounds.center().x + pressed);
@@ -70,6 +71,17 @@ pub(super) fn stock_button(
     gpu_ui::native_text(frame, painter, &spec);
     frame.record(&format!("social/{id}"), label, "button", &response);
     Ok(response)
+}
+
+pub(super) fn focus_outline(frame: &UiFrame<'_>, ui: &Ui, response: &Response, scale: f32) {
+    crate::menu::widgets::focus_outline(
+        frame,
+        ui,
+        response,
+        2.0 * scale,
+        3.0 * scale,
+        Color32::from_rgba_unmultiplied(239, 209, 125, 230),
+    );
 }
 
 pub(super) fn brackets(
