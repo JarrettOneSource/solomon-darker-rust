@@ -9,17 +9,19 @@ import { loadKernel } from '../website-oracle/oracle.mjs'
 const require = createRequire(import.meta.url)
 const { chromium } = require(resolve(process.env.PW))
 const { startNewGame } = require('./menu-journey.cjs')
+const { launchOwnedBrowser } = require('./browser-lifecycle.cjs')
 const ui = require('./gpu-ui.cjs')
 const regions = await loadKernel('core-kernels/hub-regions.ts')
 const url = process.env.URL || 'http://127.0.0.1:4185/'
 const output = resolve(process.env.SHOTS || 'dialogue-room-smoke')
 mkdirSync(output, { recursive: true })
 const receipt = { url, generatedName:process.env.GENERATED_NAME==='1', journeys: [], errors: [] }
-const browser = await chromium.launch({
+const owned = await launchOwnedBrowser(chromium, {
   headless: true,
   executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 })
+const browser = owned.browser
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
 const observed = ui.watchErrors(page, { errors: receipt.errors })
 const state = () => page.evaluate(() => Array.from(window.wasmBindings.wizard_state()))
@@ -172,14 +174,16 @@ try {
   await page.mouse.click((576.5-originX)*1.2,(710.5-originY)*1.2)
   await ui.waitForUi(page,snapshot=>ui.findWidget(snapshot,'panel:dialogue')?.label==='Professor Machinimbus','actual teacher dialogue')
   await ui.click(page,'panel:dialogue-next');await choice('Per$uade');await selector('SELECT A SPELL')
-  await scanRowsUntil('panel:dialogue-selector:79',8)
+  // Pinned Source order is 72,73,74,75,79,78,77,76. Regenerate (79)
+  // is the fifth row; Call Comet (76) is the actual final eighth row.
+  await scanRowsUntil('panel:dialogue-selector:76',8)
   await page.screenshot({path:`${output}/selector-teacher-rust.png`})
   receipt.journeys.push({interaction:'teacher',state:await state(),rows:8,focusedLastRow:true})
-  await ui.click(page,'panel:dialogue-selector:79');await page.waitForTimeout(200)
+  await ui.click(page,'panel:dialogue-selector:76');await page.waitForTimeout(200)
   await selector('SELECT A SPELL')
   // The real insufficient-gold receipt leaves all eight offers available.
   await page.keyboard.press('Escape');await choice('Per$uade');await selector('SELECT A SPELL')
-  await scanRowsUntil('panel:dialogue-selector:79',8)
+  await scanRowsUntil('panel:dialogue-selector:76',8)
   await page.keyboard.press('Escape');await ui.nextFrame(page);await page.keyboard.press('Escape')
   await ui.noWidget(page,'panel:dialogue')
   ;[x,y]=await state()
@@ -209,9 +213,17 @@ try {
   await page.screenshot({path:`${output}/failure.png`})
   process.exitCode=1
 } finally {
-  await keys([])
-  await ui.settleErrors(page)
-  writeFileSync(`${output}/receipt.json`,`${JSON.stringify(receipt,null,2)}\n`)
-  await browser.close()
+  try {
+    await keys([])
+    await ui.settleErrors(page)
+    receipt.cleanup = await owned.close()
+  } catch(error) {
+    receipt.passed = false
+    receipt.cleanup = error.cleanup
+    receipt.failure ??= error.stack
+    throw error
+  } finally {
+    writeFileSync(`${output}/receipt.json`,`${JSON.stringify(receipt,null,2)}\n`)
+  }
 }
 console.log(JSON.stringify(receipt))

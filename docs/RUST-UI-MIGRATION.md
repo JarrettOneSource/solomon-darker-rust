@@ -740,3 +740,12 @@ The same toolbar image exposes one remaining local paint-order issue: later stoc
 art covers the prior label's final glyph. Established `web/menu.css:108–110` assigns all
 native labels z-index 1, above the sibling button chrome. Preserve that by painting the
 bar's stock art first, then its real native labels; keep the existing interaction owners.
+
+The retained 58df teacher census failure is a driver ordering error: it stops at
+Regenerate (79), the fifth Source row, and then requires eight observed rows.
+Unchanged fa08 `native-hub-npc.ts::NATIVE_TEACHER_SPELLS` returns the authored order
+72,73,74,75,79,78,77,76, matching the Rust catalog exactly. The driver now traverses
+through Call Comet (76), the actual eighth row, before requiring all eight. It
+keeps real Tab scrolling, full-row visibility, purchase rejection, reopening and
+all 26 librarian rows/one-shot Lace removal. No product catalog or focus behavior
+changes to accommodate the stale target; the original five-row failure remains.
