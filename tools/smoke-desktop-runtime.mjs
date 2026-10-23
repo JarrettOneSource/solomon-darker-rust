@@ -160,10 +160,7 @@ try {
     await setWindowMinimized(guest, true);
     await setWindowMinimized(host, false);
   }
-  await host.page.getByRole('button', {
-    name: 'Enter the Boneyard',
-    exact: true
-  }).click();
+  await ui.click(host.page, 'hud:map');
   const readyDeadline = Date.now() + 120000;
   const remainingReadiness = () => {
     const remaining = readyDeadline - Date.now();
