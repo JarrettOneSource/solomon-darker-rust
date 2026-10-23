@@ -10,7 +10,7 @@ use solomon_sim::social::party_ui::{
 };
 use solomon_sim::social::{party_member_display_name, party_menu_leave_label};
 
-use super::super::{Intent, PartyTab, SocialUi, gpu};
+use super::super::{PartyTab, SocialUi, gpu};
 use crate::gpu_ui::{UiFrame, message_frame_scaled};
 
 impl SocialUi {
@@ -336,11 +336,10 @@ impl SocialUi {
                     self.clipboard.copy(code);
                 }
             } else {
-                let action = match action.as_str() {
+                self.activate(match action.as_str() {
                     "generate" => "party-generate",
                     _ => &action,
-                };
-                self.intents.borrow_mut().push(Intent::Action(action.to_owned()));
+                })?;
             }
         }
         Ok(())

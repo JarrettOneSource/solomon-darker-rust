@@ -250,7 +250,7 @@ impl SocialUi {
             })
             .inner?;
         if let Some(intent) = intent {
-            self.intents.borrow_mut().push(intent);
+            self.handle_intent(intent)?;
         }
         Ok(())
     }

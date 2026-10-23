@@ -9,7 +9,7 @@ use solomon_sim::social::party_ui::{
 };
 use solomon_sim::social::{GameChatWorldKind, PartyInvitationView, SocialAction};
 
-use super::super::{Intent, SocialUi, Surface};
+use super::super::{SocialUi, Surface};
 
 impl SocialUi {
     fn first_party_invitation(&self) -> Option<&PartyInvitationView> {
@@ -94,7 +94,7 @@ impl SocialUi {
         }
         self.shown_party_invitation = Some(id);
         if let Some(action) = selected {
-            self.intents.borrow_mut().push(Intent::Action(action));
+            self.activate(&action)?;
         }
         Ok(())
     }
