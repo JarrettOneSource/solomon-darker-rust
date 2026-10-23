@@ -259,7 +259,9 @@ async function observeAnnouncements(page, {forceFallback = false} = {}) {
     }
     const ownership = [];
     Object.defineProperty(window, '__solomonAnnouncementOwnership', {value:ownership});
-    const active = () => Boolean(window.solomonLoader?.active?.());
+    // Native ariaNotify is called while Rust is painting. Observe the actual
+    // temporary canvas without reentering a WASM getter from its own callback.
+    const active = () => Boolean(document.querySelector('canvas[data-gpu-loader]'));
     const sample = () => {
       const shared = document[Symbol.for('solomon.graphics.announcements')];
       const current = {owners:shared?.owners??0,loaders:shared?.loaders??0,
