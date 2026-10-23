@@ -166,37 +166,6 @@ async function swipe(page,distance) {
     await page.screenshot({path:path.join(output,'owned-gallery-desktop.png')});
     checked('protected screenshot textures render through GPU with previous/next wrap, thumbnail and real arrow input');
 
-    step='multiline comment and busy ownership';
-    await reveal(page,'dark-cloud-comment');
-    await gpu.fill(page,'dark-cloud-comment','😀'.repeat(501));
-    await gpu.value(page,'dark-cloud-comment','😀'.repeat(500));
-    const body='Ordinary GPU comment é\nשלום 😀';
-    await gpu.fill(page,'dark-cloud-comment',body);
-    await gpu.value(page,'dark-cloud-comment',body);
-    const postGate=new Promise(resolve=>{releasePost=resolve;});
-    await context.route(`**/api/mods/${slug}/comments`,async route=>{
-      if(route.request().method()==='POST')await postGate;
-      await route.continue();
-    });
-    await reveal(page,'cloud-post-comment');
-    await gpu.click(page,'cloud-post-comment');
-    await gpu.waitForUi(page,snapshot=>gpu.findWidget(snapshot,'cloud-post-comment')?.enabled===false,
-      'actual in-flight comment owns its draft');
-    const busyField=gpu.center(gpu.bounds(await gpu.widget(page,'dark-cloud-comment')));
-    await page.mouse.click(busyField.x,busyField.y);
-    await page.keyboard.insertText('Rejected while posting');
-    await gpu.value(page,'dark-cloud-comment',body);
-    releasePost();
-    await until(()=>comments.some(row=>row.method==='POST'&&row.body.body===body),'actual comment POST receipt');
-    const posted=comments.find(row=>row.method==='POST').body;
-    await reveal(page,`cloud-delete-comment:${posted.id}`);
-    await page.screenshot({path:path.join(output,'owned-comment-and-versions.png')});
-    await gpu.click(page,`cloud-delete-comment:${posted.id}`);
-    await gpu.noWidget(page,`cloud-delete-comment:${posted.id}`);
-    await until(()=>requests.some(request=>request.path.endsWith(`/comments/${posted.id}`)
-      &&request.method==='DELETE'&&request.status===204),'actual author comment deletion');
-    checked('real multiline UTF16-limited comments preserve the draft while posting, then author Delete refreshes the actual list');
-
     step='portrait touch gallery';
     await gpu.click(page,'cloud-detail-done');
     await gpu.noWidget(page,'cloud-detail-title');
@@ -212,6 +181,46 @@ async function swipe(page,distance) {
     await page.screenshot({path:path.join(output,'owned-gallery-touch.png')});
     await gpu.assertGpuOnly(page);
     checked('portrait gallery uses real multi-frame touch with the Source40px threshold and both directions');
+    await page.setViewportSize({width:1600,height:900});
+    await gpu.nextFrame(page);
+
+    step='multiline comment and busy ownership';
+    await reveal(page,'dark-cloud-comment');
+    await gpu.fill(page,'dark-cloud-comment','😀'.repeat(501));
+    await gpu.value(page,'dark-cloud-comment','😀'.repeat(500));
+    const body='Ordinary GPU comment é\nשלום 😀';
+    await gpu.fill(page,'dark-cloud-comment',body);
+    await gpu.value(page,'dark-cloud-comment',body);
+    await reveal(page,'cloud-comment-resize');
+    const fieldBefore=gpu.bounds(await gpu.widget(page,'dark-cloud-comment'));
+    const grip=gpu.center(gpu.bounds(await gpu.widget(page,'cloud-comment-resize')));
+    await page.mouse.move(grip.x,grip.y);await page.mouse.down();
+    await page.mouse.move(grip.x,grip.y+64,{steps:12});await page.mouse.up();
+    await gpu.waitForUi(page,snapshot=>gpu.findWidget(snapshot,'dark-cloud-comment')?.paintRect[3]>=fieldBefore.height+60,
+      'actual vertical textarea resize preserves its native minimum and current text');
+    await gpu.value(page,'dark-cloud-comment',body);
+    const postGate=new Promise(resolve=>{releasePost=resolve;});
+    await context.route(`**/api/mods/${slug}/comments`,async route=>{
+      if(route.request().method()==='POST')await postGate;
+      await route.continue();
+    });
+    await reveal(page,'cloud-post-comment');
+    await gpu.click(page,'cloud-post-comment');
+    await gpu.waitForUi(page,snapshot=>gpu.findWidget(snapshot,'cloud-post-comment')?.enabled===false,
+      'actual in-flight comment owns its draft');
+    await gpu.fill(page,'dark-cloud-comment','Edited while posting');
+    await gpu.value(page,'dark-cloud-comment','Edited while posting');
+    releasePost();
+    await until(()=>comments.some(row=>row.method==='POST'&&row.body.body===body),'actual comment POST receipt');
+    const posted=comments.find(row=>row.method==='POST').body;
+    await gpu.value(page,'dark-cloud-comment','');
+    await reveal(page,`cloud-delete-comment:${posted.id}`);
+    await page.screenshot({path:path.join(output,'owned-comment-and-versions.png')});
+    await gpu.click(page,`cloud-delete-comment:${posted.id}`);
+    await gpu.noWidget(page,`cloud-delete-comment:${posted.id}`);
+    await until(()=>requests.some(request=>request.path.endsWith(`/comments/${posted.id}`)
+      &&request.method==='DELETE'&&request.status===204),'actual author comment deletion');
+    checked('real multiline UTF16-limited comments resize and remain editable during copied submission; success clears the draft and author Delete refreshes the actual list');
 
     step='guest comment sign-in';
     const guest=await browser.newContext({ignoreHTTPSErrors:process.env.LOCAL_TLS==='1',viewport:{width:1600,height:900}});
@@ -243,7 +252,7 @@ async function swipe(page,distance) {
       fs.writeFileSync(path.join(output,'cloud-content.json'),JSON.stringify({passed:!failure,checks,failure,
         mod:{slug,name:modName,screenshots:created?.screenshots,versions:secondVersion?.versions},
         requests,comments,cleanup,errors:observations.flatMap(observation=>observation.errors)},null,2));
-      console.log(JSON.stringify({passed:!failure,checks,failure:failure?.message,cleanup}));
+      console.log(JSON.stringify({passed:!failure,checks,failure:failure?.message.split(': {')[0],cleanup}));
     }finally{await browser.close();}
   }
-})().catch(error=>{console.error(error);process.exitCode=1;});
+})().catch(error=>{console.error(error.message.split(': {')[0]);process.exitCode=1;});

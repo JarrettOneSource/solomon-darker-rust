@@ -78,6 +78,7 @@ async function client(browser, label, authenticated = true) {
 async function visibility(owner, value, native) {
   const {page,state} = owner;
   await gpu.useNativeFocus(page);
+  await page.bringToFront();
   if (!gpu.findWidget(await gpu.readUi(page),`social/visibility:${value}`)) {
     if (gpu.findWidget(await gpu.readUi(page),'social/party-menu')) await gpu.click(page,'social/tab:settings');
     else await gpu.click(page,'social/party-settings-shortcut');
@@ -90,6 +91,7 @@ async function visibility(owner, value, native) {
 async function joinMenu(visitor) {
   const {page} = visitor;
   await gpu.useNativeFocus(page);
+  await page.bringToFront();
   const surface = (await gpu.readUi(page)).surface;
   if (surface === 'title') await gpu.click(page,'play');
   if ((await gpu.readUi(page)).surface === 'play') await gpu.click(page,'join-party');
@@ -99,6 +101,7 @@ async function joinMenu(visitor) {
 async function refresh(visitor, id, label) {
   const {page,state} = visitor;
   await gpu.useNativeFocus(page);
+  await page.bringToFront();
   const count = state.directories.length;
   await gpu.click(page,'join-refresh');
   await until(() => state.directories.length > count, 'actual directory refresh response');
