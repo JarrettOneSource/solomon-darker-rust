@@ -28,6 +28,8 @@ async function reveal(page, id) {
     assert.deepEqual(gpu.bounds(await gpu.widget(page, 'settings-panel')), {x: 500, y: 100, width: 600, height: 700});
     await gpu.setSlider(page, 'settings-range:sound', 37);
     await gpu.value(page, 'settings-range:sound', '37');
+    await gpu.setSlider(page, 'settings-range:music', 61);
+    await gpu.value(page, 'settings-range:music', '61');
     checks.push('native centered panel and actual keyboard slider');
     await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'settings-root.png')});
     await gpu.click(page, 'settings-page:cloud');
@@ -69,6 +71,7 @@ async function reveal(page, id) {
     const before = (await gpu.widget(page, 'settings-toggle:lighting')).value;
     await gpu.click(page, 'settings-toggle:lighting');
     await gpu.value(page, 'settings-toggle:lighting', before === 'true' ? 'false' : 'true');
+    await gpu.focused(page, 'settings-toggle:lighting');
     await gpu.setSlider(page, 'settings-range:light-quality', 47);
     await gpu.value(page, 'settings-range:light-quality', '47');
     await reveal(page, 'settings-toggle:enhanced-effects');
