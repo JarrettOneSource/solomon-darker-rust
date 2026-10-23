@@ -77,6 +77,7 @@ async function modalFocus(page) {
   try {
     const page=await browser.newPage({viewport:{width:1600,height:900}});
     const desktopErrors=ui.watchErrors(page);errors.push(desktopErrors.errors);
+    await desktopErrors.ready;
     await ui.observeGpu(page);
     await ready(page);
     await ui.installController(page);
@@ -141,6 +142,7 @@ async function modalFocus(page) {
 
     const touch=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
     const touchErrors=ui.watchErrors(touch);errors.push(touchErrors.errors);
+    await touchErrors.ready;
     await ready(touch);
     assert.match((await ui.widget(touch,'landscape-guidance')).label,/Rotate your device to landscape/);
     await touch.screenshot({path:path.join(output,'menu-touch-portrait-guidance.png')});

@@ -163,7 +163,7 @@ async function setEnhancedEffects(page, enabled) {
     {key:mount?`sdr.token:${mount}`:'sdr.token',token:account.token});
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
-  ui.watchRequestFailures(page,{errors});
+  await ui.watchRequestFailures(page,{errors}).ready;
   await ui.observeGpu(page);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', entry => {

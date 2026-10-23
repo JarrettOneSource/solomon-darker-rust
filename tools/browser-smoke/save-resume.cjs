@@ -30,8 +30,8 @@ async function resume(page) {
   const errors=[];
   try {
     const context=await browser.newContext({viewport:{width:1600,height:900}});
-    context.on('page',page=>ui.watchErrors(page,{errors}));
     const page=await context.newPage();
+    await ui.watchErrors(page,{errors}).ready;
     await page.goto(url); await loaded(page);
     await startNewGame(page,{name:'Felix'});
     await ui.click(page,(await ui.byLabel(page,'Fomentius',{prefix:'hud:',role:'button'})).id);
@@ -85,7 +85,9 @@ async function resume(page) {
     assert.equal((await wizard(page))[6],boneyardPaused[6],'reload preserves the current region');
     await page.screenshot({path:path.join(output,'saved-title.png')});
 
-    const other=await context.newPage(); await other.goto(url); await loaded(other);
+    const other=await context.newPage();
+    await ui.watchErrors(other,{errors}).ready;
+    await other.goto(url); await loaded(other);
     await resume(page);
     await page.keyboard.down('KeyD'); await page.waitForTimeout(450); await page.keyboard.up('KeyD');
     await page.waitForTimeout(250);

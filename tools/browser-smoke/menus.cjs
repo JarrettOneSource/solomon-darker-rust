@@ -25,6 +25,7 @@ async function ticks(page,count) {
   try {
     const page=await browser.newPage({viewport:{width:1600,height:900}});
     const observed=ui.watchErrors(page);
+    await observed.ready;
     await ui.observeGpu(page);
     await ui.observeAnnouncements(page);
     await page.goto(url,{waitUntil:'domcontentloaded'});
