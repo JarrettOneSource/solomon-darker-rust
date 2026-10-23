@@ -284,7 +284,7 @@ impl MenuUi {
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         self.cloud.retire_images(frame);
         let keys = frame.key_codes().to_vec();
-        let editing = frame.ctx.text_edit_focused();
+        let editing = crate::gpu_ui::text_edit_focused(frame.ctx);
         let capturing_binding =
             self.screen == Screen::Settings && self.settings_view.awaiting_binding();
         let discard_keys = std::mem::take(&mut self.discard_keys);
@@ -428,7 +428,7 @@ impl MenuUi {
         }
         if !self.input_suspended && self.pending_start.is_none() {
             let scope = self.navigation_scope();
-            let navigation_requested = !ctx.text_edit_focused()
+            let navigation_requested = !crate::gpu_ui::text_edit_focused(&ctx)
                 && ctx.input(|input| {
                     [
                         egui::Key::Enter,

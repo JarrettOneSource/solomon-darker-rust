@@ -6,11 +6,9 @@ use crate::gpu_ui::{ImageShadow, StockAtlas, UiFrame, paint_text_layout};
 use egui::{Align2, Color32, FontId, Id, Pos2, Rect, Ui, Vec2};
 use solomon_graphics::BlendMode;
 use solomon_sim::element_vfx::{self, ElementVfxBlend, ElementVfxDraw};
-use solomon_sim::menu::create_name::{
-    finalize_create_wizard_name, layout_create_wizard_name, validate_create_wizard_name,
-};
+use solomon_sim::menu::create_name::{finalize_create_wizard_name, validate_create_wizard_name};
 use solomon_sim::menu::{self, CreateHandPose};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextLayout};
+use solomon_sim::native_ui_text::NativeUiFontName;
 use solomon_sim::profile::create::NATIVE_CREATE_ENTRY_FADE_MS;
 use solomon_sim::profile::{WizardDiscipline, WizardElement};
 
@@ -412,55 +410,27 @@ impl CreateView {
             stage.rect(732.0, 7.0, 136.0, 15.0),
             Color32::WHITE,
         );
-        let previous = self.name.clone();
-        let mut locked = previous.as_str();
-        let text: &mut dyn egui::TextBuffer =
-            if self.finalizing { &mut locked } else { &mut self.name };
-        let edit = egui::TextEdit::singleline(text)
-            .id(Id::unique("create-name"))
-            .font(FontId::new(40.0 * stage.scale, egui::FontFamily::Name("Georgia".into())))
-            .text_color(Color32::TRANSPARENT)
-            .frame(egui::Frame::NONE)
-            .margin(Vec2::ZERO)
-            .interactive(enabled);
-        let response = ui.put(field, edit);
-        frame.record("create-name", "Wizard name", "textbox", &response);
-        if self.focus_name {
-            response.request_focus();
+        let response =
+            crate::gpu_ui::NativeTextEdit::singleline(&mut self.name, "create-name", "Wizard name")
+                .native_name(origin, stage.scale)
+                .margin(Vec2::ZERO)
+                .color(widgets::GOLD)
+                .enabled(enabled)
+                .readonly(self.finalizing)
+                .rules(crate::gpu_ui::EditorRules {
+                    validate: Some(validate_name_edit),
+                    ..Default::default()
+                })
+                .request_focus(self.focus_name)
+                .show(frame, ui, field);
+        if ui.is_visible() && response.has_focus() {
             self.focus_name = false;
         }
-        if response.changed() {
-            if let Some(reason) = validate_create_wizard_name(&self.name)
-                && !self.name.is_empty()
-            {
-                self.name = previous;
-                self.message = Some(reason.message().to_owned());
-                frame.announce(reason.message());
-            } else {
-                self.restart();
-            }
-        }
-        frame.record_value("create-name", &self.name, None);
-        if !self.name.is_empty() && validate_create_wizard_name(&self.name).is_none() {
-            let mut name = layout_create_wizard_name(&self.name);
-            for glyph in &mut name.glyphs {
-                glyph.center_x = f64::from(origin.x) + glyph.center_x * f64::from(stage.scale);
-                glyph.center_y = f64::from(origin.y) + glyph.center_y * f64::from(stage.scale);
-                glyph.scale *= f64::from(stage.scale);
-                glyph.tint = 0xd8ba70;
-            }
-            paint_text_layout(
-                frame,
-                &ui.painter().with_clip_rect(field),
-                &NativeUiTextLayout {
-                    font: NativeUiFontName::Heading,
-                    glyphs: name.glyphs,
-                    lines: Vec::new(),
-                    width: name.width,
-                    height: name.height,
-                    unsupported_code_points: Vec::new(),
-                },
-            );
+        if let Some(reason) = response.rejected.as_ref() {
+            self.message = Some(reason.clone());
+            frame.announce(reason);
+        } else if response.changed() {
+            self.restart();
         }
         widgets::focus_outline(frame, ui, &response, 2.0, 2.0, widgets::alpha(0xffffff, 0.8));
         let editable = enabled && !self.finalizing;
@@ -629,4 +599,12 @@ pub(super) fn paint_vfx(
         );
     }
     Ok(())
+}
+
+fn validate_name_edit(value: &str) -> Option<String> {
+    if value.is_empty() {
+        None
+    } else {
+        validate_create_wizard_name(value).map(|reason| reason.message().to_owned())
+    }
 }

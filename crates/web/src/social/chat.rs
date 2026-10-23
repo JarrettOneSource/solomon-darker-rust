@@ -40,9 +40,6 @@ impl SocialUi {
         let faded = solomon_sim::social::is_game_chat_faded(open, self.last_activity, self.now);
         let mut intent = None;
         let focused = ctx.memory(|memory| memory.has_focus(Id::unique("social/chat-message")));
-        let send_key = open
-            && focused
-            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
         let channel_key = open
             && focused
             && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab));
@@ -162,32 +159,28 @@ impl SocialUi {
                                 } else {
                                     format!("Message {}", self.channel.label())
                                 };
-                                let edit = egui::TextEdit::singleline(&mut self.chat_draft)
-                                    .id(Id::unique("social/chat-message"))
-                                    .char_limit(180)
-                                    .hint_text(placeholder)
-                                    .font(FontId::new(
-                                        if self.coarse { 16.0 } else { 14.0 },
-                                        FontFamily::Name("Alegreya".into()),
-                                    ))
-                                    .text_color(Color32::from_rgb(255, 245, 220))
-                                    .desired_width((width - 118.0).max(50.0));
-                                let response = ui.add_sized(
-                                    vec2(
-                                        (width - 118.0).max(50.0),
-                                        if self.coarse { 40.0 } else { 34.0 },
-                                    ),
-                                    edit,
-                                );
-                                frame.record(
+                                let (_, field) = ui.allocate_space(vec2(
+                                    (width - 118.0).max(50.0),
+                                    if self.coarse { 40.0 } else { 34.0 },
+                                ));
+                                let response = crate::gpu_ui::NativeTextEdit::singleline(
+                                    &mut self.chat_draft,
                                     "social/chat-message",
                                     "Chat message",
-                                    "textbox",
-                                    &response,
-                                );
-                                frame.record_value("social/chat-message", &self.chat_draft, None);
-                                if self.focus_chat {
-                                    response.request_focus();
+                                )
+                                .hint_text(placeholder)
+                                .font(FontId::new(
+                                    if self.coarse { 16.0 } else { 14.0 },
+                                    FontFamily::Name("Alegreya".into()),
+                                ))
+                                .color(Color32::from_rgb(255, 245, 220))
+                                .rules(crate::gpu_ui::EditorRules {
+                                    utf16_limit: Some(180),
+                                    ..Default::default()
+                                })
+                                .request_focus(self.focus_chat)
+                                .show(frame, ui, field);
+                                if ui.is_visible() && response.has_focus() {
                                     self.focus_chat = false;
                                 }
                                 if response.changed() {
@@ -203,7 +196,7 @@ impl SocialUi {
                                         .stroke(Stroke::new(1.0, gpu::GOLD)),
                                 );
                                 frame.record("social/chat-send", "Send", "button", &send);
-                                if send_key || send.clicked() {
+                                if response.submitted || send.clicked() {
                                     intent = Some(Intent::Submit(self.chat_draft.clone()));
                                 }
                             });

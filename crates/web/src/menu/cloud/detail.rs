@@ -142,7 +142,6 @@ impl ModDetailView {
             }
             "cloud-gallery-previous" => self.change_image(false)?,
             "cloud-gallery-next" => self.change_image(true)?,
-            "cloud-comment-edited" => self.limit_body(),
             "cloud-post-comment" => {
                 if self.comment_mutation.is_some() {
                     return Ok(true);
@@ -208,17 +207,6 @@ impl ModDetailView {
 
     pub fn take_actions(&mut self) -> Vec<HostedMenuAction> {
         std::mem::take(&mut self.actions)
-    }
-    fn limit_body(&mut self) {
-        let mut units = 0;
-        self.body = self
-            .body
-            .chars()
-            .take_while(|c| {
-                units += c.len_utf16();
-                units <= 1000
-            })
-            .collect();
     }
     // This painter borrows the scene art, image lifetime owner and subscription policy.
     #[allow(clippy::too_many_arguments)]
@@ -324,7 +312,7 @@ impl ModDetailView {
         {
             actions.push("cloud-dialog-close".to_owned());
         }
-        if !frame.ctx.text_edit_focused() {
+        if !crate::gpu_ui::text_edit_focused(frame.ctx) {
             if frame.ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft)) {
                 actions.push("cloud-gallery-previous".to_owned());
             }
@@ -490,7 +478,7 @@ impl ModDetailView {
             );
             let (_, field) = ui.allocate_space(Vec2::new(width, 110.0));
             widgets::control_panel(frame, ui, &art.controls, field, true)?;
-            let response = widgets::edit(
+            widgets::edit(
                 frame,
                 ui,
                 "dark-cloud-comment",
@@ -499,12 +487,11 @@ impl ModDetailView {
                 field,
                 "IM FELL English",
                 16.0,
-                self.comment_mutation.is_none(),
                 true,
+                true,
+                crate::gpu_ui::EditorRules { utf16_limit: Some(1000), ..Default::default() },
+                "Write a comment...",
             );
-            if response.changed() {
-                self.limit_body();
-            }
             frame.record_value("dark-cloud-comment", &self.body, None);
             let (_, row) = ui.allocate_space(Vec2::new(width, 50.0));
             widgets::label(

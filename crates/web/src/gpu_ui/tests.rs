@@ -20,6 +20,8 @@ fn frame_codes(
     let input_scope = RefCell::new(None);
     let retired_images = RefCell::new(Vec::new());
     let previous_widgets = BTreeMap::new();
+    let editors = RefCell::new(Vec::new());
+    let editor_errors = RefCell::new(Vec::new());
     let mut paint = paint;
     let raw = egui::RawInput {
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))),
@@ -41,6 +43,9 @@ fn frame_codes(
             input_scope: &input_scope,
             retired_images: &retired_images,
             focus_from_keyboard: true,
+            editor_receipts: &[],
+            editors: &editors,
+            editor_errors: &editor_errors,
         })
     })
     .drop_without_applying_deltas();
@@ -141,10 +146,11 @@ fn a_clicked_binding_row_commits_before_the_following_escape_dispatch() {
     let passes = batches::into_passes(
         egui::RawInput { events, ..Default::default() },
         vec![browser_key("Escape", "Escape")],
+        Vec::new(),
         vec![
-            batches::DispatchEnd { events: 2, codes: 0 },
-            batches::DispatchEnd { events: 4, codes: 0 },
-            batches::DispatchEnd { events: 5, codes: 1 },
+            batches::DispatchEnd { events: 2, codes: 0, edits: 0 },
+            batches::DispatchEnd { events: 4, codes: 0, edits: 0 },
+            batches::DispatchEnd { events: 5, codes: 1, edits: 0 },
         ],
     );
     for pass in passes {
@@ -196,11 +202,12 @@ fn a_new_field_has_committed_geometry_before_an_immediate_click_and_first_charac
     let passes = batches::into_passes(
         egui::RawInput { events, ..Default::default() },
         vec![browser_key("KeyF", "F")],
+        Vec::new(),
         vec![
-            batches::DispatchEnd { events: 2, codes: 0 },
-            batches::DispatchEnd { events: 4, codes: 0 },
-            batches::DispatchEnd { events: 6, codes: 0 },
-            batches::DispatchEnd { events: 8, codes: 1 },
+            batches::DispatchEnd { events: 2, codes: 0, edits: 0 },
+            batches::DispatchEnd { events: 4, codes: 0, edits: 0 },
+            batches::DispatchEnd { events: 6, codes: 0, edits: 0 },
+            batches::DispatchEnd { events: 8, codes: 1, edits: 0 },
         ],
     );
     for pass in passes {

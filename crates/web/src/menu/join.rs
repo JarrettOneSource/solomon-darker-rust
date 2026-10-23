@@ -247,10 +247,12 @@ impl JoinView {
             20.0,
             !self.busy,
             false,
+            crate::gpu_ui::EditorRules {
+                normalize: Some(normalize_party_code),
+                ..Default::default()
+            },
+            "",
         );
-        if edited.changed() {
-            self.code = normalize_party_code(&self.code);
-        }
         frame.record_value("join-party-code", &self.code, None);
         if widgets::submitted_on_enter(&edited) && complete_party_code(&self.code) && !self.busy {
             actions.push("join-code".to_owned());
