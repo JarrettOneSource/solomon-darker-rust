@@ -6,7 +6,7 @@ use solomon_sim::native_ui_text::{
     NativeUiFontName, NativeUiTextSpec, layout_native_ui_text, measure_native_ui_text,
     native_ui_font, native_ui_glyph_ink_bounds,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{HtmlCanvasElement, HtmlImageElement, KeyboardEvent, WebGl2RenderingContext, Window};
@@ -68,11 +68,14 @@ struct Animation {
 thread_local! {
     static LOADER:RefCell<Option<Loader>>=const{RefCell::new(None)};
     static ANIMATION:RefCell<Option<Animation>>=const{RefCell::new(None)};
+    // Native announcements can synchronously query the bridge while render owns
+    // its mutable borrow. Activity belongs to the lifecycle, not that borrow.
+    static ACTIVE:Cell<bool>=const{Cell::new(false)};
 }
 
 #[wasm_bindgen]
 pub fn active() -> bool {
-    LOADER.with(|slot| slot.borrow().is_some())
+    ACTIVE.with(Cell::get)
 }
 
 #[wasm_bindgen]
@@ -112,6 +115,7 @@ pub fn error(message: &str) {
 
 #[wasm_bindgen]
 pub fn finish() {
+    ACTIVE.with(|active| active.set(false));
     ANIMATION.with(|slot| {
         if let Some(animation) = slot.borrow_mut().take()
             && let Some(request) = animation.request
@@ -204,6 +208,7 @@ async fn boot() -> Result<(), String> {
             last_announced: String::new(),
         })
     });
+    ACTIVE.with(|active| active.set(true));
     start_animation()?;
     let bytes =
         js_sys::Uint8Array::from(include_bytes!("../../../web/assets/stock/Fonts.png").as_slice());
@@ -536,6 +541,14 @@ impl Drop for Loader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bridge_activity_is_queryable_during_a_mutable_render_state_borrow() {
+        LOADER.with(|slot| {
+            let _render = slot.borrow_mut();
+            assert!(!active());
+        });
+    }
+
     #[test]
     fn progress_is_actual_bounded_work_with_unknown_code_totals() {
         let mut progress = Progress::default();
