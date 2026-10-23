@@ -27,6 +27,7 @@ assert.match(originalPublication.deploymentId, /^[a-f0-9]{32}$/);
 assert.equal(originalPublication.ready, true);
 assert.ok(Number.isSafeInteger(originalPublication.deploymentSequence) && originalPublication.deploymentSequence >= 0);
 const publicationSequence = originalPublication.deploymentSequence + 1;
+const laterPublication = process.env.LATER_PUBLICATION === '1';
 if (process.env.SAME_GAME === '1') assert.equal(current, target);
 else assert.notEqual(current, target);
 const targetWebsite = process.env.TARGET_WEBSITE_REVISION;
@@ -43,6 +44,8 @@ const publish = publication => {
 const credentials = JSON.parse(fs.readFileSync(path.join(base, 'private.json')));
 const checks = [], errors = [], events = [], requests = [];
 const welcomed = [], checkpoints = [];
+const lifecycle = [];
+let recoveredPublication;
 let frame, playerId, announcement, account;
 let heldRoute = null, armSave = false, documentLoads = 0, socketCloses = 0;
 let releaseSave;
@@ -254,9 +257,33 @@ async function adminRestart() {
     publish(originalPublication);
     changedManifest = false;
     await ui.observeDocumentReplacement(page, async () => {
+      let lifecycleSession;
+      if (laterPublication) {
+        lifecycleSession = await page.context().newCDPSession(page);
+        await lifecycleSession.send('Page.setWebLifecycleState', {state:'frozen'});
+        lifecycle.push({state:'frozen',at:Date.now()});
+        const polls = requests.filter(row => row.pathname === publicationEndpoint).length;
+        await sleep(1200);
+        assert.equal(requests.filter(row => row.pathname === publicationEndpoint).length, polls,
+          'a frozen document cannot observe the intermediate ready publication');
+      }
       fs.writeFileSync(path.join(out, 'ready-to-publish.json'), JSON.stringify({current, target,
-        publication: candidate, wizardName, runId, checkpointSequence: announcement.checkpoint_sequence, result}));
+        publication: candidate, wizardName, runId, checkpointSequence: announcement.checkpoint_sequence,
+        lifecycleFrozen: laterPublication, result}));
       console.log('READY_TO_PUBLISH');
+      if (laterPublication) {
+        const replacementPath = path.join(out, 'later-publication-ready.json');
+        await until(() => fs.existsSync(replacementPath), 'the actual later healthy replacement', 180000);
+        recoveredPublication = JSON.parse(fs.readFileSync(replacementPath));
+        assert.equal(recoveredPublication.gameRevision,target);
+        assert.equal(recoveredPublication.revision,targetWebsite);
+        assert.equal(recoveredPublication.ready,true);
+        assert.ok(recoveredPublication.deploymentSequence > publicationSequence);
+        assert.notEqual(recoveredPublication.deploymentId,publicationId);
+        await lifecycleSession.send('Page.setWebLifecycleState', {state:'active'});
+        lifecycle.push({state:'active',at:Date.now(),publication:recoveredPublication});
+        await lifecycleSession.detach();
+      }
       await until(() => documentLoads > loads, 'coordinator publication and automatic reload', 180000);
     }, {timeout:180000});
     await title(page);
@@ -269,15 +296,16 @@ async function adminRestart() {
     await until(() => frame.snapshot.boneyard?.run_id === runId, 'the saved signed run continuation');
     await page.screenshot({ path: path.join(out, 'continued.png') });
     checked('the actual target artifact reloads automatically and Continue restores the saved wizard');
+    if (laterPublication) checked('the lifecycle-frozen client accepts the later healthy sequence after missing the announced publication');
     await ui.settleErrors(page);
     assert.deepEqual(errors, []);
     fs.writeFileSync(path.join(out, 'receipt.json'), JSON.stringify({ passed: true, current, target,
-      checks, events, requests, welcomed, checkpoints, errors }, null, 2));
+      checks, events, requests, welcomed, checkpoints, lifecycle, recoveredPublication, errors }, null, 2));
   } catch (error) {
     await ui.settleErrors(page);
     await page.screenshot({ path: path.join(out, 'failure.png') });
     fs.writeFileSync(path.join(out, 'failure.json'), JSON.stringify({ error: redact(error.stack),
-      checks, events, requests, welcomed, checkpoints, announcement, errors,
+      checks, events, requests, welcomed, checkpoints, announcement, lifecycle, recoveredPublication, errors,
       ui: await ui.readUi(page) }, null, 2));
     throw error;
   } finally {
