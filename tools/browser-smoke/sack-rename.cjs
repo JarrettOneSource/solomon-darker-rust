@@ -36,6 +36,7 @@ async function expectedFont(page,text){
   const observed=ui.watchErrors(page);
   page.on('pageerror',error=>receipt.pageErrors.push(error.stack||error.message));
   try{
+    await observed.ready;
     await page.goto(url);await ui.ready(page);
     await startNewGame(page,{name:receipt.generatedName?null:'Felix'});
     const fomentius=await ui.byLabel(page,'Fomentius',{role:'button',prefix:'hud:shortcut:'});
@@ -78,7 +79,7 @@ async function expectedFont(page,text){
     await page.keyboard.press('Escape');await ui.noWidget(page,'panel:surface:inventory');
     await page.context().storageState({path:path.join(output,'browser-storage.json'),indexedDB:true});
     receipt.reproduction={url,save:'accepted-save.json',storage:'browser-storage.json'};
-    await page.reload();await ui.ready(page);await ui.click(page,'play');await ui.click(page,'continue');
+    await ui.observeDocumentReplacement(page,()=>page.reload());await ui.ready(page);await ui.click(page,'play');await ui.click(page,'continue');
     await ui.widget(page,'hud:inventory',{enabled:true});
     await page.keyboard.press('KeyI');await ui.widget(page,'panel:surface:inventory');
     assert.equal((await ui.widget(page,sack.id)).label,`${last}, quantity 1`,'full accepted Unicode name survives ordinary reload/Continue');

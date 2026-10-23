@@ -43,7 +43,7 @@ async function importSave(page,value) {
   await visibleAfterScroll(page,'save-replace');await ui.click(page,'save-replace');
   await ui.noWidget(page,'save-replace');
   await ui.widget(page,'save-export',{enabled:true});
-  await page.reload();await ui.ready(page);await ui.surface(page,'title');
+  await ui.observeDocumentReplacement(page,()=>page.reload());await ui.ready(page);await ui.surface(page,'title');
   if(ui.findWidget(await ui.readUi(page),'prompt-secondary'))await ui.click(page,'prompt-secondary');
   await ui.click(page,'play');await ui.click(page,'continue');
   await ui.widget(page,'hud:inventory',{enabled:true,timeout:120000});
@@ -82,6 +82,7 @@ async function tick(page) {
       });
       const result={world:value.world,retainedSequence:value.retainedSequence,reads:[]};
       try {
+        await observed.ready;
         await importSave(page,value);
         assert.equal(ui.findWidget(await ui.readUi(page),'panel:skill-book-result'),undefined,
           'admission seeds the retained accepted rank receipt without replaying it');
@@ -114,7 +115,7 @@ async function tick(page) {
           assert.equal(notification.label,expected.text,'the actual accepted rank also paints its native world +1 message');
           result.reads.push({bookId,skillId:outcome.skillId,sequence:outcome.sequence,dismiss:index===0?'OKAY':'Escape'});
         }
-        await page.reload();await ui.ready(page);await ui.click(page,'play');await ui.click(page,'continue');
+        await ui.observeDocumentReplacement(page,()=>page.reload());await ui.ready(page);await ui.click(page,'play');await ui.click(page,'continue');
         await ui.widget(page,'hud:inventory',{enabled:true,timeout:120000});
         await ui.noWidget(page,'panel:skill-book-result');
         await page.keyboard.press('KeyI');await ui.widget(page,'panel:surface:inventory');

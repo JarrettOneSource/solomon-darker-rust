@@ -22,7 +22,9 @@ const notice = (page, title) => ui.waitForUi(page, snapshot => {
   let page;
   try {
     page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-    const { errors } = ui.watchErrors(page);
+    const observed = ui.watchErrors(page);
+    const {errors}=observed;
+    await observed.ready;
     await page.goto(process.env.URL || 'http://127.0.0.1:4185/'); await ui.ready(page);
     await startNewGame(page, {name:process.env.GENERATED_NAME==='1'?null:'Felix'});
     await page.keyboard.press('KeyI'); await ui.widget(page, 'panel:surface:inventory');
