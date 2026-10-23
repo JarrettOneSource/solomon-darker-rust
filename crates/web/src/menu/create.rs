@@ -8,7 +8,6 @@ use solomon_graphics::BlendMode;
 use solomon_sim::element_vfx::{self, ElementVfxBlend, ElementVfxDraw};
 use solomon_sim::menu::create_name::{finalize_create_wizard_name, validate_create_wizard_name};
 use solomon_sim::menu::{self, CreateHandPose};
-use solomon_sim::native_ui_text::NativeUiFontName;
 use solomon_sim::profile::create::NATIVE_CREATE_ENTRY_FADE_MS;
 use solomon_sim::profile::{WizardDiscipline, WizardElement};
 

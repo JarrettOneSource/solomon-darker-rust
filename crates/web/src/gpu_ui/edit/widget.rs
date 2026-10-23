@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use egui::{Color32, FontId, Id, Pos2, Rect, Response, Sense, Stroke, Ui, Vec2, pos2, vec2};
+use egui::{Color32, FontId, Id, Pos2, Rect, Response, Sense, Stroke, Ui, Vec2, vec2};
 
 use super::model::Model;
 use super::{
@@ -361,7 +361,7 @@ impl<'a> NativeTextEdit<'a> {
                 }
                 frame.ctx.request_repaint_after(std::time::Duration::from_millis(250));
                 frame.ctx.output_mut(|output| {
-                    output.ime = Some(egui::IMEOutput {
+                    output.ime = Some(egui::output::IMEOutput {
                         purpose: egui::IMEPurpose::Normal,
                         rect: transform * content,
                         cursor_rect: transform * caret,
