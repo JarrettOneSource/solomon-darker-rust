@@ -411,6 +411,7 @@ impl BoneyardLibrary {
         let layer = egui::LayerId::new(egui::Order::Middle, Id::unique("boneyard-library"));
         ctx.set_sublayer(crate::menu::scene_layer(), layer);
         egui::Area::new(layer.id)
+            .fade_in(false)
             .fixed_pos(bounds.min)
             .order(layer.order)
             .show(&ctx, |ui| {
