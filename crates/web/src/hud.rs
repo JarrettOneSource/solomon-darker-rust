@@ -896,18 +896,18 @@ impl Hud {
                 frame.record_rect(
                     "hud:secondary-slot",
                     label,
-                    "button",
+                    "image",
                     transform * response.interact_rect,
-                    response.enabled(),
+                    false,
                 );
             }
             if health == Some(slot) {
                 frame.record_rect(
                     "hud:health-potion",
                     label,
-                    "button",
+                    "image",
                     transform * response.interact_rect,
-                    response.enabled(),
+                    false,
                 );
             }
         }
