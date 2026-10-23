@@ -14,9 +14,12 @@ function residentSuspension(failure,captured,settled) {
   const matches=captured.channels.filter(channel=>channel.url===failure.url);
   if(matches.length!==1)return null;
   const before=matches[0];
-  const after=settled.channels.find(channel=>channel.id===before.id);
+  const remaining=settled.channels.filter(channel=>channel.url===failure.url);
+  if(remaining.length!==1)return null;
+  const after=remaining[0];
+  if(after.id!==before.id)return null;
   const stock=musicPaths.get(before.cue);
-  if(!stock||new URL(`assets/stock/audio/${stock}`,captured.documentUrl).href!==failure.url)return null;
+  if(!stock||new URL(`assets/stock/audio/${stock}`,captured.baseUrl??captured.documentUrl).href!==failure.url)return null;
   for(const channel of [before,after]) {
     if(!channel||channel.cue!==before.cue||channel.url!==failure.url||channel.src!==failure.url
       ||!channel.connected||!channel.hidden||channel.controls||channel.preload!=='auto'
@@ -73,7 +76,7 @@ function observeResidentMedia() {
     }
   }).observe(document,{subtree:true,childList:true});
   Object.defineProperty(window,'__solomonResidentMedia',{value:()=>({
-    documentId:performance.timeOrigin,documentUrl:location.href,
+    documentId:performance.timeOrigin,documentUrl:location.href,baseUrl:document.baseURI,
     channels:[...channels].map(([media,channel])=>({...channel,...describe(media)})),
   })});
 }
