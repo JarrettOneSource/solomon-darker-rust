@@ -384,6 +384,15 @@ impl HallView {
         let header = Rect::from_min_size(box_rect.min, Vec2::new(box_rect.width(), 55.0 * scale));
         self.ui.paint_tiles(frame, ui.painter(), 49, header, scale, Color32::WHITE)?;
         let head_stage = Stage { origin: box_rect.min, scale };
+        paint_separator(&ui.painter().with_clip_rect(header), head_stage, 54.0);
+        if compact {
+            ui.painter().rect_stroke(
+                box_rect,
+                0.0,
+                egui::Stroke::new(1.0, widgets::GOLD),
+                egui::StrokeKind::Outside,
+            );
+        }
         let mut x = if compact { 16.0 } else { 70.0 };
         for (label, id, active) in [
             ("LOCAL", "hall-scope:local", self.scope == HallScope::Local),
@@ -611,13 +620,7 @@ impl HallView {
         if let Some(detail) = layout.expanded {
             self.expanded_row(frame, ui, stage, entry, detail)?;
         }
-        for rect in hall_separator_halves(layout.separator_y) {
-            let rect = stage.rect(rect.x, rect.y, rect.width, rect.height);
-            ui.painter().line_segment(
-                [rect.left_center(), rect.right_center()],
-                egui::Stroke::new(rect.height().max(1.0), widgets::GOLD),
-            );
-        }
+        paint_separator(ui.painter(), stage, layout.separator_y);
         Ok(())
     }
     fn expanded_row(
@@ -761,4 +764,23 @@ fn hall_text(frame: &UiFrame<'_>, ui: &Ui, stage: Stage, text: &str, anchor: Hal
         0xd9ba70,
         NativeUiTextAlign::Left,
     );
+}
+
+fn paint_separator(painter: &egui::Painter, stage: Stage, y: f64) {
+    for (index, rect) in hall_separator_halves(y).into_iter().enumerate() {
+        let rect = stage.rect(rect.x, rect.y, rect.width, rect.height);
+        let (left, right) = if index == 0 {
+            (Color32::TRANSPARENT, widgets::GOLD)
+        } else {
+            (widgets::GOLD, Color32::TRANSPARENT)
+        };
+        let mut mesh = egui::Mesh::default();
+        mesh.colored_vertex(rect.left_top(), left);
+        mesh.colored_vertex(rect.right_top(), right);
+        mesh.colored_vertex(rect.right_bottom(), right);
+        mesh.colored_vertex(rect.left_bottom(), left);
+        mesh.add_triangle(0, 1, 2);
+        mesh.add_triangle(0, 2, 3);
+        painter.add(egui::Shape::mesh(mesh));
+    }
 }
