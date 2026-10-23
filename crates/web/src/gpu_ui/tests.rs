@@ -9,6 +9,7 @@ fn frame(
     let widgets = RefCell::new(BTreeMap::new());
     let announcements = RefCell::new(Vec::new());
     let input_scope = RefCell::new(None);
+    let retired_images = RefCell::new(Vec::new());
     let previous_widgets = BTreeMap::new();
     let mut paint = paint;
     let raw = egui::RawInput {
@@ -28,6 +29,7 @@ fn frame(
             rotation: egui::emath::Rot2::IDENTITY,
             translation: Vec2::ZERO,
             input_scope: &input_scope,
+            retired_images: &retired_images,
         })
     })
     .drop_without_applying_deltas();
