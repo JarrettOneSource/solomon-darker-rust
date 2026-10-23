@@ -11,6 +11,8 @@ mod effects;
 mod fonts;
 mod geometry;
 mod input;
+#[cfg(test)]
+mod layer_tests;
 mod material;
 mod painter;
 mod stock;
@@ -653,6 +655,9 @@ impl UiFrame<'_> {
             widget.modal = self.ctx.memory(|memory| memory.top_modal_layer().is_some());
             widget.egui_id = Some(response.id);
             widget.layer_id = Some(response.layer_id);
+            if let Some(index) = self.ctx.fixed_layer_order_index(response.layer_id) {
+                widget.z = index;
+            }
             widget.activated = response.clicked();
             widget.interactive = response.sense.interactive();
             widget.keyboard_activated = response.clicked()
@@ -666,6 +671,11 @@ impl UiFrame<'_> {
         self.record(id, label, role, response);
         if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
             widget.hit_shape = HitShape::Ellipse;
+            let region = widget.hit_region();
+            self.ctx.set_widget_hit_test(
+                response.id,
+                std::sync::Arc::new(move |pos| region.contains(pos)),
+            );
         }
     }
 
@@ -691,6 +701,11 @@ impl UiFrame<'_> {
                 size: [size.x, size.y],
                 radians,
             };
+            let region = widget.hit_region();
+            self.ctx.set_widget_hit_test(
+                response.id,
+                std::sync::Arc::new(move |pos| region.contains(pos)),
+            );
         }
     }
 
@@ -837,7 +852,7 @@ impl GpuUi {
         let fonts = fonts::load(document, &ctx).await?;
         let images = painter::Images::default();
         images.load_stock(renderer).await?;
-        let input = match input::BrowserInput::attach(document, canvas) {
+        let input = match input::BrowserInput::attach(document, canvas, &ctx) {
             Ok(input) => input,
             Err(error) => {
                 images.destroy(&renderer.graphics_context());

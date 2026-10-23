@@ -1,6 +1,10 @@
 [workspace]
 resolver = "3"
 members = ["crates/sim", "crates/assets", "crates/graphics", "crates/loader", "crates/web", "crates/launcher", "crates/protocol", "crates/modding", "crates/save-tools"]
+exclude = ["vendor/egui"]
+
+[patch.crates-io]
+egui = { path = "vendor/egui" }
 
 [workspace.package]
 version = "0.1.0"

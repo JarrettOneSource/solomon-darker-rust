@@ -4,6 +4,28 @@ Choices a maintainer would otherwise be tempted to reverse. Each records what wa
 why, and what it costs. Add an entry when a change opens a new seam, adds a dependency, or
 reverses one of these.
 
+## Native GPU UI composition
+
+**The application pins a narrow egui0.37 integration patch for fixed Source layering and
+passive containers.** Actual browser and Context traces showed HUD reappearance raising a
+full-screen Area above Party. Source roots have fixed document order and some backgrounds
+pass input to real child controls. Upstream `set_sublayer` supports only one level;
+`move_to_top` cannot establish a total order, and `interactable(false)` removes children
+too. Rewriting or resetting Area state would discard its real focus, geometry and lifecycle.
+
+The verified registry crate is vendored with its original metadata/licenses and excluded
+from workspace lint membership. One explicit layer order feeds native hit testing, modal
+comparison and final graphics draining. Passive backgrounds preserve real layout and child
+responses; authored hit predicates reuse the existing ellipse/rotation model. The sole
+native textarea resolves its pointer target through that same canonical widget query.
+Unregistered/default egui behavior remains intact. Application Areas opt out of unsolicited
+entrance fades explicitly; this patch does not change animation defaults.
+
+Cost: upgrades must review seven small implementation-file changes and replay the focused
+Context/actual browser contracts. Provenance and exact interfaces are in
+[`vendor/egui/SOLOMON-PATCH.md`](../vendor/egui/SOLOMON-PATCH.md). The Source registry owns
+game layering; this is not another window manager or a visual DOM adapter.
+
 ## Authored content and Lua
 
 **Shared authored-content values live in `sim::modding`; Lua VMs belong to a native-only

@@ -153,6 +153,7 @@ pub(super) fn owner(ctx: &egui::Context, id: egui::Id) -> EditorOwner {
 #[derive(Clone)]
 pub(crate) struct EditorDescriptor {
     pub owner: EditorOwner,
+    pub layer_id: egui::LayerId,
     pub text: Arc<str>,
     pub model: Arc<model::Model>,
     pub rules: EditorRules,

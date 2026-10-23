@@ -245,6 +245,7 @@ mod tests {
         let field = Rect::from_min_size(Pos2::ZERO, Vec2::new(384.0, 49.0));
         let model = Model::new(text);
         EditorDescriptor {
+            layer_id: egui::LayerId::background(),
             owner: super::super::EditorOwner { id: egui::Id::unique("create-name"), instance: 1 },
             text: text.into(),
             model: std::sync::Arc::new(model),
