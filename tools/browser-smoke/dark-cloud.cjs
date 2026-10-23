@@ -1,9 +1,12 @@
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Read actual Website content through GPU catalog/detail/modal/input controls.
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const gpu = require('./gpu-ui.cjs');
+const output=process.env.OUT||'/tmp';
+fs.mkdirSync(output,{recursive:true});
 
 async function revealTab(page, id) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -19,11 +22,20 @@ async function revealTab(page, id) {
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
   const browser = owned.browser;
   const checks = [];
-  let page;
+  let page, observation, doubleActivation;
   try {
     page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
-    const {errors, ready: errorsReady} = gpu.watchErrors(page);
+    observation=gpu.watchErrors(page);
+    const {errors, ready: errorsReady} = observation;
     await errorsReady;
+    await page.addInitScript(()=>{
+      const events=[];
+      Object.defineProperty(window,'__menuPointerEvents',{value:events});
+      for(const type of ['pointerdown','pointerup'])addEventListener(type,event=>{
+        events.push({type:event.type,trusted:event.isTrusted,time:event.timeStamp,detail:event.detail,
+          x:event.clientX,y:event.clientY,buttons:event.buttons,pointerType:event.pointerType});
+      },true);
+    });
     const catalogs = [];
     const details = [];
     page.on('response', response => {
@@ -59,6 +71,7 @@ async function revealTab(page, id) {
     const firstMod = (await gpu.readUi(page)).widgets.find(w => w.id.startsWith('cloud-select:mod:'));
     if (firstMod) {
       const slug = firstMod.id.slice('cloud-select:mod:'.length);
+      doubleActivation={target:firstMod,eventsBefore:await page.evaluate(()=>window.__menuPointerEvents.length)};
       await gpu.click(page, firstMod.id, {clickCount: 2});
       await gpu.widget(page, 'cloud-detail-title');
       await gpu.waitForUi(page, () => details.length > 0, 'actual detail');
@@ -108,7 +121,13 @@ async function revealTab(page, id) {
     checks.push('source Cloud pause/settings return, compact landscape, portrait tabs/layout edit/admission');
     console.log(JSON.stringify({checks, actualMods: actual.size, errors}));
   } catch (error) {
-    if (page) await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'dark-cloud-failure.png')});
+    if (page) {
+      await gpu.settleErrors(page);
+      await page.screenshot({path: path.join(output, 'dark-cloud-failure.png')});
+      fs.writeFileSync(path.join(output,'dark-cloud-failure.json'),JSON.stringify({error:error.stack,checks,
+        doubleActivation,pointerEvents:await page.evaluate(()=>window.__menuPointerEvents),
+        ui:await gpu.readUi(page),errors:observation?.errors},null,2));
+    }
     throw error;
   } finally {
     try { if (page && !page.isClosed()) await gpu.settleErrors(page); }
