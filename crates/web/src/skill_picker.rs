@@ -291,34 +291,27 @@ impl SkillPicker {
             (height / 2.0 - center_y * scale) as f32,
         );
         let layer = self.layer_id();
-        frame.ctx.set_transform_layer(
-            layer,
-            egui::emath::TSTransform::new(origin.to_vec2(), scale as f32),
-        );
+        let transform = egui::emath::TSTransform::new(origin.to_vec2(), scale as f32);
         let mut events = Vec::new();
         let mut error = None;
         let ctx = frame.ctx.clone();
-        egui::Area::new(layer.id)
-            .order(layer.order)
-            .fixed_pos(egui::Pos2::ZERO)
-            .constrain(false)
-            .show(&ctx, |ui| {
-                ui.set_min_size(egui::vec2(1600.0, if self.compact { 960.0 } else { 900.0 }));
-                let p = ui.painter();
-                let bounds = egui::Rect::from_min_size(
-                    egui::pos2(-origin.x / scale as f32, -origin.y / scale as f32),
-                    egui::vec2(width as f32 / scale as f32, height as f32 / scale as f32),
-                );
-                p.rect_filled(
-                    bounds,
-                    0.0,
-                    egui::Color32::BLACK.gamma_multiply(reveal.curtain_alpha as f32),
-                );
-                let painted = self.paint_offer(frame, ui, &offer, reveal, interactive, &mut events);
-                if let Err(message) = painted {
-                    error = Some(message);
-                }
-            });
+        crate::player_panels::chrome::native_area(&ctx, layer, transform).show(&ctx, |ui| {
+            ui.set_min_size(egui::vec2(1600.0, if self.compact { 960.0 } else { 900.0 }));
+            let p = ui.painter();
+            let bounds = egui::Rect::from_min_size(
+                egui::pos2(-origin.x / scale as f32, -origin.y / scale as f32),
+                egui::vec2(width as f32 / scale as f32, height as f32 / scale as f32),
+            );
+            p.rect_filled(
+                bounds,
+                0.0,
+                egui::Color32::BLACK.gamma_multiply(reveal.curtain_alpha as f32),
+            );
+            let painted = self.paint_offer(frame, ui, &offer, reveal, interactive, &mut events);
+            if let Err(message) = painted {
+                error = Some(message);
+            }
+        });
         if interactive {
             for key in frame.key_codes() {
                 if key.pressed

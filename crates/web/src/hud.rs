@@ -324,20 +324,19 @@ impl Hud {
             * self.ui_scale) as f32;
         let size = egui::vec2(self.viewport.0 as f32 / scale, self.viewport.1 as f32 / scale);
         let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::unique("game-hud"));
-        frame.ctx.set_transform_layer(layer, egui::emath::TSTransform::from_scaling(scale));
+        let transform = egui::emath::TSTransform::from_scaling(scale);
         let coarse = self.coarse();
         let mut error = None;
-        egui::Area::new(layer.id)
-            .order(layer.order)
-            .fixed_pos(egui::Pos2::ZERO)
-            .constrain(false)
-            .show(frame.ctx, |ui| {
+        crate::player_panels::chrome::native_area(frame.ctx, layer, transform).show(
+            frame.ctx,
+            |ui| {
                 ui.set_min_size(size);
                 let result = self.paint_contents(frame, ui, state, size, scale, coarse);
                 if let Err(value) = result {
                     error = Some(value);
                 }
-            });
+            },
+        );
         error.map_or(Ok(()), Err)
     }
     fn mobile_rect(
