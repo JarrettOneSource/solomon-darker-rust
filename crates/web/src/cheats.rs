@@ -5,7 +5,7 @@ mod controls;
 use crate::gpu_ui::UiFrame;
 use console::ConsoleView;
 use controls::CheatControls;
-use egui::{Color32, FontFamily, FontId, Id, Order, Rect, RichText, Stroke, pos2, vec2};
+use egui::{Color32, FontFamily, FontId, Id, Rect, RichText, Stroke, pos2, vec2};
 use solomon_protocol::hosted::{HostedCommand, HostedServerMessage};
 use solomon_sim::boneyard::waves::director::WavePhase;
 use solomon_sim::game_run::GameRunPhase;
@@ -94,6 +94,10 @@ struct OpenView {
     action_receipt: Option<(String, &'static str)>,
 }
 impl CheatUi {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("cheats/dialog"))
+    }
+
     pub fn attach(document: &Document) -> Result<Self, String> {
         let events = Rc::new(RefCell::new(Vec::new()));
         let key_admission = Rc::new(RefCell::new(KeyAdmission::default()));
@@ -317,8 +321,8 @@ impl CheatUi {
         );
         let mut action = None;
         let mut console_error = None;
-        egui::Area::new(Id::unique("cheats/dialog"))
-            .order(Order::Foreground)
+        egui::Area::new(self.layer_id().id)
+            .order(self.layer_id().order)
             .fixed_pos(egui::Pos2::ZERO)
             .show(&ctx, |ui| {
                 ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));

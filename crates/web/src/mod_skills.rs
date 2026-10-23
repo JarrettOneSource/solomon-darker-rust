@@ -144,6 +144,12 @@ impl ModSkillsUi {
     pub fn take_actions(&mut self) -> Vec<ModSkillAction> {
         std::mem::take(&mut self.actions)
     }
+    pub fn book_layer(parent: egui::LayerId) -> egui::LayerId {
+        egui::LayerId::new(parent.order, Id::unique("mod/skill-book"))
+    }
+    pub fn picker_layer(parent: egui::LayerId) -> egui::LayerId {
+        egui::LayerId::new(parent.order, Id::unique("mod/skill-picker"))
+    }
     pub fn paint(
         &mut self,
         frame: &mut UiFrame<'_>,
@@ -161,7 +167,7 @@ impl ModSkillsUi {
             } else {
                 vec2(-16.0, ctx.content_rect().height() * 0.12)
             };
-            let layer = egui::LayerId::new(book_parent.order, Id::unique("mod/skill-book"));
+            let layer = Self::book_layer(book_parent);
             ctx.set_sublayer(book_parent, layer);
             let area = egui::Area::new(layer.id).order(layer.order).anchor(anchor, offset).show(
                 &ctx,
@@ -206,7 +212,7 @@ impl ModSkillsUi {
         }
         if !self.choices.is_empty() {
             frame.input_scope("mod/skill-picker");
-            let layer = egui::LayerId::new(picker_parent.order, Id::unique("mod/skill-picker"));
+            let layer = Self::picker_layer(picker_parent);
             ctx.set_sublayer(picker_parent, layer);
             let area = egui::Area::new(layer.id)
                 .order(layer.order)

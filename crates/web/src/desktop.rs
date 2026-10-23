@@ -11,7 +11,7 @@ use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::Window;
 
 use crate::gpu_ui::UiFrame;
-use egui::{Color32, FontFamily, FontId, Id, Order, RichText, Stroke, vec2};
+use egui::{Color32, FontFamily, FontId, Id, RichText, Stroke, vec2};
 
 /// Credentials are intentionally absent from Debug/log output.
 #[derive(Clone)]
@@ -147,14 +147,18 @@ pub fn attach(window: &Window, before_close: &Function) -> Result<Option<Desktop
 }
 
 impl DesktopBridge {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("desktop/update"))
+    }
+
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         if !self.notice.borrow().visible() {
             return Ok(());
         }
         let ctx = frame.ctx.clone();
         let mut action = None;
-        let area = egui::Area::new(Id::unique("desktop/update"))
-            .order(Order::Foreground)
+        let area = egui::Area::new(self.layer_id().id)
+            .order(self.layer_id().order)
             .anchor(egui::Align2::RIGHT_TOP, vec2(-12.0, 12.0))
             .show(&ctx, |ui| {
                 egui::Frame::new()

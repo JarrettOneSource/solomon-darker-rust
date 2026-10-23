@@ -144,13 +144,19 @@ impl SharedGameplayUi {
         };
         Ok(())
     }
+    pub fn pause_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Middle, Id::unique("shared/pause"))
+    }
+    pub fn resume_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("shared/resume"))
+    }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let ctx = frame.ctx.clone();
         let screen = ctx.content_rect();
         if let Some(pause) = &self.pause {
             frame.input_scope("shared/pause");
-            egui::Area::new(Id::unique("shared/pause"))
-                .order(Order::Middle)
+            egui::Area::new(Self::pause_layer().id)
+                .order(Self::pause_layer().order)
                 .fixed_pos(egui::Pos2::ZERO)
                 .show(&ctx, |ui| {
                     ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
@@ -197,8 +203,7 @@ impl SharedGameplayUi {
                 screen.center(),
                 vec2(428.0, if resume.progress.is_some() { 142.0 } else { 104.0 }) * scale,
             );
-            let painter = ctx
-                .layer_painter(egui::LayerId::new(Order::Foreground, Id::unique("shared/resume")));
+            let painter = ctx.layer_painter(Self::resume_layer());
             panel(&painter, bounds, 1.0);
             painter.text(
                 bounds.center()

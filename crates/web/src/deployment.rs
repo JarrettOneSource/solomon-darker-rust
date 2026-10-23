@@ -15,7 +15,7 @@ use web_sys::{
 
 use crate::gpu_ui::UiFrame;
 use crate::hosted::WebsiteMount;
-use egui::{Color32, FontFamily, FontId, Id, Order, RichText, Stroke, vec2};
+use egui::{Color32, FontFamily, FontId, Id, RichText, Stroke, vec2};
 
 pub struct DeploymentUpdate {
     message: Option<&'static str>,
@@ -27,6 +27,10 @@ pub struct DeploymentUpdate {
 }
 
 impl DeploymentUpdate {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("deployment/update"))
+    }
+
     pub fn new(
         document: &Document,
         mount: WebsiteMount,
@@ -107,8 +111,8 @@ impl DeploymentUpdate {
         frame.input_scope("deployment/update");
         let ctx = frame.ctx.clone();
         let screen = ctx.content_rect();
-        let area = egui::Area::new(Id::unique("deployment/update"))
-            .order(Order::Foreground)
+        let area = egui::Area::new(self.layer_id().id)
+            .order(self.layer_id().order)
             .fixed_pos(egui::Pos2::ZERO)
             .show(&ctx, |ui| {
                 ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));

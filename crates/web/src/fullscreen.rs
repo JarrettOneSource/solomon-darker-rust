@@ -98,6 +98,12 @@ impl FullscreenControl {
         }
         Ok(())
     }
+    pub fn control_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("fullscreen/control"))
+    }
+    pub fn help_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Tooltip, Id::unique("fullscreen/help"))
+    }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let (mode, active, show_help, error) = {
             let state = self.state.borrow();
@@ -127,8 +133,8 @@ impl FullscreenControl {
             "Enter fullscreen"
         };
         let mut keyboard_activation = false;
-        egui::Area::new(Id::unique("fullscreen/control"))
-            .order(Order::Foreground)
+        egui::Area::new(Self::control_layer().id)
+            .order(Self::control_layer().order)
             .fixed_pos(point)
             .show(&ctx, |ui| {
                 let (bounds, response) = ui.allocate_exact_size(size, egui::Sense::click());
@@ -178,8 +184,8 @@ impl FullscreenControl {
         self.state.borrow_mut().gesture_handled = false;
         if show_help || error.is_some() {
             let message=error.unwrap_or_else(||"Fullscreen on iPhone or iPad\nTap Share, Add to Home Screen, keep Open as Web App enabled if shown, then launch Solomon Darker from its icon.\nOtherwise, open the game in a browser that supports fullscreen.".into());
-            egui::Area::new(Id::unique("fullscreen/help"))
-                .order(Order::Tooltip)
+            egui::Area::new(Self::help_layer().id)
+                .order(Self::help_layer().order)
                 .fixed_pos(pos2(
                     (point.x - 290.0).max(8.0),
                     (point.y + 40.0).min(screen.bottom() - 180.0).max(8.0),

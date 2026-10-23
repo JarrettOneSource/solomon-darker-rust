@@ -215,6 +215,18 @@ impl ModWorldOverlays {
         self.births.retain(|key, _| live.contains(key));
         Ok(())
     }
+    pub fn powerup_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Background, Id::unique("mod/powerups"))
+    }
+    pub fn shop_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Background, Id::unique("mod/shops"))
+    }
+    pub fn enemy_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Background, Id::unique("mod/enemies"))
+    }
+    pub fn effect_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Background, Id::unique("mod/effects"))
+    }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let ctx = frame.ctx.clone();
         let now = ctx.input(|input| input.time);
@@ -225,9 +237,7 @@ impl ModWorldOverlays {
             .match_media("(prefers-reduced-motion: reduce)")
             .map_err(|_| "mod motion preference")?
             .is_some_and(|query| query.matches());
-        let painter = ctx
-            .layer_painter(egui::LayerId::new(Order::Background, Id::unique("mod/world")))
-            .with_clip_rect(ctx.content_rect());
+        let painter = ctx.layer_painter(Self::powerup_layer()).with_clip_rect(ctx.content_rect());
         for powerup in &self.powerups {
             let born = *self.births.entry((1, powerup.id, 0)).or_insert(now);
             let phase = alternate(now - born, 0.8);
@@ -264,6 +274,7 @@ impl ModWorldOverlays {
                 ),
             );
         }
+        let painter = ctx.layer_painter(Self::shop_layer()).with_clip_rect(ctx.content_rect());
         for (index, shop) in self.shops.iter().enumerate() {
             let name = crate::gpu_ui::font_run(
                 frame.ctx,
@@ -349,6 +360,7 @@ impl ModWorldOverlays {
             )?;
             frame.record_rect(&format!("mod/shop:{index}"), &shop.name, "img", image, true);
         }
+        let painter = ctx.layer_painter(Self::enemy_layer()).with_clip_rect(ctx.content_rect());
         for enemy in &self.enemies {
             frame.paint_group(
                 &painter,
@@ -430,6 +442,7 @@ impl ModWorldOverlays {
                 true,
             );
         }
+        let painter = ctx.layer_painter(Self::effect_layer()).with_clip_rect(ctx.content_rect());
         for effect in &self.effects {
             let center = effect.sprite.center;
             match effect.kind {
