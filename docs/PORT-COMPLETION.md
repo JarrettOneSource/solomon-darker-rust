@@ -4,9 +4,10 @@ Current Website behavior is implemented and its complete local parity gates pass
 The independent repository and Linux game artifact are public. All 44 public acceptance
 groups pass across their recorded revisions, including the actual `/game-stg` replacement
 from `ca728e90` to `d3903095`. Normal DNS access recovered after the separately recorded
-authoritative serving failure; both M2 and NFO ordinary HTTPS checks pass. Desktop release
-qualification remains open; the reviewed native fixes pass local checks and await the
-new source-built platform matrix.
+authoritative serving failure; both M2 and NFO ordinary HTTPS checks pass. The desktop
+packages pass final archive inspection and actual Windows, Linux, Intel Mac and Apple
+silicon Mac journeys. The [standalone apps are public](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/desktop-1a4f7063cd3f4b9cb23651bdbe7cfffa7620cf76),
+and the Website extraction PR is ready for review. Production cutover remains separate.
 The target is the current Website's behavior and existing user data. The requested result is a separately published Rust game repository, removal of
 the replaced game implementation from the Website repository, a WASM embed in that Website,
 and a verified `/game-stg` deployment. The behavioral reference is
@@ -351,8 +352,8 @@ resources, including all 233 audio files. The Source also preloads resident audi
 journey startup bounds allow 240 seconds; subsequent behavior retains its separate deadlines.
 This observation is not a general startup-performance claim.
 
-The Website extraction remains open in [PR8](https://github.com/JarrettOneSource/solomon-dark-website/pull/8),
-source `2a7b40a0`. Retained Linux CI receipts pass all 63 backend/deployment contracts and
+The Website extraction is ready for review in [PR8](https://github.com/JarrettOneSource/solomon-dark-website/pull/8),
+source `2a7b40a0`, and is not merged. Retained Linux CI receipts pass all 63 backend/deployment contracts and
 frontend checks. Both `d3903095`-pinned reruns (`39789137765` and `39789127353`, attempt 2)
 pass and their logs verify the actual artifact revision. Production migration requires manual admission of the accepted
 Rust-aware M5 worker, its configured production artifact and a passing full gate; the
@@ -369,7 +370,8 @@ graphics backend, and fresh frames from both peer views inside the original shar
 120-second deadline. The update notice includes its existing stylesheet and must fit
 inside the viewport before capture. Earlier process-lookup, missing-style and build-lock
 failures retain their red/green receipts. Desktop preparation removes Trunk build locks
-after successful client validation, and all 19 desktop tests pass.
+after successful client validation. The final archive guard rejects stale Trunk locks,
+unexpected stock/shell files and generated residue; all 27 desktop tests pass.
 
 For source `5c094aaa`, run `39826304375` passes the game gate and the Linux and both macOS
 packaged journeys. All four resulting archives pass full inspection. The retained Windows
@@ -393,13 +395,53 @@ snapshot is still unsent before replacement, retaining its ordering, resumed-inp
 deadline assertions. Windows builds use the standard static CRT target setting, and CI
 checks actual native imports and the affected launcher tests. Local macOS ARM64 validation
 passes all 42 launcher tests, strict native Clippy, formatting and 19 desktop tests.
-The new source-built matrix must establish Windows green and qualify the replacement
-packages. The earlier `5c094aaa` archives retain their own identity and are not relabeled.
+The subsequent `af80793` matrix passes the complete game gate, all four final-ZIP checks,
+all 42 Windows native tests and its static CRT import check. Its ARM Mac journey passes;
+Linux, Intel Mac and Windows reach the final renderer-error assertion and fail there.
+The failed matrix remains recorded as failed. Earlier artifacts retain their own identity.
+
+The desktop fix at `1a4f7063` retires the saved game document before stopping its services.
+Repeated close/quit requests remain guarded through completed cleanup; interrupted
+retirement destroys the surviving document before services stop. Keep playing retains
+the existing document, native host and connection. An actual AF package fails the new
+stop-order regression, while the Mac replacement passes all original 51 assertions,
+repeated close/quit, Save and return to launcher and six observed service-stop requests
+after document retirement. The AF local control proves the ordering gap but does not
+reproduce the original CI image error. The strict error gate remains unchanged.
+
+All four final platform jobs pass for `1a4f7063`: Linux, Windows and ARM Mac in
+[run39879577620](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/39879577620),
+and Intel Mac in
+[run39879923237](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/39879923237).
+The first Intel attempt stopped before packaging because its token could not read the
+draft input asset; only Intel was rerun with the required access. The first workflow retains
+its failed status from that access step; its other three jobs pass. Each final ZIP is
+inspected before its actual save, peer, update, failed-close and shutdown journey.
+Windows records no menu-image cancellations, and all seven screenshots are
+reviewed. `release-final/desktop-lifecycle-qualification/` and
+`lifecycle-1a4f7063-39879577620/` retain the actual checks and their boundaries.
+
+The new shells use verified native/client components from clean `af80793` source after
+proving their complete build inputs unchanged. The missing Intel native is built separately
+from that same source with the pinned Rust toolchain; its build provenance is retained.
+The reused client has 5,723 verified files. The complete AF Rust/WASM qualification remains
+valid, and the new packages receive their own source identity, hashes and platform checks.
+The Linux game archive accompanying desktop delivery retains its actual AF manifest.
+The published release contains exactly 11 assets: four desktop ZIPs and their checksums,
+the common desktop manifest, and the Linux game archive and checksum. The temporary Intel
+build input is removed. Anonymous public checks verify every GitHub digest, all downloaded
+checksums and the manifest, payload availability and the latest-release feed. The release
+tag points to the accepted `1a4f7063` source. Prepared/publication evidence is in
+`release-inputs-1a4f7063/` and `desktop-lifecycle-qualification/public-release-verification.json`.
 
 The installed staging game and checksum-pinned `d3903095` Website artifact retain their
 recorded public acceptance. These desktop packaging and listener-lifetime changes do not
 change game kernels, stock assets or WASM gameplay behavior. Exact diagnosis and clean
 local gate results are in `windows-release-5c094aaa-39826304375/` under the release evidence.
+After desktop publication, the October 23 01:18 UTC postflight passes all ten ordinary-DNS
+HTTP/CSP checks, Google DNSSEC validation and normal NFO HTTPS. All five production,
+staging and Caddy service PIDs remain unchanged; staging is healthy, empty and accepting.
+No DNS settings or live services changed during desktop delivery.
 
 Exact manifests, logs, screenshots, raw failed attempts and successful receipts are under
 `/Users/jarrett/codex-runs/solomon-rust-parity-20261021/release-final/` and NFO's matching
@@ -497,21 +539,21 @@ The permanent published checkout is
 `/Users/jarrett/Projects/Solomon Dark/solomon-darker-rust`. The separate legacy `Rust Game`
 checkout at `690730d` still owns the M2 launchd preview on port 4180.
 
-Nineteen completed M2 task trees are removed after their source and evidence were preserved,
-including the Website reference/extraction and Windows transport/acceptance trees. Their branches
-remain where applicable. The completed M2 acceptance services on ports 5229, 5230, 9449
-and 5383 are stopped; the baseline 4180 remains running. The Rust finalization, clean
-Windows fix and final ZIP-check task checkouts remain active for
-release completion; the permanent and baseline checkouts and unrelated acceptance
-worktrees are preserved. The external
-`release-final/worktree-cleanup.json` records exact paths and preservation checks.
+Completion cleanup removes temporary task worktrees after their source and evidence are
+preserved, including the Website reference/extraction, native fixes, archive checker and
+desktop qualification trees. Published diagnostic branches remain available for their
+retained evidence. The completed M2 acceptance services on ports 5229, 5230, 9449 and 5383
+are stopped; the separate legacy 4180 preview is preserved. Exact paths, active-consumer
+checks and removal results are in `release-final/worktree-cleanup.json` and the later
+desktop cleanup receipts. Primary/shared checkouts and unrelated work are preserved.
 
-The idle M2 task Cargo cache is removed. NFO's clean published checkout, verified earlier
-source snapshot and Cargo/Python caches are also removed. Installed immutable releases,
-state, configuration, rollback material and all acceptance evidence remain; the four NFO
-game/API service PIDs are unchanged. `release-final/task-cache-cleanup.json`,
-`nfo-source-provenance.json` and `nfo-task-cleanup.json` record these checks. Future builds
-recreate their own clean source checkout and cache.
+The M2 task Cargo caches, completed desktop staging/dependency outputs and extracted
+diagnostic app are removed. NFO's temporary source trees and Cargo/Python caches are also
+removed. Installed immutable releases, state, configuration, rollback material, raw package
+ZIPs and all acceptance evidence remain. `release-final/task-cache-cleanup.json`,
+`nfo-task-cleanup.json` and
+`windows-release-5c094aaa-39826304375/completed-windows-worktree-cache-cleanup.json` record
+these checks. Future builds recreate their own clean source checkout and cache.
 
 Jarrett explicitly accepted M2 validation on October 20. Each platform's receipt qualifies
 that platform; publication requires the actual configured matrix checks to pass.

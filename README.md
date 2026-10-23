@@ -469,14 +469,15 @@ stock splines, wander and retire through the native population lifecycle, with s
 and prop layers and the separate head pass. The player and students share the stock circle
 push response and segment collision; trader clocks and Hagatha's particles tick at 100 Hz.
 
-The optimized macOS ARM64 standalone release passes the final native two-browser,
-save/restart, combat death, Game Over readiness and disconnect journeys. Its display timeline
-projects between approximately 20 Hz snapshots: actual Metal draw positions change at a
-median 16.7 ms in the bounded cadence check. The matched 1600×900 Tutorial scene closely
-matches the pinned JS reference. Complete Tutorial lessons, actual phone casting, Social
-focus, shared holds and fullscreen also have retained browser receipts. The finished package
-is `../Packages/solomon-darker-macos-arm64-20261020/`, with a sibling ZIP; double-click its
-`Play Solomon Darker.command` to play.
+Download the standalone app for Windows, Linux, or macOS on Intel or Apple silicon from
+[the desktop release](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/desktop-1a4f7063cd3f4b9cb23651bdbe7cfffa7620cf76).
+Extract the ZIP and run the app, keeping its folder together. Each platform passes final
+archive inspection, offline save/Continue, direct peer play, update notices and safe close
+and return-to-launcher checks. Saves remain in the app's user-data folder when replacing
+the download. The release notes explain multiplayer and first-launch requirements.
+
+Earlier browser-launcher, Tutorial, phone, Social, fullscreen and rendering qualifications
+retain their actual source revisions and receipts in the completion record.
 [docs/PORT-COMPLETION.md](docs/PORT-COMPLETION.md) owns the current acceptance state.
 [docs/WORK-QUEUE.md](docs/WORK-QUEUE.md) holds the tickets.
 
