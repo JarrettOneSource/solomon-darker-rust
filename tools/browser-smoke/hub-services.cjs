@@ -24,7 +24,7 @@ const rows = snapshot => snapshot.widgets.filter(widget=>widget.id.startsWith('p
   let page,observed;
   try {
     page=await browser.newPage({viewport:{width:1600,height:900}});
-    observed=ui.watchErrors(page);
+    observed=ui.watchErrors(page);await observed.ready;
     await page.goto(url);await ui.ready(page);
     await startNewGame(page,{name:process.env.GENERATED_NAME==='1'?null:'Felix'});
     await shortcut(page,'Fomentius');await ui.widget(page,'panel:service');await settle(page);

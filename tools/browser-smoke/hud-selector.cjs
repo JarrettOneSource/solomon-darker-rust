@@ -16,7 +16,7 @@ fs.mkdirSync(output, {recursive:true});
   let phase = 'admission';
   try {
     page = await browser.newPage({ viewport: { width: 1600, height: 900 }, hasTouch: true });
-    observed = ui.watchErrors(page);
+    observed = ui.watchErrors(page);await observed.ready;
     await page.goto(process.env.URL || 'http://127.0.0.1:4185/');
     await ui.ready(page);
     await startNewGame(page,{name:process.env.GENERATED_NAME==='1'?null:'Helvidius'});

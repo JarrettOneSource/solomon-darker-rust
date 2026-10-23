@@ -165,6 +165,7 @@ async function main() {
     page.setDefaultTimeout(10000);
     page.setDefaultNavigationTimeout(30000);
     observed = gpu.watchErrors(page, {errors});
+    await observed.ready;
     page.on('response', response => {
       const pathname = new URL(response.url()).pathname;
       if (pathname.endsWith('.wasm')) wasmFiles.add(path.basename(pathname));

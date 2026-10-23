@@ -21,7 +21,7 @@ const browser = await chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 })
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
-ui.watchErrors(page, { errors: receipt.errors })
+const observed = ui.watchErrors(page, { errors: receipt.errors })
 const state = () => page.evaluate(() => Array.from(window.wasmBindings.wizard_state()))
 const held = new Set()
 
@@ -160,6 +160,7 @@ async function scanRowsUntil(target,expected) {
   throw new Error(`Tab did not reach ${target}; observed ${seen.size} native rows`)
 }
 try {
+  await observed.ready
   await page.goto(url,{waitUntil:'load'});await ui.ready(page)
   await startNewGame(page,{name:process.env.GENERATED_NAME==='1'?null:'Helvidius'})
   let [x,y]=await state()
