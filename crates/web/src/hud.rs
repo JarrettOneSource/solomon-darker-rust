@@ -98,6 +98,9 @@ pub struct Hud {
 }
 
 impl Hud {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Middle, egui::Id::unique("game-hud"))
+    }
     pub async fn attach(document: &Document, hotbar: HotbarSelection) -> Result<Self, String> {
         let bank = hotbar.bank();
         Ok(Self {
@@ -323,7 +326,7 @@ impl Hud {
         let scale = ((self.viewport.0 as f64 / 1600.0).min(self.viewport.1 as f64 / 900.0).min(1.0)
             * self.ui_scale) as f32;
         let size = egui::vec2(self.viewport.0 as f32 / scale, self.viewport.1 as f32 / scale);
-        let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::unique("game-hud"));
+        let layer = self.layer_id();
         let transform = egui::emath::TSTransform::from_scaling(scale);
         let coarse = self.coarse();
         let mut error = None;
