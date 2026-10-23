@@ -19,8 +19,8 @@ use solomon_sim::spells::presentation::{
 
 use crate::courtyard::Camera;
 use crate::native_mesh::native_sprite_texel_rect;
-use crate::render::{BlendMode, Quad, RenderTarget, Renderer};
 use crate::spells::SpellView;
+use solomon_graphics::{BlendMode, Quad, RenderTarget, Renderer};
 
 #[derive(Clone, Copy)]
 pub struct CompactMaskPlayer<'a> {

@@ -17,10 +17,10 @@ use solomon_sim::profile::WizardElement;
 use solomon_sim::spells::casting::NativePlayerWeaponKind;
 use solomon_sim::spells::presentation::{NativeSpellSprite, NativeSpellSpritePlan, SpellBlend};
 
-use crate::assets;
 use crate::courtyard::Camera;
-use crate::render::{BlendMode, Quad, Renderer, Texture};
 use crate::spells::SpellView;
+use solomon_graphics::assets;
+use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
 pub struct PlayerEffectPlayer<'a> {
     pub id: &'a str,

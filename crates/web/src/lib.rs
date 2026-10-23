@@ -4,7 +4,6 @@
 //! The simulation lives in `solomon-sim` and never touches the browser; this crate owns asset
 //! loading, input, the fixed-tick loop, and drawing.
 
-mod assets;
 pub mod audio;
 pub mod battle;
 mod boneyard;
@@ -47,7 +46,6 @@ pub mod observer;
 pub mod player_effects;
 pub mod player_panels;
 pub mod presentation;
-pub mod render;
 mod rooms;
 pub mod secondary;
 #[cfg(feature = "browser-fixtures")]

@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 browser-fixtures = []
 
 [dependencies]
+solomon-graphics = { workspace = true }
 solomon-sim = { workspace = true, features = ["persistence"] }
 solomon-assets = { workspace = true }
 solomon-protocol = { workspace = true }

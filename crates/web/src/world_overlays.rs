@@ -12,13 +12,13 @@ use solomon_sim::social::{
 };
 use solomon_sim::world_labels::*;
 
-use crate::assets;
 use crate::courtyard::Camera;
 use crate::native_mesh::native_sprite_frame_texel_rect;
-use crate::render::{BlendMode, Quad, Renderer, Texture};
 use graphics::{
     chamfered_plate, circle, circle_stroke, diamond, polygon, rectangle, round_rectangle,
 };
+use solomon_graphics::assets;
+use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
 pub struct WorldOverlayPlayer<'a> {
     pub id: &'a str,

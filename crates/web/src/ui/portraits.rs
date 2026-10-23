@@ -8,8 +8,8 @@ use solomon_sim::Vec2;
 use solomon_sim::profile::WizardElement;
 use web_sys::{Document, HtmlElement};
 
-use crate::assets;
 use crate::ui::{append, element, style};
+use solomon_graphics::assets;
 
 #[derive(Deserialize)]
 pub(crate) struct StockPortraits {

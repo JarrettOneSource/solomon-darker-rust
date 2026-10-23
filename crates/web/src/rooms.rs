@@ -12,9 +12,9 @@ use solomon_sim::hub::rooms::{
     HubRoomPropKind, hub_memorator_heading_index, hub_room_flame_transform,
 };
 
-use crate::assets;
 use crate::courtyard::Camera;
-use crate::render::{BlendMode, Quad, Renderer, Texture};
+use solomon_graphics::assets;
+use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
 const WHITE: [f32; 4] = [1.0; 4];
 

@@ -30,7 +30,6 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, Event, HtmlElement, KeyboardEvent, PointerEvent};
 
-use crate::assets;
 use crate::ui::{StockAtlas, append, element, native_button, style};
 use cloud::CloudView;
 use create::CreateView;
@@ -43,6 +42,7 @@ pub use routing::RoutingDownloadProgress;
 use routing::RoutingView;
 pub use settings::SettingsContext;
 use settings::SettingsView;
+use solomon_graphics::assets;
 use title::TitleView;
 
 #[derive(Clone, Debug, PartialEq)]

@@ -11,8 +11,8 @@ use solomon_sim::native_ui_text::{
 };
 
 use super::UiFrame;
-use crate::assets;
-use crate::render::BlendMode;
+use solomon_graphics::BlendMode;
+use solomon_graphics::assets;
 
 pub struct StockAtlas {
     name: &'static str,

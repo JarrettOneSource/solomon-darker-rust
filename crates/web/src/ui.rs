@@ -23,7 +23,7 @@ extern "C" {
     pub(crate) fn javascript_string(value: &JsValue) -> String;
 }
 
-use crate::assets;
+use solomon_graphics::assets;
 
 pub struct StockAtlas {
     name: &'static str,

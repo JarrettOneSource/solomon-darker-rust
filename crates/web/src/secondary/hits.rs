@@ -14,7 +14,7 @@ use solomon_sim::secondary::presentation::{
 use super::draws::TargetDraw;
 use super::{SecondaryPuppetHit, SecondaryView};
 use crate::courtyard::Camera;
-use crate::render::{BlendMode, Renderer, TextureColorMode, Vertex};
+use solomon_graphics::{BlendMode, Renderer, TextureColorMode, Vertex};
 
 impl SecondaryView {
     /// Call after prepare(), before painter submission. Values come from the

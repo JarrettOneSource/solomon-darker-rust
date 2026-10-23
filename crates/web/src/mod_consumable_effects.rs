@@ -13,8 +13,8 @@ use solomon_sim::presentation::multiply_native_tints;
 use solomon_sim::spells::presentation::{NativeSpellSprite, NativeSpellSpritePlan, SpellBlend};
 
 use crate::courtyard::Camera;
-use crate::render::{BlendMode, Quad, Renderer, Texture};
 use crate::spells::SpellView;
+use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
 struct ModConsumableEffectView {
     id: String,

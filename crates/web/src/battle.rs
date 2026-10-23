@@ -60,12 +60,12 @@ use crate::player_effects::{PlayerEffectPlayer, PlayerEffectsView};
 use crate::presentation::{
     EnemyPresentationMetadata, NativePresentationTimeline, PresentationClocks,
 };
-use crate::render::Renderer;
 use crate::secondary::{SecondaryPuppetHit, SecondaryView};
 use crate::solomon::{SolomonView, SolomonViewFrame};
 use crate::spells::SpellView;
 use crate::wizard::{WizardEquipment, WizardPlayerPresentation, WizardView};
 use crate::world_screen_feedback::WorldScreenFeedbackSample;
+use solomon_graphics::Renderer;
 
 /// Scenery and its light target have the same lifetime as one loaded map.
 pub struct BattleScene {
