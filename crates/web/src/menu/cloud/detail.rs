@@ -1,10 +1,12 @@
 //! GPU mod detail, screenshot gallery, versions and comments. The controller
 //! ports `DarkCloudModDetail`, `DarkCloudGallery` and `DarkCloudComments` lifetimes.
+use super::rows::{ink, ink_with_fallback};
 use super::{super::widgets, art::CloudArt, format, images::CloudImages};
 use crate::gpu_ui::UiFrame;
 use crate::hosted::{ModComments, ModDetail, ModSubscription, ModSummary};
 use crate::menu::{HostedMenuAction, ModSubscriptionAction};
-use egui::{Align2, Color32, Rect, Ui, Vec2};
+use egui::{Color32, Rect, Ui, Vec2};
+use solomon_sim::native_ui_text::{NativeUiFontName, measure_native_ui_text};
 pub(super) struct ModDetailView {
     pub summary: ModSummary,
     detail: Option<ModDetail>,
@@ -19,6 +21,9 @@ pub(super) struct ModDetailView {
     body: String,
     actions: Vec<HostedMenuAction>,
     swiping: bool,
+    reset_scroll: bool,
+    comment_height: f32,
+    comment_resize_origin: Option<f32>,
 }
 impl ModDetailView {
     pub fn open(summary: ModSummary, account: Option<&str>, next: &mut u64) -> Self {
@@ -36,6 +41,9 @@ impl ModDetailView {
             body: String::new(),
             actions: Vec::new(),
             swiping: false,
+            reset_scroll: true,
+            comment_height: 100.0,
+            comment_resize_origin: None,
         };
         view.request_detail(next);
         view.request_comments(next);
@@ -239,8 +247,8 @@ impl ModDetailView {
             Vec2::new(1100.0_f32.min(view.width() - 48.0), 820.0_f32.min(view.height() - 48.0)),
         );
         art.panel(frame, ui, rect)?;
-        let phone = view.width() < 700.0;
-        let short = view.height() < 620.0;
+        let phone = view.width() <= 700.0;
+        let short = view.height() <= 620.0;
         let header_height = if short {
             70.0
         } else if phone {
@@ -248,7 +256,13 @@ impl ModDetailView {
         } else {
             90.0
         };
-        let title_top = if phone && !short { 56.0 } else { 12.0 };
+        let title_top = if short {
+            8.0
+        } else if phone {
+            56.0
+        } else {
+            12.0
+        };
         let summary = self.detail.as_ref().map_or(&self.summary, |d| &d.summary);
         frame.record_rect(
             "cloud-detail-title",
@@ -261,26 +275,46 @@ impl ModDetailView {
             false,
         );
         frame.record_value("cloud-detail-title", &summary.name, None);
-        widgets::label(
+        let title_pad = if phone { 4.0 } else { 124.0 };
+        ink(
+            frame,
             ui,
             &summary.name,
-            egui::pos2(rect.center().x, rect.top() + title_top),
-            Align2::CENTER_TOP,
-            "Palatino",
-            25.0,
-            widgets::GOLD,
+            NativeUiFontName::Menu,
+            1.05,
+            0xd9ba70,
+            Rect::from_min_size(
+                rect.min + Vec2::new(title_pad, title_top),
+                Vec2::new(rect.width() - title_pad * 2.0, 34.0),
+            ),
+            true,
         );
-        widgets::label(
+        ink_with_fallback(
+            frame,
             ui,
             &format!("BY {}", summary.author.username),
-            egui::pos2(rect.center().x, rect.top() + title_top + 34.0),
-            Align2::CENTER_TOP,
-            "Palatino",
-            16.0,
-            widgets::GOLD,
+            NativeUiFontName::Medium,
+            1.0,
+            0xd9ba70,
+            Rect::from_min_size(
+                rect.min + Vec2::new(title_pad, title_top + 34.0),
+                Vec2::new(rect.width() - title_pad * 2.0, 23.2),
+            ),
+            true,
+            "IM FELL English",
         );
         let back = Rect::from_min_size(
-            egui::pos2(rect.right() - 108.0, rect.top() + if phone { 4.0 } else { 22.0 }),
+            egui::pos2(
+                rect.right() - 108.0,
+                rect.top()
+                    + if short {
+                        14.0
+                    } else if phone {
+                        4.0
+                    } else {
+                        22.0
+                    },
+            ),
             Vec2::new(100.0, 44.0),
         );
         if widgets::cloud_button(frame, ui, "cloud-dialog-close", "BACK", back, 0.55, true)
@@ -288,7 +322,13 @@ impl ModDetailView {
         {
             actions.push("cloud-dialog-close".to_owned());
         }
-        let footer_height = if short { 56.0 } else { 70.0 };
+        let footer_height = if short {
+            60.0
+        } else if phone {
+            64.0
+        } else {
+            74.0
+        };
         let content = Rect::from_min_max(
             rect.min + Vec2::new(if phone { 4.0 } else { 24.0 }, header_height + 12.0),
             rect.max - Vec2::new(if phone { 4.0 } else { 24.0 }, footer_height),
@@ -296,28 +336,45 @@ impl ModDetailView {
         let mut child =
             ui.new_child(egui::UiBuilder::new().id_salt("cloud-detail-content").max_rect(content));
         child.set_clip_rect(content);
+        child.spacing_mut().item_spacing = Vec2::ZERO;
         let mut result = Ok(());
-        egui::ScrollArea::vertical()
+        let mut scroll = egui::ScrollArea::vertical()
             .id_salt(format!("cloud-detail-scroll:{}", self.summary.slug))
-            .auto_shrink([false, false])
-            .show(&mut child, |ui| {
-                result = self.paint_contents(
-                    frame,
-                    ui,
-                    art,
-                    images,
-                    content.width(),
-                    view.width(),
-                    subscription,
-                    subscription_busy,
-                    subscription_error,
-                    actions,
-                );
-            });
+            .auto_shrink([false, false]);
+        if self.reset_scroll {
+            scroll = scroll.vertical_scroll_offset(0.0);
+            if child.is_visible() && child.is_enabled() {
+                self.reset_scroll = false;
+            }
+        }
+        scroll.show(&mut child, |ui| {
+            result = self.paint_contents(
+                frame,
+                ui,
+                art,
+                images,
+                content.width(),
+                view.width(),
+                subscription,
+                subscription_busy,
+                subscription_error,
+                actions,
+            );
+        });
         std::mem::replace(&mut result, Ok(()))?;
         let done = Rect::from_center_size(
-            egui::pos2(rect.center().x, rect.bottom() - footer_height / 2.0),
-            Vec2::new(300.0_f32.min(rect.width() - 20.0), 41.0),
+            egui::pos2(
+                rect.center().x,
+                rect.bottom() - footer_height
+                    + if short {
+                        30.0
+                    } else if phone {
+                        32.0
+                    } else {
+                        34.0
+                    },
+            ),
+            Vec2::new(300.0_f32.min(rect.width() - 20.0), 44.0),
         );
         if widgets::stone_button(frame, ui, &art.ui, "cloud-detail-done", "DONE", done, true)?
             .clicked()
@@ -351,14 +408,22 @@ impl ModDetailView {
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
         if let Some(error) = &self.detail_error {
-            flow(ui, error, width, widgets::ERROR);
-            let (_, r) = ui.allocate_space(Vec2::new(width, 48.0));
+            let message = narrative(ui, error, width - 140.0);
+            let (_, r) = ui.allocate_space(Vec2::new(width, message.size().y.max(44.0)));
+            ui.painter().galley_with_override_text_color(
+                egui::pos2(r.left(), r.center().y - message.size().y / 2.0),
+                message,
+                widgets::ERROR,
+            );
             if widgets::cloud_button(
                 frame,
                 ui,
                 "cloud-detail-retry",
                 "RETRY",
-                Rect::from_min_size(r.min, Vec2::new(120.0, 44.0)),
+                Rect::from_center_size(
+                    egui::pos2(r.right() - 60.0, r.center().y),
+                    Vec2::new(120.0, 44.0),
+                ),
                 0.55,
                 true,
             )
@@ -366,19 +431,20 @@ impl ModDetailView {
             {
                 actions.push("cloud-detail-retry".to_owned());
             }
+            ui.add_space(18.0);
         }
-        let columns = viewport_width >= 980.0;
+        let columns = viewport_width > 980.0;
         let gallery_width = if columns { (width - 24.0) * 1.55 / 2.4 } else { width };
         let about_width = if columns { width - gallery_width - 24.0 } else { width };
         let origin = ui.cursor().min;
-        let image_height = (gallery_width * 9.0 / 16.0).clamp(160.0, 360.0);
+        let image_height = gallery_stage_size(gallery_width, frame.ctx.content_rect().size()).y;
         let has_thumbnails =
             self.detail.as_ref().is_some_and(|detail| detail.screenshots.len() > 1);
         let gallery = Rect::from_min_size(
             origin,
             Vec2::new(
                 gallery_width,
-                30.0 + image_height + 64.0 + if has_thumbnails { 64.0 } else { 0.0 },
+                104.0 + image_height + if has_thumbnails { 64.0 } else { 0.0 },
             ),
         );
         self.paint_gallery(frame, ui, art, images, gallery, actions)?;
@@ -403,8 +469,9 @@ impl ModDetailView {
             actions,
         )?;
         let end = summary_ui.min_rect().bottom().max(gallery.bottom());
-        ui.allocate_space(Vec2::new(width, end - origin.y + 24.0));
-        heading(frame, ui, "DESCRIPTION", width);
+        ui.allocate_space(Vec2::new(width, end - origin.y));
+        ui.add_space(24.0);
+        heading(frame, ui, "DESCRIPTION", None, width);
         let summary = self.detail.as_ref().map_or(&self.summary, |d| &d.summary);
         let description = self
             .detail
@@ -413,56 +480,18 @@ impl ModDetailView {
             .filter(|s| !s.is_empty())
             .unwrap_or(&summary.summary);
         panel_text(frame, ui, art, description, width)?;
-        heading(
-            frame,
-            ui,
-            &format!(
-                "VERSION HISTORY   {}",
-                self.detail.as_ref().map_or("LOADING".to_owned(), |d| format!(
-                    "{} RELEASE{}",
-                    d.versions.len(),
-                    if d.versions.len() == 1 { "" } else { "S" }
-                ))
-            ),
-            width,
-        );
-        if let Some(detail) = &self.detail {
-            if detail.versions.is_empty() {
-                panel_text(frame, ui, art, "NO RELEASES LISTED.", width)?;
-            }
-            for version in &detail.versions {
-                panel_text(
-                    frame,
-                    ui,
-                    art,
-                    &format!(
-                        "v{}   {}   {}   {} DOWNLOADS
-{}",
-                        version.version,
-                        format::date(&version.created_at_utc)?,
-                        format::bytes(version.file_size)?,
-                        format::count(version.downloads)?,
-                        version.changelog
-                    ),
-                    width,
-                )?;
-            }
-        } else {
-            panel_text(frame, ui, art, "CONSULTING THE DARK CLOUD...", width)?;
-        }
-        heading(
-            frame,
-            ui,
-            &format!(
-                "COMMENTS   {}",
-                self.comments
-                    .as_ref()
-                    .map_or("LOADING".to_owned(), |c| format!("{} TOTAL", c.total))
-            ),
-            width,
-        );
+        ui.add_space(24.0);
+        let releases = self.detail.as_ref().map_or("LOADING".to_owned(), |d| {
+            format!("{} RELEASE{}", d.versions.len(), if d.versions.len() == 1 { "" } else { "S" })
+        });
+        heading(frame, ui, "VERSION HISTORY", Some(&releases), width);
+        self.paint_versions(frame, ui, art, width)?;
+        ui.add_space(24.0);
+        let comment_count =
+            self.comments.as_ref().map_or("LOADING".to_owned(), |c| format!("{} TOTAL", c.total));
+        heading(frame, ui, "COMMENTS", Some(&comment_count), width);
         if self.account.is_none() {
-            let (_, r) = ui.allocate_space(Vec2::new(width, 52.0));
+            let (_, r) = ui.allocate_space(Vec2::new(width, 50.0));
             if control(
                 frame,
                 ui,
@@ -470,7 +499,6 @@ impl ModDetailView {
                 "cloud-detail-signin-comment",
                 "SIGN IN TO COMMENT",
                 r,
-                false,
                 true,
             )?
             .clicked()
@@ -478,17 +506,26 @@ impl ModDetailView {
                 actions.push("cloud-sign-in".to_owned());
             }
         } else {
-            let (_, r) = ui.allocate_space(Vec2::new(width, 28.0));
-            widgets::label(
+            let form = Rect::from_min_size(
+                ui.cursor().min,
+                Vec2::new(width, 40.0 + self.comment_height + 44.0 + 6.0),
+            );
+            widgets::control_panel(frame, ui, &art.controls, form, false)?;
+            let (_, r) = ui.allocate_space(Vec2::new(width - 6.0, 40.0));
+            ink(
+                frame,
                 ui,
                 "LEAVE A COMMENT",
-                r.min + Vec2::new(14.0, 0.0),
-                Align2::LEFT_TOP,
-                "Palatino",
-                16.0,
-                widgets::GOLD,
+                NativeUiFontName::Medium,
+                1.0,
+                0xd9ba70,
+                Rect::from_min_size(
+                    r.min + Vec2::new(14.0, 12.0),
+                    Vec2::new(r.width() - 28.0, 16.0),
+                ),
+                false,
             );
-            let (_, field) = ui.allocate_space(Vec2::new(width, 110.0));
+            let (_, field) = ui.allocate_space(Vec2::new(width - 6.0, self.comment_height));
             widgets::control_panel(frame, ui, &art.controls, field, true)?;
             let response = widgets::edit(
                 frame,
@@ -506,89 +543,71 @@ impl ModDetailView {
                 self.limit_body();
             }
             frame.record_value("dark-cloud-comment", &self.body, None);
-            let (_, row) = ui.allocate_space(Vec2::new(width, 50.0));
-            widgets::label(
+            let grip =
+                Rect::from_min_size(field.right_bottom() - Vec2::splat(16.0), Vec2::splat(16.0));
+            let resize =
+                ui.interact(grip, egui::Id::unique("cloud-comment-resize"), egui::Sense::drag());
+            if resize.hovered() || resize.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
+            }
+            if resize.drag_started() {
+                self.comment_resize_origin = Some(self.comment_height);
+            }
+            if let Some(origin) = self.comment_resize_origin
+                && let Some(delta) = resize.total_drag_delta()
+            {
+                self.comment_height = (origin + delta.y).max(100.0);
+            }
+            if resize.drag_stopped() {
+                self.comment_resize_origin = None;
+            }
+            if resize.is_pointer_button_down_on() {
+                response.request_focus();
+            }
+            for inset in [3.0, 7.0, 11.0] {
+                ui.painter().line_segment(
+                    [
+                        field.right_bottom() - Vec2::new(inset, 2.0),
+                        field.right_bottom() - Vec2::new(2.0, inset),
+                    ],
+                    egui::Stroke::new(1.0, widgets::color(0x8e7c4d)),
+                );
+            }
+            frame.record("cloud-comment-resize", "Resize comment field", "slider", &resize);
+            frame.record_value("cloud-comment-resize", &self.comment_height.to_string(), None);
+            let (_, row) = ui.allocate_space(Vec2::new(width - 6.0, 44.0));
+            ink(
+                frame,
                 ui,
                 &format!("{} / 1000", self.body.encode_utf16().count()),
-                row.min + Vec2::new(14.0, 20.0),
-                Align2::LEFT_CENTER,
-                "Palatino",
-                14.0,
-                widgets::GOLD,
+                NativeUiFontName::Medium,
+                0.85,
+                0xd9ba70,
+                Rect::from_min_size(
+                    row.min + Vec2::new(14.0, 0.0),
+                    Vec2::new(row.width() - 28.0, 44.0),
+                ),
+                false,
             );
             let busy = self.comment_mutation.is_some();
             let admitted = !busy && !self.body.trim().is_empty();
+            let label = if busy { "POSTING..." } else { "POST COMMENT" };
+            let button_width = content_width(ui, label, 1.0) + 20.0;
             let b = Rect::from_min_size(
-                egui::pos2(row.right() - 200.0, row.top()),
-                Vec2::new(200.0, 44.0),
+                egui::pos2(row.right() - button_width, row.top()),
+                Vec2::new(button_width, 44.0),
             );
-            if control(
-                frame,
-                ui,
-                art,
-                "cloud-post-comment",
-                if busy { "POSTING..." } else { "POST COMMENT" },
-                b,
-                false,
-                admitted,
-            )?
-            .clicked()
+            if control_action(frame, ui, "cloud-post-comment", label, b, admitted).clicked()
                 && admitted
             {
                 actions.push("cloud-post-comment".to_owned());
             }
+            ui.add_space(6.0);
         }
         if let Some(error) = &self.comment_error {
             flow(ui, error, width, widgets::ERROR);
         }
-        if let Some(comments) = &self.comments {
-            if comments.items.is_empty() {
-                panel_text(frame, ui, art, "NO COMMENTS YET.", width)?;
-            }
-            for comment in &comments.items {
-                let (_, header) = ui.allocate_space(Vec2::new(width, 48.0));
-                widgets::label(
-                    ui,
-                    &comment.author.username,
-                    header.min + Vec2::new(14.0, 18.0),
-                    Align2::LEFT_CENTER,
-                    "Palatino",
-                    17.0,
-                    widgets::GOLD,
-                );
-                widgets::label(
-                    ui,
-                    &format::time_ago(&comment.created_at_utc),
-                    header.min + Vec2::new(200.0, 18.0),
-                    Align2::LEFT_CENTER,
-                    "Palatino",
-                    14.0,
-                    widgets::GOLD,
-                );
-                if self.can_delete(comment.id) {
-                    let id = format!("cloud-delete-comment:{}", comment.id);
-                    let b = Rect::from_min_size(
-                        egui::pos2(header.right() - 110.0, header.top()),
-                        Vec2::new(105.0, 44.0),
-                    );
-                    if widgets::cloud_button(
-                        frame,
-                        ui,
-                        &id,
-                        "DELETE",
-                        b,
-                        0.55,
-                        self.comment_mutation.is_none(),
-                    )
-                    .clicked()
-                        && self.comment_mutation.is_none()
-                    {
-                        actions.push(id);
-                    }
-                }
-                panel_text(frame, ui, art, &comment.body, width)?;
-            }
-        }
+        self.paint_comment_list(frame, ui, art, width, actions)?;
         Ok(())
     }
     fn paint_gallery(
@@ -601,15 +620,16 @@ impl ModDetailView {
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
         let screenshots = self.detail.as_ref().map_or(&[][..], |d| d.screenshots.as_slice());
-        let label = if screenshots.is_empty() {
-            "SCREENSHOTS   NO IMAGES".to_owned()
+        let status = if screenshots.is_empty() {
+            "NO IMAGES".to_owned()
         } else {
-            format!("SCREENSHOTS   {} / {}", self.image_index + 1, screenshots.len())
+            format!("{} / {}", self.image_index + 1, screenshots.len())
         };
-        widgets::label(ui, &label, rect.min, Align2::LEFT_TOP, "Palatino", 16.0, widgets::GOLD);
-        let height = (rect.width() * 9.0 / 16.0).clamp(160.0, 360.0);
-        let stage =
-            Rect::from_min_size(rect.min + Vec2::new(0.0, 30.0), Vec2::new(rect.width(), height));
+        caption(frame, ui, "SCREENSHOTS", Some(&status), rect);
+        let stage = Rect::from_min_size(
+            rect.min + Vec2::new(6.0, 34.0),
+            gallery_stage_size(rect.width(), frame.ctx.content_rect().size()),
+        );
         widgets::control_panel(frame, ui, &art.controls, stage, false)?;
         images.paint(
             frame,
@@ -619,12 +639,15 @@ impl ModDetailView {
             stage.shrink(6.0),
             true,
         );
-        frame.record_rect("cloud-gallery-image", &label, "img", stage, false);
-        frame.record_value(
+        frame.record_clipped_rect(
             "cloud-gallery-image",
-            &format!("{} / {}", self.image_index + 1, screenshots.len()),
-            None,
+            &format!("SCREENSHOTS   {status}"),
+            "img",
+            stage,
+            ui.clip_rect(),
+            false,
         );
+        frame.record_value("cloud-gallery-image", &status, None);
         let swipe =
             ui.interact(stage, egui::Id::unique("cloud-gallery-swipe"), egui::Sense::drag());
         if swipe.drag_started() {
@@ -653,7 +676,7 @@ impl ModDetailView {
         }
         if screenshots.len() > 1 {
             let thumbs = Rect::from_min_size(
-                egui::pos2(stage.left(), stage.bottom() + 66.0),
+                egui::pos2(stage.left(), stage.bottom() + 74.0),
                 Vec2::new(stage.width(), 58.0),
             );
             let mut child =
@@ -698,6 +721,221 @@ impl ModDetailView {
         }
         Ok(())
     }
+    fn paint_comment_list(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &mut Ui,
+        art: &CloudArt,
+        width: f32,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let Some(comments) = &self.comments else { return Ok(()) };
+        ui.add_space(18.0);
+        if comments.items.is_empty() {
+            return empty_panel(frame, ui, art, "NO COMMENTS YET.", width);
+        }
+        let available = width - 34.0;
+        let mut layouts = Vec::new();
+        for comment in &comments.items {
+            let author_width = content_width(ui, &comment.author.username, 1.0);
+            let time = format::time_ago(&comment.created_at_utc);
+            let time_width = content_width(ui, &time, 0.85);
+            let wraps = author_width + 16.0 + time_width > available;
+            let time_position =
+                if wraps { egui::pos2(0.0, 26.0) } else { egui::pos2(author_width + 16.0, 0.0) };
+            let mut header_height = time_position.y + 16.0;
+            let delete = self.can_delete(comment.id).then(|| {
+                let inline = time_position.x + time_width + 16.0 + 105.0 <= available;
+                let y = if inline { time_position.y } else { header_height + 10.0 };
+                header_height = header_height.max(y + 44.0);
+                Rect::from_min_size(egui::pos2(available - 105.0, y), Vec2::new(105.0, 44.0))
+            });
+            let body = narrative(ui, &comment.body, available);
+            let height = 24.0 + header_height + 8.0 + body.size().y;
+            layouts.push(CommentLayout {
+                id: comment.id,
+                author: comment.author.username.clone(),
+                author_width,
+                time,
+                time_width,
+                time_position,
+                delete,
+                body,
+                header_height,
+                height,
+            });
+        }
+        let total = layouts.iter().map(|layout| layout.height).sum::<f32>()
+            + layouts.len().saturating_sub(1) as f32
+            + 6.0;
+        let (_, panel) = ui.allocate_space(Vec2::new(width, total));
+        widgets::control_panel(frame, ui, &art.controls, panel, false)?;
+        let mut top = panel.top();
+        for (index, layout) in layouts.into_iter().enumerate() {
+            if index != 0 {
+                panel_rule(ui, panel, top);
+                top += 1.0;
+            }
+            let origin = egui::pos2(panel.left() + 14.0, top + 12.0);
+            ink(
+                frame,
+                ui,
+                &layout.author,
+                NativeUiFontName::Medium,
+                1.0,
+                0xd9ba70,
+                Rect::from_min_size(
+                    origin,
+                    Vec2::new(
+                        layout.author_width,
+                        if layout.delete.is_some_and(|rect| rect.top() == 0.0) {
+                            44.0
+                        } else {
+                            16.0
+                        },
+                    ),
+                ),
+                false,
+            );
+            ink(
+                frame,
+                ui,
+                &layout.time,
+                NativeUiFontName::Medium,
+                0.85,
+                0xd9ba70,
+                Rect::from_min_size(
+                    origin + layout.time_position.to_vec2(),
+                    Vec2::new(
+                        layout.time_width,
+                        if layout.delete.is_some_and(|rect| rect.top() == layout.time_position.y) {
+                            44.0
+                        } else {
+                            16.0
+                        },
+                    ),
+                ),
+                false,
+            );
+            if let Some(delete) = layout.delete {
+                let id = format!("cloud-delete-comment:{}", layout.id);
+                if widgets::cloud_button(
+                    frame,
+                    ui,
+                    &id,
+                    "DELETE",
+                    delete.translate(origin.to_vec2()),
+                    0.55,
+                    self.comment_mutation.is_none(),
+                )
+                .clicked()
+                    && self.comment_mutation.is_none()
+                {
+                    actions.push(id);
+                }
+            }
+            ui.painter().galley(
+                origin + Vec2::new(0.0, layout.header_height + 8.0),
+                layout.body,
+                widgets::GOLD,
+            );
+            top += layout.height;
+        }
+        Ok(())
+    }
+
+    fn paint_versions(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &mut Ui,
+        art: &CloudArt,
+        width: f32,
+    ) -> Result<(), String> {
+        let Some(detail) = &self.detail else {
+            return empty_panel(frame, ui, art, "CONSULTING THE DARK CLOUD...", width);
+        };
+        if detail.versions.is_empty() {
+            return empty_panel(frame, ui, art, "NO RELEASES LISTED.", width);
+        }
+        let mut layouts = Vec::new();
+        let available = width - 34.0;
+        for version in &detail.versions {
+            let metadata = [
+                (format!("v{}", version.version), 1.0),
+                (format::date(&version.created_at_utc)?, 0.85),
+                (format::bytes(version.file_size)?, 0.85),
+                (format!("{} DOWNLOADS", format::count(version.downloads)?), 0.85),
+            ];
+            let mut fields = Vec::new();
+            let mut x = 0.0;
+            let mut y = 0.0;
+            for (label, scale) in metadata {
+                let ink_width = content_width(ui, &label, scale);
+                let gap = if x == 0.0 { 0.0 } else { 16.0 };
+                if x != 0.0 && x + gap + ink_width > available {
+                    x = 0.0;
+                    y += 24.0;
+                } else {
+                    x += gap;
+                }
+                fields.push(MetadataField {
+                    label,
+                    position: egui::pos2(x, y),
+                    width: ink_width,
+                    scale,
+                });
+                x += ink_width;
+            }
+            let header_height = y + 16.0;
+            let changelog = (!version.changelog.is_empty())
+                .then(|| narrative(ui, &version.changelog, available));
+            let height = 24.0
+                + header_height
+                + 8.0
+                + changelog.as_ref().map_or(0.0, |galley| galley.size().y);
+            layouts.push(ReleaseLayout { fields, header_height, changelog, height });
+        }
+        let total = layouts.iter().map(|layout| layout.height).sum::<f32>()
+            + layouts.len().saturating_sub(1) as f32
+            + 6.0;
+        let (_, panel) = ui.allocate_space(Vec2::new(width, total));
+        widgets::control_panel(frame, ui, &art.controls, panel, false)?;
+        let mut top = panel.top();
+        for (index, layout) in layouts.into_iter().enumerate() {
+            if index != 0 {
+                panel_rule(ui, panel, top);
+                top += 1.0;
+            }
+            for field in layout.fields {
+                ink(
+                    frame,
+                    ui,
+                    &field.label,
+                    NativeUiFontName::Medium,
+                    field.scale,
+                    0xd9ba70,
+                    Rect::from_min_size(
+                        egui::pos2(
+                            panel.left() + 14.0 + field.position.x,
+                            top + 12.0 + field.position.y,
+                        ),
+                        Vec2::new(field.width, 16.0),
+                    ),
+                    false,
+                );
+            }
+            if let Some(changelog) = layout.changelog {
+                ui.painter().galley(
+                    egui::pos2(panel.left() + 14.0, top + 12.0 + layout.header_height + 8.0),
+                    changelog,
+                    widgets::GOLD,
+                );
+            }
+            top += layout.height;
+        }
+        Ok(())
+    }
+
     // The About section paints current subscription state without owning its requests.
     #[allow(clippy::too_many_arguments)]
     fn paint_about(
@@ -712,37 +950,114 @@ impl ModDetailView {
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
         let summary = self.detail.as_ref().map_or(&self.summary, |d| &d.summary);
-        heading(frame, ui, "ABOUT THIS MOD", width);
-        panel_text(frame, ui, art, &summary.summary, width)?;
-        for (label, value) in [
+        heading(frame, ui, "ABOUT THIS MOD", None, width);
+        let inner_width = width - 6.0;
+        let deck = narrative(ui, &summary.summary, inner_width - 28.0);
+        let deck_height = if summary.summary.is_empty() { 28.0 } else { deck.size().y + 28.0 };
+        let tag_width = inner_width
+            - 28.0
+            - 14.0
+            - measure_native_ui_text("TAGS:", NativeUiFontName::Medium, 1.0) as f32;
+        let mut tag_lines: Vec<Vec<(&str, f32)>> = Vec::new();
+        let mut line_width = 0.0;
+        for tag in &summary.tags {
+            let tag_ink = content_width(ui, tag, 1.0);
+            if tag_lines.is_empty() || line_width + 12.0 + tag_ink > tag_width {
+                tag_lines.push(Vec::new());
+                line_width = 0.0;
+            }
+            let line = tag_lines.last_mut().expect("a tag creates its line");
+            if !line.is_empty() {
+                line_width += 12.0;
+            }
+            line.push((tag, tag_ink));
+            line_width += tag_ink;
+        }
+        let tag_height =
+            if tag_lines.is_empty() { 0.0 } else { 20.0 + tag_lines.len() as f32 * 22.0 - 6.0 };
+        let (_, panel) =
+            ui.allocate_space(Vec2::new(width, deck_height + 160.0 + tag_height + 6.0));
+        widgets::control_panel(frame, ui, &art.controls, panel, false)?;
+        ui.painter().galley(panel.min + Vec2::splat(14.0), deck, widgets::GOLD);
+        let content_right = panel.right() - 20.0;
+        for (index, (label, value)) in [
             ("VERSION:", summary.latest_version.clone()),
             ("DOWNLOADS:", format::count(summary.downloads)?),
             ("PUBLISHED:", format::date(&summary.created_at_utc)?),
             ("UPDATED:", format::time_ago(&summary.updated_at_utc)),
-        ] {
-            let (_, r) = ui.allocate_space(Vec2::new(width, 40.0));
-            widgets::control_panel(frame, ui, &art.controls, r, false)?;
-            widgets::label(
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let top = panel.top() + deck_height + index as f32 * 40.0;
+            ui.painter().line_segment(
+                [egui::pos2(panel.left(), top), egui::pos2(panel.right() - 6.0, top)],
+                egui::Stroke::new(1.0, widgets::color(0x404040)),
+            );
+            ink(
+                frame,
                 ui,
                 label,
-                r.min + Vec2::new(14.0, 20.0),
-                Align2::LEFT_CENTER,
-                "Palatino",
-                16.0,
-                widgets::GOLD,
+                NativeUiFontName::Medium,
+                1.0,
+                0xd9ba70,
+                Rect::from_min_size(
+                    egui::pos2(panel.left() + 14.0, top),
+                    Vec2::new(inner_width - 28.0, 40.0),
+                ),
+                false,
             );
-            widgets::label(
+            let value_width = content_width(ui, &value, 1.0);
+            ink(
+                frame,
                 ui,
                 &value,
-                r.max - Vec2::new(14.0, 20.0),
-                Align2::RIGHT_CENTER,
-                "Palatino",
-                16.0,
-                widgets::GOLD,
+                NativeUiFontName::Medium,
+                1.0,
+                0xd9ba70,
+                Rect::from_min_size(
+                    egui::pos2(content_right - value_width, top),
+                    Vec2::new(value_width, 40.0),
+                ),
+                false,
             );
         }
-        if !summary.tags.is_empty() {
-            panel_text(frame, ui, art, &format!("TAGS: {}", summary.tags.join("  ")), width)?;
+        if !tag_lines.is_empty() {
+            let top = panel.top() + deck_height + 160.0;
+            ink(
+                frame,
+                ui,
+                "TAGS:",
+                NativeUiFontName::Medium,
+                1.0,
+                0xd9ba70,
+                Rect::from_min_size(
+                    egui::pos2(panel.left() + 14.0, top),
+                    Vec2::new(inner_width - 28.0, tag_height),
+                ),
+                false,
+            );
+            for (index, line) in tag_lines.iter().enumerate() {
+                let line_width = line.iter().map(|(_, width)| *width).sum::<f32>()
+                    + line.len().saturating_sub(1) as f32 * 12.0;
+                let mut x = content_right - line_width;
+                for (tag, width) in line {
+                    ink(
+                        frame,
+                        ui,
+                        tag,
+                        NativeUiFontName::Medium,
+                        1.0,
+                        0xd9ba70,
+                        Rect::from_min_size(
+                            egui::pos2(x, top + 10.0 + index as f32 * 22.0),
+                            Vec2::new(*width, 16.0),
+                        ),
+                        false,
+                    );
+                    x += width + 12.0;
+                }
+            }
         }
         let state = if self.account.is_none() {
             "GUEST"
@@ -750,7 +1065,8 @@ impl ModDetailView {
             subscription
                 .map_or("NOT SUBSCRIBED", |s| if s.enabled { "ENABLED" } else { "DISABLED" })
         };
-        heading(frame, ui, &format!("SUBSCRIPTION   {state}"), width);
+        ui.add_space(24.0);
+        heading(frame, ui, "SUBSCRIPTION", Some(state), width);
         let choices = if self.account.is_none() {
             vec![("SIGN IN TO SUBSCRIBE".to_owned(), "cloud-detail-signin-subscribe".to_owned())]
         } else if let Some(s) = subscription {
@@ -781,9 +1097,16 @@ impl ModDetailView {
                 format!("cloud-detail-subscription:subscribe:{}", self.summary.slug),
             )]
         };
-        for (label, id) in choices {
-            let (_, r) = ui.allocate_space(Vec2::new(width, 48.0));
-            if control(frame, ui, art, &id, &label, r, false, !busy)?.clicked() && !busy {
+        let (_, panel) = ui.allocate_space(Vec2::new(width, choices.len() as f32 * 44.0 + 6.0));
+        widgets::control_panel(frame, ui, &art.controls, panel, false)?;
+        for (index, (label, id)) in choices.into_iter().enumerate() {
+            let top = panel.top() + index as f32 * 44.0;
+            if index != 0 {
+                panel_rule(ui, panel, top);
+            }
+            let r =
+                Rect::from_min_size(egui::pos2(panel.left(), top), Vec2::new(width - 6.0, 44.0));
+            if control_action(frame, ui, &id, &label, r, !busy).clicked() && !busy {
                 actions.push(if id == "cloud-detail-signin-subscribe" {
                     "cloud-sign-in".to_owned()
                 } else {
@@ -810,29 +1133,149 @@ impl ModDetailView {
     }
 }
 
-fn heading(frame: &UiFrame<'_>, ui: &mut Ui, text: &str, width: f32) {
-    ui.add_space(12.0);
-    let (_, r) = ui.allocate_space(Vec2::new(width, 30.0));
-    widgets::native(
+struct MetadataField {
+    label: String,
+    position: egui::Pos2,
+    width: f32,
+    scale: f32,
+}
+
+struct CommentLayout {
+    id: u64,
+    author: String,
+    author_width: f32,
+    time: String,
+    time_width: f32,
+    time_position: egui::Pos2,
+    delete: Option<Rect>,
+    body: std::sync::Arc<egui::Galley>,
+    header_height: f32,
+    height: f32,
+}
+
+struct ReleaseLayout {
+    fields: Vec<MetadataField>,
+    header_height: f32,
+    changelog: Option<std::sync::Arc<egui::Galley>>,
+    height: f32,
+}
+
+fn panel_rule(ui: &Ui, panel: Rect, y: f32) {
+    ui.painter().line_segment(
+        [egui::pos2(panel.left(), y), egui::pos2(panel.right() - 6.0, y)],
+        egui::Stroke::new(1.0, widgets::color(0x404040)),
+    );
+}
+
+fn empty_panel(
+    frame: &UiFrame<'_>,
+    ui: &mut Ui,
+    art: &CloudArt,
+    text: &str,
+    width: f32,
+) -> Result<(), String> {
+    let (_, panel) = ui.allocate_space(Vec2::new(width, 50.0));
+    widgets::control_panel(frame, ui, &art.controls, panel, false)?;
+    ink(
         frame,
         ui,
         text,
-        solomon_sim::native_ui_text::NativeUiFontName::Medium,
-        r.min + Vec2::new(0.0, 18.0),
+        NativeUiFontName::Medium,
         1.0,
         0xd9ba70,
-        solomon_sim::native_ui_text::NativeUiTextAlign::Left,
+        Rect::from_min_size(panel.min + Vec2::splat(14.0), Vec2::new(width - 34.0, 22.0)),
+        false,
     );
+    Ok(())
 }
-fn flow(ui: &mut Ui, text: &str, width: f32, tint: Color32) {
-    let galley = ui.painter().layout(
+
+fn gallery_stage_size(width: f32, view: Vec2) -> Vec2 {
+    let width = width - 12.0;
+    let short = view.y <= 620.0;
+    let minimum = if short || view.x <= 700.0 { 160.0 } else { 200.0 };
+    let maximum = if short {
+        280.0
+    } else if view.x <= 980.0 {
+        360.0
+    } else {
+        f32::INFINITY
+    };
+    Vec2::new(width, (width * 9.0 / 16.0).clamp(minimum, maximum))
+}
+
+fn heading(frame: &UiFrame<'_>, ui: &mut Ui, text: &str, status: Option<&str>, width: f32) {
+    let (_, r) = ui.allocate_space(Vec2::new(width, 28.0));
+    caption(frame, ui, text, status, r);
+}
+
+fn caption(frame: &UiFrame<'_>, ui: &Ui, text: &str, status: Option<&str>, rect: Rect) {
+    ink(
+        frame,
+        ui,
+        text,
+        NativeUiFontName::Medium,
+        1.0,
+        0xd9ba70,
+        Rect::from_min_size(rect.min, Vec2::new(rect.width(), 16.0)),
+        false,
+    );
+    if let Some(status) = status {
+        let width = measure_native_ui_text(status, NativeUiFontName::Medium, 0.85) as f32;
+        ink(
+            frame,
+            ui,
+            status,
+            NativeUiFontName::Medium,
+            0.85,
+            0xd9ba70,
+            Rect::from_min_size(
+                egui::pos2(rect.right() - width, rect.top()),
+                Vec2::new(width, 16.0),
+            ),
+            false,
+        );
+    }
+}
+fn content_width(ui: &Ui, text: &str, scale: f32) -> f32 {
+    let spec = solomon_sim::native_ui_text::NativeUiTextSpec {
+        scale: f64::from(scale),
+        ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
+            NativeUiFontName::Medium,
+            text,
+            0.0,
+            0.0,
+        )
+    };
+    let layout = solomon_sim::native_ui_text::layout_native_ui_text(&spec);
+    if layout.unsupported_code_points.is_empty() {
+        layout.width as f32
+    } else {
+        ui.painter()
+            .layout_no_wrap(
+                text.to_owned(),
+                egui::FontId::new(16.0 * scale, egui::FontFamily::Name("Alegreya".into())),
+                widgets::GOLD,
+            )
+            .size()
+            .x
+    }
+}
+
+fn narrative(ui: &Ui, text: &str, width: f32) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::simple(
         text.to_owned(),
         egui::FontId::new(16.0, egui::FontFamily::Name("IM FELL English".into())),
-        tint,
-        width - 28.0,
+        widgets::GOLD,
+        width,
     );
+    job.sections[0].format.line_height = Some(23.2);
+    ui.painter().layout_job(job)
+}
+
+fn flow(ui: &mut Ui, text: &str, width: f32, tint: Color32) {
+    let galley = narrative(ui, text, width - 28.0);
     let (_, r) = ui.allocate_space(Vec2::new(width, galley.size().y + 28.0));
-    ui.painter().galley(r.min + Vec2::splat(14.0), galley, tint);
+    ui.painter().galley_with_override_text_color(r.min + Vec2::splat(14.0), galley, tint);
 }
 fn panel_text(
     frame: &UiFrame<'_>,
@@ -841,48 +1284,54 @@ fn panel_text(
     text: &str,
     width: f32,
 ) -> Result<(), String> {
-    let galley = ui.painter().layout(
-        text.to_owned(),
-        egui::FontId::new(16.0, egui::FontFamily::Name("IM FELL English".into())),
-        widgets::GOLD,
-        width - 28.0,
-    );
-    let (_, r) = ui.allocate_space(Vec2::new(width, galley.size().y + 28.0));
+    let galley = narrative(ui, text, width - 34.0);
+    let height = if text.is_empty() { 34.0 } else { galley.size().y + 34.0 };
+    let (_, r) = ui.allocate_space(Vec2::new(width, height));
     widgets::control_panel(frame, ui, &art.controls, r, false)?;
     ui.painter().galley(r.min + Vec2::splat(14.0), galley, widgets::GOLD);
     Ok(())
 }
-// Control identity, authored bounds and native label placement stay explicit.
-#[allow(clippy::too_many_arguments)]
 fn control(
-    frame: &mut UiFrame<'_>,
+    frame: &UiFrame<'_>,
     ui: &Ui,
     art: &CloudArt,
     id: &str,
     label: &str,
     rect: Rect,
-    selected: bool,
     enabled: bool,
 ) -> Result<egui::Response, String> {
     widgets::control_panel(frame, ui, &art.controls, rect, false)?;
-    let response = widgets::interact(frame, ui, id, label, "button", rect, enabled);
-    widgets::native(
+    Ok(control_action(
+        frame,
+        ui,
+        id,
+        label,
+        Rect::from_min_max(rect.min, rect.max - Vec2::splat(6.0)),
+        enabled,
+    ))
+}
+
+fn control_action(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    label: &str,
+    rect: Rect,
+    enabled: bool,
+) -> egui::Response {
+    let response = widgets::interact_unstyled(frame, ui, id, label, "button", rect, enabled);
+    ink(
         frame,
         ui,
         label,
-        solomon_sim::native_ui_text::NativeUiFontName::Medium,
-        rect.min + Vec2::new(10.0, rect.height() / 2.0 + 5.0),
+        NativeUiFontName::Medium,
         1.0,
         if enabled { 0xd9ba70 } else { 0x8e7c4d },
-        solomon_sim::native_ui_text::NativeUiTextAlign::Left,
+        rect.shrink2(Vec2::new(10.0, 0.0)),
+        false,
     );
-    if selected {
-        ui.painter().line_segment(
-            [rect.left_bottom(), rect.right_bottom()],
-            egui::Stroke::new(2.0, widgets::GOLD),
-        );
-    }
-    Ok(response)
+    widgets::focus_outline(frame, ui, &response, 1.0, -3.0, widgets::GOLD);
+    response
 }
 pub(super) fn subscription_action(value: &str) -> Option<ModSubscriptionAction> {
     match value {

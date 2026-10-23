@@ -23,6 +23,22 @@ pub(super) fn ink(
     rect: Rect,
     center: bool,
 ) {
+    ink_with_fallback(frame, ui, text, font, scale, tint, rect, center, "Alegreya");
+}
+
+// Source external labels retain their inherited family when a retail glyph is absent.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn ink_with_fallback(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    text: &str,
+    font: NativeUiFontName,
+    scale: f32,
+    tint: u32,
+    rect: Rect,
+    center: bool,
+    fallback: &str,
+) {
     let spec = solomon_sim::native_ui_text::NativeUiTextSpec {
         placement: solomon_sim::native_ui_text::NativeUiTextPlacement::Box,
         scale: f64::from(scale),
@@ -47,7 +63,7 @@ pub(super) fn ink(
     } else {
         let font = egui::FontId::new(
             solomon_sim::native_ui_text::native_ui_font(font).metrics[0] as f32 * scale,
-            egui::FontFamily::Name("Cinzel".into()),
+            egui::FontFamily::Name(fallback.into()),
         );
         painter.text(
             if center { rect.center() } else { rect.left_center() },

@@ -2,7 +2,7 @@
 //! fetch policy; the GPU owns decoding and textures. Stale completions are dropped.
 use super::super::widgets;
 use crate::{gpu_ui::UiFrame, hosted::OwnedImageUrl, menu::HostedMenuAction};
-use egui::{Align2, Rect, Ui};
+use egui::{Rect, Ui};
 use std::collections::{BTreeMap, BTreeSet};
 enum Image {
     Pending(u64),
@@ -78,7 +78,7 @@ impl CloudImages {
     ) {
         ui.painter().rect_filled(rect, 0.0, widgets::color(0x090806));
         let Some(source) = source else {
-            missing(ui, rect, alt);
+            missing(frame, ui, rect, alt);
             return;
         };
         self.used.insert(source.to_owned());
@@ -92,14 +92,14 @@ impl CloudImages {
         }
         let Some(Image::Ready(url)) = self.entries.get(source) else {
             if matches!(self.entries.get(source), Some(Image::Failed)) {
-                missing(ui, rect, alt);
+                missing(frame, ui, rect, alt);
             }
             return;
         };
         if frame.image_error(url.url()).is_some() {
             self.retired.push(url.url().to_owned());
             self.entries.insert(source.to_owned(), Image::Failed);
-            missing(ui, rect, alt);
+            missing(frame, ui, rect, alt);
             return;
         }
         let size = frame.image_size(url.url());
@@ -127,14 +127,15 @@ impl CloudImages {
         );
     }
 }
-fn missing(ui: &Ui, rect: Rect, _alt: &str) {
-    widgets::label(
+fn missing(frame: &UiFrame<'_>, ui: &Ui, rect: Rect, _alt: &str) {
+    super::rows::ink(
+        frame,
         ui,
         "NO\nIMAGE",
-        rect.center(),
-        Align2::CENTER_CENTER,
-        "Palatino",
-        14.0,
-        widgets::color(0xa99a70),
+        solomon_sim::native_ui_text::NativeUiFontName::Medium,
+        0.85,
+        0xa99a70,
+        rect,
+        true,
     );
 }
