@@ -20,7 +20,7 @@ pub(super) struct ModDetailView {
     image_index: usize,
     body: String,
     actions: Vec<HostedMenuAction>,
-    swiping: bool,
+    swipe_start_x: Option<f32>,
     reset_scroll: bool,
     comment_height: f32,
     comment_resize_origin: Option<f32>,
@@ -40,7 +40,7 @@ impl ModDetailView {
             image_index: 0,
             body: String::new(),
             actions: Vec::new(),
-            swiping: false,
+            swipe_start_x: None,
             reset_scroll: true,
             comment_height: 100.0,
             comment_resize_origin: None,
@@ -637,18 +637,8 @@ impl ModDetailView {
         );
         frame.record_value("cloud-gallery-image", &status, None);
         let swipe = ui.interact(stage, egui::Id::unique("cloud-gallery-swipe"), egui::Sense::DRAG);
-        if swipe.drag_started() {
-            self.swiping = ui.input(|i| i.any_touches());
-        }
-        if swipe.drag_stopped() && self.swiping {
-            self.swiping = false;
-            let travel = swipe.drag_delta().x;
-            if travel.abs() >= 40.0 {
-                actions.push(
-                    if travel < 0.0 { "cloud-gallery-next" } else { "cloud-gallery-previous" }
-                        .to_owned(),
-                );
-            }
+        if let Some(action) = gallery_swipe(&swipe, &mut self.swipe_start_x) {
+            actions.push(action.to_owned());
         }
         for (label, id, x) in [
             ("PREV", "cloud-gallery-previous", stage.left() + 4.0),
@@ -1183,6 +1173,39 @@ fn empty_panel(
     Ok(())
 }
 
+// DarkCloudGallery.tsx compares the original touch with its released clientX.
+// egui's drag_delta is a per-frame movement and becomes zero on release.
+fn gallery_swipe(response: &egui::Response, start_x: &mut Option<f32>) -> Option<&'static str> {
+    let cancelled = response.ctx.input(|input| {
+        input.events.iter().any(|event| {
+            matches!(event, egui::Event::Touch { phase: egui::TouchPhase::Cancel, .. })
+        })
+    });
+    if !response.enabled() || cancelled {
+        *start_x = None;
+        return None;
+    }
+    if response.drag_started() {
+        *start_x = if response.ctx.input(|input| input.any_touches()) {
+            response.interact_pointer_pos().map(|position| position.x)
+        } else {
+            None
+        };
+    }
+    if !response.drag_stopped() {
+        return None;
+    }
+    let start = start_x.take()?;
+    let travel = response.interact_pointer_pos()?.x - start;
+    if travel.abs() < 40.0 {
+        None
+    } else if travel < 0.0 {
+        Some("cloud-gallery-next")
+    } else {
+        Some("cloud-gallery-previous")
+    }
+}
+
 fn gallery_stage_size(width: f32, view: Vec2) -> Vec2 {
     let width = width - 12.0;
     let short = view.y <= 620.0;
@@ -1363,5 +1386,113 @@ pub(super) fn subscription_action(value: &str) -> Option<ModSubscriptionAction> 
         "disable" => Some(ModSubscriptionAction::Disable),
         "unsubscribe" => Some(ModSubscriptionAction::Unsubscribe),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gallery_swipe;
+    use egui::{Event, PointerButton, TouchPhase};
+
+    fn pass(
+        ctx: &egui::Context,
+        start_x: &mut Option<f32>,
+        events: Vec<Event>,
+    ) -> Option<&'static str> {
+        let mut action = None;
+        ctx.run_pass(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400.0, 300.0),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                ctx.root_ui(|ui| {
+                    let response = ui.interact(
+                        egui::Rect::from_min_max(egui::pos2(20.0, 20.0), egui::pos2(380.0, 280.0)),
+                        egui::Id::unique("gallery-touch-test"),
+                        egui::Sense::DRAG,
+                    );
+                    action = gallery_swipe(&response, start_x);
+                });
+            },
+        )
+        .drop_without_applying_deltas();
+        action
+    }
+
+    fn pointer(x: f32, phase: TouchPhase, touch: bool) -> Vec<Event> {
+        let position = egui::pos2(x, 100.0);
+        let mut events = Vec::new();
+        if touch {
+            events.push(Event::Touch {
+                device_id: egui::TouchDeviceId(0),
+                id: egui::TouchId(1),
+                phase,
+                pos: position,
+                force: None,
+            });
+        }
+        events.push(Event::PointerMoved(position));
+        if phase != TouchPhase::Move {
+            events.push(Event::PointerButton {
+                pos: position,
+                button: PointerButton::Primary,
+                pressed: phase == TouchPhase::Start,
+                modifiers: egui::Modifiers::NONE,
+            });
+            if touch && phase != TouchPhase::Start {
+                events.push(Event::PointerGone);
+            }
+        }
+        events
+    }
+
+    fn swipe(distance: f32, touch: bool, cancel: bool) -> Option<&'static str> {
+        let ctx = egui::Context::default();
+        let mut start_x = None;
+        pass(&ctx, &mut start_x, Vec::new());
+        assert_eq!(pass(&ctx, &mut start_x, pointer(200.0, TouchPhase::Start, touch)), None);
+        for step in 1..=12 {
+            assert_eq!(
+                pass(
+                    &ctx,
+                    &mut start_x,
+                    pointer(200.0 + distance * step as f32 / 12.0, TouchPhase::Move, touch),
+                ),
+                None,
+                "movement does not switch before release",
+            );
+        }
+        let action = pass(
+            &ctx,
+            &mut start_x,
+            pointer(
+                200.0 + distance,
+                if cancel { TouchPhase::Cancel } else { TouchPhase::End },
+                touch,
+            ),
+        );
+        assert_eq!(start_x, None, "release retires the original touch");
+        assert_eq!(pass(&ctx, &mut start_x, Vec::new()), None, "a swipe is emitted once");
+        action
+    }
+
+    #[test]
+    fn gallery_uses_total_touch_travel_at_the_actual_release() {
+        assert_eq!(swipe(-72.0, true, false), Some("cloud-gallery-next"));
+        assert_eq!(swipe(72.0, true, false), Some("cloud-gallery-previous"));
+    }
+
+    #[test]
+    fn gallery_retains_source_threshold_and_excludes_mouse_drag_and_touch_cancel() {
+        assert_eq!(swipe(-39.0, true, false), None);
+        assert_eq!(swipe(-40.0, true, false), Some("cloud-gallery-next"));
+        assert_eq!(swipe(40.0, true, false), Some("cloud-gallery-previous"));
+        assert_eq!(swipe(-72.0, false, false), None);
+        assert_eq!(swipe(-72.0, true, true), None);
     }
 }
