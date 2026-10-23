@@ -129,12 +129,12 @@ async function scenery(page,filename) {
       const continuedPixels=await scenery(current,path.join(output,`${name}-continued.png`));
       const submissions=await ui.gpuDraws(current);
       assert.ok(submissions.canvasCalls.game>0,'the actual game canvas submitted the world and HUD');
-      assert.deepEqual(observed.errors,[]);
       receipt.maps.push({name,seed:world.seed,runId:world.run_id,
         sourceSha256:world.source_sha256,geometrySha256:world.geometry_sha256,
         entrySide:side,entry,walked,paused,resumed,loading,
         saveRevision:left.revision,entryPixels,walkedPixels,continuedPixels,submissions,
         errors:observed.errors,warnings:observed.warnings});
+      assert.deepEqual(observed.errors,[]);
       await context.close();
       current=null;
     }
@@ -143,7 +143,12 @@ async function scenery(page,filename) {
   } catch(error) {
     receipt.status='failed';receipt.failure=error.stack;
     receipt.errors.push(...currentErrors);
-    if(current)await current.screenshot({path:path.join(output,'failure.png')});
+    if(current) {
+      receipt.failedUi=await ui.readUi(current);
+      receipt.failedSave=await readSave(current);
+      receipt.failedPlayer=await state(current);
+      await current.screenshot({path:path.join(output,'failure.png')});
+    }
     process.exitCode=1;
   } finally {
     await fs.writeFile(path.join(output,'receipt.json'),`${JSON.stringify(receipt,null,2)}\n`);
