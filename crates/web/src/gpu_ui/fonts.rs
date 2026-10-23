@@ -153,10 +153,10 @@ pub(super) fn font_css(family: &FontFamily, size: f32) -> String {
         FontFamily::Proportional => "Georgia",
     };
     let (weight, style, family) = match name {
-        "Cinzel" => ("500", "normal", "'SDGPU Cinzel',Georgia,serif"),
-        "Cinzel Semibold" => ("600", "normal", "'SDGPU Cinzel',Georgia,serif"),
-        "Cinzel Bold" => ("700", "normal", "'SDGPU Cinzel',Georgia,serif"),
-        "Cinzel ExtraBold" => ("800", "normal", "'SDGPU Cinzel',Georgia,serif"),
+        "Cinzel" => ("500", "normal", "'SDGPU Cinzel','Times New Roman',serif"),
+        "Cinzel Semibold" => ("600", "normal", "'SDGPU Cinzel','Times New Roman',serif"),
+        "Cinzel Bold" => ("700", "normal", "'SDGPU Cinzel','Times New Roman',serif"),
+        "Cinzel ExtraBold" => ("800", "normal", "'SDGPU Cinzel','Times New Roman',serif"),
         "Alegreya" => ("400", "normal", "'SDGPU Alegreya',Georgia,serif"),
         "Alegreya Medium" => ("500", "normal", "'SDGPU Alegreya',Georgia,serif"),
         // Source requests600 with only its400/500/700 faces imported; keep native matching.
@@ -167,6 +167,7 @@ pub(super) fn font_css(family: &FontFamily, size: f32) -> String {
         "JetBrains Mono Bold" => ("600", "normal", "'SDGPU JetBrains Mono',monospace"),
         "Palatino" => ("400", "normal", "Palatino,'Palatino Linotype',Georgia,serif"),
         "Arial" => ("400", "normal", "Arial,Helvetica,sans-serif"),
+        "IM FELL English" => ("400", "normal", "'IM FELL English',Georgia,serif"),
         "Georgia Bold" => ("700", "normal", "Georgia,'Times New Roman',serif"),
         _ => ("400", "normal", "Georgia,'Times New Roman',serif"),
     };
