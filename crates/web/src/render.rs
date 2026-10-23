@@ -482,6 +482,82 @@ impl Renderer {
         self.gl.delete_texture(Some(&texture.handle));
     }
 
+    pub(crate) fn graphics_context(&self) -> Gl {
+        self.gl.clone()
+    }
+
+    /// Applies an egui glyph-atlas patch without replacing its live texture.
+    pub(crate) fn update_rgba(
+        &mut self,
+        texture: &Texture,
+        origin: [usize; 2],
+        size: [usize; 2],
+        pixels: &[u8],
+    ) -> Result<(), String> {
+        self.flush();
+        self.gl.bind_texture(Gl::TEXTURE_2D, Some(&texture.handle));
+        self.bound_texture = Some(texture.id);
+        self.gl
+            .tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
+                Gl::TEXTURE_2D,
+                0,
+                origin[0] as i32,
+                origin[1] as i32,
+                size[0] as i32,
+                size[1] as i32,
+                Gl::RGBA,
+                Gl::UNSIGNED_BYTE,
+                Some(pixels),
+            )
+            .map_err(|error| format!("GPU UI texture patch: {error:?}"))
+    }
+
+    /// Draws the Rust UI over the complete canvas, then restores world projection/state.
+    pub(crate) fn draw_screen_space(
+        &mut self,
+        physical: [i32; 2],
+        logical: [f32; 2],
+        draw: impl FnOnce(&mut Self) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.flush();
+        let viewport = self.viewport;
+        let logical_size = self.logical_size;
+        let native_centers = self.native_world_pixel_centers;
+        let saturation = self.saturation;
+        self.viewport = [0, 0, physical[0], physical[1]];
+        self.logical_size = logical;
+        self.native_world_pixel_centers = false;
+        self.gl.viewport(0, 0, physical[0], physical[1]);
+        self.bind_projection(logical, [physical[0] as f32, physical[1] as f32]);
+        self.set_saturation(1.0);
+        // Uploading a new atlas changes the GL binding outside the draw batch.
+        self.bound_texture = None;
+        let result = draw(self);
+        self.flush();
+        self.gl.disable(Gl::SCISSOR_TEST);
+        self.viewport = viewport;
+        self.logical_size = logical_size;
+        self.native_world_pixel_centers = native_centers;
+        self.gl.viewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        self.bind_projection(logical_size, [viewport[2] as f32, viewport[3] as f32]);
+        self.set_saturation(saturation);
+        result
+    }
+
+    pub(crate) fn set_texture_sampling(&mut self, texture: &Texture, nearest: bool) {
+        self.flush();
+        self.gl.bind_texture(Gl::TEXTURE_2D, Some(&texture.handle));
+        self.bound_texture = Some(texture.id);
+        let filter = if nearest { Gl::NEAREST } else { Gl::LINEAR };
+        for parameter in [Gl::TEXTURE_MIN_FILTER, Gl::TEXTURE_MAG_FILTER] {
+            self.gl.tex_parameteri(Gl::TEXTURE_2D, parameter, filter as i32);
+        }
+    }
+
+    pub(crate) fn delete_ui_texture(gl: &Gl, texture: &Texture) {
+        gl.delete_texture(Some(&texture.handle));
+    }
+
     /// Authored mod wearables use nearest sampling for every frame sharing their sheet.
     pub fn set_texture_nearest(&mut self, texture: &Texture) {
         self.flush();
