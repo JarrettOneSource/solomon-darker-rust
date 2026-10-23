@@ -287,6 +287,43 @@ fn a_clicked_binding_row_commits_before_the_following_escape_dispatch() {
 }
 
 #[test]
+fn a_distant_sort_click_does_not_turn_the_following_row_double_click_into_a_triple() {
+    let ctx = Context::default();
+    let mut row_counts = Vec::new();
+    let mut paint = |frame: &mut UiFrame<'_>| {
+        frame.ctx.root_ui(|ui| {
+            let _ = ui.interact(
+                Rect::from_min_size(pos2(20.0, 30.0), vec2(100.0, 45.0)),
+                egui::Id::unique("sort"),
+                egui::Sense::click(),
+            );
+            let row = ui.interact(
+                Rect::from_min_size(pos2(200.0, 120.0), vec2(150.0, 80.0)),
+                egui::Id::unique("cloud-row"),
+                egui::Sense::click(),
+            );
+            if row.clicked() {
+                row_counts.push(if row.triple_clicked() {
+                    3
+                } else if row.double_clicked() {
+                    2
+                } else {
+                    1
+                });
+            }
+        });
+    };
+    frame(&ctx, Vec::new(), &mut paint);
+    for point in [pos2(50.0, 50.0), pos2(260.0, 150.0), pos2(260.0, 150.0)] {
+        for pressed in [true, false] {
+            frame(&ctx, pointer(pressed, point), &mut paint);
+            frame(&ctx, Vec::new(), &mut paint);
+        }
+    }
+    assert_eq!(row_counts, [1, 2], "the distant prior click is not part of the row's click series");
+}
+
+#[test]
 fn a_new_field_has_committed_geometry_before_an_immediate_click_and_submit() {
     let ctx = Context::default();
     let mut opened = false;
