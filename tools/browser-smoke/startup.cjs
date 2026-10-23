@@ -175,6 +175,11 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
     }
     await page.waitForFunction(()=>window.__solomonGpuDraws?.canvasCalls['[data-gpu-loader]']>0,
       null,{timeout:45000});
+    const heldName=new URL(requestUrl).pathname.split('/').at(-1);
+    const waiting=await ui.waitForUi(page,snapshot=>snapshot.loading
+      &&new URL(snapshot.loading.currentItem,url).pathname.split('/').at(-1)===heldName,
+    `${name} reports its actual unfinished ${heldName}`,{timeout:45000});
+    pending(waiting);
     const first=await visual(page,`${name}-held`);
     await page.waitForTimeout(500);
     const still=await ui.readUi(page);
@@ -247,8 +252,16 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
     await ui.assertGpuOnly(page);
     await page.screenshot({path:path.join(output,`${name}-title.png`)});
     assert.deepEqual(observed.errors,[],'delayed successful work has no runtime/asset errors');
-    return {requestUrl,before,still,first,second,resizes,handoff,heldAnnouncements,announcementHandoff,
+    return {requestUrl,before,waiting,still,first,second,resizes,handoff,heldAnnouncements,announcementHandoff,
       ready:await ui.readUi(page),...observed};
+  } catch(error) {
+    const failure={requestUrl,failure:error.stack,...observed};
+    try {failure.snapshot=await ui.readUi(page)}
+    catch(observationError) {failure.observationError=observationError.stack}
+    try {await page.screenshot({path:path.join(output,`${name}-failure.png`)})}
+    catch(screenshotError) {failure.screenshotError=screenshotError.stack}
+    fs.writeFileSync(path.join(output,`${name}-failure.json`),JSON.stringify(failure,null,2));
+    throw error;
   } finally {release();await context.close()}
 }
 

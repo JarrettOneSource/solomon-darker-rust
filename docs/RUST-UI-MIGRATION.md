@@ -54,6 +54,14 @@ records native `MyLoader::Render` at `0x005BCA40`, numerator `0x0081F6A8`, denom
 - Progress is de-duplicated completed work divided by total required work across sequential
   loader/resident phases. Concurrent work remains concurrent. It never regresses and never
   claims 100 percent before completion. There is no timer, easing or minimum duration.
+- Pinned `game-asset-readiness.ts::loadAssetBatch` owns a pending Set and reports its first
+  remaining source after every completion. The candidate's `runtime_ui::completed`
+  initially forwarded the just-finished source instead; its label could describe an
+  already decoded item while another resource was held. Font completions were also
+  reported as a group after Promise.all. This is a recovered readiness-contract gap:
+  canonical progress must identify real unfinished work and count individual completed
+  resources. Foundation owns that repair; held Title/font/music/module cases must retain
+  the held request's actual filename as currentItem before their splash is accepted.
 - Resident music follows pinned `game-audio-browser.ts::loadMusicChannel`: its Promise
   executor creates the channel, installs loadeddata/error handlers and calls load in one
   JavaScript task. The Rust candidate initially constructed channels with src before an
