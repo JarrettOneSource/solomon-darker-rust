@@ -232,7 +232,9 @@ async function observeGpu(page) {
           if (count > 0) {
             counts.calls += 1;
             counts.vertices += count;
-            const id = this.canvas.id || '(unattached canvas)';
+            const id = this.canvas instanceof HTMLCanvasElement
+              && this.canvas.hasAttribute('data-gpu-loader')
+              ? '[data-gpu-loader]' : this.canvas.id || '(unattached canvas)';
             counts.canvasCalls[id] = (counts.canvasCalls[id] || 0) + 1;
           }
           return result;
