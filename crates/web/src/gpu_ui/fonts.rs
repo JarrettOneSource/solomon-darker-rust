@@ -92,6 +92,7 @@ pub(super) async fn load(document: &Document, ctx: &Context) -> Result<BrowserFo
     let fallback = definitions.families[&FontFamily::Proportional].clone();
     for family in [
         "Georgia",
+        "Arial",
         "Palatino",
         "Cinzel",
         "Cinzel Bold",
@@ -143,6 +144,7 @@ fn font_css(family: &FontFamily, size: f32) -> String {
         "JetBrains Mono" => ("400", "normal", "'SDGPU JetBrains Mono',monospace"),
         "JetBrains Mono Bold" => ("600", "normal", "'SDGPU JetBrains Mono',monospace"),
         "Palatino" => ("400", "normal", "Palatino,'Palatino Linotype',Georgia,serif"),
+        "Arial" => ("400", "normal", "Arial,Helvetica,sans-serif"),
         _ => ("400", "normal", "Georgia,'Times New Roman',serif"),
     };
     format!("{style} {weight} {size}px {family}")

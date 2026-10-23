@@ -55,6 +55,8 @@ struct InputQueue {
     text_rects: Vec<Rect>,
     primary_touch: Option<i32>,
     gamepad_keys: [bool; 8],
+    gamepad_direction: Option<solomon_sim::input::MenuDirection>,
+    next_gamepad_repeat_at: f64,
     clipboard_error: Option<String>,
 }
 
@@ -138,6 +140,12 @@ impl BrowserInput {
             .append_child(&textarea)
             .map_err(|error| format!("GPU UI composition attachment: {error:?}"))?;
         canvas.set_tab_index(0);
+        canvas
+            .set_attribute("role", "application")
+            .map_err(|error| format!("GPU canvas accessibility role: {error:?}"))?;
+        canvas
+            .set_attribute("aria-label", "Solomon Dark")
+            .map_err(|error| format!("GPU canvas accessibility label: {error:?}"))?;
         let queue = Rc::new(RefCell::new(InputQueue {
             focused: document.has_focus().unwrap_or(true),
             logical: [canvas.client_width() as f32, canvas.client_height() as f32],
@@ -146,6 +154,7 @@ impl BrowserInput {
         let mut listeners = Vec::new();
         for (name, pressed) in [("keydown", true), ("keyup", false)] {
             let queue = queue.clone();
+            let adapter: EventTarget = textarea.clone().into();
             listen(document.as_ref(), name, &mut listeners, move |event| {
                 let Some(key) = event.dyn_ref::<KeyboardEvent>() else { return };
                 let mut queue = queue.borrow_mut();
@@ -192,6 +201,16 @@ impl BrowserInput {
                         && !native_text
                         && !(mods.command && key.key().eq_ignore_ascii_case("v"))
                     {
+                        event.prevent_default();
+                    }
+                }
+                // A click and the first character can arrive before the next game
+                // frame focuses the IME adapter. Queue real desktop key text here;
+                // suppress its textarea default so `input` cannot insert it twice.
+                // Virtual keyboards without keydown still use the input listener.
+                if pressed && key.key().chars().count() == 1 && !mods.ctrl && !mods.mac_cmd {
+                    queue.events.push(UiEvent::Text(key.key()));
+                    if queue.capture.text || key.target().is_some_and(|target| target == adapter) {
                         event.prevent_default();
                     }
                 }
@@ -344,6 +363,36 @@ impl BrowserInput {
             let queue = queue.clone();
             let textarea = textarea.clone();
             let target: EventTarget = textarea.clone().into();
+            listen(&target, "beforeinput", &mut listeners, move |event| {
+                let Some(input) = event.dyn_ref::<InputEvent>() else { return };
+                let mut queue = queue.borrow_mut();
+                if queue.composing || input.is_composing() {
+                    return;
+                }
+                let key = match input.input_type().as_str() {
+                    "deleteContentBackward" => Some(Key::Backspace),
+                    "deleteContentForward" => Some(Key::Delete),
+                    "insertParagraph" | "insertLineBreak" => Some(Key::Enter),
+                    _ => None,
+                };
+                if let Some(key) = key {
+                    for pressed in [true, false] {
+                        queue.events.push(UiEvent::Key {
+                            key,
+                            physical_key: None,
+                            pressed,
+                            repeat: false,
+                            modifiers: Modifiers::NONE,
+                        });
+                    }
+                    event.prevent_default();
+                }
+            })?;
+        }
+        {
+            let queue = queue.clone();
+            let textarea = textarea.clone();
+            let target: EventTarget = textarea.clone().into();
             listen(&target, "input", &mut listeners, move |event| {
                 let Some(input) = event.dyn_ref::<InputEvent>() else { return };
                 let mut queue = queue.borrow_mut();
@@ -407,7 +456,11 @@ impl BrowserInput {
         let gamepads = navigator
             .get_gamepads()
             .map_err(|error| format!("GPU UI gamepad sample: {error:?}"))?;
-        let mut held = [false; 8];
+        use solomon_sim::input::{
+            MenuDirection, MenuGamepadButtons, MenuGamepadState, advance_menu_direction_repeat,
+            read_menu_gamepad,
+        };
+        let mut current = MenuGamepadState::default();
         for value in gamepads.iter().filter(|value| !value.is_null()) {
             let Ok(gamepad) = value.dyn_into::<web_sys::Gamepad>() else { continue };
             if !gamepad.connected() || gamepad.mapping() != web_sys::GamepadMappingType::Standard {
@@ -418,26 +471,44 @@ impl BrowserInput {
                 buttons
                     .get(index)
                     .dyn_into::<web_sys::GamepadButton>()
-                    .is_ok_and(|button| button.pressed())
+                    .is_ok_and(|button| button.pressed() || button.value() > 0.5)
             };
             let axes = gamepad.axes();
             let axis = |index| axes.get(index).as_f64().unwrap_or(0.0);
-            for (index, active) in [
-                pressed(12) || axis(1) < -0.5,
-                pressed(13) || axis(1) > 0.5,
-                pressed(14) || axis(0) < -0.5,
-                pressed(15) || axis(0) > 0.5,
-                pressed(0),
-                pressed(1),
-                pressed(4),
-                pressed(5),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                held[index] |= active;
+            let state = read_menu_gamepad(
+                solomon_sim::Vec2::new(axis(0), axis(1)),
+                MenuGamepadButtons {
+                    up: pressed(12),
+                    down: pressed(13),
+                    left: pressed(14),
+                    right: pressed(15),
+                    confirm: pressed(0),
+                    back: pressed(1),
+                    previous: pressed(4),
+                    next: pressed(5),
+                },
+            );
+            if state.active() {
+                current = state;
+                break;
             }
         }
+        let held = [
+            current.direction == Some(MenuDirection::Up),
+            current.direction == Some(MenuDirection::Down),
+            current.direction == Some(MenuDirection::Left),
+            current.direction == Some(MenuDirection::Right),
+            current.confirm,
+            current.back,
+            current.previous,
+            current.next,
+        ];
+        let (repeat, next_repeat) = advance_menu_direction_repeat(
+            queue.gamepad_direction,
+            current.direction,
+            time * 1000.0,
+            queue.next_gamepad_repeat_at,
+        );
         for (index, key) in [
             Key::ArrowUp,
             Key::ArrowDown,
@@ -451,17 +522,19 @@ impl BrowserInput {
         .into_iter()
         .enumerate()
         {
-            if held[index] != queue.gamepad_keys[index] {
+            if held[index] != queue.gamepad_keys[index] || index < 4 && held[index] && repeat {
                 raw.events.push(UiEvent::Key {
                     key,
                     physical_key: None,
                     pressed: held[index],
-                    repeat: false,
+                    repeat: held[index] && queue.gamepad_keys[index],
                     modifiers: Modifiers { shift: index == 6, ..Default::default() },
                 });
             }
         }
         queue.gamepad_keys = held;
+        queue.gamepad_direction = current.direction;
+        queue.next_gamepad_repeat_at = next_repeat;
         Ok(raw)
     }
 

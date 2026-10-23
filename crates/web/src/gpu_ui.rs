@@ -4,10 +4,13 @@
 //! egui owns layout, focus, text editing and tessellation; this module owns the browser
 //! input/text adapters and the renderer's GPU resource lifetime. No visual DOM is created.
 
+mod accessibility;
 mod fonts;
 mod input;
 mod painter;
 mod stock;
+#[cfg(test)]
+mod tests;
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -21,6 +24,13 @@ use solomon_graphics::{BlendMode, Renderer};
 pub use input::{BrowserKey, canvas_point, key_from_browser};
 pub use painter::clip_scissor;
 pub use stock::{StockAtlas, message_frame, native_text, paint_text_layout};
+
+pub fn cooldown_sector_points(remaining: f64, capacity: f64) -> Vec<Pos2> {
+    solomon_sim::hud::quickbar::native_cooldown_sector_points(remaining, capacity)
+        .into_iter()
+        .map(|point| pos2(point.x as f32, point.y as f32))
+        .collect()
+}
 
 /// UI ownership sampled by the game before it admits a world input frame.
 #[derive(Clone, Copy, Debug, Default, Serialize)]
@@ -59,6 +69,12 @@ pub struct WidgetGeometry {
     pub value: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected: Option<bool>,
+    #[serde(skip)]
+    egui_id: Option<egui::Id>,
+    #[serde(skip)]
+    layer_id: Option<egui::LayerId>,
+    #[serde(skip)]
+    duplicate: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -82,9 +98,25 @@ pub struct UiFrame<'a> {
     widgets: &'a RefCell<BTreeMap<String, WidgetGeometry>>,
     previous_widgets: &'a BTreeMap<String, WidgetGeometry>,
     key_codes: &'a [BrowserKey],
+    blend: BlendMode,
+    announcements: &'a RefCell<Vec<String>>,
 }
 
 impl UiFrame<'_> {
+    pub fn announce(&self, text: &str) {
+        self.announcements.borrow_mut().push(text.to_owned());
+    }
+    pub fn with_blend(&self, blend: BlendMode) -> UiFrame<'_> {
+        UiFrame {
+            ctx: self.ctx,
+            images: self.images,
+            widgets: self.widgets,
+            previous_widgets: self.previous_widgets,
+            key_codes: self.key_codes,
+            blend,
+            announcements: self.announcements,
+        }
+    }
     pub fn key_codes(&self) -> &[BrowserKey] {
         self.key_codes
     }
@@ -178,7 +210,28 @@ impl UiFrame<'_> {
         uv: Rect,
         tint: Color32,
     ) -> bool {
-        self.paint_quad(painter, path, positions, uv, tint, BlendMode::Normal, false)
+        self.paint_quad(painter, path, positions, uv, tint, self.blend, false)
+    }
+
+    pub fn image_triangle(
+        &self,
+        painter: &Painter,
+        path: &str,
+        positions: [Pos2; 3],
+        uv: [Pos2; 3],
+        tint: Color32,
+        blend: BlendMode,
+    ) -> bool {
+        let Some(texture_id) = self.images.texture_id(path, blend, false) else { return false };
+        let mut mesh = egui::Mesh::with_texture(texture_id);
+        mesh.vertices.extend(positions.into_iter().zip(uv).map(|(pos, uv)| egui::epaint::Vertex {
+            pos,
+            uv,
+            color: tint,
+        }));
+        mesh.indices.extend_from_slice(&[0, 1, 2]);
+        painter.add(egui::Shape::mesh(mesh));
+        true
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -192,6 +245,18 @@ impl UiFrame<'_> {
         blend: BlendMode,
     ) -> bool {
         self.paint_quad(painter, path, positions, uv, tint, blend, false)
+    }
+
+    pub fn image_quad_masked(
+        &self,
+        painter: &Painter,
+        path: &str,
+        positions: [Pos2; 4],
+        uv: Rect,
+        tint: Color32,
+        blend: BlendMode,
+    ) -> bool {
+        self.paint_quad(painter, path, positions, uv, tint, blend, true)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -221,14 +286,19 @@ impl UiFrame<'_> {
     }
 
     pub fn record(&self, id: &str, label: &str, role: &str, response: &Response) {
+        if !response.visible() {
+            return;
+        }
         let rect = self
             .ctx
             .layer_transform_to_global(response.layer_id)
-            .map_or(response.rect, |transform| transform * response.rect);
+            .map_or(response.interact_rect, |transform| transform * response.interact_rect);
         self.record_rect(id, label, role, rect, response.enabled());
         if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
             widget.focused = response.has_focus();
             widget.modal = self.ctx.memory(|memory| memory.top_modal_layer().is_some());
+            widget.egui_id = Some(response.id);
+            widget.layer_id = Some(response.layer_id);
         }
     }
 
@@ -238,6 +308,10 @@ impl UiFrame<'_> {
             return;
         }
         let mut widgets = self.widgets.borrow_mut();
+        if let Some(existing) = widgets.get_mut(id) {
+            existing.duplicate = true;
+            return;
+        }
         let z = widgets.len();
         widgets.insert(
             id.to_owned(),
@@ -252,6 +326,9 @@ impl UiFrame<'_> {
                 z,
                 value: None,
                 selected: None,
+                egui_id: None,
+                layer_id: None,
+                duplicate: false,
             },
         );
     }
@@ -280,6 +357,7 @@ pub struct GpuUi {
     images: painter::Images,
     painter: painter::GpuPainter,
     _fonts: fonts::BrowserFonts,
+    accessibility: accessibility::Accessibility,
     widgets: BTreeMap<String, WidgetGeometry>,
     diagnostics: UiDiagnostics,
 }
@@ -298,8 +376,21 @@ impl GpuUi {
         let fonts = fonts::load(document, &ctx).await?;
         let images = painter::Images::default();
         images.load_stock(renderer).await?;
-        let input = input::BrowserInput::attach(document, canvas)?;
+        let input = match input::BrowserInput::attach(document, canvas) {
+            Ok(input) => input,
+            Err(error) => {
+                images.destroy(&renderer.graphics_context());
+                return Err(error);
+            }
+        };
         let painter = painter::GpuPainter::new(renderer);
+        let accessibility = match accessibility::Accessibility::attach(document) {
+            Ok(accessibility) => accessibility,
+            Err(error) => {
+                images.destroy(&renderer.graphics_context());
+                return Err(error);
+            }
+        };
         Ok(Self {
             ctx,
             canvas: canvas.clone(),
@@ -307,6 +398,7 @@ impl GpuUi {
             images,
             painter,
             _fonts: fonts,
+            accessibility,
             widgets: BTreeMap::new(),
             diagnostics: UiDiagnostics::default(),
         })
@@ -331,15 +423,19 @@ impl GpuUi {
         let physical = [self.canvas.width() as i32, self.canvas.height() as i32];
         let pixels_per_point = physical[0] as f32 / viewport[0];
         let raw = self.input.take(viewport, pixels_per_point, time_seconds)?;
+        focus_pointer_text(&self.ctx, &self.widgets, &raw.events);
         let key_codes = self.input.take_key_codes();
         let widgets = RefCell::new(BTreeMap::new());
-        let output = self.ctx.run_pass(raw, |ctx| {
+        let announcements = RefCell::new(Vec::new());
+        let mut output = self.ctx.run_pass(raw, |ctx| {
             paint(&mut UiFrame {
                 ctx,
                 images: &self.images,
                 widgets: &widgets,
                 previous_widgets: &self.widgets,
                 key_codes: &key_codes,
+                blend: BlendMode::Normal,
+                announcements: &announcements,
             });
         });
         let capture = UiCapture {
@@ -348,9 +444,25 @@ impl GpuUi {
             text: output.platform_output.ime.is_some(),
         };
         self.widgets = widgets.into_inner();
+        if let Some(widget) = self.widgets.values().find(|widget| widget.duplicate) {
+            let error = format!("GPU UI widget id {} was painted more than once", widget.id);
+            self.diagnostics.error = Some(error.clone());
+            output.textures_delta.clear();
+            return Err(error);
+        }
         self.input.set_text_rects(&self.widgets);
-        self.input.apply_output(&output.platform_output, capture)?;
+        if let Err(error) = self.input.apply_output(&output.platform_output, capture) {
+            output.textures_delta.clear();
+            return Err(error);
+        }
+        if let Err(error) =
+            self.accessibility.update(&output.platform_output, &announcements.into_inner())
+        {
+            output.textures_delta.clear();
+            return Err(error);
+        }
         if let Some(error) = fonts::take_error() {
+            output.textures_delta.clear();
             return Err(error);
         }
         let primitives = self.ctx.tessellate(output.shapes, output.pixels_per_point);
@@ -368,7 +480,7 @@ impl GpuUi {
             meshes,
             triangles,
             textures: self.painter.texture_count() + self.images.texture_count(),
-            static_images_ready: self.images.static_image_count(),
+            static_images_ready: self.images.static_images_ready(),
             static_images_total: self.images.static_image_count(),
             error: None,
             capture,
@@ -385,6 +497,45 @@ impl GpuUi {
     }
     pub fn diagnostics(&self) -> &UiDiagnostics {
         &self.diagnostics
+    }
+}
+
+fn focus_pointer_text(
+    ctx: &Context,
+    widgets: &BTreeMap<String, WidgetGeometry>,
+    events: &[egui::Event],
+) {
+    for event in events {
+        let egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            ..
+        } = event
+        else {
+            continue;
+        };
+        let layer = ctx.layer_id_at(*pos);
+        for widget in widgets.values().rev() {
+            if !widget.enabled
+                || !matches!(widget.role.as_str(), "textbox" | "input" | "text-entry")
+                || widget.layer_id != layer
+            {
+                continue;
+            }
+            let rect = Rect::from_min_size(
+                pos2(widget.bounds.x, widget.bounds.y),
+                vec2(widget.bounds.width, widget.bounds.height),
+            );
+            if rect.contains(*pos)
+                && let Some(id) = widget.egui_id
+            {
+                // egui0.37 lays out TextEdit content before its pointer response.
+                // Focus the actual hit target before its first queued text event.
+                ctx.memory_mut(|memory| memory.request_focus(id));
+                break;
+            }
+        }
     }
 }
 

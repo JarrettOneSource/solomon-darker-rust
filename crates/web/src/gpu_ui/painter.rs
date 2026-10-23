@@ -45,9 +45,21 @@ impl Images {
     pub fn static_image_count(&self) -> usize {
         include_str!("stock-images.txt").lines().filter(|line| !line.is_empty()).count()
     }
+    pub fn static_images_ready(&self) -> usize {
+        let cache = self.0.borrow();
+        include_str!("stock-images.txt")
+            .lines()
+            .filter(|path| {
+                cache
+                    .images
+                    .get(*path)
+                    .is_some_and(|entry| matches!(entry.state, ImageState::Ready(_)))
+            })
+            .count()
+    }
     pub fn request(&self, path: &str) {
         let path = path_key(path);
-        {
+        let request_id = {
             let mut cache = self.0.borrow_mut();
             if cache.images.contains_key(&path) {
                 return;
@@ -58,12 +70,16 @@ impl Images {
             cache
                 .images
                 .insert(path.clone(), ImageEntry { id, state: ImageState::Loading, size: None });
-        }
+            id
+        };
         let images = self.clone();
         wasm_bindgen_futures::spawn_local(async move {
             let decoded = assets::load_image(&path).await;
             let mut cache = images.0.borrow_mut();
             let Some(entry) = cache.images.get_mut(&path) else { return };
+            if entry.id != request_id {
+                return;
+            }
             match decoded {
                 Ok(image) => {
                     entry.size =
@@ -100,7 +116,11 @@ impl Images {
         wasm_bindgen_futures::JsFuture::from(js_sys::Promise::all(&promises))
             .await
             .map_err(|error| format!("GPU UI stock art readiness: {error:?}"))?;
-        self.upload_decoded(renderer)
+        if let Err(error) = self.upload_decoded(renderer) {
+            self.destroy(&renderer.graphics_context());
+            return Err(error);
+        }
+        Ok(())
     }
 
     fn upload_decoded(&self, renderer: &Renderer) -> Result<(), String> {
@@ -223,7 +243,9 @@ impl GpuPainter {
         mut delta: egui::TexturesDelta,
     ) -> Result<(usize, usize), String> {
         renderer.flush();
-        for (id, updates) in delta.set.drain() {
+        let updates = std::mem::take(&mut delta.set);
+        let frees = std::mem::take(&mut delta.free);
+        for (id, updates) in updates {
             for update in updates {
                 let egui::ImageData::Color(image) = update.image;
                 let pixels: Vec<u8> =
@@ -314,7 +336,9 @@ impl GpuPainter {
                     .collect();
                 let mesh_triangles: Vec<[Vertex; 3]> = mesh
                     .indices
-                    .chunks_exact(3)
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
                     .map(|indices| {
                         [
                             vertices[indices[0] as usize],
@@ -331,7 +355,7 @@ impl GpuPainter {
             }
             Ok(())
         });
-        for id in std::mem::take(&mut delta.free) {
+        for id in frees {
             if let Some(texture) = self.textures.remove(&id) {
                 renderer.destroy_texture(&texture);
             }

@@ -11,7 +11,6 @@ use solomon_sim::native_ui_text::{
 };
 
 use super::UiFrame;
-use solomon_graphics::BlendMode;
 use solomon_graphics::assets;
 
 pub struct StockAtlas {
@@ -411,6 +410,6 @@ pub fn paint_text_layout(frame: &UiFrame<'_>, painter: &Painter, layout: &Native
             glyph.tint as u8,
             (glyph.alpha * 255.0).round().clamp(0.0, 255.0) as u8,
         );
-        frame.paint_quad(painter, &path, positions, uv, tint, BlendMode::Normal, true);
+        frame.paint_quad(painter, &path, positions, uv, tint, frame.blend, true);
     }
 }
