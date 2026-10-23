@@ -91,6 +91,18 @@ impl MobileUiEditor {
                 Id::unique(("mobile/control", id.as_str())),
                 if self.busy { egui::Sense::hover() } else { egui::Sense::click_and_drag() },
             );
+            if response.has_focus() {
+                ui.memory_mut(|memory| {
+                    memory.set_focus_lock_filter(
+                        response.id,
+                        egui::EventFilter {
+                            horizontal_arrows: true,
+                            vertical_arrows: true,
+                            ..Default::default()
+                        },
+                    )
+                });
+            }
             if response.gained_focus() {
                 self.focused_element = Some(id);
                 self.events.push(EditorEvent::Select(id));
