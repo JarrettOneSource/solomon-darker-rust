@@ -208,6 +208,8 @@ impl ElementPaint {
             Stroke::new(stroke.width * self.scale, stroke.color),
         );
     }
+    // This preview primitive keeps placement, alignment, font style, and ink independent.
+    #[allow(clippy::too_many_arguments)]
     fn text(
         self,
         painter: &Painter,
@@ -227,6 +229,8 @@ impl ElementPaint {
         painter
             .add(egui::epaint::TextShape::new(rect.min, galley, color).with_angle(self.rotation));
     }
+    // Registered sprites retain independent Source center, per-axis scale, rotation, and tint.
+    #[allow(clippy::too_many_arguments)]
     fn art(
         self,
         frame: &UiFrame<'_>,

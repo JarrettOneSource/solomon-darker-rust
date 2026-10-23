@@ -342,17 +342,78 @@ impl MobileUiEditor {
             size: bounds.size(),
             rotation: 0.0,
         });
-        ui.scope_builder(egui::UiBuilder::new().max_rect(bounds.shrink(4.0)),|ui|{
-            egui::ScrollArea::vertical().id_salt("mobile/inspector-scroll").max_height(bounds.height()).show(ui,|ui|{
-                if self.fullscreen{self.picker(frame,ui);}
-                let current=self.layout.get(self.selected);
-                ui.horizontal_wrapped(|ui|{ui.label(copy("Move",11.0));for(label,action)in[("←","left"),("↑","up"),("↓","down"),("→","right")]{self.command_button(frame,ui,label,action);}});
-                ui.horizontal_wrapped(|ui|{ui.label(copy(&format!("Size {}%",(current.scale*100.0).round()),11.0));self.command_button(frame,ui,"−","smaller");let mut scale=current.scale*100.0;let response=ui.add_enabled(!self.busy,egui::Slider::new(&mut scale,40.0..=300.0).step_by(5.0).show_value(false));frame.record("mobile/scale","Size","slider",&response);frame.record_value("mobile/scale",&scale.to_string(),None);if response.drag_started(){self.events.push(EditorEvent::BeginChange);}if response.changed(){self.events.push(EditorEvent::Scale(scale/100.0));}self.command_button(frame,ui,"+","larger");});
-                ui.horizontal_wrapped(|ui|{ui.label(copy(&format!("Rotation {}°",current.rotation.round()),11.0));for(label,action)in[("−15°","rotate-left"),("0°","straighten"),("+15°","rotate-right")]{self.command_button(frame,ui,label,action);}});
-                ui.horizontal_wrapped(|ui|{self.command_button(frame,ui,"RESET THIS CONTROL","reset-control");if self.fullscreen{self.command_button(frame,ui,"RESET LAYOUT","reset-layout");}});
-                let status=format!("{}   X {}%   Y {}%   SIZE {}%   ROTATE {}°",self.selected.label(),native_tooltip_fixed(current.x,1),native_tooltip_fixed(current.y,1),(current.scale*100.0).round(),current.rotation.round());let response=ui.label(copy(&status,11.0));frame.record("mobile/selection",&status,"status",&response);
-                ui.label(copy(if self.fullscreen{"Changes apply when you save. Undo also restores a reset."}else{"GRID snaps nearby edges and centres. Drag to move; pinch or use a node to resize."},10.0));
-            });
+        ui.scope_builder(egui::UiBuilder::new().max_rect(bounds.shrink(4.0)), |ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("mobile/inspector-scroll")
+                .max_height(bounds.height())
+                .show(ui, |ui| {
+                    if self.fullscreen {
+                        self.picker(frame, ui);
+                    }
+                    let current = self.layout.get(self.selected);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(copy("Move", 11.0));
+                        for (label, action) in
+                            [("←", "left"), ("↑", "up"), ("↓", "down"), ("→", "right")]
+                        {
+                            self.command_button(frame, ui, label, action);
+                        }
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(copy(&format!("Size {}%", (current.scale * 100.0).round()), 11.0));
+                        self.command_button(frame, ui, "−", "smaller");
+                        let mut scale = current.scale * 100.0;
+                        let response = ui.add_enabled(
+                            !self.busy,
+                            egui::Slider::new(&mut scale, 40.0..=300.0)
+                                .step_by(5.0)
+                                .show_value(false),
+                        );
+                        frame.record("mobile/scale", "Size", "slider", &response);
+                        frame.record_value("mobile/scale", &scale.to_string(), None);
+                        if response.drag_started() {
+                            self.events.push(EditorEvent::BeginChange);
+                        }
+                        if response.changed() {
+                            self.events.push(EditorEvent::Scale(scale / 100.0));
+                        }
+                        self.command_button(frame, ui, "+", "larger");
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(copy(&format!("Rotation {}°", current.rotation.round()), 11.0));
+                        for (label, action) in [
+                            ("−15°", "rotate-left"),
+                            ("0°", "straighten"),
+                            ("+15°", "rotate-right"),
+                        ] {
+                            self.command_button(frame, ui, label, action);
+                        }
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        self.command_button(frame, ui, "RESET THIS CONTROL", "reset-control");
+                        if self.fullscreen {
+                            self.command_button(frame, ui, "RESET LAYOUT", "reset-layout");
+                        }
+                    });
+                    let status = format!(
+                        "{}   X {}%   Y {}%   SIZE {}%   ROTATE {}°",
+                        self.selected.label(),
+                        native_tooltip_fixed(current.x, 1),
+                        native_tooltip_fixed(current.y, 1),
+                        (current.scale * 100.0).round(),
+                        current.rotation.round()
+                    );
+                    let response = ui.label(copy(&status, 11.0));
+                    frame.record("mobile/selection", &status, "status", &response);
+                    ui.label(copy(
+                        if self.fullscreen {
+                            "Changes apply when you save. Undo also restores a reset."
+                        } else {
+                            "GRID snaps nearby edges and centres. Drag to move; pinch or use a node to resize."
+                        },
+                        10.0,
+                    ));
+                });
         });
     }
     fn picker(&mut self, frame: &UiFrame<'_>, ui: &mut Ui) {
