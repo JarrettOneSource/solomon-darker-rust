@@ -1,103 +1,237 @@
-//! `BoneyardScene.tsx` / `NativeLootBitmapText.tsx` pickup text projection.
-//! The shared native font painter retains the stock body glyphs and flow placement.
+//! Website fa08 `NativeWorldNotifications` and its accepted snapshot consumers.
+//! One clock owns all source lanes. Loading/restoring seeds cursors without replay.
 
-use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
+use std::collections::BTreeMap;
 
-use solomon_sim::boneyard::loot::messages::NativeLootMessageVisual;
-use solomon_sim::native_ui_text::{
-    NativeUiFontName, NativeUiTextAlign, NativeUiTextPlacement, NativeUiTextSpec,
+use egui::{LayerId, Order, Rect, pos2, vec2};
+use solomon_sim::Vec2;
+use solomon_sim::boneyard::loot::messages::{
+    NativeLootMessagePresentation, NativeLootMessageVisual, NativeWorldNotificationInput,
+    NativeWorldNotificationKey, NativeWorldNotificationSource, native_world_notifications_visible,
 };
-use web_sys::{Document, HtmlElement};
+use solomon_sim::economy::{
+    NativeSkillBookFeedbackCursor, NativeSkillBookOutcome, native_skill_book_result_text,
+};
+use solomon_sim::enemies::model::EnemyEventKind;
+use solomon_sim::game_run::GameRunPhase;
+use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec, native_ui_glyph_ink_bounds};
+use solomon_sim::secondary::NativeSecondaryEventKind;
+use solomon_sim::session::GameSession;
 
-use crate::ui::text::native_text;
-use crate::ui::{append, element, style};
+use crate::gpu_ui::{UiFrame, native_text};
 
-pub struct LootMessages {
-    document: Document,
-    root: HtmlElement,
-    messages: HtmlElement,
-    rows: BTreeMap<u64, HtmlElement>,
+#[derive(Default)]
+pub struct WorldNotifications {
+    state: Option<NotificationState>,
 }
 
-impl LootMessages {
-    pub fn attach(document: &Document) -> Result<Self, String> {
-        let root = element(document, "div", "loot-message-viewport")?;
-        let messages = element(document, "div", "boneyard-loot-messages")?;
-        messages.set_attribute("aria-live", "polite").map_err(|_| "loot messages aria-live")?;
-        messages.set_attribute("aria-atomic", "false").map_err(|_| "loot messages aria-atomic")?;
-        style(
-            &messages,
-            "position:absolute;left:50%;top:67px;transform:translateX(-50%);transform-origin:center top;display:flex;flex-direction:column;align-items:center;text-align:center",
-        )?;
-        append(&root, &messages)?;
-        let body = document.body().ok_or("page has no body")?;
-        append(&body, &root)?;
-        style(&root, "display:none")?;
-        Ok(Self { document: document.clone(), root, messages, rows: BTreeMap::new() })
-    }
+struct NotificationState {
+    player_id: String,
+    run_id: Option<String>,
+    tick: u64,
+    last_loot_id: u64,
+    last_combat_id: usize,
+    next_secondary_id: u64,
+    book: NativeSkillBookFeedbackCursor,
+    presentation: NativeLootMessagePresentation,
+    visuals: Vec<NativeLootMessageVisual>,
+    announced: BTreeMap<NativeWorldNotificationKey, String>,
+    visible: bool,
+}
 
-    /// Uses the host HUD's logical width and display scale. The source offset is
-    /// retained by the message clock; its Website DOM projection uses 18px rows.
-    pub fn draw(
+impl WorldNotifications {
+    /// Call with the accepted authority session, once before composing its GPU frame.
+    /// Repeated snapshots do not replay events or advance the source clock twice.
+    pub fn update(
         &mut self,
-        visuals: &[NativeLootMessageVisual],
-        logical_width: f64,
-        display_scale: f64,
-        visible: bool,
+        session: &GameSession,
+        player_id: &str,
+        combat_hud: bool,
     ) -> Result<(), String> {
-        style(
-            &self.root,
-            &format!(
-                "position:fixed;left:50%;top:0;z-index:45;width:{logical_width}px;transform:translateX(-50%) scale({display_scale});transform-origin:center top;pointer-events:none;display:{}",
-                if visible { "block" } else { "none" },
-            ),
-        )?;
-        let mut live_ids = BTreeSet::new();
-        for visual in visuals {
-            let id = visual.message.event_id;
-            live_ids.insert(id);
-            if let Entry::Vacant(entry) = self.rows.entry(id) {
-                let row = element(&self.document, "span", "loot-message")?;
-                append(&self.messages, &row)?;
-                entry.insert(row);
-            }
-            let message = &self.rows[&id];
-            if message.get_attribute("aria-label").as_deref() != Some(visual.message.text.as_str())
-            {
-                message.set_text_content(None);
-                let spec = NativeUiTextSpec {
-                    align: NativeUiTextAlign::Left,
-                    placement: NativeUiTextPlacement::Box,
-                    tint: visual.message.tint,
-                    ..NativeUiTextSpec::new(NativeUiFontName::Body, &visual.message.text, 0.0, 0.0)
-                };
-                append(message, &native_text(&self.document, &spec, "boneyard-loot-bitmap-text")?)?;
-            }
-            message
-                .set_attribute("aria-label", &visual.message.text)
-                .map_err(|_| "loot message label")?;
-            message
-                .set_attribute("data-event-id", &visual.message.event_id.to_string())
-                .map_err(|_| "loot message event")?;
-            style(
-                message,
-                &format!(
-                    "display:block;height:18px;white-space:nowrap;transform-origin:center;opacity:{};transform:scale({});filter:drop-shadow(0 2px 0 #000)",
-                    visual.alpha, visual.scale,
-                ),
-            )?;
-        }
-        self.rows.retain(|id, row| {
-            if live_ids.contains(id) {
-                return true;
-            }
-            row.remove();
-            false
+        let Some(participant) = session.participants.get(player_id) else {
+            self.reset();
+            return Ok(());
+        };
+        let feedback = participant.player.economy.action_feedback.as_ref();
+        let run_id = session.boneyard.as_ref().map(|world| world.loaded.run_id.as_str());
+        let visible = native_world_notifications_visible(
+            Some(participant.player.combat.life_state),
+            combat_hud,
+        );
+        let reset = self.state.as_ref().is_none_or(|state| {
+            state.player_id != player_id
+                || state.run_id.as_deref() != run_id
+                || session.ticks < state.tick
         });
+        let terminal = matches!(session.run.phase, GameRunPhase::GameOver | GameRunPhase::Loadout);
+        if reset || terminal {
+            self.state = Some(NotificationState {
+                player_id: player_id.to_owned(),
+                run_id: run_id.map(String::from),
+                tick: session.ticks,
+                last_loot_id: session
+                    .boneyard
+                    .as_ref()
+                    .and_then(|world| world.loot_events.iter().map(|event| event.event_id).max())
+                    .unwrap_or(0),
+                last_combat_id: session
+                    .boneyard
+                    .as_ref()
+                    .and_then(|world| world.enemy_events.iter().map(|event| event.event_id).max())
+                    .unwrap_or(0),
+                next_secondary_id: session.secondary.next_event_id,
+                book: NativeSkillBookFeedbackCursor::new(feedback),
+                presentation: NativeLootMessagePresentation::new(session.ticks),
+                visuals: Vec::new(),
+                announced: BTreeMap::new(),
+                visible: visible && !terminal,
+            });
+            return Ok(());
+        }
+        let state = self.state.as_mut().unwrap();
+        if let Some(world) = &session.boneyard {
+            for event in &world.loot_events {
+                if event.event_id > state.last_loot_id {
+                    state.last_loot_id = event.event_id;
+                    if event.player_id.as_deref() == Some(player_id) {
+                        state.presentation.consume(event);
+                    }
+                }
+            }
+        }
+        if let Some(receipt) = state.book.consume(feedback)
+            && let NativeSkillBookOutcome::Rank { skill_id: Some(skill_id) } = receipt.outcome
+        {
+            state.presentation.consume_text(&NativeWorldNotificationInput {
+                source: NativeWorldNotificationSource::Book,
+                event_id: receipt.sequence,
+                tick: session.ticks,
+                text: &native_skill_book_result_text(skill_id)?,
+                tint: 0x8080ff,
+            });
+        }
+        if let Some(world) = &session.boneyard {
+            let world_key = format!("boneyard:{}", world.loaded.run_id);
+            for event in &session.secondary.events {
+                if event.event_id >= state.next_secondary_id
+                    && event.kind == NativeSecondaryEventKind::Overload
+                    && event.owner_id == player_id
+                    && event.world_key == world_key
+                {
+                    state.presentation.consume_text(&NativeWorldNotificationInput {
+                        source: NativeWorldNotificationSource::Secondary,
+                        event_id: event.event_id,
+                        tick: event.tick,
+                        text: "Overloaded Mana!",
+                        tint: 0xffffff,
+                    });
+                }
+            }
+            for event in &world.enemy_events {
+                if event.event_id > state.last_combat_id {
+                    state.last_combat_id = event.event_id;
+                    if event.kind == EnemyEventKind::PlayerCheatDeath
+                        && event.target_player_id.as_ref().and_then(Option::as_deref)
+                            == Some(player_id)
+                    {
+                        state.presentation.consume_text(&NativeWorldNotificationInput {
+                            source: NativeWorldNotificationSource::Combat,
+                            event_id: event.event_id as u64,
+                            tick: event.tick,
+                            text: "CHEAT DEATH!",
+                            tint: 0xffffff,
+                        });
+                    }
+                }
+            }
+        }
+        state.next_secondary_id = session.secondary.next_event_id;
+        state.visuals = state.presentation.sample_world_notifications(session.ticks);
+        state.tick = session.ticks;
+        state.visible = visible;
+        state.announced.retain(|key, _| state.visuals.iter().any(|row| row.message.key == *key));
         Ok(())
     }
 
-    pub fn destroy(&self) {
-        self.root.remove();
+    /// Native full-gameplay coordinates, independent of Inventory/modal stage transforms.
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>, ui_scale: f64) -> Result<(), String> {
+        let Some(state) = self.state.as_mut().filter(|state| state.visible) else {
+            return Ok(());
+        };
+        let viewport = frame.ctx.content_rect();
+        let scale = solomon_sim::viewport::game_viewport(Vec2::new(
+            f64::from(viewport.width()),
+            f64::from(viewport.height()),
+        ))
+        .display_scale
+            * ui_scale;
+        let clip = Rect::from_min_max(
+            pos2(viewport.left(), viewport.top() + (50.0 * scale) as f32),
+            viewport.right_bottom(),
+        );
+        let painter = frame
+            .ctx
+            .layer_painter(LayerId::new(Order::Middle, egui::Id::unique("world-notifications")))
+            .with_clip_rect(clip);
+        for visual in state.visuals.iter().filter(|visual| visual.alpha > 0.0 && visual.scale > 0.0)
+        {
+            let baseline =
+                f64::from(viewport.top()) + (67.0 + visual.message.offset.round()) * scale;
+            let spec = NativeUiTextSpec {
+                scale: visual.scale * scale,
+                alpha: visual.alpha,
+                tint: visual.message.tint,
+                ..NativeUiTextSpec::new(
+                    NativeUiFontName::Menu,
+                    &visual.message.text,
+                    f64::from(viewport.center().x),
+                    baseline,
+                )
+            };
+            native_text(
+                frame,
+                &painter,
+                &NativeUiTextSpec { y: baseline + 2.0 * scale, tint: 0, ..spec },
+            );
+            let layout = native_text(frame, &painter, &spec);
+            let ink = layout
+                .glyphs
+                .iter()
+                .map(|glyph| {
+                    let ink = native_ui_glyph_ink_bounds(glyph);
+                    Rect::from_min_size(
+                        pos2(ink.left as f32, ink.top as f32),
+                        vec2(ink.width as f32, ink.height as f32),
+                    )
+                })
+                .fold(Rect::NOTHING, Rect::union);
+            let bounds = ink.intersect(clip);
+            if bounds.is_positive() {
+                let id = format!("world-notification:{}", visual.message.key);
+                frame.record_clipped_rect(&id, &visual.message.text, "text", ink, clip, false);
+                frame.record_value(
+                    &id,
+                    &serde_json::json!({
+                        "key":visual.message.key.to_string(), "alpha":visual.alpha,
+                        "scale":visual.scale, "offset":visual.message.offset,
+                        "baseline":baseline, "clipTop":clip.top(),
+                    })
+                    .to_string(),
+                    None,
+                );
+                if state.announced.get(&visual.message.key) != Some(&visual.message.text) {
+                    frame.announce(&visual.message.text);
+                    state.announced.insert(visual.message.key, visual.message.text.clone());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn reset(&mut self) {
+        self.state = None;
     }
 }
+
+#[cfg(test)]
+mod tests;
