@@ -58,16 +58,10 @@ pub(super) fn stock_button(
         .inner;
     let painter = ui.painter();
     let scale = bounds.height() / 69.0;
-    crate::menu::widgets::paint_stock_button_highlight(
-        frame,
-        ui,
-        bounds,
-        scale,
-        enabled,
-        response.is_pointer_button_down_on(),
-    );
+    let held = enabled && crate::menu::widgets::stock_button_pressed(ui, &response);
+    crate::menu::widgets::paint_stock_button_highlight(frame, ui, bounds, scale, enabled, held);
     let mut spec = NativeUiTextSpec::new(NativeUiFontName::Menu, label, 0.0, 0.0);
-    let pressed = if enabled && response.is_pointer_button_down_on() { 6.0 * scale } else { 0.0 };
+    let pressed = if held { 6.0 * scale } else { 0.0 };
     spec.x = f64::from(bounds.center().x + pressed);
     spec.y = f64::from(bounds.center().y + 9.0 * scale + pressed);
     spec.scale = f64::from(scale);
