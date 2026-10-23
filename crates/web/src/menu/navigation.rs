@@ -18,6 +18,19 @@ impl MenuNavigation {
         self.confirmation = None;
     }
     pub fn update(&mut self, ctx: &Context, scope: &str, preferred: Option<&str>) {
+        self.set_focus(ctx, scope, preferred, true);
+    }
+    /// Call before painting when the actual widget will process initial Enter itself.
+    pub fn focus(&mut self, ctx: &Context, scope: &str, preferred: Option<&str>) {
+        self.set_focus(ctx, scope, preferred, false);
+    }
+    fn set_focus(
+        &mut self,
+        ctx: &Context,
+        scope: &str,
+        preferred: Option<&str>,
+        capture_initial_enter: bool,
+    ) {
         if self.scope != scope {
             self.scope = scope.to_owned();
             self.needs_focus = true;
@@ -25,7 +38,8 @@ impl MenuNavigation {
         if self.needs_focus
             && let Some(preferred) = preferred
         {
-            if ctx.memory(|memory| memory.focused().is_none())
+            if capture_initial_enter
+                && ctx.memory(|memory| memory.focused().is_none())
                 && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Enter))
             {
                 self.confirmation = Some(preferred.to_owned());
