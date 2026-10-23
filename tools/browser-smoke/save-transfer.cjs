@@ -37,15 +37,13 @@ async function reveal(page, id) {
   const page = await browser.newPage({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
     viewport: {width: 1280, height: 720}});
   page.setDefaultTimeout(30000);
+  gpu.watchRequestFailures(page, {errors});
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
   page.on('response', response => {
     const pathname = new URL(response.url()).pathname;
     if (pathname.includes('/api/')) requests.push({path: pathname, status: response.status()});
     if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
-  });
-  page.on('requestfailed', request => {
-    errors.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
   });
   page.on('websocket', socket => socket.on('framereceived', ({payload}) => {
     const message = JSON.parse(payload.toString());
@@ -153,6 +151,7 @@ async function reveal(page, id) {
     await gpu.click(page, 'save-cancel');
     assert.equal(JSON.parse(await storedSave()).revision, 1);
     checks.push('the real GPU export/limitations/download produces a readable browser ZIP and Cancel preserves revision one');
+    await gpu.settleErrors(page);
     await page.reload({waitUntil: 'load'});
     await gpu.ready(page);
     await gpu.click(page, 'play');
@@ -164,14 +163,19 @@ async function reveal(page, id) {
     await waitUntil(() => accepted?.snapshot.ticks > restoredTick + 100,
       'restored Boneyard advances through a full second of authoritative ticks');
     checks.push('fresh browser reload restores the exported wizard and the same Boneyard run through actual host admission');
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     const receipt = {passed: true, checks, requests, errors, archiveSha256: expected.sha256, importedRevision: record.revision};
     fs.writeFileSync(path.join(output, 'native-save-transfer.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) {
+    await gpu.settleErrors(page);
     await page.screenshot({path: path.join(output, 'native-save-transfer-failure.png')});
     fs.writeFileSync(path.join(output, 'native-save-transfer-failure.json'), JSON.stringify({error: error.stack, checks, requests, errors,
       ui: await gpu.readUi(page)}, null, 2));
     throw error;
-  } finally {await browser.close();}
+  } finally {
+    try {await gpu.settleErrors(page);}
+    finally {await browser.close();}
+  }
 })().catch(error => {console.error(error); process.exitCode = 1;});
