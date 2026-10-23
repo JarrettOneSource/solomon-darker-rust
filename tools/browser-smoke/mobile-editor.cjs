@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(process.env.PW || '/Users/jarrett/Projects/Solomon Dark/Website/frontend/node_modules/playwright-core');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const out = process.env.OUT || '/tmp';
 const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
 const observations = [];
@@ -47,10 +48,10 @@ async function saved(page) {
 
 (async () => {
   fs.mkdirSync(out, {recursive:true});
-  const server = await chromium.launchServer({headless:true,host:'127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, {headless:true,
     executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const browser = browserOwner.browser;
   let current;
   try {
     const desktop = await browser.newContext({viewport:{width:1600,height:900},ignoreHTTPSErrors:true});
@@ -150,20 +151,7 @@ async function saved(page) {
     }
     throw error;
   } finally {
-    let timer;
-    try {
-      await Promise.race([browser.close(), new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Playwright disconnect timed out')), 5000);
-      })]);
-      clearTimeout(timer);
-      await Promise.race([server.close(), new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Chrome close timed out')), 15000);
-      })]);
-    } catch {
-      clearTimeout(timer);
-      await Promise.race([server.kill(), new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Chrome termination timed out')), 5000);
-      })]);
-    } finally {clearTimeout(timer);}
+    fs.writeFileSync(path.join(out, 'browser-cleanup.json'),
+      JSON.stringify(await browserOwner.close(), null, 2));
   }
 })().catch(error => {console.error(error); process.exitCode = 1;});

@@ -10,6 +10,7 @@ const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
 const textures = require('./gpu-texture-lifetime.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const output = path.resolve(process.env.OUT);
 const contentDirectory = path.resolve(process.env.CONTENT_DIR);
 const account = JSON.parse(fs.readFileSync(path.join(contentDirectory, 'private-account.json')));
@@ -29,7 +30,6 @@ const state = {id: null, frame: null, runtime: null, content: null, welcomes: []
   textureProof: {paths: [], checkpoints: [], icons: [], retired: null}};
 const errors = [], requests = [], expectedNotFound = [], cancelledMedia = [], checks = [];
 let step = 'bootstrap';
-let ownedBrowserClosed = false;
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 let priorPhase = null;
 let priorSackPhase = null;
@@ -88,16 +88,6 @@ if (authoredPhase === 'console') {
 }
 
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-async function bounded(promise, label, milliseconds) {
-  let timeout;
-  try {
-    return await Promise.race([promise, new Promise((resolve, reject) => {
-      timeout = setTimeout(() => reject(new Error(`${label} timed out`)), milliseconds);
-    })]);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 async function until(predicate, label, timeout = 30000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -269,10 +259,10 @@ async function runLua(page, code) {
 
 (async () => {
   fs.mkdirSync(output, {recursive: true});
-  const server = await chromium.launchServer({headless: true, host: '127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, {headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const browser = browserOwner.browser;
   const context = await browser.newContext({ignoreHTTPSErrors: true, viewport: {width: 1280, height: 720}});
   await context.addInitScript(token => {
     localStorage.setItem('sdr.token:/game-stg', token);
@@ -728,31 +718,10 @@ async function runLua(page, code) {
       ui: await ui.readUi(page)}, null, 2));
     throw error;
   } finally {
-    const cleanup = {};
-    await bounded(browser.close(), 'browser connection close', 5000).catch(error => {
-      cleanup.connectionError = error.message;
-    });
-    try {
-      await bounded(server.close(), 'owned Chrome close', 15000);
-      cleanup.mode = 'graceful';
-    } catch (error) {
-      cleanup.error = error.message;
-      await bounded(server.kill(), 'owned Chrome termination', 5000).catch(error => {
-        cleanup.terminationError = error.message;
-      });
-      cleanup.mode = 'forced';
-    }
-    ownedBrowserClosed = server.process().exitCode !== null || server.process().signalCode !== null;
-    cleanup.browserClosed = ownedBrowserClosed;
-    fs.writeFileSync(path.join(output, 'browser-cleanup.json'), JSON.stringify(cleanup, null, 2));
-    assert.ok(ownedBrowserClosed, 'the owned Chrome process exited');
+    fs.writeFileSync(path.join(output, 'browser-cleanup.json'),
+      JSON.stringify(await browserOwner.close(), null, 2));
   }
-})().then(() => {
-  // Playwright's server socket can outlive its already-exited Chrome child.
-  // Finish only after the cleanup receipt confirms that child is closed.
-  if (ownedBrowserClosed) process.exit(0);
-}).catch(error => {
+})().catch(error => {
   console.error(error.message);
-  if (ownedBrowserClosed) process.exit(1);
   process.exitCode = 1;
 });

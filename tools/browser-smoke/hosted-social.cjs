@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const {startNewGame} = require('./menu-journey.cjs');
 const {chromium, request} = require(path.resolve(process.env.PW));
 
@@ -31,17 +32,6 @@ async function waitUntil(predicate, label) {
     await new Promise(resolve => setTimeout(resolve, 50));
   }
   throw new Error(`Timed out waiting for ${label}`);
-}
-
-async function bounded(promise, label, milliseconds) {
-  let timer;
-  try {
-    return await Promise.race([promise, new Promise((resolve, reject) => {
-      timer = setTimeout(() => reject(new Error(`${label} timed out`)), milliseconds);
-    })]);
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 function checked(label) {
@@ -145,10 +135,10 @@ function observe(page, label) {
 }
 
 async function openClient(account, label) {
-  const server = await chromium.launchServer({headless: true, host: '127.0.0.1',
+  const browserOwner = await launchOwnedBrowser(chromium, {headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
-  const browser = await chromium.connect(server.wsEndpoint());
+  const browser = browserOwner.browser;
   const context = await browser.newContext({ignoreHTTPSErrors: process.env.LOCAL_TLS === '1',
     viewport: {width: 1280, height: 720}});
   // Bootstrap the real registration credential in the staging API namespace.
@@ -159,7 +149,7 @@ async function openClient(account, label) {
   page.setDefaultNavigationTimeout(30000);
   const state = observe(page, label);
   await state.failureObserverReady;
-  const client = {browser, server, page, state, account};
+  const client = {browserOwner, page, state, account};
   clients.push(client);
   await page.goto(url, {waitUntil: 'load'});
   await ui.ready(page, {timeout:coldStartTimeout});
@@ -245,17 +235,7 @@ function publicState(state) {
 }
 
 async function closeClient(client) {
-  const process = client.server.process();
-  let mode = 'graceful';
-  try {
-    await bounded(client.browser.close(), 'Playwright disconnect', 5000);
-    await bounded(client.server.close(), 'Chrome close', 15000);
-  } catch {
-    // The retained process belongs to this harness, never another fleet browser.
-    mode = 'forced';
-    await bounded(client.server.kill(), 'Chrome termination', 5000);
-  }
-  return {mode, exited: process.exitCode !== null || process.signalCode !== null};
+  return {...await client.browserOwner.close(), exited:true};
 }
 
 (async () => {
