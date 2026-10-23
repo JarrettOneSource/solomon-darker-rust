@@ -326,6 +326,7 @@ impl MenuUi {
             let view = frame.ctx.input(|i| i.content_rect());
             let ctx = frame.ctx.clone();
             egui::Modal::new(Id::unique("landscape-guidance"))
+                .area(egui::Area::new(Id::unique("landscape-guidance")).fade_in(false))
                 .frame(egui::Frame::NONE)
                 .backdrop_color(Color32::BLACK)
                 .show(&ctx, |ui| {
@@ -368,9 +369,11 @@ impl MenuUi {
             || self.prompt.kind.is_some()
             || self.routing.active();
         let enabled = !self.input_suspended && !overlay;
-        egui::Area::new(scene_layer().id).fixed_pos(view.min).order(scene_layer().order).show(
-            &ctx,
-            |ui| {
+        egui::Area::new(scene_layer().id)
+            .fade_in(false)
+            .fixed_pos(view.min)
+            .order(scene_layer().order)
+            .show(&ctx, |ui| {
                 ui.set_min_size(view.size());
                 ui.set_clip_rect(view);
                 if !enabled {
@@ -395,13 +398,13 @@ impl MenuUi {
                 if result.is_ok() && self.screen == Screen::Settings && self.routing.active() {
                     result = self.settings_view.paint(frame, ui, view, &mut Vec::new());
                 }
-            },
-        );
+            });
         std::mem::replace(&mut result, Ok(()))?;
         if overlay {
             egui::Modal::new(Id::unique("game-menu-modal"))
                 .area(
                     egui::Area::new(Id::unique("game-menu-modal"))
+                        .fade_in(false)
                         .fixed_pos(view.min)
                         .order(egui::Order::Foreground),
                 )

@@ -1081,6 +1081,7 @@ impl CloudView {
             let modal = egui::Modal::new(egui::Id::unique("cloud-dialog"))
                 .area(
                     egui::Area::new(egui::Id::unique("cloud-dialog"))
+                        .fade_in(false)
                         .fixed_pos(dialog_rect.min)
                         .order(egui::Order::Foreground),
                 )
