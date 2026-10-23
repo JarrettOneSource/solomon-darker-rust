@@ -34,6 +34,7 @@ fn frame_codes(
             previous_widgets: &previous_widgets,
             key_codes: codes,
             blend: BlendMode::Normal,
+            color_filter: ColorFilter::default(),
             announcements: &announcements,
             rotation: egui::emath::Rot2::IDENTITY,
             translation: Vec2::ZERO,

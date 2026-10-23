@@ -7,8 +7,11 @@ use std::rc::Rc;
 use egui::{ClippedPrimitive, Rect, TextureId, Vec2, vec2};
 use web_sys::{HtmlImageElement, WebGl2RenderingContext};
 
+use solomon_graphics::ColorFilter;
 use solomon_graphics::assets;
 use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
+
+use super::material::{Material, Materials};
 
 enum ImageState {
     Loading,
@@ -29,6 +32,7 @@ struct ImageCache {
     next_id: u64,
     images: BTreeMap<String, ImageEntry>,
     paths: BTreeMap<u64, String>,
+    materials: Materials,
 }
 
 #[derive(Clone, Default)]
@@ -43,6 +47,10 @@ fn path_key(path: &str) -> String {
 }
 
 impl Images {
+    pub fn begin_frame(&self) {
+        self.0.borrow_mut().materials.clear();
+    }
+
     pub fn register(&self, path: &str, texture: &Texture, gl: &WebGl2RenderingContext) {
         self.forget(path, gl);
         let path = path_key(path);
@@ -194,26 +202,29 @@ impl Images {
         }
     }
 
-    pub fn texture_id(&self, path: &str, blend: BlendMode, mask: bool) -> Option<TextureId> {
+    pub fn texture_id(
+        &self,
+        path: &str,
+        blend: BlendMode,
+        mask: bool,
+        filter: ColorFilter,
+    ) -> Option<TextureId> {
         self.request(path);
-        let cache = self.0.borrow();
+        let mut cache = self.0.borrow_mut();
         let entry = cache.images.get(&path_key(path))?;
         if !matches!(entry.state, ImageState::Ready(_)) {
             return None;
         }
-        let blend = match blend {
-            BlendMode::Normal => 0,
-            BlendMode::Add => 1,
-            BlendMode::Multiply => 2,
-        };
-        Some(TextureId::User(entry.id * 8 + blend + if mask { 4 } else { 0 }))
+        let material = Material::new(entry.id, blend, mask, filter);
+        Some(cache.materials.texture_id(material))
     }
 
-    fn texture(&self, id: u64) -> Option<(Texture, bool)> {
+    fn texture(&self, id: u64) -> Option<(Texture, bool, Material)> {
         let cache = self.0.borrow();
-        let entry = cache.images.get(cache.paths.get(&(id / 8))?)?;
+        let material = cache.materials.get(id)?;
+        let entry = cache.images.get(cache.paths.get(&material.image)?)?;
         match &entry.state {
-            ImageState::Ready(texture) => Some((texture.clone(), entry.owned)),
+            ImageState::Ready(texture) => Some((texture.clone(), entry.owned, material)),
             _ => None,
         }
     }
@@ -250,6 +261,7 @@ impl Images {
         }
         cache.images.clear();
         cache.paths.clear();
+        cache.materials.clear();
     }
 }
 
@@ -337,7 +349,7 @@ impl GpuPainter {
                 if !mesh.is_valid() {
                     return Err("GPU UI produced an invalid mesh".to_owned());
                 }
-                let (texture, blend, mode, sampling) = match mesh.texture_id {
+                let (texture, blend, mode, sampling, filter) = match mesh.texture_id {
                     TextureId::Managed(_) => (
                         self.textures
                             .get(&mesh.texture_id)
@@ -346,25 +358,22 @@ impl GpuPainter {
                         BlendMode::Normal,
                         TextureColorMode::Texture,
                         None,
+                        ColorFilter::default(),
                     ),
                     TextureId::User(id) => {
-                        let (texture, owned) =
+                        let (texture, owned, material) =
                             images.texture(id).ok_or("GPU UI mesh references a retired image")?;
-                        let blend = match id & 3 {
-                            1 => BlendMode::Add,
-                            2 => BlendMode::Multiply,
-                            _ => BlendMode::Normal,
-                        };
-                        let mask = id & 4 != 0;
+                        let mask = material.mask;
                         (
                             texture,
-                            blend,
+                            material.blend(),
                             if mask {
                                 TextureColorMode::AlphaMask
                             } else {
                                 TextureColorMode::Texture
                             },
                             owned.then_some(mask),
+                            material.filter(),
                         )
                     }
                 };
@@ -397,7 +406,19 @@ impl GpuPainter {
                     })
                     .collect();
                 renderer.draw_clipped(clip, 1.0, |renderer| {
-                    renderer.draw_triangles_with_color_mode(&texture, &mesh_triangles, blend, mode)
+                    let draw = |renderer: &mut Renderer| {
+                        renderer.draw_triangles_with_color_mode(
+                            &texture,
+                            &mesh_triangles,
+                            blend,
+                            mode,
+                        );
+                    };
+                    if filter == ColorFilter::default() {
+                        draw(renderer);
+                    } else {
+                        renderer.draw_color_filtered(filter, draw);
+                    }
                 });
                 meshes += 1;
                 triangles += mesh_triangles.len();

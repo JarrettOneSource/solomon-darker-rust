@@ -41,6 +41,7 @@ uniform float u_saturation;
 uniform float u_alpha_mask;
 uniform float u_white_alpha_filter;
 uniform float u_premultiply_rgb;
+uniform vec2 u_color_filter;
 out vec4 o_color;
 void main() {
     vec4 texel = texture(u_texture, v_uv);
@@ -51,6 +52,11 @@ void main() {
     float vertexGrey = (v_color.r + v_color.g + v_color.b) / 3.0;
     vec3 colour = mix(vec3(textureGrey * vertexGrey), texel.rgb * v_color.rgb, u_saturation);
     colour = mix(colour, vec3(1.0), u_white_alpha_filter);
+    if (u_color_filter.x >= 0.0) {
+        float grey = dot(colour, vec3(0.213, 0.715, 0.072));
+        colour = clamp(mix(vec3(grey), colour, u_color_filter.y), 0.0, 1.0);
+        colour = clamp(colour * u_color_filter.x, 0.0, 1.0);
+    }
     o_color = vec4(colour * mix(1.0, alpha, u_premultiply_rgb), alpha);
 }
 ";
@@ -106,6 +112,21 @@ pub enum TextureColorMode {
     WhiteAlphaFilter,
 }
 
+/// Source CSS `saturate(...) brightness(...)` in sRGB, with alpha preserved.
+/// Filter Effects 1 requires non-premultiplied colour and clamps each operation:
+/// https://drafts.csswg.org/filter-effects/#ShorthandEquivalents
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ColorFilter {
+    pub brightness: f32,
+    pub saturation: f32,
+}
+
+impl Default for ColorFilter {
+    fn default() -> Self {
+        Self { brightness: 1.0, saturation: 1.0 }
+    }
+}
+
 /// Where a quad's texels come from and where they land.
 #[derive(Clone, Copy, Debug)]
 pub struct Quad {
@@ -135,6 +156,8 @@ pub struct Renderer {
     u_alpha_mask: WebGlUniformLocation,
     u_white_alpha_filter: WebGlUniformLocation,
     u_premultiply_rgb: WebGlUniformLocation,
+    u_color_filter: WebGlUniformLocation,
+    color_filter: Option<ColorFilter>,
     texture_color_mode: TextureColorMode,
     forced_texture_color_mode: Option<TextureColorMode>,
     forced_opacity: Option<f32>,
@@ -205,12 +228,16 @@ impl Renderer {
         let u_premultiply_rgb = gl
             .get_uniform_location(&program, "u_premultiply_rgb")
             .ok_or("u_premultiply_rgb is missing")?;
+        let u_color_filter = gl
+            .get_uniform_location(&program, "u_color_filter")
+            .ok_or("u_color_filter is missing")?;
         gl.uniform1i(Some(&u_texture), 0);
         gl.uniform2f(Some(&u_pixel_center_offset), 0.0, 0.0);
         gl.uniform1f(Some(&u_saturation), 1.0);
         gl.uniform1f(Some(&u_alpha_mask), 0.0);
         gl.uniform1f(Some(&u_white_alpha_filter), 0.0);
         gl.uniform1f(Some(&u_premultiply_rgb), 1.0);
+        gl.uniform2f(Some(&u_color_filter), -1.0, 1.0);
         gl.active_texture(Gl::TEXTURE0);
         gl.enable(Gl::BLEND);
         let (source, destination, source_alpha, destination_alpha) = BlendMode::Normal.factors();
@@ -242,6 +269,8 @@ impl Renderer {
             u_alpha_mask,
             u_white_alpha_filter,
             u_premultiply_rgb,
+            u_color_filter,
+            color_filter: None,
             texture_color_mode: TextureColorMode::Texture,
             forced_texture_color_mode: None,
             forced_opacity: None,
@@ -474,6 +503,26 @@ impl Renderer {
             self.flush();
             self.gl.uniform1f(Some(&self.u_saturation), saturation);
             self.saturation = saturation;
+        }
+    }
+
+    /// Applies stock UI colour filters before the existing blend premultiplication.
+    pub fn draw_color_filtered(&mut self, filter: ColorFilter, draw: impl FnOnce(&mut Self)) {
+        assert!(filter.brightness.is_finite() && filter.brightness >= 0.0);
+        assert!(filter.saturation.is_finite() && filter.saturation >= 0.0);
+        let previous = self.color_filter;
+        self.set_color_filter(Some(filter));
+        draw(self);
+        self.set_color_filter(previous);
+    }
+
+    fn set_color_filter(&mut self, filter: Option<ColorFilter>) {
+        if filter != self.color_filter {
+            self.flush();
+            let values =
+                filter.map_or([-1.0, 1.0], |filter| [filter.brightness, filter.saturation]);
+            self.gl.uniform2f(Some(&self.u_color_filter), values[0], values[1]);
+            self.color_filter = filter;
         }
     }
 

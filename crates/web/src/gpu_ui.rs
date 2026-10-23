@@ -9,6 +9,7 @@ mod batches;
 mod fonts;
 mod geometry;
 mod input;
+mod material;
 mod painter;
 mod stock;
 #[cfg(test)]
@@ -21,7 +22,7 @@ use egui::{Color32, Context, Painter, Pos2, Rect, Response, Vec2, pos2, vec2};
 use serde::Serialize;
 use web_sys::{Document, HtmlCanvasElement};
 
-use solomon_graphics::{BlendMode, Renderer};
+use solomon_graphics::{BlendMode, ColorFilter, Renderer};
 
 pub use geometry::{clip_polygon_ellipse, css_bezier};
 pub use input::{BrowserKey, canvas_point, key_from_browser};
@@ -174,6 +175,7 @@ pub struct UiFrame<'a> {
     previous_widgets: &'a BTreeMap<String, WidgetGeometry>,
     key_codes: &'a [BrowserKey],
     blend: BlendMode,
+    color_filter: ColorFilter,
     announcements: &'a RefCell<Vec<String>>,
     rotation: egui::emath::Rot2,
     translation: Vec2,
@@ -207,6 +209,7 @@ impl UiFrame<'_> {
             previous_widgets: self.previous_widgets,
             key_codes: self.key_codes,
             blend,
+            color_filter: self.color_filter,
             announcements: self.announcements,
             rotation: self.rotation,
             translation: self.translation,
@@ -215,6 +218,22 @@ impl UiFrame<'_> {
             focus_from_keyboard: self.focus_from_keyboard,
         }
     }
+    /// Sets the image RGB gain for this view; stock bitmap text inherits it.
+    pub fn with_brightness(&self, brightness: f32) -> UiFrame<'_> {
+        assert!(brightness.is_finite() && brightness >= 0.0);
+        let mut frame = self.with_blend(self.blend);
+        frame.color_filter.brightness = brightness;
+        frame
+    }
+
+    /// Uses Source CSS saturation before brightness, preserving image alpha.
+    pub fn with_saturation(&self, saturation: f32) -> UiFrame<'_> {
+        assert!(saturation.is_finite() && saturation >= 0.0);
+        let mut frame = self.with_blend(self.blend);
+        frame.color_filter.saturation = saturation;
+        frame
+    }
+
     pub fn with_rotation(&self, pivot: Pos2, radians: f32) -> UiFrame<'_> {
         let local = egui::emath::Rot2::from_angle(radians);
         let mut frame = self.with_blend(self.blend);
@@ -339,7 +358,9 @@ impl UiFrame<'_> {
         tint: Color32,
         blend: BlendMode,
     ) -> bool {
-        let Some(texture_id) = self.images.texture_id(path, blend, false) else { return false };
+        let Some(texture_id) = self.images.texture_id(path, blend, false, self.color_filter) else {
+            return false;
+        };
         let mut mesh = egui::Mesh::with_texture(texture_id);
         mesh.vertices.extend(positions.into_iter().zip(uv).map(|(pos, uv)| egui::epaint::Vertex {
             pos: self.paint_position(pos),
@@ -387,7 +408,9 @@ impl UiFrame<'_> {
         blend: BlendMode,
         mask: bool,
     ) -> bool {
-        let Some(texture_id) = self.images.texture_id(path, blend, mask) else { return false };
+        let Some(texture_id) = self.images.texture_id(path, blend, mask, self.color_filter) else {
+            return false;
+        };
         let mut mesh = egui::Mesh::with_texture(texture_id);
         let uvs = [uv.left_top(), uv.right_top(), uv.right_bottom(), uv.left_bottom()];
         mesh.vertices.extend(positions.into_iter().zip(uvs).map(|(pos, uv)| {
@@ -659,6 +682,7 @@ impl GpuUi {
         }
         renderer.flush();
         self.images.upload_ready(renderer)?;
+        self.images.begin_frame();
         let physical = [self.canvas.width() as i32, self.canvas.height() as i32];
         let pixels_per_point = physical[0] as f32 / viewport[0];
         let pending = self.input.take(viewport, pixels_per_point, time_seconds)?;
@@ -739,6 +763,7 @@ impl GpuUi {
                 previous_widgets: &self.widgets,
                 key_codes: &pass.codes,
                 blend: BlendMode::Normal,
+                color_filter: ColorFilter::default(),
                 announcements: &announcements,
                 rotation: egui::emath::Rot2::IDENTITY,
                 translation: Vec2::ZERO,
