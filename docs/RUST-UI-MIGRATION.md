@@ -17,7 +17,16 @@ The reported failure is absent intended splash and visibly incomplete menus for 
 20 seconds. The current source establishes a readiness defect, not that exact duration:
 `web/index.html` initially paints only `Loading stock assets…`; `lib.rs::run` awaits
 `Game::load` before scheduling frames; visual HUD/menu constructors create DOM images without
-awaiting their individual successful decode. A runtime baseline is still required.
+awaiting their individual successful decode.
+
+Fresh production navigation on October 23 confirmed absent splash. The first HUD appeared at
+22.798 seconds and first Title at 25.316 seconds while the status still read `Loading stock
+assets…` and three images were incomplete. At 74.712 seconds the status became empty and the
+WASM diagnostic became available, with 49 menu images still incomplete in that sample. There
+were no page errors or console errors. This establishes premature UI exposure, not a universal
+20-second duration. The navigation-only browser closed without sign-in, admission or data
+writes. Raw 145-sample receipt and reviewed 20-second/ready screenshots are retained in
+`startup-baseline/` under the full-Rust-UI task evidence directory.
 
 Pinned Website sources are `frontend/src/game/{NativeLoader.tsx,game-assets.ts,
 game-asset-readiness.ts,native-loader.css}`, `renderer/{loader-render-contract.ts,
@@ -51,7 +60,7 @@ Owner names match the parallel implementation lanes. Scripts are under `tools/br
 
 | Surface and required variants | Owner | Implementation/reference and acceptance route | Current blocker/evidence |
 | --- | --- | --- | --- |
-| Process startup; cold, warm, held image/font/wasm; failed required asset; no partial Title or HUD | foundation + root; acceptance tests | Startup evidence above; `startup.cjs`; loader geometry, monotonic work, immediate readiness transition, screenshots | Pending GPU bootstrap and runtime baseline |
+| Process startup; cold, warm, held image/font/wasm; failed required asset; no partial Title or HUD | foundation + root; acceptance tests | Startup evidence above; `startup.cjs`; loader geometry, monotonic work, immediate readiness transition, screenshots | Baseline reproduces absent splash/premature Title; GPU repair and acceptance pending |
 | GPU runtime; stock bundle crops/rotation/registered origins, glyph masks, browser fonts, dynamic images, blend/clips | foundation | `gpu_ui.rs`, existing `render.rs`, stock manifest; read-only `gpu_ui_state`, GPU meshes/textures and final screenshots | Pending foundation and composed GPU evidence |
 | Title/Play; clouds, moon, graves, Solomon animation, logo/art, Continue policy, account/desktop links | menus | `menu/title.rs`, pinned Main Menu; `smoke.cjs`, `menus.cjs`, `menu-input.cjs` | Pending GPU port/current art |
 | Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | Pending GPU modal input |
@@ -82,8 +91,8 @@ Owner names match the parallel implementation lanes. Scripts are under `tools/br
 | Authored mod surfaces; Cast/Shop/Reforge/Portal, skills/subskills/offers/quickbar, minimap actions, mounted HUD text/image/bar/button, party attributes | social | `mod_panels.rs`, `mod_skills.rs`, `mod_skill_quickbar.rs`, `mod_minimap.rs`, `mod_world_overlays/**`; `authored-content.cjs`, `mod-skills.cjs` | Pending all authored widgets/GPU assets |
 | Match loading; every recovered stage, progress/cancel/failure, host admission/world materialization | root | `match_loading.rs`; `hosted-session.cjs`, `deployment-restart.cjs` | Pending GPU stage visibility |
 | Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | Pending platform activation |
-| Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root (assignment to confirm) | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | Pending GPU notice and packaged journey |
-| Deployment update/checkpoint/recovery; same revision identity and error ownership | root (assignment to confirm) | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | Pending GPU notice + actual update |
+| Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | Pending GPU notice and packaged journey |
+| Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | Pending GPU notice + actual update |
 | Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | Pending composed runtime |
 | No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Pending complete cutover |
 
