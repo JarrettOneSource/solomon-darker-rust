@@ -149,6 +149,7 @@ pub(crate) struct MobileUiEditor {
     fit_pending: bool,
     save_request: bool,
     focused_element: Option<MobileUiElementId>,
+    pending_element_focus: Option<MobileUiElementId>,
 }
 impl MobileUiEditor {
     pub fn new(
@@ -202,6 +203,7 @@ impl MobileUiEditor {
             fit_pending: true,
             save_request: false,
             focused_element: None,
+            pending_element_focus: None,
         })
     }
     pub fn saved_layout(&mut self) -> Result<Option<MobileUiLayout>, String> {
@@ -501,6 +503,7 @@ impl MobileUiEditor {
             self.pointer_captures.push((id, hit));
             if let Hit::Element(owner) = hit {
                 self.focused_element = Some(owner);
+                self.pending_element_focus = Some(owner);
             }
             hit
         } else {
@@ -522,6 +525,7 @@ impl MobileUiEditor {
         Ok(())
     }
     fn cancel_gestures(&mut self) -> Result<(), String> {
+        self.pending_element_focus = None;
         let captured = std::mem::take(&mut self.pointer_captures);
         for (id, hit) in captured {
             self.handle_event(EditorEvent::Pointer {
