@@ -74,10 +74,10 @@ const notice = (page, title) => ui.waitForUi(page, snapshot => {
     await page.keyboard.press('KeyK');await ui.widget(page,'panel:surface:skills');
     await page.keyboard.press('Escape');await ui.noWidget(page,'panel:surface:skills');
     await page.waitForFunction(tick => window.wasmBindings.wizard_state()[5] > tick,frozen[5]);
-    await ui.assertGpuOnly(page); assert.deepEqual(errors,[]);
+    await ui.assertGpuOnly(page); await ui.settleErrors(page); assert.deepEqual(errors,[]);
     console.log(JSON.stringify({passed:true,generatedName:process.env.GENERATED_NAME==='1',errors,screenshots:output}));
   } catch(error) {
-    if(page){await shot(page,'player-panels-failure.png');fs.writeFileSync(path.join(output,'player-panels-failure.json'),JSON.stringify({error:error.stack,ui:await ui.readUi(page).catch(failure=>({readError:failure.message}))},null,2));}
+    if(page){await ui.settleErrors(page);await shot(page,'player-panels-failure.png');fs.writeFileSync(path.join(output,'player-panels-failure.json'),JSON.stringify({error:error.stack,ui:await ui.readUi(page).catch(failure=>({readError:failure.message}))},null,2));}
     throw error;
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

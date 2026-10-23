@@ -83,11 +83,11 @@ const rows = snapshot => snapshot.widgets.filter(widget=>widget.id.startsWith('p
     await ui.waitForUi(page,snapshot=>ui.findWidget(snapshot,'panel:dialogue-key')?.value.startsWith('ANNAL_'),'accepted annalist response');
     await ui.click(page,'panel:dialogue-next');await ui.noWidget(page,'panel:dialogue');
     assert.equal((await ui.readUi(page)).surface,'hidden','closing the conversation returns directly to play');
-    await ui.assertGpuOnly(page);assert.deepEqual(observed.errors,[]);
+    await ui.assertGpuOnly(page);await ui.settleErrors(page);assert.deepEqual(observed.errors,[]);
     checks.push('all5 native boasts preserve frame/text geometry and accepted dialogue lifecycle');
     console.log(JSON.stringify({passed:true,generatedName:process.env.GENERATED_NAME==='1',checks,errors:observed.errors,screenshots:output}));
   }catch(error){
-    if(page)await screenshot(page,'hub-services-failure.png');
+    if(page){await ui.settleErrors(page);await screenshot(page,'hub-services-failure.png');}
     fs.writeFileSync(path.join(output,'hub-services-failure.json'),JSON.stringify({error:error.stack,checks,errors:observed?.errors,ui:page?await ui.readUi(page):null},null,2));
     throw error;
   }finally{await browser.close();}
