@@ -395,6 +395,7 @@ impl<'a> NativeTextEdit<'a> {
                 state.transport = Some(Arc::new(state.model.clone()));
             }
             frame.editors.borrow_mut().push(EditorDescriptor {
+                layer_id: response.layer_id,
                 owner: state.owner,
                 text: self.text.as_str().into(),
                 model: state.transport.as_ref().expect("transport snapshot").clone(),

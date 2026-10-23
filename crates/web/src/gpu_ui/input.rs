@@ -219,7 +219,11 @@ fn point(canvas: &HtmlCanvasElement, queue: &InputQueue, x: i32, y: i32) -> Pos2
 }
 
 impl BrowserInput {
-    pub fn attach(document: &Document, canvas: &HtmlCanvasElement) -> Result<Self, String> {
+    pub fn attach(
+        document: &Document,
+        canvas: &HtmlCanvasElement,
+        ctx: &egui::Context,
+    ) -> Result<Self, String> {
         let textarea: HtmlTextAreaElement = document
             .create_element("textarea")
             .map_err(|error| format!("GPU UI composition adapter: {error:?}"))?
@@ -404,6 +408,7 @@ impl BrowserInput {
             let queue = queue.clone();
             let canvas = canvas.clone();
             let textarea = textarea.clone();
+            let ctx = ctx.clone();
             let target: EventTarget = if matches!(phase, TouchPhase::Start) {
                 canvas.clone().into()
             } else {
@@ -455,11 +460,17 @@ impl BrowserInput {
                 }
                 queue.events.push(UiEvent::PointerMoved(pos));
                 if matches!(phase, TouchPhase::Start) && pointer.button() == 0 {
+                    let target = ctx.pointer_widget_at(pos);
                     let descriptor = queue
                         .editors
                         .iter()
                         .rev()
-                        .find(|editor| editor.enabled && editor.bounds.contains(pos))
+                        .find(|editor| {
+                            editor.enabled
+                                && editor.bounds.contains(pos)
+                                && target == Some(editor.owner.id)
+                                && ctx.memory(|memory| memory.allows_interaction(editor.layer_id))
+                        })
                         .cloned();
                     if let Some(descriptor) = descriptor {
                         if queue
