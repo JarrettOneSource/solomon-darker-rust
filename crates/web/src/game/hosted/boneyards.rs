@@ -408,7 +408,7 @@ impl BoneyardLibrary {
     ) -> Result<(), String> {
         let ctx = frame.ctx.clone();
         let mut actions = Vec::new();
-        let layer = egui::LayerId::new(egui::Order::Middle, Id::unique("boneyard-library"));
+        let layer = crate::menu::library_layer();
         ctx.set_sublayer(crate::menu::scene_layer(), layer);
         egui::Area::new(layer.id)
             .fade_in(false)
