@@ -5,6 +5,7 @@ const path=require('node:path');
 const {chromium}=require(path.resolve(process.env.PW));
 const {startNewGame}=require('./menu-journey.cjs');
 const ui=require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const url=process.env.URL||'http://127.0.0.1:4185/';
 const output=process.env.OUT||'/tmp';
 fs.mkdirSync(output,{recursive:true});
@@ -31,10 +32,12 @@ async function ticks(page,count) {
 const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
 
 (async()=>{
-  const browser=await chromium.launch({headless:true,
+  const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+  const {browser}=owned;
   const errors=[];
+  let failure;
   try {
     const desktopContext=await browser.newContext({viewport:{width:1600,height:900}});
     const desktop=await desktopContext.newPage();
@@ -147,5 +150,15 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
       await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
       await client.detach();
     }
-  } finally{await browser.close()}
+  } catch(error) {failure=error;throw error}
+  finally {
+    try {
+      const cleanup=await owned.close();
+      fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(cleanup,null,2));
+    } catch(error) {
+      fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(error.cleanup,null,2));
+      if(failure)throw new AggregateError([failure,error],'HUD input and browser cleanup failed');
+      throw error;
+    }
+  }
 })().catch(error=>{console.error(error);process.exitCode=1});
