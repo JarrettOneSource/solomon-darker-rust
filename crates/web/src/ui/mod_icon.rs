@@ -14,7 +14,15 @@ pub(crate) struct ModIconLayer {
     image_url: String,
     dimensions: [u32; 2],
     frame: ModSpriteFrame,
-    tint: u32,
+    tint: Color32,
+}
+
+#[derive(Clone, Copy)]
+pub struct ModIconDraw {
+    pub center: Pos2,
+    pub scale: f32,
+    pub mirrored: bool,
+    pub tint: Color32,
 }
 
 pub fn mod_icon(
@@ -24,9 +32,7 @@ pub fn mod_icon(
     mod_id: &str,
     path: &str,
     frame: ModSpriteFrame,
-    center: Pos2,
-    scale: f32,
-    mirrored: bool,
+    draw: ModIconDraw,
 ) -> Result<(), String> {
     let image = images.image(mod_id, path)?;
     frame_icon(
@@ -36,15 +42,53 @@ pub fn mod_icon(
             image_url: image.url().to_owned(),
             dimensions: image.dimensions(),
             frame,
-            tint: 0xffffff,
+            tint: draw.tint,
         },
-        center,
-        scale,
-        mirrored,
+        draw.center,
+        draw.scale,
+        draw.mirrored,
     );
     Ok(())
 }
 
+pub(crate) struct ModIconGeometry {
+    pub destination: Rect,
+    pub uv: Rect,
+}
+impl ModIconLayer {
+    pub(crate) fn url(&self) -> &str {
+        &self.image_url
+    }
+    pub(crate) fn frame(&self) -> ModSpriteFrame {
+        self.frame
+    }
+    pub(crate) fn dimensions(&self) -> [u32; 2] {
+        self.dimensions
+    }
+    pub(crate) fn geometry(&self, center: Pos2, scale: f32, mirrored: bool) -> ModIconGeometry {
+        let frame = self.frame;
+        let left = (-frame.width / 2.0 + frame.center_offset_x) as f32 * scale;
+        let top = (-frame.height / 2.0 + frame.center_offset_y) as f32 * scale;
+        let width = frame.width as f32 * scale;
+        let height = frame.height as f32 * scale;
+        let destination = Rect::from_min_size(
+            center + vec2(if mirrored { -left - width } else { left }, top),
+            vec2(width, height),
+        );
+        let [image_width, image_height] = self.dimensions.map(|value| value as f32);
+        let mut uv = Rect::from_min_max(
+            pos2(frame.x as f32 / image_width, frame.y as f32 / image_height),
+            pos2(
+                (frame.x + frame.width) as f32 / image_width,
+                (frame.y + frame.height) as f32 / image_height,
+            ),
+        );
+        if mirrored {
+            std::mem::swap(&mut uv.min.x, &mut uv.max.x);
+        }
+        ModIconGeometry { destination, uv }
+    }
+}
 fn frame_icon(
     gpu: &UiFrame<'_>,
     painter: &Painter,
@@ -53,33 +97,8 @@ fn frame_icon(
     scale: f32,
     mirrored: bool,
 ) {
-    let frame = layer.frame;
-    let left = (-frame.width / 2.0 + frame.center_offset_x) as f32 * scale;
-    let top = (-frame.height / 2.0 + frame.center_offset_y) as f32 * scale;
-    let width = frame.width as f32 * scale;
-    let height = frame.height as f32 * scale;
-    let target = Rect::from_min_size(
-        center + vec2(if mirrored { -left - width } else { left }, top),
-        vec2(width, height),
-    );
-    let [image_width, image_height] = layer.dimensions.map(|v| v as f32);
-    let mut uv = Rect::from_min_max(
-        pos2(frame.x as f32 / image_width, frame.y as f32 / image_height),
-        pos2(
-            (frame.x + frame.width) as f32 / image_width,
-            (frame.y + frame.height) as f32 / image_height,
-        ),
-    );
-    if mirrored {
-        std::mem::swap(&mut uv.min.x, &mut uv.max.x);
-    }
-    gpu.image(
-        painter,
-        &layer.image_url,
-        target,
-        Some(uv),
-        Color32::from_rgb((layer.tint >> 16) as u8, (layer.tint >> 8) as u8, layer.tint as u8),
-    );
+    let geometry = layer.geometry(center, scale, mirrored);
+    gpu.image(painter, &layer.image_url, geometry.destination, Some(geometry.uv), layer.tint);
 }
 
 pub fn mod_item_icon(
@@ -130,7 +149,7 @@ pub(crate) fn mod_item_icon_layers(
             image_url: image.url().to_owned(),
             dimensions: image.dimensions(),
             frame,
-            tint,
+            tint: Color32::from_rgb((tint >> 16) as u8, (tint >> 8) as u8, tint as u8),
         });
     }
     Ok(Some(resolved))
@@ -145,5 +164,36 @@ pub(crate) fn paint_mod_item_icon_layers(
 ) {
     for layer in layers {
         frame_icon(gpu, painter, layer, center, scale, false);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn trimmed_mod_frames_keep_their_center_offset_and_mirror_the_registered_crop() {
+        let layer = ModIconLayer {
+            image_url: "verified.png".into(),
+            dimensions: [200, 100],
+            tint: Color32::WHITE,
+            frame: ModSpriteFrame {
+                x: 20.0,
+                y: 10.0,
+                width: 40.0,
+                height: 20.0,
+                logical_width: 100.0,
+                logical_height: 80.0,
+                content_width: 40.0,
+                content_height: 20.0,
+                center_offset_x: 7.0,
+                center_offset_y: -5.0,
+            },
+        };
+        let ordinary = layer.geometry(pos2(50.0, 60.0), 2.0, false);
+        assert_eq!(ordinary.destination, Rect::from_min_size(pos2(24.0, 30.0), vec2(80.0, 40.0)));
+        assert_eq!(ordinary.uv, Rect::from_min_max(pos2(0.1, 0.1), pos2(0.3, 0.3)));
+        let mirrored = layer.geometry(pos2(50.0, 60.0), 2.0, true);
+        assert_eq!(mirrored.destination, Rect::from_min_size(pos2(-4.0, 30.0), vec2(80.0, 40.0)));
+        assert_eq!(mirrored.uv, Rect::from_min_max(pos2(0.3, 0.1), pos2(0.1, 0.3)));
     }
 }

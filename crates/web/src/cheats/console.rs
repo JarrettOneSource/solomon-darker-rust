@@ -123,6 +123,27 @@ impl ConsoleView {
         ui: &mut egui::Ui,
     ) -> Result<Option<String>, String> {
         let mut action = None;
+        let focused = ui.memory(|memory| memory.has_focus(Id::unique("cheats/lua-editor")));
+        if focused {
+            if ui.input_mut(|input| {
+                input.consume_key(egui::Modifiers::CTRL, egui::Key::Enter)
+                    || input.consume_key(egui::Modifiers::COMMAND, egui::Key::Enter)
+            }) {
+                action = Some("run".into());
+            }
+            let history = ui.input_mut(|input| {
+                if input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowUp) {
+                    -1
+                } else if input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowDown) {
+                    1
+                } else {
+                    0
+                }
+            });
+            if history != 0 {
+                self.navigate_history(history)?;
+            }
+        }
         ui.label(copy("LUA", 11.0));
         let response = ui.add_sized(
             vec2(ui.available_width(), 150.0),
@@ -143,27 +164,6 @@ impl ConsoleView {
         if response.changed() {
             self.history_cursor = None;
             truncate_utf16(&mut self.editor, MAX_LUA_CONSOLE_CODE_LENGTH);
-        }
-        if response.has_focus() {
-            let run = ui.input_mut(|input| {
-                input.consume_key(egui::Modifiers::CTRL, egui::Key::Enter)
-                    || input.consume_key(egui::Modifiers::COMMAND, egui::Key::Enter)
-            });
-            if run {
-                action = Some("run".into());
-            }
-            let history = ui.input_mut(|input| {
-                if input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowUp) {
-                    -1
-                } else if input.consume_key(egui::Modifiers::ALT, egui::Key::ArrowDown) {
-                    1
-                } else {
-                    0
-                }
-            });
-            if history != 0 {
-                self.navigate_history(history)?;
-            }
         }
         let busy = self.pending.is_some() || self.next_code.is_some();
         let count = localized_count(self.editor.encode_utf16().count())?;

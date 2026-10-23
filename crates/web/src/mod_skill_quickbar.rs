@@ -172,6 +172,23 @@ impl ModSkillQuickbarView {
                                 Color32::WHITE,
                             );
                         }
+                        if let Some(url) = &row.image_url {
+                            let id = format!("mod/quickbar-icon:{}", row.slot);
+                            frame.record_rect(
+                                &id,
+                                &format!("{} icon", row.name),
+                                "img",
+                                bounds.shrink(3.2),
+                                true,
+                            );
+                            if let Some(size) = frame.image_size(url) {
+                                frame.record_value(
+                                    &id,
+                                    &format!("{}x{} {url}", size.x, size.y),
+                                    None,
+                                );
+                            }
+                        }
                         ui.painter().text(
                             bounds.right_bottom() - vec2(1.92, 0.0),
                             egui::Align2::RIGHT_BOTTOM,

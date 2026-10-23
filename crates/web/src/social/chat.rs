@@ -39,6 +39,13 @@ impl SocialUi {
         };
         let faded = solomon_sim::social::is_game_chat_faded(open, self.last_activity, self.now);
         let mut intent = None;
+        let focused = ctx.memory(|memory| memory.has_focus(Id::unique("social/chat-message")));
+        let send_key = open
+            && focused
+            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+        let channel_key = open
+            && focused
+            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Tab));
         let anchor = if self.coarse { egui::Align2::LEFT_TOP } else { egui::Align2::LEFT_BOTTOM };
         let offset = vec2(left, if self.coarse { if open { 0.0 } else { 11.0 } } else { -34.0 });
         egui::Area::new(Id::unique("social/chat"))
@@ -188,13 +195,7 @@ impl SocialUi {
                                 if response.changed() {
                                     self.last_activity = self.now;
                                 }
-                                let enter = (response.has_focus() || response.lost_focus())
-                                    && ui.input(|input| input.key_pressed(egui::Key::Enter));
-                                let next = response.has_focus()
-                                    && ui.input_mut(|input| {
-                                        input.consume_key(egui::Modifiers::NONE, egui::Key::Tab)
-                                    });
-                                if next {
+                                if channel_key {
                                     intent = Some(Intent::NextChannel);
                                 }
                                 let send = ui.add(
@@ -204,7 +205,7 @@ impl SocialUi {
                                         .stroke(Stroke::new(1.0, gpu::GOLD)),
                                 );
                                 frame.record("social/chat-send", "Send", "button", &send);
-                                if enter || send.clicked() {
+                                if send_key || send.clicked() {
                                     intent = Some(Intent::Submit(self.chat_draft.clone()));
                                 }
                             });

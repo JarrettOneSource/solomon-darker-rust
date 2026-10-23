@@ -449,24 +449,25 @@ impl MobileUiEditor {
         match icon {
             Some(BeltIcon::Skill { record, unavailable, cooldown, .. }) => {
                 if cooldown.remaining > 0.0 && cooldown.capacity > 0.0 {
-                    let fraction = (cooldown.remaining / cooldown.capacity).clamp(0.0, 1.0) as f32;
-                    let count = (fraction * 64.0).ceil() as usize;
-                    let mut points = vec![paint.point(center)];
-                    for i in 0..=count {
-                        let angle = -std::f32::consts::FRAC_PI_2
-                            + fraction * std::f32::consts::TAU * i as f32 / count.max(1) as f32;
-                        let direction = vec2(angle.cos(), angle.sin());
-                        let edge = direction
-                            * (natural.x.min(natural.y)
-                                / 2.0
-                                / direction.x.abs().max(direction.y.abs()));
-                        points.push(paint.point(center + edge));
+                    let points = crate::gpu_ui::cooldown_sector_points(
+                        cooldown.remaining,
+                        cooldown.capacity,
+                    );
+                    let points: Vec<_> = points
+                        .into_iter()
+                        .map(|point| {
+                            paint
+                                .point(pos2(point.x / 53.0 * natural.x, point.y / 53.0 * natural.y))
+                        })
+                        .collect();
+                    let mut mesh = egui::Mesh::default();
+                    for point in &points {
+                        mesh.colored_vertex(*point, Color32::from_black_alpha(160));
                     }
-                    painter.add(egui::Shape::convex_polygon(
-                        points,
-                        Color32::from_black_alpha(160),
-                        Stroke::NONE,
-                    ));
+                    for index in 1..points.len().saturating_sub(1) {
+                        mesh.add_triangle(0, index as u32, (index + 1) as u32);
+                    }
+                    painter.add(egui::Shape::mesh(mesh));
                 }
                 let alpha =
                     native_skill_quickbar_icon_alpha(cooldown.remaining > 0.0, *unavailable) as f32;

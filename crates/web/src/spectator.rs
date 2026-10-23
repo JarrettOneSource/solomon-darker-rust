@@ -59,6 +59,8 @@ impl SpectatorStatusView {
             ),
             true,
         );
+        frame.record_value("spectator/status",&serde_json::json!({"runId":status.run_id,"targetPlayerId":status.target_player_id,"displayText":status.display_text}).to_string(),None);
+        frame.record_value("spectator/respawn",&serde_json::json!({"text":status.respawn_text,"activeEnemies":status.active_enemy_count,"incomingEnemies":status.incoming_enemy_count,"waveOrdinal":status.wave_ordinal}).to_string(),None);
         Ok(())
     }
     fn panel(
