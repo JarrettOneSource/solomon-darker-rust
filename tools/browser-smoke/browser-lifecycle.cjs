@@ -9,8 +9,17 @@ async function bounded(promise,label,milliseconds) {
   } finally {clearTimeout(timer)}
 }
 
+function releaseStdioAfterExit(child) {
+  // Crashpad/updater descendants may inherit stderr after Chrome has exited.
+  // Node's close event waits for those pipes; no live browser owns them now.
+  const release=()=>{for(const stream of child.stdio)if(stream)stream.destroy()};
+  if(child.exitCode!==null||child.signalCode!==null)release();
+  else child.once('exit',release);
+}
+
 async function launchOwnedBrowser(chromium,options) {
   const server=await chromium.launchServer({...options,host:'127.0.0.1'});
+  releaseStdioAfterExit(server.process());
   let browser;
   try {browser=await chromium.connect(server.wsEndpoint())}
   catch(error) {
@@ -33,6 +42,7 @@ async function launchOwnedBrowser(chromium,options) {
     report.exitCode=process.exitCode;report.signalCode=process.signalCode;
     if(report.connectedAfter)report.errors.push('Playwright connection remains open');
     if(report.exitCode===null&&report.signalCode===null)report.errors.push('owned Chrome remains running');
+    else if(report.exitCode!==0||report.signalCode!==null)report.errors.push('owned Chrome did not exit successfully');
     if(report.errors.length) {
       const error=new Error(`Browser cleanup failed: ${report.errors.join('; ')}`);
       error.cleanup=report;throw error;
@@ -42,4 +52,4 @@ async function launchOwnedBrowser(chromium,options) {
   return {browser,close};
 }
 
-module.exports={launchOwnedBrowser};
+module.exports={launchOwnedBrowser,releaseStdioAfterExit};
