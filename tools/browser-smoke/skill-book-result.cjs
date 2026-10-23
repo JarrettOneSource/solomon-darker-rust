@@ -47,6 +47,7 @@ async function importSave(page,value) {
   await ui.observeDocumentReplacement(page,()=>page.reload());await ui.ready(page);await ui.surface(page,'title');
   if(ui.findWidget(await ui.readUi(page),'prompt-secondary'))await ui.click(page,'prompt-secondary');
   await ui.click(page,'play');await ui.click(page,'continue');
+  await ui.surface(page,'hidden',{timeout:120000});
   await ui.widget(page,'hud:inventory',{enabled:true,timeout:120000});
   await ui.noWidget(page,'panel:skill-book-result');
 }
@@ -119,6 +120,7 @@ async function tick(page) {
           result.reads.push({bookId,skillId:outcome.skillId,sequence:outcome.sequence,dismiss:index===0?'OKAY':'Escape'});
         }
         await ui.observeDocumentReplacement(page,()=>page.reload());await ui.ready(page);await ui.click(page,'play');await ui.click(page,'continue');
+        await ui.surface(page,'hidden',{timeout:120000});
         await ui.widget(page,'hud:inventory',{enabled:true,timeout:120000});
         await ui.noWidget(page,'panel:skill-book-result');
         await page.keyboard.press('KeyI');await ui.widget(page,'panel:surface:inventory');

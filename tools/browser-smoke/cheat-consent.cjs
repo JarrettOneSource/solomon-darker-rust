@@ -97,6 +97,7 @@ async function until(predicate, label) {
     checks.push('a changed title preference commits and survives a real reload');
     await gpu.click(page, 'settings-back');
     await gpu.click(page, 'settings-back');
+    await gpu.surface(page, 'title');
     await startNewGame(page, {name:'Consent', element:'fire'});
     await until(() => welcomes.length === 1 && frame?.snapshot.participants[playerId], 'actual Global Hub admission');
     assert.equal(welcomes[0].kind, 'GlobalHub');

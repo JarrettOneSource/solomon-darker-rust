@@ -285,6 +285,7 @@ mod tests {
             size: 100.0,
             rotation: 0.0,
             scale: 100.0 / 237.5,
+            display_scale: 1.0,
         };
         let right = JoystickGeometry { center: egui::pos2(300.0, 100.0), ..left };
         state.joystick_geometry = [Some(left), Some(right)];

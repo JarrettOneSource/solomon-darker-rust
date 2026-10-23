@@ -96,6 +96,8 @@ fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_onc
     let input_scope = RefCell::new(None);
     let retired_images = RefCell::new(Vec::new());
     let previous_widgets = BTreeMap::new();
+    let editors = RefCell::new(Vec::new());
+    let editor_errors = RefCell::new(Vec::new());
     let output = ctx.run_pass(
         egui::RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(100.0, 100.0))),
@@ -116,6 +118,9 @@ fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_onc
                 input_scope: &input_scope,
                 retired_images: &retired_images,
                 focus_from_keyboard: true,
+                editor_receipts: &[],
+                editors: &editors,
+                editor_errors: &editor_errors,
             };
             let mut painter = ctx.layer_painter(egui::LayerId::new(
                 egui::Order::Middle,
