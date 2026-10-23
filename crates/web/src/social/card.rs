@@ -7,6 +7,7 @@ use solomon_sim::social::{
 };
 
 use super::{SocialUi, Surface};
+use crate::gpu_ui::{GroupEffect, ImageShadow, NativeLabelStyle, shaped_label_with_effect};
 
 impl SocialUi {
     pub(super) fn current_card(&self) -> Option<&GamePlayerCardProfile> {
@@ -111,30 +112,29 @@ impl SocialUi {
         let padding = if coarse { egui::vec2(14.0, 12.0) } else { egui::vec2(26.0, 24.0) };
         let max_height = if coarse { screen.height() * 0.9 } else { screen.height() - 32.0 };
         let mut action = None;
-        let mut portrait_error = None;
         let layer = Self::card_layer(parent.layer_id());
         ctx.set_sublayer(parent.layer_id(), layer);
         let area = egui::Area::new(layer.id)
             .fade_in(false)
             .order(layer.order)
             .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-            .show(&ctx, |ui| {
-                egui::Frame::new()
+            .show(&ctx, |ui| -> Result<egui::Rect, String> {
+                let panel = egui::Frame::new()
                     .fill(egui::Color32::from_rgba_unmultiplied(13, 15, 21, 250))
                     .stroke(egui::Stroke::new(if coarse { 2.0 } else { 3.0 }, super::gpu::GOLD))
                     .corner_radius(5.0)
                     .inner_margin(egui::Margin::symmetric(padding.x as i8, padding.y as i8))
-                    .show(ui, |ui| {
+                    .show(ui, |ui| -> Result<(), String> {
                         ui.set_width(width - 2.0 * padding.x - if coarse { 4.0 } else { 6.0 });
                         egui::ScrollArea::vertical()
                             .id_salt("social/player-card-scroll")
                             .max_height((max_height - 2.0 * padding.y).max(80.0))
-                            .show(ui, |ui| {
+                            .show(ui, |ui| -> Result<(), String> {
                                 ui.spacing_mut().item_spacing = egui::vec2(
                                     if coarse { 10.0 } else { 16.0 },
                                     if coarse { 8.0 } else { 14.0 },
                                 );
-                                ui.horizontal(|ui| {
+                                ui.horizontal(|ui| -> Result<(), String> {
                                     let size = if coarse { 72.0 } else { 92.0 };
                                     let (portrait, _) = ui.allocate_exact_size(
                                         egui::vec2(size, size),
@@ -152,16 +152,14 @@ impl SocialUi {
                                         } else {
                                             egui::vec2(44.25, 79.25)
                                         };
-                                    if let Err(error) = self.portraits.paint_wizard(
+                                    self.portraits.paint_wizard(
                                         frame,
                                         &painter,
                                         card.element,
                                         12,
                                         position,
                                         if coarse { 0.9 } else { 1.15 },
-                                    ) {
-                                        portrait_error = Some(error);
-                                    }
+                                    )?;
                                     let definition = &portrait_definition;
                                     let [x, y] = definition.registered_origin();
                                     let scale = egui::vec2(
@@ -175,32 +173,68 @@ impl SocialUi {
                                             definition.height as f32,
                                         ) * scale,
                                     );
-                                    if let Err(error) = self.skills.paint_raw(
+                                    self.skills.paint_raw(
                                         frame,
                                         ui.painter(),
                                         14,
                                         crop,
                                         egui::Color32::WHITE,
-                                    ) {
-                                        portrait_error = Some(error);
-                                    }
-                                    ui.vertical(|ui| {
+                                    )?;
+                                    ui.vertical(|ui| -> Result<(), String> {
                                         ui.spacing_mut().item_spacing.y =
                                             if coarse { 2.0 } else { 4.0 };
-                                        ui.label(super::gpu::rich(
+                                        let size = if coarse { 19.0 } else { 28.0 };
+                                        let wrap_width = ui.available_width();
+                                        shaped_label_with_effect(
+                                            frame,
+                                            ui,
+                                            "social/card-name",
                                             &card.display_name,
-                                            if coarse { 19.0 } else { 28.0 },
-                                            egui::Color32::from_rgb(240, 221, 160),
-                                        ));
-                                        ui.label(card_text(
+                                            NativeLabelStyle {
+                                                wrap_width: Some(wrap_width),
+                                                line_height: Some(size * 1.05),
+                                                ..NativeLabelStyle::new(
+                                                    egui::FontId::new(
+                                                        size,
+                                                        egui::FontFamily::Name(
+                                                            "IM FELL English".into(),
+                                                        ),
+                                                    ),
+                                                    egui::Color32::from_rgb(240, 221, 160),
+                                                )
+                                            },
+                                            GroupEffect {
+                                                shadows: vec![ImageShadow {
+                                                    offset: egui::vec2(0.0, 3.0),
+                                                    blur: 1.5,
+                                                    color: egui::Color32::BLACK,
+                                                }],
+                                                ..Default::default()
+                                            },
+                                        )?;
+                                        let class_size = if coarse { 9.0 } else { 11.0 };
+                                        profile_label(
+                                            frame,
+                                            ui,
+                                            "social/card-class",
                                             &native_wizard_class_title(
                                                 card.element,
                                                 card.discipline,
                                             )
                                             .to_uppercase(),
-                                            if coarse { 9.0 } else { 11.0 },
-                                            super::gpu::PALE,
-                                        ));
+                                            NativeLabelStyle {
+                                                letter_spacing: Some(class_size * 0.14),
+                                                ..NativeLabelStyle::new(
+                                                    egui::FontId::new(
+                                                        class_size,
+                                                        egui::FontFamily::Name(
+                                                            "Cinzel Bold".into(),
+                                                        ),
+                                                    ),
+                                                    super::gpu::PALE,
+                                                )
+                                            },
+                                        )?;
                                         let badge = card.account_username.as_ref().map_or_else(
                                             || "Guest wizard".to_owned(),
                                             |name| format!("Registered · {name}"),
@@ -215,40 +249,62 @@ impl SocialUi {
                                                 if coarse { 7 } else { 9 },
                                                 2,
                                             ))
-                                            .show(ui, |ui| {
+                                            .show(ui, |ui| -> Result<(), String> {
                                                 let displayed = badge.to_uppercase();
-                                                let response = ui.label(card_text(
-                                                    &displayed,
-                                                    if coarse { 8.0 } else { 9.5 },
-                                                    egui::Color32::from_rgb(243, 217, 148),
-                                                ));
-                                                frame.record(
+                                                let size = if coarse { 8.0 } else { 9.5 };
+                                                profile_label(
+                                                    frame,
+                                                    ui,
                                                     "social/card-badge",
                                                     &displayed,
-                                                    "text",
-                                                    &response,
-                                                );
+                                                    NativeLabelStyle {
+                                                        letter_spacing: Some(size * 0.1),
+                                                        ..NativeLabelStyle::new(
+                                                            egui::FontId::new(
+                                                                size,
+                                                                egui::FontFamily::Name(
+                                                                    "Cinzel Bold".into(),
+                                                                ),
+                                                            ),
+                                                            egui::Color32::from_rgb(243, 217, 148),
+                                                        )
+                                                    },
+                                                )?;
                                                 frame.record_value(
                                                     "social/card-badge",
                                                     &badge,
                                                     None,
                                                 );
-                                            });
+                                                Ok(())
+                                            })
+                                            .inner?;
                                         if let Some(activity) = &activity {
-                                            let response = ui.label(card_text(
-                                                activity,
-                                                if coarse { 8.0 } else { 10.0 },
-                                                super::gpu::GOLD,
-                                            ));
-                                            frame.record(
+                                            let size = if coarse { 8.0 } else { 10.0 };
+                                            profile_label(
+                                                frame,
+                                                ui,
                                                 "social/card-activity",
-                                                activity,
-                                                "text",
-                                                &response,
-                                            );
+                                                &activity.to_uppercase(),
+                                                NativeLabelStyle {
+                                                    letter_spacing: Some(size * 0.12),
+                                                    ..NativeLabelStyle::new(
+                                                        egui::FontId::new(
+                                                            size,
+                                                            egui::FontFamily::Name(
+                                                                "Cinzel Bold".into(),
+                                                            ),
+                                                        ),
+                                                        super::gpu::GOLD,
+                                                    )
+                                                },
+                                            )?;
                                         }
-                                    });
-                                });
+                                        Ok(())
+                                    })
+                                    .inner?;
+                                    Ok(())
+                                })
+                                .inner?;
                                 let playtime =
                                     card.total_playtime_ms.map(|time| time / 60000).map_or_else(
                                         || "—".into(),
@@ -376,12 +432,15 @@ impl SocialUi {
                                         action = Some("close");
                                     }
                                 });
-                            });
-                    })
-                    .response
-                    .rect
+                                Ok(())
+                            })
+                            .inner?;
+                        Ok(())
+                    });
+                panel.inner?;
+                Ok(panel.response.rect)
             });
-        let bounds = area.inner;
+        let bounds = area.inner?;
         let record = self.ui.record(17)?;
         let scale = if coarse { 0.55 } else { 0.9 };
         let source_size = egui::vec2(record.width as f32, record.height as f32);
@@ -403,9 +462,6 @@ impl SocialUi {
                 egui::Rect::from_min_size(left, corner_size),
                 egui::Color32::WHITE,
             )?;
-        }
-        if let Some(error) = portrait_error {
-            return Err(error);
         }
         frame.record_rect("social/player-card", &card.display_name, "dialog", bounds, true);
         if let Some(action) = action {
@@ -452,6 +508,31 @@ fn format_integer(value: u64) -> String {
         result.push(digit);
     }
     result
+}
+
+fn profile_label(
+    frame: &crate::gpu_ui::UiFrame<'_>,
+    ui: &mut egui::Ui,
+    id: &str,
+    text: &str,
+    mut style: NativeLabelStyle,
+) -> Result<egui::Response, String> {
+    style.wrap_width = Some(ui.available_width());
+    shaped_label_with_effect(
+        frame,
+        ui,
+        id,
+        text,
+        style,
+        GroupEffect {
+            shadows: vec![ImageShadow {
+                offset: egui::vec2(0.0, 1.0),
+                blur: 1.0,
+                color: egui::Color32::BLACK,
+            }],
+            ..Default::default()
+        },
+    )
 }
 
 fn card_text(value: &str, size: f32, color: egui::Color32) -> egui::RichText {
