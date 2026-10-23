@@ -10,7 +10,9 @@ use solomon_sim::hall_of_fame::presentation::*;
 use solomon_sim::hall_of_fame::{
     HallOfFameBoard, HallOfFameEntry, format_hall_of_fame_time, rank_hall_of_fame_entries,
 };
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, measure_native_ui_text};
+use solomon_sim::native_ui_text::{
+    NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec, measure_native_ui_text,
+};
 use solomon_sim::profile::{native_skill_root, native_wizard_class_title};
 use solomon_sim::skill_picker::SKILL_PICKER_ROOT_TINTS;
 use std::collections::BTreeMap;
@@ -403,11 +405,12 @@ impl HallView {
             }
             let width = measure(label, HallFont::Medium);
             let rect = head_stage.rect(x - 8.0, 14.0, width + 16.0, 32.0);
-            if widgets::interact(frame, ui, id, label, "tab", rect, true).clicked() {
+            let response = widgets::interact_unstyled(frame, ui, id, label, "tab", rect, true);
+            if response.clicked() {
                 actions.push(id.to_owned());
             }
             frame.record_value(id, if active { "true" } else { "false" }, Some(active));
-            hall_text(
+            hall_text_alpha(
                 frame,
                 ui,
                 head_stage,
@@ -417,11 +420,20 @@ impl HallView {
                     font: HallFont::Medium,
                     position: solomon_sim::Vec2::new(x, 36.0),
                 },
+                tab_opacity(frame, &response, active),
+            );
+            widgets::focus_outline(
+                frame,
+                ui,
+                &response,
+                scale,
+                2.0 * scale,
+                widgets::alpha(0xedd289, 0.9),
             );
             if active {
                 ui.painter().line_segment(
                     [head_stage.at(x, 45.0), head_stage.at(x + width, 45.0)],
-                    egui::Stroke::new(2.0, widgets::GOLD),
+                    egui::Stroke::new(2.0 * scale, widgets::GOLD),
                 );
             }
             x += width + 30.0;
@@ -437,7 +449,7 @@ impl HallView {
                 let label = board.as_str().to_uppercase();
                 let width = measure(&label, HallFont::Body);
                 let id = format!("hall-board:{}", board.as_str());
-                let response = widgets::interact(
+                let response = widgets::interact_unstyled(
                     frame,
                     ui,
                     &id,
@@ -450,7 +462,7 @@ impl HallView {
                 if response.clicked() {
                     actions.push(id);
                 }
-                hall_text(
+                hall_text_alpha(
                     frame,
                     ui,
                     head_stage,
@@ -460,11 +472,20 @@ impl HallView {
                         font: HallFont::Body,
                         position: solomon_sim::Vec2::new(x, 36.0),
                     },
+                    tab_opacity(frame, &response, self.board == board),
+                );
+                widgets::focus_outline(
+                    frame,
+                    ui,
+                    &response,
+                    scale,
+                    2.0 * scale,
+                    widgets::alpha(0xedd289, 0.9),
                 );
                 if self.board == board {
                     ui.painter().line_segment(
                         [head_stage.at(x, 45.0), head_stage.at(x + width, 45.0)],
-                        egui::Stroke::new(2.0, widgets::GOLD),
+                        egui::Stroke::new(2.0 * scale, widgets::GOLD),
                     );
                 }
                 x += width + 24.0;
@@ -492,10 +513,27 @@ impl HallView {
             {
                 actions.push("hall-back".to_owned());
             }
-        } else if widgets::interact(frame, ui, "hall-back", "MAIN MENU", "button", back, true)
-            .clicked()
-        {
-            actions.push("hall-back".to_owned());
+        } else {
+            let response = widgets::interact_unstyled(
+                frame,
+                ui,
+                "hall-back",
+                "MAIN MENU",
+                "button",
+                back,
+                true,
+            );
+            if response.hovered() || frame.focus_visible(&response) {
+                ui.painter().rect_stroke(
+                    back.shrink(8.0 * scale),
+                    0.0,
+                    egui::Stroke::new(2.0 * scale, widgets::alpha(0xedd289, 0.9)),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            if response.clicked() {
+                actions.push("hall-back".to_owned());
+            }
         }
         Ok(())
     }
@@ -587,7 +625,7 @@ impl HallView {
         if self.scope == HallScope::Global
             && let Some(account) = &entry.account_username
         {
-            hall_text(frame, ui, stage, &format!("@{account}"), layout.account);
+            hall_text_alpha(frame, ui, stage, &format!("@{account}"), layout.account, 0.7);
         }
         let id = format!("hall-toggle:{index}");
         let center = stage.at(layout.chevron.position.x, layout.chevron.position.y);
@@ -746,6 +784,16 @@ fn measure(text: &str, font: HallFont) -> f64 {
     )
 }
 fn hall_text(frame: &UiFrame<'_>, ui: &Ui, stage: Stage, text: &str, anchor: HallTextAnchor) {
+    hall_text_alpha(frame, ui, stage, text, anchor, 1.0);
+}
+fn hall_text_alpha(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    stage: Stage,
+    text: &str,
+    anchor: HallTextAnchor,
+    alpha: f64,
+) {
     let text = if anchor.font == HallFont::Heading { text.to_uppercase() } else { text.to_owned() };
     let width = measure(&text, anchor.font);
     let x = anchor.position.x
@@ -754,16 +802,34 @@ fn hall_text(frame: &UiFrame<'_>, ui: &Ui, stage: Stage, text: &str, anchor: Hal
             HallTextAlign::Center => (width / 2.0).ceil(),
             HallTextAlign::Right => width,
         };
-    widgets::native(
+    let position = stage.at(x, anchor.position.y);
+    crate::gpu_ui::native_text(
         frame,
-        ui,
-        &text,
-        hall_font(anchor.font),
-        stage.at(x, anchor.position.y),
-        stage.scale,
-        0xd9ba70,
-        NativeUiTextAlign::Left,
+        ui.painter(),
+        &NativeUiTextSpec {
+            align: NativeUiTextAlign::Left,
+            scale: f64::from(stage.scale),
+            alpha,
+            tint: 0xd9ba70,
+            ..NativeUiTextSpec::new(
+                hall_font(anchor.font),
+                &text,
+                f64::from(position.x),
+                f64::from(position.y),
+            )
+        },
     );
+}
+
+fn tab_opacity(frame: &UiFrame<'_>, response: &egui::Response, active: bool) -> f64 {
+    let highlighted = active || response.hovered() || frame.focus_visible(response);
+    let progress = frame.ctx.animate_bool_with_time_and_easing(
+        response.id.with("label-opacity"),
+        highlighted,
+        0.12,
+        |progress| crate::gpu_ui::css_bezier(progress, 0.0, 0.0, 0.58, 1.0),
+    );
+    0.55 + 0.45 * f64::from(progress)
 }
 
 fn paint_separator(painter: &egui::Painter, stage: Stage, y: f64) {
