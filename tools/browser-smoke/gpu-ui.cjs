@@ -87,8 +87,9 @@ async function fill(page, id, text, { touch = false } = {}) {
   else await click(page, id);
   await focused(page, id);
   await page.keyboard.press('ControlOrMeta+A');
-  await page.keyboard.press('Backspace');
+  // One replacement preserves the previous accepted draft when native validation rejects it.
   if (text) await page.keyboard.insertText(text);
+  else await page.keyboard.press('Backspace');
   await nextFrame(page);
 }
 
