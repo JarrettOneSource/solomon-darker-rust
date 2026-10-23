@@ -132,7 +132,7 @@ async function observeDocumentReplacement(page,action,{frame=page.mainFrame(),ti
   const target=snapshots.get(frame);
   if(!target)throw new Error('the replacing document has no lifecycle observation');
   const transition={beforeTargetId:target.documentId,beforeUrl:target.documentUrl,completed:false,
-    pendingRequests:[]};
+    pendingRequests:[],navigations:[]};
   observed.replacements.push(transition);
   for(const [request,tracked] of observed.activeMedia) {
     let within=false;
@@ -148,16 +148,29 @@ async function observeDocumentReplacement(page,action,{frame=page.mainFrame(),ti
   }
   let resolveNavigation;
   const navigated=new Promise(resolve=>{resolveNavigation=resolve});
-  const onNavigation=owner=>{if(owner===frame)resolveNavigation(owner)};
+  const onNavigation=async owner=>{
+    if(owner!==frame)return;
+    const event={url:owner.url()};
+    transition.navigations.push(event);
+    try {
+      const after=await owner.evaluate(()=>({documentId:performance.timeOrigin,url:location.href}));
+      event.documentId=after.documentId;
+      // A Website router may first pushState into its game route, then its
+      // ordinary bridge replaces the document. The intermediate SPA event is
+      // recorded, but supplies no document-retirement evidence.
+      if(after.documentId!==target.documentId)resolveNavigation(after);
+    } catch(error) {
+      event.observationError=error.message;
+    }
+  };
   page.on('framenavigated',onNavigation);
   const timer=setTimeout(()=>resolveNavigation(null),timeout);
   try {
     const result=await action();
-    if(!await navigated)throw new Error('the actual action did not replace its document');
-    const after=await frame.evaluate(()=>({documentId:performance.timeOrigin,url:location.href}));
+    const after=await navigated;
+    if(!after)throw new Error('the actual action did not replace its document');
     transition.afterTargetId=after.documentId;
     transition.afterUrl=after.url;
-    if(after.documentId===target.documentId)throw new Error('the action only navigated within the same document');
     transition.completed=true;
     return result;
   } catch(error) {
