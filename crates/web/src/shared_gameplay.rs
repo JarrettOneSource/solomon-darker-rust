@@ -148,10 +148,12 @@ impl SharedGameplayUi {
         let ctx = frame.ctx.clone();
         let screen = ctx.content_rect();
         if let Some(pause) = &self.pause {
+            frame.input_scope("shared/pause");
             egui::Area::new(Id::unique("shared/pause"))
                 .order(Order::Middle)
                 .fixed_pos(egui::Pos2::ZERO)
                 .show(&ctx, |ui| {
+                    ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
                     ui.set_min_size(screen.size());
                     ui.interact(screen, Id::unique("shared/pause-hold"), egui::Sense::click());
                     let alpha = pause.reveal as f32;
@@ -189,6 +191,7 @@ impl SharedGameplayUi {
                 });
         }
         if let Some(resume) = &self.resume {
+            frame.input_scope("shared/resume");
             let scale = fit_panel(self.size.0, self.size.1, 428.0, 240.0) as f32;
             let bounds = Rect::from_center_size(
                 screen.center(),

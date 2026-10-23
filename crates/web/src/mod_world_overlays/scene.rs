@@ -120,6 +120,7 @@ impl ModSceneOverlay {
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let Some(room) = &self.room else { return Ok(()) };
+        frame.input_scope(&format!("mod/scene:{}:{}", room.content_id, room.index));
         let ctx = frame.ctx.clone();
         let screen = ctx.content_rect();
         let small = screen.width() <= 700.0;
@@ -140,6 +141,7 @@ impl ModSceneOverlay {
             .order(Order::Foreground)
             .fixed_pos(egui::Pos2::ZERO)
             .show(&ctx, |ui| {
+                ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
                 ui.set_min_size(screen.size());
                 ui.interact(screen, Id::unique("mod/scene-block"), egui::Sense::click());
                 ui.painter().rect_filled(screen, 0.0, Color32::from_rgb(3, 4, 7));

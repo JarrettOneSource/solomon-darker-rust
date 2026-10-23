@@ -51,7 +51,7 @@ impl SocialUi {
             egui::Id::unique("social/invitation-panel-block"),
             egui::Sense::click(),
         );
-        crate::gpu_ui::message_frame(frame, ui.painter(), &self.ui, bounds)?;
+        crate::gpu_ui::message_frame_scaled(frame, ui.painter(), &self.ui, bounds, scale)?;
         frame.record_rect("social/party-invitation", &body, "dialog", bounds, true);
         for (text, font, baseline, line_height) in [
             (NATIVE_PARTY_INVITATION_TITLE, NativeUiFontName::Menu, 95.0, None),

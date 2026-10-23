@@ -308,6 +308,7 @@ impl CheatUi {
 
     pub fn paint(&mut self, gpu: &mut UiFrame<'_>) -> Result<(), String> {
         let (Some(view), Some(frame)) = (&mut self.view, &self.frame) else { return Ok(()) };
+        gpu.input_scope(if view.console_tab { "cheats/console" } else { "cheats/controls" });
         let ctx = gpu.ctx.clone();
         let screen = ctx.content_rect();
         let bounds = Rect::from_center_size(
@@ -320,6 +321,7 @@ impl CheatUi {
             .order(Order::Foreground)
             .fixed_pos(egui::Pos2::ZERO)
             .show(&ctx, |ui| {
+                ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
                 ui.set_min_size(screen.size());
                 ui.interact(screen, Id::unique("cheats/backdrop"), egui::Sense::click());
                 ui.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(209));

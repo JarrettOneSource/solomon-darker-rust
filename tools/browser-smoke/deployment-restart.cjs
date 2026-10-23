@@ -7,6 +7,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require(path.resolve(process.env.PW));
 const { createNativeMessageReader } = require('./native-wire.cjs');
+const {reachCollegeLoadout}=require('./menu-journey.cjs');
+const ui=require('./gpu-ui.cjs');
 
 const base = path.resolve(process.env.LOCAL_GATEWAY);
 const out = path.resolve(process.env.OUT);
@@ -44,11 +46,9 @@ function redact(value) {
 function checked(label) { checks.push(label); console.log(label); }
 async function title(page) {
   await page.waitForURL(value => value.origin === url.origin && value.pathname === `${mount}/`);
-  await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-    && document.querySelector('#status')?.textContent === '');
-  const prompt = page.locator('.title-prompt:not([hidden])');
-  if (await prompt.isVisible()) await prompt.locator('[data-menu-action="prompt-secondary"]').click();
-  await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
+  await ui.ready(page);
+  if(ui.findWidget(await ui.readUi(page),'prompt-secondary'))await ui.click(page,'prompt-secondary');
+  await ui.surface(page,'title');
 }
 async function accountForm(page) {
   await page.waitForFunction(() => {
@@ -63,11 +63,11 @@ async function register(page) {
   fs.writeFileSync(path.join(out, 'private-account.json'), JSON.stringify(account), { mode: 0o600 });
   const catalogResponse = page.waitForResponse(response => new URL(response.url()).pathname
     === `${mount}/api/mods` && response.request().method() === 'GET');
-  await page.locator('[data-menu-action="explore"]').click();
+  await ui.click(page,'dark-cloud');
   const catalog = await catalogResponse;
   assert.equal(catalog.status(), 200);
   await catalog.finished();
-  await page.locator('[data-menu-action="cloud-sign-in"]').click();
+  await ui.click(page,'cloud-sign-in');
   await page.waitForURL(value => value.pathname === `${mount}/login`);
   await accountForm(page);
   await page.getByRole('link', { name: 'Create an account', exact: true }).click();
@@ -169,13 +169,10 @@ async function adminRestart() {
     await title(page);
     await register(page);
     assert.equal(await page.locator('meta[name="solomon-build-revision"]').getAttribute('content'), current);
-    await page.locator('[data-menu-action="play"]').click();
-    await page.locator('[data-menu-action="new-game"]').click();
-    const name = page.getByRole('textbox', { name: 'Wizard name', exact: true });
-    await name.fill('UpdateQA');
-    await name.press('Tab');
-    await page.locator('[data-menu-action="element:fire"]').click();
-    await page.locator('[data-menu-action="discipline:arcane"]').click();
+    await ui.click(page,'play');await ui.click(page,'new-game');
+    await ui.waitForUi(page,snapshot=>snapshot.surface==='create'||ui.findWidget(snapshot,'college-intro')||ui.findWidget(snapshot,'panel:dialogue'),'ordinary fresh College admission',{timeout:120000});
+    if((await ui.readUi(page)).surface!=='create')await reachCollegeLoadout(page);
+    await ui.fill(page,'create-name','UpdateQA');await ui.click(page,'element:fire');await ui.click(page,'discipline:arcane');
     await until(() => welcomed.length === 1 && frame?.snapshot.participants[playerId], 'real College admission');
     const wizardName = welcomed[0].name;
     await until(() => frame.snapshot.ticks > 100, 'accepted authority ticks');
@@ -186,9 +183,8 @@ async function adminRestart() {
     await until(() => announcement && heldRoute, 'real deployment announcement and held save PUT');
     assert.equal(announcement.target_revision, target);
     assert.ok(announcement.checkpoint_sequence > 0);
-    const overlay = page.locator('.game-deployment-update:not([hidden])');
-    await overlay.waitFor();
-    assert.match(await overlay.innerText(), /Saving your game before the update/);
+    assert.match((await ui.widget(page,'deployment/update')).label,/Saving your game before the update/);
+    await ui.assertGpuOnly(page);
     await sleep(1000);
     assert.equal(events.filter(row => row.kind === 'deployment-ready').length, 0);
     assert.equal(socketCloses, closes);
@@ -201,7 +197,7 @@ async function adminRestart() {
     const result = await restart;
     assert.equal(result.status, 200);
     await until(() => socketCloses === closes + 1, 'server-owned deployment socket close');
-    assert.match(await overlay.innerText(), /Your game is saved/);
+    assert.match((await ui.widget(page,'deployment/update')).label,/Your game is saved/);
     const ack = events.findIndex(row => row.kind === 'deployment-ready');
     assert.ok(events.slice(0, ack).some(row => row.kind === 'save-response'
       && row.status === 200 && row.sha256 === heldRoute.sha256));
@@ -226,8 +222,8 @@ async function adminRestart() {
     await until(() => documentLoads > loads, 'coordinator publication and automatic reload', 180000);
     await title(page);
     assert.equal(await page.locator('meta[name="solomon-build-revision"]').getAttribute('content'), target);
-    await page.locator('[data-menu-action="play"]').click();
-    await page.locator('[data-menu-action="continue"]').click();
+    await ui.click(page,'play');
+    await ui.click(page,'continue');
     await until(() => welcomed.length === 2, 'normal Continue after actual replacement');
     assert.equal(welcomed[1].name, wizardName);
     await page.screenshot({ path: path.join(out, 'continued.png') });
@@ -239,7 +235,7 @@ async function adminRestart() {
     await page.screenshot({ path: path.join(out, 'failure.png') });
     fs.writeFileSync(path.join(out, 'failure.json'), JSON.stringify({ error: redact(error.stack),
       checks, events, requests, welcomed, checkpoints, announcement, cancelled, errors,
-      ui: await page.locator('body').innerText() }, null, 2));
+      ui: await ui.readUi(page) }, null, 2));
     throw error;
   } finally {
     releaseSave();

@@ -35,6 +35,14 @@ pub struct SocialUiContext {
     pub gold_clear_left: f64,
 }
 
+/// Display metadata for packages actually admitted by the running session.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PartyModView {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Surface {
     Party(PartyTab),
@@ -85,6 +93,7 @@ pub struct SocialUi {
     manually_selected_channel: bool,
     chat_status: Option<String>,
     party_status: Option<String>,
+    party_mods: Vec<PartyModView>,
     controls: GameControlBindings,
     context: SocialUiContext,
     now: f64,
@@ -134,6 +143,7 @@ impl SocialUi {
             manually_selected_channel: false,
             chat_status: None,
             party_status: None,
+            party_mods: Vec::new(),
             controls: GameControlBindings::default(),
             context: SocialUiContext {
                 visible: false,
@@ -150,6 +160,12 @@ impl SocialUi {
             intents,
             clipboard,
         })
+    }
+
+    pub fn set_party_mods(&mut self, mods: &[PartyModView]) {
+        if self.party_mods != mods {
+            self.party_mods = mods.to_vec();
+        }
     }
 
     pub fn set_controls(&mut self, controls: GameControlBindings) {
@@ -242,6 +258,20 @@ impl SocialUi {
         if !self.context.visible || self.snapshot.is_none() {
             return Ok(());
         }
+        if self.chat_open {
+            frame.input_scope(&format!("social/chat:{}", channel_id(self.channel)));
+        }
+        if self.college_visible() {
+            frame.input_scope(&format!("social/college:{}", self.college_invitations[0].id));
+        } else if self.party_invitation_visible() {
+            frame.input_scope("social/party-invitation");
+        } else if let Some(surface) = &self.surface {
+            frame.input_scope(&match surface {
+                Surface::Party(tab) => format!("social/party:{}", tab.id()),
+                Surface::Card(card) => format!("social/card:{}", card.player_reference),
+                Surface::HubPlayer(id) => format!("social/hub-player:{id}"),
+            });
+        }
         let ctx = frame.ctx.clone();
         self.paint_allies(frame)?;
         self.paint_party_chip(frame)?;
@@ -257,6 +287,7 @@ impl SocialUi {
                 .order(Order::Foreground)
                 .fixed_pos(egui::Pos2::ZERO)
                 .show(&ctx, |ui| -> Result<(), String> {
+                    ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
                     let screen = ctx.content_rect();
                     ui.set_min_size(screen.size());
                     let back = ui.interact(screen, Id::unique("social/backdrop"), Sense::click());
