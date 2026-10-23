@@ -418,6 +418,7 @@ impl BoneyardLibrary {
                 ui.set_max_size(bounds.size());
                 ui.set_clip_rect(bounds);
                 widgets::scrollbar_style(ui, 0x876d37, 0x080808, true);
+                ui.spacing_mut().item_spacing = Vec2::ZERO;
                 if !interactive || self.opening {
                     ui.disable();
                     ui.set_opacity(1.0);
