@@ -100,7 +100,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         c.blend = solomon_graphics::BlendMode::Add;
         c
     }
-    pub fn target_rect(&self, target: Target) -> Option<Rect> {
+    pub(super) fn target_rect(&self, target: Target) -> Option<Rect> {
         self.hits
             .borrow()
             .iter()
@@ -258,8 +258,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
             index,
             egui::pos2(center[0] as f32, center[1] as f32) + self.origin,
             scale[0] as f32,
-            tints,
-            self.alpha,
+            tints.map(|tint| self.color(tint)),
         )
     }
     pub fn mod_frame(
@@ -717,10 +716,13 @@ impl PlayerPanels {
                 c.frame,
                 &c.painter,
                 &self.ui,
-                rect(hud.belt[slot % 8]).center() + c.origin,
-                self.now,
-                1.0,
-                &format!("panel:belt-burst:{slot}:{}", burst.sequence()),
+                crate::ui::belt_pull_off::BeltPullOffDraw {
+                    center: rect(hud.belt[slot % 8]).center() + c.origin,
+                    now: self.now,
+                    scale: 1.0,
+                    rotation: 0.0,
+                    id: &format!("panel:belt-burst:{slot}:{}", burst.sequence()),
+                },
             )?;
         }
         Ok(())
@@ -812,8 +814,7 @@ pub(crate) fn paint_split_art(
     index: usize,
     center: Pos2,
     scale: f32,
-    tints: [u32; 2],
-    alpha: f32,
+    tints: [Color32; 2],
 ) -> Result<(), String> {
     let r = atlas.record(index)?;
     let size = frame.image_size(atlas.path()).ok_or("Weld glow atlas is not ready")?;
@@ -833,7 +834,7 @@ pub(crate) fn paint_split_art(
         atlas.path(),
         [dest.left_top(), dest.right_top(), dest.left_bottom()],
         [uv.left_top(), uv.right_top(), uv.left_bottom()],
-        color(tints[0]).gamma_multiply(alpha),
+        tints[0],
         solomon_graphics::BlendMode::Normal,
     );
     frame.image_triangle(
@@ -841,7 +842,7 @@ pub(crate) fn paint_split_art(
         atlas.path(),
         [dest.right_top(), dest.right_bottom(), dest.left_bottom()],
         [uv.right_top(), uv.right_bottom(), uv.left_bottom()],
-        color(tints[1]).gamma_multiply(alpha),
+        tints[1],
         solomon_graphics::BlendMode::Normal,
     );
     Ok(())
