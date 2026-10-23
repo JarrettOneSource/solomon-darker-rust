@@ -8,6 +8,7 @@ fn frame(
     let images = painter::Images::default();
     let widgets = RefCell::new(BTreeMap::new());
     let announcements = RefCell::new(Vec::new());
+    let input_scope = RefCell::new(None);
     let previous_widgets = BTreeMap::new();
     let mut paint = paint;
     let raw = egui::RawInput {
@@ -26,6 +27,7 @@ fn frame(
             announcements: &announcements,
             rotation: egui::emath::Rot2::IDENTITY,
             translation: Vec2::ZERO,
+            input_scope: &input_scope,
         })
     })
     .drop_without_applying_deltas();
@@ -200,5 +202,7 @@ fn inherited_rotation_keeps_stock_and_glyph_vertices_in_one_paint_transform() {
                 .length()
                 < 0.0001
         );
+        let scaled = frame.with_scale(pos2(100.0, 100.0), 0.5);
+        assert!((scaled.paint_position(pos2(110.0, 100.0)) - pos2(105.0, 100.0)).length() < 0.0001);
     });
 }
