@@ -194,7 +194,9 @@ pub(crate) fn stock_button(
     enabled: bool,
 ) -> Response {
     let response = interact(frame, ui, id, text, "button", rect, enabled);
-    paint_stock_button(frame, ui, &response, rect, scale, enabled);
+    let paint =
+        frame.with_brightness(if enabled && frame.focus_visible(&response) { 1.2 } else { 1.0 });
+    paint_stock_button(&paint, ui, &response, rect, scale, enabled);
     let pressed = if enabled && stock_button_pressed(ui, &response) {
         Vec2::splat(6.0 * scale)
     } else {
@@ -202,7 +204,7 @@ pub(crate) fn stock_button(
     };
     if !text.is_empty() {
         crate::gpu_ui::native_text(
-            frame,
+            &paint,
             ui.painter(),
             &NativeUiTextSpec {
                 scale: f64::from(scale),

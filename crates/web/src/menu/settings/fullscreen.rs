@@ -59,11 +59,20 @@ impl SettingsFullscreen {
             self.error = result.err();
         }
         let (_, rect) = ui.allocate_space(Vec2::new(width, 44.0));
-        atlas.paint_raw(frame, ui.painter(), 3, rect, egui::Color32::WHITE)?;
-        let response =
-            widgets::interact(frame, ui, "settings-fullscreen", "FULLSCREEN", "button", rect, true);
-        widgets::native(
+        let response = widgets::interact_unstyled(
             frame,
+            ui,
+            "settings-fullscreen",
+            "FULLSCREEN",
+            "button",
+            rect,
+            true,
+        );
+        let highlight = response.hovered() || frame.focus_visible(&response);
+        let paint = frame.with_brightness(if highlight { 1.16 } else { 1.0 });
+        atlas.paint_raw(&paint, ui.painter(), 3, rect, egui::Color32::WHITE)?;
+        widgets::native(
+            &paint,
             ui,
             "FULLSCREEN",
             NativeUiFontName::ControlPanel,
@@ -74,7 +83,7 @@ impl SettingsFullscreen {
         );
         if self.mode == ControlMode::Install {
             widgets::native(
-                frame,
+                &paint,
                 ui,
                 "OPTIONS",
                 NativeUiFontName::ControlPanel,
@@ -85,13 +94,16 @@ impl SettingsFullscreen {
             );
         } else {
             super::toggle_art(
-                frame,
+                &paint,
                 ui,
                 atlas,
                 rect,
                 fullscreen_active(&self.document),
                 egui::Color32::WHITE,
             )?;
+        }
+        if highlight {
+            super::row_outline(&paint, ui, rect);
         }
         if response.clicked() {
             actions.push("settings-fullscreen".to_owned());
