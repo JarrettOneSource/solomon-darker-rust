@@ -68,6 +68,11 @@ pub enum HitShape {
     #[default]
     Rect,
     Ellipse,
+    RotatedRect {
+        center: [f32; 2],
+        size: [f32; 2],
+        radians: f32,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -87,6 +92,11 @@ impl HitRegion {
                 let rect = self.paint_bounds.rect();
                 rect.is_positive()
                     && ((point - rect.center()) / (rect.size() / 2.0)).length_sq() <= 1.0
+            }
+            HitShape::RotatedRect { center, size, radians } => {
+                let point =
+                    egui::emath::Rot2::from_angle(-radians) * (point - pos2(center[0], center[1]));
+                point.x.abs() <= size[0] / 2.0 && point.y.abs() <= size[1] / 2.0
             }
         }
     }
@@ -146,6 +156,7 @@ pub struct UiDiagnostics {
     pub meshes: usize,
     pub triangles: usize,
     pub textures: usize,
+    pub borrowed_images: usize,
     pub static_images_ready: usize,
     pub static_images_total: usize,
     pub error: Option<String>,
@@ -415,6 +426,27 @@ impl UiFrame<'_> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_rotated_rect(
+        &self,
+        id: &str,
+        label: &str,
+        role: &str,
+        response: &Response,
+        center: Pos2,
+        size: Vec2,
+        radians: f32,
+    ) {
+        self.record(id, label, role, response);
+        if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
+            widget.hit_shape = HitShape::RotatedRect {
+                center: [center.x, center.y],
+                size: [size.x, size.y],
+                radians,
+            };
+        }
+    }
+
     pub fn record_rect(&self, id: &str, label: &str, role: &str, rect: Rect, enabled: bool) {
         let paint_bounds = rect.into();
         let rect = rect.intersect(self.ctx.input(|input| input.content_rect()));
@@ -643,6 +675,7 @@ impl GpuUi {
             meshes,
             triangles,
             textures: self.painter.texture_count() + self.images.texture_count(),
+            borrowed_images: self.images.borrowed_count(),
             static_images_ready: self.images.static_images_ready(),
             static_images_total: self.images.static_image_count(),
             error: None,
@@ -658,6 +691,10 @@ impl GpuUi {
     }
     pub fn image_texture(&self, path: &str) -> Option<solomon_graphics::Texture> {
         self.images.cached_texture(path)
+    }
+    /// Shares a decoded world-owned texture; cache retirement never deletes it.
+    pub fn register_image(&mut self, path: &str, texture: &solomon_graphics::Texture) {
+        self.images.register(path, texture, &self.painter.gl);
     }
     pub fn take_key_codes(&mut self) -> Vec<BrowserKey> {
         self.input.take_key_codes()

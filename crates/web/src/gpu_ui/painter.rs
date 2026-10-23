@@ -21,6 +21,7 @@ struct ImageEntry {
     id: u64,
     state: ImageState,
     size: Option<Vec2>,
+    owned: bool,
 }
 
 #[derive(Default)]
@@ -42,6 +43,26 @@ fn path_key(path: &str) -> String {
 }
 
 impl Images {
+    pub fn register(&self, path: &str, texture: &Texture, gl: &WebGl2RenderingContext) {
+        self.forget(path, gl);
+        let path = path_key(path);
+        let mut cache = self.0.borrow_mut();
+        cache.next_id += 1;
+        let id = cache.next_id;
+        cache.paths.insert(id, path.clone());
+        cache.images.insert(
+            path,
+            ImageEntry {
+                id,
+                state: ImageState::Ready(texture.clone()),
+                size: Some(vec2(texture.width, texture.height)),
+                owned: false,
+            },
+        );
+    }
+    pub fn borrowed_count(&self) -> usize {
+        self.0.borrow().images.values().filter(|entry| !entry.owned).count()
+    }
     pub fn cached_texture(&self, path: &str) -> Option<Texture> {
         match &self.0.borrow().images.get(&path_key(path))?.state {
             ImageState::Ready(texture) => Some(texture.clone()),
@@ -73,9 +94,10 @@ impl Images {
             cache.next_id += 1;
             let id = cache.next_id;
             cache.paths.insert(id, path.clone());
-            cache
-                .images
-                .insert(path.clone(), ImageEntry { id, state: ImageState::Loading, size: None });
+            cache.images.insert(
+                path.clone(),
+                ImageEntry { id, state: ImageState::Loading, size: None, owned: true },
+            );
             id
         };
         let images = self.clone();
@@ -116,7 +138,12 @@ impl Images {
                 cache.paths.insert(id, path.clone());
                 cache.images.insert(
                     path,
-                    ImageEntry { id, state: ImageState::Decoded(image), size: Some(size) },
+                    ImageEntry {
+                        id,
+                        state: ImageState::Decoded(image),
+                        size: Some(size),
+                        owned: true,
+                    },
                 );
                 Ok(wasm_bindgen::JsValue::UNDEFINED)
             }));
@@ -194,7 +221,9 @@ impl Images {
         let mut cache = self.0.borrow_mut();
         if let Some(entry) = cache.images.remove(&path_key(path)) {
             cache.paths.remove(&entry.id);
-            if let ImageState::Ready(texture) = entry.state {
+            if entry.owned
+                && let ImageState::Ready(texture) = entry.state
+            {
                 Renderer::delete_ui_texture(gl, &texture);
             }
         }
@@ -203,7 +232,9 @@ impl Images {
     pub fn destroy(&self, gl: &WebGl2RenderingContext) {
         let mut cache = self.0.borrow_mut();
         for entry in cache.images.values() {
-            if let ImageState::Ready(texture) = &entry.state {
+            if entry.owned
+                && let ImageState::Ready(texture) = &entry.state
+            {
                 Renderer::delete_ui_texture(gl, texture);
             }
         }
