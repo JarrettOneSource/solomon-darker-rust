@@ -138,7 +138,7 @@ fn set_status(text: &str) {
 
 async fn run() -> Result<(), String> {
     let game = Game::load().await?;
-    runtime_ui::completed("runtime", "Game resources ready", 1)?;
+    runtime_ui::completed(runtime_ui::RUNTIME)?;
     let window = web_sys::window().ok_or("no window")?;
     GAME.with(|slot| *slot.borrow_mut() = Some(game.clone()));
     Game::attach_desktop(&game, &window)?;

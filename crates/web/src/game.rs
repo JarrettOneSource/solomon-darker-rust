@@ -209,7 +209,7 @@ impl Game {
     fn load_resources() -> impl std::future::Future<Output = Result<Self, String>> {
         Box::pin(async {
             crate::runtime_ui::begin(
-                GpuUi::startup_asset_count() + GameAudio::startup_asset_count() + 3,
+                GpuUi::startup_resources().into_iter().chain(GameAudio::startup_resources()),
             )?;
             let window = web_sys::window().ok_or("no window")?;
             let document = window.document().ok_or("no document")?;
@@ -2335,8 +2335,8 @@ impl Game {
             if diagnostics.meshes > 0
                 && diagnostics.static_images_ready == diagnostics.static_images_total
             {
-                crate::runtime_ui::completed("account", "Account and saved game ready", 1)?;
-                crate::runtime_ui::completed("ready", "First game frame ready", 1)?;
+                crate::runtime_ui::completed(crate::runtime_ui::ACCOUNT)?;
+                crate::runtime_ui::completed(crate::runtime_ui::FIRST_FRAME)?;
                 crate::runtime_ui::finish()?;
                 self.ui_ready = true;
             }

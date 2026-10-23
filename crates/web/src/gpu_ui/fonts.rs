@@ -52,11 +52,17 @@ const FACES: [(&str, &str, &str, &str); 9] = [
     ("SDGPU JetBrains Mono", "jetbrains-mono-latin-600-normal.woff2", "600", "normal"),
 ];
 
-pub(super) fn asset_count() -> usize {
-    FACES.len()
+pub(super) fn startup_resources() -> Vec<crate::runtime_ui::StartupResource> {
+    FACES
+        .into_iter()
+        .map(|(_, file, _, _)| {
+            crate::runtime_ui::StartupResource::new("fonts", format!("assets/stock/fonts/{file}"))
+        })
+        .collect()
 }
 
 pub(super) async fn load(document: &Document, ctx: &Context) -> Result<BrowserFonts, String> {
+    crate::runtime_ui::enter_phase("fonts")?;
     let set = document.fonts();
     let mut faces = Vec::new();
     let promises = js_sys::Array::new();
@@ -70,9 +76,15 @@ pub(super) async fn load(document: &Document, ctx: &Context) -> Result<BrowserFo
             &descriptors,
         )
         .map_err(|error| format!("GPU UI font {file}: {error:?}"))?;
-        promises.push(
-            face.load().map_err(|error| format!("GPU UI font {file} load: {error:?}"))?.as_ref(),
-        );
+        let loaded = face.load().map_err(|error| format!("GPU UI font {file} load: {error:?}"))?;
+        promises.push(&wasm_bindgen_futures::future_to_promise(async move {
+            JsFuture::from(loaded).await.map_err(|error| {
+                wasm_bindgen::JsValue::from_str(&format!("GPU UI font {file}: {error:?}"))
+            })?;
+            crate::runtime_ui::completed(&format!("assets/stock/fonts/{file}"))
+                .map_err(wasm_bindgen::JsValue::from)?;
+            Ok(wasm_bindgen::JsValue::UNDEFINED)
+        }));
         set.add(&face).map_err(|error| format!("GPU UI font {file} registration: {error:?}"))?;
         faces.push(face);
     }
@@ -80,9 +92,6 @@ pub(super) async fn load(document: &Document, ctx: &Context) -> Result<BrowserFo
     JsFuture::from(js_sys::Promise::all(&promises))
         .await
         .map_err(|error| format!("GPU UI font readiness: {error:?}"))?;
-    for (_, file, _, _) in FACES {
-        crate::runtime_ui::completed("fonts", file, 1)?;
-    }
     let canvas: HtmlCanvasElement = document
         .create_element("canvas")
         .map_err(|error| format!("glyph canvas: {error:?}"))?
