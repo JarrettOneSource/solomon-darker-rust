@@ -12,6 +12,7 @@ use solomon_sim::menu::party_directory::{
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
 use solomon_sim::social::{GameSessionKind, PartyVisibility};
 use unicode_segmentation::UnicodeSegmentation;
+// NativeDarkCloudText keeps stock glyphs, with the Source display family for external Unicode.
 // Bitmap font, placement and tint are the authored drawing contract.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn ink(
@@ -23,22 +24,6 @@ pub(super) fn ink(
     tint: u32,
     rect: Rect,
     center: bool,
-) -> Result<(), String> {
-    ink_with_fallback(frame, ui, text, font, scale, tint, rect, center, "Alegreya")
-}
-
-// Source external labels retain their inherited family when a retail glyph is absent.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn ink_with_fallback(
-    frame: &UiFrame<'_>,
-    ui: &Ui,
-    text: &str,
-    font: NativeUiFontName,
-    scale: f32,
-    tint: u32,
-    rect: Rect,
-    center: bool,
-    fallback: &str,
 ) -> Result<(), String> {
     let spec = solomon_sim::native_ui_text::NativeUiTextSpec {
         placement: solomon_sim::native_ui_text::NativeUiTextPlacement::Box,
@@ -64,7 +49,7 @@ pub(super) fn ink_with_fallback(
     } else {
         let font = egui::FontId::new(
             solomon_sim::native_ui_text::native_ui_font(font).metrics[0] as f32 * scale,
-            egui::FontFamily::Name(fallback.into()),
+            egui::FontFamily::Name("Cinzel".into()),
         );
         let run = crate::gpu_ui::font_run(ui.ctx(), font, widgets::color(tint), text, None)?;
         let origin = if center {
