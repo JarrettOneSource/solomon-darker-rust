@@ -516,3 +516,18 @@ the stock main-menu plate/hover/corner/rail images and native Menu bitmap labels
 existing Rust `menu::widgets::stock_button` to preserve that art, pressed/focus/disabled
 appearance and actual semantic egui interaction IDs. Keep the fixed bar's scroll/input
 owner separate from the scrolling body; no default-widget placeholder remains in it.
+
+The hosted 24382f0 imported-book diagnostic retains the original normal File chooser →
+reload → Continue → first KeyI sequence. At that trusted BODY dispatch, native focus is
+true, no text adapter is active and default prevention is false. The actual GPU state
+still owns `match-loading`, acceptedSelection is null and the default wizard tick is
+zero. The real authority Welcome arrives 150ms later; the accepted Book Reader and
+scope-null presentation arrive about 200ms after the rejected key. Full event, frame and
+authority flags are retained in `skill-book-key-trace/24382f0/native-key-trace-1.json`,
+with errors[] and graceful exit0. Enabled background widget records alone do not prove
+visual exposure beneath the match-loading layer. Pinned fa08 `MainMenuScene.tsx`
+`resumeLastGame`/`activateSession`/`finishLoading` and the loading-dependent
+`sceneModalDisabled` seal input until the accepted session/renderer transition completes.
+The book driver must observe its actual imported selection, ready authority flags and
+released match-loading scope before sending the same immediate first KeyI. A timer,
+repeat key or pointer substitution would not validate that admission boundary.
