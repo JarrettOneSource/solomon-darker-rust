@@ -53,6 +53,7 @@ struct InputQueue {
     capture: UiCapture,
     logical: [f32; 2],
     text_rects: Vec<Rect>,
+    hit_rects: Vec<Rect>,
     primary_touch: Option<i32>,
     gamepad_keys: [bool; 8],
     gamepad_direction: Option<solomon_sim::input::MenuDirection>,
@@ -163,6 +164,8 @@ impl BrowserInput {
                 }
                 let mods =
                     modifiers(key.alt_key(), key.ctrl_key(), key.shift_key(), key.meta_key());
+                let text_modifier =
+                    !mods.ctrl && !mods.mac_cmd || key.get_modifier_state("AltGraph");
                 queue.codes.push(BrowserKey {
                     code: key.code(),
                     key: key.key(),
@@ -193,10 +196,8 @@ impl BrowserInput {
                         repeat: key.repeat(),
                         modifiers: mods,
                     });
-                    let native_text = queue.capture.text
-                        && key.key().chars().count() == 1
-                        && !mods.ctrl
-                        && !mods.mac_cmd;
+                    let native_text =
+                        queue.capture.text && key.key().chars().count() == 1 && text_modifier;
                     if queue.capture.keyboard
                         && !native_text
                         && !(mods.command && key.key().eq_ignore_ascii_case("v"))
@@ -208,7 +209,7 @@ impl BrowserInput {
                 // frame focuses the IME adapter. Queue real desktop key text here;
                 // suppress its textarea default so `input` cannot insert it twice.
                 // Virtual keyboards without keydown still use the input listener.
-                if pressed && key.key().chars().count() == 1 && !mods.ctrl && !mods.mac_cmd {
+                if pressed && key.key().chars().count() == 1 && text_modifier {
                     queue.events.push(UiEvent::Text(key.key()));
                     if queue.capture.text || key.target().is_some_and(|target| target == adapter) {
                         event.prevent_default();
@@ -281,9 +282,12 @@ impl BrowserInput {
                         queue.events.push(UiEvent::PointerGone);
                     }
                 }
-                if queue.capture.pointer {
+                if queue.capture.pointer
+                    || matches!(phase, TouchPhase::Start)
+                        && queue.hit_rects.iter().any(|rect| rect.contains(pos))
+                {
                     event.prevent_default();
-                    event.stop_propagation();
+                    event.stop_immediate_propagation();
                 }
             })?;
         }
@@ -538,12 +542,23 @@ impl BrowserInput {
         Ok(raw)
     }
 
-    pub fn set_text_rects(&mut self, widgets: &std::collections::BTreeMap<String, WidgetGeometry>) {
+    pub fn set_widgets(&mut self, widgets: &std::collections::BTreeMap<String, WidgetGeometry>) {
         self.queue.borrow_mut().text_rects = widgets
             .values()
             .filter(|widget| {
-                matches!(widget.role.as_str(), "textbox" | "input" | "text-entry") && widget.enabled
+                matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
+                    && widget.enabled
             })
+            .map(|widget| {
+                Rect::from_min_size(
+                    pos2(widget.bounds.x, widget.bounds.y),
+                    vec2(widget.bounds.width, widget.bounds.height),
+                )
+            })
+            .collect();
+        self.queue.borrow_mut().hit_rects = widgets
+            .values()
+            .filter(|widget| widget.interactive)
             .map(|widget| {
                 Rect::from_min_size(
                     pos2(widget.bounds.x, widget.bounds.y),
