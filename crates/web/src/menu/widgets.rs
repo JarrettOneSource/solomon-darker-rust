@@ -123,6 +123,11 @@ pub(crate) fn focus_on_pointer(response: &Response) {
         response.request_focus();
     }
 }
+
+pub(super) fn submitted_on_enter(response: &Response) -> bool {
+    // Single-line TextEdit surrenders focus while processing its Enter event.
+    response.lost_focus() && response.ctx.input(|input| input.key_pressed(egui::Key::Enter))
+}
 pub(super) fn native(
     frame: &UiFrame<'_>,
     ui: &Ui,
@@ -465,4 +470,63 @@ pub(crate) fn cloud_button_with_label(
         focus_outline(frame, ui, &response, 2.0, 3.0, alpha(0xefd17d, 0.9));
     }
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn form_pass(ctx: &egui::Context, text: &mut String, events: Vec<egui::Event>) -> (bool, bool) {
+        let mut state = (false, false);
+        ctx.run_pass(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(400.0, 300.0))),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let response = ui.put(
+                        Rect::from_min_size(Pos2::new(20.0, 20.0), Vec2::new(240.0, 44.0)),
+                        egui::TextEdit::singleline(text).id(Id::unique("native-form-input")),
+                    );
+                    state = (response.has_focus(), submitted_on_enter(&response));
+                });
+            },
+        )
+        .drop_without_applying_deltas();
+        state
+    }
+
+    #[test]
+    fn actual_single_line_enter_submits_once_after_the_field_surrenders_focus() {
+        let ctx = egui::Context::default();
+        let mut text = "a real query".to_owned();
+        form_pass(&ctx, &mut text, Vec::new());
+        let pos = Pos2::new(50.0, 40.0);
+        let click = [true, false].map(|pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+        let (focused, submitted) = form_pass(
+            &ctx,
+            &mut text,
+            std::iter::once(egui::Event::PointerMoved(pos)).chain(click).collect(),
+        );
+        assert!(focused);
+        assert!(!submitted);
+        let enter = || egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: Some(egui::Key::Enter),
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let (focused, submitted) = form_pass(&ctx, &mut text, vec![enter()]);
+        assert!(!focused);
+        assert!(submitted);
+        assert!(!form_pass(&ctx, &mut text, vec![enter()]).1);
+    }
 }
