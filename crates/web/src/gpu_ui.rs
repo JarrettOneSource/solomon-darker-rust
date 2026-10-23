@@ -110,9 +110,14 @@ pub struct UiFrame<'a> {
     rotation: egui::emath::Rot2,
     translation: Vec2,
     input_scope: &'a RefCell<Option<String>>,
+    retired_images: &'a RefCell<Vec<String>>,
 }
 
 impl UiFrame<'_> {
+    /// Retires a dynamic image after every mesh from this frame has been submitted.
+    pub fn forget_image(&self, path: &str) {
+        self.retired_images.borrow_mut().push(path.to_owned());
+    }
     /// The last foreground owner painted this frame owns controller navigation.
     /// Frames without an owner leave the gamepad with gameplay.
     pub fn input_scope(&self, scope: &str) {
@@ -133,6 +138,7 @@ impl UiFrame<'_> {
             rotation: self.rotation,
             translation: self.translation,
             input_scope: self.input_scope,
+            retired_images: self.retired_images,
         }
     }
     pub fn with_rotation(&self, pivot: Pos2, radians: f32) -> UiFrame<'_> {
@@ -486,6 +492,7 @@ impl GpuUi {
         let widgets = RefCell::new(BTreeMap::new());
         let announcements = RefCell::new(Vec::new());
         let input_scope = RefCell::new(None);
+        let retired_images = RefCell::new(Vec::new());
         let mut output = self.ctx.run_pass(raw, |ctx| {
             paint(&mut UiFrame {
                 ctx,
@@ -498,6 +505,7 @@ impl GpuUi {
                 rotation: egui::emath::Rot2::IDENTITY,
                 translation: Vec2::ZERO,
                 input_scope: &input_scope,
+                retired_images: &retired_images,
             });
         });
         let capture = UiCapture {
@@ -531,14 +539,18 @@ impl GpuUi {
             return Err(error);
         }
         let primitives = self.ctx.tessellate(output.shapes, output.pixels_per_point);
-        let (meshes, triangles) = self.painter.paint(
+        let painted = self.painter.paint(
             renderer,
             physical,
             viewport,
             &self.images,
             primitives,
             output.textures_delta,
-        )?;
+        );
+        for path in retired_images.into_inner() {
+            self.images.forget(&path, &self.painter.gl);
+        }
+        let (meshes, triangles) = painted?;
         self.diagnostics = UiDiagnostics {
             viewport,
             pixels_per_point,
