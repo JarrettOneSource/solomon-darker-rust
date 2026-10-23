@@ -35,6 +35,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
     viewport: {width: 1280, height: 720}});
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
+  gpu.watchRequestFailures(page, {errors});
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
   page.on('request', request => {
@@ -43,7 +44,6 @@ async function waitUntil(predicate, label, timeout = 30000) {
   page.on('requestfinished', request => pending.delete(request));
   page.on('requestfailed', request => {
     pending.delete(request);
-    errors.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
   });
   page.on('response', async response => {
     const pathname = new URL(response.url()).pathname;
@@ -70,6 +70,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
     assert.equal(typeof authenticatedToken, 'string', 'the ordinary sign-in returns its auth token');
     await page.waitForURL(target => target.pathname === `${mount}/account`);
     checks.push('the retained real account signs in through the ordinary Website form');
+    await gpu.settleErrors(page);
     await page.goto(url, {waitUntil: 'load'});
     await gpu.ready(page);
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) {
@@ -116,17 +117,20 @@ async function waitUntil(predicate, label, timeout = 30000) {
     checks.push('leaving Cloud during catalog refresh preserves active content in the actual New Game route');
     releaseRefresh();
     await waitUntil(() => pending.size === 0, 'actual catalog refresh completes', 60000);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     const receipt = {passed: true, checks, requests, errors};
     fs.writeFileSync(path.join(output, 'cloud-subscription.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) {
+    await gpu.settleErrors(page);
     await page.screenshot({path: path.join(output, 'cloud-subscription-failure.png')});
     fs.writeFileSync(path.join(output, 'cloud-subscription-failure.json'), JSON.stringify({error: error.stack,
       checks, requests, errors, pending: pending.size, ui: await gpu.readUi(page)}, null, 2));
     throw error;
   } finally {
     try {
+      await gpu.settleErrors(page);
       holdRefresh = false;
       releaseRefresh();
       if (subscribedSlug) {

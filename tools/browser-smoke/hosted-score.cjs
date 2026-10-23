@@ -98,6 +98,7 @@ function observeFrame(frame) {
 }
 
 function observe(page) {
+  gpu.watchRequestFailures(page, {errors});
   page.on('request', request => {
     if (['image', 'font'].includes(request.resourceType())) pendingPageArt.add(request);
     if (new URL(request.url()).pathname === `${mount}/api/auth/register`
@@ -148,7 +149,6 @@ function observe(page) {
     failedResources.push({path: new URL(request.url()).pathname,
       type: request.resourceType(), failure: request.failure()?.errorText,
       step, pagePath: new URL(page.url()).pathname});
-    errors.push(redact(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
   });
   page.on('websocket', socket => {
     const read = createNativeMessageReader();
@@ -214,6 +214,7 @@ async function gameTitle(page, username) {
 async function settlePageArt(page) {
   await page.evaluate(() => document.fonts.ready.then(() => null));
   await waitUntil(() => pendingPageArt.size === 0, 'requested page images and fonts');
+  await gpu.settleErrors(page);
 }
 
 async function settledAccountForm(page) {
@@ -459,6 +460,7 @@ async function main() {
       checked('a fresh browser signs into the actual account through the unchanged mounted form');
       step = `persisted Global Hall via ordinary ${mode}`;
       await globalHall(page, entry.runId, mode);
+      await gpu.settleErrors(page);
       assert.deepEqual(errors, []);
       checked(`the persisted run appears on all four Global boards via ordinary ${mode} activation`);
       receipt.passed = true;
@@ -535,6 +537,7 @@ async function main() {
     assert.equal(published.body.accountUsername, account.username);
     assert.equal(published.body.elapsedTicks, receipt.completedScore.elapsed_ticks);
     assert.equal(published.body.awesomeness, receipt.completedScore.awesomeness);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checked('the real signed completion receipt is POSTed once and the unchanged API returns 201');
 
@@ -553,6 +556,7 @@ async function main() {
     assert.ok(state.leaveReceipts > 0);
     await globalHall(page, runId, 'pointer');
     assert.equal(commands.some(command => command.kind === 'set_cheats'), false);
+    await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checked('normal continuation and save-before-leave reach a Global Hall row backed by the actual API');
     receipt.passed = true;
@@ -564,38 +568,42 @@ async function main() {
     }
     throw error;
   } finally {
-    receipt.beforeCleanup = {errors: [...errors], pendingPageArt: [...pendingPageArt]
-      .map(request => new URL(request.url()).pathname)};
-    receipt.wasmFiles = [...wasmFiles];
-    receipt.lastAuthority = state.frame ? {tick: state.frame.snapshot.ticks,
-      run: state.frame.snapshot.run, host: state.frame.host,
-      position: participant()?.wizard.position} : null;
-    fs.writeFileSync(path.join(output, 'solomon-approach.json'), JSON.stringify(approach, null, 2) + '\n');
-    fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
-    step = 'browser cleanup';
-    if (browser) {
-      await bounded(browser.close(), 'browser connection close', 5000).catch(error => {
-        receipt.connectionCloseError = error.message;
-      });
-    }
-    if (browserServer) {
-      try {
-        await bounded(browserServer.close(), 'Chrome close', 15000);
-        receipt.cleanup = 'graceful';
-      } catch (error) {
-        receipt.cleanupError = error.message;
-        await bounded(browserServer.kill(), 'owned Chrome kill', 5000).catch(error => {
-          receipt.cleanupError += `; ${error.message}`;
+    try {
+      if (page && !page.isClosed()) await gpu.settleErrors(page);
+    } finally {
+      receipt.beforeCleanup = {errors: [...errors], pendingPageArt: [...pendingPageArt]
+        .map(request => new URL(request.url()).pathname)};
+      receipt.wasmFiles = [...wasmFiles];
+      receipt.lastAuthority = state.frame ? {tick: state.frame.snapshot.ticks,
+        run: state.frame.snapshot.run, host: state.frame.host,
+        position: participant()?.wizard.position} : null;
+      fs.writeFileSync(path.join(output, 'solomon-approach.json'), JSON.stringify(approach, null, 2) + '\n');
+      fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
+      step = 'browser cleanup';
+      if (browser) {
+        await bounded(browser.close(), 'browser connection close', 5000).catch(error => {
+          receipt.connectionCloseError = error.message;
         });
-        receipt.cleanup = 'forced';
       }
-      receipt.browserClosed = browserServer.process().exitCode !== null
-        || browserServer.process().signalCode !== null;
-      ownedBrowserClosed = receipt.browserClosed;
+      if (browserServer) {
+        try {
+          await bounded(browserServer.close(), 'Chrome close', 15000);
+          receipt.cleanup = 'graceful';
+        } catch (error) {
+          receipt.cleanupError = error.message;
+          await bounded(browserServer.kill(), 'owned Chrome kill', 5000).catch(error => {
+            receipt.cleanupError += `; ${error.message}`;
+          });
+          receipt.cleanup = 'forced';
+        }
+        receipt.browserClosed = browserServer.process().exitCode !== null
+          || browserServer.process().signalCode !== null;
+        ownedBrowserClosed = receipt.browserClosed;
+      }
+      fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
+      console.log(JSON.stringify({passed: receipt.passed, checks, failure: receipt.failure,
+        wasmFiles: receipt.wasmFiles, browserClosed: receipt.browserClosed}));
     }
-    fs.writeFileSync(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
-    console.log(JSON.stringify({passed: receipt.passed, checks, failure: receipt.failure,
-      wasmFiles: receipt.wasmFiles, browserClosed: receipt.browserClosed}));
   }
 }
 
