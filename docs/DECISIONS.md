@@ -245,6 +245,16 @@ an earlier layout cannot retire a later native field/composition. Clipboard even
 their trusted native data synchronously. Enter submission is a per-dispatch result and
 does not surrender single-line focus.
 
+Editing history follows native operations rather than a render-time timer: continuous
+typing/deletion can stay one command across a pause, while cut, paste, selection changes
+and complete composition delimit commands. A small `VecDeque` history owns before/after
+values and UTF-16 selection together, retaining the existing undo-depth budget. The generic
+egui Undoer's timed, opaque snapshots cannot preserve these native clipboard transactions
+and cursor states. The independent Chrome cut/paste and paused-typing probes retain the
+reason for this boundary. Native selection is sampled before key/default-input/clipboard
+work, so a coalesced selectionchange event cannot make an immediately following paste use
+an earlier caret.
+
 Font rows preserve complete native shaping, disjoint bidi selection rectangles and
 pointer caret affinity. UAX#14 wrapping uses native `Intl.Segmenter` dictionary boundaries
 for complex-context scripts. Browser tabs keep their original accepted value; only font

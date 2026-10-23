@@ -12,7 +12,7 @@ use web_sys::{
 };
 
 use super::batches::{DispatchEnd, InputPass, into_passes};
-use super::edit::model::{Intent, Receipt};
+use super::edit::model::{EditGroup, Intent, Receipt};
 use super::edit::session::{Session, selection};
 use super::edit::{EditorDescriptor, TextSelection};
 use super::{HitRegion, UiCapture, WidgetGeometry};
@@ -89,15 +89,21 @@ impl InputQueue {
     fn edit(&mut self, intent: Intent, caret: Option<Rect>) {
         self.edit_sequence += 1;
         let sequence = self.edit_sequence;
-        let time = web_sys::window()
-            .and_then(|window| window.performance())
-            .map_or(0.0, |clock| clock.now() / 1000.0);
         let receipt = if let Some(session) = &mut self.session {
-            session.receipt(sequence, time, intent, None, caret)
+            session.receipt(sequence, intent, None, caret)
         } else {
-            Receipt::unbound(sequence, time, intent)
+            Receipt::unbound(sequence, intent)
         };
         self.edits.push(receipt);
+    }
+
+    fn sync_selection(&mut self, textarea: &HtmlTextAreaElement) {
+        let selected = selection(textarea);
+        if self.session.as_ref().is_some_and(|session| {
+            session.model.text() == textarea.value() && session.model.selection() != selected
+        }) {
+            self.edit(Intent::Select(selected), None);
+        }
     }
 
     fn sync_editor(&mut self, textarea: &HtmlTextAreaElement) {
@@ -267,6 +273,9 @@ impl BrowserInput {
                     });
                 }
                 let active = queue.session.is_some();
+                if active {
+                    queue.sync_selection(&textarea);
+                }
                 let mut handled = false;
                 if pressed && active {
                     let shortcut = if mods.command {
@@ -322,7 +331,10 @@ impl BrowserInput {
                         .session
                         .as_ref()
                         .map_or(TextSelection::caret(0), |session| session.model.selection());
-                    queue.edit(Intent::Replace { range, text: key.key() }, None);
+                    queue.edit(
+                        Intent::Replace { range, text: key.key(), group: Some(EditGroup::Typing) },
+                        None,
+                    );
                     handled = true;
                 }
                 if handled
@@ -585,6 +597,7 @@ impl BrowserInput {
             listen(&target, "beforeinput", &mut listeners, move |event| {
                 let Some(input) = event.dyn_ref::<InputEvent>() else { return };
                 let mut queue = queue.borrow_mut();
+                queue.sync_selection(&textarea);
                 let Some(session) = &queue.session else { return };
                 let intent = match input.input_type().as_str() {
                     "historyUndo" => Some(Intent::Undo),
@@ -598,8 +611,8 @@ impl BrowserInput {
                     event.prevent_default();
                     queue.edit(intent, None);
                     queue.sync_editor(&textarea);
-                    queue.finish_dispatch();
                 }
+                queue.finish_dispatch();
             })?;
         }
         {
@@ -614,14 +627,12 @@ impl BrowserInput {
                 if queue.session.is_some() {
                     queue.edit_sequence += 1;
                     let sequence = queue.edit_sequence;
-                    let time = web_sys::window()
-                        .and_then(|window| window.performance())
-                        .map_or(0.0, |clock| clock.now() / 1000.0);
-                    let receipt = queue
-                        .session
-                        .as_mut()
-                        .expect("active editor")
-                        .input(sequence, time, &textarea);
+                    let input = event.dyn_ref::<InputEvent>().expect("native input event");
+                    let receipt = queue.session.as_mut().expect("active editor").input(
+                        sequence,
+                        &input.input_type(),
+                        &textarea,
+                    );
                     queue.edits.push(receipt);
                     // Restore rejected edits immediately, before a later native
                     // dispatch can build another edit against an invalid value.
@@ -663,14 +674,7 @@ impl BrowserInput {
                 if queue.session.is_none() {
                     return;
                 }
-                let selected = selection(&textarea);
-                if queue
-                    .session
-                    .as_ref()
-                    .is_some_and(|session| selected != session.model.selection())
-                {
-                    queue.edit(Intent::Select(selected), None);
-                }
+                queue.sync_selection(&textarea);
                 let session = queue.session.as_ref().expect("active editor");
                 let range = session.model.selection().range();
                 if range.is_empty() {
@@ -705,15 +709,17 @@ impl BrowserInput {
                 if queue.session.is_none() {
                     return;
                 }
+                queue.sync_selection(&textarea);
                 if let Some(data) = paste.clipboard_data() {
                     match data.get_data("text/plain") {
-                        Ok(text) => {
+                        Ok(text) if !text.is_empty() => {
                             let range =
                                 queue.session.as_ref().expect("active editor").model.selection();
-                            queue.edit(Intent::Replace { range, text }, None);
+                            queue.edit(Intent::Replace { range, text, group: None }, None);
                             queue.sync_editor(&textarea);
                             event.prevent_default();
                         }
+                        Ok(_) => {}
                         Err(error) => {
                             queue.clipboard_error = Some(format!("GPU UI paste: {error:?}"))
                         }

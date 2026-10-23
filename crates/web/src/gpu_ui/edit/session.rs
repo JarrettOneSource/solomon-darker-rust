@@ -4,7 +4,7 @@
 use egui::{Key, Modifiers, Pos2, Rect, pos2};
 use web_sys::HtmlTextAreaElement;
 
-use super::model::{Intent, Model, Receipt, byte_index, replacement};
+use super::model::{EditGroup, Intent, Model, Receipt, byte_index, replacement};
 use super::{EditorDescriptor, TextSelection};
 
 pub(crate) struct Session {
@@ -42,24 +42,23 @@ impl Session {
     pub fn receipt(
         &mut self,
         sequence: u64,
-        time: f64,
         intent: Intent,
         native_selection: Option<TextSelection>,
         caret: Option<Rect>,
     ) -> Receipt {
         let intent = match intent {
-            Intent::Replace { range, text } => {
+            Intent::Replace { range, text, group } => {
                 let text = if self.descriptor.multiline {
                     text.replace("\r\n", "\n").replace('\r', "\n")
                 } else {
                     text.replace(['\r', '\n'], "")
                 };
-                Intent::Replace { range, text }
+                Intent::Replace { range, text, group }
             }
             intent => intent,
         };
         let mut proposed = self.model.text().to_owned();
-        if let Intent::Replace { range, text } = &intent {
+        if let Intent::Replace { range, text, .. } = &intent {
             let range = range.clamp(&proposed).range();
             proposed.replace_range(
                 byte_index(self.model.text(), range.start)
@@ -70,11 +69,10 @@ impl Session {
         let mut receipt = Receipt {
             owner: Some(self.descriptor.owner),
             sequence,
-            time,
             before: self.model.text().into(),
             text: proposed.into(),
             selection: native_selection.unwrap_or_else(|| match &intent {
-                Intent::Replace { range, text } => {
+                Intent::Replace { range, text, .. } => {
                     TextSelection::caret(range.range().start + text.encode_utf16().count())
                 }
                 _ => self.model.selection(),
@@ -91,12 +89,25 @@ impl Session {
         receipt
     }
 
-    pub fn input(&mut self, sequence: u64, time: f64, textarea: &HtmlTextAreaElement) -> Receipt {
+    pub fn input(
+        &mut self,
+        sequence: u64,
+        input_type: &str,
+        textarea: &HtmlTextAreaElement,
+    ) -> Receipt {
         let next = textarea.value();
         let selection = selection(textarea);
         let (range, text) = replacement(self.model.text(), &next);
         self.preferred_x = None;
-        self.receipt(sequence, time, Intent::Replace { range, text }, Some(selection), None)
+        let group = match input_type {
+            "insertText" | "insertLineBreak" | "insertParagraph" => Some(EditGroup::Typing),
+            "deleteContentBackward" => Some(EditGroup::Backspace),
+            "deleteContentForward" => Some(EditGroup::Delete),
+            "deleteWordBackward" => Some(EditGroup::BackwardWord),
+            "deleteWordForward" => Some(EditGroup::ForwardWord),
+            _ => None,
+        };
+        self.receipt(sequence, Intent::Replace { range, text, group }, Some(selection), None)
     }
 
     pub fn pointer(&mut self, point: Pos2, extend: bool) -> Result<(Intent, Rect), String> {
@@ -258,15 +269,21 @@ mod tests {
         let mut session = Session::new(descriptor("A"));
         let first = session.receipt(
             1,
-            1.0,
-            Intent::Replace { range: TextSelection::caret(1), text: "B".into() },
+            Intent::Replace {
+                range: TextSelection::caret(1),
+                text: "B".into(),
+                group: Some(EditGroup::Typing),
+            },
             None,
             None,
         );
         session.receipt(
             2,
-            1.0,
-            Intent::Replace { range: TextSelection::caret(2), text: "C".into() },
+            Intent::Replace {
+                range: TextSelection::caret(2),
+                text: "C".into(),
+                group: Some(EditGroup::Typing),
+            },
             None,
             None,
         );
@@ -295,8 +312,11 @@ mod tests {
         let mut session = Session::new(field);
         let rejected = session.receipt(
             1,
-            1.0,
-            Intent::Replace { range: TextSelection::caret(11), text: "A".into() },
+            Intent::Replace {
+                range: TextSelection::caret(11),
+                text: "A".into(),
+                group: Some(EditGroup::Typing),
+            },
             None,
             None,
         );
@@ -304,8 +324,11 @@ mod tests {
         assert_eq!(rejected.text.as_ref(), "AAAAAAAAAAA");
         let accepted = session.receipt(
             2,
-            1.0,
-            Intent::Replace { range: TextSelection { anchor: 0, focus: 11 }, text: "Felix".into() },
+            Intent::Replace {
+                range: TextSelection { anchor: 0, focus: 11 },
+                text: "Felix".into(),
+                group: Some(EditGroup::Typing),
+            },
             None,
             None,
         );
@@ -320,11 +343,14 @@ mod tests {
         later.owner.id = egui::Id::unique("later-field");
         let mut session = Some(Session::new(later));
         let active = session.as_mut().unwrap();
-        active.receipt(8, 1.0, Intent::CompositionStart, None, None);
+        active.receipt(8, Intent::CompositionStart, None, None);
         active.receipt(
             9,
-            1.0,
-            Intent::Replace { range: TextSelection::caret(1), text: "語".into() },
+            Intent::Replace {
+                range: TextSelection::caret(1),
+                text: "語".into(),
+                group: Some(EditGroup::Typing),
+            },
             None,
             None,
         );

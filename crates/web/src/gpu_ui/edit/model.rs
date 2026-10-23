@@ -1,9 +1,8 @@
 //! One accepted editing model. Native events carry immutable snapshots and intents;
 //! replay can therefore follow an earlier Clear/history action in the same frame.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
-
-use egui::util::undoer::Undoer;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Selection {
@@ -55,9 +54,18 @@ impl Rules {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditGroup {
+    Typing,
+    Backspace,
+    Delete,
+    BackwardWord,
+    ForwardWord,
+}
+
 #[derive(Clone, Debug)]
 pub enum Intent {
-    Replace { range: Selection, text: String },
+    Replace { range: Selection, text: String, group: Option<EditGroup> },
     Select(Selection),
     SelectAll,
     Copy,
@@ -73,7 +81,6 @@ pub enum Intent {
 pub struct Receipt {
     pub owner: Option<super::EditorOwner>,
     pub sequence: u64,
-    pub time: f64,
     pub before: Arc<str>,
     pub text: Arc<str>,
     pub selection: Selection,
@@ -84,11 +91,10 @@ pub struct Receipt {
 }
 
 impl Receipt {
-    pub fn unbound(sequence: u64, time: f64, intent: Intent) -> Self {
+    pub fn unbound(sequence: u64, intent: Intent) -> Self {
         Self {
             owner: None,
             sequence,
-            time,
             before: "".into(),
             text: "".into(),
             selection: Selection::caret(0),
@@ -106,10 +112,49 @@ struct Value {
     selection: Selection,
 }
 
+/// Native editing commands group consecutive typing/deletion, while selection,
+/// clipboard and composition delimit commands. Cursor moves create no undo step.
+#[derive(Clone, Default)]
+struct History {
+    past: VecDeque<Value>,
+    future: Vec<Value>,
+    group: Option<(EditGroup, Selection)>,
+}
+impl History {
+    fn record(&mut self, before: &Value, after: &Value, group: Option<EditGroup>) {
+        if before.text == after.text {
+            return;
+        }
+        let continues = group.is_some_and(|kind| self.group == Some((kind, before.selection)));
+        if !continues {
+            self.past.push_back(before.clone());
+        }
+        let limit = egui::util::undoer::Settings::default().max_undos;
+        while self.past.len() > limit {
+            self.past.pop_front();
+        }
+        self.future.clear();
+        self.group = group.map(|kind| (kind, after.selection));
+    }
+    fn undo(&mut self, value: &Value) -> Option<Value> {
+        let previous = self.past.pop_back()?;
+        self.future.push(value.clone());
+        self.group = None;
+        Some(previous)
+    }
+    fn redo(&mut self, value: &Value) -> Option<Value> {
+        let next = self.future.pop()?;
+        self.past.push_back(value.clone());
+        self.group = None;
+        Some(next)
+    }
+}
+
 #[derive(Clone)]
 pub struct Model {
     value: Value,
-    undo: Undoer<Value>,
+    history: History,
+    composition_before: Option<Value>,
     pub sequence: u64,
     pub composition: Option<Selection>,
 }
@@ -129,7 +174,8 @@ impl Model {
                 text: text.to_owned(),
                 selection: Selection::caret(text.encode_utf16().count()),
             },
-            undo: Undoer::default(),
+            history: History::default(),
+            composition_before: None,
             sequence: 0,
             composition: None,
         }
@@ -144,14 +190,23 @@ impl Model {
     }
 
     pub fn select(&mut self, selection: Selection) {
-        self.value.selection = selection.clamp(&self.value.text);
+        let selection = selection.clamp(&self.value.text);
+        if self.value.selection != selection {
+            self.end_group();
+            self.value.selection = selection;
+        }
+    }
+
+    pub fn end_group(&mut self) {
+        self.history.group = None;
     }
 
     pub fn reconcile(&mut self, text: &str) {
         if self.value.text != text {
             self.value.text = text.to_owned();
             self.value.selection = Selection::caret(text.encode_utf16().count());
-            self.undo = Undoer::default();
+            self.history = History::default();
+            self.composition_before = None;
             self.composition = None;
         }
     }
@@ -163,9 +218,6 @@ impl Model {
         self.sequence = receipt.sequence;
         let mut change = Change::default();
         let before = self.value.clone();
-        if self.composition.is_none() {
-            self.undo.feed_state(receipt.time, &self.value);
-        }
         match &receipt.intent {
             Intent::SelectAll => {
                 self.select(Selection { anchor: 0, focus: self.value.text.encode_utf16().count() });
@@ -187,25 +239,32 @@ impl Model {
                 }
             }
             Intent::Undo if !readonly => {
-                if let Some(value) = self.undo.undo(&self.value).cloned() {
+                if let Some(value) = self.history.undo(&self.value) {
                     self.value = value;
                     self.composition = None;
+                    self.composition_before = None;
                 }
             }
             Intent::Redo if !readonly => {
-                if let Some(value) = self.undo.redo(&self.value).cloned() {
+                if let Some(value) = self.history.redo(&self.value) {
                     self.value = value;
                     self.composition = None;
+                    self.composition_before = None;
                 }
             }
             Intent::Submit => change.submitted = true,
             Intent::CompositionStart if !readonly => {
+                self.end_group();
+                self.composition_before = Some(self.value.clone());
                 self.composition = Some(self.value.selection);
             }
             Intent::CompositionEnd => {
                 self.composition = None;
+                if let Some(initial) = self.composition_before.take() {
+                    self.history.record(&initial, &self.value, None);
+                }
             }
-            Intent::Replace { range, text } if !readonly => {
+            Intent::Replace { range, text, .. } if !readonly => {
                 let same_text = receipt.before.as_ref() == self.value.text;
                 let range = if same_text { *range } else { self.value.selection };
                 self.replace(range, text, rules, &mut change);
@@ -215,17 +274,32 @@ impl Model {
                 {
                     self.select(receipt.selection);
                 }
-                if receipt.composing {
-                    let start = self.composition.map_or(range.range().start, |r| r.range().start);
+                if receipt.composing && change.rejected.is_none() {
+                    let prior = self.composition.unwrap_or(range);
+                    let delta = self.value.text.encode_utf16().count() as isize
+                        - before.text.encode_utf16().count() as isize;
+                    let start = prior.range().start;
+                    let end = (prior.range().end as isize + delta).max(start as isize) as usize;
                     self.composition =
-                        Some(Selection { anchor: start, focus: self.value.selection.focus });
+                        Some(Selection { anchor: start, focus: boundary(&self.value.text, end) });
                 }
             }
             _ => {}
         }
         change.changed = self.value.text != before.text;
-        if self.composition.is_none() && !matches!(receipt.intent, Intent::Undo | Intent::Redo) {
-            self.undo.feed_state(receipt.time, &self.value);
+        if change.changed
+            && self.composition_before.is_none()
+            && !matches!(receipt.intent, Intent::Undo | Intent::Redo | Intent::CompositionEnd)
+        {
+            let group = if before.selection.range().is_empty() {
+                match receipt.intent {
+                    Intent::Replace { group, .. } => group,
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            self.history.record(&before, &self.value, group);
         }
         change
     }
@@ -333,11 +407,14 @@ mod tests {
         Receipt {
             owner: Some(super::super::EditorOwner { id: egui::Id::unique("name"), instance: 1 }),
             sequence,
-            time: 1.0,
             before: before.into(),
             text: next.into(),
             selection: Selection::caret(range.range().start + text.encode_utf16().count()),
-            intent: Intent::Replace { range, text: text.to_owned() },
+            intent: Intent::Replace {
+                range,
+                text: text.to_owned(),
+                group: Some(EditGroup::Typing),
+            },
             composing: false,
             caret: None,
             clipboard_handled: false,
@@ -470,7 +547,11 @@ mod tests {
         cut.intent = Intent::Cut;
         model.apply(&cut, Rules::default(), false);
         assert_eq!(model.text(), "");
-        model.apply(&insert(2, "", Selection::caret(0), "abc"), Rules::default(), false);
+        let mut paste = insert(2, "", Selection::caret(0), "abc");
+        if let Intent::Replace { group, .. } = &mut paste.intent {
+            *group = None;
+        }
+        model.apply(&paste, Rules::default(), false);
         assert_eq!(model.text(), "abc");
         let mut undo = insert(3, "abc", Selection::caret(3), "");
         undo.intent = Intent::Undo;
