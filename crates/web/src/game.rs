@@ -2229,7 +2229,7 @@ impl Game {
 
     fn paint_ui(&mut self) -> Result<(), String> {
         let viewport = [self.canvas.client_width() as f32, self.canvas.client_height() as f32];
-        let mut result = Ok(());
+        let mut result: Result<(), String> = Ok(());
         self.gpu_ui.run(&mut self.renderer, viewport, self.frame_time / 1000.0, |frame| {
             result = (|| {
                 self.mod_overlays.paint(frame)?;
