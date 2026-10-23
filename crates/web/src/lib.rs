@@ -19,6 +19,7 @@ pub mod enemies;
 pub mod fullscreen;
 mod game;
 pub mod game_over;
+pub mod gpu_ui;
 pub mod hosted;
 pub mod hotbar;
 pub mod hud;
