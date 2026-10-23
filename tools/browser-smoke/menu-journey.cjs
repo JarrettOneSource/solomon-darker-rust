@@ -1,3 +1,5 @@
+const ui = require('./gpu-ui.cjs');
+
 // The stock Office desk occupies x402.5..638.5, y644.5..741.5. Walk around its
 // left edge before approaching the south doorway; straight down hits its top.
 async function leaveCollegeOffice(page, movement) {
@@ -14,14 +16,12 @@ async function leaveCollegeOffice(page, movement) {
       }, {axis, threshold, increasing}, {timeout:30000});
     }
     await movement(0, 1);
-    await page.locator('.game-menus[data-menu-screen="create"]').waitFor({state:'attached',timeout:30000});
+    await ui.surface(page, 'create', {timeout:30000});
   } catch (error) {
     const actual = await page.evaluate(() => ({
       wizard: Array.from(window.wasmBindings.wizard_state()),
       input: Array.from(window.wasmBindings.gameplay_input_state()),
-      panel: document.querySelector('.player-panels')?.outerHTML.slice(0, 300),
-      menu: document.querySelector('.game-menus')?.dataset.menuScreen,
-      status: document.querySelector('#status')?.textContent,
+      gpu: JSON.parse(window.wasmBindings.gpu_ui_state()),
     }));
     throw new Error(`College exit did not reach loadout: ${JSON.stringify(actual)}`, {cause:error});
   } finally {
@@ -30,14 +30,36 @@ async function leaveCollegeOffice(page, movement) {
 }
 
 // Real College admission precedes the one final character-selection screen.
-async function reachCollegeLoadout(page) {
-  const dialogue = page.locator('.player-panels:not([hidden]) [data-player-panel="dialogue"]');
-  await dialogue.waitFor({timeout:120000});
-  await page.locator('[data-panel-action="dialogue-next"]').click();
-  await page.locator('[data-panel-action="dialogue-choice:0"]').click();
-  await dialogue.locator('[data-dialogue-key="ARCH_Q1_0"]').waitFor();
-  await page.keyboard.press('Escape');
-  await page.locator('.player-panels').waitFor({state:'hidden'});
+async function reachCollegeLoadout(page, {touch = false} = {}) {
+  const activate = touch ? ui.tap : ui.click;
+  await ui.widget(page, 'panel:dialogue', {timeout:120000});
+  await activate(page, 'panel:dialogue-next');
+  await activate(page, 'panel:dialogue-choice:0');
+  await ui.value(page, 'panel:dialogue-key', 'ARCH_Q1_0');
+  if (touch) {
+    await activate(page, 'panel:dialogue-next');
+    await ui.widget(page, 'panel:dialogue-choice:0');
+    await activate(page, 'panel:dialogue-next');
+    await ui.value(page, 'panel:dialogue-key', 'ARCH_DISMISS_0');
+    await activate(page, 'panel:dialogue-next');
+  } else await page.keyboard.press('Escape');
+  await ui.noWidget(page, 'panel:dialogue');
+  if (touch) {
+    const joystick = ui.bounds(await ui.widget(page, 'hud:joystick:movement'));
+    const center = ui.center(joystick);
+    const input = await page.context().newCDPSession(page);
+    await input.send('Input.dispatchTouchEvent', {type:'touchStart',touchPoints:[{...center,id:1}]});
+    try {
+      await leaveCollegeOffice(page, (dx,dy) => input.send('Input.dispatchTouchEvent', {
+        type:'touchMove',touchPoints:[{x:center.x+dx*joystick.width*0.4,
+          y:center.y+dy*joystick.height*0.4,id:1}],
+      }));
+    } finally {
+      await input.send('Input.dispatchTouchEvent', {type:'touchEnd',touchPoints:[]});
+      await input.detach();
+    }
+    return;
+  }
   const held = new Set();
   await leaveCollegeOffice(page, async (x, y) => {
     const desired = x < 0 ? 'KeyA' : x > 0 ? 'KeyD' : y > 0 ? 'KeyS' : null;
@@ -52,51 +74,36 @@ async function reachCollegeLoadout(page) {
 }
 
 async function startNewGame(page, {
-  element = 'ether', discipline = 'arcane', name = 'Helvidius', introOnly = false,
+  element = 'ether', discipline = 'arcane', name = 'Helvidius', introOnly = false, touch = false,
 } = {}) {
-  const title = page.locator('.game-menus[data-menu-screen="title"]');
-  if (await title.count() === 0) return;
-  const prompt = page.locator('.title-prompt:not([hidden])');
-  if (await prompt.isVisible()) {
-    await prompt.locator('[data-menu-action="prompt-secondary"]').click();
-    await prompt.waitFor({state: 'hidden'});
+  const activate = touch ? ui.tap : ui.click;
+  const initial = await ui.readUi(page);
+  if (initial.surface !== 'title') return;
+  if (ui.findWidget(initial, 'prompt-secondary')) {
+    await activate(page, 'prompt-secondary');
+    await ui.noWidget(page, 'prompt-secondary');
   }
-  await page.locator('[data-menu-action="play"]').click();
-  await page.locator('[data-menu-action="new-game"]').click();
-  // Menu clicks are applied on the next frame. Wait for the actual next surface
-  // before deciding whether an existing character needs confirmation.
-  await page.waitForFunction(() => {
-    const screen = document.querySelector('.game-menus').dataset.menuScreen;
-    return document.querySelector('.title-prompt:not([hidden])')
-      || screen === 'create'
-      || document.querySelector('.college-intro-overlay:not([hidden])')
-      || document.querySelector('.player-panels:not([hidden]) [data-player-panel="dialogue"]');
-  }, null, { timeout: 20000 });
-  if (await prompt.isVisible()) {
-    await prompt.locator('[data-menu-action="prompt-primary"]').click();
-  }
-  // A saved wizard's old tick remains available while retirement is pending.
-  // It does not identify whether the next flow is Create or College admission.
-  await page.waitForFunction(() => document.querySelector('.game-menus').dataset.menuScreen === 'create'
-    || document.querySelector('.college-intro-overlay:not([hidden])')
-    || document.querySelector('.player-panels:not([hidden]) [data-player-panel="dialogue"]'),
-  null, { timeout: 120000 });
+  await activate(page, 'play');
+  await activate(page, 'new-game');
+  // A saved wizard's old tick remains available during retirement. Observe the
+  // actual GPU surface rather than treating that old state as a fresh admission.
+  const next = await ui.waitForUi(page, snapshot => snapshot.surface === 'create'
+    || ui.findWidget(snapshot, 'prompt-primary')
+    || ui.findWidget(snapshot, 'college-intro')
+    || ui.findWidget(snapshot, 'panel:dialogue'), 'new-game admission', {timeout:120000});
+  if (ui.findWidget(next, 'prompt-primary')) await activate(page, 'prompt-primary');
+  await ui.waitForUi(page, snapshot => snapshot.surface === 'create'
+    || ui.findWidget(snapshot, 'college-intro')
+    || ui.findWidget(snapshot, 'panel:dialogue'), 'Create or College admission', {timeout:120000});
   if (introOnly) return;
-  // Declining Source's first-run Tutorial also skips the College introduction.
-  if (await page.locator('.game-menus').getAttribute('data-menu-screen') !== 'create') {
-    await reachCollegeLoadout(page);
-  }
-  const nameInput = page.getByRole('textbox', { name: 'Wizard name', exact: true });
-  await nameInput.fill(name);
-  const acceptedName = await nameInput.inputValue();
-  if (acceptedName !== name) {
-    throw new Error(`Create rejected the requested wizard name ${JSON.stringify(name)}; retained ${JSON.stringify(acceptedName)}`);
-  }
-  await page.locator(`[data-menu-action="element:${element}"]`).click();
-  await page.locator(`[data-menu-action="discipline:${discipline}"]`).click();
-  await page.waitForFunction(() => document.querySelector('.game-menus').dataset.menuScreen === 'hidden'
-    && window.wasmBindings.wizard_state()[6] === 0
-    && window.wasmBindings.wizard_state()[7] === -1, null, { timeout: 20000 });
+  if ((await ui.readUi(page)).surface !== 'create') await reachCollegeLoadout(page, {touch});
+  await ui.fill(page, 'create-name', name, {touch});
+  await ui.value(page, 'create-name', name);
+  await activate(page, `element:${element}`);
+  await activate(page, `discipline:${discipline}`);
+  await ui.surface(page, 'hidden');
+  await page.waitForFunction(() => window.wasmBindings.wizard_state()[6] === 0
+    && window.wasmBindings.wizard_state()[7] === -1, null, {timeout:20000});
 }
 
 module.exports = { leaveCollegeOffice, reachCollegeLoadout, startNewGame };
