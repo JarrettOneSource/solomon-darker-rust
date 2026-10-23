@@ -195,6 +195,30 @@ fn a_real_text_pointer_focus_preserves_characters_queued_in_the_same_frame() {
 }
 
 #[test]
+fn a_noninteractive_text_edit_never_receives_forced_pointer_focus() {
+    let ctx = Context::default();
+    let mut text = "Finalizing wizard".to_owned();
+    let mut paint = |frame: &mut UiFrame<'_>| {
+        frame.ctx.root_ui(|ui| {
+            let response = ui.put(
+                Rect::from_min_size(pos2(20.0, 30.0), vec2(250.0, 45.0)),
+                egui::TextEdit::singleline(&mut text).id_salt("name").interactive(false),
+            );
+            frame.record("name", "Wizard name", "textbox", &response);
+        });
+    };
+    let widgets = frame(&ctx, vec![], &mut paint);
+    // TextEdit::interactive(false) preserves the containing UI's enabled state.
+    assert!(widgets["name"].enabled);
+    assert!(!widgets["name"].is_interactive());
+    let events = pointer(true, pos2(50.0, 50.0));
+    focus_pointer_text(&ctx, &widgets, &events);
+    assert!(ctx.memory(|memory| memory.focused().is_none()));
+    frame(&ctx, events, &mut paint);
+    assert!(!ctx.text_edit_focused());
+}
+
+#[test]
 fn duplicate_visible_semantic_ids_are_rejected_instead_of_overwriting_a_control() {
     let ctx = Context::default();
     let widgets = frame(&ctx, vec![], |frame| {

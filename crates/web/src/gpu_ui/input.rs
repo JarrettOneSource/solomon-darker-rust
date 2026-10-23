@@ -594,6 +594,7 @@ impl BrowserInput {
             .filter(|widget| {
                 matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
                     && widget.enabled
+                    && widget.is_interactive()
             })
             .map(|widget| {
                 Rect::from_min_size(

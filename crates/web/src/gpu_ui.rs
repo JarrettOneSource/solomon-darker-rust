@@ -746,6 +746,7 @@ fn focus_pointer_text(
         let layer = ctx.layer_id_at(*pos);
         for widget in widgets.values().rev() {
             if !widget.enabled
+                || !widget.is_interactive()
                 || !matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
                 || widget.layer_id != layer
             {
