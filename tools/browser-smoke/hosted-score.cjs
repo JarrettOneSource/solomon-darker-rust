@@ -470,6 +470,7 @@ async function main() {
     const submit = 'settings-toggle:submit-runs';
     if ((await gpu.widget(page, submit)).value !== 'true') await gpu.click(page, submit);
     await gpu.value(page, submit, 'true');
+    await gpu.wheel(page, 'settings-content', 0, 600);
     await gpu.value(page, 'settings-toggle:cheats', 'false');
     await gpu.click(page, 'settings-back');
     await gpu.click(page, 'settings-back');
