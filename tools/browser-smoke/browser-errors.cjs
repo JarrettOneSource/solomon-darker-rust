@@ -90,9 +90,10 @@ function watchRequestFailures(page,{errors=[],warnings=[]}={}) {
     errors.push(failure);observed.rawFailures.push(failure);
     if(failure.resourceType!=='media'||failure.failure?.errorText!=='net::ERR_ABORTED')return;
     const pending=(async()=>{
+      const owner=request.frame();
       const [response,captured]=await Promise.all([request.response(),
-        page.evaluate(()=>window.__solomonResidentMedia?.()??null)]);
-      return {failure,status:response?.status()??null,captured};
+        owner.evaluate(()=>window.__solomonResidentMedia?.()??null)]);
+      return {failure,status:response?.status()??null,captured,owner};
     })().catch(error=>({failure,observationError:error.message}));
     observed.pending.push(pending);
   });
@@ -119,21 +120,25 @@ async function settleErrors(page) {
   await observed.ready;
   // Let already queued native media events (including error/abort) run before
   // deciding whether a completed request failure belongs to idle suspension.
-  await page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,0)));
+  const frames=page.frames();
+  await Promise.all(frames.map(frame=>frame.evaluate(()=>new Promise(resolve=>setTimeout(resolve,0)))));
   const pending=await Promise.all(observed.pending.splice(0));
-  const settled=await page.evaluate(()=>window.__solomonResidentMedia?.()??null);
-  for(const channel of settled?.channels??[])for(const event of channel.events) {
+  const snapshots=new Map(await Promise.all(frames.map(async frame=>[frame,
+    await frame.evaluate(()=>window.__solomonResidentMedia?.()??null)])));
+  for(const snapshot of snapshots.values())for(const channel of snapshot?.channels??[])for(const event of channel.events) {
     if(!['error','abort'].includes(event.type))continue;
-    const key=`${settled.documentId}:${channel.id}:${event.type}:${event.time}`;
+    const key=`${snapshot.documentId}:${channel.id}:${event.type}:${event.time}`;
     if(observed.mediaEvents.has(key))continue;
     observed.mediaEvents.add(key);
     observed.errors.push({type:'media',event:event.type,url:event.url,cue:event.cue,
       code:event.error,time:event.time});
   }
   for(const row of pending) {
+    const {owner,...evidence}=row;
+    const settled=snapshots.get(owner)??null;
     const classification=residentSuspension({...row.failure,status:row.status,
       errorText:row.failure.failure?.errorText},row.captured,settled);
-    observed.mediaFailures.push({...row,settled,classification});
+    observed.mediaFailures.push({...evidence,settled,classification});
     if(classification) {
       const index=observed.errors.indexOf(row.failure);
       if(index>=0)observed.errors.splice(index,1);
@@ -143,7 +148,8 @@ async function settleErrors(page) {
   }
   const report={url:page.url(),rawFailures:observed.rawFailures,
     expectedSuspensions:observed.expectedSuspensions,mediaFailures:observed.mediaFailures,
-    media:settled,errors:observed.errors,warnings:observed.warnings};
+    media:snapshots.get(page.mainFrame()),frames:[...snapshots.values()].filter(Boolean),
+    errors:observed.errors,warnings:observed.warnings};
   if(process.env.OUT) {
     fs.mkdirSync(process.env.OUT,{recursive:true});
     fs.writeFileSync(path.join(process.env.OUT,`browser-errors-${observed.id}.json`),
