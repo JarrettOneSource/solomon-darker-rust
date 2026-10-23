@@ -181,6 +181,22 @@ async function heldAsset(browser, name, pattern, {wasm=false}={}) {
       else assert.equal(still.loading.progress,0,'unknown code loading invents no percentage');
     }
     const second=await visual(page,`${name}-still-held`);
+    const resizes=[];
+    if(wasm) {
+      for(const viewport of [{width:1920,height:1080},{width:390,height:844}]) {
+        await page.setViewportSize(viewport);
+        const resized=await ui.waitForUi(page,snapshot=>snapshot.loading
+          &&snapshot.canvas.width===viewport.width&&snapshot.canvas.height===viewport.height,
+        'the actual loader canvas resize');
+        pending(resized);
+        await page.screenshot({path:path.join(output,
+          `${name}-${viewport.width}x${viewport.height}.png`)});
+        resizes.push(resized);
+      }
+      await page.setViewportSize({width:1600,height:900});
+      await ui.waitForUi(page,snapshot=>snapshot.canvas.width===1600&&snapshot.canvas.height===900,
+        'the restored loading viewport');
+    }
     release();
     await ui.ready(page);
     await ui.surface(page,'title');
@@ -188,7 +204,7 @@ async function heldAsset(browser, name, pattern, {wasm=false}={}) {
     await ui.assertGpuOnly(page);
     await page.screenshot({path:path.join(output,`${name}-title.png`)});
     assert.deepEqual(observed.errors,[],'delayed successful work has no runtime/asset errors');
-    return {requestUrl,before,still,first,second,handoff,ready:await ui.readUi(page),...observed};
+    return {requestUrl,before,still,first,second,resizes,handoff,ready:await ui.readUi(page),...observed};
   } finally {release();await context.close()}
 }
 
