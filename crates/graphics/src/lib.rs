@@ -3,6 +3,7 @@
 //! the Website's native per-channel blend equations. Destinations are
 //! logical pixels of the 1600×900 view, which `begin_frame` letterboxes into the canvas.
 
+pub mod announcements;
 pub mod assets;
 
 use solomon_sim::float;
@@ -151,6 +152,15 @@ pub struct Renderer {
     _program: WebGlProgram,
     _vertex_array: WebGlVertexArrayObject,
     _vertex_buffer: WebGlBuffer,
+}
+
+impl Drop for Renderer {
+    fn drop(&mut self) {
+        self.gl.delete_texture(Some(&self.white_texture.handle));
+        self.gl.delete_buffer(Some(&self._vertex_buffer));
+        self.gl.delete_vertex_array(Some(&self._vertex_array));
+        self.gl.delete_program(Some(&self._program));
+    }
 }
 
 impl Renderer {
