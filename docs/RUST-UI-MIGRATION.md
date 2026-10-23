@@ -623,3 +623,17 @@ wheel admission, explicitly keep navigation above the body, and retain a drag's 
 owner through release/cancel outside its viewport. Preserve normal modal ownership.
 The original failing browser path remains the acceptance case; no second tap, wait or
 weaker equipment assertion substitutes for the first-tap transition.
+
+The ordinary paid Sack journey in `native-editor-f41dc57-qualified-r2` passes on
+f41dc57 with no unexpected browser errors and an owned Chrome exit of zero. The
+reviewed GPU screenshots show joined Arabic, a ZWJ emoji and combining mark, two
+disjoint mixed-direction selection rectangles, and the complete native IME preedit
+underline while its caret is inside the preedit. Real pointer/keyboard input also
+proves weak bidi caret placement, native arrow selection changes, synchronous OS
+copy/cut/paste, separate undo transactions, the UTF-16 boundary and one Enter rename.
+IME input uses Chromium's native Input protocol, rather than an application event;
+an unchanged native textarea oracle produces the same untrusted composition-end
+event for protocol commit. This proves browser IME integration, not an OS hardware
+candidate window. The earlier failed trust assertion and stale-frame caret assertion
+remain in their original receipts; the final driver waits for the actual painted
+caret without repeating input or changing product behavior.
