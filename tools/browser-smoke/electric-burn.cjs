@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
+const ui = require('./gpu-ui.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const {walkSolomonEntrance} = require('./solomon-entrance.cjs');
 
@@ -13,10 +14,11 @@ const qualityOnly = process.env.QUALITY_ONLY === '1';
 const account = JSON.parse(fs.readFileSync(process.env.ACCOUNTS, 'utf8')).find(row => row.user.id === 3);
 assert.ok(account, 'the isolated configured developer account is required');
 const url = new URL(process.env.URL || 'https://127.0.0.1:9449/game-stg/');
-assert.equal(url.href, 'https://127.0.0.1:9449/game-stg/');
+assert.ok(['127.0.0.1','localhost'].includes(url.hostname),
+  'the developer Console journey requires the owned isolated local host');
 const state = {frame: null, id: null, developer: false, shot: null, samples: [], lua: [],
   luaRequests: [], qualityRequests: [], sentInputs: [], frames: [], stormSamples: [], leaveReceipts: 0};
-const errors = [], checks = [], requests = [], expectedNotFound = [], cancelled = [], images = [];
+const errors = [], checks = [], requests = [], expectedNotFound = [], images = [];
 const qualityImages = [];
 const inputBoundaries = [];
 const wasm = new Set();
@@ -50,33 +52,25 @@ function authority() {
     projectiles: state.frame?.snapshot.spells.projectiles.map(value => Object.keys(value)[0])};
 }
 async function observeInput(page, label) {
-  const browser = await page.evaluate(() => {
-    const node = value => value && {tag: value.tagName, id: value.id, className: value.className,
-      hidden: value.hidden, display: getComputedStyle(value).display,
-      pointerEvents: getComputedStyle(value).pointerEvents};
-    return {input: Array.from(window.wasmBindings.gameplay_input_state()),
-      wizard: Array.from(window.wasmBindings.wizard_state()), active: node(document.activeElement),
-      hit: node(document.elementFromPoint(1120, 360)),
-      joysticks: [...document.querySelectorAll('[data-joystick]')].map(value => ({
-        lane: value.dataset.joystick, blocked: value.hasAttribute('data-blocked'),
-        castDisabled: value.hasAttribute('data-cast-disabled')})),
-      menu: document.querySelector('.game-menus')?.dataset.menuScreen,
-      panels: node(document.querySelector('.player-panels')),
-      modPanels: node(document.querySelector('.mod-panels')),
-      loading: node(document.querySelector('.match-loading-screen'))};
-  });
+  const browser = {gpu:await ui.readUi(page),...await page.evaluate(() => ({
+    input:Array.from(window.wasmBindings.gameplay_input_state()),
+    wizard:Array.from(window.wasmBindings.wizard_state()),
+    active:document.activeElement?.tagName,
+    canvas:document.elementFromPoint(1120,360)?.id,
+  }))};
   inputBoundaries.push({label, authority: authority(), browser});
   fs.writeFileSync(path.join(output, 'input-boundaries.json'), JSON.stringify(inputBoundaries, null, 2));
   return browser;
 }
 async function clientReady(page) {
-  await page.waitForFunction(() => {
-    const primary = document.querySelector('[data-joystick="primary"]');
-    return primary && !primary.hasAttribute('data-blocked')
-      && !primary.hasAttribute('data-cast-disabled')
-      && document.querySelector('.game-menus')?.dataset.menuScreen === 'hidden'
-      && document.elementFromPoint(1120, 360)?.id === 'game';
-  });
+  await ui.surface(page,'hidden');
+  await ui.noWidget(page,'match-loading:label');
+  await ui.noWidget(page,'cheats/dialog');
+  await page.mouse.move(1120,360);
+  await ui.nextFrame(page);
+  await ui.waitForUi(page,snapshot=>!snapshot.capture.pointer&&!snapshot.capture.keyboard
+    &&!snapshot.widgets.some(widget=>widget.id.startsWith('panel:surface:')),
+    'actual gameplay input ownership');
 }
 async function until(predicate, label, timeout = 30000) {
   const end = Date.now() + timeout;
@@ -119,18 +113,17 @@ function message(row) {
 }
 async function consoleRun(page, code) {
   await page.keyboard.press('Backquote');
-  await page.locator('[data-cheat-action="console"]').click();
-  const editor = page.locator('#cheat-menu-lua-editor');
-  await editor.fill(code);
+  await ui.click(page,'cheats/tab:console');
+  await ui.fill(page,'cheats/lua-editor',code);
   const before = state.luaRequests.length;
-  await page.locator('[data-cheat-action="run"]').click();
+  await ui.click(page,'cheats/run');
   await until(() => state.luaRequests.length > before, 'actual Console request');
   const request = state.luaRequests.at(-1);
   await until(() => state.lua.some(row => row.request_id === request.requestId), 'actual Lua completion');
   const result = state.lua.find(row => row.request_id === request.requestId);
   assert.equal(result.ok, true, result.error || 'real Lua execution failed');
   await page.keyboard.press('Backquote');
-  await editor.waitFor({state: 'hidden'});
+  await ui.noWidget(page,'cheats/dialog');
   return result;
 }
 async function gpuStatus(page) {
@@ -143,17 +136,17 @@ async function gpuStatus(page) {
 }
 async function setEnhancedEffects(page, enabled) {
   await page.keyboard.press('Escape');
-  await page.locator('[data-menu-action="pause-settings"]').click();
-  await page.locator('[data-menu-action="settings-page:performance"]').click();
-  const toggle = page.locator('[data-setting="enhanced-effects"]');
-  assert.equal(await toggle.isEnabled(), true, 'the actual run owner can change its setting');
-  assert.equal(await toggle.getAttribute('aria-pressed'), String(!enabled));
-  await toggle.click();
+  await ui.click(page,'pause-settings');
+  await ui.click(page,'settings-page:performance');
+  const toggle = await ui.widget(page,'settings-toggle:enhanced-effects');
+  assert.equal(toggle.enabled,true,'the actual run owner can change its setting');
+  assert.equal(toggle.selected,!enabled);
+  await ui.click(page,toggle.id);
   await until(() => state.frame.snapshot.enhanced_effects === enabled, 'accepted Enhanced Effects change');
-  assert.equal(await toggle.getAttribute('aria-pressed'), String(enabled));
-  await page.locator('[data-menu-action="settings-back"]').click();
-  await page.locator('[data-menu-action="settings-back"]').click();
-  await page.locator('[data-menu-action="resume"]').click();
+  assert.equal((await ui.widget(page,toggle.id)).selected,enabled);
+  await ui.click(page,'settings-back');
+  await ui.click(page,'settings-back');
+  await ui.click(page,'resume');
   await until(() => !state.frame.host.pause && !state.frame.host.resume_grace, 'normal resumed draw after setting change');
   await clientReady(page);
 }
@@ -165,27 +158,34 @@ async function setEnhancedEffects(page, enabled) {
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
   const browser = await chromium.connect(server.wsEndpoint());
   const context = await browser.newContext({ignoreHTTPSErrors: true, viewport: {width: 1600, height: 900}});
-  await context.addInitScript(token => localStorage.setItem('sdr.token:/game-stg', token), account.token);
+  await context.addInitScript(({key,token})=>localStorage.setItem(key,token),
+    {key:`sdr.token:${url.pathname.replace(/\/$/,'')}`,token:account.token});
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
+  await ui.observeGpu(page);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', entry => {
     if (entry.type() !== 'error') return;
     const pathname = new URL(entry.location().url || url).pathname;
-    if (entry.text().includes('404') && /\/api\/game\/(saves\/0|rejoin)$/.test(pathname)) return;
+    if (entry.text()==='Failed to load resource: the server responded with a status of 404 (Not Found)'
+      && /\/api\/game\/(saves\/0|rejoin)$/.test(pathname)) {
+      expectedNotFound.push({type:'console',url:entry.location().url,message:entry.text(),
+        ownership:'A fresh configured account has no checkpoint or rejoin ticket; only these exact discovery404s are expected.'});
+      return;
+    }
     errors.push(entry.text());
   });
   page.on('response', response => {
     const pathname = new URL(response.url()).pathname;
     if (pathname.endsWith('.wasm')) wasm.add(path.basename(pathname));
     if (pathname.includes('/api/')) requests.push({path: pathname, status: response.status()});
-    if (response.status() === 404 && /\/api\/game\/(saves\/0|rejoin)$/.test(pathname)) expectedNotFound.push(pathname);
+    if (response.status() === 404 && /\/api\/game\/(saves\/0|rejoin)$/.test(pathname)) expectedNotFound.push({type:'response',url:response.url(),status:404,
+      ownership:'A fresh configured account has no checkpoint or rejoin ticket; only these exact discovery404s are expected.'});
     else if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
   });
   page.on('requestfailed', request => {
     const row = {path: new URL(request.url()).pathname, error: request.failure()?.errorText};
-    if (row.error === 'net::ERR_ABORTED' && !row.path.includes('/api/')) cancelled.push(row);
-    else errors.push(`${row.error} ${row.path}`);
+    errors.push(`${row.error} ${row.path}`);
   });
   page.on('websocket', socket => {
     const read = createNativeMessageReader();
@@ -209,13 +209,14 @@ async function setEnhancedEffects(page, enabled) {
   try {
     step = 'ordinary Create and real developer admission';
     await page.goto(url.href, {waitUntil: 'load'});
-    await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-      && document.querySelector('#status')?.textContent === '');
+    await ui.ready(page);
     if (process.env.RESUME === '1') {
-      const prompt = page.locator('.title-prompt:not([hidden])');
-      if (await prompt.isVisible()) await prompt.locator('[data-menu-action="prompt-secondary"]').click();
-      await page.locator('[data-menu-action="play"]').click();
-      await page.locator('[data-menu-action="continue"]').click();
+      if(ui.findWidget(await ui.readUi(page),'prompt-secondary')) {
+        await ui.click(page,'prompt-secondary');
+        await ui.noWidget(page,'prompt-secondary');
+      }
+      await ui.click(page,'play');
+      await ui.click(page,'continue');
     } else await startNewGame(page, {element: 'air', discipline: 'arcane', name: 'Electric'});
     await until(() => participant() && state.developer, 'accepted developer College');
     if (process.env.RESUME !== '1') assert.equal(participant().player.selection.name, 'Electric');
@@ -233,7 +234,7 @@ async function setEnhancedEffects(page, enabled) {
     await until(() => participant().player.book.weld_build_id === 1002
       && participant().player.book.primary_skill_id === 52, 'actual BallLightning selection');
     }
-    if (!state.frame.snapshot.boneyard) await page.locator('.hud-map').click();
+    if (!state.frame.snapshot.boneyard) await ui.click(page,'hud:map');
     await until(() => state.frame?.snapshot.boneyard && !state.frame.host.loading_run_id
       && !state.frame.host.resume_grace && !state.frame.host.pause, 'actual Boneyard readiness', 120000);
     await observeInput(page, 'server holds cleared before client admission');
@@ -343,14 +344,16 @@ return true`);
 
     step = 'normal saved Leave and disposal';
     await page.keyboard.press('Escape');
-    await page.locator('[data-menu-action="leave"]').click();
-    await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
+    await ui.click(page,'leave');
+    await ui.surface(page,'title');
     assert.ok(state.leaveReceipts > 0);
+    await ui.assertGpuOnly(page);
+    await page.screenshot({path:path.join(output,'electric-final-title.png')});
     assert.deepEqual(errors, []);
     checks.push('ordinary saved Leave returns to Title');
     fs.writeFileSync(path.join(output, qualityOnly ? 'storm-quality.json' : 'electric-burn.json'), JSON.stringify({passed: true,
       sourceRevision: 'fa08ae249ff5563570bdb2a653e2ef9358ce7b83', checks, errors, requests,
-      expectedNotFound, cancelled, wasm: [...wasm], gpu, images, qualityImages,
+      expectedNotFound, wasm: [...wasm], gpu, images, qualityImages,
       qualityRequests: state.qualityRequests, shot: state.shot, samples: state.samples,
       stormSamples: state.stormSamples,
       sentInputs: state.sentInputs, inputBoundaries, frames: state.frames,
@@ -362,12 +365,12 @@ return true`);
     await page.mouse.up().catch(() => {});
     await page.screenshot({path: path.join(output, 'failure.png')}).catch(() => {});
     fs.writeFileSync(path.join(output, 'failure.json'), JSON.stringify({passed: false, step,
-      error: error.stack, errors, requests, expectedNotFound, cancelled, wasm: [...wasm],
+      error: error.stack, errors, requests, expectedNotFound, wasm: [...wasm],
       images, qualityImages, qualityRequests: state.qualityRequests,
       stormSamples: state.stormSamples,
       shot: state.shot, samples: state.samples, commands: state.luaRequests,
       sentInputs: state.sentInputs, inputBoundaries, frames: state.frames,
-      ui: await page.locator('body').innerText().catch(() => '')}, null, 2));
+      ui: await ui.readUi(page).catch(() => null)}, null, 2));
     throw error;
   } finally {
     await context.close();
