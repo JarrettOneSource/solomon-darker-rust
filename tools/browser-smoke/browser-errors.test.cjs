@@ -43,6 +43,7 @@ for(const [name,change] of [
   ['a retired and reattached owner',(f)=>{f.settled.channels[0].retired=true}],
   ['a replaced document',(f)=>{f.settled.documentId=124}],
   ['multiple owners for the failed resource',(f)=>{f.captured.channels.push({...f.captured.channels[0],id:4})}],
+  ['a second owner added before classification',(f)=>{f.settled.channels.push({...f.settled.channels[0],id:4})}],
 ])test(`${name} remains fatal`,()=>{
   const fixture=evidence();change(fixture);
   assert.equal(residentSuspension(fixture.failure,fixture.captured,fixture.settled),null);
