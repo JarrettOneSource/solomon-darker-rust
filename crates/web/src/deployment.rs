@@ -53,17 +53,25 @@ impl DeploymentUpdate {
         self.restarting
     }
 
-    pub fn begin(&mut self, target: &str, deployment_id: &str) -> Result<(), String> {
+    pub fn begin(
+        &mut self,
+        target: &str,
+        deployment_id: &str,
+        deployment_sequence: u64,
+    ) -> Result<(), String> {
         if self.restarting {
             return Ok(());
         }
         let target = normalized_revision(target).ok_or("The deployment target is invalid")?;
-        let deployment_id = normalized_deployment_id(deployment_id)
+        normalized_deployment_id(deployment_id)
             .ok_or("The deployment publication identity is invalid")?;
+        if deployment_sequence == 0 {
+            return Err("The deployment publication sequence is invalid".into());
+        }
         self.restarting = true;
         self.target_revision = Some(target.clone());
         if let Some(state) = &self.state {
-            state.borrow_mut().begin(target, deployment_id);
+            state.borrow_mut().begin(target, deployment_sequence);
         }
         self.message =
             Some("Saving your game before the update. Solomon Dark will restart automatically.");
@@ -298,9 +306,10 @@ fn deployment_publication(status: u16, body: &str) -> Option<Publication> {
     let value: serde_json::Value = serde_json::from_str(body).ok()?;
     let value = value.as_object()?;
     normalized_revision(value.get("revision")?.as_str()?)?;
+    normalized_deployment_id(value.get("deploymentId")?.as_str()?)?;
     Some(Publication {
         game_revision: normalized_revision(value.get("gameRevision")?.as_str()?)?,
-        deployment_id: normalized_deployment_id(value.get("deploymentId")?.as_str()?)?,
+        sequence: value.get("deploymentSequence")?.as_u64()?,
         ready: value.get("ready")?.as_bool()?,
     })
 }
@@ -314,11 +323,11 @@ mod tests {
         let game = "a".repeat(40);
         let id = "b".repeat(32);
         let publication = serde_json::json!({
-            "revision":"c".repeat(40), "gameRevision":game, "deploymentId":id, "ready":true,
+            "revision":"c".repeat(40), "gameRevision":game, "deploymentId":id, "deploymentSequence":2, "ready":true,
         });
         assert!(deployment_publication(200, &publication.to_string()).is_some());
         assert!(deployment_publication(503, &publication.to_string()).is_none());
-        for field in ["revision", "gameRevision", "deploymentId", "ready"] {
+        for field in ["revision", "gameRevision", "deploymentId", "deploymentSequence", "ready"] {
             let mut incomplete = publication.clone();
             incomplete.as_object_mut().unwrap().remove(field);
             assert!(deployment_publication(200, &incomplete.to_string()).is_none(), "{field}");
