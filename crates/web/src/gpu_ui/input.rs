@@ -95,18 +95,7 @@ impl InputQueue {
         let receipt = if let Some(session) = &mut self.session {
             session.receipt(sequence, time, intent, None, caret)
         } else {
-            Receipt {
-                id: None,
-                sequence,
-                time,
-                before: "".into(),
-                text: "".into(),
-                selection: TextSelection::caret(0),
-                intent,
-                composing: false,
-                caret: None,
-                clipboard_handled: false,
-            }
+            Receipt::unbound(sequence, time, intent)
         };
         self.edits.push(receipt);
     }
