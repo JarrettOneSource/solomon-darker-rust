@@ -68,7 +68,12 @@ async function saved(page) {
     await changed(page, 'pause', ([x,y]) => x === initial.x && y === initial.y, 'undo restores movement');
     await ui.click(page, 'mobile/redo');
     await changed(page, 'pause', ([x,y]) => x === moved.x && y === moved.y, 'redo restores movement');
-    await ui.click(page, 'mobile/control:pause'); await page.keyboard.press(']');
+    await ui.click(page, 'mobile/control:pause');
+    const beforeNudge = await transform(page, 'pause');
+    await page.keyboard.press('ArrowRight');
+    await changed(page, 'pause', ([x]) => x > beforeNudge.x, 'focused native keyboard nudge');
+    await ui.focused(page, 'mobile/control:pause');
+    await page.keyboard.press(']');
     await changed(page, 'pause', ([,,,rotation]) => rotation === 5, 'keyboard five-degree rotation');
     const beforeResize = await transform(page, 'pause');
     await dragBy(page, 'mobile/resize:pause:east', 25, 0);

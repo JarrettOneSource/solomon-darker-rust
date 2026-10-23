@@ -6,7 +6,7 @@ mod presentation;
 mod preview;
 
 use crate::gpu_ui::{StockAtlas, UiFrame};
-use egui::{Color32, Id, Order, Rect, pos2, vec2};
+use egui::{Color32, Id, Rect, pos2, vec2};
 use solomon_sim::Vec2;
 use solomon_sim::hud::HudRect;
 use solomon_sim::mobile_ui::*;
@@ -250,17 +250,23 @@ impl MobileUiEditor {
     pub fn take_save_request(&mut self) -> bool {
         std::mem::take(&mut self.save_request)
     }
-    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
-        let bounds = frame.ctx.content_rect();
-        self.paint_in(frame, bounds)
-    }
-    pub fn paint_in(&mut self, frame: &mut UiFrame<'_>, bounds: Rect) -> Result<(), String> {
-        frame.input_scope(if self.fullscreen {
-            "mobile/editor/fullscreen"
-        } else {
-            "mobile/editor/windowed"
-        });
+    pub fn paint_in(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        bounds: Rect,
+        parent: &egui::Ui,
+    ) -> Result<(), String> {
         let ctx = frame.ctx.clone();
+        let layer = egui::LayerId::new(parent.layer_id().order, Id::unique("mobile/editor"));
+        ctx.set_sublayer(parent.layer_id(), layer);
+        let enabled = parent.is_enabled() && ctx.memory(|memory| memory.allows_interaction(layer));
+        if enabled {
+            frame.input_scope(if self.fullscreen {
+                "mobile/editor/fullscreen"
+            } else {
+                "mobile/editor/windowed"
+            });
+        }
         self.root_bounds = hud_rect(bounds);
         let toolbar_height = if self.fullscreen { 0.0 } else { 80.0 };
         let details_height = if self.fullscreen { 0.0 } else { 146.0 };
@@ -277,19 +283,25 @@ impl MobileUiEditor {
             self.set_scroll_position(scroll)?;
         }
         self.refresh_page_bounds();
-        self.read_input(frame)?;
-        self.update()?;
+        if enabled {
+            self.read_input(frame, layer)?;
+            self.update()?;
+        } else {
+            self.cancel_gestures()?;
+        }
         if let Some(scroll) = self.pending_scroll.take() {
             self.set_scroll_position(scroll)?;
         }
         self.refresh_page_bounds();
         self.hit_targets.clear();
         let mut error = None;
-        egui::Area::new(Id::unique("mobile/editor"))
-            .order(Order::Foreground)
-            .fixed_pos(bounds.min)
-            .show(&ctx, |ui| {
-                if self.fullscreen {
+        egui::Area::new(Id::unique("mobile/editor")).order(layer.order).fixed_pos(bounds.min).show(
+            &ctx,
+            |ui| {
+                if !enabled {
+                    ui.disable();
+                }
+                if self.fullscreen && enabled {
                     ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
                 }
                 ui.set_min_size(bounds.size());
@@ -350,14 +362,15 @@ impl MobileUiEditor {
                     "Mobile controls",
                     "application",
                     bounds,
-                    !self.busy,
+                    enabled && !self.busy,
                 );
                 frame.record_value(
                     "mobile/editor",
                     self.selected.as_str(),
                     Some(!self.restoring_default),
                 );
-            });
+            },
+        );
         if let Some(error) = error {
             return Err(error);
         }
@@ -380,15 +393,27 @@ impl MobileUiEditor {
             self.page.height * self.zoom,
         );
     }
-    fn read_input(&mut self, frame: &UiFrame<'_>) -> Result<(), String> {
+    fn read_input(&mut self, frame: &UiFrame<'_>, layer: egui::LayerId) -> Result<(), String> {
         if self.busy {
             return Ok(());
         }
+        let keyboard_owned = frame
+            .ctx
+            .memory(|memory| memory.focused())
+            .and_then(|id| frame.ctx.read_response(id))
+            .is_some_and(|response| response.layer_id == layer);
+        self.focused_element = MobileUiElementId::ALL.iter().copied().find(|id| {
+            frame.ctx.memory(|memory| memory.has_focus(Id::unique(("mobile/control", id.as_str()))))
+        });
         let events = frame.ctx.input(|input| input.raw.events.clone());
         let touches = events.iter().any(|event| matches!(event, egui::Event::Touch { .. }));
         for event in events {
             match event {
                 egui::Event::Touch { id, phase, pos, .. } => {
+                    if phase == egui::TouchPhase::Start && frame.ctx.layer_id_at(pos) != Some(layer)
+                    {
+                        continue;
+                    }
                     let phase = match phase {
                         egui::TouchPhase::Start => PointerPhase::Start,
                         egui::TouchPhase::Move => PointerPhase::Move,
@@ -401,11 +426,12 @@ impl MobileUiEditor {
                     button: egui::PointerButton::Primary,
                     pressed,
                     ..
-                } if !touches => self.pointer(
-                    if pressed { PointerPhase::Start } else { PointerPhase::End },
-                    -1,
-                    pos,
-                )?,
+                } if !touches && (!pressed || frame.ctx.layer_id_at(pos) == Some(layer)) => self
+                    .pointer(
+                        if pressed { PointerPhase::Start } else { PointerPhase::End },
+                        -1,
+                        pos,
+                    )?,
                 egui::Event::PointerMoved(pos)
                     if !touches && self.pointer_captures.iter().any(|(id, _)| *id == -1) =>
                 {
@@ -415,6 +441,7 @@ impl MobileUiEditor {
                 egui::Event::MouseWheel { delta, .. } if !self.fullscreen => {
                     if let Some(pos) = frame.ctx.input(|input| input.pointer.hover_pos())
                         && egui_rect(self.viewport).contains(pos)
+                        && frame.ctx.layer_id_at(pos) == Some(layer)
                     {
                         self.handle_event(EditorEvent::Wheel {
                             delta: -f64::from(delta.y),
@@ -422,7 +449,7 @@ impl MobileUiEditor {
                         })?;
                     }
                 }
-                egui::Event::Key { key, pressed: true, modifiers, .. } => {
+                egui::Event::Key { key, pressed: true, modifiers, .. } if keyboard_owned => {
                     let name = match key {
                         egui::Key::ArrowLeft => "ArrowLeft",
                         egui::Key::ArrowRight => "ArrowRight",
