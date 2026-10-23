@@ -11,7 +11,7 @@ use web_sys::{
     HtmlTextAreaElement, InputEvent, KeyboardEvent, PointerEvent, WheelEvent,
 };
 
-use super::{UiCapture, WidgetGeometry};
+use super::{HitRegion, UiCapture, WidgetGeometry};
 
 pub fn canvas_point(client: [f32; 2], bounds: [f32; 4], logical: [f32; 2]) -> Pos2 {
     pos2(
@@ -53,7 +53,8 @@ struct InputQueue {
     capture: UiCapture,
     logical: [f32; 2],
     text_rects: Vec<Rect>,
-    hit_rects: Vec<Rect>,
+    hit_regions: Vec<HitRegion>,
+    owned_pointers: std::collections::HashSet<i32>,
     primary_touch: Option<i32>,
     gamepad_keys: [bool; 8],
     gamepad_direction: Option<solomon_sim::input::MenuDirection>,
@@ -268,6 +269,27 @@ impl BrowserInput {
                 let mut queue = queue.borrow_mut();
                 let pos = point(&canvas, &queue, pointer.client_x(), pointer.client_y());
                 let touch = pointer.pointer_type() != "mouse";
+                let owned = if matches!(phase, TouchPhase::Start) {
+                    let owned = queue.scope.is_some()
+                        || queue.hit_regions.iter().any(|region| region.contains(pos));
+                    if owned {
+                        queue.owned_pointers.insert(pointer.pointer_id());
+                    }
+                    owned
+                } else {
+                    queue.owned_pointers.contains(&pointer.pointer_id())
+                };
+                if matches!(phase, TouchPhase::End | TouchPhase::Cancel) {
+                    queue.owned_pointers.remove(&pointer.pointer_id());
+                }
+                if owned {
+                    event.prevent_default();
+                    event.stop_immediate_propagation();
+                }
+                if touch && !owned {
+                    return;
+                }
+
                 if touch {
                     queue.events.push(UiEvent::Touch {
                         device_id: egui::TouchDeviceId(0),
@@ -310,13 +332,6 @@ impl BrowserInput {
                         queue.primary_touch = None;
                         queue.events.push(UiEvent::PointerGone);
                     }
-                }
-                if queue.capture.pointer
-                    || matches!(phase, TouchPhase::Start)
-                        && queue.hit_rects.iter().any(|rect| rect.contains(pos))
-                {
-                    event.prevent_default();
-                    event.stop_immediate_propagation();
                 }
             })?;
         }
@@ -361,6 +376,7 @@ impl BrowserInput {
                 queue.events.push(UiEvent::WindowFocused(focused));
                 if !focused {
                     queue.primary_touch = None;
+                    queue.owned_pointers.clear();
                     queue.events.push(UiEvent::PointerGone);
                 }
             })?;
@@ -586,16 +602,15 @@ impl BrowserInput {
                 )
             })
             .collect();
-        self.queue.borrow_mut().hit_rects = widgets
+        self.queue.borrow_mut().hit_regions = widgets
             .values()
-            .filter(|widget| widget.interactive)
-            .map(|widget| {
-                Rect::from_min_size(
-                    pos2(widget.bounds.x, widget.bounds.y),
-                    vec2(widget.bounds.width, widget.bounds.height),
-                )
-            })
+            .filter(|widget| widget.is_interactive())
+            .map(WidgetGeometry::hit_region)
             .collect();
+    }
+
+    pub fn owns_pointer(&self) -> bool {
+        !self.queue.borrow().owned_pointers.is_empty()
     }
 
     pub fn set_scope(&mut self, scope: Option<&str>) {

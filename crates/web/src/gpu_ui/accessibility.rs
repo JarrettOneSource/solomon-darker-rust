@@ -166,6 +166,7 @@ mod tests {
                 bounds: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(100.0, 20.0)).into(),
                 paint_bounds: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(100.0, 20.0))
                     .into(),
+                hit_shape: super::super::HitShape::Rect,
                 enabled: true,
                 focused: true,
                 modal: false,
@@ -203,6 +204,7 @@ mod tests {
                 bounds: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(100.0, 20.0)).into(),
                 paint_bounds: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(100.0, 20.0))
                     .into(),
+                hit_shape: super::super::HitShape::Rect,
                 enabled: true,
                 focused: true,
                 modal: false,
