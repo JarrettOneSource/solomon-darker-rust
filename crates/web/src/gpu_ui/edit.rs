@@ -63,7 +63,7 @@ pub fn shaped_label(
     let (_, rect) = ui.allocate_space(run.size());
     let response = ui.interact(rect, egui::Id::unique(id), style.sense);
     if ui.is_visible() && style.opacity > 0.0 {
-        run.paint(ui.painter(), rect.min, style.opacity)?;
+        run.paint(frame, ui.painter(), rect.min, style.opacity)?;
         if style.sense.interactive() {
             frame.record(id, text, "button", &response);
         } else {
