@@ -629,7 +629,7 @@ impl HallView {
         }
         let id = format!("hall-toggle:{index}");
         let center = stage.at(layout.chevron.position.x, layout.chevron.position.y);
-        let response = widgets::interact(
+        let response = widgets::interact_unstyled(
             frame,
             ui,
             &id,
@@ -646,8 +646,15 @@ impl HallView {
         if response.clicked() {
             actions.push(id);
         }
+        let highlight = frame.ctx.animate_bool_with_time_and_easing(
+            response.id.with("glyph-brightness"),
+            response.hovered() || frame.focus_visible(&response),
+            0.12,
+            |progress| crate::gpu_ui::css_bezier(progress, 0.0, 0.0, 0.58, 1.0),
+        );
+        let paint = frame.with_brightness(1.0 + 0.35 * highlight);
         self.ui.paint_centered(
-            frame,
+            &paint,
             ui.painter(),
             9,
             center,
@@ -655,6 +662,14 @@ impl HallView {
             layout.chevron.rotation.to_radians() as f32,
             Color32::WHITE,
         )?;
+        widgets::focus_outline(
+            frame,
+            ui,
+            &response,
+            stage.scale,
+            3.0 * stage.scale,
+            widgets::alpha(0xedd289, 0.9),
+        );
         if let Some(detail) = layout.expanded {
             self.expanded_row(frame, ui, stage, entry, detail)?;
         }

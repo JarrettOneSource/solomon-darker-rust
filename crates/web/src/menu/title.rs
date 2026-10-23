@@ -279,7 +279,12 @@ impl TitleView {
             let available = action != "continue" || self.can_resume;
             let admitted = enabled && available;
             let response = widgets::interact(frame, ui, action, label, "button", rect, admitted);
-            widgets::paint_stock_button(frame, ui, &response, rect, controls_scale, available);
+            let paint = frame.with_brightness(if admitted && frame.focus_visible(&response) {
+                1.2
+            } else {
+                1.0
+            });
+            widgets::paint_stock_button(&paint, ui, &response, rect, controls_scale, available);
             if response.clicked() && admitted {
                 actions.push(action.to_owned());
             }
@@ -297,7 +302,7 @@ impl TitleView {
                     Align2::CENTER_CENTER,
                     "Cinzel Bold",
                     17.28 * controls_scale,
-                    widgets::color(0xd8d2c0),
+                    paint.filtered_color(widgets::color(0xd8d2c0)),
                 );
             } else {
                 let names = if action == "continue" {
@@ -319,7 +324,7 @@ impl TitleView {
                 let mut top = rect.center().y - sizes.iter().map(|size| size.y).sum::<f32>() / 2.0;
                 for (name, size) in names.iter().zip(sizes) {
                     widgets::image(
-                        frame,
+                        &paint,
                         ui,
                         &format!("main-menu-text-{name}"),
                         Rect::from_min_size(

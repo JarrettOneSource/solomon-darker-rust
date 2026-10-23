@@ -229,8 +229,15 @@ impl CreateView {
                     rect,
                     enabled,
                 );
+                let paint = frame.with_brightness(
+                    if enabled && (response.hovered() || frame.focus_visible(&response)) {
+                        1.3
+                    } else {
+                        1.0
+                    },
+                );
                 self.create.paint_centered(
-                    frame,
+                    &paint,
                     ui.painter(),
                     record,
                     center,
@@ -293,8 +300,15 @@ impl CreateView {
                     Rect::from_center_size(center, size.max(Vec2::splat(44.0))),
                     enabled,
                 );
+                let paint = frame.with_brightness(
+                    if enabled && (response.hovered() || frame.focus_visible(&response)) {
+                        1.3
+                    } else {
+                        1.0
+                    },
+                );
                 self.create.paint_centered(
-                    frame,
+                    &paint,
                     ui.painter(),
                     record,
                     center,
@@ -327,8 +341,9 @@ impl CreateView {
             back,
             enabled && self.back_enabled,
         );
+        let paint = frame.with_brightness(if response.hovered() { 1.2 } else { 1.0 });
         self.ui.paint_centered(
-            frame,
+            &paint,
             ui.painter(),
             42,
             back.center(),
@@ -349,7 +364,8 @@ impl CreateView {
             rect,
             enabled && self.finalized_name().is_ok(),
         );
-        self.create.paint(frame, ui.painter(), 6, dice.at(1518.0, 3.0), scale, Color32::WHITE)?;
+        let paint = frame.with_brightness(if response.hovered() { 1.2 } else { 1.0 });
+        self.create.paint(&paint, ui.painter(), 6, dice.at(1518.0, 3.0), scale, Color32::WHITE)?;
         if response.clicked() && enabled {
             actions.push("randomize-loadout".to_owned());
         }
@@ -471,7 +487,7 @@ impl CreateView {
             widgets::alpha(0xffffff, 0.65),
         );
         let random = stage.rect(952.0, 92.0, 42.0, 30.0);
-        if widgets::interact(
+        let response = widgets::interact_unstyled(
             frame,
             ui,
             "randomize-name",
@@ -479,20 +495,21 @@ impl CreateView {
             "button",
             random,
             editable,
-        )
-        .clicked()
-            && editable
-        {
+        );
+        if response.clicked() && editable {
             actions.push("randomize-name".to_owned());
         }
+        let hover = response.hovered();
+        let paint = frame.with_brightness(if hover { 1.25 } else { 1.0 });
         self.create.paint(
-            frame,
+            &paint,
             ui.painter(),
             6,
             stage.at(952.0, 92.825),
             stage.scale * 0.525,
-            widgets::alpha(0xffffff, 0.78),
+            widgets::alpha(0xffffff, if hover { 1.0 } else { 0.78 }),
         )?;
+        widgets::focus_outline(frame, ui, &response, 2.0, 2.0, widgets::alpha(0xffffff, 0.8));
         if let Some(error) = &self.message {
             let font =
                 egui::FontId::new(14.0 * stage.scale, egui::FontFamily::Name("Georgia".into()));
