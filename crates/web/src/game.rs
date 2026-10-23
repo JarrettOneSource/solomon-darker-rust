@@ -106,6 +106,7 @@ pub struct Game {
     teacher_view: TeacherView,
     spell_view: SpellView,
     world_overlays: WorldOverlaysView,
+    notifications: crate::loot::WorldNotifications,
     world_screen_feedback: WorldScreenFeedback,
     npc_view: NpcView,
     session: GameSession,
@@ -303,6 +304,7 @@ impl Game {
             teacher_view,
             spell_view,
             world_overlays,
+            notifications: crate::loot::WorldNotifications::default(),
             world_screen_feedback: WorldScreenFeedback::default(),
             npc_view,
             session,
@@ -573,6 +575,7 @@ impl Game {
     }
 
     fn reset_world_views(&mut self) -> Result<(), String> {
+        self.notifications.reset();
         self.book_feedback_scope = None;
         self.panels.reset_skill_book_feedback(None);
         self.spectator_camera = Default::default();
@@ -2245,6 +2248,12 @@ impl Game {
     }
 
     fn render(&mut self) -> Result<(), String> {
+        if self.has_game {
+            let combat_hud = self.tutorial_access().is_none_or(|access| access.combat);
+            self.notifications.update(&self.session, &self.local_player_id, combat_hud)?;
+        } else {
+            self.notifications.reset();
+        }
         self.render_world()?;
         self.paint_ui()?;
         if !self.ui_ready && !self.native.as_ref().is_some_and(NativeGame::is_inspecting) {
@@ -2270,6 +2279,10 @@ impl Game {
                 self.mod_minimap.paint(frame)?;
                 self.hud.paint(frame)?;
                 self.input.paint(frame)?;
+                if self.has_game && !self.menu.covers_world() && !self.panels.covers_world() {
+                    self.notifications
+                        .paint(frame, f64::from(self.menu.settings().ui_scale_percent) / 100.0)?;
+                }
                 self.mod_skill_quickbar.paint(frame)?;
                 self.shared_gameplay.paint(frame)?;
                 self.panels.paint(frame)?;

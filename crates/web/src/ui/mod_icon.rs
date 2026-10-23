@@ -17,40 +17,6 @@ pub(crate) struct ModIconLayer {
     tint: Color32,
 }
 
-#[derive(Clone, Copy)]
-pub struct ModIconDraw {
-    pub center: Pos2,
-    pub scale: f32,
-    pub mirrored: bool,
-    pub tint: Color32,
-}
-
-pub fn mod_icon(
-    gpu: &UiFrame<'_>,
-    painter: &Painter,
-    images: &ModPresentationAssets,
-    mod_id: &str,
-    path: &str,
-    frame: ModSpriteFrame,
-    draw: ModIconDraw,
-) -> Result<(), String> {
-    let image = images.image(mod_id, path)?;
-    frame_icon(
-        gpu,
-        painter,
-        &ModIconLayer {
-            image_url: image.url().to_owned(),
-            dimensions: image.dimensions(),
-            frame,
-            tint: draw.tint,
-        },
-        draw.center,
-        draw.scale,
-        draw.mirrored,
-    );
-    Ok(())
-}
-
 pub(crate) struct ModIconGeometry {
     pub destination: Rect,
     pub uv: Rect,
@@ -99,19 +65,6 @@ fn frame_icon(
 ) {
     let geometry = layer.geometry(center, scale, mirrored);
     gpu.image(painter, &layer.image_url, geometry.destination, Some(geometry.uv), layer.tint);
-}
-
-pub fn mod_item_icon(
-    gpu: &UiFrame<'_>,
-    painter: &Painter,
-    images: Option<&ModPresentationAssets>,
-    item: &HubInventoryItem,
-    center: Pos2,
-    scale: f32,
-) -> Result<bool, String> {
-    let Some(layers) = mod_item_icon_layers(images, item)? else { return Ok(false) };
-    paint_mod_item_icon_layers(gpu, painter, &layers, center, scale);
-    Ok(true)
 }
 
 pub(crate) fn mod_item_icon_layers(
