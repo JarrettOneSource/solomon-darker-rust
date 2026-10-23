@@ -288,9 +288,10 @@ async function announced(page, text, {afterIndex = 0, timeout = 10000} = {}) {
 // Native Gamepad prototypes feed the production navigator adapter, never game commands.
 async function installController(page) {
   await page.evaluate(() => {
-    window.gpuTestPad = { buttons: [], x: 0, y: 0 };
+    window.gpuTestPad = { buttons: [], x: 0, y: 0, connected: true };
     const gamepad = Object.create(Gamepad.prototype, {
-      index: { value: 0 }, connected: { value: true }, mapping: { value: 'standard' },
+      index: { value: 0 }, connected: { get: () => window.gpuTestPad.connected },
+      mapping: { value: 'standard' },
       axes: { get: () => [window.gpuTestPad.x, window.gpuTestPad.y] },
       buttons: { get: () => Array.from({ length: 17 }, (_, index) =>
         Object.create(GamepadButton.prototype, {
@@ -304,7 +305,7 @@ async function installController(page) {
 
 async function controller(page, buttons = [], x = 0, y = 0) {
   await page.evaluate(({ buttons, x, y }) => {
-    window.gpuTestPad = { buttons, x, y };
+    window.gpuTestPad = { ...window.gpuTestPad, buttons, x, y };
   }, { buttons, x, y });
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 }

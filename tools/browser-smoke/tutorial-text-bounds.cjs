@@ -1,47 +1,51 @@
-// Actual rendered text bounds: wrapping and the phone font floor cannot be checked in sim.
-const assert = require('node:assert/strict');
+// Actual glyph layout bounds keep wrapping and the phone font floor observable.
+const assert=require('node:assert/strict');
+const ui=require('./gpu-ui.cjs');
+
+function rectangle(rect) {
+  assert.ok(Array.isArray(rect)&&rect.length===4,'unclipped GPU paint geometry is retained');
+  const [left,top,width,height]=rect;
+  return {left,top,width,height,right:left+width,bottom:top+height};
+}
 
 async function assertTutorialTextBounds(page) {
-  const bounds = await page.evaluate(() => {
-    const rectangle = name => {
-      const node = document.querySelector(`.tutorial-ui:not([hidden]) [data-tutorial-text="${name}"]`);
-      if (!node) return null;
-      const box = node.getBoundingClientRect();
-      return {left: box.left, right: box.right, top: box.top, bottom: box.bottom};
-    };
-    const selected = [...document.querySelectorAll('.game-hud:not([hidden]) .hud-skill-action')]
-      .map(node => node.getBoundingClientRect()).filter(box => box.width > 0 && box.height > 0)
-      .map(box => ({left: box.left, right: box.right, top: box.top, bottom: box.bottom, width: box.width, height: box.height}));
-    const controls = [...document.querySelectorAll('.game-hud:not([hidden]) :is(.hud-belt-slot,.hud-backpack,.hud-tome),.movement-joystick:not([data-blocked])')]
-      .map(node => node.getBoundingClientRect())
-      .filter(box => box.width > 0 && box.height > 0 && box.top >= innerHeight / 2)
-      .map(box => ({left: box.left, right: box.right, top: box.top, bottom: box.bottom}));
-    return {controls,width: innerWidth, height: innerHeight, coarse: matchMedia('(pointer:coarse)').matches,
-      heading: rectangle('heading'), subheading: rectangle('subheading'), selected};
-  });
-  assert.ok(bounds.heading && bounds.subheading, 'the current lesson has both instruction lines');
-  for (const name of ['heading', 'subheading']) {
-    const box = bounds[name];
-    assert.ok(box.top >= 0 && box.bottom <= bounds.height, `${name} stays vertically in the viewport`);
-    assert.ok(box.left >= 0 && box.right <= bounds.width, `${name} stays horizontally in the viewport`);
+  await ui.widget(page,'tutorial:text:heading');
+  await ui.widget(page,'tutorial:text:subheading');
+  const snapshot=await ui.readUi(page);
+  const {width,height}=snapshot.canvas;
+  const coarse=await page.evaluate(()=>matchMedia('(pointer:coarse)').matches);
+  const selected=snapshot.widgets.filter(widget=>/^hud:skill-binding:(12|16|20)$/.test(widget.id))
+    .map(widget=>rectangle(widget.rect));
+  const controls=snapshot.widgets.filter(widget=>/^hud:belt:/.test(widget.id)
+    ||['hud:inventory','hud:skills'].includes(widget.id)
+    ||(widget.id==='hud:joystick:movement'&&widget.enabled))
+    .map(widget=>rectangle(widget.rect)).filter(box=>box.top>=height/2);
+  // Hit bounds are clipped for input. Full native glyph bounds must independently fit.
+  const heading=rectangle(ui.findWidget(snapshot,'tutorial:text:heading').paintRect);
+  const subheading=rectangle(ui.findWidget(snapshot,'tutorial:text:subheading').paintRect);
+  const bounds={width,height,coarse,selected,controls,heading,subheading};
+  for(const name of ['heading','subheading']) {
+    const box=bounds[name];
+    assert.ok(box.top>=0&&box.bottom<=height,`${name} stays vertically in the viewport`);
+    assert.ok(box.left>=0&&box.right<=width,`${name} stays horizontally in the viewport`);
   }
-  assert.ok(bounds.subheading.top >= bounds.heading.bottom + 4, 'the subheading clears every wrapped heading line');
-  if (bounds.coarse && bounds.width < 1000) {
-    for (const name of ['heading', 'subheading']) {
-      for (const control of bounds.controls) {
-        const text = bounds[name];
-        const clear = text.bottom <= control.top || text.top >= control.bottom
-          || text.right <= control.left || text.left >= control.right;
-        assert.ok(clear, `${name} clears the actual lower controls`);
+  assert.ok(subheading.top>=heading.bottom+4,'subheading clears every wrapped heading line');
+  if(coarse&&width<1000) {
+    for(const name of ['heading','subheading']) {
+      for(const control of controls) {
+        const text=bounds[name];
+        const clear=text.bottom<=control.top||text.top>=control.bottom
+          ||text.right<=control.left||text.left>=control.right;
+        assert.ok(clear,`${name} clears the actual lower controls`);
       }
     }
-    for (const button of bounds.selected) {
-      assert.ok(button.width >= 43.99 && button.height >= 43.99, 'selectors retain a real finger-sized target');
-      assert.ok(button.top >= 0 && button.left >= 0 && button.right <= bounds.width, 'selector targets stay in the viewport');
-      assert.ok(bounds.heading.top >= button.bottom + 7, 'the lesson clears the visible selector strip');
+    for(const button of selected) {
+      assert.ok(button.width>=43.99&&button.height>=43.99,'selectors retain a real finger-sized target');
+      assert.ok(button.top>=0&&button.left>=0&&button.right<=width,'selector targets stay in the viewport');
+      assert.ok(heading.top>=button.bottom+7,'lesson clears the visible selector strip');
     }
   }
   return bounds;
 }
 
-module.exports = {assertTutorialTextBounds};
+module.exports={assertTutorialTextBounds};
