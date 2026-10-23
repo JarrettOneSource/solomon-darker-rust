@@ -73,6 +73,21 @@ pub(super) struct HostedGame {
 }
 
 impl HostedGame {
+    pub(super) fn paint_boneyard_library(
+        &mut self,
+        menu: &MenuUi,
+        frame: &mut crate::gpu_ui::UiFrame<'_>,
+    ) -> Result<(), String> {
+        if !menu.dark_cloud_boneyards_selected() {
+            return Ok(());
+        }
+        let Some(bounds) = frame.widget_rect("cloud-boneyards-content") else { return Ok(()) };
+        if let Some(library) = &mut self.boneyard_library {
+            library.paint(frame, bounds, menu.boneyards_interactive())?;
+        }
+        Ok(())
+    }
+
     pub(super) fn end_connection(&mut self) {
         self.connecting = false;
         self.leave_checkpoint = None;
@@ -339,22 +354,6 @@ impl Game {
         }
         Ok(())
     }
-    pub(super) fn paint_boneyard_library(
-        &mut self,
-        frame: &mut crate::gpu_ui::UiFrame<'_>,
-    ) -> Result<(), String> {
-        if !self.menu.dark_cloud_boneyards_selected() {
-            return Ok(());
-        }
-        let Some(bounds) = frame.widget_rect("cloud-boneyards-content") else { return Ok(()) };
-        if let Some(library) =
-            self.hosted.as_mut().and_then(|hosted| hosted.boneyard_library.as_mut())
-        {
-            library.paint(frame, bounds, self.menu.boneyards_interactive())?;
-        }
-        Ok(())
-    }
-
     pub(super) async fn load_hosted(
         &mut self,
         window: &web_sys::Window,

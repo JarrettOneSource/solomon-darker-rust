@@ -477,7 +477,7 @@ impl Renderer {
         }
     }
 
-    /// A DOM panel supplies its actual physical-buffer clip and fade. Flush before changing
+    /// A panel supplies its actual physical-buffer clip and fade. Flush before changing
     /// the native scissor so queued sprites cannot escape a scrolling Inventory viewport.
     pub fn draw_clipped(&mut self, clip: [i32; 4], opacity: f32, draw: impl FnOnce(&mut Self)) {
         self.flush();
