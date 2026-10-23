@@ -513,3 +513,20 @@ fn egui_rect(rect: HudRect) -> Rect {
         vec2(rect.width as f32, rect.height as f32),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn rotated_control_hits_follow_the_actual_control_instead_of_its_axis_aligned_bounds() {
+        let target = HitTarget {
+            hit: Hit::Element(MobileUiElementId::Pause),
+            center: pos2(100.0, 100.0),
+            size: vec2(100.0, 20.0),
+            rotation: std::f32::consts::FRAC_PI_2,
+        };
+        assert!(target.contains(pos2(100.0, 140.0)));
+        assert!(!target.contains(pos2(140.0, 100.0)));
+        assert!(!target.contains(pos2(111.0, 100.0)));
+    }
+}
