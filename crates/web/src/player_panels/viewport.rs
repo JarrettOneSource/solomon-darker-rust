@@ -203,6 +203,7 @@ impl PlayerPanels {
             .show(frame.ctx, |ui| {
                 ui.set_min_width(self.viewport_size.0 as f32);
                 if !(!self.input_suspended
+                    && !self.skill_book_result_open()
                     && self.notice.is_none()
                     && self.dye.is_none()
                     && self.rename_sack.is_none())

@@ -12,6 +12,7 @@ pub mod notices;
 mod sack_pages;
 mod sack_rename;
 mod services;
+mod skill_book_feedback;
 mod skill_selector;
 mod skills;
 mod viewport;
@@ -156,6 +157,7 @@ enum Target {
     Skill(usize),
     Belt(usize),
     NoticeOkay,
+    SkillBookResultOkay,
     Unforge,
     UnforgeConfirm,
     UnforgeCancel,
@@ -274,6 +276,7 @@ pub struct PlayerPanels {
     sack_transition: Option<sack_pages::SackPageTransition>,
     stats_page: usize,
     notice: Option<PlayerPanelNotice>,
+    skill_book_feedback: skill_book_feedback::SkillBookFeedback,
     unforge_item: Option<u64>,
     dye: Option<DyeSelection>,
     rename_sack: Option<sack_rename::SackRenameDialog>,
@@ -339,6 +342,7 @@ impl PlayerPanels {
             sack_transition: None,
             stats_page: 0,
             notice: None,
+            skill_book_feedback: skill_book_feedback::SkillBookFeedback::new(),
             unforge_item: None,
             dye: None,
             rename_sack: None,
@@ -361,7 +365,7 @@ impl PlayerPanels {
         })
     }
     pub fn show(&mut self, panel: PlayerPanel, now: f64) -> Result<(), String> {
-        self.close_sack_rename()?;
+        self.close_sack_rename();
         self.clear_inventory_flybys()?;
         self.clear_sack_transition()?;
         let previous = self.panel;
@@ -399,7 +403,7 @@ impl PlayerPanels {
     }
 
     pub fn hide(&mut self) -> Result<(), String> {
-        self.close_sack_rename()?;
+        self.close_sack_rename();
         self.clear_inventory_flybys()?;
         self.clear_sack_transition()?;
         self.sack_path.clear();
@@ -428,6 +432,7 @@ impl PlayerPanels {
         self.notice = None;
         self.closing_at = None;
         self.replace_with = None;
+        self.reset_skill_book_feedback(None);
         self.npc_notebox.reset();
         self.boast_instruction = None;
         self.boast_failure_sequence = None;
@@ -460,7 +465,7 @@ impl PlayerPanels {
     }
 
     pub fn is_open(&self) -> bool {
-        self.panel.is_some()
+        self.panel.is_some() || self.skill_book_result_open()
     }
 
     pub fn panel(&self) -> Option<PlayerPanel> {
@@ -539,9 +544,7 @@ impl PlayerPanels {
         if let Some(dialog) = &mut self.rename_sack {
             match dialog.action_feedback(action, result.accepted) {
                 Ok(true) => {
-                    if let Err(message) = self.close_sack_rename() {
-                        web_sys::console::error_1(&message.into());
-                    }
+                    self.close_sack_rename();
                 }
                 Ok(false) => {}
                 Err(message) => web_sys::console::error_1(&message.into()),
@@ -623,7 +626,7 @@ impl PlayerPanels {
     fn back(&mut self, now: f64) -> Result<(), String> {
         if let Some(dialog) = &self.rename_sack {
             if dialog.can_cancel() {
-                self.close_sack_rename()?;
+                self.close_sack_rename();
             }
         } else if self.notice.take().is_some() {
             self.unforge_item = None;
@@ -663,6 +666,10 @@ impl PlayerPanels {
         snapshot: &PlayerPanelSnapshot<'_>,
         now: f64,
     ) -> Result<(), String> {
+        if self.skill_book_result_open() {
+            self.apply_skill_book_result_event(&event);
+            return Ok(());
+        }
         if self.rename_sack.is_some() {
             return Ok(());
         }
@@ -915,6 +922,7 @@ impl PlayerPanels {
             Target::NoticeOkay => {
                 self.notice = None;
             }
+            Target::SkillBookResultOkay => {}
             Target::Unforge => {
                 if let Some(Target::Item(id)) = self.selected {
                     self.begin_unforge(id, snapshot);
@@ -1128,6 +1136,7 @@ impl PlayerPanels {
         self.expire_sack_transition(now)?;
         if self.hotbar_controls.update(
             self.input_suspended
+                || self.skill_book_result_open()
                 || self.closing_at.is_some()
                 || self.rename_sack.is_some()
                 || self.inventory_transition_locked(),
@@ -1213,6 +1222,7 @@ impl PlayerPanels {
         self.update_inventory_flybys(now)?;
         self.npc_notebox.update(now);
         if self.panel.is_none() {
+            self.viewport_size = (width, height);
             return Ok(());
         }
         self.update_viewport(width, height)?;
@@ -1261,8 +1271,8 @@ impl PlayerPanels {
             }
         }
         self.npc_notebox.paint(frame, &self.ui, self.now, self.viewport_size)?;
-        let Some(panel) = self.panel else { return Ok(()) };
-        let Some(model) = self.model.take() else { return Ok(()) };
+        let Some(panel) = self.panel else { return self.paint_skill_book_result(frame) };
+        let Some(model) = self.model.take() else { return self.paint_skill_book_result(frame) };
         let snapshot = model.snapshot();
         let scope = if self.notice.is_some() {
             "panel-notice"
@@ -1315,7 +1325,7 @@ impl PlayerPanels {
                 _ => Some("panel:stats-down".to_owned()),
             }
         };
-        if !self.input_suspended && self.rename_sack.is_none() {
+        if !self.input_suspended && self.rename_sack.is_none() && !self.skill_book_result_open() {
             frame.input_scope(scope);
             self.navigation.update(frame.ctx, scope, preferred.as_deref());
         }
@@ -1343,6 +1353,7 @@ impl PlayerPanels {
                     &events,
                     self.alpha as f32,
                     !self.input_suspended
+                        && !self.skill_book_result_open()
                         && self.closing_at.is_none()
                         && self.notice.is_none()
                         && self.dye.is_none()
@@ -1400,6 +1411,7 @@ impl PlayerPanels {
             self.paint_notice_modal(frame, &notice)?;
         }
         self.paint_sack_rename(frame)?;
+        self.paint_skill_book_result(frame)?;
         self.model = Some(model);
         error.map_or(Ok(()), Err)
     }
@@ -1506,6 +1518,7 @@ fn target_from_action(action: &str) -> Option<Target> {
         "stats-up" => Target::StatsUp,
         "stats-down" => Target::StatsDown,
         "notice-okay" => Target::NoticeOkay,
+        "skill-book-result-okay" => Target::SkillBookResultOkay,
         "unforge" => Target::Unforge,
         "unforge-confirm" => Target::UnforgeConfirm,
         "unforge-cancel" => Target::UnforgeCancel,
