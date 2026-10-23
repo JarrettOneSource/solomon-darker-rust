@@ -142,6 +142,12 @@ impl MovementInput {
             .ok_or("no gameplay canvas")?
             .dyn_into::<HtmlCanvasElement>()
             .map_err(|_| "gameplay surface is not a canvas")?;
+        // Source joysticks/scene disable native pan before a gesture starts.
+        // preventDefault on pointerdown cannot prevent browser pointercancel.
+        canvas
+            .style()
+            .set_property("touch-action", "none")
+            .map_err(|_| "cannot configure game canvas touch gestures".to_owned())?;
         let state = Rc::new(RefCell::new(GameplayInputState::new(hotbar.bank())));
         let mut listeners = Vec::new();
         for (name, pressed) in [("keydown", true), ("keyup", false)] {
