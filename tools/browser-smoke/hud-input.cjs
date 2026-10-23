@@ -36,7 +36,8 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
   const errors=[];
   try {
-    const desktop=await browser.newPage({viewport:{width:1600,height:900}});
+    const desktopContext=await browser.newContext({viewport:{width:1600,height:900}});
+    const desktop=await desktopContext.newPage();
     ui.watchErrors(desktop,{errors});
     await ui.observeGpu(desktop);
     await ready(desktop);
@@ -90,7 +91,7 @@ const screenshot=(page,name)=>page.screenshot({path:path.join(output,name)});
     await focusTarget.close();
     await screenshot(desktop,'hud-input-desktop-final.png');
     const desktopSubmissions=await ui.gpuDraws(desktop);
-    await desktop.close();
+    await desktopContext.close();
 
     const touch=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
     ui.watchErrors(touch,{errors});

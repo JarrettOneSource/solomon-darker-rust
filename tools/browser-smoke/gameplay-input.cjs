@@ -18,7 +18,8 @@ async function pad(page,buttons=[],axes=[0,0,0,0],analog={}){
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
   const errors=[];
   try{
-    const page=await browser.newPage({viewport:{width:1600,height:900}});
+    const context=await browser.newContext({viewport:{width:1600,height:900}});
+    const page=await context.newPage();
     ui.watchErrors(page,{errors});
     await ui.observeGpu(page);
     await page.goto(url,{waitUntil:'domcontentloaded'});
