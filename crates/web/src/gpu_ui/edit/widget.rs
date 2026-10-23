@@ -268,6 +268,7 @@ impl<'a> NativeTextEdit<'a> {
                         line_height: self.line_height,
                         tab_size: self.tab_size,
                         letter_spacing: self.letter_spacing,
+                        stroke: None,
                     },
                 )?;
                 (run.geometry.clone(), Some(run))
@@ -422,6 +423,7 @@ impl<'a> NativeTextEdit<'a> {
                     line_height: self.line_height,
                     tab_size: self.tab_size,
                     letter_spacing: self.letter_spacing,
+                    stroke: None,
                 },
             });
         }

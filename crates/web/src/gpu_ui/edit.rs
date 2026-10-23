@@ -11,7 +11,9 @@ use egui::{Color32, FontId, Pos2, Rect, Response, Sense, Vec2};
 
 use super::UiFrame;
 
-pub use font_run::{FontRunOptions, NativeFontRun, font_run, font_run_with_options};
+pub use font_run::{
+    FontRunOptions, NativeFontRun, NativeFontStroke, font_run, font_run_with_options,
+};
 pub use model::{Rules as EditorRules, Selection as TextSelection};
 pub use widget::{NativeEditOutput, NativeTextEdit};
 
@@ -24,6 +26,7 @@ pub struct NativeLabelStyle {
     pub line_height: Option<f32>,
     pub tab_size: Option<f32>,
     pub letter_spacing: Option<f32>,
+    pub stroke: Option<NativeFontStroke>,
     pub sense: Sense,
 }
 
@@ -37,6 +40,7 @@ impl NativeLabelStyle {
             line_height: None,
             tab_size: None,
             letter_spacing: None,
+            stroke: None,
             sense: Sense::hover(),
         }
     }
@@ -61,6 +65,7 @@ pub fn shaped_label(
             line_height: style.line_height,
             tab_size: style.tab_size,
             letter_spacing: style.letter_spacing,
+            stroke: style.stroke,
         },
     )?;
     let (_, rect) = ui.allocate_space(run.size());

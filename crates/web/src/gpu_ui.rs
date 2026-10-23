@@ -27,8 +27,9 @@ use web_sys::{Document, HtmlCanvasElement};
 use solomon_graphics::{BlendMode, ColorFilter, Renderer};
 
 pub use edit::{
-    EditorRules, FontRunOptions, NativeEditOutput, NativeFontRun, NativeLabelStyle, NativeTextEdit,
-    TextSelection, font_run, font_run_with_options, shaped_label, text_edit_focused,
+    EditorRules, FontRunOptions, NativeEditOutput, NativeFontRun, NativeFontStroke,
+    NativeLabelStyle, NativeTextEdit, TextSelection, font_run, font_run_with_options, shaped_label,
+    text_edit_focused,
 };
 pub use effects::GroupEffect;
 pub use geometry::{clip_polygon_ellipse, css_bezier};
