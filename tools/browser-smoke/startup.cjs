@@ -13,6 +13,13 @@ assert.ok(selectedCases.length>0&&selectedCases.every(value=>allCases.includes(v
   `CASES must name existing startup cases: ${allCases.join(',')}`);
 const selected=name=>selectedCases.includes(name);
 const source = path.resolve(__dirname, '../../web/assets/stock/loader-logo.png');
+const fontCount=[...fs.readFileSync(path.resolve(__dirname,
+  '../../crates/web/src/gpu_ui/fonts.rs'),'utf8').matchAll(/"[^"]+\.woff2"/g)].length;
+const interfaceImageCount=fs.readFileSync(path.resolve(__dirname,
+  '../../crates/web/src/gpu_ui/stock-images.txt'),'utf8').split(/\r?\n/).filter(Boolean).length;
+const audioCount=new Set([...fs.readFileSync(path.resolve(__dirname,
+  '../../crates/sim/src/audio/catalog.rs'),'utf8').matchAll(/path: "([^"]+)"/g)]
+  .map(match=>match[1])).size;
 const expected = {
   'loader:logo': [41,13,388,227],
   'loader:url': [119,251,244,18],
@@ -176,9 +183,15 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
     await page.waitForFunction(()=>window.__solomonGpuDraws?.canvasCalls['[data-gpu-loader]']>0,
       null,{timeout:45000});
     const heldName=new URL(requestUrl).pathname.split('/').at(-1);
+    const expectedCompleted=heldName.endsWith('.woff2')?fontCount-1
+      :heldName==='Title.png'?fontCount+interfaceImageCount-1
+      :heldName==='solomondarktheme.mp3'?fontCount+interfaceImageCount+audioCount-1
+      :wasm?0:null;
     const waiting=await ui.waitForUi(page,snapshot=>snapshot.loading
-      &&new URL(snapshot.loading.currentItem,url).pathname.split('/').at(-1)===heldName,
-    `${name} reports its actual unfinished ${heldName}`,{timeout:45000});
+      &&new URL(snapshot.loading.currentItem,url).pathname.split('/').at(-1)===heldName
+      &&(expectedCompleted===null||snapshot.loading.completed===expectedCompleted),
+    `${name} reports unfinished ${heldName} after ${expectedCompleted??'all other phase'} real completions`,
+    {timeout:45000});
     pending(waiting);
     const first=await visual(page,`${name}-held`);
     await page.waitForTimeout(500);
@@ -252,7 +265,7 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
     await ui.assertGpuOnly(page);
     await page.screenshot({path:path.join(output,`${name}-title.png`)});
     assert.deepEqual(observed.errors,[],'delayed successful work has no runtime/asset errors');
-    return {requestUrl,before,waiting,still,first,second,resizes,handoff,heldAnnouncements,announcementHandoff,
+    return {requestUrl,expectedCompleted,before,waiting,still,first,second,resizes,handoff,heldAnnouncements,announcementHandoff,
       ready:await ui.readUi(page),...observed};
   } catch(error) {
     const failure={requestUrl,failure:error.stack,...observed};
