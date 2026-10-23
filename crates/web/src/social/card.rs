@@ -213,18 +213,36 @@ impl SocialUi {
                                                 2,
                                             ))
                                             .show(ui, |ui| {
-                                                ui.label(card_text(
-                                                    &badge.to_uppercase(),
+                                                let displayed = badge.to_uppercase();
+                                                let response = ui.label(card_text(
+                                                    &displayed,
                                                     if coarse { 8.0 } else { 9.5 },
                                                     egui::Color32::from_rgb(243, 217, 148),
                                                 ));
+                                                frame.record(
+                                                    "social/card-badge",
+                                                    &displayed,
+                                                    "text",
+                                                    &response,
+                                                );
+                                                frame.record_value(
+                                                    "social/card-badge",
+                                                    &badge,
+                                                    None,
+                                                );
                                             });
                                         if let Some(activity) = &activity {
-                                            ui.label(card_text(
+                                            let response = ui.label(card_text(
                                                 activity,
                                                 if coarse { 8.0 } else { 10.0 },
                                                 super::gpu::GOLD,
                                             ));
+                                            frame.record(
+                                                "social/card-activity",
+                                                activity,
+                                                "text",
+                                                &response,
+                                            );
                                         }
                                     });
                                 });
