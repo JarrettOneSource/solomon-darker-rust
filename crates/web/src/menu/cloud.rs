@@ -1699,7 +1699,7 @@ impl CloudView {
                 false,
             );
             frame.record_value("dark-cloud-search-input", input, None);
-            if response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if widgets::submitted_on_enter(&response) {
                 actions.push("cloud-search-submit".to_owned());
             }
             let clear =
