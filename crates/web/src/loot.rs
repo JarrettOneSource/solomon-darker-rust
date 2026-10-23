@@ -3,7 +3,7 @@
 //! scatter seed persists here, and it resets when the host installs a new run.
 
 mod messages;
-pub use messages::LootMessages;
+pub use messages::WorldNotifications;
 
 use std::collections::{BTreeMap, BTreeSet};
 

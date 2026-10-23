@@ -117,7 +117,12 @@ fa08 oracle: nine programs and 1,960 records cover all four source keys, Gold pa
 merge boundaries, insertion pressure, complete fades and two-decimal scale rounding.
 Ten visibility cases, 77 book-name/error cases and 12 receipt deliveries are also exact.
 All eight focused notification/book/historical-loot tests pass locally. GPU composition
-and accepted production-event delivery remain pending.
+and accepted production-event delivery remain pending. `WorldNotifications` now replaces
+the unused DOM type with one accepted-session consumer and the menu-font GPU painter.
+Four focused controller tests cover initial/restored receipts, all local lanes and remote
+filters, repeated snapshots, world/player/missing-player/terminal/rewind resets, and hidden
+life/Tutorial clocks. They pass locally; final game-loop wiring and browser proof remain
+owned by integration. Geometry diagnostics retain original glyph ink and the Y50 clip.
 
 Confidence is high for this complete pinned-source contract and the cited recovered native
 geometry/lifecycle. Unknown until measured: composed GPU glyph clipping/blending, actual
@@ -154,7 +159,7 @@ Owner names match the parallel implementation lanes. Scripts are under `tools/br
 | NPC chat/books/boasts/authored choices; history, progressive text/audio/acceleration, selector list drag/wheel/controller, notebox/error | HUD | `player_panels/{dialogue,notebox}.rs`; `hub-dialogue-rooms.mjs`, `menu-journey.cjs` | Pending GPU modal focus and dialogue |
 | Level-up offer sequence; reveal/clocks, cards/insight/weld, responsive detail, choice/reroll/save and rejected-action recovery | HUD | `skill_picker.rs`; `hud-selector.cjs`, actual earned gameplay | Pending earned offer and real selection |
 | Tutorial callouts/arrows; canonical text/narration and live GPU widget anchors; intro title/fade; Game Over riff/prompt/admission | HUD | `tutorial/**`, `college_intro.rs`, `game_over.rs`; `tutorial-text-bounds.cjs`, `solomon-entrance.cjs`, `boneyard.cjs` | Pending GPU anchor and terminal run evidence |
-| World notifications; local loot/Gold coalescing, Hub/Boneyard rank-book notices, Overloaded Mana and CHEAT DEATH; per-run cursors, native clip/rise/fade/shadow, life/Tutorial/Game Over gates and screen-reader text | acceptance | Recovered notification contract below; `sim/boneyard/loot/messages.rs`, `web/loot/messages.rs`; current-source fixture and genuine earned browser events | Recovered-pending-port; old DOM type was entirely unwired |
+| World notifications; local loot/Gold coalescing, Hub/Boneyard rank-book notices, Overloaded Mana and CHEAT DEATH; per-run cursors, native clip/rise/fade/shadow, life/Tutorial/Game Over gates and screen-reader text | acceptance; root wiring | Recovered notification contract above; `sim/boneyard/loot/messages.rs`, `web/loot/messages.rs`; current-source fixture and genuine earned browser events | Current-source clock and GPU controller implemented; 12 focused tests pass; integrated browser event/render proof pending |
 | Social Party; collapsed/coarse/expanded, Members/Settings/Mods, roster tags/scroll, privacy, copy/regenerate, Kick/Leave, request/invite Accept/Deny | social | `social/party/**`; `hosted-social.cjs`, `join-party.cjs` | Pending actual two-human host/input |
 | Player cards/private College; Hub actor hit, Message/invite, resolve/decline/failure and owned roster | social | `social/{card,hub_players,hosted}.rs`; `hosted-social.cjs`, `hosted-session.cjs` | Pending private admission/teardown |
 | Chat; Boneyard/Global/Party/Whisper, drafts/unread/fade/channel cycle, IME, author card and disconnect/reset | social | `social/chat.rs`; `hosted-social.cjs` | Pending real text composition and delivery |
