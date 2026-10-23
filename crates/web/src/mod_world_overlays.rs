@@ -450,7 +450,7 @@ fn paint_sprite(
                     [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()],
                     uv,
                     tint,
-                    crate::render::BlendMode::Normal,
+                    solomon_graphics::BlendMode::Normal,
                 );
             }
         }

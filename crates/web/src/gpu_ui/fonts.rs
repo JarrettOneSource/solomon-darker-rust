@@ -52,6 +52,10 @@ const FACES: [(&str, &str, &str, &str); 9] = [
     ("SDGPU JetBrains Mono", "jetbrains-mono-latin-600-normal.woff2", "600", "normal"),
 ];
 
+pub(super) fn asset_count() -> usize {
+    FACES.len()
+}
+
 pub(super) async fn load(document: &Document, ctx: &Context) -> Result<BrowserFonts, String> {
     let set = document.fonts();
     let mut faces = Vec::new();
@@ -76,6 +80,9 @@ pub(super) async fn load(document: &Document, ctx: &Context) -> Result<BrowserFo
     JsFuture::from(js_sys::Promise::all(&promises))
         .await
         .map_err(|error| format!("GPU UI font readiness: {error:?}"))?;
+    for (_, file, _, _) in FACES {
+        crate::runtime_ui::completed("fonts", file, 1)?;
+    }
     let canvas: HtmlCanvasElement = document
         .create_element("canvas")
         .map_err(|error| format!("glyph canvas: {error:?}"))?

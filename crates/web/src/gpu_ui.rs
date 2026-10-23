@@ -427,6 +427,14 @@ pub struct GpuUi {
 }
 
 impl GpuUi {
+    pub(crate) fn startup_asset_count() -> usize {
+        fonts::asset_count()
+            + include_str!("gpu_ui/stock-images.txt")
+                .lines()
+                .filter(|path| !path.is_empty())
+                .count()
+    }
+
     pub async fn load(
         document: &Document,
         canvas: &HtmlCanvasElement,
