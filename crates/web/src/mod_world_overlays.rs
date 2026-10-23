@@ -1,31 +1,26 @@
-//! Source `mod-ui/Mod{Enemies,SpellEffects,Powerups,ShopNpcs}.tsx` DOM consumers.
-//! Refresh on accepted snapshot/runtime notifications and resize, using the last rendered
-//! scene projection. Keyed elements survive refreshes so CSS animation clocks do too.
+//! GPU authored enemies, spell effects, powerups and shop NPCs from `mod-ui`.
+//! Accepted projections own actor state. Birth clocks retain the source's keyed CSS animation lifetimes.
 
 mod scene;
 pub use scene::{ModSceneOverlay, ModSceneOverlayFrame, ModScenePartyMember, ModViewAction};
 
-use std::collections::{BTreeMap, BTreeSet};
-
+use crate::gpu_ui::UiFrame;
+use crate::mod_presentation_assets::ModPresentationAssets;
+use egui::{Color32, FontFamily, FontId, Id, Order, Pos2, Rect, Stroke, pos2, vec2};
 use solomon_sim::Vec2;
 use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::assets::GameModAsset;
 use solomon_sim::modding::presentation::*;
-use web_sys::{Document, HtmlElement};
-
-use crate::mod_presentation_assets::ModPresentationAssets;
-use crate::ui::{append, element, style};
+use std::collections::{BTreeMap, BTreeSet};
+use web_sys::Document;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModWorldProjection {
     pub location: ModWorldLocation,
-    /// Scene client rect origin plus its last rendered local-player screen point.
     pub screen_origin: Vec2,
-    /// Source layouts subtract the accepted local position, not a predicted display copy.
     pub local_player_position: Vec2,
     pub zoom: f64,
 }
-
 impl ModWorldProjection {
     #[must_use]
     pub fn screen_position(self, world: Vec2) -> Vec2 {
@@ -35,99 +30,84 @@ impl ModWorldProjection {
         )
     }
 }
-
 pub struct ModWorldOverlayFrame<'a> {
     pub runtime: Option<&'a LuaObject>,
     pub assets: &'a [GameModAsset],
     pub projection: Option<ModWorldProjection>,
 }
-
+#[derive(Clone)]
+struct Sprite {
+    path: String,
+    source: ModImageFrame,
+    image_size: Vec2,
+    center: Pos2,
+    size: egui::Vec2,
+}
+struct Enemy {
+    id: i64,
+    sprite: Sprite,
+    name: String,
+    health: f32,
+    dying: bool,
+    glow: Color32,
+    blur: f32,
+}
+struct Effect {
+    id: i64,
+    sprite: Sprite,
+    kind: ModSpellEffectKind,
+    radius: f32,
+    target: Pos2,
+}
+struct Powerup {
+    id: i64,
+    sprite: Sprite,
+}
+struct Pickup {
+    id: i64,
+    tick: i64,
+    center: Pos2,
+}
+struct Shop {
+    path: Option<String>,
+    name: String,
+    center: Pos2,
+}
 pub struct ModWorldOverlays {
     document: Document,
-    root: HtmlElement,
-    enemy_root: HtmlElement,
-    effect_root: HtmlElement,
-    powerup_root: HtmlElement,
-    shop_root: HtmlElement,
-    enemy_nodes: BTreeMap<i64, EnemyNodes>,
-    effect_nodes: BTreeMap<i64, EffectNodes>,
-    powerup_nodes: BTreeMap<i64, HtmlElement>,
-    pickup_nodes: BTreeMap<(i64, i64), HtmlElement>,
-    shop_nodes: BTreeMap<usize, ShopNodes>,
+    enemies: Vec<Enemy>,
+    effects: Vec<Effect>,
+    powerups: Vec<Powerup>,
+    pickups: Vec<Pickup>,
+    shops: Vec<Shop>,
+    births: BTreeMap<(u8, i64, i64), f64>,
     pub scene: ModSceneOverlay,
 }
-
-struct EnemyNodes {
-    root: HtmlElement,
-    name: HtmlElement,
-    health: HtmlElement,
-}
-
-struct EffectNodes {
-    root: HtmlElement,
-    sprite: HtmlElement,
-    decoration: Option<(ModSpellEffectKind, HtmlElement)>,
-}
-
-struct ShopNodes {
-    root: HtmlElement,
-    icon: HtmlElement,
-    name: HtmlElement,
-    image: bool,
-}
-
 impl ModWorldOverlays {
     pub fn new(document: &Document) -> Result<Self, String> {
-        let root = element(document, "div", "mod-world-overlays")?;
-        let css = element(document, "style", "mod-world-styles")?;
-        css.set_text_content(Some(include_str!("../../../web/mod-world.css")));
-        append(&root, &css)?;
-        let powerup_root = element(document, "div", "mod-powerups")?;
-        let enemy_root = element(document, "div", "mod-enemies")?;
-        let shop_root = element(document, "div", "mod-shop-npcs")?;
-        let effect_root = element(document, "div", "mod-spell-effects")?;
-        for group in [&enemy_root, &powerup_root, &shop_root, &effect_root] {
-            attribute(group, "aria-hidden", "true")?;
-            append(&root, group)?;
-        }
-        document
-            .body()
-            .ok_or("Mod overlays need the game document")?
-            .append_child(&root)
-            .map_err(|_| "Could not attach mod world overlays")?;
-        let scene = ModSceneOverlay::new(document, &root)?;
         Ok(Self {
             document: document.clone(),
-            root,
-            enemy_root,
-            effect_root,
-            powerup_root,
-            shop_root,
-            enemy_nodes: BTreeMap::new(),
-            effect_nodes: BTreeMap::new(),
-            powerup_nodes: BTreeMap::new(),
-            pickup_nodes: BTreeMap::new(),
-            shop_nodes: BTreeMap::new(),
-            scene,
+            enemies: Vec::new(),
+            effects: Vec::new(),
+            powerups: Vec::new(),
+            pickups: Vec::new(),
+            shops: Vec::new(),
+            births: BTreeMap::new(),
+            scene: ModSceneOverlay::new(document)?,
         })
     }
-
     pub fn reset(&mut self) {
         self.clear_world();
         self.scene.reset();
     }
-
     fn clear_world(&mut self) {
-        for group in [&self.enemy_root, &self.effect_root, &self.powerup_root, &self.shop_root] {
-            group.set_text_content(None);
-        }
-        self.enemy_nodes.clear();
-        self.effect_nodes.clear();
-        self.powerup_nodes.clear();
-        self.pickup_nodes.clear();
-        self.shop_nodes.clear();
+        self.enemies.clear();
+        self.effects.clear();
+        self.powerups.clear();
+        self.pickups.clear();
+        self.shops.clear();
+        self.births.clear();
     }
-
     pub fn refresh(
         &mut self,
         frame: &ModWorldOverlayFrame<'_>,
@@ -138,329 +118,374 @@ impl ModWorldOverlays {
             return Ok(());
         };
         let boneyard = projection.location == ModWorldLocation::Boneyard;
-        let enemies =
-            if boneyard { project_mod_enemies(frame.runtime, frame.assets) } else { Vec::new() };
-        let powerups =
-            if boneyard { project_mod_powerups(frame.runtime, frame.assets) } else { Vec::new() };
-        let pickups = if boneyard {
-            project_mod_powerup_events(frame.runtime, frame.assets)
-        } else {
-            Vec::new()
-        };
-        self.refresh_enemies(&enemies, projection, images)?;
-        self.refresh_effects(
-            &project_mod_spell_effects(frame.runtime, frame.assets),
-            projection,
-            images,
-        )?;
-        self.refresh_powerups(&powerups, &pickups, projection, images)?;
-        self.refresh_shops(
-            &project_mod_shop_npcs(frame.runtime, frame.assets, projection.location),
-            projection,
-            images,
-        )
-    }
-
-    fn refresh_enemies(
-        &mut self,
-        models: &[ModEnemyModel<'_>],
-        projection: ModWorldProjection,
-        images: &ModPresentationAssets,
-    ) -> Result<(), String> {
-        let live: BTreeSet<_> = models.iter().map(|enemy| enemy.id).collect();
-        self.enemy_nodes.retain(|id, nodes| {
-            if live.contains(id) {
-                true
-            } else {
-                nodes.root.remove();
-                false
+        self.enemies.clear();
+        if boneyard {
+            for model in project_mod_enemies(frame.runtime, frame.assets) {
+                let scale = (128.0 / model.frame.width.max(model.frame.height)).min(1.0)
+                    * model.scale
+                    * projection.zoom;
+                self.enemies.push(Enemy {
+                    id: model.id,
+                    sprite: sprite(
+                        images,
+                        model.image,
+                        model.frame,
+                        model.image_size,
+                        scale,
+                        projection.screen_position(model.position),
+                    )?,
+                    name: model.name.to_owned(),
+                    health: (model.current_health / model.maximum_health) as f32,
+                    dying: model.life_state == ModEnemyLifeState::Dying,
+                    glow: packed_color(model.light_color),
+                    blur: (model.light_radius / 10.0).max(4.0) as f32,
+                });
             }
+        }
+        // CSS stacks enemies by rounded screen y; insertion order resolves ties.
+        self.enemies.sort_by(|left, right| {
+            (left.sprite.center.y + 0.5).floor().total_cmp(&(right.sprite.center.y + 0.5).floor())
         });
-        for (index, enemy) in models.iter().enumerate() {
-            if !self.enemy_nodes.contains_key(&enemy.id) {
-                let root = element(&self.document, "div", "mod-enemy")?;
-                let name = element(&self.document, "span", "mod-enemy__name")?;
-                let rail = element(&self.document, "span", "mod-enemy__health")?;
-                let health = element(&self.document, "i", "")?;
-                append(&rail, &health)?;
-                append(&root, &name)?;
-                append(&root, &rail)?;
-                self.enemy_nodes.insert(enemy.id, EnemyNodes { root, name, health });
+        self.effects.clear();
+        for model in project_mod_spell_effects(frame.runtime, frame.assets) {
+            let scale =
+                (96.0 / model.frame.width.max(model.frame.height)).min(1.0) * projection.zoom;
+            self.effects.push(Effect {
+                id: model.id,
+                sprite: sprite(
+                    images,
+                    model.image,
+                    model.frame,
+                    model.image_size,
+                    scale,
+                    projection.screen_position(model.position),
+                )?,
+                kind: model.kind,
+                radius: (model.radius * projection.zoom) as f32,
+                target: point(projection.screen_position(model.target)),
+            });
+        }
+        self.powerups.clear();
+        self.pickups.clear();
+        if boneyard {
+            for model in project_mod_powerups(frame.runtime, frame.assets) {
+                let scale =
+                    (72.0 / model.frame.width.max(model.frame.height)).min(1.0) * projection.zoom;
+                self.powerups.push(Powerup {
+                    id: model.id,
+                    sprite: sprite(
+                        images,
+                        model.image,
+                        model.frame,
+                        model.image_size,
+                        scale,
+                        projection.screen_position(model.position),
+                    )?,
+                });
             }
-            let nodes = &self.enemy_nodes[&enemy.id];
-            let point = projection.screen_position(enemy.position);
-            let scale = (128.0 / enemy.frame.width.max(enemy.frame.height)).min(1.0)
-                * enemy.scale
-                * projection.zoom;
-            sprite_style(
-                &nodes.root,
-                enemy.image,
-                enemy.frame,
-                enemy.image_size,
-                scale,
-                point,
-                images,
-            )?;
-            property(
-                &nodes.root,
-                "filter",
-                &format!(
-                    "drop-shadow(0 0 {}px #{})",
-                    (enemy.light_radius / 10.0).max(4.0),
-                    packed_color(enemy.light_color)
+            for event in project_mod_powerup_events(frame.runtime, frame.assets) {
+                self.pickups.push(Pickup {
+                    id: event.id,
+                    tick: event.tick,
+                    center: point(projection.screen_position(event.position)),
+                });
+            }
+        }
+        self.shops.clear();
+        for model in project_mod_shop_npcs(frame.runtime, frame.assets, projection.location) {
+            self.shops.push(Shop {
+                path: model
+                    .image
+                    .map(|image| {
+                        images.image(&image.mod_id, &image.path).map(|image| image.url().to_owned())
+                    })
+                    .transpose()?,
+                name: model.name.to_owned(),
+                center: point(projection.screen_position(model.position)),
+            });
+        }
+        let live: BTreeSet<_> = self
+            .effects
+            .iter()
+            .filter(|effect| effect.kind == ModSpellEffectKind::Area)
+            .map(|effect| (0, effect.id, 0))
+            .chain(self.powerups.iter().map(|powerup| (1, powerup.id, 0)))
+            .chain(self.pickups.iter().map(|event| (2, event.id, event.tick)))
+            .collect();
+        self.births.retain(|key, _| live.contains(key));
+        Ok(())
+    }
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        let ctx = frame.ctx.clone();
+        let now = ctx.input(|input| input.time);
+        let reduced = self
+            .document
+            .default_view()
+            .ok_or("mod overlay window")?
+            .match_media("(prefers-reduced-motion: reduce)")
+            .map_err(|_| "mod motion preference")?
+            .is_some_and(|query| query.matches());
+        let painter = ctx
+            .layer_painter(egui::LayerId::new(Order::Background, Id::unique("mod/world")))
+            .with_clip_rect(ctx.content_rect());
+        for powerup in &self.powerups {
+            let born = *self.births.entry((1, powerup.id, 0)).or_insert(now);
+            let phase = alternate(now - born, 0.8);
+            let mut sprite = powerup.sprite.clone();
+            if !reduced {
+                sprite.center.y -= 7.0 * phase;
+            }
+            paint_sprite(
+                frame,
+                &painter,
+                &sprite,
+                0.5,
+                1.0,
+                Some((Color32::from_rgba_unmultiplied(215, 186, 255, 217), 9.0)),
+            );
+            frame.record_rect(
+                &format!("mod/powerup:{}", powerup.id),
+                "Powerup",
+                "img",
+                Rect::from_center_size(sprite.center, sprite.size),
+                true,
+            );
+        }
+        for event in &self.pickups {
+            let born = *self.births.entry((2, event.id, event.tick)).or_insert(now);
+            let progress = ((now - born) / 0.5).clamp(0.0, 1.0) as f32;
+            let eased = bezier(progress, 0.0, 0.0, 0.58, 1.0);
+            painter.circle_stroke(
+                event.center,
+                12.0 * (1.0 + 2.0 * eased),
+                Stroke::new(
+                    3.0 * (1.0 + 2.0 * eased),
+                    Color32::from_rgba_unmultiplied(227, 201, 255, ((1.0 - eased) * 255.0) as u8),
                 ),
-            )?;
-            property(&nodes.root, "z-index", &(point.y + 0.5).floor().to_string())?;
-            attribute(&nodes.root, "data-enemy-id", &enemy.id.to_string())?;
-            attribute(&nodes.root, "data-life-state", enemy.life_state.as_str())?;
-            nodes.name.set_text_content(Some(enemy.name));
-            property(
-                &nodes.health,
-                "width",
-                &format!("{}%", enemy.current_health / enemy.maximum_health * 100.0),
-            )?;
-            place_in_order(&self.enemy_root, &nodes.root, index)?;
+            );
         }
-        Ok(())
-    }
-
-    fn refresh_effects(
-        &mut self,
-        models: &[ModSpellEffectModel<'_>],
-        projection: ModWorldProjection,
-        images: &ModPresentationAssets,
-    ) -> Result<(), String> {
-        let live: BTreeSet<_> = models.iter().map(|effect| effect.id).collect();
-        self.effect_nodes.retain(|id, nodes| {
-            if live.contains(id) {
-                true
+        for (index, shop) in self.shops.iter().enumerate() {
+            let image = Rect::from_min_size(shop.center - vec2(27.0, 68.0), vec2(54.0, 54.0));
+            if let Some(path) = &shop.path {
+                frame.image(&painter, path, image, None, Color32::WHITE);
             } else {
-                nodes.root.remove();
-                false
-            }
-        });
-        for (index, effect) in models.iter().enumerate() {
-            if !self.effect_nodes.contains_key(&effect.id) {
-                let root = element(&self.document, "div", "mod-spell-effect")?;
-                let sprite = element(&self.document, "span", "mod-spell-effect__sprite")?;
-                append(&root, &sprite)?;
-                self.effect_nodes.insert(effect.id, EffectNodes { root, sprite, decoration: None });
-            }
-            let nodes = self.effect_nodes.get_mut(&effect.id).expect("admitted mod effect");
-            attribute(&nodes.root, "data-effect-id", &effect.id.to_string())?;
-            attribute(&nodes.root, "data-kind", effect.kind.as_str())?;
-            if nodes.decoration.as_ref().is_some_and(|(kind, _)| *kind != effect.kind) {
-                nodes.decoration.take().expect("existing effect decoration").1.remove();
-            }
-            let point = projection.screen_position(effect.position);
-            if effect.kind != ModSpellEffectKind::Projectile {
-                if nodes.decoration.is_none() {
-                    let class = if effect.kind == ModSpellEffectKind::Area {
-                        "mod-spell-effect__area"
-                    } else {
-                        "mod-spell-effect__channel"
-                    };
-                    let decoration = element(&self.document, "span", class)?;
-                    nodes
-                        .root
-                        .insert_before(&decoration, Some(&nodes.sprite))
-                        .map_err(|_| "Could not attach mod field")?;
-                    nodes.decoration = Some((effect.kind, decoration));
+                painter.circle_filled(image.center(), 27.0, Color32::from_rgb(37, 28, 48));
+                for i in (0..12).rev() {
+                    let ratio = i as f32 / 12.0;
+                    painter.circle_filled(
+                        image.center(),
+                        27.0 * ratio,
+                        Color32::from_rgb(
+                            (133.0 - 96.0 * ratio) as u8,
+                            (104.0 - 76.0 * ratio) as u8,
+                            (161.0 - 113.0 * ratio) as u8,
+                        ),
+                    );
                 }
-                let decoration = &nodes.decoration.as_ref().expect("admitted effect decoration").1;
-                let (width, height) = if effect.kind == ModSpellEffectKind::Area {
-                    (effect.radius * 2.0 * projection.zoom, effect.radius * 2.0 * projection.zoom)
-                } else {
-                    let dx = (effect.target.x - effect.position.x) * projection.zoom;
-                    let dy = (effect.target.y - effect.position.y) * projection.zoom;
-                    property(
-                        decoration,
-                        "transform",
-                        &format!("translateY(-50%) rotate({}rad)", dy.atan2(dx)),
-                    )?;
-                    (
-                        solomon_sim::float::hypot(dx, dy),
-                        (effect.radius * 2.0 * projection.zoom).max(4.0),
-                    )
-                };
-                property(decoration, "left", &format!("{}px", point.x))?;
-                property(decoration, "top", &format!("{}px", point.y))?;
-                property(decoration, "width", &format!("{width}px"))?;
-                property(decoration, "height", &format!("{height}px"))?;
+                painter.circle_stroke(
+                    image.center(),
+                    27.0,
+                    Stroke::new(2.0, Color32::from_rgb(213, 192, 142)),
+                );
             }
-            let scale =
-                (96.0 / effect.frame.width.max(effect.frame.height)).min(1.0) * projection.zoom;
-            sprite_style(
-                &nodes.sprite,
-                effect.image,
-                effect.frame,
-                effect.image_size,
-                scale,
-                point,
-                images,
-            )?;
-            place_in_order(&self.effect_root, &nodes.root, index)?;
+            painter.text(
+                shop.center - vec2(0.0, 7.0),
+                egui::Align2::CENTER_CENTER,
+                &shop.name,
+                FontId::new(11.0, FontFamily::Name("Alegreya".into())),
+                Color32::from_rgb(240, 228, 196),
+            );
+            frame.record_rect(&format!("mod/shop:{index}"), &shop.name, "img", image, true);
         }
-        Ok(())
-    }
-
-    fn refresh_powerups(
-        &mut self,
-        models: &[ModPowerupModel<'_>],
-        events: &[ModPowerupEventModel<'_>],
-        projection: ModWorldProjection,
-        images: &ModPresentationAssets,
-    ) -> Result<(), String> {
-        let live: BTreeSet<_> = models.iter().map(|actor| actor.id).collect();
-        self.powerup_nodes.retain(|id, node| {
-            if live.contains(id) {
-                true
-            } else {
-                node.remove();
-                false
-            }
-        });
-        let live_pickups: BTreeSet<_> = events.iter().map(|event| (event.id, event.tick)).collect();
-        self.pickup_nodes.retain(|key, node| {
-            if live_pickups.contains(key) {
-                true
-            } else {
-                node.remove();
-                false
-            }
-        });
-        for (index, actor) in models.iter().enumerate() {
-            if !self.powerup_nodes.contains_key(&actor.id) {
-                self.powerup_nodes
-                    .insert(actor.id, element(&self.document, "span", "mod-powerup")?);
-            }
-            let node = &self.powerup_nodes[&actor.id];
-            let scale =
-                (72.0 / actor.frame.width.max(actor.frame.height)).min(1.0) * projection.zoom;
-            sprite_style(
-                node,
-                actor.image,
-                actor.frame,
-                actor.image_size,
-                scale,
-                projection.screen_position(actor.position),
-                images,
-            )?;
-            attribute(node, "data-powerup-id", &actor.id.to_string())?;
-            place_in_order(&self.powerup_root, node, index)?;
+        for enemy in &self.enemies {
+            let alpha = if enemy.dying { 0.75 } else { 1.0 };
+            paint_sprite(
+                frame,
+                &painter,
+                &enemy.sprite,
+                0.72,
+                alpha,
+                Some((enemy.glow, enemy.blur)),
+            );
+            let top = enemy.sprite.center.y - enemy.sprite.size.y * 0.72;
+            painter.text(
+                pos2(enemy.sprite.center.x, top - 6.0),
+                egui::Align2::CENTER_BOTTOM,
+                &enemy.name,
+                FontId::new(10.0, FontFamily::Name("Alegreya Medium".into())),
+                Color32::from_rgb(234, 223, 196).gamma_multiply(alpha),
+            );
+            let rail =
+                Rect::from_min_size(pos2(enemy.sprite.center.x - 22.0, top + 9.0), vec2(44.0, 4.0));
+            painter.rect_filled(rail, 0.0, Color32::from_rgb(36, 22, 26).gamma_multiply(alpha));
+            painter.rect_filled(
+                Rect::from_min_size(rail.min, vec2(rail.width() * enemy.health, rail.height())),
+                0.0,
+                Color32::from_rgb(165, 67, 82).gamma_multiply(alpha),
+            );
+            painter.rect_stroke(
+                rail,
+                0.0,
+                Stroke::new(1.0, Color32::from_black_alpha((204.0 * alpha) as u8)),
+                egui::StrokeKind::Inside,
+            );
+            frame.record_rect(
+                &format!("mod/enemy:{}", enemy.id),
+                &enemy.name,
+                "img",
+                Rect::from_min_size(
+                    enemy.sprite.center
+                        - vec2(enemy.sprite.size.x / 2.0, enemy.sprite.size.y * 0.72),
+                    enemy.sprite.size,
+                ),
+                true,
+            );
         }
-        for (index, event) in events.iter().enumerate() {
-            let key = (event.id, event.tick);
-            if !self.pickup_nodes.contains_key(&key) {
-                self.pickup_nodes.insert(key, element(&self.document, "i", "mod-powerup-pickup")?);
-            }
-            let node = &self.pickup_nodes[&key];
-            let point = projection.screen_position(event.position);
-            style(node, &format!("left:{}px;top:{}px", point.x, point.y))?;
-            place_in_order(&self.powerup_root, node, models.len() + index)?;
-        }
-        Ok(())
-    }
-
-    fn refresh_shops(
-        &mut self,
-        models: &[ModShopNpcModel<'_>],
-        projection: ModWorldProjection,
-        images: &ModPresentationAssets,
-    ) -> Result<(), String> {
-        for (index, shop) in models.iter().enumerate() {
-            let image = shop.image.is_some();
-            if self.shop_nodes.get(&index).is_some_and(|nodes| nodes.image != image) {
-                self.shop_nodes.remove(&index).expect("existing shop icon").root.remove();
-            }
-            if !self.shop_nodes.contains_key(&index) {
-                let root = element(&self.document, "div", "")?;
-                let icon = element(&self.document, if image { "img" } else { "i" }, "")?;
-                if image {
-                    attribute(&icon, "alt", "")?;
+        for effect in &self.effects {
+            let center = effect.sprite.center;
+            match effect.kind {
+                ModSpellEffectKind::Area => {
+                    let born = *self.births.entry((0, effect.id, 0)).or_insert(now);
+                    let phase = if reduced { 1.0 } else { alternate(now - born, 0.55) };
+                    let radius = effect.radius * if reduced { 1.0 } else { 0.96 + 0.08 * phase };
+                    let alpha = if reduced { 1.0 } else { 0.55 + 0.45 * phase };
+                    for i in (0..12).rev() {
+                        let ratio = i as f32 / 12.0;
+                        painter.circle_filled(
+                            center,
+                            radius * ratio,
+                            Color32::from_rgba_unmultiplied(
+                                133,
+                                78,
+                                219,
+                                ((1.0 - ratio) * 56.0 * alpha) as u8,
+                            ),
+                        );
+                    }
+                    painter.circle_stroke(
+                        center,
+                        radius,
+                        Stroke::new(
+                            2.0,
+                            Color32::from_rgba_unmultiplied(176, 132, 255, (199.0 * alpha) as u8),
+                        ),
+                    );
                 }
-                let name = element(&self.document, "span", "")?;
-                append(&root, &icon)?;
-                append(&root, &name)?;
-                self.shop_nodes.insert(index, ShopNodes { root, icon, name, image });
+                ModSpellEffectKind::Channel => {
+                    painter.line_segment(
+                        [center, effect.target],
+                        Stroke::new(
+                            (effect.radius * 2.0).max(4.0),
+                            Color32::from_rgba_unmultiplied(178, 144, 241, 150),
+                        ),
+                    );
+                }
+                ModSpellEffectKind::Projectile => {}
             }
-            let nodes = &self.shop_nodes[&index];
-            if let Some(image) = shop.image {
-                attribute(&nodes.icon, "src", images.image(&image.mod_id, &image.path)?.url())?;
-            }
-            let point = projection.screen_position(shop.position);
-            style(&nodes.root, &format!("left:{}px;top:{}px", point.x, point.y))?;
-            nodes.name.set_text_content(Some(shop.name));
-            place_in_order(&self.shop_root, &nodes.root, index)?;
+            paint_sprite(
+                frame,
+                &painter,
+                &effect.sprite,
+                0.5,
+                1.0,
+                Some((Color32::from_rgba_unmultiplied(183, 135, 255, 204), 7.0)),
+            );
+            frame.record_rect(
+                &format!("mod/effect:{}", effect.id),
+                effect.kind.as_str(),
+                "img",
+                Rect::from_center_size(center, effect.sprite.size),
+                true,
+            );
         }
-        self.shop_nodes.retain(|&index, nodes| {
-            if index < models.len() {
-                true
-            } else {
-                nodes.root.remove();
-                false
-            }
-        });
-        Ok(())
+        self.scene.paint(frame)
     }
 }
-
-impl Drop for ModWorldOverlays {
-    fn drop(&mut self) {
-        self.root.remove();
-    }
-}
-
-#[allow(clippy::too_many_arguments)] // The Source CSS crop uses these sprite properties independently.
-fn sprite_style(
-    node: &HtmlElement,
+fn sprite(
+    images: &ModPresentationAssets,
     image: &GameModAsset,
-    frame: ModImageFrame,
+    source: ModImageFrame,
     image_size: Vec2,
     scale: f64,
-    point: Vec2,
-    images: &ModPresentationAssets,
-) -> Result<(), String> {
-    let source = serde_json::to_string(images.image(&image.mod_id, &image.path)?.url())
-        .map_err(|error| error.to_string())?;
-    style(
-        node,
-        &format!(
-            "background-image:url({source});background-position:{}px {}px;background-size:{}px {}px;width:{}px;height:{}px;left:{}px;top:{}px",
-            -frame.x * scale,
-            -frame.y * scale,
-            image_size.x * scale,
-            image_size.y * scale,
-            frame.width * scale,
-            frame.height * scale,
-            point.x,
-            point.y,
+    position: Vec2,
+) -> Result<Sprite, String> {
+    Ok(Sprite {
+        path: images.image(&image.mod_id, &image.path)?.url().to_owned(),
+        source,
+        image_size,
+        center: point(position),
+        size: vec2((source.width * scale) as f32, (source.height * scale) as f32),
+    })
+}
+fn paint_sprite(
+    frame: &UiFrame<'_>,
+    painter: &egui::Painter,
+    sprite: &Sprite,
+    anchor_y: f32,
+    alpha: f32,
+    glow: Option<(Color32, f32)>,
+) {
+    let source = sprite.source;
+    let uv = Rect::from_min_max(
+        pos2((source.x / sprite.image_size.x) as f32, (source.y / sprite.image_size.y) as f32),
+        pos2(
+            ((source.x + source.width) / sprite.image_size.x) as f32,
+            ((source.y + source.height) / sprite.image_size.y) as f32,
         ),
-    )
-}
-
-fn packed_color(color: i64) -> String {
-    let hex = if color < 0 { format!("-{:x}", color.unsigned_abs()) } else { format!("{color:x}") };
-    format!("{hex:0>6}")
-}
-
-fn attribute(node: &HtmlElement, name: &str, value: &str) -> Result<(), String> {
-    node.set_attribute(name, value).map_err(|_| format!("Could not set mod {name}"))
-}
-
-fn property(node: &HtmlElement, name: &str, value: &str) -> Result<(), String> {
-    node.style().set_property(name, value).map_err(|_| format!("Could not set mod {name}"))
-}
-
-fn place_in_order(parent: &HtmlElement, node: &HtmlElement, index: usize) -> Result<(), String> {
-    let current = parent.children().item(index as u32);
-    if current.as_ref().is_some_and(|current| current.is_same_node(Some(node))) {
-        return Ok(());
+    );
+    let target = Rect::from_min_size(
+        sprite.center - vec2(sprite.size.x / 2.0, sprite.size.y * anchor_y),
+        sprite.size,
+    );
+    if let Some((color, blur)) = glow {
+        // A bounded separable Gaussian samples the same sprite alpha on the GPU.
+        for y in -2_i32..=2 {
+            for x in -2_i32..=2 {
+                let weight = (-0.5 * ((x * x + y * y) as f32)).exp() / 6.1689;
+                let tint = color.gamma_multiply(weight * alpha);
+                let rect = target.translate(vec2(x as f32, y as f32) * blur / 2.0);
+                frame.image_quad_masked(
+                    painter,
+                    &sprite.path,
+                    [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()],
+                    uv,
+                    tint,
+                    solomon_graphics::BlendMode::Normal,
+                );
+            }
+        }
     }
-    // A no-op DOM append can restart CSS animations. Source React retains an unchanged
-    // keyed child, so only insert/move when its actual order changed.
-    parent
-        .insert_before(node, current.as_ref().map(|current| current.as_ref()))
-        .map(|_| ())
-        .map_err(|_| "Could not order mod world overlays".into())
+    frame.image(
+        painter,
+        &sprite.path,
+        target,
+        Some(uv),
+        Color32::from_white_alpha((alpha * 255.0) as u8),
+    );
+}
+fn point(point: Vec2) -> Pos2 {
+    pos2(point.x as f32, point.y as f32)
+}
+fn packed_color(color: i64) -> Color32 {
+    if (0..=0xffffff).contains(&color) {
+        Color32::from_rgb((color >> 16) as u8, (color >> 8) as u8, color as u8)
+    } else {
+        Color32::TRANSPARENT
+    }
+}
+fn alternate(seconds: f64, duration: f64) -> f32 {
+    let phase = (seconds / duration).rem_euclid(2.0) as f32;
+    bezier(if phase > 1.0 { 2.0 - phase } else { phase }, 0.42, 0.0, 0.58, 1.0)
+}
+fn bezier(t: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+    let curve = |v: f32, p1: f32, p2: f32| {
+        3.0 * (1.0 - v) * (1.0 - v) * v * p1 + 3.0 * (1.0 - v) * v * v * p2 + v * v * v
+    };
+    let mut low = 0.0;
+    let mut high = 1.0;
+    for _ in 0..16 {
+        let middle = (low + high) * 0.5;
+        if curve(middle, x1, x2) < t { low = middle } else { high = middle }
+    }
+    curve((low + high) * 0.5, y1, y2)
 }

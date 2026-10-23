@@ -1,6 +1,5 @@
-//! Offline title/Create/pause/settings surfaces. This module owns navigation and art;
-//! typed actions leave through `take_actions` so the session owns gameplay and persistence.
-
+//! GPU title/Create/pause/settings/Hall/Cloud menus. Screen state and input
+//! routing retain their typed action seam; Game owns gameplay and persistence.
 mod cloud;
 mod create;
 mod hall;
@@ -10,10 +9,22 @@ mod prompt;
 mod routing;
 mod settings;
 mod title;
+pub(crate) mod widgets;
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
+use crate::gpu_ui::{StockAtlas, UiFrame};
+use cloud::CloudView;
+use create::CreateView;
+use egui::{Color32, Id, Rect, Vec2};
+pub use hall::HallSnapshot;
+use hall::HallView;
+use join::JoinView;
+use navigation::MenuNavigation;
+use prompt::{TitlePrompt, TitlePromptKind};
+pub use routing::RoutingDownloadProgress;
+use routing::RoutingView;
+pub use settings::SettingsContext;
+use settings::SettingsView;
+use solomon_graphics::assets;
 use solomon_sim::NativeRng;
 use solomon_sim::audio::{
     AudioCue, AudioEvent, AudioOptions, MusicScene, create_entry_audio_events,
@@ -26,25 +37,8 @@ use solomon_sim::profile::create::{
 };
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::settings::GameSettings;
-use wasm_bindgen::JsCast;
-use wasm_bindgen::prelude::*;
-use web_sys::{Document, Element, Event, HtmlElement, KeyboardEvent, PointerEvent};
-
-use crate::assets;
-use crate::ui::{StockAtlas, append, element, native_button, style};
-use cloud::CloudView;
-use create::CreateView;
-pub use hall::HallSnapshot;
-use hall::HallView;
-use join::JoinView;
-use navigation::MenuNavigation;
-use prompt::{TitlePrompt, TitlePromptKind};
-pub use routing::RoutingDownloadProgress;
-use routing::RoutingView;
-pub use settings::SettingsContext;
-use settings::SettingsView;
 use title::TitleView;
-
+use web_sys::Document;
 #[derive(Clone, Debug, PartialEq)]
 pub enum MenuAction {
     Start(NewGameSelection),
@@ -116,13 +110,6 @@ enum Screen {
     Settings,
 }
 
-enum UiEvent {
-    Action(String),
-    Key(String, bool),
-    Pointer(i16),
-    SettingsChanged,
-}
-
 #[derive(Clone, Copy)]
 enum PauseChoice {
     Resume,
@@ -145,9 +132,12 @@ struct PendingCreateCommit {
     submitted: bool,
 }
 
+enum UiEvent {
+    Action(String),
+    Key(String, bool),
+    Pointer(i16),
+}
 pub struct MenuUi {
-    root: HtmlElement,
-    orientation_hint: HtmlElement,
     title: TitleView,
     hall: HallView,
     join: JoinView,
@@ -173,7 +163,8 @@ pub struct MenuUi {
     create_rng: Option<NativeRng>,
     create_previous_phase_elapsed: f64,
     pending_pause: Option<(f64, PauseChoice)>,
-    events: Rc<RefCell<Vec<UiEvent>>>,
+    discard_keys: bool,
+    orientation_blocked: bool,
     actions: Vec<MenuAction>,
     hosted_actions: Vec<HostedMenuAction>,
     audio_events: Vec<AudioEvent>,
@@ -186,206 +177,42 @@ pub struct MenuUi {
     names: Vec<String>,
     document: Document,
     navigation: MenuNavigation,
-    _listeners: Vec<Closure<dyn FnMut(Event)>>,
 }
-
 impl MenuUi {
-    /// A player panel owns Escape while it is open. Drop queued gameplay shortcuts before
-    /// the hidden pause surface samples them; visible menu navigation remains unchanged.
-    pub fn discard_gameplay_keys(&self) {
+    pub fn discard_gameplay_keys(&mut self) {
         if self.screen == Screen::Hidden {
-            self.events.borrow_mut().retain(|event| !matches!(event, UiEvent::Key(_, _)));
+            self.discard_keys = true;
         }
     }
-    #[must_use]
     pub fn settings_open(&self) -> bool {
         self.screen == Screen::Settings
     }
-
-    /// Chat/social dialogs keep the visible menu but own its keyboard/controller input.
-    /// Native inert also preserves the source's pointer and focus admission.
     pub fn set_input_suspended(&mut self, suspended: bool) -> Result<(), String> {
-        if self.input_suspended == suspended {
-            return Ok(());
+        if self.input_suspended != suspended {
+            self.input_suspended = suspended;
+            self.discard_keys = true;
+            self.navigation.release();
         }
-        self.root
-            .toggle_attribute_with_force("inert", suspended)
-            .map_err(|_| "menu input admission")?;
-        self.input_suspended = suspended;
-        // Window capture can queue the modal's closing key before its own handler
-        // stops propagation. Resuming must not replay that key in the menu below.
-        self.events.borrow_mut().retain(|event| !matches!(event, UiEvent::Key(_, _)));
-        self.navigation.release();
         Ok(())
     }
-
     pub async fn attach(document: &Document) -> Result<Self, String> {
-        let root = element(document, "div", "game-menus")?;
-        root.set_hidden(true);
-        let title = TitleView::new(document).await?;
-        let create = CreateView::new(document).await?;
-        let hall = HallView::new(document).await?;
-        let join = JoinView::new(document)?;
-        let cloud = CloudView::new(document).await?;
-        let settings_view = SettingsView::new(document).await?;
-        let pause = PauseView::new(document).await?;
-        let prompt = TitlePrompt::new(document).await?;
-        let routing = RoutingView::new(document)?;
-        for surface in [
-            &title.root,
-            &create.root,
-            &hall.root,
-            &join.root,
-            &cloud.root,
-            &settings_view.root,
-            &pause.root,
-        ] {
-            append(&root, surface)?;
-        }
-        append(&root, &prompt.root)?;
-        append(&root, &routing.root)?;
-        append(&document.body().ok_or("page has no body")?, &root)?;
-        // MainMenuScene keeps this outside its fixed-aspect stage, including
-        // during gameplay. Dark Cloud alone opts out of the portrait gate.
-        let orientation_hint = element(document, "div", "game-orientation-hint")?;
-        orientation_hint.set_attribute("role", "status").map_err(|_| "orientation hint role")?;
-        orientation_hint
-            .set_text_content(Some("Rotate your device to landscape to enter the College."));
-        append(&document.body().ok_or("page has no body")?, &orientation_hint)?;
-        let names_bytes = assets::fetch_bytes("assets/stock/menu/wizard-names.json").await?;
-        let names_json =
-            String::from_utf8(names_bytes).map_err(|_| "wizard name list is not UTF-8")?;
-        let names_value =
-            js_sys::JSON::parse(&names_json).map_err(|_| "wizard name list is not JSON")?;
-        if !js_sys::Array::is_array(&names_value) {
-            return Err("wizard name list must be an array".to_string());
-        }
-        let mut names = Vec::new();
-        for value in js_sys::Array::from(&names_value) {
-            names.push(value.as_string().ok_or("wizard name list contains a non-string")?);
-        }
+        let names: Vec<String> = serde_json::from_slice(
+            &assets::fetch_bytes("assets/stock/menu/wizard-names.json").await?,
+        )
+        .map_err(|e| format!("wizard name list: {e}"))?;
         if names.is_empty() {
-            return Err("wizard name list is empty".to_string());
+            return Err("wizard name list is empty".to_owned());
         }
-        let events = Rc::new(RefCell::new(Vec::new()));
-        let mut listeners = Vec::new();
-        let clicked = events.clone();
-        let click =
-            Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-                match menu_action_target(&event) {
-                    Ok(Some(action)) => {
-                        event.prevent_default();
-                        clicked.borrow_mut().push(UiEvent::Action(action));
-                    }
-                    Ok(None) => {}
-                    Err(message) => web_sys::console::error_1(&JsValue::from_str(&message)),
-                }
-            });
-        root.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())
-            .map_err(|_| "menu click listener")?;
-        root.add_event_listener_with_callback("submit", click.as_ref().unchecked_ref())
-            .map_err(|_| "menu submit listener")?;
-        listeners.push(click);
-        let changed = events.clone();
-        let change = Closure::<dyn FnMut(Event)>::new(move |_| {
-            changed.borrow_mut().push(UiEvent::SettingsChanged)
-        });
-        for event in ["input", "change"] {
-            root.add_event_listener_with_callback(event, change.as_ref().unchecked_ref())
-                .map_err(|_| "settings value listener")?;
-        }
-        listeners.push(change);
-        let keyed = events.clone();
-        let key_scope = root.clone();
-        let key = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(key) = event.dyn_ref::<KeyboardEvent>() else {
-                return;
-            };
-            if key.repeat() || key.alt_key() || key.ctrl_key() || key.meta_key() {
-                return;
-            }
-            if key_scope.get_attribute("data-menu-screen").as_deref() == Some("dark-cloud")
-                && key_scope.get_attribute("data-cloud-menu-binding").as_deref()
-                    == Some(key.code().as_str())
-                && matches!(key_scope.query_selector("dialog[open]"), Ok(None))
-            {
-                key.prevent_default();
-                key.stop_propagation();
-            }
-            match key_scope.query_selector("[data-awaiting-binding]") {
-                Ok(Some(_)) => {
-                    key.prevent_default();
-                    key.stop_immediate_propagation();
-                }
-                Ok(None) => match key_scope.query_selector(".game-settings-backdrop:not([hidden])")
-                {
-                    Ok(Some(settings))
-                        if key.code() == "Escape"
-                            || settings.get_attribute("data-settings-menu-binding").as_deref()
-                                == Some(key.code().as_str()) =>
-                    {
-                        key.prevent_default();
-                        key.stop_immediate_propagation();
-                    }
-                    Ok(_) => {}
-                    Err(_) => web_sys::console::error_1(&"settings key scope failed".into()),
-                },
-                Err(_) => web_sys::console::error_1(&"binding capture selector failed".into()),
-            }
-            let editing =
-                key.target().and_then(|target| target.dyn_into::<Element>().ok()).is_some_and(
-                    |target| ["INPUT", "TEXTAREA", "SELECT"].contains(&target.tag_name().as_str()),
-                );
-            keyed.borrow_mut().push(UiEvent::Key(key.code(), editing));
-        });
-        let window = web_sys::window().ok_or("no window for menu input")?;
-        window
-            .add_event_listener_with_callback_and_bool(
-                "keydown",
-                key.as_ref().unchecked_ref(),
-                true,
-            )
-            .map_err(|_| "menu key listener")?;
-        listeners.push(key);
-        let pointed = events.clone();
-        let pointer_scope = root.clone();
-        let pointer = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(pointer) = event.dyn_ref::<PointerEvent>() else {
-                return;
-            };
-            if pointer.pointer_type() != "mouse" || pointer.button() < 1 {
-                return;
-            }
-            // GameSettingsDialog captures secondary mouse buttons only for a belt row.
-            match pointer_scope
-                .query_selector("[data-awaiting-binding][data-menu-action^='bind:belt-']")
-            {
-                Ok(Some(_)) => {
-                    pointer.prevent_default();
-                    pointer.stop_propagation();
-                    pointed.borrow_mut().push(UiEvent::Pointer(pointer.button()));
-                }
-                Ok(None) => {}
-                Err(_) => {
-                    web_sys::console::error_1(&"mouse binding capture selector failed".into())
-                }
-            }
-        });
-        root.add_event_listener_with_callback("pointerdown", pointer.as_ref().unchecked_ref())
-            .map_err(|_| "binding pointer listener")?;
-        listeners.push(pointer);
         let mut ui = Self {
-            root,
-            orientation_hint,
-            title,
-            hall,
-            join,
-            cloud,
-            create,
-            settings_view,
-            pause,
-            prompt,
-            routing,
+            title: TitleView::new().await?,
+            hall: HallView::new().await?,
+            join: JoinView::new()?,
+            cloud: CloudView::new().await?,
+            create: CreateView::new().await?,
+            settings_view: SettingsView::new(document).await?,
+            pause: PauseView::new().await?,
+            prompt: TitlePrompt::new().await?,
+            routing: RoutingView::new()?,
             screen: Screen::Hidden,
             settings_back: Screen::Title,
             pause_back: Screen::Hidden,
@@ -402,7 +229,8 @@ impl MenuUi {
             create_rng: None,
             create_previous_phase_elapsed: 0.0,
             pending_pause: None,
-            events,
+            discard_keys: false,
+            orientation_blocked: false,
             actions: Vec::new(),
             hosted_actions: Vec::new(),
             audio_events: Vec::new(),
@@ -415,12 +243,240 @@ impl MenuUi {
             names,
             document: document.clone(),
             navigation: MenuNavigation::new(),
-            _listeners: listeners,
         };
         ui.show_title(false)?;
         Ok(ui)
     }
-
+    #[must_use]
+    pub fn surface_name(&self) -> &'static str {
+        if self.routing.active() {
+            return "routing";
+        }
+        match self.screen {
+            Screen::Hidden => "hidden",
+            Screen::Title => "title",
+            Screen::Play => "play",
+            Screen::Join => "join-party",
+            Screen::Cloud => "dark-cloud",
+            Screen::Create => "create",
+            Screen::Hall => "hall",
+            Screen::Pause => "pause",
+            Screen::Settings => "settings",
+        }
+    }
+    fn navigation_scope(&self) -> String {
+        if self.routing.active() {
+            "routing".to_owned()
+        } else if self.prompt.kind.is_some() {
+            "title-prompt".to_owned()
+        } else if self.screen == Screen::Settings {
+            self.settings_view.navigation_scope()
+        } else if self.screen == Screen::Cloud {
+            self.cloud.navigation_scope()
+        } else {
+            format!("{:?}-{:?}", self.screen, self.selected_element)
+        }
+    }
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        self.cloud.retire_images(frame);
+        let keys = frame.key_codes().to_vec();
+        let editing = frame.ctx.text_edit_focused();
+        let capturing_binding =
+            self.screen == Screen::Settings && self.settings_view.awaiting_binding();
+        let discard_keys = std::mem::take(&mut self.discard_keys);
+        for key in keys {
+            if !discard_keys && key.pressed && !key.repeat && !key.alt && !key.ctrl && !key.meta {
+                self.handle_event(UiEvent::Key(key.code, editing))?;
+            }
+        }
+        if capturing_binding {
+            frame.ctx.input_mut(|input| {
+                input
+                    .events
+                    .retain(|event| !matches!(event, egui::Event::Key { pressed: true, .. }))
+            });
+        }
+        if self.screen == Screen::Settings && self.settings_view.awaiting_mouse_binding() {
+            let buttons: Vec<_> = frame.ctx.input(|input| {
+                input
+                    .events
+                    .iter()
+                    .filter_map(|event| match event {
+                        egui::Event::PointerButton { button, pressed: true, .. } => match button {
+                            egui::PointerButton::Primary => None,
+                            egui::PointerButton::Middle => Some(1),
+                            egui::PointerButton::Secondary => Some(2),
+                            egui::PointerButton::Extra1 => Some(3),
+                            egui::PointerButton::Extra2 => Some(4),
+                        },
+                        _ => None,
+                    })
+                    .collect()
+            });
+            for button in buttons {
+                self.handle_event(UiEvent::Pointer(button))?;
+            }
+        }
+        if self.orientation_blocked {
+            frame.input_scope("landscape-guidance");
+            let view = frame.ctx.input(|i| i.content_rect());
+            let ctx = frame.ctx.clone();
+            egui::Modal::new(Id::unique("landscape-guidance"))
+                .frame(egui::Frame::NONE)
+                .backdrop_color(Color32::BLACK)
+                .show(&ctx, |ui| {
+                    ui.set_min_size(view.size());
+                    ui.set_clip_rect(view);
+                    widgets::gradient(ui, view, widgets::color(0x252b3b), widgets::color(0x07080d));
+                    widgets::paragraph(
+                        ui,
+                        "Rotate your device to landscape to enter the College.",
+                        view.shrink2(Vec2::new(view.width() * 0.1, view.height() * 0.35)),
+                        "IM FELL English",
+                        (view.width() * 0.07).clamp(22.0, 42.0),
+                        widgets::color(0xdfd2a7),
+                    );
+                    frame.record_rect(
+                        "landscape-guidance",
+                        "Rotate your device to landscape to enter the College.",
+                        "status",
+                        view,
+                        false,
+                    );
+                });
+            return Ok(());
+        }
+        if !self.input_suspended && self.pending_start.is_none() && self.is_blocking() {
+            frame.input_scope(&self.navigation_scope());
+        }
+        if self.screen == Screen::Hidden && !self.routing.active() {
+            return Ok(());
+        }
+        let view = Rect::from_min_size(
+            egui::Pos2::ZERO,
+            Vec2::new(self.viewport.0 as f32, self.viewport.1 as f32),
+        );
+        let ctx = frame.ctx.clone();
+        let mut actions = Vec::new();
+        let mut result = Ok(());
+        let overlay = self.screen == Screen::Settings
+            || self.screen == Screen::Pause
+            || self.prompt.kind.is_some()
+            || self.routing.active();
+        let enabled = !self.input_suspended && !overlay;
+        egui::Area::new(Id::unique("game-menu-scene"))
+            .fixed_pos(view.min)
+            .order(egui::Order::Middle)
+            .show(&ctx, |ui| {
+                ui.set_min_size(view.size());
+                ui.set_clip_rect(view);
+                if !enabled {
+                    ui.disable();
+                    ui.set_opacity(1.0);
+                }
+                if self.cloud_visible(self.screen) {
+                    result = self.cloud.paint(frame, ui, view, true, &mut actions);
+                } else if matches!(self.screen, Screen::Title | Screen::Play)
+                    || (self.screen == Screen::Settings
+                        && matches!(self.settings_back, Screen::Title | Screen::Play))
+                {
+                    result = self.title.paint(frame, ui, view, true, &mut actions);
+                } else {
+                    result = match self.screen {
+                        Screen::Create => self.create.paint(frame, ui, view, true, &mut actions),
+                        Screen::Hall => self.hall.paint(frame, ui, view, &mut actions),
+                        Screen::Join => self.join.paint_gpu(frame, ui, view, &mut actions),
+                        _ => Ok(()),
+                    };
+                }
+                if result.is_ok() && self.screen == Screen::Settings && self.routing.active() {
+                    result = self.settings_view.paint(frame, ui, view, &mut Vec::new());
+                }
+            });
+        std::mem::replace(&mut result, Ok(()))?;
+        if overlay {
+            egui::Modal::new(Id::unique("game-menu-modal"))
+                .area(
+                    egui::Area::new(Id::unique("game-menu-modal"))
+                        .fixed_pos(view.min)
+                        .order(egui::Order::Foreground),
+                )
+                .frame(egui::Frame::NONE)
+                .backdrop_color(Color32::TRANSPARENT)
+                .show(&ctx, |ui| {
+                    ui.set_min_size(view.size());
+                    ui.set_clip_rect(view);
+                    if self.input_suspended {
+                        ui.disable();
+                        ui.set_opacity(1.0);
+                    }
+                    result = if self.routing.active() {
+                        self.routing.paint(frame, ui, view, &mut actions)
+                    } else if self.prompt.kind.is_some() {
+                        self.prompt.paint(frame, ui, view, &mut actions)
+                    } else if self.screen == Screen::Settings {
+                        self.settings_view.paint(frame, ui, view, &mut actions)
+                    } else {
+                        self.pause.paint(frame, ui, view, &mut actions)
+                    };
+                });
+            std::mem::replace(&mut result, Ok(()))?;
+        }
+        if !self.input_suspended && self.pending_start.is_none() {
+            let scope = self.navigation_scope();
+            let navigation_requested = !ctx.text_edit_focused()
+                && ctx.input(|input| {
+                    [
+                        egui::Key::Enter,
+                        egui::Key::Tab,
+                        egui::Key::ArrowUp,
+                        egui::Key::ArrowDown,
+                        egui::Key::ArrowLeft,
+                        egui::Key::ArrowRight,
+                    ]
+                    .into_iter()
+                    .any(|key| input.key_pressed(key))
+                });
+            let preferred = if self.routing.active() {
+                Some("routing-back".to_owned())
+            } else if self.prompt.kind.is_some() {
+                Some("prompt-primary".to_owned())
+            } else {
+                match self.screen {
+                    Screen::Title | Screen::Play => Some(self.title.default_focus().to_owned()),
+                    Screen::Create if navigation_requested => {
+                        self.create.default_focus().map(str::to_owned)
+                    }
+                    Screen::Create => None,
+                    Screen::Pause => Some("resume".to_owned()),
+                    Screen::Settings => self.settings_view.default_focus(),
+                    Screen::Hall => Some("hall-back".to_owned()),
+                    Screen::Join if navigation_requested => Some("join-party-code".to_owned()),
+                    Screen::Join => None,
+                    Screen::Cloud => self.cloud.default_focus(),
+                    Screen::Hidden => None,
+                }
+            };
+            self.navigation.update(&ctx, &scope, preferred.as_deref());
+            if let Some(action) = self.navigation.take_confirmation() {
+                if !matches!(action.as_str(), "join-party-code") {
+                    actions.push(action);
+                }
+            }
+            if frame.key_codes().is_empty() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.back()?;
+            }
+        } else {
+            self.navigation.release();
+        }
+        for action in actions {
+            self.handle_event(UiEvent::Action(action))?;
+        }
+        if self.screen == Screen::Settings && self.settings_view.take_changed() {
+            self.settings_changed()?;
+        }
+        Ok(())
+    }
     pub fn show_title(&mut self, can_resume: bool) -> Result<(), String> {
         self.can_resume = can_resume;
         self.title_started = self.now;
@@ -504,14 +560,16 @@ impl MenuUi {
         self.set_screen(Screen::Cloud)
     }
 
-    pub fn boneyards_mount(&self) -> HtmlElement {
-        self.cloud.boneyards_mount()
-    }
-
     pub fn dark_cloud_boneyards_selected(&self) -> bool {
         self.cloud.boneyards_selected()
     }
 
+    pub fn boneyards_interactive(&self) -> bool {
+        self.screen == Screen::Cloud
+            && !self.input_suspended
+            && !self.routing.active()
+            && self.cloud.boneyards_selected()
+    }
     pub fn request_boneyard_library_menu(&mut self) -> Result<(), String> {
         if self.screen == Screen::Cloud {
             self.handle_event(UiEvent::Key(self.settings.controls.open_menu.clone(), false))?;
@@ -611,7 +669,7 @@ impl MenuUi {
         signed_in: bool,
     ) -> Result<(), String> {
         self.routing.show_party(request_id, target, requires_vanilla, signed_in)?;
-        self.root.set_hidden(false);
+
         self.navigation.release();
         Ok(())
     }
@@ -628,7 +686,7 @@ impl MenuUi {
             self.set_screen(Screen::Play)?;
         }
         self.routing.show_modded(request_id, active_mods, cheats_enabled)?;
-        self.root.set_hidden(false);
+
         self.navigation.release();
         Ok(())
     }
@@ -639,8 +697,7 @@ impl MenuUi {
         mismatch: solomon_sim::menu::save_mods::GameSaveModMismatch,
     ) -> Result<(), String> {
         self.routing.show_mismatch(request_id, mismatch)?;
-        self.routing.resize(f64::from(self.viewport.0), f64::from(self.viewport.1))?;
-        self.root.set_hidden(false);
+
         self.navigation.release();
         Ok(())
     }
@@ -659,7 +716,7 @@ impl MenuUi {
         result: Result<(), String>,
     ) -> Result<bool, String> {
         let accepted = self.routing.complete(request_id, result)?;
-        self.root.set_hidden(self.screen == Screen::Hidden && !self.routing.active());
+
         Ok(accepted)
     }
 
@@ -744,7 +801,7 @@ impl MenuUi {
         self.pending_pause = None;
         self.pause_back = Screen::Hidden;
         self.set_gameplay_pause_rows()?;
-        self.pause.resize(f64::from(self.viewport.0), f64::from(self.viewport.1))?;
+
         self.set_screen(Screen::Pause)
     }
 
@@ -766,7 +823,6 @@ impl MenuUi {
             && self.pause_back != Screen::Cloud
         {
             self.set_gameplay_pause_rows()?;
-            self.pause.resize(f64::from(self.viewport.0), f64::from(self.viewport.1))?;
         }
         Ok(())
     }
@@ -793,7 +849,7 @@ impl MenuUi {
         }
         rows.push(("MAIN MENU", "leave"));
         self.pause.set_rows(&rows)?;
-        self.pause.resize(f64::from(self.viewport.0), f64::from(self.viewport.1))?;
+
         self.audio_events.push(AudioEvent::Play(AudioCue::OpenPanel, AudioOptions::default()));
         self.set_screen(Screen::Pause)
     }
@@ -899,10 +955,10 @@ impl MenuUi {
         self.set_screen(Screen::Hidden)
     }
     pub fn is_blocking(&self) -> bool {
-        self.screen != Screen::Hidden || self.routing.active()
+        self.screen != Screen::Hidden || self.routing.active() || self.orientation_blocked
     }
     pub fn covers_world(&self) -> bool {
-        if self.cloud_visible(self.screen) {
+        if self.cloud_visible(self.screen) || self.orientation_blocked {
             return true;
         }
         matches!(
@@ -964,18 +1020,17 @@ impl MenuUi {
             self.title_started = now;
         }
         self.now = now;
+        self.orientation_blocked = !self.cloud_visible(self.screen)
+            && self
+                .document
+                .default_view()
+                .ok_or("orientation window")?
+                .match_media("(orientation: portrait) and (hover: none) and (pointer: coarse)")
+                .map_err(|_| "orientation media")?
+                .is_some_and(|query| query.matches());
         if self.viewport != (width, height) {
-            self.title.resize(f64::from(width), f64::from(height))?;
-            self.create.resize(f64::from(width), f64::from(height))?;
-            self.pause.resize(f64::from(width), f64::from(height))?;
-            self.prompt.resize(width, height)?;
-            self.hall.resize(width, height)?;
-            self.routing.resize(f64::from(width), f64::from(height))?;
             self.viewport = (width, height);
-        }
-        let events = std::mem::take(&mut *self.events.borrow_mut());
-        for event in events {
-            self.handle_event(event)?;
+            self.settings_view.resize(width, height);
         }
         if self.screen == Screen::Settings {
             self.settings_view.update()?;
@@ -991,19 +1046,6 @@ impl MenuUi {
         }
         if self.cloud_visible(self.screen) {
             self.cloud.update(now)?;
-        }
-        if self.is_blocking() && self.pending_start.is_none() && !self.input_suspended {
-            let surface = self.active_surface().clone();
-            let scope = if self.prompt.kind.is_some() {
-                "title-prompt".to_string()
-            } else {
-                self.root.get_attribute("data-menu-screen").ok_or("menu has no navigation scope")?
-            };
-            if self.navigation.update(&surface, &self.document, &scope, now)? {
-                self.back()?;
-            }
-        } else {
-            self.navigation.release();
         }
         if self.screen == Screen::Title
             || self.screen == Screen::Play
@@ -1114,16 +1156,12 @@ impl MenuUi {
         if self.routing.active() {
             if let UiEvent::Action(action) = event {
                 self.routing.activate(&action)?;
-                self.root.set_hidden(self.screen == Screen::Hidden && !self.routing.active());
             }
             // The pinned routing dialogs provide buttons/controller Back; they
             // do not add an Escape listener to the scene underneath them.
             return Ok(());
         }
         match event {
-            UiEvent::SettingsChanged if self.screen == Screen::Settings => {
-                self.settings_changed()?
-            }
             UiEvent::Key(code, editing) => {
                 if self.screen == Screen::Cloud {
                     if !self.cloud.modal_open() && code == self.settings.controls.open_menu {
@@ -1273,12 +1311,12 @@ impl MenuUi {
             "create-back" => self.back()?,
             "clear-name" => {
                 self.create.set_name("")?;
-                self.create.name.focus().map_err(|_| "focus wizard name")?;
+                self.create.focus_name = true;
             }
             "randomize-name" => {
                 let index = (js_sys::Math::random() * self.names.len() as f64).floor() as usize;
                 self.create.set_name(&self.names[index])?;
-                self.create.message.set_text_content(None);
+                self.create.message = None;
             }
             "randomize-loadout" => self.randomize_create_loadout()?,
             _ => {
@@ -1314,7 +1352,7 @@ impl MenuUi {
                                 CreateCommitKind::Manual,
                             )?;
                         }
-                        Err(message) => self.create.message.set_text_content(Some(&message)),
+                        Err(message) => self.create.message = Some(message),
                     }
                 }
             }
@@ -1323,6 +1361,7 @@ impl MenuUi {
     }
 
     fn settings_changed(&mut self) -> Result<(), String> {
+        self.settings_view.take_changed();
         let settings = self.settings_view.read()?;
         if settings != self.settings {
             // The coordinator may require private-College consent. Keep accepted
@@ -1351,15 +1390,6 @@ impl MenuUi {
         self.pending_start = None;
         self.create_rng = None;
         self.create_previous_phase_elapsed = 0.0;
-        self.create.root.remove_attribute("inert").map_err(|_| "Create interactivity")?;
-        self.create
-            .root
-            .remove_attribute("data-finalizing-kind")
-            .map_err(|_| "Create finalization kind")?;
-        self.create
-            .root
-            .set_attribute("data-finalizing", "false")
-            .map_err(|_| "Create finalization state")?;
         self.create_started = self.now;
         self.phase_started = self.now;
         self.create.restart();
@@ -1388,15 +1418,6 @@ impl MenuUi {
         if pending.kind == CreateCommitKind::Randomize {
             self.phase_started += self.now - pending.started_at;
         }
-        self.create.root.remove_attribute("inert").map_err(|_| "Create retry admission")?;
-        self.create
-            .root
-            .set_attribute("data-finalizing", "false")
-            .map_err(|_| "Create retry state")?;
-        self.create
-            .root
-            .remove_attribute("data-finalizing-kind")
-            .map_err(|_| "Create retry kind")?;
         self.create.restart();
         self.set_screen(Screen::Create)
     }
@@ -1408,18 +1429,6 @@ impl MenuUi {
     ) -> Result<(), String> {
         self.pending_start =
             Some(PendingCreateCommit { started_at: self.now, kind, selection, submitted: false });
-        self.create.root.set_attribute("inert", "").map_err(|_| "Create finalization")?;
-        self.create
-            .root
-            .set_attribute("data-finalizing", "true")
-            .map_err(|_| "Create finalization state")?;
-        self.create
-            .root
-            .set_attribute(
-                "data-finalizing-kind",
-                if kind == CreateCommitKind::Manual { "manual" } else { "randomize" },
-            )
-            .map_err(|_| "Create finalization kind")?;
         Ok(())
     }
 
@@ -1432,7 +1441,7 @@ impl MenuUi {
         let name = match self.create.finalized_name() {
             Ok(name) => name,
             Err(message) => {
-                self.create.message.set_text_content(Some(&message));
+                self.create.message = Some(message);
                 return Ok(());
             }
         };
@@ -1470,22 +1479,15 @@ impl MenuUi {
         self.set_create_back_enabled(false)
     }
 
-    fn set_create_back_enabled(&self, enabled: bool) -> Result<(), String> {
-        let back = self
-            .create
-            .root
-            .query_selector("[data-menu-action='create-back']")
-            .map_err(|_| "Create Back control")?
-            .ok_or("Create has no Back control")?;
-        back.toggle_attribute_with_force("disabled", !enabled)
-            .map_err(|_| "Create Back availability")?;
+    fn set_create_back_enabled(&mut self, enabled: bool) -> Result<(), String> {
+        self.create.back_enabled = enabled;
         Ok(())
     }
 
     fn show_prompt(&mut self, kind: TitlePromptKind) -> Result<(), String> {
         self.prompt.show(kind)?;
         self.title.set_prompt_visible(true);
-        self.title.root.set_attribute("inert", "").map_err(|_| "title prompt ownership")?;
+
         self.navigation.release();
         Ok(())
     }
@@ -1493,7 +1495,7 @@ impl MenuUi {
     fn hide_prompt(&mut self) -> Result<(), String> {
         self.title.set_prompt_visible(false);
         self.prompt.hide();
-        self.title.root.remove_attribute("inert").map_err(|_| "title prompt handoff")?;
+
         self.navigation.release();
         Ok(())
     }
@@ -1507,7 +1509,7 @@ impl MenuUi {
     fn back(&mut self) -> Result<(), String> {
         if self.routing.active() {
             self.routing.back();
-            self.root.set_hidden(self.screen == Screen::Hidden && !self.routing.active());
+
             return Ok(());
         }
         if self.prompt.kind.is_some() {
@@ -1575,85 +1577,8 @@ impl MenuUi {
             self.join.close();
         }
         self.screen = screen;
-        self.orientation_hint.set_hidden(self.cloud_visible(screen));
-        self.root
-            .set_attribute(
-                "data-orientation-gate",
-                if self.cloud_visible(screen) { "false" } else { "true" },
-            )
-            .map_err(|_| "orientation scene admission")?;
-        self.root.set_hidden(screen == Screen::Hidden);
-        self.title.root.set_hidden(
-            !(matches!(screen, Screen::Title | Screen::Play)
-                || (screen == Screen::Settings
-                    && matches!(self.settings_back, Screen::Title | Screen::Play))),
-        );
-        self.title
-            .root
-            .toggle_attribute_with_force("inert", screen == Screen::Settings)
-            .map_err(|_| "title modal ownership")?;
-        self.create.root.set_hidden(screen != Screen::Create);
-        self.hall.root.set_hidden(screen != Screen::Hall);
-        self.join.root.set_hidden(screen != Screen::Join);
-        self.cloud.root.set_hidden(!self.cloud_visible(screen));
-        self.cloud
-            .root
-            .toggle_attribute_with_force("inert", screen != Screen::Cloud)
-            .map_err(|_| "Dark Cloud overlay input")?;
-        self.settings_view.root.set_hidden(screen != Screen::Settings);
-        self.pause.root.set_hidden(screen != Screen::Pause);
-        let name = match screen {
-            Screen::Hidden => "hidden",
-            Screen::Title => "title",
-            Screen::Play => "play",
-            Screen::Join => "join-party",
-            Screen::Cloud => "dark-cloud",
-            Screen::Create => "create",
-            Screen::Hall => "hall",
-            Screen::Pause => "pause",
-            Screen::Settings => "settings",
-        };
-        self.root.set_attribute("data-menu-screen", name).map_err(|_| "menu screen")?;
-        self.root
-            .set_attribute("data-cloud-menu-binding", &self.settings.controls.open_menu)
-            .map_err(|_| "Dark Cloud menu binding")?;
-        if matches!(screen, Screen::Create | Screen::Join) {
-            if let Some(active) = self.document.active_element()
-                && let Some(active) = active.dyn_ref::<HtmlElement>()
-            {
-                active.blur().map_err(|_| "Create focus handoff")?;
-            }
-            return Ok(());
-        }
-        if let Some(button) = self
-            .active_surface()
-            .query_selector("button:not([disabled]), input:not([disabled]), select:not([disabled])")
-            .map_err(|_| "default menu focus")?
-        {
-            let button: HtmlElement =
-                button.dyn_into().map_err(|_| "menu focus target is not HTML")?;
-            button.focus().map_err(|_| "menu focus")?;
-        }
+        self.navigation.release();
         Ok(())
-    }
-
-    fn active_surface(&self) -> &HtmlElement {
-        if self.routing.active() {
-            return &self.routing.root;
-        }
-        if self.prompt.kind.is_some() {
-            return &self.prompt.root;
-        }
-        match self.screen {
-            Screen::Title | Screen::Play => &self.title.root,
-            Screen::Create => &self.create.root,
-            Screen::Hall => &self.hall.root,
-            Screen::Join => &self.join.root,
-            Screen::Cloud => self.cloud.active_surface(),
-            Screen::Pause => &self.pause.root,
-            Screen::Settings => &self.settings_view.root,
-            Screen::Hidden => &self.root,
-        }
     }
 
     fn cloud_visible(&self, screen: Screen) -> bool {
@@ -1669,181 +1594,100 @@ impl MenuUi {
     }
 }
 
-fn menu_action_target(event: &Event) -> Result<Option<String>, String> {
-    let Some(target) = event.target() else {
-        return Ok(None);
-    };
-    let Ok(target) = target.dyn_into::<Element>() else {
-        return Ok(None);
-    };
-    let Some(button) = target.closest("[data-menu-action]").map_err(|_| "menu action selector")?
-    else {
-        return Ok(None);
-    };
-    if button.has_attribute("disabled") {
-        return Ok(None);
-    }
-    // Forms own submit, not every pointer click inside an editable field.
-    if button.tag_name() == "FORM" && event.type_() != "submit" {
-        return Ok(None);
-    }
-    Ok(button.get_attribute("data-menu-action"))
-}
-
 struct PauseView {
-    root: HtmlElement,
-    stage: HtmlElement,
-    frame: HtmlElement,
-    header: HtmlElement,
-    arrows: Vec<(HtmlElement, f64, f64, f64)>,
+    rows: Vec<(String, String)>,
     atlas: StockAtlas,
-    document: Document,
-    previous: Option<f64>,
-    row_count: usize,
+    reveal: f64,
 }
-
 impl PauseView {
-    async fn new(document: &Document) -> Result<Self, String> {
-        let atlas = StockAtlas::load("UI").await?;
-        let root = element(document, "section", "menu-screen pause-screen")?;
-        root.set_attribute("role", "dialog").map_err(|_| "pause role")?;
-        root.set_attribute("aria-modal", "true").map_err(|_| "pause modal")?;
-        root.set_attribute("aria-label", "Game paused").map_err(|_| "pause label")?;
-        let stage = element(document, "div", "pause-stage")?;
-        for (index, (label, action)) in [
-            ("RESUME GAME", "resume"),
-            ("GAME SETTINGS", "pause-settings"),
-            ("LEAVE GAME", "leave"),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let button = native_button(document, label, action)?;
-            style(
-                &button,
-                &format!("position:absolute;left:623.5px;top:{}px", 339.5 + index as f64 * 76.0),
-            )?;
-            append(&stage, &button)?;
-        }
-        let frame = element(document, "div", "pause-frame")?;
-        append(&stage, &frame)?;
-        let header = atlas.sprite(document, 18, "pause-header")?;
-        append(&stage, &header)?;
-        let mut arrows = Vec::new();
-        for (x, offset, scale) in [(800.0, 55.0, 1.0), (725.0, 42.0, 0.75), (875.0, 42.0, 0.75)] {
-            let arrow = atlas.sprite(document, 8, "pause-arrow")?;
-            append(&stage, &arrow)?;
-            arrows.push((arrow, x, offset, scale));
-        }
-        append(&root, &stage)?;
+    async fn new() -> Result<Self, String> {
         Ok(Self {
-            root,
-            stage,
-            frame,
-            header,
-            arrows,
-            atlas,
-            document: document.clone(),
-            previous: None,
-            row_count: 3,
+            rows: vec![
+                ("RESUME GAME".to_owned(), "resume".to_owned()),
+                ("GAME SETTINGS".to_owned(), "pause-settings".to_owned()),
+                ("LEAVE GAME".to_owned(), "leave".to_owned()),
+            ],
+            atlas: StockAtlas::load("UI").await?,
+            reveal: 0.0,
         })
     }
-
     fn set_rows(&mut self, rows: &[(&str, &str)]) -> Result<(), String> {
-        let previous = self
-            .stage
-            .query_selector_all(".native-button")
-            .map_err(|_| "SimpleMenu existing rows")?;
-        for index in 0..previous.length() {
-            if let Some(button) = previous.item(index) {
-                self.stage.remove_child(&button).map_err(|_| "SimpleMenu old row")?;
-            }
-        }
-        self.row_count = rows.len();
-        self.previous = None;
-        let top = (900.0 - self.body_height()) / 2.0;
-        for (index, &(label, action)) in rows.iter().enumerate() {
-            let button = native_button(&self.document, label, action)?;
-            style(
-                &button,
-                &format!("position:absolute;left:623.5px;top:{}px", top + index as f64 * 76.0),
-            )?;
-            append(&self.stage, &button)?;
-        }
+        self.rows = rows.iter().map(|(l, a)| (l.to_string(), a.to_string())).collect();
         Ok(())
     }
-
     fn body_height(&self) -> f64 {
-        self.row_count as f64 * 76.0 - 7.0
+        self.rows.len() as f64 * 76.0 - 7.0
     }
-
-    fn resize(&self, width: f64, height: f64) -> Result<(), String> {
-        let native = (width / 1600.0).min(height / 900.0);
+    fn update(&mut self, reveal: f64) -> Result<(), String> {
+        self.reveal = reveal;
+        Ok(())
+    }
+    fn paint(
+        &self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut egui::Ui,
+        view: Rect,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let native = (view.width() / 1600.0).min(view.height() / 900.0);
         let scale = if native < 44.0 / 69.0 {
-            // `nativePauseMenuStagePlacement` includes the header and lowest
-            // arrow around the actual three/four-row SimpleMenu body.
-            1.0_f64
-                .min((width / 2.0 - 12.0) / 216.5)
-                .min((height / 2.0 - 12.0) / (self.body_height() / 2.0 + 151.0))
+            1.0_f32
+                .min((view.width() / 2.0 - 12.0) / 216.5)
+                .min((view.height() / 2.0 - 12.0) / (self.body_height() as f32 / 2.0 + 151.0))
         } else {
             native
         };
-        style(
-            &self.stage,
-            &format!(
-                "left:{}px;top:{}px;transform:scale({scale})",
-                (width - 1600.0 * scale) / 2.0,
-                (height - 900.0 * scale) / 2.0
-            ),
-        )
-    }
-
-    fn update(&mut self, reveal: f64) -> Result<(), String> {
-        if self.previous == Some(reveal) {
-            return Ok(());
-        }
-        self.previous = Some(reveal);
-        let spread = solomon_sim::float::fround((1.0 - reveal) * 25.0 + 40.0);
-        let body_height = self.body_height();
-        let top = (900.0 - body_height) / 2.0 - spread;
-        let bottom = top + body_height + spread * 2.0;
-        self.root
-            .style()
-            .set_property(
-                "background-color",
-                &format!("rgba(0, 0, 0, {})", solomon_sim::float::fround(reveal * 0.85)),
-            )
-            .map_err(|_| "pause curtain")?;
-        self.stage
-            .style()
-            .set_property("opacity", &reveal.to_string())
-            .map_err(|_| "pause reveal")?;
-        self.frame.set_text_content(None);
-        let art = self.atlas.nine_slice(
-            &self.document,
+        let stage =
+            widgets::Stage { origin: view.center() - Vec2::new(800.0, 450.0) * scale, scale };
+        ui.painter().rect_filled(view, 0.0, widgets::alpha(0, self.reveal * 0.85));
+        ui.set_opacity(self.reveal as f32);
+        let spread = solomon_sim::float::fround((1.0 - self.reveal) * 25.0 + 40.0);
+        let top = (900.0 - self.body_height()) / 2.0 - spread;
+        let bottom = top + self.body_height() + spread * 2.0;
+        self.atlas.paint_native_frame_scaled(
+            frame,
+            ui.painter(),
             17,
-            353.0 + spread * 2.0,
-            body_height + spread * 2.0,
+            stage.rect(
+                623.5 - spread,
+                top,
+                353.0 + spread * 2.0,
+                self.body_height() + spread * 2.0,
+            ),
+            scale,
+            true,
+            Color32::WHITE,
         )?;
-        art.style()
-            .set_property("left", &format!("{}px", 623.5 - spread))
-            .map_err(|_| "pause frame x")?;
-        art.style().set_property("top", &format!("{top}px")).map_err(|_| "pause frame y")?;
-        append(&self.frame, &art)?;
-        self.header
-            .style()
-            .set_property("top", &format!("{}px", top - 42.0))
-            .map_err(|_| "pause header position")?;
-        for (arrow, x, offset, scale) in &self.arrows {
-            arrow.style().set_property("left", &format!("{x}px")).map_err(|_| "pause arrow x")?;
-            arrow
-                .style()
-                .set_property("top", &format!("{}px", bottom + offset))
-                .map_err(|_| "pause arrow y")?;
-            arrow
-                .style()
-                .set_property("transform", &format!("translate(-50%, -50%) scale({scale})"))
-                .map_err(|_| "pause arrow scale")?;
+        self.atlas.paint_centered(
+            frame,
+            ui.painter(),
+            18,
+            stage.at(800.0, top - 42.0),
+            scale,
+            std::f32::consts::FRAC_PI_2,
+            Color32::WHITE,
+        )?;
+        for (x, offset, size) in [(800.0, 55.0, 1.0), (725.0, 42.0, 0.75), (875.0, 42.0, 0.75)] {
+            self.atlas.paint_centered(
+                frame,
+                ui.painter(),
+                8,
+                stage.at(x, bottom + offset),
+                scale * size,
+                0.0,
+                Color32::WHITE,
+            )?;
+        }
+        for (index, (label, id)) in self.rows.iter().enumerate() {
+            let r = stage.rect(
+                623.5,
+                (900.0 - self.body_height()) / 2.0 + index as f64 * 76.0,
+                353.0,
+                69.0,
+            );
+            if widgets::stock_button(frame, ui, id, label, r, scale, self.reveal > 0.0).clicked() {
+                actions.push(id.clone());
+            }
         }
         Ok(())
     }

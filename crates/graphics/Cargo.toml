@@ -1,0 +1,17 @@
+[package]
+name = "solomon-graphics"
+description = "Shared WebGL2 stock renderer and browser asset decoding"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+solomon-sim = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+web-sys = { workspace = true, features = [
+  "Window", "Document", "HtmlElement", "Element", "Node", "Response", "HtmlImageElement", "WebGl2RenderingContext", "WebGlBuffer",
+  "WebGlFramebuffer", "WebGlProgram", "WebGlShader", "WebGlTexture",
+  "WebGlUniformLocation", "WebGlVertexArrayObject",
+] }

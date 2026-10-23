@@ -1,4 +1,4 @@
-// Source GamePageGame.tsx saveForDeployment and GameDeploymentUpdate.tsx.
+// Real durable-save/transport-retirement/publication recovery journey.
 // Run only while this isolated gateway has no other active acceptance browsers.
 // The coordinator publishes real replacement artifacts after ready-to-publish.json.
 const assert = require('node:assert/strict');
@@ -7,6 +7,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require(path.resolve(process.env.PW));
 const { createNativeMessageReader } = require('./native-wire.cjs');
+const {reachCollegeLoadout}=require('./menu-journey.cjs');
+const ui=require('./gpu-ui.cjs');
 
 const base = path.resolve(process.env.LOCAL_GATEWAY);
 const out = path.resolve(process.env.OUT);
@@ -15,9 +17,26 @@ assert.equal(url.hostname, '127.0.0.1', 'This operator test owns only the isolat
 const mount = url.pathname.replace(/\/$/, '');
 const target = process.env.TARGET_REVISION;
 assert.match(target, /^[a-f0-9]{40}$/);
-const originalManifest = fs.readFileSync(path.join(base, 'served-web-dist/deployment.json'));
-const current = JSON.parse(originalManifest).revision;
-assert.notEqual(current, target);
+const publicationPath = path.resolve(process.env.PUBLICATION_PATH);
+const originalManifest = fs.readFileSync(publicationPath);
+const originalPublication = JSON.parse(originalManifest);
+const current = originalPublication.gameRevision;
+assert.match(current, /^[a-f0-9]{40}$/);
+assert.match(originalPublication.deploymentId, /^[a-f0-9]{32}$/);
+assert.equal(originalPublication.ready, true);
+if (process.env.SAME_GAME === '1') assert.equal(current, target);
+else assert.notEqual(current, target);
+const targetWebsite = process.env.TARGET_WEBSITE_REVISION;
+assert.match(targetWebsite, /^[a-f0-9]{40}$/);
+const publicationId = crypto.randomUUID().replaceAll('-', '');
+const publicationEndpoint = `${mount}/api/game/deployment`;
+const adminUrl = new URL(process.env.ADMIN_URL || 'http://127.0.0.1:5230');
+assert.equal(adminUrl.hostname, '127.0.0.1');
+const publish = publication => {
+  const temporary = `${publicationPath}.${publicationId}.tmp`;
+  fs.writeFileSync(temporary, JSON.stringify(publication));
+  fs.renameSync(temporary, publicationPath);
+};
 const credentials = JSON.parse(fs.readFileSync(path.join(base, 'private.json')));
 const checks = [], errors = [], cancelled = [], events = [], requests = [];
 const welcomed = [], checkpoints = [];
@@ -44,11 +63,9 @@ function redact(value) {
 function checked(label) { checks.push(label); console.log(label); }
 async function title(page) {
   await page.waitForURL(value => value.origin === url.origin && value.pathname === `${mount}/`);
-  await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-    && document.querySelector('#status')?.textContent === '');
-  const prompt = page.locator('.title-prompt:not([hidden])');
-  if (await prompt.isVisible()) await prompt.locator('[data-menu-action="prompt-secondary"]').click();
-  await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
+  await ui.ready(page);
+  if(ui.findWidget(await ui.readUi(page),'prompt-secondary'))await ui.click(page,'prompt-secondary');
+  await ui.surface(page,'title');
 }
 async function accountForm(page) {
   await page.waitForFunction(() => {
@@ -63,11 +80,11 @@ async function register(page) {
   fs.writeFileSync(path.join(out, 'private-account.json'), JSON.stringify(account), { mode: 0o600 });
   const catalogResponse = page.waitForResponse(response => new URL(response.url()).pathname
     === `${mount}/api/mods` && response.request().method() === 'GET');
-  await page.locator('[data-menu-action="explore"]').click();
+  await ui.click(page,'dark-cloud');
   const catalog = await catalogResponse;
   assert.equal(catalog.status(), 200);
   await catalog.finished();
-  await page.locator('[data-menu-action="cloud-sign-in"]').click();
+  await ui.click(page,'cloud-sign-in');
   await page.waitForURL(value => value.pathname === `${mount}/login`);
   await accountForm(page);
   await page.getByRole('link', { name: 'Create an account', exact: true }).click();
@@ -90,9 +107,9 @@ async function register(page) {
   await title(page);
 }
 async function adminRestart() {
-  const response = await fetch('http://127.0.0.1:5230/admin/deployments/restart', {
+  const response = await fetch(new URL('/admin/deployments/restart', adminUrl), {
     method: 'POST', headers: { authorization: `Bearer ${credentials.supervisor}`,
-      'content-type': 'application/json' }, body: JSON.stringify({ targetRevision: target }),
+      'content-type': 'application/json', 'X-Solomon-Deployment-Id': publicationId }, body: JSON.stringify({ targetRevision: target }),
   });
   const body = await response.json();
   return { status: response.status, body };
@@ -112,7 +129,7 @@ async function adminRestart() {
   page.on('response', response => {
     const request = response.request(), pathname = new URL(response.url()).pathname;
     if (request.resourceType() === 'document' && pathname === `${mount}/`) documentLoads += 1;
-    if (pathname.includes('/api/') || pathname.endsWith('/deployment.json'))
+    if (pathname.includes('/api/') || pathname === publicationEndpoint)
       requests.push({ pathname, method: request.method(), status: response.status() });
     if (pathname === `${mount}/api/game/saves/0` && request.method() === 'PUT') {
       events.push({ kind: 'save-response', status: response.status(),
@@ -123,7 +140,7 @@ async function adminRestart() {
   page.on('requestfailed', request => {
     const row = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
     if (request.failure()?.errorText === 'net::ERR_ABORTED'
-      && (request.resourceType() === 'media' || new URL(request.url()).pathname.endsWith('/deployment.json')))
+      && new URL(request.url()).pathname === publicationEndpoint)
       cancelled.push(row);
     else errors.push(redact(row));
   });
@@ -151,7 +168,7 @@ async function adminRestart() {
       } else if (message.type === 'hosted' && message.message.kind === 'deployment_restart') {
         announcement = message.message;
         events.push({ kind: 'deployment-announced', sequence: announcement.checkpoint_sequence,
-          target: announcement.target_revision });
+          target: announcement.target_revision, publication: announcement.deployment_id });
       }
     });
   });
@@ -169,26 +186,29 @@ async function adminRestart() {
     await title(page);
     await register(page);
     assert.equal(await page.locator('meta[name="solomon-build-revision"]').getAttribute('content'), current);
-    await page.locator('[data-menu-action="play"]').click();
-    await page.locator('[data-menu-action="new-game"]').click();
-    const name = page.getByRole('textbox', { name: 'Wizard name', exact: true });
-    await name.fill('UpdateQA');
-    await name.press('Tab');
-    await page.locator('[data-menu-action="element:fire"]').click();
-    await page.locator('[data-menu-action="discipline:arcane"]').click();
-    await until(() => welcomed.length === 1 && frame?.snapshot.participants[playerId], 'real College admission');
-    const wizardName = welcomed[0].name;
-    await until(() => frame.snapshot.ticks > 100, 'accepted authority ticks');
-    checked('registered account enters the real College on the old published revision');
+    await ui.click(page,'play');await ui.click(page,'new-game');
+    await ui.waitForUi(page,snapshot=>snapshot.surface==='create'||ui.findWidget(snapshot,'college-intro')||ui.findWidget(snapshot,'panel:dialogue'),'ordinary fresh College admission',{timeout:120000});
+    if((await ui.readUi(page)).surface!=='create')await reachCollegeLoadout(page);
+    await ui.fill(page,'create-name','UpdateQA');await ui.click(page,'element:fire');await ui.click(page,'discipline:arcane');
+    await until(() => welcomed.length === 1
+      && frame?.snapshot.participants[playerId]?.player.selection.name === 'UpdateQA', 'real College selection');
+    const wizardName = frame.snapshot.participants[playerId].player.selection.name;
+    await ui.click(page, (await ui.byLabel(page, 'Enter the Boneyard', {role:'button'})).id);
+    await until(() => frame?.snapshot.boneyard && !frame.host.loading_run_id
+      && !frame.host.resume_grace && !frame.host.pause && frame.snapshot.ticks > 100,
+      'actual Boneyard entry and authority ticks');
+    const runId = frame.snapshot.boneyard.run_id;
+    const savedPlayerId = playerId;
+    checked('registered account enters a real Boneyard on the current published game');
     const loads = documentLoads, closes = socketCloses;
     armSave = true;
     const restart = adminRestart();
     await until(() => announcement && heldRoute, 'real deployment announcement and held save PUT');
     assert.equal(announcement.target_revision, target);
+    assert.equal(announcement.deployment_id, publicationId);
     assert.ok(announcement.checkpoint_sequence > 0);
-    const overlay = page.locator('.game-deployment-update:not([hidden])');
-    await overlay.waitFor();
-    assert.match(await overlay.innerText(), /Saving your game before the update/);
+    assert.match((await ui.widget(page,'deployment/update')).label,/Saving your game before the update/);
+    await ui.assertGpuOnly(page);
     await sleep(1000);
     assert.equal(events.filter(row => row.kind === 'deployment-ready').length, 0);
     assert.equal(socketCloses, closes);
@@ -200,8 +220,9 @@ async function adminRestart() {
     await until(() => events.some(row => row.kind === 'deployment-ready'), 'saved deployment ACK');
     const result = await restart;
     assert.equal(result.status, 200);
+    assert.equal(result.body.deploymentId, publicationId);
     await until(() => socketCloses === closes + 1, 'server-owned deployment socket close');
-    assert.match(await overlay.innerText(), /Your game is saved/);
+    assert.match((await ui.widget(page,'deployment/update')).label,/Your game is saved/);
     const ack = events.findIndex(row => row.kind === 'deployment-ready');
     assert.ok(events.slice(0, ack).some(row => row.kind === 'save-response'
       && row.status === 200 && row.sha256 === heldRoute.sha256));
@@ -211,25 +232,36 @@ async function adminRestart() {
     const wrong = '1d682fa13c9427a056691238e4051992451f6f96';
     assert.notEqual(wrong, current);
     assert.notEqual(wrong, target);
-    fs.writeFileSync(path.join(base, 'served-web-dist/deployment.json'), JSON.stringify({ revision: wrong }));
-    changedManifest = true;
-    const polls = requests.filter(row => row.pathname.endsWith('/deployment.json')).length;
-    await until(() => requests.filter(row => row.pathname.endsWith('/deployment.json')).length >= polls + 3,
-      'three actual mismatching deployment polls');
-    assert.equal(documentLoads, loads);
-    fs.writeFileSync(path.join(base, 'served-web-dist/deployment.json'), originalManifest);
+    const candidate = {revision: targetWebsite, gameRevision: target,
+      deploymentId: publicationId, ready: true};
+    for (const [label, publication] of [
+      ['the old healthy publication', originalPublication],
+      ['a mismatching target game', {...candidate, gameRevision: wrong}],
+      ['a mismatching publication', {...candidate, deploymentId: '00'.repeat(16)}],
+      ['the pending replacement', {...candidate, ready: false}],
+    ]) {
+      publish(publication);
+      changedManifest = true;
+      const polls = requests.filter(row => row.pathname === publicationEndpoint).length;
+      await until(() => requests.filter(row => row.pathname === publicationEndpoint).length >= polls + 3,
+        `three actual polls of ${label}`);
+      assert.equal(documentLoads, loads);
+      checked(`${label} cannot authorize an active-session reload`);
+    }
+    publish(originalPublication);
     changedManifest = false;
-    checked('a different published revision is ignored until it matches the announced target');
-    fs.writeFileSync(path.join(out, 'ready-to-publish.json'), JSON.stringify({ current, target,
-      wizardName, checkpointSequence: announcement.checkpoint_sequence, result }));
+    fs.writeFileSync(path.join(out, 'ready-to-publish.json'), JSON.stringify({current, target,
+      publication: candidate, wizardName, runId, checkpointSequence: announcement.checkpoint_sequence, result}));
     console.log('READY_TO_PUBLISH');
     await until(() => documentLoads > loads, 'coordinator publication and automatic reload', 180000);
     await title(page);
     assert.equal(await page.locator('meta[name="solomon-build-revision"]').getAttribute('content'), target);
-    await page.locator('[data-menu-action="play"]').click();
-    await page.locator('[data-menu-action="continue"]').click();
+    await ui.click(page,'play');
+    await ui.click(page,'continue');
     await until(() => welcomed.length === 2, 'normal Continue after actual replacement');
     assert.equal(welcomed[1].name, wizardName);
+    assert.equal(welcomed[1].id, savedPlayerId);
+    await until(() => frame.snapshot.boneyard?.run_id === runId, 'the saved signed run continuation');
     await page.screenshot({ path: path.join(out, 'continued.png') });
     checked('the actual target artifact reloads automatically and Continue restores the saved wizard');
     assert.deepEqual(errors, []);
@@ -239,11 +271,11 @@ async function adminRestart() {
     await page.screenshot({ path: path.join(out, 'failure.png') });
     fs.writeFileSync(path.join(out, 'failure.json'), JSON.stringify({ error: redact(error.stack),
       checks, events, requests, welcomed, checkpoints, announcement, cancelled, errors,
-      ui: await page.locator('body').innerText() }, null, 2));
+      ui: await ui.readUi(page) }, null, 2));
     throw error;
   } finally {
     releaseSave();
-    if (changedManifest) fs.writeFileSync(path.join(base, 'served-web-dist/deployment.json'), originalManifest);
+    if (changedManifest) publish(originalPublication);
     let timer;
     try { await Promise.race([server.close(), new Promise((_, reject) => {
       timer = setTimeout(() => reject(new Error('Chrome close timed out')), 15000);

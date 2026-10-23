@@ -20,8 +20,8 @@ use solomon_sim::spells::presentation::{SpellAtlas, SpellBlend};
 
 use crate::courtyard::Camera;
 use crate::mod_presentation_assets::{ModPresentationAssets, ModSpriteDraw, ModSpriteTexture};
-use crate::render::{BlendMode, Renderer, TextureColorMode};
 use crate::secondary::SecondaryView;
+use solomon_graphics::{BlendMode, Renderer, TextureColorMode};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LootPainterId {

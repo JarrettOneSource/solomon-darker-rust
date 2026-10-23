@@ -6,7 +6,7 @@
     "sdmod": "node tools/sdmod/cli.mjs",
     "test:sdmod": "node --test tools/sdmod/cli.test.mjs",
     "dev:desktop": "node tools/run-desktop.mjs",
-    "test:desktop": "node --test desktop/*.test.mjs tools/stage-node-runtime.test.mjs tools/desktop-build.test.mjs tools/desktop-archive.test.mjs tools/browser-smoke/native-child.test.cjs tools/browser-smoke/desktop-failure.test.cjs",
+    "test:desktop": "node --test desktop/*.test.mjs tools/stage-node-runtime.test.mjs tools/desktop-build.test.mjs tools/editor-test-boot.test.mjs tools/desktop-archive.test.mjs tools/browser-smoke/native-child.test.cjs tools/browser-smoke/desktop-failure.test.cjs",
     "package:desktop": "node tools/package-desktop.mjs",
     "package:desktop:windows": "node tools/package-desktop.mjs --platform win32 --arch x64",
     "package:desktop:mac": "node tools/package-desktop.mjs --platform darwin --arch arm64",

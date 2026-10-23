@@ -11,7 +11,7 @@ use solomon_sim::hub::painter::{PainterLane, PainterLayer};
 use solomon_sim::hub::regions::HubRegion;
 
 use crate::courtyard::{Camera, registered_origin};
-use crate::render::{BlendMode, Quad, Renderer, Texture};
+use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
 const WHITE: [f32; 4] = [1.0; 4];
 const STUDENT_PRIMARY: [f32; 4] = [104.0 / 255.0, 130.0 / 255.0, 145.0 / 255.0, 1.0];

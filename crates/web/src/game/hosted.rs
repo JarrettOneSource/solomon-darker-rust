@@ -73,6 +73,21 @@ pub(super) struct HostedGame {
 }
 
 impl HostedGame {
+    pub(super) fn paint_boneyard_library(
+        &mut self,
+        menu: &MenuUi,
+        frame: &mut crate::gpu_ui::UiFrame<'_>,
+    ) -> Result<(), String> {
+        if !menu.dark_cloud_boneyards_selected() {
+            return Ok(());
+        }
+        let Some(bounds) = frame.widget_rect("cloud-boneyards-content") else { return Ok(()) };
+        if let Some(library) = &mut self.boneyard_library {
+            library.paint(frame, bounds, menu.boneyards_interactive())?;
+        }
+        Ok(())
+    }
+
     pub(super) fn end_connection(&mut self) {
         self.connecting = false;
         self.leave_checkpoint = None;
@@ -320,28 +335,25 @@ impl PendingHostedWork {
 }
 
 impl Game {
-    // DarkCloudBoneyards owns editor documents, imports and cloud CRUD in the Website.
-    // Its lifetime follows the selected tab, like Source's conditional React child.
     fn update_boneyard_library(&mut self) -> Result<(), String> {
         let Some(hosted) = &mut self.hosted else { return Ok(()) };
         if hosted.desktop_endpoint.is_some() || !self.menu.dark_cloud_boneyards_selected() {
             hosted.boneyard_library = None;
             return Ok(());
         }
-        if let Some(library) = &hosted.boneyard_library {
-            if library.take_menu_requested() {
-                self.menu.request_boneyard_library_menu()?;
-            }
-            return Ok(());
+        let account = hosted.account.as_ref().map(|account| account.username.as_str());
+        if let Some(library) = &mut hosted.boneyard_library {
+            library.set_account(account);
+            library.update()?;
+        } else {
+            hosted.boneyard_library = Some(boneyards::BoneyardLibrary::new(
+                web_sys::window().ok_or("Boneyard library window")?,
+                hosted.api.clone(),
+                account,
+            )?);
         }
-        hosted.boneyard_library = Some(boneyards::BoneyardLibrary::mount(
-            &self.menu.boneyards_mount(),
-            hosted.api.mount(),
-            &self.menu.settings().controls.open_menu,
-        )?);
         Ok(())
     }
-
     pub(super) async fn load_hosted(
         &mut self,
         window: &web_sys::Window,
@@ -850,7 +862,11 @@ impl Game {
                         );
                     }
                 }
-                HostedServerMessage::DeploymentRestart { checkpoint_sequence, target_revision } => {
+                HostedServerMessage::DeploymentRestart {
+                    checkpoint_sequence,
+                    target_revision,
+                    deployment_id,
+                } => {
                     if hosted.deployment_update.restarting() {
                         continue;
                     }
@@ -864,7 +880,7 @@ impl Game {
                         )?;
                         continue;
                     };
-                    hosted.deployment_update.begin(&target_revision)?;
+                    hosted.deployment_update.begin(&target_revision, &deployment_id)?;
                     hosted.leave_checkpoint = None;
                     hosted.pending_transfer = None;
                     hosted.transfer_save_document = None;
@@ -1120,7 +1136,7 @@ impl Game {
                         target_revision: revision.clone(),
                     };
                     hosted.deployment = None;
-                    hosted.deployment_update.saved()?;
+                    hosted.deployment_update.saved();
                     self.native.as_ref().unwrap().acknowledge_deployment(command)?;
                 }
                 SaveOutcome::Failed(error) => {

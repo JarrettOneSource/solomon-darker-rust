@@ -3,7 +3,16 @@ target = "index.html"
 dist = "dist"
 
 [watch]
-watch = ["index.html", "../crates"]
+watch = ["index.html", "bootstrap.mjs", "../scripts/trunk_bootstrap.py", "../scripts/prepare-trunk-client.py", "../crates"]
+
+[[hooks]]
+stage = "post_build"
+command = "sh"
+command_arguments = ["-c", 'exec python3 "$TRUNK_SOURCE_DIR/../scripts/prepare-trunk-client.py"']
+
+[hooks.windows]
+command = "cmd"
+command_arguments = ["/C", 'python "%TRUNK_SOURCE_DIR%\..\scripts\prepare-trunk-client.py"']
 
 [serve]
 addresses = ["127.0.0.1"]

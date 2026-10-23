@@ -1,12 +1,11 @@
-//! The source `CheatMenu.tsx` debug surface. The actual host executes every command;
-//! this module owns only browser form drafts, bounded console output and request identity.
+//! GPU `CheatMenu.tsx`; host commands, catalog admission and VM request IDs remain canonical.
 
 mod console;
 mod controls;
-
-use std::cell::RefCell;
-use std::rc::Rc;
-
+use crate::gpu_ui::UiFrame;
+use console::ConsoleView;
+use controls::CheatControls;
+use egui::{Color32, FontFamily, FontId, Id, Order, Rect, RichText, Stroke, pos2, vec2};
 use solomon_protocol::hosted::{HostedCommand, HostedServerMessage};
 use solomon_sim::boneyard::waves::director::WavePhase;
 use solomon_sim::game_run::GameRunPhase;
@@ -17,12 +16,10 @@ use solomon_sim::menu::cheats::{
 use solomon_sim::modding::value::LuaValue;
 use solomon_sim::session::GameSession;
 use solomon_sim::social::GameSessionKind;
+use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen::{JsCast, prelude::*};
-use web_sys::{Document, Element, Event, HtmlElement, KeyboardEvent};
-
-use crate::ui::{append, element};
-use console::ConsoleView;
-use controls::CheatControls;
+use web_sys::{Document, Event, KeyboardEvent};
 
 /// Borrowed accepted state. `can_open` and `retain_open` are the source scene/modal
 /// admission predicates, supplied by the same owner that admits gameplay input.
@@ -68,11 +65,6 @@ struct KeyAdmission {
 enum UiEvent {
     Open,
     Close,
-    Action(String),
-    Target,
-    Skill,
-    ConsoleEdited,
-    History(i32),
 }
 
 struct PendingAction {
@@ -82,7 +74,6 @@ struct PendingAction {
 
 pub struct CheatUi {
     document: Document,
-    root: HtmlElement,
     view: Option<OpenView>,
     frame: Option<CheatFrame>,
     events: Rc<RefCell<Vec<UiEvent>>>,
@@ -93,30 +84,17 @@ pub struct CheatUi {
     action_request: Option<PendingAction>,
     catalogs: Option<CheatMenuCatalogs>,
     key: Closure<dyn FnMut(Event)>,
-    click: Closure<dyn FnMut(Event)>,
-    submit: Closure<dyn FnMut(Event)>,
-    input: Closure<dyn FnMut(Event)>,
 }
-
 struct OpenView {
-    dialog: HtmlElement,
-    identity: HtmlElement,
-    cheats_tab: HtmlElement,
-    console_tab: HtmlElement,
     controls: CheatControls,
     console: ConsoleView,
-    catalog_loading: HtmlElement,
-    catalog_error: HtmlElement,
-    action_receipt: HtmlElement,
+    console_tab: bool,
+    catalog_loading: bool,
+    catalog_error: Option<String>,
+    action_receipt: Option<(String, &'static str)>,
 }
-
 impl CheatUi {
-    /// All art comes from the already loaded native-settings CSS atlas. No debug
-    /// catalog or script is evaluated until the admitted menu actually opens.
     pub fn attach(document: &Document) -> Result<Self, String> {
-        let root = element(document, "div", "game-settings-backdrop cheat-menu-backdrop")?;
-        root.set_attribute("role", "presentation").map_err(|_| "cheat backdrop semantics")?;
-        root.set_hidden(true);
         let events = Rc::new(RefCell::new(Vec::new()));
         let key_admission = Rc::new(RefCell::new(KeyAdmission::default()));
         let pending = events.clone();
@@ -145,43 +123,8 @@ impl CheatUi {
             )
             .map_err(|_| "cheat binding listener")?;
 
-        let pending = events.clone();
-        let click = Closure::new(move |event: Event| {
-            if let Some(action) = event_action(&event, "[data-cheat-action]", "data-cheat-action") {
-                pending.borrow_mut().push(UiEvent::Action(action));
-            }
-        });
-        root.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())
-            .map_err(|_| "cheat click listener")?;
-        let pending = events.clone();
-        let submit = Closure::new(move |event: Event| {
-            if let Some(action) = event_action(&event, "[data-cheat-submit]", "data-cheat-submit") {
-                event.prevent_default();
-                pending.borrow_mut().push(UiEvent::Action(action));
-            }
-        });
-        root.add_event_listener_with_callback("submit", submit.as_ref().unchecked_ref())
-            .map_err(|_| "cheat form listener")?;
-        let pending = events.clone();
-        let input = Closure::new(move |event: Event| {
-            let Some(target) = event.target().and_then(|target| target.dyn_into::<Element>().ok())
-            else {
-                return;
-            };
-            let action = match target.get_attribute("data-cheat-field").as_deref() {
-                Some("target") => UiEvent::Target,
-                Some("skill") => UiEvent::Skill,
-                Some("console") => UiEvent::ConsoleEdited,
-                _ => return,
-            };
-            pending.borrow_mut().push(action);
-        });
-        root.add_event_listener_with_callback("input", input.as_ref().unchecked_ref())
-            .map_err(|_| "cheat field listener")?;
-        append(&document.body().ok_or("cheat document body")?, &root)?;
         Ok(Self {
             document: document.clone(),
-            root,
             view: None,
             frame: None,
             events,
@@ -192,12 +135,8 @@ impl CheatUi {
             action_request: None,
             catalogs: None,
             key,
-            click,
-            submit,
-            input,
         })
     }
-
     #[must_use]
     pub fn is_open(&self) -> bool {
         self.view.is_some()
@@ -229,7 +168,6 @@ impl CheatUi {
             self.process(event)?;
         }
         if let (Some(view), Some(frame)) = (&mut self.view, &self.frame) {
-            view.identity.set_text_content(Some(&frame.identity));
             view.controls.update(frame, self.action_request.is_some(), self.catalogs.as_ref())?;
         }
         Ok(())
@@ -241,10 +179,8 @@ impl CheatUi {
             return Ok(false);
         }
         let Some(frame) = &self.frame else { return Ok(false) };
-        let view = OpenView::new(&self.document, frame, &self.events)?;
-        append(&self.root, &view.dialog)?;
+        let view = OpenView::new(&self.document, frame)?;
         self.view = Some(view);
-        self.root.set_hidden(false);
         self.key_admission.borrow_mut().open = true;
         let id = self.request(CHEAT_MENU_CATALOG_QUERY.to_owned());
         self.catalog_request = Some(id);
@@ -255,8 +191,6 @@ impl CheatUi {
     /// lifetime. The request counter survives so late VM replies cannot reopen it.
     pub fn close(&mut self) {
         self.view = None;
-        self.root.set_text_content(None);
-        self.root.set_hidden(true);
         self.key_admission.borrow_mut().open = false;
         self.catalog_request = None;
         self.action_request = None;
@@ -281,7 +215,7 @@ impl CheatUi {
         let Some(view) = &mut self.view else { return Ok(false) };
         if self.catalog_request == Some(*request_id) {
             self.catalog_request = None;
-            view.catalog_loading.set_hidden(true);
+            view.catalog_loading = false;
             let result = if *ok {
                 decode_cheat_menu_catalogs(values)
             } else {
@@ -290,8 +224,7 @@ impl CheatUi {
             let catalogs = match result {
                 Ok(catalogs) => catalogs,
                 Err(error) => {
-                    view.catalog_error.set_text_content(Some(&error));
-                    view.catalog_error.set_hidden(false);
+                    view.catalog_error = Some(error);
                     CheatMenuCatalogs::default()
                 }
             };
@@ -311,10 +244,10 @@ impl CheatUi {
             } else {
                 error.clone().unwrap_or_else(|| format!("{} failed.", request.label))
             };
-            receipt(&view.action_receipt, &message, if *ok { "ok" } else { "error" })?;
+            view.action_receipt = Some((message, if *ok { "ok" } else { "error" }));
             return Ok(true);
         }
-        view.console.complete(&self.document, *request_id, *ok, output, values, error.as_deref())
+        view.console.complete(*request_id, *ok, output, values, error.as_deref())
     }
 
     fn process(&mut self, event: UiEvent) -> Result<(), String> {
@@ -323,27 +256,6 @@ impl CheatUi {
                 self.open()?;
             }
             UiEvent::Close => self.close(),
-            UiEvent::History(direction) => {
-                if let Some(view) = &mut self.view {
-                    view.console.navigate_history(direction)?;
-                }
-            }
-            UiEvent::ConsoleEdited => {
-                if let Some(view) = &mut self.view {
-                    view.console.edited()?;
-                }
-            }
-            UiEvent::Target => {
-                if let (Some(view), Some(frame)) = (&self.view, &self.frame) {
-                    view.controls.target_changed(frame);
-                }
-            }
-            UiEvent::Skill => {
-                if let (Some(view), Some(catalogs)) = (&self.view, &self.catalogs) {
-                    view.controls.skill_changed(catalogs)?;
-                }
-            }
-            UiEvent::Action(action) => self.activate(&action)?,
         }
         Ok(())
     }
@@ -355,7 +267,7 @@ impl CheatUi {
         }
         let Some(view) = &mut self.view else { return Ok(()) };
         match action {
-            "cheats" | "console" => view.tab(action)?,
+            "cheats" | "console" => view.tab(action),
             "clear" => view.console.clear()?,
             "run" => {
                 if let Some(code) = view.console.prepare()? {
@@ -372,15 +284,15 @@ impl CheatUi {
                 match result {
                     Ok(Some((label, action))) => match compile_cheat_menu_action(&action) {
                         Ok(code) => {
-                            receipt(&view.action_receipt, &format!("{label}…"), "working")?;
+                            view.action_receipt = Some((format!("{label}…"), "working"));
                             let id = self.request(code);
                             self.action_request =
                                 Some(PendingAction { id, label: label.to_owned() });
                         }
-                        Err(error) => receipt(&view.action_receipt, &error, "error")?,
+                        Err(error) => view.action_receipt = Some((error, "error")),
                     },
                     Ok(None) => {}
-                    Err(error) => receipt(&view.action_receipt, &error, "error")?,
+                    Err(error) => view.action_receipt = Some((error, "error")),
                 }
             }
         }
@@ -393,130 +305,237 @@ impl CheatUi {
         self.commands.push(HostedCommand::LuaExecute { request_id: id, code });
         id
     }
-}
 
-impl Drop for CheatUi {
-    fn drop(&mut self) {
-        if let Some(window) = self.document.default_view() {
-            window
-                .remove_event_listener_with_callback_and_bool(
-                    "keydown",
-                    self.key.as_ref().unchecked_ref(),
-                    true,
-                )
-                .expect("remove the installed cheat key listener");
+    pub fn paint(&mut self, gpu: &mut UiFrame<'_>) -> Result<(), String> {
+        let (Some(view), Some(frame)) = (&mut self.view, &self.frame) else { return Ok(()) };
+        gpu.input_scope(if view.console_tab { "cheats/console" } else { "cheats/controls" });
+        let ctx = gpu.ctx.clone();
+        let screen = ctx.content_rect();
+        let bounds = Rect::from_center_size(
+            screen.center(),
+            vec2(1040.0_f32.min(screen.width() - 24.0), 820.0_f32.min(screen.height() - 24.0)),
+        );
+        let mut action = None;
+        let mut console_error = None;
+        egui::Area::new(Id::unique("cheats/dialog"))
+            .order(Order::Foreground)
+            .fixed_pos(egui::Pos2::ZERO)
+            .show(&ctx, |ui| {
+                ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
+                ui.set_min_size(screen.size());
+                ui.interact(screen, Id::unique("cheats/backdrop"), egui::Sense::CLICK);
+                ui.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(209));
+                ui.painter().rect_filled(bounds, 0.0, Color32::from_rgb(14, 13, 12));
+                if let Some(size) = gpu.image_size("assets/stock/settings-leather.png") {
+                    let painter = ui.painter().with_clip_rect(bounds);
+                    let mut y = bounds.top();
+                    while y < bounds.bottom() {
+                        let mut x = bounds.left();
+                        while x < bounds.right() {
+                            gpu.image(
+                                &painter,
+                                "assets/stock/settings-leather.png",
+                                Rect::from_min_size(pos2(x, y), size),
+                                None,
+                                Color32::from_white_alpha(150),
+                            );
+                            x += size.x;
+                        }
+                        y += size.y;
+                    }
+                }
+                ui.painter().rect_stroke(
+                    bounds,
+                    0.0,
+                    Stroke::new(3.0, Color32::from_rgb(159, 133, 71)),
+                    egui::StrokeKind::Inside,
+                );
+                paint_native_art(gpu, ui.painter(), bounds);
+                let inner = bounds.shrink(20.0);
+                ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.label(copy("DEBUG MENU", 22.0));
+                            ui.label(
+                                RichText::new(&frame.identity)
+                                    .font(FontId::new(
+                                        10.0,
+                                        FontFamily::Name("JetBrains Mono".into()),
+                                    ))
+                                    .color(Color32::from_rgb(169, 156, 118)),
+                            );
+                        });
+                        for (id, label, selected) in [
+                            ("cheats", "CHEATS", !view.console_tab),
+                            ("console", "CONSOLE", view.console_tab),
+                        ] {
+                            let response = ui.add(
+                                egui::Button::new(copy(label, 14.0))
+                                    .selected(selected)
+                                    .min_size(vec2(100.0, 48.0)),
+                            );
+                            gpu.record(&format!("cheats/tab:{id}"), label, "tab", &response);
+                            gpu.record_value(&format!("cheats/tab:{id}"), id, Some(selected));
+                            if response.clicked() {
+                                action = Some(id.to_owned());
+                            }
+                        }
+                        if button(gpu, ui, "close", "×", true).clicked() {
+                            action = Some("close".into());
+                        }
+                    });
+                    ui.separator();
+                    if view.console_tab {
+                        match view.console.paint(gpu, ui) {
+                            Ok(Some(next)) => action = Some(next),
+                            Ok(None) => {}
+                            Err(error) => console_error = Some(error),
+                        }
+                    } else {
+                        egui::ScrollArea::vertical()
+                            .id_salt("cheats/content")
+                            .max_height((inner.height() - 72.0).max(50.0))
+                            .show(ui, |ui| {
+                                if let Some(next) = view.controls.paint(
+                                    gpu,
+                                    ui,
+                                    frame,
+                                    self.action_request.is_some(),
+                                    self.catalogs.as_ref(),
+                                ) {
+                                    action = Some(next);
+                                }
+                                if view.catalog_loading {
+                                    ui.label(copy("Loading semantic catalogs…", 12.0));
+                                }
+                                if let Some(error) = &view.catalog_error {
+                                    let response =
+                                        ui.colored_label(Color32::from_rgb(255, 142, 120), error);
+                                    gpu.record("cheats/catalog-error", error, "alert", &response);
+                                }
+                                if let Some((message, tone)) = &view.action_receipt {
+                                    let response = ui.colored_label(
+                                        if *tone == "error" {
+                                            Color32::from_rgb(255, 142, 120)
+                                        } else {
+                                            Color32::from_rgb(217, 202, 155)
+                                        },
+                                        message,
+                                    );
+                                    gpu.record(
+                                        "cheats/action-receipt",
+                                        message,
+                                        if *tone == "error" { "alert" } else { "status" },
+                                        &response,
+                                    );
+                                }
+                            });
+                    }
+                });
+                gpu.record_rect("cheats/dialog", "Cheat menu", "dialog", bounds, true);
+            });
+        if let Some(error) = console_error {
+            return Err(error);
         }
-        for (name, listener) in
-            [("click", &self.click), ("submit", &self.submit), ("input", &self.input)]
-        {
-            self.root
-                .remove_event_listener_with_callback(name, listener.as_ref().unchecked_ref())
-                .expect("remove the installed cheat form listener");
-        }
-        self.root.remove();
-    }
-}
-
-impl OpenView {
-    fn new(
-        document: &Document,
-        frame: &CheatFrame,
-        events: &Rc<RefCell<Vec<UiEvent>>>,
-    ) -> Result<Self, String> {
-        let dialog = element(document, "section", "game-settings-dialog cheat-menu-dialog")?;
-        for (name, value) in
-            [("aria-label", "Cheat menu"), ("aria-modal", "true"), ("role", "dialog")]
-        {
-            dialog.set_attribute(name, value).map_err(|_| "cheat dialog semantics")?;
-        }
-        // NativePanelArt uses the existing CSS atlas crops without registered-sprite
-        // offsets; its flourishes stay centered at every debug-dialog height.
-        let art = element(document, "div", "game-settings-native-art")?;
-        art.set_attribute("aria-hidden", "true").map_err(|_| "cheat frame semantics")?;
-        for corner in ["top-left", "top-right", "bottom-left", "bottom-right"] {
-            append(
-                &art,
-                &element(document, "i", &format!("game-settings-frame-corner {corner}"))?,
-            )?;
-        }
-        for side in ["left", "right"] {
-            append(
-                &art,
-                &element(document, "i", &format!("game-settings-frame-flourish {side}"))?,
-            )?;
-        }
-        append(&dialog, &art)?;
-        let header = element(document, "header", "cheat-menu-topbar")?;
-        let identity_box = element(document, "div", "cheat-menu-identity")?;
-        text(document, &identity_box, "strong", "", "DEBUG MENU")?;
-        let identity = text(document, &identity_box, "span", "", &frame.identity)?;
-        append(&header, &identity_box)?;
-        let tabs = element(document, "nav", "cheat-menu-tabs")?;
-        tabs.set_attribute("role", "tablist").map_err(|_| "cheat tabs role")?;
-        tabs.set_attribute("aria-label", "Debug menu tabs").map_err(|_| "cheat tabs label")?;
-        let cheats_tab = tab_button(document, "cheats")?;
-        let console_tab = tab_button(document, "console")?;
-        append(&tabs, &cheats_tab)?;
-        append(&tabs, &console_tab)?;
-        append(&header, &tabs)?;
-        let close = button(document, "×", "close", "cheat-menu-close")?;
-        close.set_attribute("aria-label", "Close cheat menu").map_err(|_| "cheat close label")?;
-        close.set_attribute("data-game-back", "true").map_err(|_| "cheat back control")?;
-        append(&header, &close)?;
-        append(&dialog, &header)?;
-        let controls = CheatControls::new(document, frame)?;
-        let catalog_loading = text(
-            document,
-            &controls.root,
-            "p",
-            "cheat-menu-receipt",
-            "Loading semantic catalogs…",
-        )?;
-        catalog_loading.set_attribute("data-tone", "working").map_err(|_| "cheat loading tone")?;
-        catalog_loading.set_attribute("role", "status").map_err(|_| "cheat loading status")?;
-        let catalog_error = text(document, &controls.root, "p", "cheat-menu-receipt", "")?;
-        catalog_error.set_hidden(true);
-        receipt(&catalog_error, "", "error")?;
-        catalog_error.set_hidden(true);
-        let action_receipt = element(document, "p", "cheat-menu-receipt")?;
-        action_receipt.set_hidden(true);
-        append(&controls.root, &action_receipt)?;
-        append(&dialog, &controls.root)?;
-        let console = ConsoleView::new(document, events)?;
-        append(&dialog, &console.root)?;
-        let mut view = Self {
-            dialog,
-            identity,
-            cheats_tab,
-            console_tab,
-            controls,
-            console,
-            catalog_loading,
-            catalog_error,
-            action_receipt,
-        };
-        view.tab("cheats")?;
-        Ok(view)
-    }
-
-    fn tab(&mut self, tab: &str) -> Result<(), String> {
-        let console = tab == "console";
-        self.dialog.set_attribute("data-cheat-menu-tab", tab).map_err(|_| "cheat active tab")?;
-        self.cheats_tab
-            .set_attribute("aria-selected", if console { "false" } else { "true" })
-            .map_err(|_| "cheat tab selection")?;
-        self.console_tab
-            .set_attribute("aria-selected", if console { "true" } else { "false" })
-            .map_err(|_| "console tab selection")?;
-        self.controls.root.set_hidden(console);
-        self.console.root.set_hidden(!console);
-        if console {
-            self.console.focus()?;
+        if let Some(action) = action {
+            self.activate(&action)?;
         }
         Ok(())
     }
 }
-
+impl Drop for CheatUi {
+    fn drop(&mut self) {
+        if let Some(window) = self.document.default_view()
+            && let Err(error) = window.remove_event_listener_with_callback_and_bool(
+                "keydown",
+                self.key.as_ref().unchecked_ref(),
+                true,
+            )
+        {
+            web_sys::console::error_1(&error);
+        }
+    }
+}
+impl OpenView {
+    fn new(document: &Document, frame: &CheatFrame) -> Result<Self, String> {
+        Ok(Self {
+            controls: CheatControls::new(document, frame)?,
+            console: ConsoleView::new(),
+            console_tab: false,
+            catalog_loading: true,
+            catalog_error: None,
+            action_receipt: None,
+        })
+    }
+    fn tab(&mut self, tab: &str) {
+        self.console_tab = tab == "console";
+        if self.console_tab {
+            self.console.focus();
+        }
+    }
+}
+fn copy(text: &str, size: f32) -> RichText {
+    RichText::new(text)
+        .font(FontId::new(size, FontFamily::Name("Cinzel Bold".into())))
+        .color(Color32::from_rgb(240, 220, 167))
+}
+fn button(
+    gpu: &UiFrame<'_>,
+    ui: &mut egui::Ui,
+    id: &str,
+    label: &str,
+    enabled: bool,
+) -> egui::Response {
+    let response = ui.add_enabled(
+        enabled,
+        egui::Button::new(copy(label, 12.0))
+            .fill(Color32::from_rgb(30, 25, 14))
+            .stroke(Stroke::new(1.0, Color32::from_rgb(128, 107, 59)))
+            .corner_radius(0.0)
+            .min_size(vec2(80.0, 36.0)),
+    );
+    gpu.record(&format!("cheats/{id}"), label, "button", &response);
+    response
+}
+fn paint_native_art(gpu: &UiFrame<'_>, painter: &egui::Painter, bounds: Rect) {
+    let source = Rect::from_min_size(pos2(743.0, 588.0), vec2(80.0, 83.0));
+    for (point, mirror_x, mirror_y) in [
+        (bounds.min - vec2(8.0, 8.0), false, false),
+        (bounds.right_top() + vec2(-72.0, -8.0), true, false),
+        (bounds.left_bottom() + vec2(-8.0, -75.0), false, true),
+        (bounds.max - vec2(72.0, 75.0), true, true),
+    ] {
+        let mut uv = source;
+        if mirror_x {
+            std::mem::swap(&mut uv.min.x, &mut uv.max.x);
+        }
+        if mirror_y {
+            std::mem::swap(&mut uv.min.y, &mut uv.max.y);
+        }
+        gpu.atlas_image(
+            painter,
+            "assets/stock/UI.png",
+            uv,
+            Rect::from_min_size(point, vec2(80.0, 83.0)),
+            Color32::WHITE,
+        );
+    }
+    if bounds.width() > 700.0 {
+        for (x, mirror) in [(bounds.left() - 52.0, false), (bounds.right() - 15.0, true)] {
+            let mut source = Rect::from_min_size(pos2(543.0, 205.0), vec2(67.0, 262.0));
+            if mirror {
+                std::mem::swap(&mut source.min.x, &mut source.max.x);
+            }
+            gpu.atlas_image(
+                painter,
+                "assets/stock/UI.png",
+                source,
+                Rect::from_center_size(pos2(x + 33.5, bounds.center().y), vec2(67.0, 262.0)),
+                Color32::WHITE,
+            );
+        }
+    }
+}
 impl CheatFrame {
     fn from_snapshot(snapshot: CheatViewSnapshot<'_>) -> Self {
         let session = snapshot.session;
@@ -596,58 +615,6 @@ impl CheatFrame {
 fn round(value: f64) -> f64 {
     let rounded = js_sys::Math::round(value * 100.0) / 100.0;
     if rounded == 0.0 { 0.0 } else { rounded }
-}
-
-fn tab_button(document: &Document, tab: &str) -> Result<HtmlElement, String> {
-    let button = button(document, &tab.to_ascii_uppercase(), tab, "")?;
-    for (name, value) in [
-        ("role", "tab".to_owned()),
-        ("id", format!("cheat-menu-{tab}-tab")),
-        ("aria-controls", format!("cheat-menu-{tab}")),
-    ] {
-        button.set_attribute(name, &value).map_err(|_| "cheat tab semantics")?;
-    }
-    Ok(button)
-}
-
-fn button(
-    document: &Document,
-    label: &str,
-    action: &str,
-    class: &str,
-) -> Result<HtmlElement, String> {
-    let button = element(document, "button", class)?;
-    button.set_attribute("type", "button").map_err(|_| "cheat button type")?;
-    button.set_attribute("data-cheat-action", action).map_err(|_| "cheat button action")?;
-    button.set_text_content(Some(label));
-    Ok(button)
-}
-
-fn text(
-    document: &Document,
-    parent: &HtmlElement,
-    tag: &str,
-    class: &str,
-    value: &str,
-) -> Result<HtmlElement, String> {
-    let node = element(document, tag, class)?;
-    node.set_text_content(Some(value));
-    append(parent, &node)?;
-    Ok(node)
-}
-
-fn receipt(node: &HtmlElement, message: &str, tone: &str) -> Result<(), String> {
-    node.set_text_content(Some(message));
-    node.set_attribute("data-tone", tone).map_err(|_| "cheat receipt tone")?;
-    node.set_attribute("role", if tone == "error" { "alert" } else { "status" })
-        .map_err(|_| "cheat receipt status")?;
-    node.set_hidden(false);
-    Ok(())
-}
-
-fn event_action(event: &Event, selector: &str, attribute: &str) -> Option<String> {
-    let target = event.target()?.dyn_into::<Element>().ok()?;
-    target.closest(selector).ok()??.get_attribute(attribute)
 }
 
 /// Keep the browser's JSON number formatting and insertion order, as in source

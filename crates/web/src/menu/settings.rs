@@ -1,26 +1,22 @@
-//! Source `GameSettingsDialog.tsx` pages. Preferences leave through MenuUi;
-//! this view retains only page navigation, form values and binding capture.
-
+//! GPU `GameSettingsDialog` pages. Draft preferences leave through MenuUi;
+//! storage, account admission and simulation authority retain their existing owners.
 mod fullscreen;
 mod mobile;
 mod mobile_sharing;
 mod transfer;
 
-use solomon_protocol::hosted::{EnhancedEffectsAuthority, EnhancedEffectsScope};
-use std::rc::Rc;
-
+use super::widgets;
+use crate::gpu_ui::{StockAtlas, UiFrame};
 use crate::mobile_editor::{MobileEditorArt, MobileEditorPlayerPreview, MobileUiEditor};
+use egui::{Color32, Pos2, Rect, Ui, Vec2};
+use fullscreen::SettingsFullscreen;
+use solomon_protocol::hosted::{EnhancedEffectsAuthority, EnhancedEffectsScope};
 use solomon_sim::hud::quickbar::NativeSkillQuickbarCooldownPresentation;
 use solomon_sim::mobile_ui::{MobileUiLayout, MobileUiLayoutState};
-use solomon_sim::native_ui_text::NativeUiTextAlign;
+use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
 use solomon_sim::settings::{GameControlAction, GameSettings, game_binding_label};
-use wasm_bindgen::JsCast;
-use web_sys::{Document, HtmlElement, HtmlInputElement};
-
-use crate::ui::settings::{NativeSettingsArt, settings_text};
-use crate::ui::{append, element};
-use fullscreen::SettingsFullscreen;
-
+use std::rc::Rc;
+use web_sys::Document;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsContext {
     Title,
@@ -201,53 +197,23 @@ impl ToggleSetting {
     }
 }
 
-struct NumericRow {
-    setting: NumericSetting,
-    input: HtmlInputElement,
-    output: HtmlElement,
-    track: HtmlElement,
-    track_width: f64,
-}
-
-struct ToggleRow {
-    setting: ToggleSetting,
-    button: HtmlElement,
-    art: HtmlElement,
-}
-
-struct BindingRow {
-    action: GameControlAction,
-    label: String,
-    button: HtmlElement,
-    value: HtmlElement,
-}
-
-pub struct SettingsView {
-    pub root: HtmlElement,
-    panel: HtmlElement,
-    title: HtmlElement,
-    content: HtmlElement,
-    footer: HtmlElement,
+pub(super) struct SettingsView {
     page: Page,
     context: SettingsContext,
     account_username: Option<String>,
-    account_label: Option<HtmlElement>,
-    console_help: Option<HtmlElement>,
     enhanced_effects_authority: Option<EnhancedEffectsAuthority>,
-    enhanced_effects_note: Option<HtmlElement>,
-    numeric: Vec<NumericRow>,
-    toggles: Vec<ToggleRow>,
-    bindings: Vec<BindingRow>,
     pending_binding: Option<GameControlAction>,
     settings: GameSettings,
     fullscreen: Option<SettingsFullscreen>,
-    art: Rc<NativeSettingsArt>,
+    ui_atlas: StockAtlas,
+    control_panel: StockAtlas,
     document: Document,
     mobile_art: Rc<MobileEditorArt>,
     mobile_state: MobileUiLayoutState,
     mobile_preview: Option<MobileEditorPlayerPreview>,
     mobile_cooldowns: [NativeSkillQuickbarCooldownPresentation; 83],
     mobile_editor: Option<MobileUiEditor>,
+    mobile_fullscreen: bool,
     mobile_save: Option<Option<MobileUiLayout>>,
     mobile_save_in_flight: bool,
     mobile_sharing: Option<mobile_sharing::SettingsLayoutPublication>,
@@ -255,57 +221,29 @@ pub struct SettingsView {
     save_transfer_available: bool,
     save_transfer: Option<transfer::SaveTransferView>,
     save_request_sequence: Rc<std::cell::Cell<u64>>,
+    viewport: Vec2,
+    changed: bool,
+    scroll_reset: bool,
 }
-
 impl SettingsView {
     pub async fn new(document: &Document) -> Result<Self, String> {
-        let art = Rc::new(NativeSettingsArt::load().await?);
-        let mobile_art = Rc::new(MobileEditorArt::load().await?);
-        let root = element(document, "div", "menu-screen game-settings-backdrop")?;
-        root.set_hidden(true);
-        root.set_attribute("role", "presentation").map_err(|_| "settings backdrop role")?;
-        root.set_attribute("data-native-ui-settings", "").map_err(|_| "settings hook")?;
-        let panel = element(document, "section", "game-settings-dialog settings-panel")?;
-        panel.set_attribute("role", "dialog").map_err(|_| "settings role")?;
-        panel.set_attribute("aria-modal", "true").map_err(|_| "settings modal")?;
-        append(&panel, &art.panel(document)?)?;
-        let header = element(document, "header", "game-settings-header")?;
-        let title = element(document, "h2", "")?;
-        append(&header, &title)?;
-        append(&panel, &header)?;
-        let content = element(document, "div", "game-settings-content")?;
-        append(&panel, &content)?;
-        let footer = art.stone_button(document, "DONE", "settings-back")?;
-        footer.set_class_name("native-stone-button game-settings-close");
-        footer.set_attribute("data-game-back", "true").map_err(|_| "settings back hook")?;
-        append(&panel, &footer)?;
-        append(&root, &panel)?;
         Ok(Self {
-            root,
-            panel,
-            title,
-            content,
-            footer,
             page: Page::Root,
             context: SettingsContext::Title,
             account_username: None,
-            account_label: None,
-            console_help: None,
             enhanced_effects_authority: None,
-            enhanced_effects_note: None,
-            numeric: Vec::new(),
-            toggles: Vec::new(),
-            bindings: Vec::new(),
             pending_binding: None,
             settings: GameSettings::default(),
-            fullscreen: None,
-            art,
+            fullscreen: SettingsFullscreen::new(document)?,
+            ui_atlas: StockAtlas::load("UI").await?,
+            control_panel: StockAtlas::load("ControlPanel").await?,
             document: document.clone(),
-            mobile_art,
+            mobile_art: Rc::new(MobileEditorArt::load().await?),
             mobile_state: MobileUiLayoutState::default(),
             mobile_preview: None,
             mobile_cooldowns: [NativeSkillQuickbarCooldownPresentation::default(); 83],
             mobile_editor: None,
+            mobile_fullscreen: false,
             mobile_save: None,
             mobile_save_in_flight: false,
             mobile_sharing: None,
@@ -313,110 +251,80 @@ impl SettingsView {
             save_transfer_available: false,
             save_transfer: None,
             save_request_sequence: Rc::new(std::cell::Cell::new(0)),
+            viewport: Vec2::new(1600.0, 900.0),
+            changed: false,
+            scroll_reset: true,
         })
     }
-
+    pub fn resize(&mut self, width: i32, height: i32) {
+        self.viewport = Vec2::new(width as f32, height as f32);
+    }
     pub fn open(&mut self, context: SettingsContext) -> Result<(), String> {
         self.context = context;
         self.page = Page::Root;
         self.build_page()
     }
-
     pub fn set_account_username(&mut self, username: Option<&str>) -> Result<(), String> {
         self.account_username = username.map(str::to_owned);
         if let Some(sharing) = &mut self.mobile_sharing {
             sharing.set_admission(username.is_some(), self.mobile_state.customized)?;
         }
-        self.paint_account()
+        Ok(())
     }
-
     pub fn set_enhanced_effects_authority(
         &mut self,
         authority: Option<EnhancedEffectsAuthority>,
     ) -> Result<(), String> {
-        if self.enhanced_effects_authority != authority {
-            self.enhanced_effects_authority = authority;
-            self.paint_values()?;
-        }
+        self.enhanced_effects_authority = authority;
         Ok(())
     }
-
     pub fn requested_enhanced_effects(&self) -> Option<bool> {
         match self.enhanced_effects_authority {
-            Some(authority) if !authority.can_change => None,
-            Some(authority) => Some(!authority.enabled),
+            Some(a) if !a.can_change => None,
+            Some(a) => Some(!a.enabled),
             None => Some(!self.settings.enhanced_effects),
         }
     }
-
     pub fn close(&mut self) -> Result<(), String> {
         self.clear_mobile_editor()?;
         self.mobile_sharing = None;
         self.save_transfer = None;
         self.pending_binding = None;
-        self.fullscreen = None;
-        self.paint_bindings()
+        Ok(())
     }
-
-    /// Hidden pages have zero width. Repaint a repeated track only when its actual
-    /// containing width changes, including the first visible frame after opening.
     pub fn update(&mut self) -> Result<(), String> {
         self.update_mobile_editor()?;
         self.update_save_transfer()?;
-        if let Some(sharing) = &mut self.mobile_sharing {
-            sharing.update()?;
-        }
-        for row in &mut self.numeric {
-            let width = row.track.get_bounding_client_rect().width();
-            if width == row.track_width {
-                continue;
-            }
-            row.track_width = width;
-            row.track.set_text_content(None);
-            append(
-                &row.track,
-                &self.art.control_panel.strip(
-                    &self.document,
-                    4,
-                    width,
-                    "game-settings-native-range-track",
-                )?,
-            )?;
+        if let Some(s) = &mut self.mobile_sharing {
+            s.update()?;
         }
         Ok(())
     }
-
     pub fn set(&mut self, settings: &GameSettings) -> Result<(), String> {
         self.settings = settings.clone();
         self.pending_binding = None;
-        self.paint_values()
+        Ok(())
     }
-
     pub fn read(&mut self) -> Result<GameSettings, String> {
-        let previous = self.settings.clone();
-        for row in &self.numeric {
-            let value = row.input.value().parse().map_err(|_| "invalid settings range value")?;
-            row.setting.set(&mut self.settings, value);
-        }
-        if self.settings != previous {
-            self.paint_values()?;
-        }
         Ok(self.settings.clone())
     }
-
+    pub fn take_changed(&mut self) -> bool {
+        std::mem::take(&mut self.changed)
+    }
     pub fn activate(&mut self, action: &str) -> Result<bool, String> {
         let page = match action {
             "settings-page:cloud" => Some(Page::Cloud),
             "settings-page:controls" => Some(Page::Controls),
             "settings-page:performance" => Some(Page::Performance),
             "settings-page:mobile-ui" => Some(Page::MobileUi),
-            "settings-page:save-transfer" if self.context == SettingsContext::Title => {
+            "settings-page:save-transfer"
+                if self.context == SettingsContext::Title && self.save_transfer_available =>
+            {
                 Some(Page::SaveTransfer)
             }
             _ => None,
         };
         if let Some(page) = page {
-            self.read()?;
             self.page = page;
             self.build_page()?;
             return Ok(true);
@@ -426,23 +334,35 @@ impl SettingsView {
             return Ok(true);
         }
         if let Some(id) = action.strip_prefix("settings-toggle:") {
-            let Some(row) = self.toggles.iter().find(|row| row.setting.definition().0 == id) else {
-                return Ok(false);
-            };
-            if !row.setting.disabled(&self.settings) {
-                row.setting.toggle(&mut self.settings);
-                self.paint_values()?;
+            let setting = ToggleSetting::ALL.into_iter().find(|s| s.definition().0 == id);
+            if let Some(setting) = setting {
+                if !setting.disabled(&self.settings) {
+                    setting.toggle(&mut self.settings);
+                    self.changed = true;
+                }
+                return Ok(true);
             }
+        }
+        if action == "settings-fullscreen" {
+            if let Some(fullscreen) = &mut self.fullscreen {
+                fullscreen.activate()?;
+            }
+            return Ok(true);
+        }
+        if let Some(view) = &mut self.mobile_sharing
+            && view.activate(action)?
+        {
+            return Ok(true);
+        }
+        if let Some(view) = &mut self.save_transfer
+            && view.activate(action)?
+        {
             return Ok(true);
         }
         Ok(false)
     }
-
-    /// Footer Back cancels a capture first. Escape is captured as a binding by
-    /// MenuUi before reaching this method, as in the source dialog's key handler.
     pub fn back(&mut self) -> Result<bool, String> {
         if self.pending_binding.take().is_some() {
-            self.paint_bindings()?;
             return Ok(true);
         }
         if self.page == Page::MobileUi {
@@ -450,459 +370,725 @@ impl SettingsView {
             return Ok(true);
         }
         if self.page != Page::Root {
-            self.read()?;
             self.page = Page::Root;
             self.build_page()?;
             return Ok(true);
         }
         Ok(false)
     }
-
     pub fn begin_binding(&mut self, id: &str) -> Result<(), String> {
-        let Some(selected) = self.bindings.iter().find(|row| binding_id(row.action) == id) else {
-            return Ok(());
-        };
-        self.pending_binding = if self.pending_binding == Some(selected.action) {
-            None
-        } else {
-            Some(selected.action)
-        };
-        self.paint_bindings()
+        if let Some(action) = GameControlAction::ALL.into_iter().find(|a| binding_id(*a) == id) {
+            self.pending_binding =
+                if self.pending_binding == Some(action) { None } else { Some(action) };
+        }
+        Ok(())
     }
-
     pub fn capture_binding(&mut self, code: &str) -> Result<bool, String> {
-        let Some(action) = self.pending_binding.take() else {
-            return Ok(false);
-        };
+        let Some(action) = self.pending_binding.take() else { return Ok(false) };
         let changed = self.settings.controls.rebind(action, code);
-        self.paint_bindings()?;
+        self.changed |= changed;
         Ok(changed)
     }
-
     pub fn awaiting_binding(&self) -> bool {
         self.pending_binding.is_some()
     }
-
     pub fn awaiting_mouse_binding(&self) -> bool {
         matches!(self.pending_binding, Some(GameControlAction::Belt(_)))
     }
-
     fn build_page(&mut self) -> Result<(), String> {
-        // Release document fullscreen listeners before discarding the page's nodes.
-        self.fullscreen = None;
         self.clear_mobile_editor()?;
-        self.save_transfer = None;
         self.mobile_sharing = None;
-        self.content
-            .class_list()
-            .remove_1("native-save-transfer-settings")
-            .map_err(|_| "save content owner")?;
-        self.content.set_text_content(None);
-        self.content.set_scroll_top(0);
-        self.numeric.clear();
-        self.toggles.clear();
-        self.bindings.clear();
-        self.account_label = None;
-        self.console_help = None;
-        self.enhanced_effects_note = None;
+        self.save_transfer = None;
         self.pending_binding = None;
-        self.panel
-            .set_attribute("data-settings-page", self.page.as_str())
-            .map_err(|_| "settings page hook")?;
-        self.panel
-            .set_attribute("data-settings-context", self.context.as_str())
-            .map_err(|_| "settings context hook")?;
-        self.panel.set_attribute("aria-label", self.page.title()).map_err(|_| "settings title")?;
-        self.title.set_text_content(None);
-        append(
-            &self.title,
-            &settings_text(&self.document, self.page.title(), 2.0, 0xd9bd72, None)?,
-        )?;
-        self.art.set_stone_label(
-            &self.document,
-            &self.footer,
-            match self.page {
-                Page::Root => "DONE",
-                Page::MobileUi => "SAVE",
-                _ => "BACK",
-            },
-        )?;
+        self.scroll_reset = true;
         match self.page {
-            Page::Root => self.build_root()?,
-            Page::Cloud => self.build_cloud()?,
-            Page::Controls => self.build_controls()?,
-            Page::Performance => self.build_performance()?,
             Page::MobileUi => self.build_mobile_editor()?,
-            Page::SaveTransfer => self.build_save_transfer()?,
-        }
-        self.paint_values()?;
-        self.focus_default()
-    }
-
-    fn build_root(&mut self) -> Result<(), String> {
-        let group = self.group("SOUND AND MUSIC")?;
-        self.range(&group, NumericSetting::Sound, true)?;
-        self.range(&group, NumericSetting::Music, false)?;
-        let group = self.group("VIDEO SETTINGS")?;
-        self.fullscreen = SettingsFullscreen::new(&self.document, self.art.clone())?;
-        if let Some(fullscreen) = &self.fullscreen {
-            append(&group, &fullscreen.root)?;
-        }
-        self.range(&group, NumericSetting::Fov, false)?;
-        self.range(&group, NumericSetting::UiScale, false)?;
-        let group = self.group("DARK CLOUD SETTINGS")?;
-        self.action(&group, "ONLINE AND ACCOUNT", "settings-page:cloud")?;
-        let group = self.group("CONTROLS")?;
-        self.action(&group, "CUSTOMIZE MOBILE UI", "settings-page:mobile-ui")?;
-        self.action(&group, "CUSTOMIZE KEYBOARD", "settings-page:controls")?;
-        let group = self.group("PERFORMANCE")?;
-        self.action(&group, "TWEAK GAME", "settings-page:performance")
-    }
-
-    fn build_cloud(&mut self) -> Result<(), String> {
-        let group = self.group("DARK ACCOUNT")?;
-        self.account_label = Some(self.static_row(&group, "", None)?);
-        let group = self.group("ONLINE FEATURES")?;
-        for setting in [
-            ToggleSetting::Online,
-            ToggleSetting::Activity,
-            ToggleSetting::GlobalChat,
-            ToggleSetting::SharedHub,
-            ToggleSetting::SubmitRuns,
-        ] {
-            self.toggle(&group, setting)?;
-        }
-        let group = self.group("MOBILE INTERFACE")?;
-        let sharing = mobile_sharing::SettingsLayoutPublication::new(
-            &self.document,
-            self.art.clone(),
-            self.account_username.is_some(),
-            self.mobile_state.customized,
-        )?;
-        append(&group, &sharing.root)?;
-        self.mobile_sharing = Some(sharing);
-        self.add_save_transfer_route()?;
-        let group = self.group("DEVELOPER")?;
-        self.toggle(&group, ToggleSetting::Cheats)?;
-        let help = element(&self.document, "p", "game-settings-console-help")?;
-        help.set_attribute("role", "status").map_err(|_| "console help role")?;
-        append(&group, &help)?;
-        self.console_help = Some(help);
-        if self.context != SettingsContext::Title {
-            let note = element(&self.document, "p", "game-settings-context-note")?;
-            note.set_text_content(Some(
-                "Display size follows the browser. Resolution is available automatically.",
-            ));
-            append(&self.content, &note)?;
-        }
-        Ok(())
-    }
-
-    fn build_controls(&mut self) -> Result<(), String> {
-        let cycling = self.group("HOTBAR CYCLING")?;
-        self.toggle(&cycling, ToggleSetting::ReverseHotbar)?;
-        let movement = self.group("WIZARD CONTROLS")?;
-        let surfaces = self.group("STATS AND STUFF")?;
-        let belt = self.group("BELT HOTKEYS")?;
-        for action in GameControlAction::ALL {
-            let (group, label) = match action {
-                GameControlAction::MoveUp => (&movement, "MOVE UP".to_owned()),
-                GameControlAction::MoveDown => (&movement, "MOVE DOWN".to_owned()),
-                GameControlAction::MoveLeft => (&movement, "MOVE LEFT".to_owned()),
-                GameControlAction::MoveRight => (&movement, "MOVE RIGHT".to_owned()),
-                GameControlAction::OpenMenu => (&surfaces, "OPEN MENU".to_owned()),
-                GameControlAction::OpenInventory => (&surfaces, "OPEN INVENTORY".to_owned()),
-                GameControlAction::OpenSkills => (&surfaces, "OPEN SKILLS".to_owned()),
-                GameControlAction::OpenChat => (&surfaces, "OPEN CHAT".to_owned()),
-                GameControlAction::OpenCheats => (&surfaces, "OPEN CHEATS".to_owned()),
-                GameControlAction::CycleHotbar => (&belt, "CYCLE HOTBAR".to_owned()),
-                GameControlAction::Belt(slot) => (&belt, format!("BELT SLOT {}", slot + 1)),
-            };
-            let button =
-                self.button("game-settings-binding", &format!("bind:{}", binding_id(action)))?;
-            button
-                .set_attribute("data-binding-action", action.as_str())
-                .map_err(|_| "binding id")?;
-            self.label(&button, &label)?;
-            let value = element(&self.document, "strong", "")?;
-            append(&button, &value)?;
-            append(group, &button)?;
-            self.bindings.push(BindingRow { action, label, button, value });
-        }
-        Ok(())
-    }
-
-    fn build_performance(&mut self) -> Result<(), String> {
-        let group = self.group("LIGHTING")?;
-        self.toggle(&group, ToggleSetting::Lighting)?;
-        self.toggle(&group, ToggleSetting::Shadows)?;
-        self.toggle(&group, ToggleSetting::MultipleShadows)?;
-        self.range(&group, NumericSetting::LightQuality, false)?;
-        let group = self.group("PLAY STYLE")?;
-        self.toggle(&group, ToggleSetting::AimAtMouse)?;
-        let group = self.group("SPECIAL EFFECTS")?;
-        self.toggle(&group, ToggleSetting::ReducedFlashes)?;
-        self.toggle(&group, ToggleSetting::CameraShake)?;
-        self.toggle(&group, ToggleSetting::EnhancedEffects)?;
-        let note = element(&self.document, "p", "game-settings-context-note")?;
-        note.set_attribute("role", "status").map_err(|_| "effects authority note")?;
-        append(&group, &note)?;
-        self.enhanced_effects_note = Some(note);
-        Ok(())
-    }
-
-    fn paint_values(&mut self) -> Result<(), String> {
-        self.root
-            .set_attribute("data-settings-menu-binding", &self.settings.controls.open_menu)
-            .map_err(|_| "settings menu key")?;
-        for row in &self.numeric {
-            let value = row.setting.value(&self.settings);
-            row.input.set_value(&value.to_string());
-            row.input
-                .set_attribute("aria-valuetext", &format!("{value}%"))
-                .map_err(|_| "range spoken value")?;
-            row.output.set_text_content(None);
-            append(
-                &row.output,
-                &settings_text(
-                    &self.document,
-                    &format!("{value}%"),
-                    1.0,
-                    0xf0d996,
-                    Some((NativeUiTextAlign::Right, 48.0)),
-                )?,
-            )?;
-        }
-        for row in &self.toggles {
-            let (disabled, checked) = if matches!(row.setting, ToggleSetting::EnhancedEffects) {
-                self.enhanced_effects_authority
-                    .map_or((false, self.settings.enhanced_effects), |authority| {
-                        (!authority.can_change, authority.enabled)
-                    })
-            } else {
-                let disabled = row.setting.disabled(&self.settings);
-                (disabled, !disabled && row.setting.stored(&self.settings))
-            };
-            row.button
-                .toggle_attribute_with_force("disabled", disabled)
-                .map_err(|_| "toggle admission")?;
-            row.button
-                .set_attribute("aria-pressed", if checked { "true" } else { "false" })
-                .map_err(|_| "toggle state")?;
-            row.art.set_text_content(None);
-            append(&row.art, &self.art.toggle(&self.document, checked)?)?;
-        }
-        if let Some(note) = &self.enhanced_effects_note {
-            note.set_hidden(self.enhanced_effects_authority.is_none());
-            note.set_text_content(None);
-            if let Some(authority) = self.enhanced_effects_authority {
-                let mut copy = match authority.scope {
-                    EnhancedEffectsScope::NextPartyRun => {
-                        "Applies to this party’s next game. The shared College is unchanged."
-                            .to_owned()
-                    }
-                    EnhancedEffectsScope::Game => {
-                        "Shared game setting. Existing effects keep their native birth state."
-                            .to_owned()
-                    }
-                };
-                if !authority.can_change {
-                    copy.push_str(" Only the game owner can change it.");
-                }
-                append_text(&self.document, note, "span", &copy)?;
+            Page::Cloud => {
+                self.mobile_sharing = Some(mobile_sharing::SettingsLayoutPublication::new(
+                    self.account_username.is_some(),
+                    self.mobile_state.customized,
+                ))
             }
-        }
-        self.paint_bindings()?;
-        self.paint_account()?;
-        if let Some(help) = &self.console_help {
-            help.set_hidden(!self.settings.enable_cheats);
-            help.set_text_content(None);
-            append_text(&self.document, help, "span", "Debug menu: ")?;
-            append_text(
-                &self.document,
-                help,
-                "strong",
-                &game_binding_label(&self.settings.controls.open_cheats),
-            )?;
-            append(help, &element(&self.document, "br", "")?)?;
-            append_text(&self.document, help, "span", "DevTools: ")?;
-            append_text(&self.document, help, "code", "solomonDark.lua.help()")?;
-        }
-        Ok(())
-    }
-
-    fn paint_bindings(&self) -> Result<(), String> {
-        for row in &self.bindings {
-            let code = self.settings.controls.code(row.action);
-            let listening = self.pending_binding == Some(row.action);
-            let label = if listening { "PRESS A KEY".to_owned() } else { game_binding_label(code) };
-            row.button.set_attribute("data-binding-code", code).map_err(|_| "binding code")?;
-            row.button
-                .set_attribute("aria-label", &format!("{}, {label}", row.label))
-                .map_err(|_| "binding label")?;
-            row.button
-                .set_attribute("aria-pressed", if listening { "true" } else { "false" })
-                .map_err(|_| "binding listening state")?;
-            row.button
-                .toggle_attribute_with_force("data-awaiting-binding", listening)
-                .map_err(|_| "binding capture state")?;
-            row.value.set_text_content(None);
-            self.art.binding_plate(&self.document, &row.value)?;
-            append(
-                &row.value,
-                &settings_text(
+            Page::SaveTransfer => {
+                self.save_transfer = Some(transfer::SaveTransferView::new(
                     &self.document,
-                    &label,
-                    1.0,
-                    0xd9bd72,
-                    Some((NativeUiTextAlign::Center, 200.0)),
-                )?,
+                    self.save_can_export,
+                    self.save_request_sequence.clone(),
+                )?)
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+    pub fn default_focus(&self) -> Option<String> {
+        match self.page {
+            Page::Root => Some("settings-range:sound".to_owned()),
+            Page::Cloud => Some("settings-toggle:online".to_owned()),
+            Page::Controls => Some("settings-toggle:reverse-hotbar".to_owned()),
+            Page::Performance => Some("settings-toggle:lighting".to_owned()),
+            Page::SaveTransfer => Some("save-import".to_owned()),
+            Page::MobileUi => None,
+        }
+    }
+    pub fn navigation_scope(&self) -> String {
+        format!("settings-{}-{}", self.context.as_str(), self.page.as_str())
+    }
+    pub fn paint(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        view: Rect,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        if self.page == Page::MobileUi && self.mobile_fullscreen {
+            if let Some(editor) = &mut self.mobile_editor {
+                editor.paint(frame)?;
+                if editor.take_save_request() {
+                    actions.push("settings-back".to_owned());
+                }
+            }
+            return Ok(());
+        }
+        ui.painter().rect_filled(view, 0.0, egui::Color32::from_black_alpha(209));
+        let pad = (view.width().min(view.height()) * 0.03).clamp(8.0, 24.0);
+        let panel = Rect::from_center_size(
+            view.center(),
+            Vec2::new(
+                600.0_f32.min(view.width() - pad * 2.0),
+                700.0_f32.min(view.height() - pad * 2.0),
+            ),
+        );
+        frame.image(
+            ui.painter(),
+            "assets/stock/settings-leather.png",
+            panel,
+            None,
+            widgets::color(0xddd9ce),
+        );
+        ui.painter().rect_filled(panel, 0.0, widgets::alpha(0x0e0d0c, 0.42));
+        ui.painter().rect_stroke(
+            panel,
+            0.0,
+            egui::Stroke::new(3.0, widgets::color(0x9f8547)),
+            egui::StrokeKind::Inside,
+        );
+        frame.record_rect("settings-panel", self.page.title(), "dialog", panel, ui.is_enabled());
+        let compact = view.width() < 700.0 || view.height() < 540.0;
+        let band = if compact { 54.0 } else { 70.0 };
+        let header = Rect::from_min_size(panel.min, Vec2::new(panel.width(), band));
+        widgets::gradient(ui, header, widgets::color(0x65532b), widgets::color(0x3c321d));
+        widgets::native(
+            frame,
+            ui,
+            self.page.title(),
+            NativeUiFontName::ControlPanel,
+            header.center() + Vec2::new(0.0, 10.0),
+            2.0,
+            0xd9bd72,
+            NativeUiTextAlign::Center,
+        );
+        let content = Rect::from_min_max(
+            panel.min + Vec2::new(if compact { 14.0 } else { 20.0 }, band + 12.0),
+            panel.max - Vec2::new(if compact { 14.0 } else { 20.0 }, band),
+        );
+        frame.record_rect(
+            "settings-content",
+            "Settings preferences",
+            "region",
+            content,
+            ui.is_enabled(),
+        );
+        if self.page == Page::MobileUi {
+            if let Some(editor) = &mut self.mobile_editor {
+                editor.paint_in(frame, content)?;
+                if editor.take_save_request() {
+                    actions.push("settings-back".to_owned());
+                }
+            }
+        } else {
+            let mut child =
+                ui.new_child(egui::UiBuilder::new().id_salt("settings-content").max_rect(content));
+            child.set_clip_rect(content);
+            let mut scroll = egui::ScrollArea::vertical()
+                .id_salt(self.navigation_scope())
+                .auto_shrink([false, false]);
+            if self.scroll_reset {
+                scroll = scroll.vertical_scroll_offset(0.0);
+                self.scroll_reset = false;
+            }
+            let mut result = Ok(());
+            scroll.show(&mut child, |ui| {
+                result = self.paint_page(frame, ui, content.width(), actions);
+            });
+            std::mem::replace(&mut result, Ok(()))?;
+        }
+        let footer = Rect::from_center_size(
+            Pos2::new(panel.center().x, panel.bottom() - band / 2.0 - 2.0),
+            Vec2::new(300.0_f32.min(panel.width() - 40.0), 41.0),
+        );
+        let label = match self.page {
+            Page::Root => "DONE",
+            Page::MobileUi => "SAVE",
+            _ => "BACK",
+        };
+        if widgets::stone_button(
+            frame,
+            ui,
+            &self.ui_atlas,
+            "settings-back",
+            label,
+            footer,
+            !self.mobile_save_in_flight,
+        )?
+        .clicked()
+            && !self.mobile_save_in_flight
+        {
+            actions.push("settings-back".to_owned());
+        }
+        for (x, y, flip_x, flip_y) in [
+            (panel.left() - 13.0, panel.top() - 13.0, false, false),
+            (panel.right() - 67.0, panel.top() - 13.0, true, false),
+            (panel.left() - 13.0, panel.bottom() - 70.0, false, true),
+            (panel.right() - 67.0, panel.bottom() - 70.0, true, true),
+        ] {
+            let record = self.ui_atlas.record(17)?;
+            let size = Vec2::new(record.width as f32, record.height as f32)
+                * if compact { 0.72 } else { 1.0 };
+            let dest = Rect::from_min_size(egui::pos2(x, y), size);
+            let atlas_size = frame.image_size(self.ui_atlas.path()).ok_or("UI atlas not ready")?;
+            let uv = Rect::from_min_max(
+                egui::pos2(record.x as f32 / atlas_size.x, record.y as f32 / atlas_size.y),
+                egui::pos2(
+                    ((record.x + record.width) as f32) / atlas_size.x,
+                    ((record.y + record.height) as f32) / atlas_size.y,
+                ),
+            );
+            frame.image_quad(
+                ui.painter(),
+                self.ui_atlas.path(),
+                [
+                    if flip_x {
+                        if flip_y { dest.right_bottom() } else { dest.right_top() }
+                    } else if flip_y {
+                        dest.left_bottom()
+                    } else {
+                        dest.left_top()
+                    },
+                    if flip_x {
+                        if flip_y { dest.left_bottom() } else { dest.left_top() }
+                    } else if flip_y {
+                        dest.right_bottom()
+                    } else {
+                        dest.right_top()
+                    },
+                    if flip_x {
+                        if flip_y { dest.left_top() } else { dest.left_bottom() }
+                    } else if flip_y {
+                        dest.right_top()
+                    } else {
+                        dest.right_bottom()
+                    },
+                    if flip_x {
+                        if flip_y { dest.right_top() } else { dest.right_bottom() }
+                    } else if flip_y {
+                        dest.left_top()
+                    } else {
+                        dest.left_bottom()
+                    },
+                ],
+                uv,
+                Color32::WHITE,
+            );
+        }
+        if !compact {
+            self.ui_atlas.paint(
+                frame,
+                ui.painter(),
+                18,
+                panel.min + Vec2::new(-101.0, 216.0),
+                1.0,
+                Color32::WHITE,
+            )?;
+            self.ui_atlas.paint_centered(
+                frame,
+                ui.painter(),
+                18,
+                egui::pos2(panel.right() + 67.5, panel.top() + 347.0),
+                1.0,
+                0.0,
+                Color32::WHITE,
             )?;
         }
         Ok(())
     }
-
-    fn paint_account(&self) -> Result<(), String> {
-        if let Some(label) = &self.account_label {
-            let text = format!(
-                "ACCOUNT: {}",
-                self.account_username.as_deref().unwrap_or("GUEST").to_uppercase()
-            );
-            label.set_text_content(None);
-            label.set_attribute("aria-label", &text).map_err(|_| "settings account label")?;
-            append(label, &settings_text(&self.document, &text, 1.0, 0xdbc174, None)?)?;
+    fn paint_page(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        width: f32,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        match self.page {
+            Page::Root => {
+                group(frame, ui, "SOUND AND MUSIC", width);
+                self.range(frame, ui, NumericSetting::Sound, width)?;
+                self.range(frame, ui, NumericSetting::Music, width)?;
+                group(frame, ui, "VIDEO SETTINGS", width);
+                if let Some(fullscreen) = &mut self.fullscreen {
+                    fullscreen.paint(frame, ui, &self.control_panel, width, actions)?;
+                }
+                self.range(frame, ui, NumericSetting::Fov, width)?;
+                self.range(frame, ui, NumericSetting::UiScale, width)?;
+                for (heading, label, id) in [
+                    ("DARK CLOUD SETTINGS", "ONLINE AND ACCOUNT", "settings-page:cloud"),
+                    ("CONTROLS", "CUSTOMIZE MOBILE UI", "settings-page:mobile-ui"),
+                    ("", "CUSTOMIZE KEYBOARD", "settings-page:controls"),
+                    ("PERFORMANCE", "TWEAK GAME", "settings-page:performance"),
+                ] {
+                    if !heading.is_empty() {
+                        group(frame, ui, heading, width);
+                    }
+                    self.action_row(frame, ui, label, id, width, true, actions)?;
+                }
+            }
+            Page::Cloud => {
+                group(frame, ui, "DARK ACCOUNT", width);
+                let text = format!(
+                    "ACCOUNT: {}",
+                    self.account_username.as_deref().unwrap_or("GUEST").to_uppercase()
+                );
+                self.static_row(frame, ui, &text, width)?;
+                group(frame, ui, "ONLINE FEATURES", width);
+                for setting in [
+                    ToggleSetting::Online,
+                    ToggleSetting::Activity,
+                    ToggleSetting::GlobalChat,
+                    ToggleSetting::SharedHub,
+                    ToggleSetting::SubmitRuns,
+                ] {
+                    self.toggle(frame, ui, setting, width, actions)?;
+                }
+                group(frame, ui, "MOBILE INTERFACE", width);
+                if let Some(mut sharing) = self.mobile_sharing.take() {
+                    sharing.paint(self, frame, ui, width, actions)?;
+                    self.mobile_sharing = Some(sharing);
+                }
+                if self.context == SettingsContext::Title && self.save_transfer_available {
+                    group(frame, ui, "SAVE TRANSFER", width);
+                    self.action_row(
+                        frame,
+                        ui,
+                        "STOCK / BROWSER SAVE",
+                        "settings-page:save-transfer",
+                        width,
+                        true,
+                        actions,
+                    )?;
+                }
+                group(frame, ui, "DEVELOPER", width);
+                self.toggle(frame, ui, ToggleSetting::Cheats, width, actions)?;
+                if self.settings.enable_cheats {
+                    flow(
+                        ui,
+                        &format!(
+                            "Debug menu: {}
+DevTools: solomonDark.lua.help()",
+                            game_binding_label(&self.settings.controls.open_cheats)
+                        ),
+                        width,
+                        12.0,
+                        widgets::color(0xb3a477),
+                    );
+                }
+                if self.context != SettingsContext::Title {
+                    flow(
+                        ui,
+                        "Display size follows the browser. Resolution is available automatically.",
+                        width,
+                        12.0,
+                        widgets::color(0xb3a477),
+                    );
+                }
+            }
+            Page::Controls => {
+                group(frame, ui, "HOTBAR CYCLING", width);
+                self.toggle(frame, ui, ToggleSetting::ReverseHotbar, width, actions)?;
+                for (title, actions_group) in
+                    [("WIZARD CONTROLS", 0), ("STATS AND STUFF", 1), ("BELT HOTKEYS", 2)]
+                {
+                    group(frame, ui, title, width);
+                    for action in GameControlAction::ALL {
+                        let group = match action {
+                            GameControlAction::MoveUp
+                            | GameControlAction::MoveDown
+                            | GameControlAction::MoveLeft
+                            | GameControlAction::MoveRight => 0,
+                            GameControlAction::Belt(_) | GameControlAction::CycleHotbar => 2,
+                            _ => 1,
+                        };
+                        if group == actions_group {
+                            self.binding(frame, ui, action, width, actions)?;
+                        }
+                    }
+                }
+            }
+            Page::Performance => {
+                group(frame, ui, "LIGHTING", width);
+                for setting in [
+                    ToggleSetting::Lighting,
+                    ToggleSetting::Shadows,
+                    ToggleSetting::MultipleShadows,
+                ] {
+                    self.toggle(frame, ui, setting, width, actions)?;
+                }
+                self.range(frame, ui, NumericSetting::LightQuality, width)?;
+                group(frame, ui, "PLAY STYLE", width);
+                self.toggle(frame, ui, ToggleSetting::AimAtMouse, width, actions)?;
+                group(frame, ui, "SPECIAL EFFECTS", width);
+                for setting in [
+                    ToggleSetting::ReducedFlashes,
+                    ToggleSetting::CameraShake,
+                    ToggleSetting::EnhancedEffects,
+                ] {
+                    self.toggle(frame, ui, setting, width, actions)?;
+                }
+                if let Some(authority) = self.enhanced_effects_authority {
+                    let mut text = match authority.scope {
+                        EnhancedEffectsScope::NextPartyRun => {
+                            "Applies to this party’s next game. The shared College is unchanged."
+                                .to_owned()
+                        }
+                        EnhancedEffectsScope::Game => {
+                            "Shared game setting. Existing effects keep their native birth state."
+                                .to_owned()
+                        }
+                    };
+                    if !authority.can_change {
+                        text.push_str(" Only the game owner can change it.");
+                    }
+                    flow(ui, &text, width, 12.0, widgets::color(0xb3a477));
+                }
+            }
+            Page::SaveTransfer => {
+                if let Some(transfer) = self.save_transfer.take() {
+                    transfer.paint(self, frame, ui, width, actions)?;
+                    self.save_transfer = Some(transfer);
+                }
+            }
+            Page::MobileUi => {}
         }
         Ok(())
     }
-
-    fn group(&self, title: &str) -> Result<HtmlElement, String> {
-        let group = element(&self.document, "section", "game-settings-group")?;
-        group.set_attribute("aria-label", title).map_err(|_| "settings group label")?;
-        let heading = element(&self.document, "h3", "")?;
-        heading.set_attribute("aria-label", title).map_err(|_| "settings heading label")?;
-        append(&heading, &settings_text(&self.document, title, 1.0, 0xa99258, None)?)?;
-        append(&group, &heading)?;
-        let content = element(&self.document, "div", "")?;
-        append(&group, &content)?;
-        append(&self.content, &group)?;
-        Ok(content)
+    fn row(&self, frame: &UiFrame<'_>, ui: &mut Ui, width: f32) -> Result<Rect, String> {
+        let (_, rect) = ui.allocate_space(Vec2::new(width, 44.0));
+        self.control_panel.paint_raw(frame, ui.painter(), 3, rect, Color32::WHITE)?;
+        Ok(rect)
     }
-
-    fn label(&self, parent: &HtmlElement, text: &str) -> Result<HtmlElement, String> {
-        let label = element(&self.document, "span", "game-settings-native-label")?;
-        append(&label, &settings_text(&self.document, text, 1.0, 0xdbc174, None)?)?;
-        append(parent, &label)?;
-        Ok(label)
-    }
-
-    fn button(&self, class: &str, action: &str) -> Result<HtmlElement, String> {
-        let button = element(&self.document, "button", class)?;
-        button.set_attribute("type", "button").map_err(|_| "settings button type")?;
-        button.set_attribute("data-menu-action", action).map_err(|_| "settings action")?;
-        self.art.row(&self.document, &button)?;
-        Ok(button)
-    }
-
-    fn action(&self, parent: &HtmlElement, label: &str, action: &str) -> Result<(), String> {
-        let button = self.button("game-settings-action", action)?;
-        button.set_attribute("aria-label", label).map_err(|_| "settings action label")?;
-        self.label(&button, label)?;
-        self.art.arrow(&self.document, &button)?;
-        append(parent, &button)
-    }
-
     fn static_row(
         &self,
-        parent: &HtmlElement,
+        frame: &UiFrame<'_>,
+        ui: &mut Ui,
         label: &str,
-        detail: Option<&str>,
-    ) -> Result<HtmlElement, String> {
-        let row = element(&self.document, "p", "game-settings-fixed-policy")?;
-        self.art.row(&self.document, &row)?;
-        let text = self.label(&row, label)?;
-        text.set_attribute("aria-label", label).map_err(|_| "settings static label")?;
-        if let Some(detail) = detail {
-            append_text(&self.document, &row, "small", detail)?;
-        }
-        append(parent, &row)?;
-        Ok(text)
-    }
-
-    fn toggle(&mut self, parent: &HtmlElement, setting: ToggleSetting) -> Result<(), String> {
-        let (id, label, nested) = setting.definition();
-        let button =
-            self.button("game-settings-native-toggle-row", &format!("settings-toggle:{id}"))?;
-        button.set_attribute("aria-label", label).map_err(|_| "settings toggle label")?;
-        button.set_attribute("data-setting", id).map_err(|_| "settings toggle id")?;
-        if nested {
-            button.set_attribute("data-settings-nested", "true").map_err(|_| "nested toggle")?;
-        }
-        if matches!(setting, ToggleSetting::Online) {
-            button.set_attribute("data-game-default-focus", "true").map_err(|_| "online focus")?;
-        }
-        self.label(&button, label)?;
-        let art = element(&self.document, "span", "")?;
-        append(&button, &art)?;
-        append(parent, &button)?;
-        self.toggles.push(ToggleRow { setting, button, art });
+        width: f32,
+    ) -> Result<(), String> {
+        let rect = self.row(frame, ui, width)?;
+        widgets::native(
+            frame,
+            ui,
+            label,
+            NativeUiFontName::ControlPanel,
+            rect.min + Vec2::new(10.0, 26.0),
+            1.0,
+            0xdbc174,
+            NativeUiTextAlign::Left,
+        );
         Ok(())
     }
-
+    fn action_row(
+        &self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        label: &str,
+        id: &str,
+        width: f32,
+        enabled: bool,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let rect = self.row(frame, ui, width)?;
+        let response = widgets::interact(frame, ui, id, label, "button", rect, enabled);
+        widgets::native(
+            frame,
+            ui,
+            label,
+            NativeUiFontName::ControlPanel,
+            rect.min + Vec2::new(10.0, 26.0),
+            1.0,
+            if enabled { 0xdbc174 } else { 0x746c58 },
+            NativeUiTextAlign::Left,
+        );
+        self.control_panel.paint_centered(
+            frame,
+            ui.painter(),
+            0,
+            egui::pos2(rect.right() - 20.0, rect.center().y),
+            1.0,
+            0.0,
+            Color32::WHITE,
+        )?;
+        if response.clicked() && enabled {
+            actions.push(id.to_owned());
+        }
+        Ok(())
+    }
+    fn toggle(
+        &self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        setting: ToggleSetting,
+        width: f32,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let (id, label, nested) = setting.definition();
+        let rect = self.row(frame, ui, width)?;
+        let (disabled, checked) = if matches!(setting, ToggleSetting::EnhancedEffects) {
+            self.enhanced_effects_authority
+                .map_or((false, self.settings.enhanced_effects), |a| (!a.can_change, a.enabled))
+        } else {
+            let disabled = setting.disabled(&self.settings);
+            (disabled, !disabled && setting.stored(&self.settings))
+        };
+        let id = format!("settings-toggle:{id}");
+        let response = widgets::interact(frame, ui, &id, label, "checkbox", rect, !disabled);
+        frame.record_value(&id, if checked { "true" } else { "false" }, Some(checked));
+        widgets::native(
+            frame,
+            ui,
+            label,
+            NativeUiFontName::ControlPanel,
+            rect.min + Vec2::new(if nested { 30.0 } else { 10.0 }, 26.0),
+            1.0,
+            if disabled { 0x746c58 } else { 0xdbc174 },
+            NativeUiTextAlign::Left,
+        );
+        self.control_panel.paint_centered(
+            frame,
+            ui.painter(),
+            if checked { 9 } else { 8 },
+            egui::pos2(rect.right() - 32.0, rect.center().y),
+            1.0,
+            0.0,
+            widgets::alpha(0xffffff, if disabled { 0.58 } else { 1.0 }),
+        )?;
+        if response.clicked() && !disabled {
+            actions.push(id);
+        }
+        Ok(())
+    }
     fn range(
         &mut self,
-        parent: &HtmlElement,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
         setting: NumericSetting,
-        auto_focus: bool,
+        width: f32,
     ) -> Result<(), String> {
-        let (id, label, minimum, maximum) = setting.definition();
-        let row = element(&self.document, "label", "game-settings-range")?;
-        self.art.row(&self.document, &row)?;
-        self.label(&row, label)?;
-        let control = element(&self.document, "div", "game-settings-range-control")?;
-        let track = element(&self.document, "span", "game-settings-range-track-host")?;
-        append(&control, &track)?;
-        let input: HtmlInputElement =
-            element(&self.document, "input", "")?.dyn_into().map_err(|_| "settings range input")?;
-        input.set_type("range");
-        input.set_min(&minimum.to_string());
-        input.set_max(&maximum.to_string());
-        input.set_step("1");
-        input.set_attribute("data-setting", id).map_err(|_| "settings range id")?;
-        input.set_attribute("aria-label", label).map_err(|_| "settings range label")?;
-        if auto_focus {
-            input.set_attribute("data-game-default-focus", "true").map_err(|_| "range focus")?;
+        let (id, label, min, max) = setting.definition();
+        let rect = self.row(frame, ui, width)?;
+        widgets::native(
+            frame,
+            ui,
+            label,
+            NativeUiFontName::ControlPanel,
+            rect.min + Vec2::new(10.0, 26.0),
+            1.0,
+            0xdbc174,
+            NativeUiTextAlign::Left,
+        );
+        let track = Rect::from_min_max(
+            rect.min + Vec2::new(if width < 500.0 { 144.0 } else { 156.0 }, 7.5),
+            rect.max - Vec2::new(68.0, 7.5),
+        );
+        self.control_panel.paint_strip(frame, ui.painter(), 4, track, Color32::WHITE)?;
+        let id = format!("settings-range:{id}");
+        let response = ui.interact(track, egui::Id::unique(&id), egui::Sense::click_and_drag());
+        frame.record(&id, label, "slider", &response);
+        let mut value = setting.value(&self.settings);
+        let before = value;
+        if response.dragged() || response.clicked() {
+            if let Some(pos) = response.interact_pointer_pos() {
+                let fraction = ((pos.x - track.left() - 32.0) / (track.width() - 64.0).max(1.0))
+                    .clamp(0.0, 1.0);
+                value = (f32::from(min) + fraction * f32::from(max - min)).round() as u16;
+            }
         }
-        control.append_child(&input).map_err(|_| "range input attachment")?;
-        append(&row, &control)?;
-        let output = element(&self.document, "output", "")?;
-        append(&row, &output)?;
-        append(parent, &row)?;
-        self.numeric.push(NumericRow { setting, input, output, track, track_width: -1.0 });
+        if response.has_focus() {
+            ui.memory_mut(|memory| {
+                memory.set_focus_lock_filter(
+                    response.id,
+                    egui::EventFilter { horizontal_arrows: true, ..Default::default() },
+                )
+            });
+            for (key, delta) in [
+                (egui::Key::ArrowLeft, -1_i32),
+                (egui::Key::ArrowRight, 1),
+                (egui::Key::PageDown, -10),
+                (egui::Key::PageUp, 10),
+            ] {
+                if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, key)) {
+                    value = (i32::from(value) + delta).clamp(i32::from(min), i32::from(max)) as u16;
+                }
+            }
+        }
+        if response.has_focus() {
+            for (key, next) in [(egui::Key::Home, min), (egui::Key::End, max)] {
+                if ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, key)) {
+                    value = next;
+                }
+            }
+            for (key, code, delta) in
+                [(egui::Key::ArrowUp, "ArrowUp", 1_i32), (egui::Key::ArrowDown, "ArrowDown", -1)]
+            {
+                if frame.key_codes().iter().any(|event| event.pressed && event.code == code)
+                    && ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, key))
+                {
+                    value = (i32::from(value) + delta).clamp(i32::from(min), i32::from(max)) as u16;
+                    ui.memory_mut(|memory| memory.move_focus(egui::FocusDirection::None));
+                }
+            }
+        }
+        if value != before {
+            setting.set(&mut self.settings, value);
+            self.changed = true;
+        }
+        frame.record_value(&id, &value.to_string(), None);
+        let fraction = f32::from(value - min) / f32::from(max - min);
+        let center = egui::pos2(
+            track.left() + 32.0 + fraction * (track.width() - 64.0).max(0.0),
+            track.center().y,
+        );
+        self.control_panel.paint_centered(
+            frame,
+            ui.painter(),
+            18,
+            center,
+            1.0,
+            0.0,
+            Color32::WHITE,
+        )?;
+        widgets::native(
+            frame,
+            ui,
+            &format!("{value}%"),
+            NativeUiFontName::ControlPanel,
+            egui::pos2(rect.right() - 10.0, rect.top() + 26.0),
+            1.0,
+            0xf0d996,
+            NativeUiTextAlign::Right,
+        );
         Ok(())
     }
-
-    fn focus_default(&self) -> Result<(), String> {
-        if self.root.hidden() {
-            return Ok(());
-        }
-        if self.page == Page::MobileUi {
-            return Ok(());
-        }
-        let selector =
-            "[data-game-default-focus='true'], button:not([disabled]), input:not([disabled])";
-        if let Some(target) =
-            self.content.query_selector(selector).map_err(|_| "settings focus lookup")?
-        {
-            target
-                .dyn_into::<HtmlElement>()
-                .map_err(|_| "settings focus target")?
-                .focus()
-                .map_err(|_| "settings page focus")?;
+    fn binding(
+        &self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        action: GameControlAction,
+        width: f32,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let rect = self.row(frame, ui, width)?;
+        let label = binding_label(action);
+        let id = format!("bind:{}", binding_id(action));
+        let response = widgets::interact(frame, ui, &id, &label, "button", rect, true);
+        widgets::native(
+            frame,
+            ui,
+            &label,
+            NativeUiFontName::ControlPanel,
+            rect.min + Vec2::new(10.0, 26.0),
+            1.0,
+            0xdbc174,
+            NativeUiTextAlign::Left,
+        );
+        let plate = Rect::from_min_size(
+            egui::pos2(rect.right() - 210.0, rect.center().y - 15.0),
+            Vec2::new(200.0, 30.0),
+        );
+        self.control_panel.paint_raw(frame, ui.painter(), 5, plate, Color32::WHITE)?;
+        let listening = self.pending_binding == Some(action);
+        frame.record_value(&id, self.settings.controls.code(action), Some(listening));
+        let value = if listening {
+            "PRESS A KEY".to_owned()
+        } else {
+            game_binding_label(self.settings.controls.code(action))
+        };
+        widgets::native(
+            frame,
+            ui,
+            &value,
+            NativeUiFontName::ControlPanel,
+            plate.center() + Vec2::new(0.0, 4.0),
+            1.0,
+            if listening { 0xf7e1a0 } else { 0xd9bd72 },
+            NativeUiTextAlign::Center,
+        );
+        if response.clicked() {
+            actions.push(id);
         }
         Ok(())
     }
 }
-
+impl ToggleSetting {
+    const ALL: [Self; 14] = [
+        Self::Online,
+        Self::Activity,
+        Self::GlobalChat,
+        Self::SharedHub,
+        Self::SubmitRuns,
+        Self::Cheats,
+        Self::Lighting,
+        Self::Shadows,
+        Self::MultipleShadows,
+        Self::AimAtMouse,
+        Self::ReducedFlashes,
+        Self::CameraShake,
+        Self::ReverseHotbar,
+        Self::EnhancedEffects,
+    ];
+}
+fn group(frame: &UiFrame<'_>, ui: &mut Ui, title: &str, width: f32) {
+    ui.add_space(12.0);
+    let (_, r) = ui.allocate_space(Vec2::new(width, 23.0));
+    widgets::native(
+        frame,
+        ui,
+        title,
+        NativeUiFontName::ControlPanel,
+        r.min + Vec2::new(8.0, 14.0),
+        1.0,
+        0xa99258,
+        NativeUiTextAlign::Left,
+    );
+}
+fn flow(ui: &mut Ui, text: &str, width: f32, size: f32, tint: Color32) {
+    let font = egui::FontId::new(size, egui::FontFamily::Name("Cinzel".into()));
+    let galley = ui.painter().layout(text.to_owned(), font, tint, width - 16.0);
+    let (_, r) = ui.allocate_space(Vec2::new(width, galley.size().y + 16.0));
+    ui.painter().galley(r.min + Vec2::splat(8.0), galley, tint);
+}
+fn binding_label(action: GameControlAction) -> String {
+    match action {
+        GameControlAction::MoveUp => "MOVE UP".to_owned(),
+        GameControlAction::MoveDown => "MOVE DOWN".to_owned(),
+        GameControlAction::MoveLeft => "MOVE LEFT".to_owned(),
+        GameControlAction::MoveRight => "MOVE RIGHT".to_owned(),
+        GameControlAction::OpenMenu => "OPEN MENU".to_owned(),
+        GameControlAction::OpenInventory => "OPEN INVENTORY".to_owned(),
+        GameControlAction::OpenSkills => "OPEN SKILLS".to_owned(),
+        GameControlAction::OpenChat => "OPEN CHAT".to_owned(),
+        GameControlAction::OpenCheats => "OPEN CHEATS".to_owned(),
+        GameControlAction::CycleHotbar => "CYCLE HOTBAR".to_owned(),
+        GameControlAction::Belt(slot) => format!("BELT SLOT {}", slot + 1),
+    }
+}
 fn binding_id(action: GameControlAction) -> String {
     match action {
         GameControlAction::MoveUp => "move-up".to_owned(),
@@ -917,15 +1103,4 @@ fn binding_id(action: GameControlAction) -> String {
         GameControlAction::CycleHotbar => "cycle-hotbar".to_owned(),
         GameControlAction::Belt(slot) => format!("belt-{slot}"),
     }
-}
-
-fn append_text(
-    document: &Document,
-    parent: &HtmlElement,
-    tag: &str,
-    text: &str,
-) -> Result<(), String> {
-    let node = element(document, tag, "")?;
-    node.set_text_content(Some(text));
-    append(parent, &node)
 }

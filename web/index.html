@@ -3,51 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="solomon-bootstrap" content="gpu-loader-v1" />
+    <base data-trunk-public-url />
     <title>Solomon Darker</title>
     <link rel="icon" type="image/png" href="assets/stock/favicon.png" />
-    <link data-trunk rel="rust" href="../crates/web/Cargo.toml" data-wasm-opt="z" />
+    <link data-trunk rel="rust" href="../crates/loader/Cargo.toml" data-type="worker" data-bindgen-target="web" data-wasm-opt="z" />
+    <link data-trunk rel="rust" href="../crates/web/Cargo.toml" data-type="worker" data-bindgen-target="web" data-wasm-opt="z" />
     <link data-trunk rel="copy-dir" href="assets" />
-    <link data-trunk rel="css" href="browser-fonts.css" />
-    <link data-trunk rel="css" href="native-ui.css" />
-    <link data-trunk rel="css" href="hud.css" />
-    <link data-trunk rel="css" href="hotbar.css" />
-    <link data-trunk rel="css" href="menu.css" />
-    <link data-trunk rel="css" href="join-party.css" />
-    <link data-trunk rel="css" href="play-routing.css" />
-    <link data-trunk rel="css" href="dark-cloud.css" />
-    <link data-trunk rel="css" href="developer-observer.css" />
-    <link data-trunk rel="css" href="native-settings.css" />
-    <link data-trunk rel="css" href="cheat-menu.css" />
-    <link data-trunk rel="css" href="mobile-ui-editor.css" />
-    <link data-trunk rel="css" href="hall.css" />
-    <link data-trunk rel="css" href="player-panels.css" />
-    <link data-trunk rel="css" href="skill-picker.css" />
-    <link data-trunk rel="css" href="game-over.css" />
-    <link data-trunk rel="css" href="tutorial.css" />
-    <link data-trunk rel="css" href="college-intro.css" />
-    <link data-trunk rel="css" href="social.css" />
-    <link data-trunk rel="css" href="party-menu.css" />
-    <link data-trunk rel="css" href="shared-gameplay.css" />
-    <link data-trunk rel="css" href="match-loading-screen.css" />
-    <link data-trunk rel="css" href="fullscreen.css" />
-    <link data-trunk rel="css" href="desktop-update.css" />
     <style>
-      html, body { margin: 0; height: 100%; background: #07060a; color: #d8d2c4; font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
+      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000054; }
       #game { display: block; width: 100vw; height: 100vh; }
-      #status { position: fixed; left: 12px; bottom: 10px; opacity: 0.8; pointer-events: none; white-space: pre; }
-      #status:empty { display: none; }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
-    <div id="status">Loading stock assets…</div>
-    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
-      <filter id="hud-shield-tint" color-interpolation-filters="sRGB">
-        <feColorMatrix
-          type="matrix"
-          values="0.5 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"
-        />
-      </filter>
-    </svg>
   </body>
 </html>

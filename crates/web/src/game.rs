@@ -25,9 +25,10 @@ use crate::player_panels::{
 use crate::storage::SaveStore;
 use crate::tutorial::TutorialUi;
 use crate::tutorial_scene::{TutorialFrame, TutorialScene};
-use crate::{assets, set_status, storage};
+use crate::{set_status, storage};
 use solomon_assets::parse_bundle;
 use solomon_assets::save_document;
+use solomon_graphics::assets;
 use solomon_sim::Vec2;
 use solomon_sim::appearance::StarterEquipmentAppearance;
 use solomon_sim::audio::MusicScene;
@@ -66,12 +67,12 @@ use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 use crate::audio::GameAudio;
 use crate::boneyard::PreparedBoneyardView;
 use crate::courtyard::{ActorPainters, Camera, CourtyardPass, CourtyardScene};
+use crate::gpu_ui::GpuUi;
 use crate::hotbar::HotbarSelection;
 use crate::hud::{Hud, HudAction, HudMode};
 use crate::input::MovementInput;
 use crate::menu::{MenuAction, MenuUi};
 use crate::npc::NpcView;
-use crate::render::Renderer;
 use crate::rooms::{PrivateRoomFrame, PrivateRoomScenes};
 use crate::shared_gameplay::SharedGameplayUi;
 use crate::skill_picker::{SkillPicker, SkillPickerAction};
@@ -83,6 +84,7 @@ use crate::world_overlays::{WorldOverlayFrame, WorldOverlayPlayer, WorldOverlays
 use crate::world_screen_feedback::{
     ScreenFeedbackScene, WorldScreenFeedback, WorldScreenFeedbackFrame,
 };
+use solomon_graphics::Renderer;
 use solomon_sim::spells::presentation::SpellDrawQueue;
 
 const LOCAL_PLAYER_ID: &str = "local";
@@ -95,6 +97,9 @@ const AUTOSAVE_TICKS: u64 = 3000;
 pub struct Game {
     canvas: HtmlCanvasElement,
     renderer: Renderer,
+    gpu_ui: GpuUi,
+    ui_ready: bool,
+    frame_time: f64,
     scene: CourtyardScene,
     rooms: PrivateRoomScenes,
     wizard_view: WizardView,
@@ -135,6 +140,7 @@ pub struct Game {
     match_loading: Option<MatchLoadingState>,
     match_loading_view: crate::match_loading::MatchLoadingView,
     panels: PlayerPanels,
+    book_feedback_scope: Option<(String, Option<String>)>,
     skill_picker: SkillPicker,
     social: SocialUi,
     cheats: crate::cheats::CheatUi,
@@ -188,6 +194,9 @@ struct ActiveBattle {
 
 impl Game {
     pub async fn load() -> Result<Self, String> {
+        crate::runtime_ui::begin(
+            GpuUi::startup_asset_count() + GameAudio::startup_asset_count() + 3,
+        )?;
         let window = web_sys::window().ok_or("no window")?;
         let document = window.document().ok_or("no document")?;
         let playtime = if editor_test::configured(&document)? {
@@ -221,6 +230,7 @@ impl Game {
                 .await?;
 
         let renderer = Renderer::new(webgl2_context(&canvas)?)?;
+        let gpu_ui = GpuUi::load(&document, &canvas, &renderer).await?;
         let teacher_view = TeacherView::load(&renderer).await?;
         let spell_view = SpellView::load(&renderer).await?;
         let college_texture = renderer.upload(&college_image)?;
@@ -284,6 +294,9 @@ impl Game {
         let mut game = Self {
             canvas,
             renderer,
+            gpu_ui,
+            ui_ready: false,
+            frame_time: 0.0,
             scene,
             rooms,
             wizard_view,
@@ -327,6 +340,7 @@ impl Game {
             match_loading: None,
             match_loading_view: crate::match_loading::MatchLoadingView::attach(&document)?,
             panels,
+            book_feedback_scope: None,
             skill_picker,
             social: SocialUi::attach(&document).await?,
             cheats: crate::cheats::CheatUi::attach(&document)?,
@@ -559,6 +573,8 @@ impl Game {
     }
 
     fn reset_world_views(&mut self) -> Result<(), String> {
+        self.book_feedback_scope = None;
+        self.panels.reset_skill_book_feedback(None);
         self.spectator_camera = Default::default();
         self.spectator_ui.hide();
         if let Some(previous) = self.battle.take() {
@@ -578,6 +594,7 @@ impl Game {
     }
 
     pub fn frame(&mut self, time: f64) -> Result<(), String> {
+        self.frame_time = time;
         if self.editor_test_disposed() {
             return Ok(());
         }
@@ -1271,6 +1288,7 @@ impl Game {
     }
 
     fn advance_session_ui(&mut self, now: f64) -> Result<(), String> {
+        self.observe_skill_book_feedback(now)?;
         if !self.has_game || self.native_ui_waiting() {
             return Ok(());
         }
@@ -1288,6 +1306,34 @@ impl Game {
         ) && !self.panels.is_open()
         {
             self.open_hub_dialogue(HubInteractionId::ArchChancellor, now)?;
+        }
+        Ok(())
+    }
+
+    fn observe_skill_book_feedback(&mut self, now: f64) -> Result<(), String> {
+        if !self.has_game
+            || self.world_loading
+            || self.is_hosted_observer()
+            || matches!(self.session.run.phase, GameRunPhase::Loadout | GameRunPhase::GameOver)
+        {
+            if self.book_feedback_scope.take().is_some() {
+                self.panels.reset_skill_book_feedback(None);
+            }
+            return Ok(());
+        }
+        let run = self.session.boneyard.as_ref().map(|world| world.loaded.run_id.as_str());
+        let feedback = self.session.participants[&self.local_player_id]
+            .player
+            .economy
+            .action_feedback
+            .as_ref();
+        if self.book_feedback_scope.as_ref().is_none_or(|(player, previous_run)| {
+            player != &self.local_player_id || previous_run.as_deref() != run
+        }) {
+            self.panels.reset_skill_book_feedback(feedback);
+            self.book_feedback_scope = Some((self.local_player_id.clone(), run.map(str::to_owned)));
+        } else {
+            self.panels.observe_skill_book_feedback(feedback, now)?;
         }
         Ok(())
     }
@@ -1848,7 +1894,7 @@ impl Game {
 
     fn show_storage_error(error: &str) {
         web_sys::console::warn_1(&JsValue::from_str(error));
-        set_status(error);
+        crate::runtime_ui::set_error(error);
     }
 
     pub fn retain_save_listener(
@@ -2198,6 +2244,109 @@ impl Game {
     }
 
     fn render(&mut self) -> Result<(), String> {
+        self.render_world()?;
+        self.paint_ui()?;
+        if !self.ui_ready && !self.native.as_ref().is_some_and(NativeGame::is_inspecting) {
+            let diagnostics = self.gpu_ui.diagnostics();
+            if diagnostics.meshes > 0
+                && diagnostics.static_images_ready == diagnostics.static_images_total
+            {
+                crate::runtime_ui::completed("account", "Account and saved game ready", 1)?;
+                crate::runtime_ui::completed("ready", "First game frame ready", 1)?;
+                crate::runtime_ui::finish()?;
+                self.ui_ready = true;
+            }
+        }
+        Ok(())
+    }
+
+    fn paint_ui(&mut self) -> Result<(), String> {
+        let viewport = [self.canvas.client_width() as f32, self.canvas.client_height() as f32];
+        let mut result: Result<(), String> = Ok(());
+        self.gpu_ui.run(&mut self.renderer, viewport, self.frame_time / 1000.0, |frame| {
+            result = (|| {
+                self.mod_overlays.paint(frame)?;
+                self.mod_minimap.paint(frame)?;
+                self.hud.paint(frame)?;
+                self.input.paint(frame)?;
+                self.mod_skill_quickbar.paint(frame)?;
+                self.shared_gameplay.paint(frame)?;
+                self.panels.paint(frame)?;
+                self.mod_skills.paint(frame)?;
+                self.mod_panels.paint(frame)?;
+                self.tutorial_ui.paint(frame)?;
+                self.college_overlay.paint(frame)?;
+                self.game_over.paint(frame)?;
+                self.skill_picker.paint(frame)?;
+                self.social.paint(frame)?;
+                self.cheats.paint(frame)?;
+                self.observer_ui.paint(frame)?;
+                self.spectator_ui.paint(frame)?;
+                self.menu.paint(frame)?;
+                if let Some(hosted) = &mut self.hosted {
+                    hosted.paint_boneyard_library(&self.menu, frame)?;
+                }
+                self.fullscreen.paint(frame)?;
+                if let Some(desktop) = &mut self.desktop_bridge {
+                    desktop.paint(frame)?;
+                }
+                self.match_loading_view.paint(frame)?;
+                if let Some(hosted) = &mut self.hosted {
+                    hosted.deployment_update.paint(frame)?;
+                }
+                crate::runtime_ui::paint(frame);
+                Ok(())
+            })();
+        })?;
+        result?;
+        self.input.set_ui_geometry(self.gpu_ui.diagnostics(), &self.hud.belt_input_geometry());
+        Ok(())
+    }
+
+    pub(crate) fn present_failure(&mut self, time: f64) -> Result<(), String> {
+        let (width, height) = self.fit_canvas();
+        let viewport = [self.canvas.client_width() as f32, self.canvas.client_height() as f32];
+        self.renderer.begin_frame(width, height, viewport);
+        self.renderer.end_frame();
+        self.gpu_ui.run(&mut self.renderer, viewport, time / 1000.0, crate::runtime_ui::paint)?;
+        if !self.ui_ready {
+            crate::runtime_ui::startup_failed(
+                crate::runtime_ui::error().as_deref().unwrap_or("Game initialization failed"),
+            );
+        }
+        Ok(())
+    }
+
+    pub(crate) fn gpu_ui_snapshot(&self) -> serde_json::Value {
+        let ui = self.gpu_ui.diagnostics();
+        let widgets: Vec<_> = ui
+            .widgets
+            .iter()
+            .map(|widget| {
+                let rect = |bounds: crate::gpu_ui::WidgetBounds| {
+                    [bounds.x, bounds.y, bounds.width, bounds.height]
+                };
+                serde_json::json!({
+                    "id": widget.id, "label": widget.label, "role": widget.role,
+                    "rect": rect(widget.bounds), "paintRect": rect(widget.paint_bounds),
+                    "enabled": widget.enabled, "focused": widget.focused,
+                    "value": widget.value, "selected": widget.selected,
+                    "modal": widget.modal, "z": widget.z,
+                })
+            })
+            .collect();
+        serde_json::json!({
+            "schemaVersion": 1, "surface": self.menu.surface_name(), "ready": self.ui_ready,
+            "loading": null, "error": ui.error.clone().or_else(crate::runtime_ui::error),
+            "canvas": { "width": ui.viewport[0], "height": ui.viewport[1], "pixelsPerPoint": ui.pixels_per_point },
+            "capture": ui.capture,
+            "inputScope": ui.input_scope, "frame": ui.frame,
+            "draw": { "meshes": ui.meshes, "triangles": ui.triangles, "textures": ui.textures },
+            "widgets": widgets,
+        })
+    }
+
+    fn render_world(&mut self) -> Result<(), String> {
         let display = self.native.as_ref().and_then(|native| native.display.as_ref());
         let session = display.map_or(&self.session, |display| display.session.as_ref());
         let presentation_tick = display.map_or(session.ticks as f64, |frame| frame.tick);
@@ -2207,6 +2356,14 @@ impl Game {
             self.spectator_ui.hide();
             self.mod_overlays.reset();
             self.mod_projection = None;
+            let (width, height) = self.fit_canvas();
+            self.renderer.set_native_world_pixel_centers(false);
+            self.renderer.begin_frame(
+                width,
+                height,
+                [self.canvas.client_width() as f32, self.canvas.client_height() as f32],
+            );
+            self.renderer.end_frame();
             return Ok(());
         }
         let player = &session.participants[&self.local_player_id].player;
@@ -2251,21 +2408,51 @@ impl Game {
         self.renderer.begin_frame(width, height, [viewport.x as f32, viewport.y as f32]);
         if self.panels.covers_world() {
             self.renderer.set_native_world_pixel_centers(false);
+            let client_width = self.canvas.client_width().max(1) as f32;
+            let client_height = self.canvas.client_height().max(1) as f32;
+            self.renderer.begin_frame(width, height, [client_width, client_height]);
+            self.renderer.set_saturation(1.0);
+            let ratio_x = f64::from(width) / f64::from(client_width);
+            let ratio_y = f64::from(height) / f64::from(client_height);
+            let clip = |bounds: solomon_sim::hud::HudRect| {
+                [
+                    (bounds.x * ratio_x).round() as i32,
+                    (f64::from(height) - (bounds.y + bounds.height) * ratio_y).round() as i32,
+                    (bounds.width * ratio_x).round() as i32,
+                    (bounds.height * ratio_y).round() as i32,
+                ]
+            };
+            if let Some(underlay) = self.panels.inventory_preview_underlay()? {
+                let texture = self
+                    .gpu_ui
+                    .image_texture(underlay.texture_path)
+                    .ok_or("The stock Inventory seal is not ready")?;
+                let rect = |r: solomon_sim::hud::HudRect| {
+                    [r.x as f32, r.y as f32, r.width as f32, r.height as f32]
+                };
+                self.renderer.draw_clipped(
+                    clip(underlay.clip),
+                    underlay.alpha as f32,
+                    |renderer| {
+                        renderer.draw(
+                            &texture,
+                            solomon_graphics::Quad {
+                                source: rect(underlay.source),
+                                destination: rect(underlay.destination),
+                                tint: [
+                                    ((underlay.tint >> 16) & 255) as f32 / 255.0,
+                                    ((underlay.tint >> 8) & 255) as f32 / 255.0,
+                                    (underlay.tint & 255) as f32 / 255.0,
+                                    1.0,
+                                ],
+                                blend: solomon_graphics::BlendMode::Normal,
+                            },
+                        );
+                    },
+                );
+            }
             if let Some(preview) = self.panels.inventory_preview_placement() {
-                let client_width = self.canvas.client_width().max(1) as f32;
-                let client_height = self.canvas.client_height().max(1) as f32;
-                self.renderer.begin_frame(width, height, [client_width, client_height]);
-                self.renderer.set_saturation(1.0);
-                let ratio_x = f64::from(width) / f64::from(client_width);
-                let ratio_y = f64::from(height) / f64::from(client_height);
-                let clip = [
-                    (preview.clip.x * ratio_x).round() as i32,
-                    (f64::from(height) - (preview.clip.y + preview.clip.height) * ratio_y).round()
-                        as i32,
-                    (preview.clip.width * ratio_x).round() as i32,
-                    (preview.clip.height * ratio_y).round() as i32,
-                ];
-                self.renderer.draw_clipped(clip, preview.alpha as f32, |renderer| {
+                self.renderer.draw_clipped(clip(preview.clip), preview.alpha as f32, |renderer| {
                     self.wizard_view.draw_preview(
                         renderer,
                         &Camera { origin: Vec2::ZERO, scale: preview.scale },

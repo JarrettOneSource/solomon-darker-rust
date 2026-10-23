@@ -3,7 +3,7 @@ use super::SecondaryView;
 use super::draws::rgba;
 use crate::courtyard::Camera;
 use crate::native_mesh::clip_native_mesh;
-use crate::render::{BlendMode, Renderer, Vertex};
+use solomon_graphics::{BlendMode, Renderer, Vertex};
 use solomon_sim::secondary::presentation::NativeSecondaryAtlas;
 
 impl SecondaryView {

@@ -10,9 +10,9 @@ use solomon_sim::hub::teacher::{
     HUB_TEACHER_RUNE_CENTER, HubTeacherBurstMember, HubTeacherDrawPlan,
 };
 
-use crate::assets;
 use crate::courtyard::Camera;
-use crate::render::{BlendMode, Quad, Renderer, Texture};
+use solomon_graphics::assets;
+use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TeacherPass {

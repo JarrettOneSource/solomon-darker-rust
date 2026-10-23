@@ -3,10 +3,10 @@
 
 use crate::courtyard::Camera;
 use crate::loot::LootView;
-use crate::render::Renderer;
 use crate::secondary::{SecondaryPuppetHit, SecondaryView};
 use crate::spells::SpellView;
 use serde_json::{Value, json};
+use solomon_graphics::Renderer;
 use solomon_sim::boneyard::loot::{BoneyardGoodieState, BoneyardLootActor, BoneyardLootStore};
 use solomon_sim::enemies::puppet_hits::EnemyPuppetHit;
 use solomon_sim::hub::painter::hub_painter_order;

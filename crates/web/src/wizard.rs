@@ -28,8 +28,8 @@ use crate::courtyard::{Camera, registered_origin};
 use crate::mod_presentation_assets::{
     ModSpriteDraw, ModWearableLayer, ModWearableTextureFrames, mod_wearable_frame,
 };
-use crate::render::{BlendMode, Quad, RenderTarget, Renderer, Texture};
 use crate::spells::SpellView;
+use solomon_graphics::{BlendMode, Quad, RenderTarget, Renderer, Texture};
 
 mod equipment;
 mod material;

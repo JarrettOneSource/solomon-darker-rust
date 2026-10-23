@@ -12,9 +12,9 @@ use solomon_sim::modding::inventory::{
 };
 use web_sys::HtmlImageElement;
 
-use crate::assets;
 use crate::mod_content::{GameModContentLoadError, ModContentCache, ModContentUrl};
-use crate::render::{BlendMode, Renderer, Texture};
+use solomon_graphics::assets;
+use solomon_graphics::{BlendMode, Renderer, Texture};
 
 const WEARABLE_CELL: f64 = 170.0;
 const WEARABLE_HEADINGS: usize = 24;

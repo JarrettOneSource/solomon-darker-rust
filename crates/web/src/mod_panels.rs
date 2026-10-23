@@ -1,17 +1,14 @@
-//! Source `mod-ui/ModPanels.tsx`. The host owns spells, shop stock, prices and
-//! portals; this view only projects its rows and queues the actual selected IDs.
+//! GPU `mod-ui/ModPanels.tsx`; mounted actions use accepted host IDs and positions.
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
+use crate::gpu_ui::UiFrame;
+use crate::ui::javascript_string;
+use egui::{Color32, FontFamily, FontId, Id, Order, RichText, Stroke, vec2};
 use solomon_sim::Vec2;
 use solomon_sim::economy::{HubInventoryItem, HubItemKind};
 use solomon_sim::hub::regions::HubRegion;
 use solomon_sim::modding::{LuaObject, LuaValue};
-use wasm_bindgen::{JsCast, prelude::*};
-use web_sys::{Document, Element, Event, HtmlElement};
-
-use crate::ui::{append, element, javascript_string};
+use wasm_bindgen::JsValue;
+use web_sys::Document;
 
 #[derive(Clone, Copy)]
 pub enum ModPanelsWorld {
@@ -53,113 +50,74 @@ struct ButtonRow {
 }
 
 pub struct ModPanelsView {
-    document: Document,
-    root: HtmlElement,
-    rows: Vec<(String, HtmlElement)>,
-    current: Rc<RefCell<Vec<ButtonRow>>>,
-    actions: Rc<RefCell<Vec<ModPanelAction>>>,
-    click: Closure<dyn FnMut(Event)>,
+    rows: Vec<ButtonRow>,
+    actions: Vec<ModPanelAction>,
 }
-
 impl ModPanelsView {
-    pub fn new(document: &Document) -> Result<Self, String> {
-        let root = element(document, "aside", "mod-panels")?;
-        root.set_hidden(true);
-        root.set_attribute("aria-label", "Mod content").map_err(|_| "Mod panel label")?;
-        let css = element(document, "style", "mod-panels-styles")?;
-        css.set_text_content(Some(include_str!("../../../web/mod-panels.css")));
-        append(&root, &css)?;
-        let current: Rc<RefCell<Vec<ButtonRow>>> = Rc::new(RefCell::new(Vec::new()));
-        let actions = Rc::new(RefCell::new(Vec::new()));
-        let selected = current.clone();
-        let outbox = actions.clone();
-        let click = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let button = event
-                .target()
-                .and_then(|target| target.dyn_into::<Element>().ok())
-                .and_then(|target| {
-                    target.closest("[data-mod-panel-key]").expect("valid mod button selector")
-                });
-            let Some(key) = button.and_then(|button| button.get_attribute("data-mod-panel-key"))
-            else {
-                return;
-            };
-            if let Some(row) = selected.borrow().iter().find(|row| row.key == key)
-                && !row.disabled
-                && let Some(action) = &row.action
-            {
-                outbox.borrow_mut().push(action.clone());
-            }
-        });
-        root.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())
-            .map_err(|_| "Could not listen to mod panels")?;
-        append(&document.body().ok_or("Mod panels need the game document")?, &root)?;
-        Ok(Self { document: document.clone(), root, rows: Vec::new(), current, actions, click })
+    pub fn new(_document: &Document) -> Result<Self, String> {
+        Ok(Self { rows: Vec::new(), actions: Vec::new() })
     }
-
-    /// Source refreshes on accepted runtime and snapshot notifications, including
-    /// movement across an authored shop radius or the monument's 100-unit trigger.
     pub fn update(&mut self, snapshot: &ModPanelsSnapshot<'_>) -> Result<(), String> {
-        let rows = project_rows(snapshot);
-        self.root.set_hidden(rows.is_empty());
-        let mut retained = Vec::new();
-        for (index, row) in rows.iter().enumerate() {
-            let button = if let Some(old) = self.rows.iter().position(|(key, _)| *key == row.key) {
-                self.rows.remove(old).1
-            } else {
-                let button = element(&self.document, "button", "")?;
-                button.set_attribute("type", "button").map_err(|_| "Mod action button type")?;
-                button
-                    .set_attribute("data-mod-panel-key", &row.key)
-                    .map_err(|_| "Mod action identity")?;
-                button
-            };
-            button.set_text_content(Some(&row.label));
-            button
-                .toggle_attribute_with_force("disabled", row.disabled)
-                .map_err(|_| "Mod stock availability")?;
-            // The first child is the retained stylesheet. Avoid moving an already
-            // placed focused button on each received host snapshot.
-            let next = self.root.children().item(index as u32 + 1);
-            if next.as_ref() != Some(button.as_ref()) {
-                self.root
-                    .insert_before(&button, next.as_ref().map(|next| next.as_ref()))
-                    .map_err(|_| "Mod panel button order")?;
-            }
-            retained.push((row.key.clone(), button));
-        }
-        for (_, button) in self.rows.drain(..) {
-            button.remove();
-        }
-        self.rows = retained;
-        *self.current.borrow_mut() = rows;
+        self.rows = project_rows(snapshot);
         Ok(())
     }
-
     pub fn hide(&mut self) {
-        self.root.set_hidden(true);
-        for (_, button) in self.rows.drain(..) {
-            button.remove();
-        }
-        self.current.borrow_mut().clear();
+        self.rows.clear();
     }
-
     pub fn reset(&mut self) {
         self.hide();
-        self.actions.borrow_mut().clear();
+        self.actions.clear();
     }
-
     pub fn take_actions(&mut self) -> Vec<ModPanelAction> {
-        std::mem::take(&mut *self.actions.borrow_mut())
+        std::mem::take(&mut self.actions)
     }
-}
-
-impl Drop for ModPanelsView {
-    fn drop(&mut self) {
-        self.root
-            .remove_event_listener_with_callback("click", self.click.as_ref().unchecked_ref())
-            .expect("remove installed mod panel listener");
-        self.root.remove();
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        if self.rows.is_empty() {
+            return Ok(());
+        }
+        let ctx = frame.ctx.clone();
+        egui::Area::new(Id::unique("mod/panels"))
+            .order(Order::Middle)
+            .anchor(egui::Align2::RIGHT_BOTTOM, vec2(-16.0, -80.0))
+            .show(&ctx, |ui| {
+                ui.set_width(256.0_f32.min(ctx.content_rect().width() * 0.42));
+                egui::ScrollArea::vertical()
+                    .id_salt("mod/panels-scroll")
+                    .max_height(ctx.content_rect().height() * 0.4)
+                    .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 5.6;
+                        for row in &self.rows {
+                            let response = ui.add_enabled(
+                                !row.disabled,
+                                egui::Button::new(
+                                    RichText::new(&row.label)
+                                        .font(FontId::new(12.0, FontFamily::Name("Cinzel".into())))
+                                        .color(Color32::from_rgb(230, 217, 178)),
+                                )
+                                .fill(Color32::from_rgba_unmultiplied(10, 12, 17, 224))
+                                .stroke(Stroke::new(
+                                    1.0,
+                                    Color32::from_rgba_unmultiplied(210, 190, 139, 191),
+                                ))
+                                .corner_radius(0.0)
+                                .wrap()
+                                .min_size(vec2(ui.available_width(), 30.0)),
+                            );
+                            frame.record(
+                                &format!("mod/panel:{}", row.key),
+                                &row.label,
+                                "button",
+                                &response,
+                            );
+                            if response.clicked()
+                                && let Some(action) = &row.action
+                            {
+                                self.actions.push(action.clone());
+                            }
+                        }
+                    });
+            });
+        Ok(())
     }
 }
 

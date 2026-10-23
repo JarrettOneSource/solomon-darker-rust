@@ -34,13 +34,13 @@ use solomon_sim::spells::weld::{
     native_weld_visual_plan_at_age,
 };
 
-use crate::assets;
 use crate::courtyard::Camera;
 use crate::native_mesh::{
     NativeMeshVertex, clip_native_mesh, clip_native_mesh_in_rect, native_sprite_texel_rect,
 };
 use crate::presentation::PresentationClocks;
-use crate::render::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
+use solomon_graphics::assets;
+use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
 
 pub struct SpellPainter {
     pub layer: PainterLayer,

@@ -8,6 +8,9 @@ pub enum PlayerPanelNotice {
     UnforgeResult { title: String, body: String, summary: String, outcome_tint: u32 },
 }
 
+use super::PlayerPanels;
+use super::chrome::PanelCanvas;
+use crate::gpu_ui::UiFrame;
 use solomon_sim::Vec2;
 use solomon_sim::hud::HudRect;
 use solomon_sim::native_ui_text::messages::{
@@ -16,33 +19,12 @@ use solomon_sim::native_ui_text::messages::{
 use solomon_sim::native_ui_text::{
     NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec, measure_native_ui_text,
 };
-use web_sys::HtmlElement;
-
-use super::PlayerPanels;
-use super::chrome::{bitmap_text, place};
-use crate::ui::{append, element, message_frame, native_button, style};
-
 impl PlayerPanels {
-    /// `renderer/hub-inventory/notices.ts`: native DataLine boxes and the two
-    /// content-sized Unforge branches share the existing stock frame/glyph painters.
-    pub(crate) fn draw_notice(&self, notice: &PlayerPanelNotice) -> Result<(), String> {
-        let curtain = element(&self.document, "div", "player-panel-notice-curtain")?;
-        append(&self.overlay, &curtain)?;
-        let stage = element(&self.document, "div", "player-panel-notice")?;
-        let width = f64::from(self.viewport_size.0);
-        let height = f64::from(self.viewport_size.1);
-        let scale =
-            if width > 0.0 && height > 0.0 { (width / 1600.0).min(height / 900.0) } else { 1.0 };
-        // MainMenuScene uses a centered fixed 1600x900 stage, including on a phone.
-        // The inventory's local scrolling/pan camera must not move the message box.
-        style(
-            &stage,
-            &format!(
-                "left:{}px;top:{}px;width:1600px;height:900px;transform:scale({scale});transform-origin:0 0",
-                (width - 1600.0 * scale) / 2.0,
-                (height - 900.0 * scale) / 2.0,
-            ),
-        )?;
+    pub(crate) fn draw_notice(
+        &self,
+        c: &PanelCanvas<'_, '_>,
+        notice: &PlayerPanelNotice,
+    ) -> Result<(), String> {
         let (title, body, summary) = match notice {
             PlayerPanelNotice::Standard { title, body } => (title.as_str(), body.as_str(), ""),
             PlayerPanelNotice::UnforgeConfirmation => (
@@ -54,10 +36,7 @@ impl PlayerPanels {
                 (title.as_str(), body.as_str(), summary.as_str())
             }
         };
-        let semantic = element(&self.document, "span", "panel-notice-semantic")?;
-        semantic.set_attribute("role", "alert").map_err(|_| "notice announcement")?;
-        semantic.set_text_content(Some(&format!("{title} {summary} {body}")));
-        append(&stage, &semantic)?;
+        c.frame.announce(&format!("{title}. {summary} {body}"));
         match notice {
             PlayerPanelNotice::Standard { .. } => {
                 let mut lines = vec![NativeUiMessageDataLineSpec {
@@ -83,21 +62,22 @@ impl PlayerPanels {
                     Vec2::new(800.0, if clothing { 450.0 } else { 350.0 }),
                     &lines,
                 )?;
-                self.notice_frame(&stage, layout.frame_bounds)?;
-                for line in layout.lines {
-                    bitmap_text(
-                        &self.document,
-                        &stage,
-                        &NativeUiTextSpec {
-                            align: NativeUiTextAlign::Left,
-                            tint: line.tint,
-                            line_height: Some(line.line_height),
-                            ..NativeUiTextSpec::new(line.font, &line.text, line.x, line.baseline_y)
-                        },
-                    )?;
+                self.notice_frame(c, layout.frame_bounds)?;
+                for (index, line) in layout.lines.iter().enumerate() {
+                    let spec = NativeUiTextSpec {
+                        align: NativeUiTextAlign::Left,
+                        tint: line.tint,
+                        line_height: Some(line.line_height),
+                        ..NativeUiTextSpec::new(line.font, &line.text, line.x, line.baseline_y)
+                    };
+                    if index == 0 {
+                        c.labeled_text("panel:notice-title", &spec);
+                    } else {
+                        c.text(&spec);
+                    }
                 }
                 self.notice_button(
-                    &stage,
+                    c,
                     "OKAY",
                     "notice-okay",
                     layout.action_bounds,
@@ -106,26 +86,22 @@ impl PlayerPanels {
                 )?;
             }
             PlayerPanelNotice::UnforgeConfirmation => {
-                self.notice_frame(&stage, HudRect::new(539.5, 382.5, 524.0, 336.0))?;
-                self.notice_text(
-                    &stage,
-                    NativeUiFontName::Menu,
-                    title,
-                    Vec2::new(614.0, 478.0),
-                    0xffffff,
-                )?;
-                bitmap_text(
-                    &self.document,
-                    &stage,
+                self.notice_frame(c, HudRect::new(539.5, 382.5, 524.0, 336.0))?;
+                c.labeled_text(
+                    "panel:notice-title",
                     &NativeUiTextSpec {
                         align: NativeUiTextAlign::Left,
-                        line_height: Some(17.0),
-                        max_width: Some(376.0),
-                        ..NativeUiTextSpec::new(NativeUiFontName::Medium, body, 614.0, 511.0)
+                        ..NativeUiTextSpec::new(NativeUiFontName::Menu, title, 614.0, 478.0)
                     },
-                )?;
+                );
+                c.text(&NativeUiTextSpec {
+                    align: NativeUiTextAlign::Left,
+                    line_height: Some(17.0),
+                    max_width: Some(376.0),
+                    ..NativeUiTextSpec::new(NativeUiFontName::Medium, body, 614.0, 511.0)
+                });
                 self.notice_button(
-                    &stage,
+                    c,
                     "UNFORGE",
                     "unforge-confirm",
                     HudRect::new(595.0, 573.0, 197.0, 69.0),
@@ -133,7 +109,7 @@ impl PlayerPanels {
                     true,
                 )?;
                 self.notice_button(
-                    &stage,
+                    c,
                     "CANCEL",
                     "unforge-cancel",
                     HudRect::new(811.0, 573.0, 197.0, 69.0),
@@ -147,33 +123,30 @@ impl PlayerPanels {
                     .max(measure_native_ui_text(body, NativeUiFontName::Medium, 1.0));
                 let inner_width = line_width + 141.0;
                 let left = 801.5 - inner_width / 2.0;
-                self.notice_frame(
-                    &stage,
-                    HudRect::new(left - 5.0, 391.5, inner_width + 10.0, 318.0),
-                )?;
+                self.notice_frame(c, HudRect::new(left - 5.0, 391.5, inner_width + 10.0, 318.0))?;
+                c.labeled_text(
+                    "panel:notice-title",
+                    &NativeUiTextSpec {
+                        align: NativeUiTextAlign::Left,
+                        ..NativeUiTextSpec::new(NativeUiFontName::Menu, title, left + 70.5, 485.0)
+                    },
+                );
                 self.notice_text(
-                    &stage,
-                    NativeUiFontName::Menu,
-                    title,
-                    Vec2::new(left + 70.5, 485.0),
-                    0xffffff,
-                )?;
-                self.notice_text(
-                    &stage,
+                    c,
                     NativeUiFontName::Medium,
                     summary,
                     Vec2::new(left + 70.5, 520.0),
                     0xd9ba70,
                 )?;
                 self.notice_text(
-                    &stage,
+                    c,
                     NativeUiFontName::Medium,
                     body,
                     Vec2::new(left + 70.5, 537.0),
                     *outcome_tint,
                 )?;
                 self.notice_button(
-                    &stage,
+                    c,
                     "OKAY",
                     "notice-okay",
                     HudRect::new(703.0, 564.0, 197.0, 69.0),
@@ -182,70 +155,61 @@ impl PlayerPanels {
                 )?;
             }
         }
-        append(&self.overlay, &stage)
+        Ok(())
     }
-
-    fn notice_frame(&self, stage: &HtmlElement, bounds: HudRect) -> Result<(), String> {
-        let frame = message_frame(&self.document, &self.ui, bounds.width, bounds.height)?;
-        place(&frame, bounds)?;
-        append(stage, &frame)
+    pub(super) fn paint_notice_modal(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        notice: &PlayerPanelNotice,
+    ) -> Result<(), String> {
+        let scale = (self.viewport_size.0 as f32 / 1600.0).min(self.viewport_size.1 as f32 / 900.0);
+        self.modal_canvas(
+            frame,
+            "panel-notice",
+            scale,
+            egui::pos2(
+                (self.viewport_size.0 as f32 - 1600.0 * scale) / 2.0,
+                (self.viewport_size.1 as f32 - 900.0 * scale) / 2.0,
+            ),
+            0.75,
+            |panels, c| panels.draw_notice(c, notice),
+        )
     }
-
+    fn notice_frame(&self, c: &PanelCanvas<'_, '_>, r: HudRect) -> Result<(), String> {
+        crate::gpu_ui::message_frame(c.frame, &c.painter, &self.ui, c.rect(r))
+    }
     fn notice_text(
         &self,
-        stage: &HtmlElement,
+        c: &PanelCanvas<'_, '_>,
         font: NativeUiFontName,
         text: &str,
         position: Vec2,
         tint: u32,
     ) -> Result<(), String> {
-        bitmap_text(
-            &self.document,
-            stage,
-            &NativeUiTextSpec {
-                align: NativeUiTextAlign::Left,
-                tint,
-                ..NativeUiTextSpec::new(font, text, position.x, position.y)
-            },
-        )?;
+        c.text(&NativeUiTextSpec {
+            align: NativeUiTextAlign::Left,
+            tint,
+            ..NativeUiTextSpec::new(font, text, position.x, position.y)
+        });
         Ok(())
     }
-
     fn notice_button(
         &self,
-        stage: &HtmlElement,
+        c: &PanelCanvas<'_, '_>,
         label: &str,
         action: &str,
-        bounds: HudRect,
+        r: HudRect,
         baseline: f64,
-        default_focus: bool,
+        _default_focus: bool,
     ) -> Result<(), String> {
-        let button = native_button(&self.document, label, "panel-notice-action")?;
-        button.set_attribute("data-panel-action", action).map_err(|_| "notice action")?;
-        if default_focus {
-            button.set_attribute("data-game-default-focus", "true").map_err(|_| "notice focus")?;
-        }
-        if action == "unforge-cancel" {
-            button.set_attribute("data-game-back", "true").map_err(|_| "notice back action")?;
-        }
-        place(&button, bounds)?;
-        let glyphs = button
-            .query_selector(".native-button-glyphs")
-            .map_err(|_| "notice button glyph selector")?
-            .ok_or("native button has no glyph pen")?;
-        glyphs
-            .set_attribute(
-                "style",
-                &format!(
-                    "position:absolute;left:50%;top:{}px;width:0;height:0",
-                    baseline - bounds.y,
-                ),
-            )
-            .map_err(|_| "notice button baseline")?;
-        append(stage, &button)
+        let button = c.native_button_art(&self.ui, action, label, r)?;
+        button.text(&NativeUiTextSpec {
+            tint: 0xd9ba70,
+            ..NativeUiTextSpec::new(NativeUiFontName::Menu, label, r.width / 2.0, baseline - r.y)
+        });
+        Ok(())
     }
 }
-
 fn data_line(text: &str) -> NativeUiMessageDataLineSpec<'_> {
     NativeUiMessageDataLineSpec {
         font: NativeUiFontName::Medium,

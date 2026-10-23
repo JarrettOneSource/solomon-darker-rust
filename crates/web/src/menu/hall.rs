@@ -1,63 +1,36 @@
-//! Local and hosted Hall records from Website `HallOfFameScene.tsx` and `HallOfFamePrimitives.tsx`.
-//! The session supplies archived runs. This view owns only expansion, scrolling and art.
-
-use std::collections::BTreeMap;
-
-use solomon_sim::Vec2;
-use solomon_sim::element_vfx::native_element_vfx_plan;
+//! GPU Hall of Fame from `HallOfFameScene` and `HallOfFamePrimitives`.
+//! Ranking, authored geometry, scroll easing and highlights remain canonical simulation plans.
+use super::create::paint_vfx;
+use super::widgets::Stage;
+use super::{HostedMenuAction, widgets};
+use crate::gpu_ui::{StockAtlas, UiFrame};
+use crate::ui::portraits::StockPortraits;
+use egui::{Color32, Rect, Ui, Vec2};
 use solomon_sim::hall_of_fame::presentation::*;
 use solomon_sim::hall_of_fame::{
     HallOfFameBoard, HallOfFameEntry, format_hall_of_fame_time, rank_hall_of_fame_entries,
 };
-use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::{
-    NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec, measure_native_ui_text,
-};
-use solomon_sim::profile::{WizardElement, native_skill_root, native_wizard_class_title};
+use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, measure_native_ui_text};
+use solomon_sim::profile::{native_skill_root, native_wizard_class_title};
 use solomon_sim::skill_picker::SKILL_PICKER_ROOT_TINTS;
-use web_sys::{Document, HtmlElement};
-
-use super::HostedMenuAction;
-use super::create::VfxView;
-use crate::player_panels::chrome::{place, tint};
-use crate::ui::portraits::StockPortraits;
-use crate::ui::text::native_text;
-use crate::ui::{StockAtlas, append, element, image, native_button, style};
-
-/// A borrowed archive projection; setting this never creates a completed run or score.
+use std::collections::BTreeMap;
 #[derive(Clone, Copy)]
 pub struct HallSnapshot<'a> {
     pub entries: &'a [HallOfFameEntry],
     pub current_run_id: Option<&'a str>,
 }
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum HallScope {
     Local,
     Global,
 }
-
 struct GlobalHallResult {
     board: HallOfFameBoard,
     refresh: u64,
     entries: Vec<HallOfFameEntry>,
     error: Option<String>,
 }
-
-struct VisibleRow {
-    orb: VfxView,
-    element: WizardElement,
-    fill: Option<HtmlElement>,
-    frame: Option<HtmlElement>,
-}
-
 pub(super) struct HallView {
-    pub root: HtmlElement,
-    stage: HtmlElement,
-    scroller: HtmlElement,
-    content: HtmlElement,
-    tiles: HtmlElement,
-    tabs: HtmlElement,
     local_entries: Vec<HallOfFameEntry>,
     entries: Vec<HallOfFameEntry>,
     scope: HallScope,
@@ -68,72 +41,24 @@ pub(super) struct HallView {
     next_request_id: u64,
     refresh: u64,
     hosted_actions: Vec<HostedMenuAction>,
-    header_dirty: bool,
     current_run_id: Option<String>,
     expanded: BTreeMap<String, bool>,
     row_tops: Vec<f64>,
     content_height: f64,
-    range: Option<(usize, usize)>,
-    visible: Vec<VisibleRow>,
     pending_scroll: Option<(f64, f64)>,
     center_on_open: bool,
     layout_dirty: bool,
-    last_tick: Option<u64>,
-    viewport: (i32, i32),
+    scroll_reset: bool,
+    now: f64,
     ui: StockAtlas,
     skills: StockAtlas,
     inventory: StockAtlas,
     vfx: StockAtlas,
     portraits: StockPortraits,
-    document: Document,
 }
-
 impl HallView {
-    pub async fn new(document: &Document) -> Result<Self, String> {
-        let root = element(document, "section", "menu-screen hall-screen")?;
-        root.set_attribute("aria-label", "Hall of Fame").map_err(|_| "Hall label")?;
-        let stage = element(document, "div", "hall-stage")?;
-        append(&stage, &image(document, "hall-of-fame-background", "hall-background")?)?;
-        let heading = element(document, "h1", "hall-phone-heading")?;
-        heading.set_text_content(Some("HALL OF FAME"));
-        append(&stage, &heading)?;
-        let box_node = element(document, "div", "hall-box")?;
-        let ui = StockAtlas::load("UI").await?;
-        let tiles = ui.tiles(document, 49, 1320.0, 1056.0)?;
-        tiles.set_class_name("hall-tiles");
-        append(&box_node, &tiles)?;
-        let scroller = element(document, "div", "hall-scroll")?;
-        scroller.set_attribute("tabindex", "0").map_err(|_| "Hall scroll focus")?;
-        scroller.set_attribute("aria-label", "Hall records").map_err(|_| "Hall scroll label")?;
-        let content = element(document, "div", "hall-content")?;
-        append(&scroller, &content)?;
-        append(&box_node, &scroller)?;
-        let header = element(document, "div", "hall-header")?;
-        append(&header, &ui.tiles(document, 49, 1200.0, 55.0)?)?;
-        let tabs = element(document, "div", "hall-tabs")?;
-        append(&header, &tabs)?;
-        for (side, rect) in hall_separator_halves(54.0).into_iter().enumerate() {
-            let rule = element(
-                document,
-                "span",
-                if side == 0 { "hall-rule hall-rule-left" } else { "hall-rule hall-rule-right" },
-            )?;
-            place(&rule, rect)?;
-            append(&header, &rule)?;
-        }
-        append(&box_node, &header)?;
-        append(&stage, &box_node)?;
-        let back = native_button(document, "MAIN MENU", "hall-back")?;
-        back.set_class_name("native-button hall-back");
-        append(&stage, &back)?;
-        append(&root, &stage)?;
+    pub async fn new() -> Result<Self, String> {
         Ok(Self {
-            root,
-            stage,
-            scroller,
-            content,
-            tiles,
-            tabs,
             local_entries: Vec::new(),
             entries: Vec::new(),
             scope: HallScope::Local,
@@ -144,27 +69,22 @@ impl HallView {
             next_request_id: 0,
             refresh: 0,
             hosted_actions: Vec::new(),
-            header_dirty: true,
             current_run_id: None,
             expanded: BTreeMap::new(),
             row_tops: Vec::new(),
             content_height: HALL_CONTENT_TOP,
-            range: None,
-            visible: Vec::new(),
             pending_scroll: None,
             center_on_open: true,
             layout_dirty: true,
-            last_tick: None,
-            viewport: (0, 0),
-            ui,
+            scroll_reset: true,
+            now: 0.0,
+            ui: StockAtlas::load("UI").await?,
             skills: StockAtlas::load("Skills").await?,
             inventory: StockAtlas::load("Inventory").await?,
             vfx: StockAtlas::load("BadGuys").await?,
             portraits: StockPortraits::load().await?,
-            document: document.clone(),
         })
     }
-
     pub fn set_snapshot(&mut self, snapshot: HallSnapshot<'_>) {
         let same_entries = self.local_entries == snapshot.entries;
         let same_current = self.current_run_id.as_deref() == snapshot.current_run_id;
@@ -185,7 +105,6 @@ impl HallView {
             return;
         }
         self.global_available = available;
-        self.header_dirty = true;
         if !available && self.scope == HallScope::Global {
             self.scope = HallScope::Local;
             self.global_request = None;
@@ -224,9 +143,8 @@ impl HallView {
         self.global_result = None;
         self.global_request = None;
         self.refresh = 0;
-        self.header_dirty = true;
         self.expanded.clear();
-        self.scroller.set_scroll_top(0);
+        self.scroll_reset = true;
         self.select_entries();
         self.pending_scroll = Some((0.0, now));
         self.center_on_open = true;
@@ -271,9 +189,8 @@ impl HallView {
             }
         }
         self.expanded.clear();
-        self.scroller.set_scroll_top(0);
+        self.scroll_reset = true;
         self.pending_scroll = None;
-        self.header_dirty = true;
         self.select_entries();
         true
     }
@@ -315,487 +232,492 @@ impl HallView {
         }
     }
 
-    pub fn resize(&mut self, width: i32, height: i32) -> Result<(), String> {
-        let scale = (f64::from(width) / 1600.0).min(f64::from(height) / 900.0);
-        let compact = width < 900;
-        self.root
-            .set_attribute("data-hall-compact", if compact { "true" } else { "false" })
-            .map_err(|_| "Hall responsive mode")?;
-        if compact {
-            style(&self.stage, "left:0;top:0;transform:none;width:100%;height:100%")?;
-            // Preserve readable native rows on phones. The browser pans the same canvas;
-            // first show its central wizard/record column, then allow both scroll axes.
-            self.center_on_open = true;
-        } else {
-            style(
-                &self.stage,
-                &format!(
-                    "left:{}px;top:{}px;transform:scale({scale});width:1600px;height:900px",
-                    (f64::from(width) - 1600.0 * scale) / 2.0,
-                    (f64::from(height) - 900.0 * scale) / 2.0
-                ),
-            )?;
-            self.scroller.set_scroll_left(0);
-        }
-        self.viewport = (width, height);
-        self.range = None;
-        Ok(())
-    }
-
     pub fn update(&mut self, now: f64) -> Result<(), String> {
-        if self.header_dirty {
-            self.draw_header()?;
-            self.header_dirty = false;
-        }
-        if self.center_on_open {
-            // Hidden DOM has no scroll extent. Center after the Hall is visible, when
-            // browser layout can retain the native-canvas offset rather than clamp to zero.
-            let left = if self.viewport.0 < 900 {
-                (600 - self.scroller.client_width() / 2).max(0)
-            } else {
-                0
-            };
-            self.scroller.set_scroll_left(left);
-            self.center_on_open = false;
-        }
+        self.now = now;
         if self.layout_dirty {
-            let expanded: Vec<_> =
-                self.entries.iter().map(|entry| self.is_expanded(entry)).collect();
+            let expanded: Vec<_> = self.entries.iter().map(|e| self.is_expanded(e)).collect();
             (self.row_tops, self.content_height) = hall_row_tops(&expanded);
-            self.content
-                .style()
-                .set_property("height", &format!("{}px", self.content_height.max(HALL_BOX.height)))
-                .map_err(|_| "Hall content height")?;
-            self.root
-                .set_attribute("data-hall-entry-count", &self.entries.len().to_string())
-                .map_err(|_| "Hall entry count")?;
             if self.pending_scroll.is_some() {
-                let target = self.entries.iter().position(|entry| self.is_current(entry)).map_or(
-                    0.0,
-                    |index| {
-                        hall_current_row_scroll_target(self.row_tops[index], self.content_height)
-                    },
-                );
+                let target =
+                    self.entries.iter().position(|e| self.is_current(e)).map_or(0.0, |i| {
+                        hall_current_row_scroll_target(self.row_tops[i], self.content_height)
+                    });
                 self.pending_scroll = Some((target, now));
             }
-            self.range = None;
             self.layout_dirty = false;
         }
+        Ok(())
+    }
+    fn is_current(&self, entry: &HallOfFameEntry) -> bool {
+        self.current_run_id.as_deref() == Some(entry.run_id.as_str())
+    }
+    fn is_expanded(&self, entry: &HallOfFameEntry) -> bool {
+        self.expanded.get(&entry.run_id).copied().unwrap_or_else(|| self.is_current(entry))
+    }
+    pub fn paint(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        view: Rect,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        ui.painter().rect_filled(view, 0.0, widgets::color(0x080909));
+        let compact = view.width() < 900.0;
+        let stage = Stage::fit(view);
+        let box_rect = if compact {
+            widgets::label(
+                ui,
+                "HALL OF FAME",
+                egui::pos2(view.center().x, view.top() + 14.0),
+                egui::Align2::CENTER_TOP,
+                "Palatino",
+                24.0,
+                widgets::GOLD,
+            );
+            Rect::from_min_max(view.min + Vec2::new(12.0, 56.0), view.max - Vec2::new(12.0, 100.0))
+        } else {
+            widgets::image(
+                frame,
+                ui,
+                "hall-of-fame-background",
+                stage.rect(0.0, 0.0, 1600.0, 900.0),
+                Color32::WHITE,
+            );
+            stage.rect(200.0, 80.0, 1200.0, 695.0)
+        };
+        let scale = if compact { 1.0 } else { stage.scale };
+        frame.record_rect("hall-records", "Hall records", "region", box_rect, true);
+        self.ui.paint_tiles(frame, ui.painter(), 49, box_rect, scale, Color32::WHITE)?;
+        let mut child =
+            ui.new_child(egui::UiBuilder::new().id_salt("hall-content").max_rect(box_rect));
+        child.set_clip_rect(box_rect);
+        let mut scroll =
+            egui::ScrollArea::both().id_salt("hall-records").auto_shrink([false, false]);
+        if !compact {
+            scroll = scroll.horizontal_scroll_offset(0.0);
+        }
+        if self.center_on_open {
+            scroll = scroll.horizontal_scroll_offset(if compact {
+                (600.0 - box_rect.width() / 2.0).max(0.0)
+            } else {
+                0.0
+            });
+            self.center_on_open = false;
+        }
+        if self.scroll_reset {
+            scroll = scroll.vertical_scroll_offset(0.0);
+            self.scroll_reset = false;
+        }
         if let Some((target, started)) = self.pending_scroll {
-            let tick = ((now - started).max(0.0) / 10.0).floor();
-            self.scroller.set_scroll_top((hall_scroll_ease(tick) * target) as i32);
+            let tick = ((self.now - started).max(0.0) / 10.0).floor();
+            scroll =
+                scroll.vertical_scroll_offset((hall_scroll_ease(tick) * target) as f32 * scale);
             if tick >= 89.0 {
                 self.pending_scroll = None;
             }
         }
-        let top = f64::from(self.scroller.scroll_top());
-        self.tiles
-            .style()
-            .set_property("transform", &format!("translateY({}px)", -hall_tile_offset(top)))
-            .map_err(|_| "Hall tile scroll")?;
-        let expanded: Vec<_> = self.entries.iter().map(|entry| self.is_expanded(entry)).collect();
-        let range = hall_visible_row_range(&self.row_tops, &expanded, top);
-        if self.range != Some(range) {
-            self.rebuild_visible(range)?;
-            self.range = Some(range);
-        }
-        let tick = (now.max(0.0) / 10.0).floor() as u64;
-        if self.last_tick == Some(tick) {
-            return Ok(());
-        }
-        self.last_tick = Some(tick);
-        for row in &mut self.visible {
-            row.orb.update(
-                &self.document,
-                &self.vfx,
-                &native_element_vfx_plan(row.element, tick as f64, 1.0),
-            )?;
-            if let Some(fill) = &row.fill {
-                fill.style()
-                    .set_property("opacity", &hall_highlight_fill_alpha(tick as f64).to_string())
-                    .map_err(|_| "Hall current fill")?;
-            }
-            if let Some(frame) = &row.frame {
-                frame
-                    .style()
-                    .set_property("opacity", &hall_current_frame_alpha(tick as f64).to_string())
-                    .map_err(|_| "Hall current frame")?;
-            }
-        }
-        Ok(())
-    }
-
-    fn is_current(&self, entry: &HallOfFameEntry) -> bool {
-        self.current_run_id.as_deref() == Some(entry.run_id.as_str())
-    }
-
-    fn is_expanded(&self, entry: &HallOfFameEntry) -> bool {
-        self.expanded.get(&entry.run_id).copied().unwrap_or_else(|| self.is_current(entry))
-    }
-
-    fn rebuild_visible(&mut self, (start, end): (usize, usize)) -> Result<(), String> {
-        self.content.set_text_content(None);
-        self.visible.clear();
-        if self.entries.is_empty() {
-            let result = self.global_ready();
-            let error = result.and_then(|result| result.error.as_deref());
-            let label = if self.scope == HallScope::Global && result.is_none() {
-                "Loading global records..."
-            } else {
-                error.unwrap_or("No records yet.")
-            };
-            let status = element(&self.document, "div", "hall-status")?;
-            status
-                .set_attribute("role", if error.is_some() { "alert" } else { "status" })
-                .map_err(|_| "Hall request status")?;
-            status.set_attribute("aria-label", label).map_err(|_| "Hall status label")?;
-            append(
-                &status,
-                &self.text(
-                    label,
+        let mut result = Ok(());
+        scroll.show_viewport(&mut child, |ui, viewport| {
+            let origin = ui.cursor().min;
+            let content = Stage { origin, scale };
+            ui.allocate_space(Vec2::new(
+                1200.0 * scale,
+                self.content_height.max(HALL_BOX.height) as f32 * scale,
+            ));
+            if self.entries.is_empty() {
+                let ready = self.global_ready();
+                let error = ready.and_then(|r| r.error.as_deref());
+                let text = if self.scope == HallScope::Global && ready.is_none() {
+                    "Loading global records..."
+                } else {
+                    error.unwrap_or("No records yet.")
+                };
+                frame.record_rect("hall-status", text, "status", box_rect, false);
+                frame.record_value("hall-status", text, None);
+                hall_text(
+                    frame,
+                    ui,
+                    content,
+                    text,
                     HallTextAnchor {
                         align: HallTextAlign::Center,
                         font: HallFont::Medium,
-                        position: Vec2::new(600.0, 320.0),
+                        position: solomon_sim::Vec2::new(600.0, 320.0),
                     },
-                )?,
-            )?;
-            if error.is_some() {
-                let width = self.measure_text("RETRY", HallFont::Medium);
-                let retry =
-                    self.tab("RETRY", "hall-retry", HallFont::Medium, 600.0 - width / 2.0, true)?;
-                retry.style().set_property("top", "338px").map_err(|_| "Hall retry anchor")?;
-                append(&status, &retry)?;
+                );
+                if error.is_some()
+                    && widgets::stock_button(
+                        frame,
+                        ui,
+                        "hall-retry",
+                        "RETRY",
+                        content.rect(500.0, 338.0, 200.0, 44.0),
+                        0.55 * scale,
+                        true,
+                    )
+                    .clicked()
+                {
+                    actions.push("hall-retry".to_owned());
+                }
             }
-            append(&self.content, &status)?;
-        }
-        for index in start..end {
-            let entry = &self.entries[index];
-            let expanded = self.is_expanded(entry);
-            let current = self.is_current(entry);
-            let rank = (index + 1).to_string();
-            let score = format!("Awesomeness: {}", entry.awesomeness);
-            let layout = hall_row_layout(
-                self.row_tops[index],
-                expanded,
-                self.measure_text(&rank, HallFont::Heading),
-                self.measure_text(&score, HallFont::Medium),
+            let expanded: Vec<_> = self.entries.iter().map(|e| self.is_expanded(e)).collect();
+            let range = hall_visible_row_range(
+                &self.row_tops,
+                &expanded,
+                f64::from(viewport.top() / scale),
             );
-            let row = element(&self.document, "article", "hall-row")?;
-            row.set_attribute("data-hall-run", &entry.run_id).map_err(|_| "Hall row run")?;
-            row.set_attribute("data-hall-expanded", if expanded { "true" } else { "false" })
-                .map_err(|_| "Hall row expanded")?;
-            row.set_attribute("aria-label", &format!("Rank {}: {}", index + 1, entry.wizard_name))
-                .map_err(|_| "Hall row label")?;
-            let fill = if current {
-                let fill = element(&self.document, "span", "hall-current-fill")?;
-                place(&fill, layout.highlight)?;
-                append(&row, &fill)?;
-                Some(fill)
-            } else {
-                None
-            };
-            let frame = self.frame(&row, 17, layout.highlight, if current { 0.5 } else { 0.2 })?;
-            self.sprite(&row, &self.ui, 25, layout.ornament, 1.0, 0.0)?;
-            append(&row, &self.text(&rank, layout.rank)?)?;
-            let portrait = self.portraits.wizard(
-                &self.document,
-                entry.element,
-                (entry.heading_index % 24) as usize,
-                layout.wizard,
-                1.25 * entry.portrait_scale,
-            )?;
-            let orb = VfxView::new(&self.document)?;
-            append(&portrait.orb, &orb.root)?;
-            append(&row, &portrait.root)?;
-            for (value, anchor) in [
-                (entry.wizard_name.clone(), layout.name),
-                (
-                    format!(
-                        "Level {} {}",
-                        entry.level,
-                        native_wizard_class_title(entry.element, entry.discipline)
-                    ),
-                    layout.level,
-                ),
-                (score, layout.awesomeness),
-            ] {
-                append(&row, &self.text(&value, anchor)?)?;
+            for index in range.0..range.1 {
+                if let Err(error) = self.paint_row(frame, ui, content, index, actions) {
+                    result = Err(error);
+                    break;
+                }
             }
-            if self.scope == HallScope::Global
-                && let Some(account) = &entry.account_username
-            {
-                let name = self.text(&format!("@{account}"), layout.account)?;
-                name.style().set_property("opacity", "0.7").map_err(|_| "Hall account opacity")?;
-                append(&row, &name)?;
+        });
+        std::mem::replace(&mut result, Ok(()))?;
+        let header = Rect::from_min_size(box_rect.min, Vec2::new(box_rect.width(), 55.0 * scale));
+        self.ui.paint_tiles(frame, ui.painter(), 49, header, scale, Color32::WHITE)?;
+        let head_stage = Stage { origin: box_rect.min, scale };
+        let mut x = if compact { 16.0 } else { 70.0 };
+        for (label, id, active) in [
+            ("LOCAL", "hall-scope:local", self.scope == HallScope::Local),
+            ("GLOBAL", "hall-scope:global", self.scope == HallScope::Global),
+        ] {
+            if id.ends_with("global") && !self.global_available {
+                continue;
             }
-            let toggle = element(&self.document, "button", "hall-toggle")?;
-            toggle.set_attribute("type", "button").map_err(|_| "Hall toggle type")?;
-            toggle
-                .set_attribute("data-menu-action", &format!("hall-toggle:{index}"))
-                .map_err(|_| "Hall toggle action")?;
-            toggle
-                .set_attribute("aria-expanded", if expanded { "true" } else { "false" })
-                .map_err(|_| "Hall toggle state")?;
-            toggle
-                .set_attribute(
-                    "aria-label",
-                    &format!(
-                        "{} details for {}",
-                        if expanded { "Hide" } else { "Show" },
-                        entry.wizard_name
-                    ),
-                )
-                .map_err(|_| "Hall toggle label")?;
-            style(
-                &toggle,
-                &format!(
-                    "left:{}px;top:{}px",
-                    layout.chevron.position.x - 22.0,
-                    layout.chevron.position.y - 22.0
-                ),
-            )?;
-            self.sprite(&toggle, &self.ui, 9, Vec2::new(22.0, 22.0), 1.0, layout.chevron.rotation)?;
-            append(&row, &toggle)?;
-            if let Some(detail) = layout.expanded {
-                self.expanded_row(&row, entry, detail)?;
+            let width = measure(label, HallFont::Medium);
+            let rect = head_stage.rect(x - 8.0, 14.0, width + 16.0, 32.0);
+            if widgets::interact(frame, ui, id, label, "tab", rect, true).clicked() {
+                actions.push(id.to_owned());
             }
-            for (side, rect) in hall_separator_halves(layout.separator_y).into_iter().enumerate() {
-                let rule = element(
-                    &self.document,
-                    "span",
-                    if side == 0 {
-                        "hall-rule hall-rule-left"
-                    } else {
-                        "hall-rule hall-rule-right"
-                    },
-                )?;
-                place(&rule, rect)?;
-                append(&row, &rule)?;
+            hall_text(
+                frame,
+                ui,
+                head_stage,
+                label,
+                HallTextAnchor {
+                    align: HallTextAlign::Left,
+                    font: HallFont::Medium,
+                    position: solomon_sim::Vec2::new(x, 36.0),
+                },
+            );
+            if active {
+                ui.painter().line_segment(
+                    [head_stage.at(x, 45.0), head_stage.at(x + width, 45.0)],
+                    egui::Stroke::new(2.0, widgets::GOLD),
+                );
             }
-            append(&self.content, &row)?;
-            self.visible.push(VisibleRow {
-                orb,
-                element: entry.element,
-                fill,
-                frame: current.then_some(frame),
-            });
+            x += width + 30.0;
         }
-        self.last_tick = None;
+        if self.scope == HallScope::Global {
+            let total = HallOfFameBoard::ALL
+                .iter()
+                .map(|b| measure(&b.as_str().to_uppercase(), HallFont::Body))
+                .sum::<f64>()
+                + 72.0;
+            let mut x = if compact { x + 20.0 } else { 1130.0 - total };
+            for board in HallOfFameBoard::ALL {
+                let label = board.as_str().to_uppercase();
+                let width = measure(&label, HallFont::Body);
+                let id = format!("hall-board:{}", board.as_str());
+                if widgets::interact(
+                    frame,
+                    ui,
+                    &id,
+                    &label,
+                    "tab",
+                    head_stage.rect(x - 8.0, 14.0, width + 16.0, 32.0),
+                    true,
+                )
+                .clicked()
+                {
+                    actions.push(id);
+                }
+                hall_text(
+                    frame,
+                    ui,
+                    head_stage,
+                    &label,
+                    HallTextAnchor {
+                        align: HallTextAlign::Left,
+                        font: HallFont::Body,
+                        position: solomon_sim::Vec2::new(x, 36.0),
+                    },
+                );
+                if self.board == board {
+                    ui.painter().line_segment(
+                        [head_stage.at(x, 45.0), head_stage.at(x + width, 45.0)],
+                        egui::Stroke::new(2.0, widgets::GOLD),
+                    );
+                }
+                x += width + 24.0;
+            }
+        }
+        let back = if compact {
+            Rect::from_center_size(
+                egui::pos2(view.center().x, view.bottom() - 45.0),
+                Vec2::new(353.0_f32.min(view.width() - 48.0), 62.0),
+            )
+        } else {
+            stage.rect(617.5, 809.5, 365.0, 85.0)
+        };
+        if compact {
+            if widgets::stock_button(
+                frame,
+                ui,
+                "hall-back",
+                "MAIN MENU",
+                back,
+                back.height() / 69.0,
+                true,
+            )
+            .clicked()
+            {
+                actions.push("hall-back".to_owned());
+            }
+        } else if widgets::interact(frame, ui, "hall-back", "MAIN MENU", "button", back, true)
+            .clicked()
+        {
+            actions.push("hall-back".to_owned());
+        }
         Ok(())
     }
-
+    fn paint_row(
+        &self,
+        frame: &mut UiFrame<'_>,
+        ui: &Ui,
+        stage: Stage,
+        index: usize,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let entry = &self.entries[index];
+        let expanded = self.is_expanded(entry);
+        let current = self.is_current(entry);
+        let rank = (index + 1).to_string();
+        let score = format!("Awesomeness: {}", entry.awesomeness);
+        let layout = hall_row_layout(
+            self.row_tops[index],
+            expanded,
+            measure(&rank, HallFont::Heading),
+            measure(&score, HallFont::Medium),
+        );
+        let tick = (self.now.max(0.0) / 10.0).floor();
+        let rect = stage.rect(
+            layout.highlight.x,
+            layout.highlight.y,
+            layout.highlight.width,
+            layout.highlight.height,
+        );
+        if current {
+            ui.painter().rect_filled(
+                rect,
+                0.0,
+                widgets::alpha(0xd9ba70, hall_highlight_fill_alpha(tick)),
+            );
+        }
+        self.ui.paint_native_frame_scaled(
+            frame,
+            ui.painter(),
+            17,
+            rect,
+            stage.scale,
+            false,
+            widgets::alpha(0xffffff, if current { hall_current_frame_alpha(tick) } else { 0.2 }),
+        )?;
+        self.ui.paint_centered(
+            frame,
+            ui.painter(),
+            25,
+            stage.at(layout.ornament.x, layout.ornament.y),
+            stage.scale,
+            0.0,
+            Color32::WHITE,
+        )?;
+        hall_text(frame, ui, stage, &rank, layout.rank);
+        let portrait_scale = stage.scale * 1.25 * entry.portrait_scale as f32;
+        self.portraits.paint_wizard_with_orb(
+            frame,
+            ui.painter(),
+            entry.element,
+            (entry.heading_index % 24) as usize,
+            stage.at(layout.wizard.x, layout.wizard.y),
+            portrait_scale,
+            |frame, painter, orb| {
+                paint_vfx(
+                    frame,
+                    painter,
+                    &self.vfx,
+                    orb,
+                    portrait_scale,
+                    &solomon_sim::element_vfx::native_element_vfx_plan(entry.element, tick, 1.0),
+                )
+            },
+        )?;
+        for (value, anchor) in [
+            (entry.wizard_name.clone(), layout.name),
+            (
+                format!(
+                    "Level {} {}",
+                    entry.level,
+                    native_wizard_class_title(entry.element, entry.discipline)
+                ),
+                layout.level,
+            ),
+            (score, layout.awesomeness),
+        ] {
+            hall_text(frame, ui, stage, &value, anchor);
+        }
+        if self.scope == HallScope::Global
+            && let Some(account) = &entry.account_username
+        {
+            hall_text(frame, ui, stage, &format!("@{account}"), layout.account);
+        }
+        let id = format!("hall-toggle:{index}");
+        let center = stage.at(layout.chevron.position.x, layout.chevron.position.y);
+        let response = widgets::interact(
+            frame,
+            ui,
+            &id,
+            &format!(
+                "{} details for {}",
+                if expanded { "Hide" } else { "Show" },
+                entry.wizard_name
+            ),
+            "button",
+            Rect::from_center_size(center, Vec2::splat(44.0 * stage.scale)),
+            true,
+        );
+        if response.clicked() {
+            actions.push(id);
+        }
+        self.ui.paint_centered(
+            frame,
+            ui.painter(),
+            9,
+            center,
+            stage.scale,
+            layout.chevron.rotation.to_radians() as f32,
+            Color32::WHITE,
+        )?;
+        if let Some(detail) = layout.expanded {
+            self.expanded_row(frame, ui, stage, entry, detail)?;
+        }
+        for rect in hall_separator_halves(layout.separator_y) {
+            let rect = stage.rect(rect.x, rect.y, rect.width, rect.height);
+            ui.painter().line_segment(
+                [rect.left_center(), rect.right_center()],
+                egui::Stroke::new(rect.height().max(1.0), widgets::GOLD),
+            );
+        }
+        Ok(())
+    }
     fn expanded_row(
         &self,
-        row: &HtmlElement,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        stage: Stage,
         entry: &HallOfFameEntry,
         layout: HallExpandedLayout,
     ) -> Result<(), String> {
         for (value, anchor) in [
-            ("SURVIVAL".to_string(), layout.survival),
-            ("Time:".to_string(), layout.time_label),
+            ("SURVIVAL".to_owned(), layout.survival),
+            ("Time:".to_owned(), layout.time_label),
             (format_hall_of_fame_time(entry.elapsed_ticks), layout.time_value),
-            ("Wave:".to_string(), layout.wave_label),
+            ("Wave:".to_owned(), layout.wave_label),
             (entry.wave.to_string(), layout.wave_value),
-            ("HIGHEST SKILLS".to_string(), layout.highest_skills),
-            ("PERKS USED".to_string(), layout.perks_used),
+            ("HIGHEST SKILLS".to_owned(), layout.highest_skills),
+            ("PERKS USED".to_owned(), layout.perks_used),
             (format!("Monsters Killed: {}", entry.monsters_killed), layout.monsters_killed),
-            ("Awesomest Kill:".to_string(), layout.awesomest_label),
+            ("Awesomest Kill:".to_owned(), layout.awesomest_label),
         ] {
-            append(row, &self.text(&value, anchor)?)?;
+            hall_text(frame, ui, stage, &value, anchor);
         }
-        self.frame(row, 50, layout.kills_frame, 0.5)?;
+        self.ui.paint_native_frame_scaled(
+            frame,
+            ui.painter(),
+            50,
+            stage.rect(
+                layout.kills_frame.x,
+                layout.kills_frame.y,
+                layout.kills_frame.width,
+                layout.kills_frame.height,
+            ),
+            stage.scale,
+            false,
+            widgets::alpha(0xffffff, 0.5),
+        )?;
         if let Some(name) = &entry.awesomest_kill {
-            append(row, &self.text(name, layout.awesomest_kill)?)?;
+            hall_text(frame, ui, stage, name, layout.awesomest_kill);
         }
         for (index, cell) in layout.skill_cells.into_iter().enumerate() {
+            let center = stage.at(cell.center.x, cell.center.y);
             if let Some(skill) = entry.highest_skills.get(index) {
-                let skill_id = usize::try_from(skill.skill_id).ok();
-                let root = if skill.skill_id < 8 {
-                    Some(skill.skill_id as usize)
-                } else {
-                    skill_id.and_then(native_skill_root)
-                }
-                .ok_or_else(|| format!("unknown native skill root for {}", skill.skill_id))?;
-                let back = self.sprite(row, &self.skills, 164, cell.center, 1.0, 0.0)?;
-                tint(&self.document, &back, SKILL_PICKER_ROOT_TINTS[root])?;
-                let record = skill_id
-                    .and_then(|id| id.checked_add(27))
-                    .ok_or_else(|| format!("Skills has no Hall icon for {}", skill.skill_id))?;
-                self.sprite(row, &self.skills, record, cell.center, 0.9, 0.0)?;
+                let id = usize::try_from(skill.skill_id).map_err(|_| "Hall skill identity")?;
+                let root = if id < 8 { Some(id) } else { native_skill_root(id) }
+                    .ok_or_else(|| format!("unknown native skill root for {id}"))?;
+                self.skills.paint_centered(
+                    frame,
+                    ui.painter(),
+                    164,
+                    center,
+                    stage.scale,
+                    0.0,
+                    widgets::color(SKILL_PICKER_ROOT_TINTS[root]),
+                )?;
+                self.skills.paint_centered(
+                    frame,
+                    ui.painter(),
+                    id + 27,
+                    center,
+                    stage.scale * 0.9,
+                    0.0,
+                    Color32::WHITE,
+                )?;
                 let value = skill.rank.to_string();
-                let badge = element(&self.document, "span", "hall-skill-badge")?;
-                place(&badge, cell.badge(self.measure_text(&value, HallFont::Body)))?;
-                append(row, &badge)?;
-                let numeral = self.text(&value, cell.numeral)?;
-                numeral
-                    .style()
-                    .set_property("color", "#fff")
-                    .map_err(|_| "Hall skill rank tint")?;
-                append(row, &numeral)?;
+                let badge = cell.badge(measure(&value, HallFont::Body));
+                ui.painter().rect_filled(
+                    stage.rect(badge.x, badge.y, badge.width, badge.height),
+                    0.0,
+                    egui::Color32::from_black_alpha(128),
+                );
+                hall_text(frame, ui, stage, &value, cell.numeral);
             }
-            self.sprite(row, &self.inventory, 10, cell.center, 0.8, 0.0)?;
+            self.inventory.paint_centered(
+                frame,
+                ui.painter(),
+                10,
+                center,
+                stage.scale * 0.8,
+                0.0,
+                Color32::WHITE,
+            )?;
         }
         for (index, center) in layout.perk_centers.into_iter().enumerate() {
-            self.sprite(row, &self.inventory, 10, center, 0.57, 0.0)?;
+            let center = stage.at(center.x, center.y);
+            self.inventory.paint_centered(
+                frame,
+                ui.painter(),
+                10,
+                center,
+                stage.scale * 0.57,
+                0.0,
+                Color32::WHITE,
+            )?;
             if let Some(selector) = entry.perks_used.get(index) {
-                let record = usize::try_from(*selector)
-                    .ok()
-                    .and_then(|selector| selector.checked_add(127))
-                    .ok_or_else(|| format!("Skills has no Hall perk {selector}"))?;
-                self.sprite(row, &self.skills, record, center, 0.7, 0.0)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn draw_header(&self) -> Result<(), String> {
-        self.tabs.set_text_content(None);
-        let mut x = 70.0;
-        for (label, action, active) in [
-            ("LOCAL", "hall-scope:local", self.scope == HallScope::Local),
-            ("GLOBAL", "hall-scope:global", self.scope == HallScope::Global),
-        ] {
-            if action.ends_with("global") && !self.global_available {
-                continue;
-            }
-            append(&self.tabs, &self.tab(label, action, HallFont::Medium, x, active)?)?;
-            x += self.measure_text(label, HallFont::Medium) + 30.0;
-        }
-        if self.scope == HallScope::Global {
-            let mut total = 24.0 * 3.0;
-            for board in HallOfFameBoard::ALL {
-                total += self.measure_text(&board.as_str().to_uppercase(), HallFont::Body);
-            }
-            let mut x = 1130.0 - total;
-            for board in HallOfFameBoard::ALL {
-                let label = board.as_str().to_uppercase();
-                append(
-                    &self.tabs,
-                    &self.tab(
-                        &label,
-                        &format!("hall-board:{}", board.as_str()),
-                        HallFont::Body,
-                        x,
-                        self.board == board,
-                    )?,
+                self.skills.paint_centered(
+                    frame,
+                    ui.painter(),
+                    usize::try_from(*selector).map_err(|_| "Hall perk identity")? + 127,
+                    center,
+                    stage.scale * 0.7,
+                    0.0,
+                    Color32::WHITE,
                 )?;
-                x += self.measure_text(&label, HallFont::Body) + 24.0;
             }
         }
-        self.root
-            .set_attribute(
-                "data-hall-scope",
-                if self.scope == HallScope::Local { "local" } else { "global" },
-            )
-            .map_err(|_| "Hall active scope")?;
-        self.root
-            .set_attribute(
-                "data-hall-board",
-                if self.scope == HallScope::Local { "awesomeness" } else { self.board.as_str() },
-            )
-            .map_err(|_| "Hall active board")?;
         Ok(())
-    }
-
-    fn tab(
-        &self,
-        label: &str,
-        action: &str,
-        font: HallFont,
-        x: f64,
-        active: bool,
-    ) -> Result<HtmlElement, String> {
-        let node = element(&self.document, "button", "hall-tab")?;
-        node.set_attribute("type", "button").map_err(|_| "Hall tab type")?;
-        node.set_attribute("aria-label", label).map_err(|_| "Hall tab label")?;
-        node.set_attribute("aria-pressed", if active { "true" } else { "false" })
-            .map_err(|_| "Hall tab active")?;
-        node.set_attribute("data-menu-action", action).map_err(|_| "Hall tab action")?;
-        place(&node, HudRect::new(x - 8.0, 14.0, self.measure_text(label, font) + 16.0, 32.0))?;
-        append(
-            &node,
-            &self.text(
-                label,
-                HallTextAnchor { align: HallTextAlign::Left, font, position: Vec2::new(8.0, 22.0) },
-            )?,
-        )?;
-        append(&node, &element(&self.document, "span", "hall-tab-underline")?)?;
-        Ok(node)
-    }
-
-    fn text(&self, value: &str, anchor: HallTextAnchor) -> Result<HtmlElement, String> {
-        let value =
-            if anchor.font == HallFont::Heading { value.to_uppercase() } else { value.to_owned() };
-        let width = self.measure_text(&value, anchor.font);
-        // `layoutHallText` centers with -ceil(width/2), not a half-pixel pen.
-        let x = anchor.position.x
-            - match anchor.align {
-                HallTextAlign::Left => 0.0,
-                HallTextAlign::Center => (width / 2.0).ceil(),
-                HallTextAlign::Right => width,
-            };
-        native_text(
-            &self.document,
-            &NativeUiTextSpec {
-                align: NativeUiTextAlign::Left,
-                tint: 0xd9ba70,
-                ..NativeUiTextSpec::new(hall_font(anchor.font), &value, x, anchor.position.y)
-            },
-            "hall-text",
-        )
-    }
-
-    fn measure_text(&self, value: &str, font: HallFont) -> f64 {
-        let value = if font == HallFont::Heading { value.to_uppercase() } else { value.to_owned() };
-        measure_native_ui_text(&value, hall_font(font), 1.0)
-    }
-
-    fn sprite(
-        &self,
-        parent: &HtmlElement,
-        atlas: &StockAtlas,
-        record: usize,
-        center: Vec2,
-        scale: f64,
-        rotation: f64,
-    ) -> Result<HtmlElement, String> {
-        let metrics = atlas.record(record)?;
-        let node = atlas.sprite(&self.document, record, "hall-sprite")?;
-        node.style().set_property("position", "absolute").map_err(|_| "Hall sprite positioning")?;
-        for (property, value) in [
-            ("left", (center.x - f64::from(metrics.logical_width) / 2.0 + 0.5).floor()),
-            ("top", (center.y - f64::from(metrics.logical_height) / 2.0 + 0.5).floor()),
-        ] {
-            node.style()
-                .set_property(property, &format!("{value}px"))
-                .map_err(|_| "Hall sprite anchor")?;
-        }
-        node.style()
-            .set_property("transform", &format!("rotate({rotation}deg) scale({scale})"))
-            .map_err(|_| "Hall sprite transform")?;
-        append(parent, &node)?;
-        Ok(node)
-    }
-
-    fn frame(
-        &self,
-        parent: &HtmlElement,
-        record: usize,
-        rect: HudRect,
-        alpha: f64,
-    ) -> Result<HtmlElement, String> {
-        let frame = self.ui.nine_slice_border(&self.document, record, rect.width, rect.height)?;
-        place(&frame, rect)?;
-        frame
-            .style()
-            .set_property("opacity", &alpha.to_string())
-            .map_err(|_| "Hall frame alpha")?;
-        append(parent, &frame)?;
-        Ok(frame)
     }
 }
-
 fn hall_font(font: HallFont) -> NativeUiFontName {
     match font {
         HallFont::Body => NativeUiFontName::Body,
@@ -803,4 +725,31 @@ fn hall_font(font: HallFont) -> NativeUiFontName {
         HallFont::Medium => NativeUiFontName::Medium,
         HallFont::Menu => NativeUiFontName::Menu,
     }
+}
+fn measure(text: &str, font: HallFont) -> f64 {
+    measure_native_ui_text(
+        &if font == HallFont::Heading { text.to_uppercase() } else { text.to_owned() },
+        hall_font(font),
+        1.0,
+    )
+}
+fn hall_text(frame: &UiFrame<'_>, ui: &Ui, stage: Stage, text: &str, anchor: HallTextAnchor) {
+    let text = if anchor.font == HallFont::Heading { text.to_uppercase() } else { text.to_owned() };
+    let width = measure(&text, anchor.font);
+    let x = anchor.position.x
+        - match anchor.align {
+            HallTextAlign::Left => 0.0,
+            HallTextAlign::Center => (width / 2.0).ceil(),
+            HallTextAlign::Right => width,
+        };
+    widgets::native(
+        frame,
+        ui,
+        &text,
+        hall_font(anchor.font),
+        stage.at(x, anchor.position.y),
+        stage.scale,
+        0xd9ba70,
+        NativeUiTextAlign::Left,
+    );
 }

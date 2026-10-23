@@ -1,5 +1,4 @@
-//! Editor gestures and history from `MobileUiEditor.tsx`. The DOM supplies measured
-//! client rectangles; all element constraints/snaps use the canonical pure kernel.
+//! GPU editor gestures/history from `MobileUiEditor.tsx`; constraints and snapping use the canonical kernel.
 
 use solomon_sim::Vec2;
 use solomon_sim::float::hypot;
@@ -49,6 +48,7 @@ impl MobileUiEditor {
                 Hit::Rotate(owner) => self.handle_pointer(phase, owner, None, id, client),
                 Hit::Page => self.page_pointer(phase, id, client)?,
                 Hit::Dock => self.dock_pointer(phase, id, client),
+                Hit::Chrome => {}
             },
         }
         Ok(())
@@ -143,9 +143,7 @@ impl MobileUiEditor {
             self.future.push(current);
         }
         self.element_pointers.clear();
-        self.pointer_captures
-            .borrow_mut()
-            .retain(|(_, hit, _)| matches!(hit, Hit::Page | Hit::Dock));
+        self.pointer_captures.retain(|(_, hit)| matches!(hit, Hit::Page | Hit::Dock));
         self.element_owner = None;
         self.element_interaction = None;
         self.handle_interaction = None;
@@ -364,11 +362,9 @@ impl MobileUiEditor {
                         },
                     }
                 } else {
-                    let bounds = self.elements[id as usize].get_bounding_client_rect();
-                    let center = Vec2::new(
-                        bounds.left() + bounds.width() / 2.0,
-                        bounds.top() + bounds.height() / 2.0,
-                    );
+                    let bounds = self.elements[id as usize];
+                    let center =
+                        Vec2::new(bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
                     HandleInteraction::Rotate {
                         id,
                         pointer_id: pointer,
@@ -459,11 +455,11 @@ impl MobileUiEditor {
                     });
                 } else if self.page_pointers.len() == 2 {
                     let midpoint = middle(self.page_pointers[0].1, self.page_pointers[1].1);
-                    let bounds = self.viewport.get_bounding_client_rect();
+                    let bounds = self.viewport;
                     let scroll = self.scroll_position()?;
                     let anchor = Vec2::new(
-                        (scroll.x + midpoint.x - bounds.left() - 24.0) / self.zoom,
-                        (scroll.y + midpoint.y - bounds.top() - 24.0) / self.zoom,
+                        (scroll.x + midpoint.x - bounds.x - 24.0) / self.zoom,
+                        (scroll.y + midpoint.y - bounds.y - 24.0) / self.zoom,
                     );
                     self.page_interaction = Some(PageInteraction::Pinch {
                         anchor,
@@ -498,11 +494,11 @@ impl MobileUiEditor {
                             initial_distance,
                             distance(first, second),
                         );
-                        let bounds = self.viewport.get_bounding_client_rect();
+                        let bounds = self.viewport;
                         self.zoom = next;
                         self.pending_scroll = Some(Vec2::new(
-                            anchor.x * next + 24.0 - (midpoint.x - bounds.left()),
-                            anchor.y * next + 24.0 - (midpoint.y - bounds.top()),
+                            anchor.x * next + 24.0 - (midpoint.x - bounds.x),
+                            anchor.y * next + 24.0 - (midpoint.y - bounds.y),
                         ));
                     }
                     _ => {}
@@ -521,9 +517,9 @@ impl MobileUiEditor {
     fn dock_pointer(&mut self, phase: PointerPhase, pointer: i32, client: Vec2) {
         match phase {
             PointerPhase::Start => {
-                let bounds = self.dock.get_bounding_client_rect();
+                let bounds = self.dock_bounds;
                 self.dock_interaction = Some(DockInteraction {
-                    offset: Vec2::new(client.x - bounds.left(), client.y - bounds.top()),
+                    offset: Vec2::new(client.x - bounds.x, client.y - bounds.y),
                     pointer_id: pointer,
                 });
             }
@@ -531,10 +527,10 @@ impl MobileUiEditor {
                 if let Some(DockInteraction { offset, pointer_id }) = self.dock_interaction
                     && pointer_id == pointer
                 {
-                    let bounds = self.root.get_bounding_client_rect();
+                    let bounds = self.root_bounds;
                     self.dock_position = Some(Vec2::new(
-                        client.x - bounds.left() - offset.x,
-                        client.y - bounds.top() - offset.y,
+                        client.x - bounds.x - offset.x,
+                        client.y - bounds.y - offset.y,
                     ));
                 }
             }
@@ -551,35 +547,35 @@ impl MobileUiEditor {
     }
 
     fn page_percent_point(&self, client: Vec2) -> Vec2 {
-        let bounds = self.page_node.get_bounding_client_rect();
-        if bounds.width() <= 0.0 || bounds.height() <= 0.0 {
+        let bounds = self.page_bounds;
+        if bounds.width <= 0.0 || bounds.height <= 0.0 {
             return Vec2::new(50.0, 50.0);
         }
         Vec2::new(
-            (client.x - bounds.left()) / bounds.width() * 100.0,
-            (client.y - bounds.top()) / bounds.height() * 100.0,
+            (client.x - bounds.x) / bounds.width * 100.0,
+            (client.y - bounds.y) / bounds.height * 100.0,
         )
     }
 
     fn page_pixel_point(&self, client: Vec2) -> Vec2 {
-        let bounds = self.page_node.get_bounding_client_rect();
-        if bounds.width() <= 0.0 || bounds.height() <= 0.0 {
+        let bounds = self.page_bounds;
+        if bounds.width <= 0.0 || bounds.height <= 0.0 {
             return Vec2::new(self.page.width / 2.0, self.page.height / 2.0);
         }
         Vec2::new(
-            (client.x - bounds.left()) / bounds.width() * self.page.width,
-            (client.y - bounds.top()) / bounds.height() * self.page.height,
+            (client.x - bounds.x) / bounds.width * self.page.width,
+            (client.y - bounds.y) / bounds.height * self.page.height,
         )
     }
 
     fn viewport_center(&self) -> Vec2 {
-        let bounds = self.viewport.get_bounding_client_rect();
-        Vec2::new(bounds.left() + bounds.width() / 2.0, bounds.top() + bounds.height() / 2.0)
+        let bounds = self.viewport;
+        Vec2::new(bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0)
     }
 
     fn zoom_at(&mut self, zoom: f64, client: Vec2) -> Result<(), String> {
-        let bounds = self.viewport.get_bounding_client_rect();
-        let local = Vec2::new(client.x - bounds.left(), client.y - bounds.top());
+        let bounds = self.viewport;
+        let local = Vec2::new(client.x - bounds.x, client.y - bounds.y);
         let scroll = self.scroll_position()?;
         let anchor = Vec2::new(
             (scroll.x + local.x - 24.0) / self.zoom,
@@ -594,26 +590,18 @@ impl MobileUiEditor {
     }
 
     fn scroll_position(&self) -> Result<Vec2, String> {
-        let read = |name: &str| {
-            js_sys::Reflect::get(&self.viewport, &wasm_bindgen::JsValue::from_str(name))
-                .map_err(|_| format!("mobile editor {name}"))?
-                .as_f64()
-                .ok_or_else(|| format!("mobile editor numeric {name}"))
-        };
-        Ok(Vec2::new(read("scrollLeft")?, read("scrollTop")?))
+        Ok(self.scroll)
     }
-
-    pub(super) fn set_scroll_position(&self, position: Vec2) -> Result<(), String> {
-        // CSSOM scroll positions are fractional. The legacy web-sys i32 accessors
-        // would truncate a source zoom anchor after every drag or pinch.
-        for (name, value) in [("scrollLeft", position.x), ("scrollTop", position.y)] {
-            js_sys::Reflect::set(
-                &self.viewport,
-                &wasm_bindgen::JsValue::from_str(name),
-                &wasm_bindgen::JsValue::from_f64(value),
-            )
-            .map_err(|_| format!("mobile editor {name}"))?;
-        }
+    pub(super) fn set_scroll_position(&mut self, position: Vec2) -> Result<(), String> {
+        let inset = if self.fullscreen { 0.0 } else { 48.0 };
+        self.scroll = Vec2::new(
+            position
+                .x
+                .clamp(0.0, (self.page.width * self.zoom + inset - self.viewport.width).max(0.0)),
+            position
+                .y
+                .clamp(0.0, (self.page.height * self.zoom + inset - self.viewport.height).max(0.0)),
+        );
         Ok(())
     }
 
@@ -622,46 +610,28 @@ impl MobileUiEditor {
             self.zoom = 1.0;
             self.pending_scroll = Some(Vec2::ZERO);
         } else {
-            self.zoom = ((f64::from(self.viewport.client_width()) - 48.0) / self.page.width)
-                .min((f64::from(self.viewport.client_height()) - 48.0) / self.page.height)
+            self.zoom = ((self.viewport.width - 48.0) / self.page.width)
+                .min((self.viewport.height - 48.0) / self.page.height)
                 .min(1.0)
                 .clamp(MOBILE_UI_PAGE_ZOOM_MIN, MOBILE_UI_PAGE_ZOOM_MAX);
             self.pending_scroll = Some(Vec2::new(
-                ((self.page.width * self.zoom + 48.0 - f64::from(self.viewport.client_width()))
-                    / 2.0)
-                    .max(0.0),
-                ((self.page.height * self.zoom + 48.0 - f64::from(self.viewport.client_height()))
-                    / 2.0)
-                    .max(0.0),
+                ((self.page.width * self.zoom + 48.0 - self.viewport.width) / 2.0).max(0.0),
+                ((self.page.height * self.zoom + 48.0 - self.viewport.height) / 2.0).max(0.0),
             ));
         }
-        self.paint()
+        Ok(())
     }
 
     pub(super) fn constrain_dock(&mut self) -> Result<(), String> {
-        let position = self.dock_position.unwrap_or(Vec2::new(
-            (f64::from(self.root.client_width()) - f64::from(self.dock.offset_width())) / 2.0,
-            54.0,
+        let position = self
+            .dock_position
+            .unwrap_or(Vec2::new((self.root_bounds.width - self.dock_bounds.width) / 2.0, 54.0));
+        self.dock_position = Some(Vec2::new(
+            position.x.clamp(8.0, (self.root_bounds.width - self.dock_bounds.width - 8.0).max(8.0)),
+            position
+                .y
+                .clamp(8.0, (self.root_bounds.height - self.dock_bounds.height - 8.0).max(8.0)),
         ));
-        let position = Vec2::new(
-            position.x.clamp(
-                8.0,
-                (f64::from(self.root.client_width() - self.dock.offset_width()) - 8.0).max(8.0),
-            ),
-            position.y.clamp(
-                8.0,
-                (f64::from(self.root.client_height() - self.dock.offset_height()) - 8.0).max(8.0),
-            ),
-        );
-        self.dock_position = Some(position);
-        let style = self.dock.style();
-        style
-            .set_property("left", &format!("{}px", position.x))
-            .map_err(|_| "mobile editor action position")?;
-        style.set_property("right", "auto").map_err(|_| "mobile editor action right edge")?;
-        style
-            .set_property("top", &format!("{}px", position.y))
-            .map_err(|_| "mobile editor action height")?;
         Ok(())
     }
 }

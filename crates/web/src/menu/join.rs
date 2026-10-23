@@ -1,33 +1,21 @@
-//! Website `JoinPartyScene.tsx`, `party-directory.ts` and `party-join.ts`.
-//! The Website coordinator resolves IDs, polls requests and admits sessions.
-
-use std::cell::Cell;
-use std::rc::Rc;
-
+//! GPU Join Party preserves `JoinPartyScene.tsx`, `party-directory.ts` and
+//! `party-join.ts`. Only the Website coordinator admits actual sessions.
+use super::HostedMenuAction;
+use super::widgets;
+use crate::gpu_ui::UiFrame;
+use crate::hosted::{PartyActivity, PublicGameParty};
+use egui::{Align2, Rect, Ui, Vec2};
 use solomon_sim::menu::party_directory::{
     DirectoryPartyAction, complete_party_code, directory_party_action,
     directory_party_presentation, normalize_party_code,
 };
 use solomon_sim::social::GameSessionKind;
-use wasm_bindgen::JsCast;
-use wasm_bindgen::prelude::*;
-use web_sys::{Document, Event, HtmlElement, HtmlInputElement};
-
-use super::HostedMenuAction;
-use crate::hosted::{PartyActivity, PublicGameParty};
-use crate::ui::{append, element};
-
 pub(super) struct JoinView {
-    pub root: HtmlElement,
-    document: Document,
-    code: HtmlInputElement,
-    join_button: HtmlElement,
-    error: HtmlElement,
-    list: HtmlElement,
+    code: String,
     parties: Vec<PublicGameParty>,
     active: bool,
     loading: bool,
-    busy: Rc<Cell<bool>>,
+    busy: bool,
     next_request: u64,
     directory_request: Option<u64>,
     join_request: Option<u64>,
@@ -37,86 +25,15 @@ pub(super) struct JoinView {
     refresh_at: f64,
     viewport_height: f64,
     actions: Vec<HostedMenuAction>,
-    _input: Closure<dyn FnMut(Event)>,
 }
-
 impl JoinView {
-    pub fn new(document: &Document) -> Result<Self, String> {
-        let root = element(document, "section", "menu-screen join-party-scene")?;
-        root.set_attribute("aria-label", "Join Party").map_err(|_| "Join Party label")?;
-        root.set_hidden(true);
-        let header = element(document, "header", "")?;
-        text(document, &header, "h1", "", "JOIN PARTY")?;
-        text(document, &header, "p", "", "Enter a Party ID or join a listed party.")?;
-        append(&root, &header)?;
-        let form = element(document, "form", "join-party-code")?;
-        form.set_attribute("data-menu-action", "join-code").map_err(|_| "Party ID form action")?;
-        let label = text(document, &form, "label", "", "PARTY ID")?;
-        label.set_attribute("for", "join-party-code").map_err(|_| "Party ID form label")?;
-        let field = element(document, "div", "")?;
-        let code: HtmlInputElement =
-            element(document, "input", "")?.dyn_into().map_err(|_| "Party ID input")?;
-        code.set_id("join-party-code");
-        code.set_type("text");
-        code.set_max_length(128);
-        code.set_placeholder("XXXX-XXXX");
-        code.set_spellcheck(false);
-        for (name, value) in [
-            ("aria-label", "Party ID"),
-            ("autocapitalize", "characters"),
-            ("autocomplete", "off"),
-            ("autocorrect", "off"),
-            ("enterkeyhint", "go"),
-            ("inputmode", "text"),
-        ] {
-            code.set_attribute(name, value).map_err(|_| "Party ID input attributes")?;
-        }
-        field.append_child(&code).map_err(|_| "Party ID input parent")?;
-        let join_button = action_button(document, "JOIN", "join-code")?;
-        join_button.set_attribute("disabled", "").map_err(|_| "incomplete Party ID")?;
-        append(&field, &join_button)?;
-        append(&form, &field)?;
-        append(&root, &form)?;
-        let error = element(document, "p", "join-party-error")?;
-        error.set_attribute("role", "alert").map_err(|_| "Party error role")?;
-        error.set_hidden(true);
-        append(&root, &error)?;
-        let list = element(document, "div", "join-party-list")?;
-        list.set_attribute("role", "list").map_err(|_| "Party directory role")?;
-        append(&root, &list)?;
-        let footer = element(document, "footer", "")?;
-        let back = action_button(document, "BACK", "join-back")?;
-        back.set_attribute("data-game-back", "true").map_err(|_| "Party directory back")?;
-        append(&footer, &back)?;
-        append(&footer, &action_button(document, "REFRESH", "join-refresh")?)?;
-        append(&root, &footer)?;
-        let busy = Rc::new(Cell::new(false));
-        let input_code = code.clone();
-        let input_button = join_button.clone();
-        let input_busy = busy.clone();
-        let input = Closure::<dyn FnMut(Event)>::new(move |_| {
-            let normalized = normalize_party_code(&input_code.value());
-            input_code.set_value(&normalized);
-            if let Err(error) = input_button.toggle_attribute_with_force(
-                "disabled",
-                input_busy.get() || !complete_party_code(&normalized),
-            ) {
-                web_sys::console::error_1(&error);
-            }
-        });
-        code.add_event_listener_with_callback("input", input.as_ref().unchecked_ref())
-            .map_err(|_| "Party ID edit listener")?;
+    pub fn new() -> Result<Self, String> {
         Ok(Self {
-            root,
-            document: document.clone(),
-            code,
-            join_button,
-            error,
-            list,
+            code: String::new(),
             parties: Vec::new(),
             active: false,
             loading: false,
-            busy,
+            busy: false,
             next_request: 0,
             directory_request: None,
             join_request: None,
@@ -126,15 +43,13 @@ impl JoinView {
             refresh_at: 0.0,
             viewport_height: 0.0,
             actions: Vec::new(),
-            _input: input,
         })
     }
-
     pub fn open(&mut self, now: f64) -> Result<(), String> {
         self.active = true;
-        self.code.set_value("");
+        self.code.clear();
         self.parties.clear();
-        self.busy.set(false);
+        self.busy = false;
         self.join_request = None;
         self.pending_listing = None;
         self.join_error = None;
@@ -149,7 +64,7 @@ impl JoinView {
         if let Some(request_id) = self.join_request.take() {
             self.actions.push(HostedMenuAction::CancelPartyJoin { request_id });
         }
-        self.busy.set(false);
+        self.busy = false;
     }
 
     pub fn update(&mut self, now: f64, viewport_height: f64) -> Result<(), String> {
@@ -159,13 +74,7 @@ impl JoinView {
         if now >= self.refresh_at {
             self.refresh(now)?;
         }
-        if self.viewport_height != viewport_height {
-            self.viewport_height = viewport_height;
-            self.root
-                .style()
-                .set_property("--join-party-viewport-height", &format!("{viewport_height}px"))
-                .map_err(|_| "Party directory visible viewport")?;
-        }
+        self.viewport_height = viewport_height;
         Ok(())
     }
 
@@ -175,18 +84,17 @@ impl JoinView {
             return Ok(true);
         }
         if action == "join-code" {
-            let code = normalize_party_code(&self.code.value());
-            if !self.busy.get() && complete_party_code(&code) {
+            let code = normalize_party_code(&self.code);
+            if !self.busy && complete_party_code(&code) {
                 let request_id = self.begin_join(None);
                 self.actions.push(HostedMenuAction::ResolvePartyCode { request_id, code });
-                self.paint()?;
             }
             return Ok(true);
         }
         let Some(listing_id) = action.strip_prefix("join-listing:") else {
             return Ok(false);
         };
-        if self.busy.get() {
+        if self.busy {
             return Ok(true);
         }
         let Some(party) = self.parties.iter().find(|party| party.id == listing_id) else {
@@ -216,7 +124,6 @@ impl JoinView {
                 unreachable!("playing listings returned before starting admission")
             }
         });
-        self.paint()?;
         Ok(true)
     }
 
@@ -237,7 +144,6 @@ impl JoinView {
             }
             Err(error) => self.directory_error = Some(error),
         }
-        self.paint()?;
         Ok(true)
     }
 
@@ -253,9 +159,8 @@ impl JoinView {
         }
         self.join_request = None;
         self.pending_listing = None;
-        self.busy.set(false);
+        self.busy = false;
         self.join_error = result.err();
-        self.paint()?;
         Ok(true)
     }
 
@@ -269,7 +174,7 @@ impl JoinView {
         self.refresh_at = now + 15_000.0;
         self.loading = true;
         self.actions.push(HostedMenuAction::LoadParties { request_id: self.next_request });
-        self.paint()
+        Ok(())
     }
 
     fn begin_join(&mut self, listing: Option<String>) -> u64 {
@@ -277,121 +182,315 @@ impl JoinView {
         self.join_request = Some(self.next_request);
         self.pending_listing = listing;
         self.join_error = None;
-        self.busy.set(true);
+        self.busy = true;
         self.next_request
     }
 
-    fn paint(&self) -> Result<(), String> {
-        self.join_button
-            .toggle_attribute_with_force(
-                "disabled",
-                self.busy.get() || !complete_party_code(&self.code.value()),
-            )
-            .map_err(|_| "Party ID submit admission")?;
-        let error = self.join_error.as_deref().or(self.directory_error.as_deref());
-        self.error.set_hidden(error.is_none());
-        self.error.set_text_content(error);
-        self.list
-            .set_attribute("aria-busy", if self.loading { "true" } else { "false" })
-            .map_err(|_| "Party directory loading")?;
-        self.list.set_text_content(None);
-        if self.parties.is_empty() {
-            text(
-                &self.document,
-                &self.list,
-                "p",
-                "",
-                if self.loading {
-                    "CONSULTING THE DARK CLOUD…"
-                } else {
-                    "NO PARTIES ARE FORMING RIGHT NOW."
-                },
-            )?;
-            return Ok(());
+    pub fn paint_gpu(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        mut view: Rect,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        view.max.y = view.min.y + view.height().min(self.viewport_height as f32);
+        widgets::gradient(ui, view, widgets::color(0x2b2212), widgets::color(0x040508));
+        let compact = view.width() < 700.0 || view.height() < 620.0;
+        let pad = if compact { 12.0 } else { 24.0 };
+        widgets::label(
+            ui,
+            "JOIN PARTY",
+            view.min + Vec2::new(view.width() / 2.0, pad),
+            Align2::CENTER_TOP,
+            "Cinzel Bold",
+            if compact { 24.0 } else { 30.0 },
+            widgets::color(0xf4d887),
+        );
+        widgets::label(
+            ui,
+            "Enter a Party ID or join a listed party.",
+            view.min + Vec2::new(view.width() / 2.0, pad + 40.0),
+            Align2::CENTER_TOP,
+            "IM FELL English",
+            16.0,
+            widgets::color(0xaaa088),
+        );
+        let width = 560.0_f32.min(view.width() - pad * 2.0);
+        let left = view.center().x - width / 2.0;
+        let code_top = view.top() + pad + 72.0;
+        widgets::label(
+            ui,
+            "PARTY ID",
+            egui::pos2(left, code_top),
+            Align2::LEFT_TOP,
+            "Cinzel Bold",
+            11.0,
+            widgets::GOLD,
+        );
+        let field =
+            Rect::from_min_size(egui::pos2(left, code_top + 20.0), Vec2::new(width - 90.0, 44.0));
+        ui.painter().rect_filled(field, 0.0, widgets::color(0x080704));
+        ui.painter().rect_stroke(
+            field,
+            0.0,
+            egui::Stroke::new(1.0, widgets::color(0x947b42)),
+            egui::StrokeKind::Inside,
+        );
+        let edited = widgets::edit(
+            frame,
+            ui,
+            "join-party-code",
+            "Party ID",
+            &mut self.code,
+            field,
+            "JetBrains Mono Bold",
+            20.0,
+            !self.busy,
+            false,
+        );
+        if edited.changed() {
+            self.code = normalize_party_code(&self.code);
         }
-        for party in &self.parties {
-            self.paint_party(party)?;
+        if edited.has_focus()
+            && ui.input(|i| i.key_pressed(egui::Key::Enter))
+            && complete_party_code(&self.code)
+            && !self.busy
+        {
+            actions.push("join-code".to_owned());
+        }
+        let rect = Rect::from_min_size(
+            egui::pos2(field.right() + 8.0, field.top()),
+            Vec2::new(82.0, 44.0),
+        );
+        if widgets::flat_button(
+            frame,
+            ui,
+            "join-code",
+            "JOIN",
+            rect,
+            !self.busy && complete_party_code(&self.code),
+        )
+        .clicked()
+            && !self.busy
+            && complete_party_code(&self.code)
+        {
+            actions.push("join-code".to_owned());
+        }
+        let error = self.join_error.as_deref().or(self.directory_error.as_deref());
+        if let Some(error) = error {
+            widgets::label(
+                ui,
+                error,
+                egui::pos2(view.center().x, field.bottom() + 12.0),
+                Align2::CENTER_TOP,
+                "IM FELL English",
+                16.0,
+                widgets::ERROR,
+            );
+        }
+        let list = Rect::from_min_max(
+            egui::pos2(
+                view.center().x - (900.0_f32.min(view.width() - pad * 2.0)) / 2.0,
+                field.bottom() + if error.is_some() { 48.0 } else { 20.0 },
+            ),
+            egui::pos2(
+                view.center().x + (900.0_f32.min(view.width() - pad * 2.0)) / 2.0,
+                view.bottom() - pad - 58.0,
+            ),
+        );
+        ui.painter().rect_filled(list, 0.0, egui::Color32::from_black_alpha(90));
+        ui.painter().rect_stroke(
+            list,
+            0.0,
+            egui::Stroke::new(1.0, widgets::alpha(0xbf9d4e, 0.45)),
+            egui::StrokeKind::Inside,
+        );
+        frame.record_rect("join-party-list", "Party directory", "region", list, true);
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("join-list")
+                .max_rect(list)
+                .layout(egui::Layout::top_down(egui::Align::Min)),
+        );
+        child.set_clip_rect(list);
+        egui::ScrollArea::vertical().id_salt("join-party-list").auto_shrink([false, false]).show(
+            &mut child,
+            |ui| {
+                if self.parties.is_empty() {
+                    let text = if self.loading {
+                        "CONSULTING THE DARK CLOUD…"
+                    } else {
+                        "NO PARTIES ARE FORMING RIGHT NOW."
+                    };
+                    ui.add_space(32.0);
+                    widgets::label(
+                        ui,
+                        text,
+                        egui::pos2(list.center().x, ui.cursor().top()),
+                        Align2::CENTER_TOP,
+                        "IM FELL English",
+                        16.0,
+                        widgets::GOLD,
+                    );
+                    ui.add_space(48.0);
+                }
+                for party in &self.parties {
+                    let height = if compact { 128.0 } else { 92.0 };
+                    let (_, row) = ui.allocate_space(Vec2::new(list.width() - 16.0, height));
+                    ui.painter().line_segment(
+                        [row.left_bottom(), row.right_bottom()],
+                        egui::Stroke::new(1.0, widgets::alpha(0xbf9d4e, 0.2)),
+                    );
+                    widgets::label(
+                        ui,
+                        &party.leader.to_uppercase(),
+                        row.min + Vec2::new(12.0, 10.0),
+                        Align2::LEFT_TOP,
+                        "IM FELL English",
+                        18.0,
+                        widgets::color(0xead9aa),
+                    );
+                    let mut flags = Vec::new();
+                    if party.session_kind == GameSessionKind::PrivateCollege {
+                        flags.push("PRIVATE COLLEGE".to_owned());
+                    }
+                    if party.mod_count > 0 {
+                        flags.push(format!("MODDED · {}", party.mod_count));
+                    }
+                    if party.cheats_enabled {
+                        flags.push("CHEATS".to_owned());
+                    }
+                    widgets::label(
+                        ui,
+                        &flags.join(" · "),
+                        row.min + Vec2::new(12.0, 34.0),
+                        Align2::LEFT_TOP,
+                        "Cinzel Bold",
+                        8.0,
+                        widgets::color(0xc8ad69),
+                    );
+                    widgets::label(
+                        ui,
+                        &party.members.join(" · "),
+                        row.min + Vec2::new(12.0, 50.0),
+                        Align2::LEFT_TOP,
+                        "IM FELL English",
+                        14.0,
+                        widgets::color(0x9e9580),
+                    );
+                    let location = match &party.activity {
+                        PartyActivity::Hub => None,
+                        PartyActivity::Playing { boneyard_name } => Some(boneyard_name.as_str()),
+                    };
+                    let p = directory_party_presentation(
+                        party.member_count,
+                        party.max_members,
+                        location,
+                    );
+                    widgets::label(
+                        ui,
+                        &format!("{} · {}", p.status, p.location),
+                        row.min + Vec2::new(12.0, 68.0),
+                        Align2::LEFT_TOP,
+                        "IM FELL English",
+                        14.0,
+                        widgets::color(0xb6a77f),
+                    );
+                    let action = directory_party_action(party.visibility, location.is_some());
+                    let label = if action == DirectoryPartyAction::Wait {
+                        "IN GAME"
+                    } else if self.pending_listing.as_deref() == Some(party.id.as_str()) {
+                        "REQUESTED"
+                    } else if action == DirectoryPartyAction::Request {
+                        "REQUEST"
+                    } else {
+                        "JOIN"
+                    };
+                    let r = Rect::from_min_size(
+                        if compact {
+                            row.min + Vec2::new(row.width() - 110.0, 80.0)
+                        } else {
+                            egui::pos2(row.right() - 110.0, row.center().y - 22.0)
+                        },
+                        Vec2::new(98.0, 44.0),
+                    );
+                    widgets::label(
+                        ui,
+                        &p.squad,
+                        r.min - Vec2::new(16.0, -22.0),
+                        Align2::RIGHT_CENTER,
+                        "IM FELL English",
+                        16.0,
+                        widgets::color(0xcbb985),
+                    );
+                    let id = format!("join-listing:{}", party.id);
+                    let enabled = !self.busy && action != DirectoryPartyAction::Wait;
+                    if widgets::flat_button(frame, ui, &id, label, r, enabled).clicked() && enabled
+                    {
+                        actions.push(id);
+                    }
+                }
+            },
+        );
+        for (label, action, x) in [
+            ("BACK", "join-back", view.center().x - 110.0),
+            ("REFRESH", "join-refresh", view.center().x + 4.0),
+        ] {
+            if widgets::flat_button(
+                frame,
+                ui,
+                action,
+                label,
+                Rect::from_min_size(
+                    egui::pos2(x, view.bottom() - pad - 44.0),
+                    Vec2::new(106.0, 44.0),
+                ),
+                true,
+            )
+            .clicked()
+            {
+                actions.push(action.to_owned());
+            }
         }
         Ok(())
     }
+}
 
-    fn paint_party(&self, party: &PublicGameParty) -> Result<(), String> {
-        let row = element(&self.document, "article", "")?;
-        row.set_attribute("role", "listitem").map_err(|_| "Party listing role")?;
-        row.set_attribute("data-party-listing", &party.id).map_err(|_| "Party listing identity")?;
-        let copy = element(&self.document, "span", "join-party-copy")?;
-        text(&self.document, &copy, "strong", "", &party.leader.to_uppercase())?;
-        let flags = element(&self.document, "span", "join-party-flags")?;
-        if party.session_kind == GameSessionKind::PrivateCollege {
-            text(&self.document, &flags, "em", "", "PRIVATE COLLEGE")?;
-        }
-        if party.mod_count > 0 {
-            text(&self.document, &flags, "em", "", &format!("MODDED · {}", party.mod_count))?;
-        }
-        if party.cheats_enabled {
-            text(&self.document, &flags, "em", "cheats", "CHEATS")?;
-        }
-        append(&copy, &flags)?;
-        text(&self.document, &copy, "small", "", &party.members.join(" · "))?;
-        let boneyard = match &party.activity {
-            PartyActivity::Hub => None,
-            PartyActivity::Playing { boneyard_name } => Some(boneyard_name.as_str()),
-        };
-        let presentation =
-            directory_party_presentation(party.member_count, party.max_members, boneyard);
-        let status_line = element(&self.document, "small", "")?;
-        text(
-            &self.document,
-            &status_line,
-            "span",
-            if boneyard.is_some() { "join-party-status playing" } else { "join-party-status hub" },
-            presentation.status,
-        )?;
-        let separator = text(&self.document, &status_line, "span", "", " · ")?;
-        separator.set_attribute("aria-hidden", "true").map_err(|_| "Party listing separator")?;
-        text(&self.document, &status_line, "span", "join-party-location", presentation.location)?;
-        append(&copy, &status_line)?;
-        append(&row, &copy)?;
-        let squad = text(&self.document, &row, "span", "join-party-squad", &presentation.squad)?;
-        squad
-            .set_attribute("aria-label", &format!("{} wizards", presentation.squad))
-            .map_err(|_| "Party size label")?;
-        let action = directory_party_action(party.visibility, boneyard.is_some());
-        let label = match action {
-            DirectoryPartyAction::Wait => "IN GAME",
-            _ if self.pending_listing.as_deref() == Some(party.id.as_str()) => "REQUESTED",
-            DirectoryPartyAction::Request => "REQUEST",
-            DirectoryPartyAction::Join => "JOIN",
-        };
-        let button = action_button(&self.document, label, &format!("join-listing:{}", party.id))?;
-        button
-            .toggle_attribute_with_force(
-                "disabled",
-                self.busy.get() || action == DirectoryPartyAction::Wait,
-            )
-            .map_err(|_| "Party listing admission")?;
-        append(&row, &button)?;
-        append(&self.list, &row)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn closing_the_directory_cancels_admission_and_rejects_late_results() {
+        let mut join = JoinView::new().expect("pure directory state");
+        join.open(100.0).expect("open directory");
+        let request = join.take_actions();
+        assert_eq!(request, vec![HostedMenuAction::LoadParties { request_id: 1 }]);
+        join.code = "ABCD-EFGH".to_owned();
+        join.activate("join-code", 100.0).expect("enter party code");
+        assert_eq!(
+            join.take_actions(),
+            vec![HostedMenuAction::ResolvePartyCode {
+                request_id: 2,
+                code: "ABCD-EFGH".to_owned()
+            }]
+        );
+        join.close();
+        assert_eq!(join.take_actions(), vec![HostedMenuAction::CancelPartyJoin { request_id: 2 }]);
+        assert!(!join.complete_join(2, Ok(())).expect("late admission"));
+        assert!(!join.complete_directory(1, Ok(Vec::new())).expect("late directory"));
     }
-}
 
-fn text(
-    document: &Document,
-    parent: &HtmlElement,
-    tag: &str,
-    class: &str,
-    value: &str,
-) -> Result<HtmlElement, String> {
-    let node = element(document, tag, class)?;
-    node.set_text_content(Some(value));
-    append(parent, &node)?;
-    Ok(node)
-}
-
-fn action_button(document: &Document, label: &str, action: &str) -> Result<HtmlElement, String> {
-    let button = element(document, "button", "")?;
-    button.set_attribute("type", "button").map_err(|_| "Join Party action type")?;
-    button.set_attribute("data-menu-action", action).map_err(|_| "Join Party action")?;
-    button.set_text_content(Some(label));
-    Ok(button)
+    #[test]
+    fn a_new_refresh_supersedes_the_old_directory_without_replaying_admission() {
+        let mut join = JoinView::new().expect("pure directory state");
+        join.open(0.0).expect("open directory");
+        join.take_actions();
+        join.update(15_000.0, 900.0).expect("automatic refresh");
+        assert_eq!(join.take_actions(), vec![HostedMenuAction::LoadParties { request_id: 2 }]);
+        assert!(!join.complete_directory(1, Err("old failure".to_owned())).expect("stale result"));
+        assert!(join.complete_directory(2, Ok(Vec::new())).expect("current result"));
+        assert_eq!(join.directory_error, None);
+        assert!(!join.loading);
+    }
 }

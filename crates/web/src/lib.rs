@@ -4,7 +4,6 @@
 //! The simulation lives in `solomon-sim` and never touches the browser; this crate owns asset
 //! loading, input, the fixed-tick loop, and drawing.
 
-mod assets;
 pub mod audio;
 pub mod battle;
 mod boneyard;
@@ -19,6 +18,7 @@ pub mod enemies;
 pub mod fullscreen;
 mod game;
 pub mod game_over;
+pub mod gpu_ui;
 pub mod hosted;
 pub mod hotbar;
 pub mod hud;
@@ -46,8 +46,8 @@ pub mod observer;
 pub mod player_effects;
 pub mod player_panels;
 pub mod presentation;
-pub mod render;
 mod rooms;
+mod runtime_ui;
 pub mod secondary;
 #[cfg(feature = "browser-fixtures")]
 mod secondary_fixture;
@@ -71,7 +71,7 @@ use std::rc::Rc;
 
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
-use web_sys::{HtmlElement, Window};
+use web_sys::Window;
 
 use crate::boneyard::PreparedBoneyardView;
 use crate::game::Game;
@@ -104,19 +104,18 @@ pub fn gameplay_input_state() -> Vec<f64> {
     })
 }
 
-/// Exercises the same offline map loading and installation used by the active session.
+/// Immutable observations of real GPU controls and submitted frames. Browser journeys
+/// locate these bounds, then exercise normal pointer, keyboard and controller input.
 #[wasm_bindgen]
-pub async fn enter_boneyard(seed_index: u32) -> Result<(), JsValue> {
-    let game = GAME.with(|slot| slot.borrow().clone()).ok_or("the game has not started")?;
-    let mut seed = [0; 16];
-    seed[..4].copy_from_slice(&seed_index.to_be_bytes());
-    let loaded = solomon_assets::boneyard::load_boneyard(seed).map_err(JsValue::from)?;
-    set_status("Loading Boneyard…");
-    let prepared = PreparedBoneyardView::load(&loaded).await.map_err(JsValue::from)?;
-    let navigation = navigation_data::load_navigation(&loaded).await.map_err(JsValue::from)?;
-    game.borrow_mut().install_boneyard(loaded, prepared, navigation).map_err(JsValue::from)?;
-    set_status("");
-    Ok(())
+pub fn gpu_ui_state() -> String {
+    if let Some(loading) = runtime_ui::loading_snapshot() {
+        return loading;
+    }
+    GAME.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map_or_else(|| "null".to_owned(), |game| game.borrow().gpu_ui_snapshot().to_string())
+    })
 }
 
 #[wasm_bindgen(start)]
@@ -128,22 +127,13 @@ pub fn start() {
             if let Err(error) = game::editor_test::report_failure(&message) {
                 web_sys::console::error_1(&JsValue::from_str(&error));
             }
-            if let Some(status) = status_element() {
-                status.set_text_content(Some(&message));
-                let _ = status.style().set_property("color", "#ff7b7b");
-            }
+            runtime_ui::startup_failed(&message);
         }
     });
 }
 
-fn status_element() -> Option<HtmlElement> {
-    web_sys::window()?.document()?.get_element_by_id("status")?.dyn_into().ok()
-}
-
 fn set_status(text: &str) {
-    if let Some(status) = status_element() {
-        status.set_text_content(Some(text));
-    }
+    runtime_ui::set_status(text);
 }
 
 async fn run() -> Result<(), String> {
@@ -151,6 +141,7 @@ async fn run() -> Result<(), String> {
     // Keep that large future on the heap: nesting its unoptimized state in this poll frame
     // exhausted the wasm stack while decoding a saved PlayerState (save-resume journey).
     let game = Rc::new(RefCell::new(Box::pin(Game::load()).await?));
+    runtime_ui::completed("runtime", "Game resources ready", 1)?;
     let window = web_sys::window().ok_or("no window")?;
     GAME.with(|slot| *slot.borrow_mut() = Some(game.clone()));
     Game::attach_desktop(&game, &window)?;
@@ -191,7 +182,10 @@ fn schedule_frames(window: Window, game: Rc<RefCell<Game>>) {
         let result = game.borrow_mut().frame(time);
         if let Err(message) = result {
             web_sys::console::error_1(&JsValue::from_str(&message));
-            set_status(&message);
+            runtime_ui::set_error(&message);
+            if let Err(error) = game.borrow_mut().present_failure(time) {
+                web_sys::console::error_1(&JsValue::from_str(&error));
+            }
             if let Err(error) = game.borrow_mut().editor_test_failed(&message) {
                 web_sys::console::error_1(&JsValue::from_str(&error));
             }

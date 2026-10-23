@@ -1,25 +1,12 @@
-//! The actual catalog detail, gallery, version history and comments from
-//! Website `DarkCloudModDetail.tsx`, `DarkCloudGallery.tsx` and `DarkCloudComments.tsx`.
-
-use std::cell::RefCell;
-use std::rc::Rc;
-
-use solomon_sim::native_ui_text::NativeUiFontName::{Medium, Menu};
-use wasm_bindgen::{JsCast, closure::Closure};
-use web_sys::{Document, Event, HtmlElement, HtmlTextAreaElement, PointerEvent};
-
-use super::dialog::CloudDialog;
-use super::format;
-use super::images::CloudImages;
-use super::widgets::{self, control_action, control_panel, narrative, text};
+//! GPU mod detail, screenshot gallery, versions and comments. The controller
+//! ports `DarkCloudModDetail`, `DarkCloudGallery` and `DarkCloudComments` lifetimes.
+use super::{super::widgets, art::CloudArt, format, images::CloudImages};
+use crate::gpu_ui::UiFrame;
 use crate::hosted::{ModComments, ModDetail, ModSubscription, ModSummary};
 use crate::menu::{HostedMenuAction, ModSubscriptionAction};
-use crate::ui::{append, element};
-
+use egui::{Align2, Color32, Rect, Ui, Vec2};
 pub(super) struct ModDetailView {
-    pub dialog: CloudDialog,
     pub summary: ModSummary,
-    document: Document,
     detail: Option<ModDetail>,
     detail_request: Option<u64>,
     detail_error: Option<String>,
@@ -29,90 +16,14 @@ pub(super) struct ModDetailView {
     comment_error: Option<String>,
     account: Option<String>,
     image_index: usize,
-    header: HtmlElement,
-    gallery: HtmlElement,
-    about: HtmlElement,
-    subscription: HtmlElement,
-    copy: HtmlElement,
-    versions: HtmlElement,
-    comment_form: HtmlElement,
-    comment_count: HtmlElement,
-    comment_list: HtmlElement,
-    comment_notice: HtmlElement,
-    load_notice: HtmlElement,
-    body: Option<HtmlTextAreaElement>,
-    counter: Option<HtmlElement>,
-    post: Option<HtmlElement>,
+    body: String,
     actions: Vec<HostedMenuAction>,
-    _swipe: Vec<Closure<dyn FnMut(Event)>>,
+    swiping: bool,
 }
-
 impl ModDetailView {
-    pub fn open(
-        document: &Document,
-        parent: &HtmlElement,
-        summary: ModSummary,
-        account: Option<&str>,
-        events: Rc<RefCell<Vec<String>>>,
-        next_request: &mut u64,
-        images: &mut CloudImages,
-    ) -> Result<Self, String> {
-        let dialog =
-            CloudDialog::new(document, parent, "dark-cloud-detail", &summary.name, events.clone())?;
-        let header = element(document, "header", "dark-cloud-detail-header")?;
-        append(dialog.element(), &header)?;
-        let scroll = element(document, "div", "dark-cloud-detail-scroll")?;
-        let load_notice = element(document, "div", "dark-cloud-detail-load-error")?;
-        load_notice.set_attribute("role", "alert").map_err(|_| "mod detail error role")?;
-        append(&scroll, &load_notice)?;
-        let layout = element(document, "div", "dark-cloud-detail-layout")?;
-        let gallery = element(document, "section", "dark-cloud-gallery")?;
-        gallery.set_attribute("aria-label", "Screenshots").map_err(|_| "gallery label")?;
-        append(&layout, &gallery)?;
-        let summary_column = element(document, "aside", "dark-cloud-detail-summary")?;
-        let about = element(document, "div", "")?;
-        append(&summary_column, &about)?;
-        let subscription = element(document, "div", "dark-cloud-detail-subscription")?;
-        append(&summary_column, &subscription)?;
-        append(&layout, &summary_column)?;
-        append(&scroll, &layout)?;
-        let copy = element(document, "section", "dark-cloud-detail-copy")?;
-        append(&scroll, &copy)?;
-        let versions = element(document, "section", "dark-cloud-versions")?;
-        append(&scroll, &versions)?;
-        let comments = element(document, "section", "dark-cloud-comments")?;
-        comments.set_attribute("aria-label", "Comments").map_err(|_| "comments label")?;
-        let comment_heading = section_heading(document, &comments, "COMMENTS")?;
-        let comment_count = element(document, "span", "")?;
-        append(&comment_heading, &comment_count)?;
-        let comment_form = element(document, "div", "")?;
-        append(&comments, &comment_form)?;
-        let comment_notice = element(document, "p", "dark-cloud-inline-error")?;
-        comment_notice.set_attribute("role", "alert").map_err(|_| "comment error role")?;
-        append(&comments, &comment_notice)?;
-        let comment_list = element(document, "div", "")?;
-        append(&comments, &comment_list)?;
-        append(&scroll, &comments)?;
-        append(dialog.element(), &scroll)?;
-        let footer = element(document, "footer", "dark-cloud-panel-footer")?;
-        let done = widgets::button(
-            document,
-            "DONE",
-            "cloud-dialog-close",
-            "native-ui-stone-button",
-            None,
-            44.0,
-            1.0,
-            false,
-        )?;
-        done.set_attribute("data-cloud-stone", "").map_err(|_| "mod detail Done art")?;
-        append(&footer, &done)?;
-        append(dialog.element(), &footer)?;
-
+    pub fn open(summary: ModSummary, account: Option<&str>, next: &mut u64) -> Self {
         let mut view = Self {
-            dialog,
             summary,
-            document: document.clone(),
             detail: None,
             detail_request: None,
             detail_error: None,
@@ -122,69 +33,14 @@ impl ModDetailView {
             comment_error: None,
             account: account.map(str::to_owned),
             image_index: 0,
-            header,
-            gallery,
-            about,
-            subscription,
-            copy,
-            versions,
-            comment_form,
-            comment_count,
-            comment_list,
-            comment_notice,
-            load_notice,
-            body: None,
-            counter: None,
-            post: None,
+            body: String::new(),
             actions: Vec::new(),
-            _swipe: Vec::new(),
+            swiping: false,
         };
-        // Pointer events preserve the source's forty-pixel touch swipe while
-        // leaving mouse drags and the browser's vertical pan untouched.
-        let start = Rc::new(RefCell::new(None));
-        let swipe_start = start.clone();
-        let down = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(event) = event.dyn_ref::<PointerEvent>() else {
-                return;
-            };
-            if event.pointer_type() == "touch" {
-                *swipe_start.borrow_mut() = Some(event.client_x());
-            }
-        });
-        let up = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(event) = event.dyn_ref::<PointerEvent>() else {
-                return;
-            };
-            if event.pointer_type() != "touch" {
-                return;
-            }
-            let Some(start) = start.borrow_mut().take() else {
-                return;
-            };
-            let travel = event.client_x() - start;
-            if travel.abs() >= 40 {
-                events.borrow_mut().push(
-                    if travel < 0 { "cloud-gallery-next" } else { "cloud-gallery-previous" }
-                        .to_owned(),
-                );
-            }
-        });
-        view.gallery
-            .add_event_listener_with_callback("pointerdown", down.as_ref().unchecked_ref())
-            .map_err(|_| "gallery swipe start")?;
-        view.gallery
-            .add_event_listener_with_callback("pointerup", up.as_ref().unchecked_ref())
-            .map_err(|_| "gallery swipe end")?;
-        view._swipe = vec![down, up];
-        view.request_detail(next_request);
-        view.request_comments(next_request);
-        view.paint_detail(images)?;
-        view.paint_comment_form()?;
-        view.paint_comments()?;
-        view.dialog.show()?;
-        Ok(view)
+        view.request_detail(next);
+        view.request_comments(next);
+        view
     }
-
     pub fn request_detail(&mut self, next: &mut u64) {
         *next += 1;
         self.detail_request = Some(*next);
@@ -211,8 +67,7 @@ impl ModDetailView {
     pub fn set_account(&mut self, account: Option<&str>) -> Result<(), String> {
         if self.account.as_deref() != account {
             self.account = account.map(str::to_owned);
-            self.paint_comment_form()?;
-            self.paint_comments()?;
+            self.body.clear();
         }
         Ok(())
     }
@@ -221,7 +76,6 @@ impl ModDetailView {
         &mut self,
         request_id: u64,
         result: Result<ModDetail, String>,
-        images: &mut CloudImages,
     ) -> Result<bool, String> {
         if self.detail_request != Some(request_id) {
             return Ok(false);
@@ -234,7 +88,6 @@ impl ModDetailView {
             }
             Err(error) => self.detail_error = Some(error),
         }
-        self.paint_detail(images)?;
         Ok(true)
     }
 
@@ -254,7 +107,6 @@ impl ModDetailView {
             }
             Err(error) => self.comment_error = Some(error),
         }
-        self.paint_comments()?;
         Ok(true)
     }
 
@@ -273,39 +125,32 @@ impl ModDetailView {
         self.comment_mutation = None;
         match result {
             Ok(()) => {
-                if posted && let Some(body) = &self.body {
-                    body.set_value("");
+                if posted {
+                    self.body.clear();
                 }
                 self.request_comments(next);
             }
             Err(error) => self.comment_error = Some(error),
         }
-        self.update_comment_input()?;
-        self.paint_comments()?;
         Ok(true)
     }
 
-    pub fn activate(
-        &mut self,
-        action: &str,
-        next: &mut u64,
-        images: &mut CloudImages,
-    ) -> Result<bool, String> {
+    pub fn activate(&mut self, action: &str, next: &mut u64) -> Result<bool, String> {
         match action {
             "cloud-detail-retry" => {
                 self.request_detail(next);
-                self.paint_detail(images)?;
             }
-            "cloud-gallery-previous" => self.change_image(false, images)?,
-            "cloud-gallery-next" => self.change_image(true, images)?,
-            "cloud-comment-edited" => self.update_comment_input()?,
+            "cloud-gallery-previous" => self.change_image(false)?,
+            "cloud-gallery-next" => self.change_image(true)?,
+            "cloud-comment-edited" => self.limit_body(),
             "cloud-post-comment" => {
                 if self.comment_mutation.is_some() {
                     return Ok(true);
                 }
-                let Some(body) = self.body.as_ref().map(HtmlTextAreaElement::value) else {
+                if self.account.is_none() {
                     return Ok(true);
-                };
+                }
+                let body = self.body.clone();
                 let body = js_sys::JsString::from(body)
                     .trim()
                     .as_string()
@@ -321,15 +166,12 @@ impl ModDetailView {
                     slug: self.summary.slug.clone(),
                     body,
                 });
-                self.update_comment_input()?;
-                self.paint_comments()?;
             }
             _ => {
                 if let Some(index) = action.strip_prefix("cloud-gallery:") {
                     let index: usize = index.parse().map_err(|_| "gallery image index")?;
                     if self.detail.as_ref().is_some_and(|detail| index < detail.screenshots.len()) {
                         self.image_index = index;
-                        self.paint_gallery(images)?;
                     }
                 } else if let Some(id) = action.strip_prefix("cloud-delete-comment:") {
                     let id = id.parse().map_err(|_| "comment identity")?;
@@ -344,8 +186,6 @@ impl ModDetailView {
                         slug: self.summary.slug.clone(),
                         comment_id: id,
                     });
-                    self.update_comment_input()?;
-                    self.paint_comments()?;
                 } else {
                     return Ok(false);
                 }
@@ -354,7 +194,7 @@ impl ModDetailView {
         Ok(true)
     }
 
-    pub fn change_image(&mut self, next: bool, images: &mut CloudImages) -> Result<(), String> {
+    pub fn change_image(&mut self, next: bool) -> Result<(), String> {
         let count = self.detail.as_ref().map_or(0, |detail| detail.screenshots.len());
         if count >= 2 {
             self.image_index = if next {
@@ -362,73 +202,6 @@ impl ModDetailView {
             } else {
                 (self.image_index + count - 1) % count
             };
-            self.paint_gallery(images)?;
-        }
-        Ok(())
-    }
-
-    pub fn paint_subscription(
-        &self,
-        subscription: Option<&ModSubscription>,
-        busy: bool,
-        error: Option<&str>,
-    ) -> Result<(), String> {
-        self.subscription.set_text_content(None);
-        let heading = section_heading(&self.document, &self.subscription, "SUBSCRIPTION")?;
-        let state = if self.account.is_none() {
-            "GUEST"
-        } else {
-            subscription.map_or("NOT SUBSCRIBED", |subscription| {
-                if subscription.enabled { "ENABLED" } else { "DISABLED" }
-            })
-        };
-        text(&self.document, &heading, "span", "", state, Medium, 0.85, 0xd9ba70, false)?;
-        let panel = control_panel(&self.document, &self.subscription, "", false)?;
-        if self.account.is_none() {
-            control_action(
-                &self.document,
-                &panel,
-                "SIGN IN TO SUBSCRIBE",
-                "cloud-sign-in",
-                false,
-                false,
-            )?;
-        } else if let Some(subscription) = subscription {
-            let (label, action) = if subscription.enabled {
-                ("DISABLE MOD", "disable")
-            } else {
-                ("ENABLE MOD", "enable")
-            };
-            control_action(
-                &self.document,
-                &panel,
-                if busy { "WORKING..." } else { label },
-                &format!("cloud-subscription:{action}:{}", self.summary.slug),
-                false,
-                busy,
-            )?;
-            control_action(
-                &self.document,
-                &panel,
-                "UNSUBSCRIBE",
-                &format!("cloud-subscription:unsubscribe:{}", self.summary.slug),
-                false,
-                busy,
-            )?;
-        } else {
-            control_action(
-                &self.document,
-                &panel,
-                if busy { "WORKING..." } else { "SUBSCRIBE" },
-                &format!("cloud-subscription:subscribe:{}", self.summary.slug),
-                false,
-                busy,
-            )?;
-        }
-        if let Some(error) = error {
-            narrative(&self.document, &self.subscription, "p", "dark-cloud-inline-error", error)?
-                .set_attribute("role", "alert")
-                .map_err(|_| "subscription error role")?;
         }
         Ok(())
     }
@@ -436,437 +209,587 @@ impl ModDetailView {
     pub fn take_actions(&mut self) -> Vec<HostedMenuAction> {
         std::mem::take(&mut self.actions)
     }
-
-    fn paint_detail(&mut self, images: &mut CloudImages) -> Result<(), String> {
-        let document = &self.document;
-        let summary = self.detail.as_ref().map_or(&self.summary, |detail| &detail.summary);
-        self.header.set_text_content(None);
-        let titles = element(document, "div", "")?;
-        let title = text(document, &titles, "h2", "", &summary.name, Menu, 1.05, 0xd9ba70, true)?;
-        title.set_id("dark-cloud-detail-title");
-        text(
-            document,
-            &titles,
-            "p",
-            "",
-            &format!("BY {}", summary.author.username),
-            Medium,
-            1.0,
-            0xd9ba70,
-            true,
-        )?;
-        append(&self.header, &titles)?;
-        let close = widgets::button(
-            document,
-            "BACK",
-            "cloud-dialog-close",
-            "dark-cloud-detail-close",
-            Some(100.0),
-            44.0,
-            0.55,
+    fn limit_body(&mut self) {
+        let mut units = 0;
+        self.body = self
+            .body
+            .chars()
+            .take_while(|c| {
+                units += c.len_utf16();
+                units <= 1000
+            })
+            .collect();
+    }
+    pub fn paint(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        art: &CloudArt,
+        images: &mut CloudImages,
+        view: Rect,
+        subscription: Option<&ModSubscription>,
+        subscription_busy: bool,
+        subscription_error: Option<&str>,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let rect = Rect::from_center_size(
+            view.center(),
+            Vec2::new(1100.0_f32.min(view.width() - 48.0), 820.0_f32.min(view.height() - 48.0)),
+        );
+        art.panel(frame, ui, rect)?;
+        let phone = view.width() < 700.0;
+        let short = view.height() < 620.0;
+        let header_height = if short {
+            70.0
+        } else if phone {
+            120.0
+        } else {
+            90.0
+        };
+        let title_top = if phone && !short { 56.0 } else { 12.0 };
+        let summary = self.detail.as_ref().map_or(&self.summary, |d| &d.summary);
+        frame.record_rect(
+            "cloud-detail-title",
+            &summary.name,
+            "heading",
+            Rect::from_min_size(
+                rect.min + Vec2::new(0.0, title_top),
+                Vec2::new(rect.width(), 34.0),
+            ),
             false,
-        )?;
-        close.set_attribute("data-game-back", "true").map_err(|_| "detail Back action")?;
-        close.set_attribute("data-game-default-focus", "true").map_err(|_| "detail Back focus")?;
-        close.set_attribute("aria-label", "Close mod details").map_err(|_| "detail Back label")?;
-        append(&self.header, &close)?;
-        self.load_notice.set_text_content(None);
-        self.load_notice.set_hidden(self.detail_error.is_none());
-        if let Some(error) = &self.detail_error {
-            narrative(document, &self.load_notice, "p", "", error)?;
-            append(
-                &self.load_notice,
-                &widgets::button(
-                    document,
-                    "RETRY",
-                    "cloud-detail-retry",
-                    "",
-                    None,
-                    44.0,
-                    0.55,
-                    false,
-                )?,
-            )?;
+        );
+        frame.record_value("cloud-detail-title", &summary.name, None);
+        widgets::label(
+            ui,
+            &summary.name,
+            egui::pos2(rect.center().x, rect.top() + title_top),
+            Align2::CENTER_TOP,
+            "Palatino",
+            25.0,
+            widgets::GOLD,
+        );
+        widgets::label(
+            ui,
+            &format!("BY {}", summary.author.username),
+            egui::pos2(rect.center().x, rect.top() + title_top + 34.0),
+            Align2::CENTER_TOP,
+            "Palatino",
+            16.0,
+            widgets::GOLD,
+        );
+        let back = Rect::from_min_size(
+            egui::pos2(rect.right() - 108.0, rect.top() + if phone { 4.0 } else { 22.0 }),
+            Vec2::new(100.0, 44.0),
+        );
+        if widgets::cloud_button(frame, ui, "cloud-dialog-close", "BACK", back, 0.55, true)
+            .clicked()
+        {
+            actions.push("cloud-dialog-close".to_owned());
         }
-        self.about.set_text_content(None);
-        section_heading(document, &self.about, "ABOUT THIS MOD")?;
-        let panel = control_panel(document, &self.about, "", false)?;
-        narrative(document, &panel, "p", "dark-cloud-detail-deck", &summary.summary)?;
-        let descriptions = element(document, "dl", "")?;
+        let footer_height = if short { 56.0 } else { 70.0 };
+        let content = Rect::from_min_max(
+            rect.min + Vec2::new(if phone { 4.0 } else { 24.0 }, header_height + 12.0),
+            rect.max - Vec2::new(if phone { 4.0 } else { 24.0 }, footer_height),
+        );
+        let mut child =
+            ui.new_child(egui::UiBuilder::new().id_salt("cloud-detail-content").max_rect(content));
+        child.set_clip_rect(content);
+        let mut result = Ok(());
+        egui::ScrollArea::vertical()
+            .id_salt(format!("cloud-detail-scroll:{}", self.summary.slug))
+            .auto_shrink([false, false])
+            .show(&mut child, |ui| {
+                result = self.paint_contents(
+                    frame,
+                    ui,
+                    art,
+                    images,
+                    content.width(),
+                    view.width(),
+                    subscription,
+                    subscription_busy,
+                    subscription_error,
+                    actions,
+                );
+            });
+        std::mem::replace(&mut result, Ok(()))?;
+        let done = Rect::from_center_size(
+            egui::pos2(rect.center().x, rect.bottom() - footer_height / 2.0),
+            Vec2::new(300.0_f32.min(rect.width() - 20.0), 41.0),
+        );
+        if widgets::stone_button(frame, ui, &art.ui, "cloud-detail-done", "DONE", done, true)?
+            .clicked()
+        {
+            actions.push("cloud-dialog-close".to_owned());
+        }
+        if !frame.ctx.text_edit_focused() {
+            if frame.ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft)) {
+                actions.push("cloud-gallery-previous".to_owned());
+            }
+            if frame.ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowRight))
+            {
+                actions.push("cloud-gallery-next".to_owned());
+            }
+        }
+        Ok(())
+    }
+    fn paint_contents(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        art: &CloudArt,
+        images: &mut CloudImages,
+        width: f32,
+        viewport_width: f32,
+        subscription: Option<&ModSubscription>,
+        subscription_busy: bool,
+        subscription_error: Option<&str>,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        if let Some(error) = &self.detail_error {
+            flow(ui, error, width, widgets::ERROR);
+            let (_, r) = ui.allocate_space(Vec2::new(width, 48.0));
+            if widgets::cloud_button(
+                frame,
+                ui,
+                "cloud-detail-retry",
+                "RETRY",
+                Rect::from_min_size(r.min, Vec2::new(120.0, 44.0)),
+                0.55,
+                true,
+            )
+            .clicked()
+            {
+                actions.push("cloud-detail-retry".to_owned());
+            }
+        }
+        let columns = viewport_width >= 980.0;
+        let gallery_width = if columns { (width - 24.0) * 1.55 / 2.4 } else { width };
+        let about_width = if columns { width - gallery_width - 24.0 } else { width };
+        let origin = ui.cursor().min;
+        let image_height = (gallery_width * 9.0 / 16.0).clamp(160.0, 360.0);
+        let has_thumbnails =
+            self.detail.as_ref().is_some_and(|detail| detail.screenshots.len() > 1);
+        let gallery = Rect::from_min_size(
+            origin,
+            Vec2::new(
+                gallery_width,
+                30.0 + image_height + 64.0 + if has_thumbnails { 64.0 } else { 0.0 },
+            ),
+        );
+        self.paint_gallery(frame, ui, art, images, gallery, actions)?;
+        let about_origin = if columns {
+            origin + Vec2::new(gallery_width + 24.0, 0.0)
+        } else {
+            egui::pos2(origin.x, gallery.bottom() + 24.0)
+        };
+        let mut summary_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("cloud-detail-summary")
+                .max_rect(Rect::from_min_size(about_origin, Vec2::new(about_width, 1000.0))),
+        );
+        self.paint_about(
+            frame,
+            &mut summary_ui,
+            art,
+            about_width,
+            subscription,
+            subscription_busy,
+            subscription_error,
+            actions,
+        )?;
+        let end = summary_ui.min_rect().bottom().max(gallery.bottom());
+        ui.allocate_space(Vec2::new(width, end - origin.y + 24.0));
+        heading(frame, ui, "DESCRIPTION", width);
+        let summary = self.detail.as_ref().map_or(&self.summary, |d| &d.summary);
+        let description = self
+            .detail
+            .as_ref()
+            .map(|d| d.description.as_str())
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&summary.summary);
+        panel_text(frame, ui, art, description, width)?;
+        heading(
+            frame,
+            ui,
+            &format!(
+                "VERSION HISTORY   {}",
+                self.detail.as_ref().map_or("LOADING".to_owned(), |d| format!(
+                    "{} RELEASE{}",
+                    d.versions.len(),
+                    if d.versions.len() == 1 { "" } else { "S" }
+                ))
+            ),
+            width,
+        );
+        if let Some(detail) = &self.detail {
+            if detail.versions.is_empty() {
+                panel_text(frame, ui, art, "NO RELEASES LISTED.", width)?;
+            }
+            for version in &detail.versions {
+                panel_text(
+                    frame,
+                    ui,
+                    art,
+                    &format!(
+                        "v{}   {}   {}   {} DOWNLOADS
+{}",
+                        version.version,
+                        format::date(&version.created_at_utc)?,
+                        format::bytes(version.file_size)?,
+                        format::count(version.downloads)?,
+                        version.changelog
+                    ),
+                    width,
+                )?;
+            }
+        } else {
+            panel_text(frame, ui, art, "CONSULTING THE DARK CLOUD...", width)?;
+        }
+        heading(
+            frame,
+            ui,
+            &format!(
+                "COMMENTS   {}",
+                self.comments
+                    .as_ref()
+                    .map_or("LOADING".to_owned(), |c| format!("{} TOTAL", c.total))
+            ),
+            width,
+        );
+        if self.account.is_none() {
+            let (_, r) = ui.allocate_space(Vec2::new(width, 52.0));
+            if control(
+                frame,
+                ui,
+                art,
+                "cloud-detail-signin-comment",
+                "SIGN IN TO COMMENT",
+                r,
+                false,
+                true,
+            )?
+            .clicked()
+            {
+                actions.push("cloud-sign-in".to_owned());
+            }
+        } else {
+            let (_, r) = ui.allocate_space(Vec2::new(width, 28.0));
+            widgets::label(
+                ui,
+                "LEAVE A COMMENT",
+                r.min + Vec2::new(14.0, 0.0),
+                Align2::LEFT_TOP,
+                "Palatino",
+                16.0,
+                widgets::GOLD,
+            );
+            let (_, field) = ui.allocate_space(Vec2::new(width, 110.0));
+            widgets::control_panel(frame, ui, &art.controls, field, true)?;
+            let response = widgets::edit(
+                frame,
+                ui,
+                "dark-cloud-comment",
+                "Leave a comment",
+                &mut self.body,
+                field,
+                "IM FELL English",
+                16.0,
+                self.comment_mutation.is_none(),
+                true,
+            );
+            if response.changed() {
+                self.limit_body();
+            }
+            frame.record_value("dark-cloud-comment", &self.body, None);
+            let (_, row) = ui.allocate_space(Vec2::new(width, 50.0));
+            widgets::label(
+                ui,
+                &format!("{} / 1000", self.body.encode_utf16().count()),
+                row.min + Vec2::new(14.0, 20.0),
+                Align2::LEFT_CENTER,
+                "Palatino",
+                14.0,
+                widgets::GOLD,
+            );
+            let busy = self.comment_mutation.is_some();
+            let admitted = !busy && !self.body.trim().is_empty();
+            let b = Rect::from_min_size(
+                egui::pos2(row.right() - 200.0, row.top()),
+                Vec2::new(200.0, 44.0),
+            );
+            if control(
+                frame,
+                ui,
+                art,
+                "cloud-post-comment",
+                if busy { "POSTING..." } else { "POST COMMENT" },
+                b,
+                false,
+                admitted,
+            )?
+            .clicked()
+                && admitted
+            {
+                actions.push("cloud-post-comment".to_owned());
+            }
+        }
+        if let Some(error) = &self.comment_error {
+            flow(ui, error, width, widgets::ERROR);
+        }
+        if let Some(comments) = &self.comments {
+            if comments.items.is_empty() {
+                panel_text(frame, ui, art, "NO COMMENTS YET.", width)?;
+            }
+            for comment in &comments.items {
+                let (_, header) = ui.allocate_space(Vec2::new(width, 48.0));
+                widgets::label(
+                    ui,
+                    &comment.author.username,
+                    header.min + Vec2::new(14.0, 18.0),
+                    Align2::LEFT_CENTER,
+                    "Palatino",
+                    17.0,
+                    widgets::GOLD,
+                );
+                widgets::label(
+                    ui,
+                    &format::time_ago(&comment.created_at_utc),
+                    header.min + Vec2::new(200.0, 18.0),
+                    Align2::LEFT_CENTER,
+                    "Palatino",
+                    14.0,
+                    widgets::GOLD,
+                );
+                if self.can_delete(comment.id) {
+                    let id = format!("cloud-delete-comment:{}", comment.id);
+                    let b = Rect::from_min_size(
+                        egui::pos2(header.right() - 110.0, header.top()),
+                        Vec2::new(105.0, 44.0),
+                    );
+                    if widgets::cloud_button(
+                        frame,
+                        ui,
+                        &id,
+                        "DELETE",
+                        b,
+                        0.55,
+                        self.comment_mutation.is_none(),
+                    )
+                    .clicked()
+                        && self.comment_mutation.is_none()
+                    {
+                        actions.push(id);
+                    }
+                }
+                panel_text(frame, ui, art, &comment.body, width)?;
+            }
+        }
+        Ok(())
+    }
+    fn paint_gallery(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        art: &CloudArt,
+        images: &mut CloudImages,
+        rect: Rect,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let screenshots = self.detail.as_ref().map_or(&[][..], |d| d.screenshots.as_slice());
+        let label = if screenshots.is_empty() {
+            "SCREENSHOTS   NO IMAGES".to_owned()
+        } else {
+            format!("SCREENSHOTS   {} / {}", self.image_index + 1, screenshots.len())
+        };
+        widgets::label(ui, &label, rect.min, Align2::LEFT_TOP, "Palatino", 16.0, widgets::GOLD);
+        let height = (rect.width() * 9.0 / 16.0).clamp(160.0, 360.0);
+        let stage =
+            Rect::from_min_size(rect.min + Vec2::new(0.0, 30.0), Vec2::new(rect.width(), height));
+        widgets::control_panel(frame, ui, &art.controls, stage, false)?;
+        images.paint(
+            frame,
+            ui,
+            screenshots.get(self.image_index).map(|i| i.url.as_str()),
+            &self.summary.name,
+            stage.shrink(6.0),
+            true,
+        );
+        frame.record_rect("cloud-gallery-image", &label, "img", stage, false);
+        frame.record_value(
+            "cloud-gallery-image",
+            &format!("{} / {}", self.image_index + 1, screenshots.len()),
+            None,
+        );
+        let swipe =
+            ui.interact(stage, egui::Id::unique("cloud-gallery-swipe"), egui::Sense::drag());
+        if swipe.drag_started() {
+            self.swiping = ui.input(|i| i.any_touches());
+        }
+        if swipe.drag_stopped() && self.swiping {
+            self.swiping = false;
+            let travel = swipe.drag_delta().x;
+            if travel.abs() >= 40.0 {
+                actions.push(
+                    if travel < 0.0 { "cloud-gallery-next" } else { "cloud-gallery-previous" }
+                        .to_owned(),
+                );
+            }
+        }
+        for (label, id, x) in [
+            ("PREV", "cloud-gallery-previous", stage.left() + 4.0),
+            ("NEXT", "cloud-gallery-next", stage.right() - 100.0),
+        ] {
+            let b =
+                Rect::from_min_size(egui::pos2(x, stage.bottom() + 10.0), Vec2::new(96.0, 44.0));
+            let enabled = screenshots.len() > 1;
+            if widgets::cloud_button(frame, ui, id, label, b, 0.55, enabled).clicked() && enabled {
+                actions.push(id.to_owned());
+            }
+        }
+        if screenshots.len() > 1 {
+            let thumbs = Rect::from_min_size(
+                egui::pos2(stage.left(), stage.bottom() + 66.0),
+                Vec2::new(stage.width(), 58.0),
+            );
+            let mut child =
+                ui.new_child(egui::UiBuilder::new().id_salt("cloud-thumbnails").max_rect(thumbs));
+            child.set_clip_rect(thumbs);
+            egui::ScrollArea::horizontal()
+                .id_salt("cloud-gallery-thumbnails")
+                .auto_shrink([false, false])
+                .show(&mut child, |ui| {
+                    ui.set_width(screenshots.len() as f32 * 88.0);
+                    for (index, image) in screenshots.iter().enumerate() {
+                        let r = Rect::from_min_size(
+                            ui.cursor().min + Vec2::new(index as f32 * 88.0, 0.0),
+                            Vec2::new(80.0, 54.0),
+                        );
+                        images.paint(frame, ui, Some(&image.url), &self.summary.name, r, false);
+                        let id = format!("cloud-gallery:{index}");
+                        if widgets::interact(
+                            frame,
+                            ui,
+                            &id,
+                            &format!("Show screenshot {}", index + 1),
+                            "button",
+                            r,
+                            true,
+                        )
+                        .clicked()
+                        {
+                            actions.push(id);
+                        }
+                        if index == self.image_index {
+                            ui.painter().rect_stroke(
+                                r.shrink(3.0),
+                                0.0,
+                                egui::Stroke::new(1.0, widgets::GOLD),
+                                egui::StrokeKind::Inside,
+                            );
+                        }
+                    }
+                    ui.allocate_space(Vec2::new(screenshots.len() as f32 * 88.0, 54.0));
+                });
+        }
+        Ok(())
+    }
+    fn paint_about(
+        &self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        art: &CloudArt,
+        width: f32,
+        subscription: Option<&ModSubscription>,
+        busy: bool,
+        error: Option<&str>,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let summary = self.detail.as_ref().map_or(&self.summary, |d| &d.summary);
+        heading(frame, ui, "ABOUT THIS MOD", width);
+        panel_text(frame, ui, art, &summary.summary, width)?;
         for (label, value) in [
             ("VERSION:", summary.latest_version.clone()),
             ("DOWNLOADS:", format::count(summary.downloads)?),
             ("PUBLISHED:", format::date(&summary.created_at_utc)?),
             ("UPDATED:", format::time_ago(&summary.updated_at_utc)),
         ] {
-            let row = element(document, "div", "")?;
-            text(document, &row, "dt", "", label, Medium, 1.0, 0xd9ba70, false)?;
-            text(document, &row, "dd", "", &value, Medium, 1.0, 0xd9ba70, true)?;
-            append(&descriptions, &row)?;
-        }
-        append(&panel, &descriptions)?;
-        if !summary.tags.is_empty() {
-            let tags = element(document, "div", "dark-cloud-detail-tags")?;
-            tags.set_attribute("aria-label", "Tags").map_err(|_| "detail tags label")?;
-            text(document, &tags, "span", "", "TAGS:", Medium, 1.0, 0xd9ba70, false)?;
-            let list = element(document, "span", "dark-cloud-detail-tag-list")?;
-            for tag in &summary.tags {
-                text(document, &list, "span", "", tag, Medium, 1.0, 0xd9ba70, true)?;
-            }
-            append(&tags, &list)?;
-            append(&panel, &tags)?;
-        }
-        self.copy.set_text_content(None);
-        section_heading(document, &self.copy, "DESCRIPTION")?;
-        let panel = control_panel(document, &self.copy, "", false)?;
-        narrative(
-            document,
-            &panel,
-            "p",
-            "",
-            self.detail
-                .as_ref()
-                .map(|detail| detail.description.as_str())
-                .filter(|description| !description.is_empty())
-                .unwrap_or(&summary.summary),
-        )?;
-        self.versions.set_text_content(None);
-        let heading = section_heading(document, &self.versions, "VERSION HISTORY")?;
-        if let Some(detail) = &self.detail {
-            text(
-                document,
-                &heading,
-                "span",
-                "",
-                &format!(
-                    "{} RELEASE{}",
-                    detail.versions.len(),
-                    if detail.versions.len() == 1 { "" } else { "S" }
-                ),
-                Medium,
-                0.85,
-                0xd9ba70,
-                false,
-            )?;
-            let panel = control_panel(document, &self.versions, "", false)?;
-            if detail.versions.is_empty() {
-                text(
-                    document,
-                    &panel,
-                    "p",
-                    "dark-cloud-detail-empty",
-                    "NO RELEASES LISTED.",
-                    Medium,
-                    1.0,
-                    0xd9ba70,
-                    false,
-                )?;
-            }
-            for version in &detail.versions {
-                let article = element(document, "article", "")?;
-                let row = element(document, "div", "")?;
-                text(
-                    document,
-                    &row,
-                    "strong",
-                    "",
-                    &format!("v{}", version.version),
-                    Medium,
-                    1.0,
-                    0xd9ba70,
-                    true,
-                )?;
-                for value in [
-                    format::date(&version.created_at_utc)?,
-                    format::bytes(version.file_size)?,
-                    format!("{} DOWNLOADS", format::count(version.downloads)?),
-                ] {
-                    text(document, &row, "span", "", &value, Medium, 0.85, 0xd9ba70, false)?;
-                }
-                append(&article, &row)?;
-                if !version.changelog.is_empty() {
-                    narrative(document, &article, "p", "", &version.changelog)?;
-                }
-                append(&panel, &article)?;
-            }
-        } else {
-            text(document, &heading, "span", "", "LOADING", Medium, 0.85, 0xd9ba70, false)?;
-            let panel = control_panel(document, &self.versions, "", false)?;
-            text(
-                document,
-                &panel,
-                "p",
-                "dark-cloud-detail-empty",
-                "CONSULTING THE DARK CLOUD...",
-                Medium,
-                1.0,
-                0xd9ba70,
-                false,
-            )?;
-        }
-        self.paint_gallery(images)
-    }
-
-    fn paint_gallery(&self, images: &mut CloudImages) -> Result<(), String> {
-        self.gallery.set_text_content(None);
-        let document = &self.document;
-        let heading = section_heading(document, &self.gallery, "SCREENSHOTS")?;
-        let screenshots =
-            self.detail.as_ref().map_or(&[][..], |detail| detail.screenshots.as_slice());
-        let label = if screenshots.is_empty() {
-            "NO IMAGES".to_owned()
-        } else {
-            format!("{} / {}", self.image_index + 1, screenshots.len())
-        };
-        text(document, &heading, "span", "", &label, Medium, 0.85, 0xd9ba70, false)?;
-        let gallery = element(document, "div", "dark-cloud-gallery-box")?;
-        let stage = element(document, "div", "dark-cloud-gallery-stage")?;
-        let image = screenshots.get(self.image_index);
-        let alt = image.map_or_else(
-            || self.summary.name.clone(),
-            |_| format!("{} screenshot {}", self.summary.name, self.image_index + 1),
-        );
-        append(
-            &stage,
-            &images.media(
-                document,
-                image.map(|image| image.url.as_str()),
-                &alt,
-                "dark-cloud-gallery-image",
-                true,
-                true,
-            )?,
-        )?;
-        append(&gallery, &stage)?;
-        let navigation = element(document, "div", "dark-cloud-gallery-navigation")?;
-        for (label, action, class, aria) in [
-            ("PREV", "cloud-gallery-previous", "dark-cloud-gallery-previous", "PREVIOUS IMAGE"),
-            ("NEXT", "cloud-gallery-next", "dark-cloud-gallery-next", "NEXT IMAGE"),
-        ] {
-            let button = widgets::button(
-                document,
+            let (_, r) = ui.allocate_space(Vec2::new(width, 40.0));
+            widgets::control_panel(frame, ui, &art.controls, r, false)?;
+            widgets::label(
+                ui,
                 label,
-                action,
-                class,
-                Some(96.0),
-                44.0,
-                0.55,
-                screenshots.len() < 2,
-            )?;
-            button.set_attribute("aria-label", aria).map_err(|_| "gallery navigation label")?;
-            append(&navigation, &button)?;
+                r.min + Vec2::new(14.0, 20.0),
+                Align2::LEFT_CENTER,
+                "Palatino",
+                16.0,
+                widgets::GOLD,
+            );
+            widgets::label(
+                ui,
+                &value,
+                r.max - Vec2::new(14.0, 20.0),
+                Align2::RIGHT_CENTER,
+                "Palatino",
+                16.0,
+                widgets::GOLD,
+            );
         }
-        append(&gallery, &navigation)?;
-        if screenshots.len() > 1 {
-            let thumbnails = element(document, "div", "dark-cloud-gallery-thumbnails")?;
-            thumbnails
-                .set_attribute("aria-label", "Choose screenshot")
-                .map_err(|_| "gallery thumbnail label")?;
-            for (index, image) in screenshots.iter().enumerate() {
-                let button = element(
-                    document,
-                    "button",
-                    if index == self.image_index { "selected" } else { "" },
-                )?;
-                button.set_attribute("type", "button").map_err(|_| "gallery thumbnail type")?;
-                button
-                    .set_attribute("data-menu-action", &format!("cloud-gallery:{index}"))
-                    .map_err(|_| "gallery thumbnail action")?;
-                button
-                    .set_attribute("aria-label", &format!("Show screenshot {}", index + 1))
-                    .map_err(|_| "gallery thumbnail semantics")?;
-                button
-                    .set_attribute(
-                        "aria-pressed",
-                        if index == self.image_index { "true" } else { "false" },
-                    )
-                    .map_err(|_| "gallery thumbnail selection")?;
-                append(
-                    &button,
-                    &images.media(
-                        document,
-                        Some(&image.url),
-                        &format!("{} screenshot {}", self.summary.name, index + 1),
-                        "",
-                        false,
-                        false,
-                    )?,
-                )?;
-                append(&thumbnails, &button)?;
-            }
-            append(&gallery, &thumbnails)?;
+        if !summary.tags.is_empty() {
+            panel_text(frame, ui, art, &format!("TAGS: {}", summary.tags.join("  ")), width)?;
         }
-        append(&self.gallery, &gallery)
-    }
-
-    fn paint_comment_form(&mut self) -> Result<(), String> {
-        self.comment_form.set_text_content(None);
-        self.body = None;
-        self.counter = None;
-        self.post = None;
-        let document = &self.document;
-        let panel = control_panel(document, &self.comment_form, "", false)?;
-        if self.account.is_none() {
-            control_action(document, &panel, "SIGN IN TO COMMENT", "cloud-sign-in", false, false)?;
-            return Ok(());
-        }
-        let form = element(document, "form", "")?;
-        form.set_attribute("data-menu-action", "cloud-post-comment")
-            .map_err(|_| "comment form action")?;
-        let label =
-            text(document, &form, "label", "", "LEAVE A COMMENT", Medium, 1.0, 0xd9ba70, false)?;
-        label.set_attribute("for", "dark-cloud-comment").map_err(|_| "comment input label")?;
-        let field = control_panel(document, &form, "", true)?;
-        let body: HtmlTextAreaElement =
-            element(document, "textarea", "")?.dyn_into().map_err(|_| "comment input")?;
-        body.set_id("dark-cloud-comment");
-        body.set_max_length(1000);
-        body.set_placeholder("Write a comment...");
-        field.append_child(&body).map_err(|_| "comment field parent")?;
-        let controls = element(document, "div", "")?;
-        let counter = element(document, "span", "")?;
-        append(&controls, &counter)?;
-        let post =
-            control_action(document, &controls, "POST COMMENT", "cloud-post-comment", false, true)?;
-        post.set_attribute("type", "submit").map_err(|_| "comment submit type")?;
-        append(&form, &controls)?;
-        append(&panel, &form)?;
-        self.body = Some(body);
-        self.counter = Some(counter);
-        self.post = Some(post);
-        self.update_comment_input()
-    }
-
-    pub fn update_comment_input(&self) -> Result<(), String> {
-        let Some(body) = &self.body else {
-            return Ok(());
+        let state = if self.account.is_none() {
+            "GUEST"
+        } else {
+            subscription
+                .map_or("NOT SUBSCRIBED", |s| if s.enabled { "ENABLED" } else { "DISABLED" })
         };
-        let value = body.value();
-        if let Some(counter) = &self.counter {
-            counter.set_text_content(None);
-            append(
-                counter,
-                &crate::ui::cloud::cloud_text(
-                    &self.document,
-                    &format!("{} / 1000", value.encode_utf16().count()),
-                    Medium,
-                    0.85,
-                    0xd9ba70,
-                    false,
-                )?,
-            )?;
-        }
-        if let Some(post) = &self.post {
-            post.toggle_attribute_with_force(
-                "disabled",
-                self.comment_mutation.is_some()
-                    || js_sys::JsString::from(value).trim().length() == 0,
-            )
-            .map_err(|_| "comment submit admission")?;
-            post.set_text_content(None);
-            append(
-                post,
-                &crate::ui::cloud::cloud_text(
-                    &self.document,
-                    if self.comment_mutation.is_some() { "POSTING..." } else { "POST COMMENT" },
-                    Medium,
-                    1.0,
-                    if post.has_attribute("disabled") { 0x8e7c4d } else { 0xd9ba70 },
-                    false,
-                )?,
-            )?;
-        }
-        Ok(())
-    }
-
-    fn paint_comments(&self) -> Result<(), String> {
-        let document = &self.document;
-        self.comment_count.set_text_content(None);
-        append(
-            &self.comment_count,
-            &crate::ui::cloud::cloud_text(
-                document,
-                &self.comments.as_ref().map_or_else(
-                    || "LOADING".to_owned(),
-                    |comments| format!("{} TOTAL", comments.total),
+        heading(frame, ui, &format!("SUBSCRIPTION   {state}"), width);
+        let choices = if self.account.is_none() {
+            vec![("SIGN IN TO SUBSCRIBE".to_owned(), "cloud-detail-signin-subscribe".to_owned())]
+        } else if let Some(s) = subscription {
+            vec![
+                (
+                    if busy {
+                        "WORKING..."
+                    } else if s.enabled {
+                        "DISABLE MOD"
+                    } else {
+                        "ENABLE MOD"
+                    }
+                    .to_owned(),
+                    format!(
+                        "cloud-detail-subscription:{}:{}",
+                        if s.enabled { "disable" } else { "enable" },
+                        self.summary.slug
+                    ),
                 ),
-                Medium,
-                0.85,
-                0xd9ba70,
-                false,
-            )?,
-        )?;
-        self.comment_notice.set_text_content(self.comment_error.as_deref());
-        self.comment_notice.set_hidden(self.comment_error.is_none());
-        self.comment_list.set_text_content(None);
-        let Some(comments) = &self.comments else {
-            return Ok(());
+                (
+                    "UNSUBSCRIBE".to_owned(),
+                    format!("cloud-detail-subscription:unsubscribe:{}", self.summary.slug),
+                ),
+            ]
+        } else {
+            vec![(
+                if busy { "WORKING..." } else { "SUBSCRIBE" }.to_owned(),
+                format!("cloud-detail-subscription:subscribe:{}", self.summary.slug),
+            )]
         };
-        let list = control_panel(document, &self.comment_list, "dark-cloud-comment-list", false)?;
-        if comments.items.is_empty() {
-            text(
-                document,
-                &list,
-                "p",
-                "dark-cloud-detail-empty",
-                "NO COMMENTS YET.",
-                Medium,
-                1.0,
-                0xd9ba70,
-                false,
-            )?;
-        }
-        for comment in &comments.items {
-            let article = element(document, "article", "")?;
-            let header = element(document, "header", "")?;
-            text(
-                document,
-                &header,
-                "strong",
-                "",
-                &comment.author.username,
-                Medium,
-                1.0,
-                0xd9ba70,
-                true,
-            )?;
-            text(
-                document,
-                &header,
-                "span",
-                "",
-                &format::time_ago(&comment.created_at_utc),
-                Medium,
-                0.85,
-                0xd9ba70,
-                false,
-            )?;
-            if self.can_delete(comment.id) {
-                let delete = widgets::button(
-                    document,
-                    "DELETE",
-                    &format!("cloud-delete-comment:{}", comment.id),
-                    "",
-                    None,
-                    44.0,
-                    0.55,
-                    self.comment_mutation.is_some(),
-                )?;
-                delete
-                    .set_attribute(
-                        "aria-label",
-                        &format!("Delete comment by {}", comment.author.username),
-                    )
-                    .map_err(|_| "comment deletion label")?;
-                append(&header, &delete)?;
+        for (label, id) in choices {
+            let (_, r) = ui.allocate_space(Vec2::new(width, 48.0));
+            if control(frame, ui, art, &id, &label, r, false, !busy)?.clicked() && !busy {
+                actions.push(if id == "cloud-detail-signin-subscribe" {
+                    "cloud-sign-in".to_owned()
+                } else {
+                    id.replacen("cloud-detail-subscription:", "cloud-subscription:", 1)
+                });
             }
-            append(&article, &header)?;
-            narrative(document, &article, "p", "", &comment.body)?;
-            append(&list, &article)?;
+        }
+        if let Some(error) = error {
+            flow(ui, error, width, widgets::ERROR);
         }
         Ok(())
     }
-
     fn can_delete(&self, id: u64) -> bool {
         let Some(account) = &self.account else {
             return false;
@@ -881,17 +804,78 @@ impl ModDetailView {
     }
 }
 
-fn section_heading(
-    document: &Document,
-    parent: &HtmlElement,
-    title: &str,
-) -> Result<HtmlElement, String> {
-    let header = element(document, "div", "dark-cloud-section-heading")?;
-    text(document, &header, "h3", "", title, Medium, 1.0, 0xd9ba70, false)?;
-    append(parent, &header)?;
-    Ok(header)
+fn heading(frame: &UiFrame<'_>, ui: &mut Ui, text: &str, width: f32) {
+    ui.add_space(12.0);
+    let (_, r) = ui.allocate_space(Vec2::new(width, 30.0));
+    widgets::native(
+        frame,
+        ui,
+        text,
+        solomon_sim::native_ui_text::NativeUiFontName::Medium,
+        r.min + Vec2::new(0.0, 18.0),
+        1.0,
+        0xd9ba70,
+        solomon_sim::native_ui_text::NativeUiTextAlign::Left,
+    );
 }
-
+fn flow(ui: &mut Ui, text: &str, width: f32, tint: Color32) {
+    let galley = ui.painter().layout(
+        text.to_owned(),
+        egui::FontId::new(16.0, egui::FontFamily::Name("IM FELL English".into())),
+        tint,
+        width - 28.0,
+    );
+    let (_, r) = ui.allocate_space(Vec2::new(width, galley.size().y + 28.0));
+    ui.painter().galley(r.min + Vec2::splat(14.0), galley, tint);
+}
+fn panel_text(
+    frame: &UiFrame<'_>,
+    ui: &mut Ui,
+    art: &CloudArt,
+    text: &str,
+    width: f32,
+) -> Result<(), String> {
+    let galley = ui.painter().layout(
+        text.to_owned(),
+        egui::FontId::new(16.0, egui::FontFamily::Name("IM FELL English".into())),
+        widgets::GOLD,
+        width - 28.0,
+    );
+    let (_, r) = ui.allocate_space(Vec2::new(width, galley.size().y + 28.0));
+    widgets::control_panel(frame, ui, &art.controls, r, false)?;
+    ui.painter().galley(r.min + Vec2::splat(14.0), galley, widgets::GOLD);
+    Ok(())
+}
+fn control(
+    frame: &mut UiFrame<'_>,
+    ui: &Ui,
+    art: &CloudArt,
+    id: &str,
+    label: &str,
+    rect: Rect,
+    selected: bool,
+    enabled: bool,
+) -> Result<egui::Response, String> {
+    widgets::control_panel(frame, ui, &art.controls, rect, false)?;
+    let response = widgets::interact(frame, ui, id, label, "button", rect, enabled);
+    widgets::native(
+        frame,
+        ui,
+        label,
+        solomon_sim::native_ui_text::NativeUiFontName::Medium,
+        rect.min + Vec2::new(10.0, rect.height() / 2.0 + 5.0),
+        1.0,
+        if enabled { 0xd9ba70 } else { 0x8e7c4d },
+        solomon_sim::native_ui_text::NativeUiTextAlign::Left,
+    );
+    if selected {
+        ui.painter().line_segment(
+            [rect.left_bottom(), rect.right_bottom()],
+            egui::Stroke::new(2.0, widgets::GOLD),
+        );
+    }
+    Ok(response)
+}
 pub(super) fn subscription_action(value: &str) -> Option<ModSubscriptionAction> {
     match value {
         "subscribe" => Some(ModSubscriptionAction::Subscribe),

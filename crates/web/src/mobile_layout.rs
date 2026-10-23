@@ -5,11 +5,11 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use solomon_sim::mobile_ui::{
-    MobileUiElementId, MobileUiLayout, MobileUiLayoutDocument, MobileUiLayoutState,
-    legacy_mobile_ui_layout, mobile_ui_layout_document, mobile_ui_layout_from_document,
+    MobileUiLayout, MobileUiLayoutDocument, MobileUiLayoutState, legacy_mobile_ui_layout,
+    mobile_ui_layout_document, mobile_ui_layout_from_document,
 };
 use wasm_bindgen::{JsCast, closure::Closure};
-use web_sys::{Event, HtmlElement, Storage, StorageEvent, Window};
+use web_sys::{Event, Storage, StorageEvent, Window};
 
 use crate::hosted::WebsiteMount;
 
@@ -17,41 +17,6 @@ pub const MOBILE_UI_LAYOUT_STORAGE_KEY: &str = "solomon-dark-mobile-ui-layout-v1
 /// Same-page controls subscribe to this native event. Other browser tabs receive
 /// the ordinary storage event and read the same mount-scoped key.
 pub const MOBILE_UI_LAYOUT_CHANGED_EVENT: &str = "solomon-dark-mobile-ui-layout-changed";
-
-/// `mobileUiElementStyle`: one saved touch-only transform around an existing semantic
-/// control. The owning HUD/input CSS supplies its native natural dimensions.
-pub fn apply_mobile_ui_element(
-    element: &HtmlElement,
-    state: &MobileUiLayoutState,
-    id: MobileUiElementId,
-) -> Result<(), String> {
-    element
-        .set_attribute("data-mobile-ui-element", id.as_str())
-        .map_err(|_| "mobile control identity")?;
-    if state.customized {
-        element
-            .set_attribute("data-mobile-ui-custom", "true")
-            .map_err(|_| "mobile control customization")?;
-    } else {
-        element
-            .remove_attribute("data-mobile-ui-custom")
-            .map_err(|_| "default mobile control customization")?;
-    }
-    let style = element.style();
-    for (name, value) in [
-        ("--mobile-ui-x", format!("{}%", state.layout.get(id).x)),
-        ("--mobile-ui-y", format!("{}%", state.layout.get(id).y)),
-        ("--mobile-ui-scale", state.layout.get(id).scale.to_string()),
-        ("--mobile-ui-rotation", format!("{}deg", state.layout.get(id).rotation)),
-    ] {
-        if state.customized {
-            style.set_property(name, &value).map_err(|_| "saved mobile control transform")?;
-        } else {
-            style.remove_property(name).map_err(|_| "default mobile control transform")?;
-        }
-    }
-    Ok(())
-}
 
 pub struct MobileUiLayoutStore {
     window: Window,

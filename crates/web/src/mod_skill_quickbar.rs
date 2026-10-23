@@ -1,21 +1,18 @@
-//! Mounted `mod-ui/ModSkillQuickbar.tsx` with its stable keyboard controller.
-//! The Game owner sends these cast intents through its existing request sequence.
+//! GPU `mod-ui/ModSkillQuickbar.tsx` with Source's stable keyboard controller.
 
-use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
-use std::rc::Rc;
-
+use crate::gpu_ui::UiFrame;
+use crate::mod_presentation_assets::ModPresentationAssets;
+use egui::{Color32, FontFamily, FontId, Id, Order, Stroke, vec2};
 use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::assets::GameModAsset;
 use solomon_sim::modding::skill_quickbar::{
     ModCastAction, ModSkillQuickbarKey, ModSkillQuickbarPlayer, cast_mod_skill_quickbar_spell,
     mod_skill_quickbar_keyboard_slot, project_mod_skill_quickbar,
 };
+use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen::{JsCast, prelude::*};
-use web_sys::{Document, Element, Event, HtmlElement, KeyboardEvent, Window};
-
-use crate::mod_presentation_assets::ModPresentationAssets;
-use crate::ui::{append, element};
+use web_sys::{KeyboardEvent, Window};
 
 #[wasm_bindgen]
 extern "C" {
@@ -35,58 +32,24 @@ struct QuickbarState {
 }
 
 struct QuickbarButton {
-    button: HtmlElement,
-    image: Option<HtmlElement>,
-    label: HtmlElement,
+    slot: i64,
+    content_id: String,
+    name: String,
+    image_url: Option<String>,
 }
-
 pub struct ModSkillQuickbarView {
-    document: Document,
     window: Window,
-    root: HtmlElement,
-    nav: HtmlElement,
-    buttons: BTreeMap<i64, QuickbarButton>,
-    order: Vec<i64>,
+    buttons: Vec<QuickbarButton>,
     current: Rc<RefCell<QuickbarState>>,
     actions: Rc<RefCell<Vec<ModCastAction>>>,
-    click: Closure<dyn FnMut(Event)>,
     key_down: Closure<dyn FnMut(KeyboardEvent)>,
     session_id: Option<u64>,
     listening: bool,
 }
-
 impl ModSkillQuickbarView {
     pub fn new(window: &Window) -> Result<Self, String> {
-        let document = window.document().ok_or("The quickbar needs a game document")?;
-        let root = element(&document, "div", "mod-skill-quickbar-host")?;
-        let css = element(&document, "style", "")?;
-        css.set_text_content(Some(include_str!("../../../web/mod-skill-quickbar.css")));
-        append(&root, &css)?;
-        let nav = element(&document, "nav", "mod-skill-quickbar")?;
-        nav.set_attribute("aria-label", "Mod spell quickbar")
-            .map_err(|_| "Could not label the mod quickbar")?;
         let current = Rc::new(RefCell::new(QuickbarState::default()));
         let actions = Rc::new(RefCell::new(Vec::new()));
-
-        let clicked_state = current.clone();
-        let clicked_actions = actions.clone();
-        let click = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(target) = event.target() else { return };
-            let Ok(target) = target.dyn_into::<Element>() else { return };
-            let Ok(Some(button)) = target.closest("[data-mod-quickbar-slot]") else { return };
-            let Some(slot) = button.get_attribute("data-mod-quickbar-slot") else { return };
-            let Ok(slot) = slot.parse::<i64>() else { return };
-            let state = clicked_state.borrow();
-            let Some(binding) = state.bindings.iter().find(|binding| binding.slot == slot) else {
-                return;
-            };
-            if let Some(action) = cast_mod_skill_quickbar_spell(&binding.content_id, state.player) {
-                clicked_actions.borrow_mut().push(action);
-            }
-        });
-        nav.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())
-            .map_err(|_| "Could not attach the mod quickbar buttons")?;
-
         let keyboard_state = current.clone();
         let keyboard_actions = actions.clone();
         let key_down = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
@@ -110,25 +73,17 @@ impl ModSkillQuickbarView {
                 keyboard_actions.borrow_mut().push(action);
             }
         });
-        append(&document.body().ok_or("The quickbar needs a document body")?, &root)?;
+
         Ok(Self {
-            document,
             window: window.clone(),
-            root,
-            nav,
-            buttons: BTreeMap::new(),
-            order: Vec::new(),
+            buttons: Vec::new(),
             current,
             actions,
-            click,
             key_down,
             session_id: None,
             listening: false,
         })
     }
-
-    /// Refresh accepted runtime and player inputs together. A new session ID forces
-    /// the same listener detach/reattach as Source's changed session object.
     pub fn update(
         &mut self,
         session_id: u64,
@@ -142,93 +97,124 @@ impl ModSkillQuickbarView {
             self.actions.borrow_mut().clear();
         }
         self.session_id = Some(session_id);
-        let slots = project_mod_skill_quickbar(runtime, assets);
-        let live: BTreeSet<_> = slots.iter().map(|row| row.slot).collect();
-        self.buttons.retain(|slot, nodes| {
-            if live.contains(slot) {
-                true
+        self.buttons.clear();
+        for row in project_mod_skill_quickbar(runtime, assets) {
+            let image_url = if let Some(asset) = row.image {
+                Some(
+                    images
+                        .ok_or("Mod quickbar images are not installed")?
+                        .image(&asset.mod_id, &asset.path)?
+                        .url()
+                        .to_owned(),
+                )
             } else {
-                nodes.button.remove();
-                false
-            }
-        });
-        for slot in &slots {
-            if !self.buttons.contains_key(&slot.slot) {
-                let button = element(&self.document, "button", "")?;
-                button.set_attribute("type", "button").map_err(|_| "Mod quickbar button type")?;
-                button
-                    .set_attribute("data-mod-quickbar-slot", &slot.slot.to_string())
-                    .map_err(|_| "Mod quickbar button slot")?;
-                let label = element(&self.document, "span", "")?;
-                append(&button, &label)?;
-                self.buttons.insert(slot.slot, QuickbarButton { button, image: None, label });
-            }
-            let nodes = self.buttons.get_mut(&slot.slot).expect("admitted quickbar button");
-            nodes
-                .button
-                .set_attribute("title", &format!("{} (Shift+{})", slot.name, slot.slot + 1))
-                .map_err(|_| "Mod quickbar title")?;
-            nodes.label.set_text_content(Some(&(slot.slot + 1).to_string()));
-            if let Some(asset) = slot.image {
-                let image_url = images
-                    .ok_or("Mod quickbar images have not been installed")?
-                    .image(&asset.mod_id, &asset.path)?
-                    .url();
-                if nodes.image.is_none() {
-                    let image = element(&self.document, "img", "")?;
-                    image.set_attribute("alt", "").map_err(|_| "Mod quickbar image alt")?;
-                    nodes
-                        .button
-                        .insert_before(&image, Some(&nodes.label))
-                        .map_err(|_| "Mod quickbar image placement")?;
-                    nodes.image = Some(image);
-                }
-                let image = nodes.image.as_ref().expect("admitted quickbar image");
-                if image.get_attribute("src").as_deref() != Some(image_url) {
-                    image.set_attribute("src", image_url).map_err(|_| "Mod quickbar image URL")?;
-                }
-            } else if let Some(image) = nodes.image.take() {
-                image.remove();
-            }
+                None
+            };
+            self.buttons.push(QuickbarButton {
+                slot: row.slot,
+                content_id: row.content_id.to_owned(),
+                name: row.name.to_owned(),
+                image_url,
+            });
         }
-
-        let next_order: Vec<_> = slots.iter().map(|row| row.slot).collect();
-        if self.order != next_order {
-            for slot in &next_order {
-                append(&self.nav, &self.buttons[slot].button)?;
-            }
-            self.order = next_order;
-        }
-        if slots.is_empty() {
-            self.nav.remove();
-        } else if self.nav.parent_node().is_none() {
-            append(&self.root, &self.nav)?;
-        }
-        let bindings = slots
-            .iter()
-            .map(|row| QuickbarBinding { slot: row.slot, content_id: row.content_id.to_owned() })
-            .collect();
-        *self.current.borrow_mut() = QuickbarState { bindings, player };
-        self.set_listening(!slots.is_empty())
+        *self.current.borrow_mut() = QuickbarState {
+            bindings: self
+                .buttons
+                .iter()
+                .map(|row| QuickbarBinding { slot: row.slot, content_id: row.content_id.clone() })
+                .collect(),
+            player,
+        };
+        self.set_listening(!self.buttons.is_empty())
     }
-
-    /// Source unmounts this component during College admission and session cleanup.
     pub fn reset(&mut self) -> Result<(), String> {
         self.set_listening(false)?;
         self.session_id = None;
         *self.current.borrow_mut() = QuickbarState::default();
         self.actions.borrow_mut().clear();
         self.buttons.clear();
-        self.order.clear();
-        self.nav.set_text_content(None);
-        self.nav.remove();
         Ok(())
     }
-
     pub fn take_actions(&mut self) -> Vec<ModCastAction> {
-        std::mem::take(&mut self.actions.borrow_mut())
+        std::mem::take(&mut *self.actions.borrow_mut())
     }
-
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        if self.buttons.is_empty() {
+            return Ok(());
+        }
+        let ctx = frame.ctx.clone();
+        egui::Area::new(Id::unique("mod/quickbar"))
+            .order(Order::Middle)
+            .anchor(egui::Align2::CENTER_BOTTOM, vec2(0.0, -80.0))
+            .show(&ctx, |ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                ui.horizontal(|ui| {
+                    for row in &self.buttons {
+                        let (bounds, response) =
+                            ui.allocate_exact_size(vec2(41.6, 41.6), egui::Sense::click());
+                        ui.painter().rect_filled(
+                            bounds,
+                            0.0,
+                            Color32::from_rgba_unmultiplied(9, 10, 14, 230),
+                        );
+                        ui.painter().rect_stroke(
+                            bounds,
+                            0.0,
+                            Stroke::new(1.0, Color32::from_rgba_unmultiplied(202, 181, 126, 204)),
+                            egui::StrokeKind::Inside,
+                        );
+                        if let Some(url) = &row.image_url {
+                            frame.image(
+                                ui.painter(),
+                                url,
+                                bounds.shrink(3.2),
+                                None,
+                                Color32::WHITE,
+                            );
+                        }
+                        if let Some(url) = &row.image_url {
+                            let id = format!("mod/quickbar-icon:{}", row.slot);
+                            frame.record_rect(
+                                &id,
+                                &format!("{} icon", row.name),
+                                "img",
+                                bounds.shrink(3.2),
+                                true,
+                            );
+                            if let Some(size) = frame.image_size(url) {
+                                frame.record_value(
+                                    &id,
+                                    &format!("{}x{} {url}", size.x, size.y),
+                                    None,
+                                );
+                            }
+                        }
+                        ui.painter().text(
+                            bounds.right_bottom() - vec2(1.92, 0.0),
+                            egui::Align2::RIGHT_BOTTOM,
+                            (row.slot + 1).to_string(),
+                            FontId::new(9.28, FontFamily::Name("Alegreya Bold".into())),
+                            Color32::from_rgb(241, 230, 198),
+                        );
+                        frame.record(
+                            &format!("mod/quickbar:{}", row.slot),
+                            &format!("{} (Shift+{})", row.name, row.slot + 1),
+                            "button",
+                            &response,
+                        );
+                        if response.clicked()
+                            && let Some(action) = cast_mod_skill_quickbar_spell(
+                                &row.content_id,
+                                self.current.borrow().player,
+                            )
+                        {
+                            self.actions.borrow_mut().push(action);
+                        }
+                    }
+                });
+            });
+        Ok(())
+    }
     fn set_listening(&mut self, listening: bool) -> Result<(), String> {
         if self.listening == listening {
             return Ok(());
@@ -250,10 +236,8 @@ impl ModSkillQuickbarView {
 
 impl Drop for ModSkillQuickbarView {
     fn drop(&mut self) {
-        let _ = self.set_listening(false);
-        let _ = self
-            .nav
-            .remove_event_listener_with_callback("click", self.click.as_ref().unchecked_ref());
-        self.root.remove();
+        if let Err(error) = self.set_listening(false) {
+            web_sys::console::error_1(&JsValue::from_str(&error));
+        }
     }
 }

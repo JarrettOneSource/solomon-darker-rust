@@ -1,36 +1,27 @@
-//! Title art and controls from Website `renderer/title-menu-renderer.ts`.
+//! Stock title composition from Website `renderer/title-menu-renderer.ts`.
 
-use solomon_sim::float;
-use solomon_sim::menu::{TitleState, title_backdrop_offsets_at};
-use web_sys::{Document, HtmlElement};
+use super::widgets::{self, Stage};
+use crate::gpu_ui::{StockAtlas, UiFrame};
+use egui::{Align2, Color32, Pos2, Rect, Ui, Vec2};
+use solomon_sim::{
+    float,
+    menu::{TitleState, title_backdrop_offsets_at},
+};
 
-use crate::ui::{StockAtlas, append, element, image, native_button, style};
-
-pub struct TitleView {
-    pub root: HtmlElement,
-    backdrop: HtmlElement,
-    solomon: HtmlElement,
-    center: HtmlElement,
-    controls: HtmlElement,
-    account: HtmlElement,
-    cloud_detail: HtmlElement,
-    cloud_shadow: HtmlElement,
-    grass: HtmlElement,
-    horizon: HtmlElement,
-    cloak: [HtmlElement; 4],
-    eyes: HtmlElement,
-    grave_rows: [HtmlElement; 3],
-    grave_sprites: [Vec<HtmlElement>; 3],
+pub(super) struct TitleView {
     state: TitleState,
     grave_frames: [[f64; 4]; 9],
     widths: [f64; 9],
-    document: Document,
     party_directory_available: bool,
     dark_cloud_available: bool,
+    play: bool,
+    can_resume: bool,
+    account: Option<String>,
+    prompt_visible: bool,
+    elapsed: f64,
 }
-
 impl TitleView {
-    pub async fn new(document: &Document) -> Result<Self, String> {
+    pub async fn new() -> Result<Self, String> {
         let atlas = StockAtlas::load("Title").await?;
         let mut widths = [0.0; 9];
         let mut grave_frames = [[0.0; 4]; 9];
@@ -44,302 +35,342 @@ impl TitleView {
                 f64::from(record.center_y),
             ];
         }
-        let root = element(document, "section", "menu-screen title-screen")?;
-        root.set_attribute("aria-label", "Solomon Darker").map_err(|_| "title label")?;
-        let backdrop = element(document, "div", "title-backdrop")?;
-        let base = element(document, "div", "title-cloud title-cloud-base")?;
-        let cloud_detail = element(document, "div", "title-cloud title-cloud-detail")?;
-        let cloud_shadow = element(document, "div", "title-cloud title-cloud-shadow")?;
-        let horizon = element(document, "div", "title-horizon")?;
-        let grass = element(document, "div", "title-grass")?;
-        append(&backdrop, &base)?;
-        append(&backdrop, &image(document, "main-menu-moon", "title-moon")?)?;
-        append(&backdrop, &cloud_detail)?;
-        append(&backdrop, &cloud_shadow)?;
-        append(&backdrop, &horizon)?;
-        let grave_rows = [
-            element(document, "div", "title-grave-row")?,
-            element(document, "div", "title-grave-row")?,
-            element(document, "div", "title-grave-row")?,
-        ];
-        for (index, row) in grave_rows.iter().enumerate() {
-            row.style()
-                .set_property("z-index", &(6 + index * 3).to_string())
-                .map_err(|_| "grave depth")?;
-            append(&backdrop, row)?;
-            let fog = element(document, "div", "title-fog")?;
-            fog.style()
-                .set_property("z-index", &(7 + index * 3).to_string())
-                .map_err(|_| "fog depth")?;
-            append(&backdrop, &fog)?;
-        }
-        append(&backdrop, &element(document, "div", "title-inter-row-fog")?)?;
-        append(&backdrop, &element(document, "div", "title-lower-fog")?)?;
-        append(&backdrop, &grass)?;
-        append(&root, &backdrop)?;
-        let solomon = element(document, "div", "title-solomon")?;
-        append(&solomon, &image(document, "menu-solomon-body", "title-solomon-body")?)?;
-        let eyes = image(document, "menu-solomon-eyes", "title-solomon-eyes")?;
-        append(&solomon, &eyes)?;
-        let cloak = [
-            image(document, "menu-solomon-cloak-0", "title-solomon-cloak")?,
-            image(document, "menu-solomon-cloak-0", "title-solomon-cloak")?,
-            image(document, "menu-solomon-cloak-1", "title-solomon-cloak")?,
-            image(document, "menu-solomon-cloak-1", "title-solomon-cloak")?,
-        ];
-        for layer in &cloak {
-            append(&solomon, layer)?;
-        }
-        append(&root, &solomon)?;
-        let center = element(document, "div", "title-center")?;
-        append(&center, &image(document, "logo-solomon-dark", "title-logo")?)?;
-        append(&root, &center)?;
-        let controls = element(document, "nav", "title-controls")?;
-        controls.set_attribute("aria-label", "Main menu").map_err(|_| "title controls label")?;
-        append(&controls, &image(document, "main-menu-flourish", "title-flourish-left")?)?;
-        append(&controls, &image(document, "main-menu-flourish", "title-flourish-right")?)?;
-        append(&root, &controls)?;
-        let account = element(document, "span", "game-account-name game-account-name-title")?;
-        account.set_text_content(Some("Not logged in"));
-        account.set_attribute("aria-label", "Not logged in").map_err(|_| "title account label")?;
-        append(&root, &account)?;
         Ok(Self {
-            root,
-            backdrop,
-            solomon,
-            center,
-            controls,
-            account,
-            cloud_detail,
-            cloud_shadow,
-            grass,
-            horizon,
-            cloak,
-            eyes,
-            grave_rows,
-            grave_sprites: std::array::from_fn(|_| Vec::new()),
             state: TitleState::new(widths),
             grave_frames,
             widths,
-            document: document.clone(),
             party_directory_available: false,
             dark_cloud_available: false,
+            play: false,
+            can_resume: false,
+            account: None,
+            prompt_visible: false,
+            elapsed: 0.0,
         })
     }
-
     pub fn show_controls(&mut self, play: bool, can_resume: bool) -> Result<(), String> {
-        let existing =
-            self.controls.query_selector_all("button").map_err(|_| "title button selector")?;
-        for index in 0..existing.length() {
-            if let Some(button) = existing.item(index) {
-                self.controls.remove_child(&button).map_err(|_| "remove title button")?;
-            }
-        }
-        let rows: &[(&str, &str, &str)] = if play {
-            &[
-                ("Last game", "continue", "main-menu-text-last-game"),
-                ("New game", "new-game", "main-menu-text-new-game"),
-                ("Join party", "join-party", ""),
-                ("Back", "title", "main-menu-text-back"),
-            ]
-        } else {
-            &[
-                ("Play", "play", "main-menu-text-play"),
-                ("Explore the Dark Cloud", "explore", "main-menu-text-dark-cloud"),
-                ("Settings", "settings", "main-menu-text-settings"),
-                ("Hall of Fame", "hall", "main-menu-text-hall"),
-            ]
-        };
-        for &(label, action, label_image) in rows {
-            if action == "join-party" && !self.party_directory_available {
-                continue;
-            }
-            if action == "explore" && !self.dark_cloud_available {
-                continue;
-            }
-            let button = native_button(&self.document, label, action)?;
-            if action == "continue" && !can_resume {
-                button.set_attribute("disabled", "").map_err(|_| "continue availability")?;
-            }
-            let text = button
-                .query_selector(".native-button-label")
-                .map_err(|_| "title button label")?
-                .ok_or("native button has no label")?;
-            text.set_text_content(None);
-            if action == "continue" || action == "explore" {
-                text.set_class_name("native-button-label title-stacked-label");
-                let resume_label = image(
-                    &self.document,
-                    if action == "continue" {
-                        "main-menu-text-resume"
-                    } else {
-                        "main-menu-text-explore"
-                    },
-                    "title-button-label",
-                )?;
-                text.append_child(&resume_label).map_err(|_| "Last game resume label")?;
-            }
-            let label_art = if action == "join-party" {
-                let node = element(&self.document, "span", "title-join-party-label")?;
-                node.set_text_content(Some("JOIN PARTY"));
-                node
-            } else {
-                image(&self.document, label_image, "title-button-label")?
-            };
-            text.append_child(&label_art).map_err(|_| "title label art")?;
-            append(&self.controls, &button)?;
-        }
+        self.play = play;
+        self.can_resume = can_resume;
         Ok(())
     }
-
-    pub fn set_party_directory_available(&mut self, available: bool) {
-        self.party_directory_available = available;
+    pub fn set_party_directory_available(&mut self, value: bool) {
+        self.party_directory_available = value;
     }
-
-    pub fn set_dark_cloud_available(&mut self, available: bool) {
-        self.dark_cloud_available = available;
+    pub fn set_dark_cloud_available(&mut self, value: bool) {
+        self.dark_cloud_available = value;
     }
-
-    pub fn set_account_username(&self, username: Option<&str>) -> Result<(), String> {
-        self.account.set_text_content(Some(username.unwrap_or("Not logged in")));
-        self.account
-            .set_attribute("data-account-username", username.unwrap_or("Not logged in"))
-            .map_err(|_| "title account identity")?;
-        self.account
-            .set_attribute(
-                "aria-label",
-                &username.map_or_else(
-                    || "Not logged in".to_owned(),
-                    |name| format!("Signed in as {name}"),
-                ),
-            )
-            .map_err(|_| "title account semantics".to_owned())
+    pub fn set_account_username(&mut self, value: Option<&str>) -> Result<(), String> {
+        self.account = value.map(str::to_owned);
+        Ok(())
     }
-
-    pub fn set_prompt_visible(&self, visible: bool) {
-        self.account.set_hidden(visible);
+    pub fn set_prompt_visible(&mut self, value: bool) {
+        self.prompt_visible = value;
     }
-
     pub fn restart(&mut self) {
         self.state = TitleState::new(self.widths);
+        self.elapsed = 0.0;
     }
-
-    pub fn resize(&self, width: f64, height: f64) -> Result<(), String> {
-        let scale = (width / 1600.0).min(height / 900.0);
-        let cover = (width / 1600.0).max(height / 900.0);
-        style(
-            &self.backdrop,
-            &format!(
-                "transform:translate({}px, {}px) scale({cover})",
-                (width - 1600.0 * cover) / 2.0,
-                height - 900.0 * cover
-            ),
-        )?;
-        style(
-            &self.solomon,
-            &format!("left:0;bottom:{}px;transform:scale({scale})", -60.0 * scale),
-        )?;
-        style(
-            &self.center,
-            &format!(
-                "left:{}px;top:{}px;transform:scale({scale})",
-                (width - 1600.0 * scale) / 2.0,
-                (height - 900.0 * scale) / 2.0
-            ),
-        )?;
-        // Keep native desktop placement, with a physical touch target floor on phones.
-        let controls_scale = if width < 650.0 { ((width - 100.0) / 353.0).min(1.0) } else { scale };
-        let x = width / 2.0 + 51.0 * scale - 176.5 * controls_scale;
-        let y = if width < 650.0 {
-            height * 0.51
-        } else {
-            (height - 900.0 * scale) / 2.0 + 421.0 * scale
-        };
-        style(&self.controls, &format!("left:{x}px;top:{y}px;transform:scale({controls_scale})"))
-    }
-
-    pub fn update(&mut self, elapsed_ms: f64) -> Result<(), String> {
-        let target = (elapsed_ms.max(0.0) / 1000.0 * 60.0).floor() as u64;
+    pub fn update(&mut self, elapsed: f64) -> Result<(), String> {
+        self.elapsed = elapsed;
+        let target = (elapsed.max(0.0) / 1000.0 * 60.0).floor() as u64;
         while self.state.ticks < target {
             self.state.step();
         }
-        let [detail, shadow, grass, horizon] = title_backdrop_offsets_at(elapsed_ms / 1000.0);
-        for (element, offset) in [
-            (&self.cloud_detail, detail),
-            (&self.cloud_shadow, shadow),
-            (&self.grass, grass),
-            (&self.horizon, horizon),
-        ] {
-            element
-                .style()
-                .set_property("background-position-x", &format!("{}px", -offset))
-                .map_err(|_| "title scroll")?;
-        }
-        for index in 0..3 {
-            let row = &self.state.rows[index];
-            while self.grave_sprites[index].len() < row.graves.len() {
-                let sprite = element(&self.document, "div", "title-grave")?;
-                append(&sprite, &image(&self.document, "main-menu-grave-0", "")?)?;
-                append(&self.grave_rows[index], &sprite)?;
-                self.grave_sprites[index].push(sprite);
-            }
-            for (slot, sprite) in self.grave_sprites[index].iter().enumerate() {
-                let Some(grave) = row.graves.get(slot) else {
-                    sprite.set_hidden(true);
-                    continue;
-                };
-                sprite.set_hidden(false);
-                style(
-                    sprite,
-                    &format!(
-                        "left:{}px;top:{}px;filter:brightness({});transform:rotate({}deg) scale({})",
-                        grave.x, row.baseline, row.gray, grave.rotation, row.scale
-                    ),
-                )?;
-                let art = sprite.first_element_child().ok_or("grave has no art")?;
-                let [width, height, center_x, center_y] = self.grave_frames[grave.image_index];
-                art.set_attribute(
-                    "src",
+        Ok(())
+    }
+    pub fn paint(
+        &self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        view: Rect,
+        enabled: bool,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        ui.painter().rect_filled(view, 0.0, Color32::BLACK);
+        let stage = Stage::fit(view);
+        let cover_scale = (view.width() / 1600.0).max(view.height() / 900.0);
+        let cover = Stage {
+            origin: Pos2::new(
+                view.center().x - 800.0 * cover_scale,
+                view.bottom() - 900.0 * cover_scale,
+            ),
+            scale: cover_scale,
+        };
+        let [detail, shadow, grass, horizon] = title_backdrop_offsets_at(self.elapsed / 1000.0);
+        repeat(
+            frame,
+            ui,
+            "main-menu-cloud-base",
+            cover,
+            [0.0, 0.0, 1600.0, 553.0],
+            1298.788990825688,
+            0.0,
+        );
+        widgets::image(
+            frame,
+            ui,
+            "main-menu-moon",
+            cover.rect(1304.0, 101.5, 192.0, 192.0),
+            Color32::WHITE,
+        );
+        repeat(
+            frame,
+            ui,
+            "main-menu-cloud-detail",
+            cover,
+            [0.0, 0.0, 1600.0, 553.0],
+            1298.788990825688,
+            detail,
+        );
+        repeat(
+            frame,
+            ui,
+            "main-menu-cloud-shadow",
+            cover,
+            [0.0, 0.0, 1600.0, 553.0],
+            1298.788990825688,
+            shadow,
+        );
+        repeat(frame, ui, "main-menu-horizon", cover, [0.0, 522.0, 1600.0, 31.0], 1024.0, horizon);
+        for (index, row) in self.state.rows.iter().enumerate() {
+            for grave in &row.graves {
+                let [w, h, cx, cy] = self.grave_frames[grave.image_index];
+                let center = cover.at(grave.x, row.baseline);
+                let rect = cover.rect(
+                    grave.x + (-w / 2.0 + cx) * row.scale,
+                    row.baseline + (-h / 2.0 + cy) * row.scale,
+                    w * row.scale,
+                    h * row.scale,
+                );
+                frame.image_rotated(
+                    ui.painter(),
                     &format!("assets/stock/menu/main-menu-grave-{}.png", grave.image_index),
-                )
-                .map_err(|_| "grave art")?;
-                art.set_attribute(
-                    "style",
-                    &format!(
-                        "position:absolute;left:{}px;top:{}px;width:{width}px;height:{height}px",
-                        -width / 2.0 + center_x,
-                        -height / 2.0 + center_y
-                    ),
-                )
-                .map_err(|_| "grave registration")?;
+                    rect,
+                    None,
+                    grave.rotation.to_radians() as f32,
+                    center,
+                    widgets::color({
+                        let channel = (row.gray.clamp(0.0, 1.0) * 255.0).round() as u32;
+                        channel * 0x010101
+                    }),
+                );
+            }
+            widgets::gradient(
+                ui,
+                cover.rect(0.0, 365.0, 1600.0, 535.0),
+                Color32::TRANSPARENT,
+                widgets::alpha(0x292e40, 0.7),
+            );
+            if index == 1 {
+                widgets::gradient(
+                    ui,
+                    cover.rect(0.0, 500.0, 1600.0, 212.0),
+                    Color32::TRANSPARENT,
+                    widgets::color(0x292e40),
+                );
+                ui.painter().rect_filled(
+                    cover.rect(0.0, 712.0, 1600.0, 188.0),
+                    0.0,
+                    widgets::color(0x282d3f),
+                );
             }
         }
+        repeat(frame, ui, "main-menu-grass", cover, [0.0, 829.0, 1600.0, 71.0], 1024.0, grass);
+        let solomon = Stage {
+            origin: Pos2::new(view.left(), view.bottom() - 600.0 * stage.scale),
+            scale: stage.scale,
+        };
+        let solomon_alpha = if view.width() < 650.0 { 0.6 } else { 1.0 };
+        widgets::image(
+            frame,
+            ui,
+            "menu-solomon-body",
+            solomon.rect(48.0, 106.0, 208.0, 498.0),
+            widgets::alpha(0xffffff, solomon_alpha),
+        );
+        let bob = float::sin(self.state.ticks as f64 * std::f64::consts::PI / 180.0);
+        widgets::image(
+            frame,
+            ui,
+            "menu-solomon-eyes",
+            solomon.rect(50.0, 230.0 + bob, 171.0, 30.0),
+            widgets::alpha(0xffffff, solomon_alpha),
+        );
         let current = self.state.cloak_phase.floor() as usize;
         let fraction = self.state.cloak_phase - current as f64;
-        for (index, layer) in self.cloak.iter().enumerate() {
-            let (frame, alpha) = if index < 2 {
+        for index in 0..4 {
+            let (pose, alpha) = if index < 2 {
                 (current, 1.0 - fraction.powi(3))
             } else {
                 ((current + 1) % 5, fraction)
             };
-            let edge = frame == 0 || frame == 4;
-            layer
-                .set_attribute("src", &format!("assets/stock/menu/menu-solomon-cloak-{frame}.png"))
-                .map_err(|_| "Solomon cloak art")?;
-            style(
-                layer,
-                &format!(
-                    "top:{}px;height:{}px;opacity:{alpha}",
-                    if edge { 6 } else { 8 },
-                    if edge { 654 } else { 652 }
+            let edge = pose == 0 || pose == 4;
+            widgets::image(
+                frame,
+                ui,
+                &format!("menu-solomon-cloak-{pose}"),
+                solomon.rect(
+                    -40.0,
+                    if edge { 6.0 } else { 8.0 },
+                    366.0,
+                    if edge { 654.0 } else { 652.0 },
                 ),
-            )?;
+                widgets::alpha(0xffffff, alpha * solomon_alpha),
+            );
         }
-        let bob = float::sin(self.state.ticks as f64 * std::f64::consts::PI / 180.0);
-        self.eyes
-            .style()
-            .set_property("top", &format!("{}px", 230.0 + bob))
-            .map_err(|_| "Solomon eye drift")?;
+        widgets::image(
+            frame,
+            ui,
+            "logo-solomon-dark",
+            stage.rect(435.5, if view.width() < 650.0 { -250.0 } else { 0.0 }, 829.0, 395.0),
+            Color32::WHITE,
+        );
+        let controls_scale = if view.width() < 650.0 {
+            ((view.width() - 100.0) / 353.0).min(1.0)
+        } else {
+            stage.scale
+        };
+        let x = view.center().x + 51.0 * stage.scale - 176.5 * controls_scale;
+        let y = if view.width() < 650.0 {
+            view.top() + view.height() * 0.51
+        } else {
+            stage.origin.y + 421.0 * stage.scale
+        };
+        let controls = Stage { origin: Pos2::new(x, y), scale: controls_scale };
+        widgets::image(
+            frame,
+            ui,
+            "main-menu-flourish",
+            controls.rect(-73.5, 19.0, 67.0, 262.0),
+            Color32::WHITE,
+        );
+        widgets::mirrored_image(
+            frame,
+            ui,
+            "main-menu-flourish",
+            controls.rect(359.5, 19.0, 67.0, 262.0),
+            true,
+            false,
+            Color32::WHITE,
+        );
+        let rows = if self.play {
+            [
+                ("Last game", "continue", "last-game"),
+                ("New game", "new-game", "new-game"),
+                ("Join party", "join-party", ""),
+                ("Back", "title", "back"),
+            ]
+        } else {
+            [
+                ("Play", "play", "play"),
+                ("Explore the Dark Cloud", "explore", "dark-cloud"),
+                ("Settings", "settings", "settings"),
+                ("Hall of Fame", "hall", "hall"),
+            ]
+        };
+        let mut row = 0;
+        for (label, action, art) in rows {
+            if action == "join-party" && !self.party_directory_available
+                || action == "explore" && !self.dark_cloud_available
+            {
+                continue;
+            }
+            let rect = controls.rect(0.0, f64::from(row) * 76.0, 353.0, 69.0);
+            let available = action != "continue" || self.can_resume;
+            let admitted = enabled && available;
+            let response = widgets::interact(frame, ui, action, label, "button", rect, admitted);
+            widgets::paint_stock_button(frame, ui, &response, rect, controls_scale, available);
+            if response.clicked() && admitted {
+                actions.push(action.to_owned());
+            }
+            let tint = widgets::alpha(0xffffff, if available { 1.0 } else { 0.36 });
+            let press = if response.is_pointer_button_down_on() {
+                Vec2::splat(6.0 * controls_scale)
+            } else {
+                Vec2::ZERO
+            };
+            if action == "join-party" {
+                widgets::label(
+                    ui,
+                    "JOIN PARTY",
+                    rect.center() + press,
+                    Align2::CENTER_CENTER,
+                    "Cinzel Bold",
+                    17.28 * controls_scale,
+                    widgets::color(0xd8d2c0),
+                );
+            } else {
+                let names = if action == "continue" {
+                    vec!["resume", art]
+                } else if action == "explore" {
+                    vec!["explore", art]
+                } else {
+                    vec![art]
+                };
+                let sizes: Vec<_> = names
+                    .iter()
+                    .map(|name| {
+                        frame
+                            .image_size(&format!("assets/stock/menu/main-menu-text-{name}.png"))
+                            .unwrap_or(Vec2::ZERO)
+                            * controls_scale
+                    })
+                    .collect();
+                let mut top = rect.center().y - sizes.iter().map(|size| size.y).sum::<f32>() / 2.0;
+                for (name, size) in names.iter().zip(sizes) {
+                    widgets::image(
+                        frame,
+                        ui,
+                        &format!("main-menu-text-{name}"),
+                        Rect::from_min_size(
+                            Pos2::new(rect.center().x - size.x / 2.0, top) + press,
+                            size,
+                        ),
+                        tint,
+                    );
+                    top += size.y;
+                }
+            }
+            row += 1;
+        }
+        if !self.prompt_visible {
+            widgets::label(
+                ui,
+                self.account.as_deref().unwrap_or("Not logged in"),
+                view.min + Vec2::new(11.0, 12.0),
+                Align2::LEFT_TOP,
+                "JetBrains Mono",
+                14.0,
+                widgets::GOLD,
+            );
+        }
         Ok(())
+    }
+    pub fn default_focus(&self) -> &'static str {
+        if self.play { if self.can_resume { "continue" } else { "new-game" } } else { "play" }
+    }
+}
+fn repeat(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    name: &str,
+    stage: Stage,
+    bounds: [f64; 4],
+    tile_width: f64,
+    offset: f64,
+) {
+    let [x, y, width, height] = bounds;
+    let painter =
+        ui.painter().with_clip_rect(stage.rect(x, y, width, height).intersect(ui.clip_rect()));
+    let mut left = x - offset.rem_euclid(tile_width);
+    while left < x + width {
+        frame.image(
+            &painter,
+            &format!("assets/stock/menu/{name}.png"),
+            stage.rect(left, y, tile_width, height),
+            None,
+            Color32::WHITE,
+        );
+        left += tile_width;
     }
 }

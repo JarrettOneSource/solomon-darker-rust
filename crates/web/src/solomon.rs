@@ -12,9 +12,9 @@ use solomon_sim::boneyard::solomon_presentation::{
 use solomon_sim::hub::painter::PainterLayer;
 use solomon_sim::painter::PainterRegistration;
 
-use crate::assets::load_image;
 use crate::courtyard::Camera;
-use crate::render::{BlendMode, Quad, Renderer, Texture};
+use solomon_graphics::assets::load_image;
+use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
 pub struct SolomonViewFrame {
     pub tick: u64,

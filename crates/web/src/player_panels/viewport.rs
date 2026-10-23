@@ -1,11 +1,8 @@
-//! Compact screens pan the existing stock panel instead of shrinking its controls.
-//! The simulation and action targets stay the same; this module owns only the camera
-//! over that panel, its section shortcuts and the native browser scroll surface.
-
-use super::{InventoryPreviewPlacement, PlayerPanel, PlayerPanels};
-use crate::ui::{append, native_button, style};
+//! Responsive camera over the stock panel. Compact screens retain usable slot
+//! sizes and scroll the same native design surface, with section shortcuts.
+use super::{InventoryPreviewPlacement, PanelEvent, PlayerPanel, PlayerPanels};
+use crate::gpu_ui::UiFrame;
 use solomon_sim::{Vec2, hud::HudRect};
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum PanelSection {
     Stats,
@@ -15,127 +12,168 @@ pub(super) enum PanelSection {
     Previous,
     Next,
 }
-
 impl PlayerPanels {
-    #[must_use]
+    pub fn inventory_preview_underlay(
+        &self,
+    ) -> Result<Option<super::InventoryPreviewUnderlay>, String> {
+        if self.panel != Some(PlayerPanel::Inventory) {
+            return Ok(None);
+        }
+        let r = self.ui.record(62)?;
+        let [ox, oy] = r.registered_origin();
+        let scale = self.view_scale * 1.25;
+        let top = if self.compact { 48.0 } else { 0.0 };
+        Ok(Some(super::InventoryPreviewUnderlay {
+            texture_path: "assets/stock/UI.png",
+            source: HudRect::new(r.x as f64, r.y as f64, r.width as f64, r.height as f64),
+            destination: HudRect::new(
+                self.stage_origin.x
+                    + 800.0 * self.view_scale
+                    + (ox as f64 - r.logical_width as f64 / 2.0) * scale,
+                self.stage_origin.y
+                    + 249.0 * self.view_scale
+                    + (oy as f64 - r.logical_height as f64 / 2.0) * scale,
+                r.width as f64 * scale,
+                r.height as f64 * scale,
+            ),
+            clip: HudRect::new(
+                0.0,
+                top,
+                self.viewport_size.0 as f64,
+                self.viewport_size.1 as f64 - top,
+            ),
+            tint: 0xffffff,
+            alpha: self.alpha * 0.32,
+        }))
+    }
     pub fn inventory_preview_placement(&self) -> Option<InventoryPreviewPlacement> {
         if self.panel != Some(PlayerPanel::Inventory) || self.notice.is_some() || self.dye.is_some()
         {
             return None;
         }
-        let viewport = self.viewport.get_bounding_client_rect();
-        let stage = self.stage.get_bounding_client_rect();
         let center = Vec2::new(
-            stage.left() + 800.0 * self.view_scale,
-            stage.top() + 249.0 * self.view_scale,
+            self.stage_origin.x + 800.0 * self.view_scale,
+            self.stage_origin.y + 249.0 * self.view_scale,
         );
-        let half_width = 100.0 * self.view_scale;
-        let half_height = 140.0 * self.view_scale;
-        if center.x + half_width < viewport.left()
-            || center.x - half_width > viewport.right()
-            || center.y + half_height < viewport.top()
-            || center.y - half_height > viewport.bottom()
+        let top = if self.compact { 48.0 } else { 0.0 };
+        let width = self.viewport_size.0 as f64;
+        let height = self.viewport_size.1 as f64;
+        if center.x + 100.0 * self.view_scale < 0.0
+            || center.x - 100.0 * self.view_scale > width
+            || center.y + 140.0 * self.view_scale < top
+            || center.y - 140.0 * self.view_scale > height
         {
             return None;
         }
-        let alpha = self.content.style().get_property_value("opacity").ok()?.parse().ok()?;
         Some(InventoryPreviewPlacement {
             center,
             scale: self.view_scale * 1.25,
-            clip: HudRect::new(
-                viewport.left(),
-                viewport.top(),
-                viewport.width(),
-                viewport.height(),
-            ),
-            alpha,
+            clip: HudRect::new(0.0, top, width, height - top),
+            alpha: self.alpha,
         })
     }
-
     pub(super) fn update_viewport(&mut self, width: i32, height: i32) -> Result<(), String> {
-        let compact = width < 1000;
-        let changed = self.viewport_size != (width, height)
-            || self.viewport_panel != self.panel
-            || self.compact != compact;
-        if !changed {
-            return Ok(());
-        }
         let opening = self.viewport_panel != self.panel;
-        self.compact = compact;
+        let changed = self.viewport_size != (width, height) || opening;
         self.viewport_size = (width, height);
         self.viewport_panel = self.panel;
-        self.dirty = true;
-        self.root
-            .set_attribute("data-compact", if compact { "true" } else { "false" })
-            .map_err(|_| "panel compact layout")?;
+        self.compact = width < 1000;
         let dialogue = self.panel == Some(PlayerPanel::Dialogue);
         let selector = matches!(self.panel, Some(PlayerPanel::SkillSelector(_)));
-        self.compact_navigation.set_hidden(!compact || dialogue || selector);
-        if compact && !dialogue && !selector {
-            self.draw_compact_navigation()?;
-        }
-        if selector && compact {
-            self.view_scale = 1.0;
-            style(&self.viewport, "top:0;overflow:hidden")?;
-            style(&self.surface, &format!("width:{width}px;height:{height}px;margin-top:0"))?;
-            style(&self.stage, "left:0;top:0;transform:none")?;
-        } else if compact {
-            // A 72px stock slot remains at least 46px wide on a phone. Browser scrolling
-            // and section shortcuts expose the rest of the original panel at that scale.
-            self.view_scale = 0.65;
-            if dialogue {
-                self.view_scale =
-                    ((f64::from(width) - 16.0) / 560.0).min((f64::from(height) - 16.0) / 500.0);
-                style(&self.viewport, "top:0;overflow:hidden")?;
-                style(&self.surface, &format!("width:{width}px;height:{height}px;margin-top:0"))?;
-                style(
-                    &self.stage,
-                    &format!(
-                        "left:{}px;top:{}px;transform:scale({})",
-                        f64::from(width) / 2.0 - 800.0 * self.view_scale,
-                        f64::from(height) / 2.0 - 300.0 * self.view_scale,
-                        self.view_scale,
-                    ),
-                )?;
+        if changed {
+            self.scroll = Vec2::ZERO;
+            self.view_scale = if self.compact {
+                if dialogue {
+                    ((width as f64 - 16.0) / 560.0).min((height as f64 - 16.0) / 500.0)
+                } else if selector {
+                    1.0
+                } else {
+                    0.65
+                }
             } else {
-                self.layout_compact_surface(0.65)?;
-            }
-        } else {
-            self.view_scale = (f64::from(width) / 1600.0).min(f64::from(height) / 900.0);
-            style(&self.viewport, "top:0;overflow:hidden")?;
-            style(&self.surface, &format!("width:{width}px;height:{height}px;margin-top:0"))?;
-            style(
-                &self.stage,
-                &format!(
-                    "left:{}px;top:{}px;transform:scale({})",
-                    (f64::from(width) - 1600.0 * self.view_scale) / 2.0,
-                    (f64::from(height) - 900.0 * self.view_scale) / 2.0,
-                    self.view_scale,
-                ),
-            )?;
-        }
-        if opening || !compact {
-            self.viewport.set_scroll_left(0);
-            self.viewport.set_scroll_top(0);
-            if compact && matches!(self.panel, Some(PlayerPanel::Service(_))) {
-                self.show_section(PanelSection::Shop)?;
-            } else if compact && self.panel == Some(PlayerPanel::Skills) {
-                // Native skill pages are centered at x800. Starting at the canvas's
-                // left edge shows empty leather while the first cards sit offscreen.
-                let left = 800.0 * self.view_scale - f64::from(self.viewport.client_width()) / 2.0;
-                self.viewport.set_scroll_left(left.max(0.0) as i32);
+                (width as f64 / 1600.0).min(height as f64 / 900.0)
+            };
+            if self.compact && !dialogue && !selector {
+                if matches!(self.panel, Some(PlayerPanel::Service(_))) {
+                    self.show_section(PanelSection::Shop)?;
+                } else if self.panel == Some(PlayerPanel::Skills) {
+                    self.scroll.x = (800.0 * self.view_scale - width as f64 / 2.0).max(0.0);
+                }
             }
         }
-        if compact {
-            append(&self.root, &self.tooltip)?;
-        } else {
-            append(&self.stage, &self.tooltip)?;
-        }
+        self.clamp_scroll();
+        self.position_stage();
         Ok(())
     }
-
-    fn draw_compact_navigation(&self) -> Result<(), String> {
-        self.compact_navigation.set_text_content(None);
+    fn position_stage(&mut self) {
+        let (width, height) = (self.viewport_size.0 as f64, self.viewport_size.1 as f64);
+        self.stage_origin = if self.compact {
+            if self.panel == Some(PlayerPanel::Dialogue) {
+                Vec2::new(
+                    width / 2.0 - 800.0 * self.view_scale,
+                    height / 2.0 - 300.0 * self.view_scale,
+                )
+            } else if matches!(self.panel, Some(PlayerPanel::SkillSelector(_))) {
+                Vec2::ZERO
+            } else {
+                Vec2::new(
+                    -self.scroll.x,
+                    48.0 + ((height - 48.0 - 900.0 * self.view_scale) / 2.0).max(0.0)
+                        - self.scroll.y,
+                )
+            }
+        } else {
+            Vec2::new(
+                (width - 1600.0 * self.view_scale) / 2.0,
+                (height - 900.0 * self.view_scale) / 2.0,
+            )
+        };
+    }
+    pub(super) fn clamp_scroll(&mut self) {
+        self.scroll.x = self
+            .scroll
+            .x
+            .clamp(0.0, (1675.0 * self.view_scale - self.viewport_size.0 as f64).max(0.0));
+        self.scroll.y = self
+            .scroll
+            .y
+            .clamp(0.0, (900.0 * self.view_scale - (self.viewport_size.1 as f64 - 48.0)).max(0.0));
+        self.position_stage();
+    }
+    pub(super) fn show_section(&mut self, section: PanelSection) -> Result<(), String> {
+        self.view_scale = match section {
+            PanelSection::Stats | PanelSection::Equipment => {
+                ((self.viewport_size.0 as f64 - 24.0) / 360.0).min(1.0)
+            }
+            PanelSection::Backpack | PanelSection::Shop => 0.65,
+            _ => self.view_scale,
+        };
+        let width = self.viewport_size.0 as f64;
+        let service = matches!(self.panel, Some(PlayerPanel::Service(_)));
+        self.scroll = match section {
+            PanelSection::Stats => Vec2::new(
+                (if service { 263.0 } else { 210.0 }) * self.view_scale - width / 2.0,
+                0.0,
+            ),
+            PanelSection::Backpack => Vec2::new(0.0, 490.0 * self.view_scale),
+            PanelSection::Equipment => Vec2::new(
+                (if service { 1337.0 } else { 1390.0 }) * self.view_scale - width / 2.0,
+                0.0,
+            ),
+            PanelSection::Shop => Vec2::new(800.0 * self.view_scale - width / 2.0, 0.0),
+            PanelSection::Previous => Vec2::new(self.scroll.x - width + 48.0, self.scroll.y),
+            PanelSection::Next => Vec2::new(self.scroll.x + width - 48.0, self.scroll.y),
+        };
+        self.clamp_scroll();
+        Ok(())
+    }
+    pub(super) fn paint_compact_navigation(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+    ) -> Result<(), String> {
+        if matches!(self.panel, Some(PlayerPanel::Dialogue | PlayerPanel::SkillSelector(_))) {
+            return Ok(());
+        }
         let actions: &[(&str, &str)] = match self.panel {
             Some(PlayerPanel::Skills) => &[
                 ("view-previous", "◀"),
@@ -159,75 +197,44 @@ impl PlayerPanels {
                 ("close", "Done"),
             ],
         };
-        for (action, label) in actions {
-            let button = native_button(&self.document, label, action)?;
-            button
-                .set_attribute("data-panel-action", action)
-                .map_err(|_| "panel section action")?;
-            if *action == "view-previous" || *action == "view-next" {
-                button
-                    .set_attribute(
-                        "aria-label",
-                        if *action == "view-previous" {
-                            "Scroll panel left"
-                        } else {
-                            "Scroll panel right"
-                        },
-                    )
-                    .map_err(|_| "panel scroll label")?;
-            }
-            append(&self.compact_navigation, &button)?;
-        }
-        Ok(())
-    }
-
-    fn layout_compact_surface(&mut self, scale: f64) -> Result<(), String> {
-        self.view_scale = scale;
-        style(&self.viewport, "top:48px;overflow:auto")?;
-        let margin = ((f64::from(self.viewport_size.1) - 48.0 - 900.0 * scale) / 2.0).max(0.0);
-        // The native final backpack column extends beyond the 1600px canvas.
-        // Scrolling keeps that addressed slot reachable without moving its contents.
-        style(
-            &self.surface,
-            &format!("width:{}px;height:{}px;margin-top:{margin}px", 1675.0 * scale, 900.0 * scale),
-        )?;
-        style(&self.stage, &format!("left:0;top:0;transform:scale({scale})"))
-    }
-
-    pub(super) fn show_section(&mut self, section: PanelSection) -> Result<(), String> {
-        let scale = match section {
-            PanelSection::Stats | PanelSection::Equipment => {
-                ((f64::from(self.viewport_size.0) - 24.0) / 360.0).min(1.0)
-            }
-            PanelSection::Backpack | PanelSection::Shop => 0.65,
-            PanelSection::Previous | PanelSection::Next => self.view_scale,
-        };
-        self.layout_compact_surface(scale)?;
-        let width = f64::from(self.viewport.client_width());
-        let current = f64::from(self.viewport.scroll_left());
-        let (left, top) = match section {
-            PanelSection::Stats => {
-                let center =
-                    if matches!(self.panel, Some(PlayerPanel::Service(_))) { 263.0 } else { 210.0 };
-                (center * scale - width / 2.0, 0.0)
-            }
-            PanelSection::Backpack => (0.0, 490.0 * self.view_scale),
-            PanelSection::Equipment => {
-                let center = if matches!(self.panel, Some(PlayerPanel::Service(_))) {
-                    1337.0
-                } else {
-                    1390.0
-                };
-                (center * scale - width / 2.0, 0.0)
-            }
-            PanelSection::Shop => (800.0 * self.view_scale - width / 2.0, 0.0),
-            PanelSection::Previous => {
-                (current - width + 48.0, f64::from(self.viewport.scroll_top()))
-            }
-            PanelSection::Next => (current + width - 48.0, f64::from(self.viewport.scroll_top())),
-        };
-        self.viewport.set_scroll_left(left.max(0.0) as i32);
-        self.viewport.set_scroll_top(top.max(0.0) as i32);
+        egui::Area::new(egui::Id::unique("panel-sections"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(egui::Pos2::ZERO)
+            .show(frame.ctx, |ui| {
+                ui.set_min_width(self.viewport_size.0 as f32);
+                if !(!self.input_suspended
+                    && !self.skill_book_result_open()
+                    && self.notice.is_none()
+                    && self.dye.is_none()
+                    && self.rename_sack.is_none())
+                {
+                    ui.disable();
+                }
+                frame.record_rect(
+                    "panel:navigation",
+                    "Panel sections",
+                    "navigation",
+                    egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(self.viewport_size.0 as f32, 48.0),
+                    ),
+                    false,
+                );
+                ui.horizontal(|ui| {
+                    for (action, label) in actions {
+                        let response = ui.add_sized(
+                            [self.viewport_size.0 as f32 / actions.len() as f32 - 8.0, 40.0],
+                            egui::Button::new(*label),
+                        );
+                        frame.record(&format!("panel:{action}"), label, "button", &response);
+                        if response.clicked() {
+                            self.events.push(PanelEvent::Activate(
+                                super::target_from_action(action).expect("section action"),
+                            ));
+                        }
+                    }
+                });
+            });
         Ok(())
     }
 }

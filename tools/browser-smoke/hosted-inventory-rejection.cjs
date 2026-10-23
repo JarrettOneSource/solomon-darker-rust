@@ -9,6 +9,8 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
+const gpu = require('./gpu-ui.cjs');
+const {startNewGame} = require('./menu-journey.cjs');
 
 const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
 const output = path.resolve(process.env.OUT);
@@ -53,27 +55,15 @@ function checked(label) {
 }
 
 async function readUi(page) {
-  return page.evaluate(() => ({
-    status: document.querySelector('#status')?.textContent,
-    menu: document.querySelector('.game-menus')?.dataset.menuScreen,
-    inventoryVisible: document.querySelector('.player-panels')?.getAttribute('aria-hidden') !== 'true'
-      && [...document.querySelectorAll('[data-panel-action="equipment:amulet"]')]
-        .some(element => element.getClientRects().length > 0),
-    // This diagnostic reads the accepted Session, not display interpolation.
-    acceptedTick: window.wasmBindings?.wizard_state()[5],
-    text: document.body.innerText.slice(-1200),
-  }));
+  const snapshot=await gpu.readUi(page);
+  return {status:gpu.findWidget(snapshot,'runtime:status')?.value || '',menu:snapshot.surface,
+    inventoryVisible:Boolean(gpu.findWidget(snapshot,'panel:equipment:amulet')),
+    acceptedTick:await page.evaluate(()=>window.wasmBindings.wizard_state()[5]),
+    text:snapshot.widgets.map(widget=>widget.label).join('\n').slice(-1200)};
 }
 
-async function equipPotion(page, potion, amulet) {
-  const source = await potion.boundingBox();
-  const destination = await amulet.boundingBox();
-  assert.ok(source && destination, 'ordinary Inventory drag targets are visible');
-  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(destination.x + destination.width / 2,
-    destination.y + destination.height / 2, {steps: 15});
-  await page.mouse.up();
+async function equipPotion(page,potion,amulet) {
+  await gpu.drag(page,potion,amulet);
 }
 
 function observeFrame(frame) {
@@ -186,31 +176,23 @@ async function main() {
 
     step = 'real guest Global admission';
     await page.goto(url, {waitUntil: 'load'});
-    await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-      && document.querySelector('#status')?.textContent === '');
+    await gpu.ready(page);
     receipt.renderer = await page.evaluate(() => {
       const gl = document.querySelector('canvas').getContext('webgl2');
       const info = gl.getExtension('WEBGL_debug_renderer_info');
       return info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
     });
-    await page.locator('.title-prompt:not([hidden]) [data-menu-action="prompt-secondary"]').click();
-    await page.locator('[data-menu-action="play"]').click();
-    await page.locator('[data-menu-action="new-game"]').click();
-    await page.getByRole('textbox', {name: 'Wizard name', exact: true}).fill('Inventory Reject');
-    await page.locator('[data-menu-action="element:fire"]').click();
-    await page.locator('[data-menu-action="discipline:arcane"]').click();
+    await startNewGame(page,{name:'Inventory Reject',element:'fire',discipline:'arcane'});
     await waitUntil(() => welcomes.length === 1, 'real host Welcome');
     assert.equal(welcomes[0].sessionKind, 'GlobalHub');
-    await page.locator('.game-menus[data-menu-screen="hidden"]').waitFor({state: 'attached'});
-    await page.waitForFunction(() => document.querySelector('#status')?.textContent === '');
+    await gpu.surface(page,'hidden');
     assert.deepEqual(errors, []);
     checked('ordinary Create admits a real guest to the Global College');
 
     step = 'real Inventory ineligible Equip rejection';
     await page.keyboard.press('KeyI');
-    const amulet = page.locator('[data-panel-action="equipment:amulet"]');
-    await amulet.waitFor({state: 'visible'});
-    const potion = page.locator('.player-panels [data-inventory-slot="0"]');
+    const amulet='panel:equipment:amulet';await gpu.widget(page,amulet);
+    const potion=(await gpu.byLabel(page,'Health Potion, quantity 1',{prefix:'panel:item:',role:'button'})).id;
     assert.equal(latestSnapshot.amuletEmpty, true, 'fresh wizard has no Amulet');
     receipt.beforeAction = {...latestSnapshot};
     assert.equal(receipt.beforeAction.firstBackpackItem.equipmentType, null);
@@ -227,7 +209,7 @@ async function main() {
     checked('the host naturally rejects equipping a potion; only inventory_result is omitted');
 
     step = 'rejected receipt UI and receiver liveness';
-    await page.waitForFunction(() => !!document.querySelector('#status')?.textContent);
+    await gpu.waitForUi(page,snapshot=>gpu.findWidget(snapshot,'runtime:status')?.value==='ineligible-item','actual rejected receipt status');
     receipt.rejectionUi = await readUi(page);
     assert.equal(receipt.rejectionUi.status, 'ineligible-item');
     assert.equal(receipt.rejectionUi.inventoryVisible, true);
@@ -262,6 +244,7 @@ async function main() {
     assert.equal(receipt.finalUi.inventoryVisible, true);
     assert.equal(receipt.afterRetry.inventorySha256, receipt.beforeAction.inventorySha256);
     assert.deepEqual(errors, []);
+    await gpu.assertGpuOnly(page);
     await page.screenshot({path: path.join(output, 'normal-retry-inventory-live.png')});
     checked('the same ordinary action retries through the real host and leaves inventory unchanged');
     receipt.passed = true;

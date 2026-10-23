@@ -1,51 +1,48 @@
-// Production Hall navigation/empty archive. Populated archive acceptance belongs to a real run.
+// Read actual archive/global rows through the displayed GPU Hall widgets.
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { chromium } = require(path.resolve(process.env.PW));
-
+const {chromium} = require(path.resolve(process.env.PW));
+const gpu = require('./gpu-ui.cjs');
 (async () => {
-  const browser = await chromium.launch({
-    headless: true,
+  const browser = await chromium.launch({headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
-  });
-  const errors = [];
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
+  const checks = [];
   try {
-    const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-    page.on('pageerror', error => errors.push(error.message));
-    page.on('console', message => {
-      if (message.type() === 'error') errors.push(message.text());
-    });
-    await page.goto(process.env.URL || 'http://127.0.0.1:4185/');
-    await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-      && !document.querySelector('#status').textContent, null, { timeout: 60000 });
-    const open = async () => {
-      await page.getByRole('button', { name: 'Hall of Fame', exact: true }).click();
-      await page.locator('.game-menus[data-menu-screen="hall"]').waitFor();
-    };
-    await open();
-    await page.getByRole('status').filter({ hasText: 'No records yet.' }).waitFor();
-    assert.equal(await page.locator('.hall-screen').getAttribute('data-hall-entry-count'), '0');
-    assert.equal(await page.getByText('Global', { exact: true }).count(), 0);
-    if (process.env.OUT) await page.screenshot({ path: path.join(process.env.OUT, 'hall-empty-rust.png') });
+    const page = await browser.newPage({viewport: {width: 1600, height: 900}});
+    const {errors} = gpu.watchErrors(page);
+    await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
+    await gpu.ready(page);
+    if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) await gpu.click(page, 'prompt-secondary');
+    await gpu.click(page, 'hall');
+    await gpu.surface(page, 'hall');
+    await gpu.widget(page, 'hall-records');
+    await gpu.value(page, 'hall-status', 'No records yet.');
+    checks.push('ordinary empty local archive');
+    await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'hall-empty-rust.png')});
+    if (gpu.findWidget(await gpu.readUi(page), 'hall-scope:global')) {
+      await gpu.click(page, 'hall-scope:global');
+      for (const board of ['awesomeness', 'wave', 'kills', 'time']) {
+        const id = `hall-board:${board}`;
+        if (gpu.findWidget(await gpu.readUi(page), id)) await gpu.click(page, id);
+      }
+      await gpu.click(page, 'hall-scope:local');
+      checks.push('actual hosted scope and available global boards');
+    }
     await page.keyboard.press('Escape');
-    await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
-    await page.setViewportSize({ width: 390, height: 844 });
-    await open();
-    const empty = await page.getByRole('status').filter({ hasText: 'No records yet.' }).boundingBox();
-    assert.ok(empty.x >= 0 && empty.x + empty.width <= 390, 'phone centers the native record canvas after opening');
-    const back = page.getByRole('button', { name: 'MAIN MENU', exact: true });
-    const bounds = await back.boundingBox();
-    assert.ok(bounds.height >= 44 && bounds.x >= 0 && bounds.x + bounds.width <= 390);
-    if (process.env.OUT) await page.screenshot({ path: path.join(process.env.OUT, 'phone-hall-empty-rust.png') });
-    await back.click();
-    await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
+    await gpu.surface(page, 'title');
+    await page.setViewportSize({width: 390, height: 844});
+    await gpu.click(page, 'hall');
+    await gpu.surface(page, 'hall');
+    const back = gpu.bounds(await gpu.widget(page, 'hall-back'));
+    assert.ok(back.height >= 44 && back.x >= 0 && back.x + back.width <= 390);
+    await gpu.wheel(page, 'hall-records', 200, 300);
+    await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'phone-hall-empty-rust.png')});
+    await gpu.click(page, 'hall-back');
+    await gpu.surface(page, 'title');
+    await gpu.assertGpuOnly(page);
     assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ passed: true, errors }));
-  } finally {
-    await browser.close();
-  }
-})().catch(error => {
-  console.error(error);
-  process.exitCode = 1;
-});
+    checks.push('native Hall canvas scroll and compact touch target');
+    console.log(JSON.stringify({checks, errors}));
+  } finally { await browser.close(); }
+})().catch(error => {console.error(error); process.exitCode = 1;});

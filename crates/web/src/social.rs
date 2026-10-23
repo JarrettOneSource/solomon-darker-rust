@@ -1,19 +1,19 @@
-//! Social browser surfaces from Website `GameChat.tsx`, `NativeUiPartyChip.tsx`,
+//! Social GPU surfaces from Website `GameChat.tsx`, `NativeUiPartyChip.tsx`,
 //! `NativeUiPartyMenu.tsx`, `PlayerCardDialog.tsx` and `AllyHud.tsx`.
-//!
-//! Only draft/navigation state lives here. Accepted messages, membership, profiles and
-//! ally health always come from the native host's borrowed projection.
+//! Accepted messages, membership, profiles and health remain host-owned.
 
 mod allies;
 mod card;
 mod chat;
+pub(crate) mod gpu;
 mod hosted;
 mod hub_players;
 mod party;
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 
+use egui::{Color32, Id, Order};
 use solomon_sim::settings::GameControlBindings;
 use solomon_sim::social::party_ui::NativePartyMenuTab as PartyTab;
 use solomon_sim::social::{
@@ -21,23 +21,26 @@ use solomon_sim::social::{
     PartyActionRejection, SocialAction, SocialSnapshot, available_game_chat_channels,
     next_game_chat_channel, normalize_game_chat_text, should_increment_game_chat_unread,
 };
-use wasm_bindgen::{JsCast, closure::Closure};
-use web_sys::{Document, Event, EventTarget, HtmlElement, KeyboardEvent};
+use web_sys::Document;
 
+use crate::gpu_ui::{StockAtlas, UiFrame};
+use crate::ui::portraits::StockPortraits;
 pub use hosted::HostedSocialAction;
 
-use crate::menu::navigation::MenuNavigation;
-use crate::ui::portraits::StockPortraits;
-use crate::ui::{StockAtlas, append, element};
-
-/// Admission and placement supplied by the active game view. Coordinates are physical
-/// client pixels, like DOM rectangles; chat never controls the shared simulation clock.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SocialUiContext {
     pub visible: bool,
     pub chat_enabled: bool,
     pub input_suspended: bool,
     pub gold_clear_left: f64,
+}
+
+/// Display metadata for packages actually admitted by the running session.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PartyModView {
+    pub id: String,
+    pub name: String,
+    pub version: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,43 +53,13 @@ enum Surface {
 enum Intent {
     Action(String),
     Submit(String),
-    DraftChanged,
     NextChannel,
     Close,
-    PartyChanged,
     PartyCopied { code: String, copied: bool },
-}
-
-struct Listener {
-    target: EventTarget,
-    name: &'static str,
-    capture: bool,
-    callback: Closure<dyn FnMut(Event)>,
-}
-
-impl Drop for Listener {
-    fn drop(&mut self) {
-        if let Err(error) = self.target.remove_event_listener_with_callback_and_bool(
-            self.name,
-            self.callback.as_ref().unchecked_ref(),
-            self.capture,
-        ) {
-            web_sys::console::error_1(&error);
-        }
-    }
 }
 
 pub struct SocialUi {
     document: Document,
-    root: HtmlElement,
-    chip: HtmlElement,
-    modal: HtmlElement,
-    party_invitation: HtmlElement,
-    shown_party_invitation: Option<String>,
-    college_dialog: HtmlElement,
-    hosted_notice: HtmlElement,
-    allies: HtmlElement,
-    chat: chat::ChatView,
     ui: StockAtlas,
     bonedit: StockAtlas,
     control_panel: StockAtlas,
@@ -94,7 +67,6 @@ pub struct SocialUi {
     portraits: StockPortraits,
     snapshot: Option<SocialSnapshot>,
     ally_rows: Vec<AllyHudRow>,
-    ally_nodes: Vec<allies::AllyRowView>,
     surface: Option<Surface>,
     hub_players: Vec<hub_players::HubPlayerCard>,
     requested_card: Option<(bool, String)>,
@@ -104,10 +76,14 @@ pub struct SocialUi {
     hosted_actions: Vec<HostedSocialAction>,
     college_invitations: Vec<solomon_sim::social::GameCollegeInvitation>,
     resolving_college: Option<String>,
+    hosted_notice: Option<String>,
     focus_college: bool,
     party_expanded: bool,
-    party_ui: Rc<RefCell<party::PartyMenuInteraction>>,
+    party_ui: party::PartyMenuInteraction,
+    clipboard: party::PartyClipboard,
+    shown_party_invitation: Option<String>,
     chat_open: bool,
+    chat_draft: String,
     channel: GameChatChannel,
     whisper: Option<GameChatSender>,
     unread: [u8; 4],
@@ -117,139 +93,31 @@ pub struct SocialUi {
     manually_selected_channel: bool,
     chat_status: Option<String>,
     party_status: Option<String>,
+    party_mods: Vec<PartyModView>,
     controls: GameControlBindings,
     context: SocialUiContext,
     now: f64,
     size: (i32, i32),
     coarse: bool,
-    dirty: bool,
-    party_dirty: bool,
-    chat_dirty: bool,
-    allies_dirty: bool,
     focus_chat: bool,
     focus_modal: bool,
     actions: Vec<SocialAction>,
     intents: Rc<RefCell<Vec<Intent>>>,
-    capture_keys: Rc<Cell<bool>>,
-    navigation: MenuNavigation,
-    _listeners: Vec<Listener>,
 }
 
 impl SocialUi {
     pub async fn attach(document: &Document) -> Result<Self, String> {
-        let ui = StockAtlas::load("UI").await?;
-        let bonedit = StockAtlas::load("Bonedit").await?;
-        let control_panel = StockAtlas::load("ControlPanel").await?;
-        let skills = StockAtlas::load("Skills").await?;
-        let portraits = StockPortraits::load().await?;
-        let root = element(document, "div", "game-social")?;
-        let chip = element(document, "section", "hub-party-panel")?;
-        chip.set_attribute("aria-label", "Party").map_err(|_| "party chip label")?;
-        let allies = element(document, "div", "hub-hud-allies")?;
-        allies.set_attribute("role", "list").map_err(|_| "ally list role")?;
-        allies.set_attribute("aria-label", "Allies").map_err(|_| "ally list label")?;
-        let modal = element(document, "div", "social-modal")?;
-        let party_invitation = element(document, "div", "hub-party-menu-overlay")?;
-        let chat = chat::ChatView::new(document)?;
-        let college_dialog = element(document, "div", "play-routing-backdrop")?;
-        let hosted_notice = element(document, "div", "main-menu-runtime-status")?;
-        attribute(&hosted_notice, "role", "status")?;
-        for node in
-            [&chip, &allies, &modal, &party_invitation, &chat.root, &college_dialog, &hosted_notice]
-        {
-            append(&root, node)?;
-        }
-        root.set_hidden(true);
-        append(&document.body().ok_or("social document has no body")?, &root)?;
         let intents = Rc::new(RefCell::new(Vec::new()));
-        let party_ui = Rc::new(RefCell::new(party::PartyMenuInteraction::default()));
-        let capture_keys = Rc::new(Cell::new(false));
-        let mut listeners = Vec::new();
-        let clicked = intents.clone();
-        let party_copy = party_ui.clone();
-        listen(&mut listeners, root.as_ref(), "click", false, move |event| {
-            let result = event
-                .target()
-                .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
-                .map(|target| target.closest("[data-social-action]"));
-            match result {
-                Some(Ok(Some(target))) => {
-                    if let Some(action) = target.get_attribute("data-social-action") {
-                        event.prevent_default();
-                        if action == "party-copy" {
-                            party::copy_party_code(&target, &party_copy, &clicked);
-                            return;
-                        }
-                        clicked.borrow_mut().push(Intent::Action(action));
-                    }
-                }
-                Some(Err(error)) => web_sys::console::error_1(&error),
-                _ => {}
-            }
-        })?;
-        // Bubble cancellation keeps a UI gesture from turning into a world attack.
-        for name in ["pointerdown", "mousedown", "mouseup", "contextmenu"] {
-            listen(&mut listeners, root.as_ref(), name, false, |event| {
-                event.stop_propagation();
-            })?;
-        }
-        let submitted = intents.clone();
-        let input = chat.input.clone();
-        listen(&mut listeners, chat.form.as_ref(), "submit", false, move |event| {
-            event.prevent_default();
-            submitted.borrow_mut().push(Intent::Submit(input.value()));
-        })?;
-        let changed = intents.clone();
-        listen(&mut listeners, chat.input.as_ref(), "input", false, move |_| {
-            changed.borrow_mut().push(Intent::DraftChanged);
-        })?;
-        let keyed = intents.clone();
-        listen(&mut listeners, chat.input.as_ref(), "keydown", false, move |event| {
-            event.stop_propagation();
-            if event.dyn_ref::<KeyboardEvent>().is_some_and(|key| key.key() == "Tab") {
-                event.prevent_default();
-                keyed.borrow_mut().push(Intent::NextChannel);
-            }
-        })?;
-        let outside = intents.clone();
-        let backdrop = modal.clone();
-        listen(&mut listeners, modal.as_ref(), "pointerdown", false, move |event| {
-            if event.target().is_some_and(|target| target == backdrop.clone().into()) {
-                outside.borrow_mut().push(Intent::Close);
-            }
-        })?;
-        let window = document.default_view().ok_or("social document has no window")?;
-        party::listen_to_party(&mut listeners, &modal, &party_ui, &intents)?;
-        let captured = capture_keys.clone();
-        let closed = intents.clone();
-        listen(&mut listeners, window.as_ref(), "keydown", true, move |event| {
-            if captured.get()
-                && event.dyn_ref::<KeyboardEvent>().is_some_and(|key| key.key() == "Escape")
-            {
-                event.prevent_default();
-                event.stop_immediate_propagation();
-                closed.borrow_mut().push(Intent::Close);
-            }
-        })?;
+        let clipboard = party::PartyClipboard::new(document, intents.clone())?;
         Ok(Self {
             document: document.clone(),
-            root,
-            chip,
-            modal,
-            party_invitation,
-            shown_party_invitation: None,
-            college_dialog,
-            hosted_notice,
-            allies,
-            chat,
-            ui,
-            bonedit,
-            control_panel,
-            skills,
-            portraits,
+            ui: StockAtlas::load("UI").await?,
+            bonedit: StockAtlas::load("Bonedit").await?,
+            control_panel: StockAtlas::load("ControlPanel").await?,
+            skills: StockAtlas::load("Skills").await?,
+            portraits: StockPortraits::load().await?,
             snapshot: None,
             ally_rows: Vec::new(),
-            ally_nodes: Vec::new(),
             surface: None,
             hub_players: Vec::new(),
             requested_card: None,
@@ -259,10 +127,13 @@ impl SocialUi {
             hosted_actions: Vec::new(),
             college_invitations: Vec::new(),
             resolving_college: None,
+            hosted_notice: None,
             focus_college: false,
             party_expanded: false,
-            party_ui,
+            party_ui: party::PartyMenuInteraction::default(),
+            shown_party_invitation: None,
             chat_open: false,
+            chat_draft: String::new(),
             channel: GameChatChannel::Party,
             whisper: None,
             unread: [0; 4],
@@ -272,6 +143,7 @@ impl SocialUi {
             manually_selected_channel: false,
             chat_status: None,
             party_status: None,
+            party_mods: Vec::new(),
             controls: GameControlBindings::default(),
             context: SocialUiContext {
                 visible: false,
@@ -282,24 +154,23 @@ impl SocialUi {
             now: 0.0,
             size: (0, 0),
             coarse: false,
-            dirty: true,
-            party_dirty: true,
-            chat_dirty: true,
-            allies_dirty: true,
             focus_chat: false,
             focus_modal: false,
             actions: Vec::new(),
             intents,
-            capture_keys,
-            navigation: MenuNavigation::new(),
-            _listeners: listeners,
+            clipboard,
         })
+    }
+
+    pub fn set_party_mods(&mut self, mods: &[PartyModView]) {
+        if self.party_mods != mods {
+            self.party_mods = mods.to_vec();
+        }
     }
 
     pub fn set_controls(&mut self, controls: GameControlBindings) {
         if self.controls != controls {
             self.controls = controls;
-            self.dirty = true;
         }
     }
 
@@ -314,7 +185,6 @@ impl SocialUi {
         self.unread[channel_index(self.channel)] = 0;
         self.mark_activity();
         self.focus_chat = true;
-        self.capture_keys.set(true);
     }
 
     #[must_use]
@@ -345,7 +215,6 @@ impl SocialUi {
     /// The host may already supply authored, user-visible error copy with its command result.
     pub fn party_error(&mut self, message: &str) {
         self.party_status = Some(message.to_owned());
-        self.dirty = true;
     }
 
     pub fn update(
@@ -358,30 +227,20 @@ impl SocialUi {
         height: i32,
     ) -> Result<(), String> {
         self.now = now_ms;
-        if self.party_ui.borrow_mut().expire_copy(now_ms) {
-            self.party_dirty = true;
-        }
-        if self.context != context || self.size != (width, height) {
-            self.context = context;
-            self.size = (width, height);
-            self.dirty = true;
-        }
-        let window = self.document.default_view().ok_or("social window")?;
-        let coarse = window
+        self.context = context;
+        self.size = (width, height);
+        self.party_ui.expire_copy(now_ms);
+        self.coarse = self
+            .document
+            .default_view()
+            .ok_or("social window")?
             .match_media("(hover:none) and (pointer:coarse)")
-            .map_err(|_| "social pointer media query")?
+            .map_err(|_| "social pointer query")?
             .is_some_and(|query| query.matches());
-        if self.coarse != coarse {
-            self.coarse = coarse;
-            self.dirty = true;
-        }
         if self.snapshot.as_ref() != snapshot {
             self.accept_snapshot(snapshot);
         }
-        if self.ally_rows != allies {
-            self.ally_rows = allies.to_vec();
-            self.allies_dirty = true;
-        }
+        self.ally_rows = allies.to_vec();
         if !context.visible || context.input_suspended || snapshot.is_none() {
             self.close_surfaces();
         } else if !context.chat_enabled && self.chat_open {
@@ -391,104 +250,89 @@ impl SocialUi {
         for intent in intents {
             self.handle_intent(intent)?;
         }
-        self.root.set_hidden(!context.visible || snapshot.is_none());
-        self.capture_keys.set(self.input_active());
-        self.hosted_notice
-            .set_hidden(self.hosted_notice.text_content().is_none_or(|text| text.is_empty()));
-        if self.dirty || self.party_dirty {
-            self.draw_party()?;
-            self.draw_modal()?;
-            self.draw_college_invitation()?;
-            self.draw_party_invitation()?;
+        Ok(())
+    }
+
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        self.clipboard.clear();
+        if !self.context.visible || self.snapshot.is_none() {
+            return Ok(());
         }
-        if self.dirty || self.allies_dirty {
-            self.draw_allies()?;
-        }
-        if self.dirty || self.chat_dirty {
-            self.draw_chat()?;
-        }
-        self.dirty = false;
-        self.party_dirty = false;
-        self.chat_dirty = false;
-        self.allies_dirty = false;
-        self.chat
-            .root
-            .set_attribute(
-                "data-chat-faded",
-                &solomon_sim::social::is_game_chat_faded(
-                    self.chat_open,
-                    self.last_activity,
-                    now_ms,
-                )
-                .to_string(),
-            )
-            .map_err(|_| "chat fade state")?;
-        if self.focus_chat {
-            self.chat.input.focus().map_err(|_| "chat input focus")?;
-            self.focus_chat = false;
-            self.chat.messages.set_scroll_top(self.chat.messages.scroll_height());
-        }
-        if self.focus_modal {
-            if let Some(node) = self
-                .modal
-                .query_selector("[data-social-focus]")
-                .map_err(|_| "social focus target")?
-            {
-                node.dyn_into::<HtmlElement>()
-                    .map_err(|_| "social focus element")?
-                    .focus()
-                    .map_err(|_| "social dialog focus")?;
-            }
-            self.focus_modal = false;
+        if self.chat_open {
+            frame.input_scope(&format!("social/chat:{}", channel_id(self.channel)));
         }
         if self.college_visible() {
-            if self.navigation.update(
-                &self.college_dialog,
-                &self.document,
-                "college-invitation",
-                now_ms,
-            )? {
-                self.decline_college_invitation();
-            }
+            frame.input_scope(&format!("social/college:{}", self.college_invitations[0].id));
         } else if self.party_invitation_visible() {
-            if self.navigation.update(
-                &self.party_invitation,
-                &self.document,
-                "party-invitation",
-                now_ms,
-            )? {
-                self.deny_party_invitation();
-            }
-        } else if self.surface.is_some() {
-            if self.navigation.update(&self.modal, &self.document, "social", now_ms)? {
-                self.close_surfaces();
-            }
-        } else {
-            self.navigation.release();
+            frame.input_scope("social/party-invitation");
+        } else if let Some(surface) = &self.surface {
+            frame.input_scope(&match surface {
+                Surface::Party(tab) => format!("social/party:{}", tab.id()),
+                Surface::Card(card) => format!("social/card:{}", card.player_reference),
+                Surface::HubPlayer(id) => format!("social/hub-player:{id}"),
+            });
         }
+        let ctx = frame.ctx.clone();
+        self.paint_allies(frame)?;
+        self.paint_party_chip(frame)?;
+        self.paint_chat(frame)?;
+        if self.context.input_suspended {
+            return Ok(());
+        }
+        let modal =
+            self.college_visible() || self.party_invitation_visible() || self.surface.is_some();
+        if modal {
+            let mut close = false;
+            egui::Area::new(Id::unique("social/modal"))
+                .order(Order::Foreground)
+                .fixed_pos(egui::Pos2::ZERO)
+                .show(&ctx, |ui| -> Result<(), String> {
+                    ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
+                    let screen = ctx.content_rect();
+                    ui.set_min_size(screen.size());
+                    let back =
+                        ui.interact(screen, Id::unique("social/backdrop"), egui::Sense::CLICK);
+                    ui.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(178));
+                    if self.college_visible() {
+                        self.paint_college_invitation(frame, ui)?;
+                    } else if self.party_invitation_visible() {
+                        self.paint_party_invitation(frame, ui)?;
+                    } else {
+                        match self.surface.clone() {
+                            Some(Surface::Party(tab)) => {
+                                self.paint_native_party_menu(frame, ui, tab)?
+                            }
+                            Some(Surface::Card(_) | Surface::HubPlayer(_)) => {
+                                self.paint_card(frame, ui)?
+                            }
+                            None => {}
+                        }
+                    }
+                    close = back.clicked()
+                        || ui.input_mut(|input| {
+                            input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
+                        });
+                    Ok(())
+                })
+                .inner?;
+            if close {
+                self.handle_intent(Intent::Close)?;
+            }
+        }
+        if let Some(notice) = &self.hosted_notice {
+            egui::Area::new(Id::unique("social/notice"))
+                .order(Order::Tooltip)
+                .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 16.0))
+                .show(&ctx, |ui| {
+                    let response = ui.label(gpu::rich(notice, 16.0, gpu::GOLD));
+                    frame.record("social/notice", notice, "status", &response);
+                });
+        }
+        self.clipboard.finish_frame();
         Ok(())
     }
 
     fn accept_snapshot(&mut self, snapshot: Option<&SocialSnapshot>) {
-        let previous = self.snapshot.as_ref();
-        self.party_dirty |= !party_markup_equal(previous, snapshot)
-            || previous.map(|value| &value.player_cards)
-                != snapshot.map(|value| &value.player_cards);
-        self.chat_dirty |= previous.map(|value| {
-            (
-                &value.chat_messages,
-                value.world_kind,
-                value.global_chat_available,
-                value.party_state.as_ref().map(|state| state.party.member_player_ids.len()),
-            )
-        }) != snapshot.map(|value| {
-            (
-                &value.chat_messages,
-                value.world_kind,
-                value.global_chat_available,
-                value.party_state.as_ref().map(|state| state.party.member_player_ids.len()),
-            )
-        });
         let previously_grouped = self.channels().len() > 1;
         if self.snapshot.as_ref().map(|state| &state.local_player_id)
             != snapshot.map(|state| &state.local_player_id)
@@ -501,12 +345,11 @@ impl SocialUi {
             self.last_world = None;
             self.unread = [0; 4];
             self.whisper = None;
-            self.chat.input.set_value("");
+            self.chat_draft.clear();
             self.party_status = None;
         }
         self.snapshot = snapshot.cloned();
         let Some(snapshot) = snapshot else {
-            self.dirty = true;
             return;
         };
         for message in &snapshot.chat_messages {
@@ -527,7 +370,7 @@ impl SocialUi {
                         && message.sender.player_id != snapshot.local_player_id
                         && self.chat_open
                         && self.channel == GameChatChannel::Whisper
-                        && !self.chat.input.value().is_empty();
+                        && !self.chat_draft.is_empty();
                     if !preserve_draft {
                         self.whisper = Some(partner.clone());
                     }
@@ -560,7 +403,6 @@ impl SocialUi {
             && matches!(self.surface, Some(Surface::Party(_)))
         {
             self.surface = None;
-            self.party_dirty = true;
         }
         if self.chat_open {
             self.unread[channel_index(self.channel)] = 0;
@@ -586,7 +428,6 @@ impl SocialUi {
                 self.surface = Some(Surface::Card(card.clone()));
                 self.requested_card = None;
                 self.focus_modal = true;
-                self.party_dirty = true;
             }
         }
     }
@@ -618,7 +459,6 @@ impl SocialUi {
                     self.close_surfaces();
                 }
             }
-            Intent::PartyChanged => self.party_dirty = true,
             Intent::PartyCopied { code, copied } => {
                 if self
                     .snapshot
@@ -627,8 +467,7 @@ impl SocialUi {
                     .and_then(|state| state.party.join_code.as_deref())
                     == Some(code.as_str())
                 {
-                    self.party_ui.borrow_mut().copied(copied, self.now);
-                    self.party_dirty = true;
+                    self.party_ui.copied(copied, self.now);
                 }
             }
             Intent::NextChannel => {
@@ -639,7 +478,6 @@ impl SocialUi {
                 self.focus_chat = true;
                 self.mark_activity();
             }
-            Intent::DraftChanged => self.last_activity = self.now,
             Intent::Submit(draft) => match normalize_game_chat_text(&draft) {
                 Ok(text) => {
                     self.actions.push(SocialAction::SendChat {
@@ -651,7 +489,7 @@ impl SocialUi {
                             None
                         },
                     });
-                    self.chat.input.set_value("");
+                    self.chat_draft.clear();
                     self.chat_status = None;
                     self.close_chat();
                 }
@@ -671,7 +509,6 @@ impl SocialUi {
             "close" => self.close_surfaces(),
             "party" if self.coarse => {
                 self.party_expanded = !self.party_expanded;
-                self.dirty = true;
             }
             "party" | "party-members" => self.show_party(PartyTab::Members),
             "party-settings" => self.show_party(PartyTab::Settings),
@@ -772,7 +609,6 @@ impl SocialUi {
                 self.focus_modal = true;
             }
         }
-        self.dirty = true;
     }
 
     fn show_party(&mut self, tab: PartyTab) {
@@ -781,13 +617,12 @@ impl SocialUi {
         }) {
             self.close_chat();
             let opening = !matches!(self.surface, Some(Surface::Party(_)));
-            self.party_ui.borrow_mut().select_tab(tab, opening);
+            self.party_ui.select_tab(tab, opening);
             self.surface = Some(Surface::Party(tab));
             if opening {
                 self.party_status = None;
                 self.focus_modal = true;
             }
-            self.dirty = true;
         }
     }
 
@@ -795,60 +630,18 @@ impl SocialUi {
         if self.chat_open {
             self.chat_open = false;
             self.mark_activity();
-            if let Err(error) = self.chat.opener.focus() {
-                web_sys::console::error_1(&error);
-            }
         }
     }
 
     fn close_surfaces(&mut self) {
         self.close_chat();
-        let had_surface = self.surface.take().is_some();
-        self.party_ui.borrow_mut().close();
-        let had_request = self.requested_card.take().is_some();
-        if had_surface || had_request {
-            self.dirty = true;
-        }
-        self.capture_keys.set(false);
+        self.surface = None;
+        self.requested_card = None;
     }
 
     fn mark_activity(&mut self) {
         self.last_activity = self.now;
-        self.dirty = true;
     }
-}
-
-fn listen(
-    listeners: &mut Vec<Listener>,
-    target: &EventTarget,
-    name: &'static str,
-    capture: bool,
-    callback: impl FnMut(Event) + 'static,
-) -> Result<(), String> {
-    let callback = Closure::<dyn FnMut(Event)>::new(callback);
-    target
-        .add_event_listener_with_callback_and_bool(name, callback.as_ref().unchecked_ref(), capture)
-        .map_err(|_| format!("social {name} listener"))?;
-    listeners.push(Listener { target: target.clone(), name, capture, callback });
-    Ok(())
-}
-
-fn attribute(node: &HtmlElement, name: &str, value: &str) -> Result<(), String> {
-    node.set_attribute(name, value).map_err(|_| format!("social {name}"))
-}
-
-fn action_button(
-    document: &Document,
-    label: &str,
-    action: &str,
-    class: &str,
-) -> Result<HtmlElement, String> {
-    let node = element(document, "button", class)?;
-    attribute(&node, "type", "button")?;
-    attribute(&node, "data-social-action", action)?;
-    attribute(&node, "aria-label", label)?;
-    node.set_text_content(Some(label));
-    Ok(node)
 }
 
 fn channel_index(channel: GameChatChannel) -> usize {
@@ -859,7 +652,6 @@ fn channel_index(channel: GameChatChannel) -> usize {
         GameChatChannel::Whisper => 3,
     }
 }
-
 fn channel_id(channel: GameChatChannel) -> &'static str {
     match channel {
         GameChatChannel::Boneyard => "boneyard",
@@ -868,7 +660,6 @@ fn channel_id(channel: GameChatChannel) -> &'static str {
         GameChatChannel::Whisper => "whisper",
     }
 }
-
 fn channel_from_id(id: &str) -> Option<GameChatChannel> {
     match id {
         "boneyard" => Some(GameChatChannel::Boneyard),
@@ -876,30 +667,5 @@ fn channel_from_id(id: &str) -> Option<GameChatChannel> {
         "party" => Some(GameChatChannel::Party),
         "whisper" => Some(GameChatChannel::Whisper),
         _ => None,
-    }
-}
-
-/// Health changes update ally bars independently; Party labels only depend on identity,
-/// membership and connection. An accepted combat snapshot must not rebuild a focused dialog.
-fn party_markup_equal(left: Option<&SocialSnapshot>, right: Option<&SocialSnapshot>) -> bool {
-    match (left, right) {
-        (Some(left), Some(right)) => match (&left.party_state, &right.party_state) {
-            (Some(left), Some(right)) => {
-                left.party == right.party
-                    && left.hub_players == right.hub_players
-                    && left.join_requests == right.join_requests
-                    && left.invitations == right.invitations
-                    && left.party_roster.len() == right.party_roster.len()
-                    && left.party_roster.iter().zip(&right.party_roster).all(|(left, right)| {
-                        left.player_id == right.player_id
-                            && left.display_name == right.display_name
-                            && left.connected == right.connected
-                    })
-            }
-            (None, None) => true,
-            _ => false,
-        },
-        (None, None) => true,
-        _ => false,
     }
 }

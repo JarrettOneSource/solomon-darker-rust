@@ -19,11 +19,14 @@ solomon-web ──▶ solomon-sim     kernels: rules, tables, stepped state
   reuse serde/serde_json and perform no filesystem or network I/O. The shared
   `save_document` codec enables simulation persistence and validates complete session
   continuations for both browser and native storage.
-- **`solomon-web`** (`crates/web`): the browser client. Fetches atlases and bundles, reads the
-  input, runs a local fixed-tick loop or accepts native host snapshots, and draws through
-  a WebGL2 renderer. Its stock-art HUD uses
-  native DOM buttons and reads the explicit simulation `HudState`. `web/` is the Trunk
-  root that hosts it.
+- **`solomon-graphics`** (`crates/graphics`): the shared WebGL2 renderer and asset decoder.
+  Both loader and main client use its textures, blend modes and native geometry; neither
+  owns a copied renderer.
+- **`solomon-web`** (`crates/web`): the browser client. Fetches atlases and bundles, reads
+  input, runs a local fixed-tick loop or accepts native host snapshots, and composes the
+  world with Rust GPU menus, HUD and overlays. Controllers read explicit simulation state
+  and return typed actions. `gpu_ui` owns egui interaction/layout, stock bitmap text,
+  licensed browser glyph rasterization and GPU resources. `web/` is the Trunk root.
 - **`solomon-protocol`** (`crates/protocol`): the native host and browser's versioned messages.
   Inputs, commands and snapshots reuse canonical simulation types. A borrowed host snapshot
   and an owned browser checkpoint have the same serialized shape.
@@ -61,6 +64,16 @@ obstacle) is in `web`, index-aligned with it.
    Scenery occlusion advances through whole display ticks using that displayed local
    position; snapshot receipt and simulation stepping do not also advance its view state.
 
+The final screen pass composes each visible controller once through `GpuUi::run`; modal
+scope and actual hit geometry route input without hidden DOM controls. Native composition,
+clipboard, file, audio and accessibility APIs remain browser adapters. `runtime_ui` carries
+real completed image/font/audio counts to the separate Rust splash loader and releases it
+only after account/save admission and the first complete GPU frame. Match transitions retain
+their separate source delay and progress owner. The surface acceptance matrix and current
+verification limits are in [RUST-UI-MIGRATION.md](RUST-UI-MIGRATION.md).
+
+The read-only `gpu_ui_state()` reports only submitted geometry, readiness, capture and
+visible widget bounds. Browser journeys use those bounds with ordinary input events.
 The read-only `wizard_state()` diagnostic reports accepted simulation state. Actual WebGL
 submission observations establish display cadence separately; simulation diagnostics alone
 cannot prove smooth rendering between snapshots.
@@ -139,7 +152,7 @@ the active planner keeps it directly below the ordered body (`bodyDepth - 0.25` 
 
 ## Rendering
 
-`crates/web/src/render.rs` batches textured triangles over WebGL2. `Vertex` carries logical
+`crates/graphics/src/lib.rs` batches textured triangles over WebGL2. `Vertex` carries logical
 position, atlas texel coordinates and tint; `draw_triangles` accepts typed three-vertex
 triangles. Native attachment quads use `draw_quad`, and axis-aligned sprite `draw(Quad)` uses
 that same primitive. Uploads clamp by default; `upload_with_repeat(image, true)` gives native
@@ -241,8 +254,10 @@ crates/web/src
   menu/navigation.rs controller edges, focus ownership and neutral handoffs
   player_panels.rs  Inventory/Skillbook/College surfaces, pointer capture and typed commands
   player_panels/    stock panel art, learned pages, chat, services, dye and Unforge
-  ui.rs             stock bundle crops, repeated tiles/strips and native frames in DOM
-  render.rs         WebGL2 quads, blend modes, textures
+  ui/               shared GPU item, skill, portrait and native text presentations
+  gpu_ui/           browser input, fonts, stock primitives and UI mesh submission
+  runtime_ui.rs     counted startup handoff and GPU runtime status
+crates/graphics/    shared WebGL2 quads, blend modes, textures and decoded assets
   courtyard.rs      the courtyard scene: background, ambient, actors, foreground
   wizard.rs         the player's layers
   teacher.rs        teacher, rune, shadow and the four release painters
@@ -357,7 +372,7 @@ codes, discovery, invitations and the Global channel. The actual roster, player 
 Whisper, leader Kick and Leave remain available. Controller navigation reuses `MenuNavigation`;
 Open Chat reuses the normal binding machinery and the source default T key.
 
-Chat/profile/ally CSS and locally packed font faces come from the pinned Website. Party
-chrome uses the stock records and the same message frame as the title confirmations.
+Chat/profile/ally GPU layouts preserve the pinned Website's geometry and locally packed
+font faces. Party chrome uses stock records and the same message frame as title confirmations.
 ControlPanel's retail bundle interleaves font metrics: asset sync projects its existing
 manifest into the sprite-only bundle codec; no font engine or runtime Website is required.

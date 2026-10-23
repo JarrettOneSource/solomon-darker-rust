@@ -1,10 +1,8 @@
-//! The readonly panel in Website `DeveloperObserverScene.tsx`.
-//! The connection owns the observed participant and camera. This view retains only the
-//! preceding skill-choice projection needed by `observer-activity.ts`.
+//! GPU readonly match panel from `DeveloperObserverScene.tsx`.
+//! Camera selection leaves through the connection owner; this panel creates no participant.
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
+use crate::gpu_ui::UiFrame;
+use egui::{Color32, FontFamily, FontId, Id, Order, RichText, Stroke, vec2};
 use solomon_sim::observer_activity::{
     ObserverSkillEvent, ObserverSkillOfferPresentation, ObserverSkillPlayer,
     derive_observer_skill_events, observer_skill_offers,
@@ -12,10 +10,7 @@ use solomon_sim::observer_activity::{
 use solomon_sim::profile::PlayerSkillOffer;
 use solomon_sim::session::GameSession;
 use solomon_sim::social::GameChatMessage;
-use wasm_bindgen::{JsCast, prelude::*};
-use web_sys::{Document, Element, Event, HtmlElement};
-
-use crate::ui::{append, element};
+use web_sys::Document;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObserverAction {
@@ -57,84 +52,36 @@ impl PreviousPlayerSkills {
 }
 
 pub struct ObserverUi {
-    document: Document,
-    root: HtmlElement,
-    subtitle: HtmlElement,
-    targets: HtmlElement,
-    skills: HtmlElement,
-    chat: HtmlElement,
     previous: Option<Vec<PreviousPlayerSkills>>,
     events: Vec<ObserverSkillEvent>,
-    painted_roster: Vec<(String, String)>,
-    painted_offers: Vec<ObserverSkillOfferPresentation>,
-    painted_events: Vec<ObserverSkillEvent>,
-    painted_chat: Vec<GameChatMessage>,
-    painted: bool,
-    actions: Rc<RefCell<Vec<ObserverAction>>>,
-    click: Closure<dyn FnMut(Event)>,
+    roster: Vec<(String, String)>,
+    offers: Vec<ObserverSkillOfferPresentation>,
+    chat: Vec<GameChatMessage>,
+    selected: String,
+    subtitle: String,
+    visible: bool,
+    actions: Vec<ObserverAction>,
 }
-
 impl ObserverUi {
-    pub fn attach(document: &Document) -> Result<Self, String> {
-        let root = element(document, "section", "developer-observer-scene")?;
-        root.set_attribute("aria-label", "Developer match observer")
-            .map_err(|_| "observer description")?;
-        root.set_hidden(true);
-        let panel = element(document, "aside", "developer-observer-panel")?;
-        let header = element(document, "header", "")?;
-        let title = element(document, "div", "")?;
-        append_text(document, &title, "strong", "DEVELOPER OBSERVER")?;
-        let subtitle = element(document, "span", "")?;
-        append(&title, &subtitle)?;
-        append(&header, &title)?;
-        let exit = action_button(document, "EXIT", "exit")?;
-        append(&header, &exit)?;
-        append(&panel, &header)?;
-        let targets = element(document, "div", "developer-observer-targets")?;
-        let skills = element(document, "section", "")?;
-        let chat = element(document, "section", "")?;
-        for child in [&targets, &skills, &chat] {
-            append(&panel, child)?;
-        }
-        append(&root, &panel)?;
-        let actions = Rc::new(RefCell::new(Vec::new()));
-        let pending = actions.clone();
-        let click = Closure::new(move |event: Event| {
-            if let Err(error) = queue_observer_action(&event, &pending) {
-                web_sys::console::error_1(&JsValue::from_str(&error));
-            }
-        });
-        root.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())
-            .map_err(|_| "observer controls listener")?;
-        append(&document.body().ok_or("observer document body")?, &root)?;
+    pub fn attach(_document: &Document) -> Result<Self, String> {
         Ok(Self {
-            document: document.clone(),
-            root,
-            subtitle,
-            targets,
-            skills,
-            chat,
             previous: None,
             events: Vec::new(),
-            painted_roster: Vec::new(),
-            painted_offers: Vec::new(),
-            painted_events: Vec::new(),
-            painted_chat: Vec::new(),
-            painted: false,
-            actions,
-            click,
+            roster: Vec::new(),
+            offers: Vec::new(),
+            chat: Vec::new(),
+            selected: String::new(),
+            subtitle: String::new(),
+            visible: false,
+            actions: Vec::new(),
         })
     }
-
     pub fn take_actions(&mut self) -> Vec<ObserverAction> {
-        std::mem::take(&mut *self.actions.borrow_mut())
+        std::mem::take(&mut self.actions)
     }
-
     pub fn update(&mut self, snapshot: ObserverViewSnapshot<'_>) -> Result<(), String> {
-        // A removed camera target is replaced by the connection's actual fallback ID.
-        // As in the source, no participant means there is no observer panel to show.
         if snapshot.session.participant(snapshot.view_player_id).is_none() {
-            self.root.set_hidden(true);
+            self.visible = false;
             return Ok(());
         }
         let mut players = Vec::new();
@@ -169,198 +116,126 @@ impl ObserverUi {
             }
         }
         self.previous = Some(current);
-        self.root.set_hidden(false);
-        self.subtitle
-            .set_text_content(Some(&format!("{} · NO PARTICIPANT", snapshot.boneyard_name)));
-        let roster: Vec<_> =
+
+        self.visible = true;
+        self.selected = snapshot.view_player_id.to_owned();
+        self.subtitle = format!("{} · NO PARTICIPANT", snapshot.boneyard_name);
+        self.roster =
             players.iter().map(|player| (player.id.to_owned(), player.name.to_owned())).collect();
-        if !self.painted || roster != self.painted_roster {
-            self.paint_roster(&roster)?;
-            self.painted_roster = roster;
-        }
-        self.paint_camera_selection(snapshot.view_player_id)?;
-        let offers = observer_skill_offers(&players);
-        let visible_events = &self.events[self.events.len().saturating_sub(8)..];
-        if !self.painted || offers != self.painted_offers || visible_events != self.painted_events {
-            paint_skills(&self.document, &self.skills, &offers, visible_events)?;
-            self.painted_offers = offers;
-            self.painted_events = visible_events.to_vec();
-        }
-        let chats = &snapshot.chat_messages[snapshot.chat_messages.len().saturating_sub(24)..];
-        if !self.painted || chats != self.painted_chat {
-            paint_chat(&self.document, &self.chat, chats)?;
-            self.painted_chat = chats.to_vec();
-        }
-        self.painted = true;
+        self.offers = observer_skill_offers(&players);
+        self.chat =
+            snapshot.chat_messages[snapshot.chat_messages.len().saturating_sub(24)..].to_vec();
         Ok(())
     }
-
-    /// Leaving an observed match discards its display history; the next match starts clean.
     pub fn hide(&mut self) {
-        self.root.set_hidden(true);
+        self.visible = false;
         self.previous = None;
         self.events.clear();
-        self.painted = false;
-        self.actions.borrow_mut().clear();
+        self.actions.clear();
     }
-
-    fn paint_roster(&self, roster: &[(String, String)]) -> Result<(), String> {
-        let focus = self.document.active_element().and_then(|element| {
-            self.targets
-                .contains(Some(&element))
-                .then(|| element.get_attribute("data-observer-player"))
-                .flatten()
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        if !self.visible {
+            return Ok(());
+        }
+        frame.input_scope("observer");
+        let ctx = frame.ctx.clone();
+        egui::Area::new(Id::unique("observer/panel"))
+            .order(Order::Foreground)
+            .anchor(egui::Align2::RIGHT_TOP, vec2(-16.0, 16.0))
+            .show(&ctx, |ui| {
+                egui::Frame::new()
+                    .fill(Color32::from_rgba_unmultiplied(7, 10, 18, 240))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(98, 172, 211)))
+                    .inner_margin(12.0)
+                    .show(ui, |ui| {
+                        ui.set_max_width((ctx.content_rect().width() - 32.0).min(420.0));
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                ui.label(copy("DEVELOPER OBSERVER", 13.0));
+                                ui.label(copy(&self.subtitle, 10.0));
+                            });
+                            let exit = ui.button(copy("EXIT", 11.0));
+                            frame.record("observer/exit", "EXIT", "button", &exit);
+                            if exit.clicked() {
+                                self.actions.push(ObserverAction::Exit);
+                            }
+                        });
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(copy("CAMERA", 10.0));
+                            for (id, name) in &self.roster {
+                                let response =
+                                    ui.selectable_label(*id == self.selected, copy(name, 11.0));
+                                frame.record(
+                                    &format!("observer/player:{id}"),
+                                    name,
+                                    "button",
+                                    &response,
+                                );
+                                if response.clicked() {
+                                    self.actions.push(ObserverAction::SelectPlayer(id.clone()));
+                                }
+                            }
+                        });
+                        egui::ScrollArea::vertical()
+                            .id_salt("observer/activity")
+                            .max_height((ctx.content_rect().height() * 0.72).max(100.0))
+                            .show(ui, |ui| {
+                                ui.separator();
+                                ui.label(copy("SKILL PICKS", 11.0));
+                                if self.offers.is_empty() {
+                                    ui.label(copy("NO ACTIVE SKILL CHOICE.", 10.0));
+                                }
+                                for offer in &self.offers {
+                                    activity(
+                                        ui,
+                                        &format!("{} · {}", offer.player_name, offer.title),
+                                        &offer.options.join(" · "),
+                                    );
+                                }
+                                for event in &self.events[self.events.len().saturating_sub(8)..] {
+                                    activity(
+                                        ui,
+                                        &format!("{} · {}", event.player_name, event.title),
+                                        &event.detail,
+                                    );
+                                }
+                                ui.separator();
+                                ui.label(copy("ALL MATCH CHAT", 11.0));
+                                if self.chat.is_empty() {
+                                    ui.label(copy("NO CHAT YET.", 10.0));
+                                }
+                                for message in &self.chat {
+                                    let mut label = format!(
+                                        "[{}] {}",
+                                        message.channel.label().to_uppercase(),
+                                        message.sender.display_name
+                                    );
+                                    if let Some(recipient) = &message.recipient {
+                                        label.push_str(&format!(" → {}", recipient.display_name));
+                                    }
+                                    activity(ui, &label, &message.text);
+                                }
+                            });
+                    });
+            });
+        Ok(())
+    }
+}
+fn copy(text: &str, size: f32) -> RichText {
+    RichText::new(text)
+        .font(FontId::new(size, FontFamily::Name("Cinzel".into())))
+        .color(Color32::from_rgb(198, 222, 237))
+}
+fn activity(ui: &mut egui::Ui, title: &str, detail: &str) {
+    egui::Frame::new()
+        .fill(Color32::from_rgba_unmultiplied(20, 27, 40, 180))
+        .inner_margin(6.0)
+        .show(ui, |ui| {
+            ui.label(copy(title, 11.0).strong());
+            ui.label(
+                RichText::new(detail)
+                    .font(FontId::new(12.0, FontFamily::Name("Alegreya".into())))
+                    .color(Color32::from_rgb(180, 199, 216)),
+            );
         });
-        self.targets.set_text_content(None);
-        append_text(&self.document, &self.targets, "span", "CAMERA")?;
-        for (id, name) in roster {
-            let button = action_button(&self.document, name, "select-player")?;
-            button
-                .set_attribute("data-observer-player", id)
-                .map_err(|_| "observer camera target")?;
-            append(&self.targets, &button)?;
-            if focus.as_deref() == Some(id) {
-                button.focus().map_err(|_| "observer camera focus")?;
-            }
-        }
-        Ok(())
-    }
-
-    fn paint_camera_selection(&self, selected: &str) -> Result<(), String> {
-        let buttons = self
-            .targets
-            .query_selector_all("[data-observer-player]")
-            .map_err(|_| "observer camera buttons")?;
-        for index in 0..buttons.length() {
-            if let Some(button) =
-                buttons.item(index).and_then(|node| node.dyn_into::<Element>().ok())
-            {
-                let selected =
-                    button.get_attribute("data-observer-player").as_deref() == Some(selected);
-                button.set_class_name(if selected { "selected" } else { "" });
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Drop for ObserverUi {
-    fn drop(&mut self) {
-        if let Err(error) = self
-            .root
-            .remove_event_listener_with_callback("click", self.click.as_ref().unchecked_ref())
-        {
-            web_sys::console::error_1(&error);
-        }
-        self.root.remove();
-    }
-}
-
-fn queue_observer_action(
-    event: &Event,
-    actions: &Rc<RefCell<Vec<ObserverAction>>>,
-) -> Result<(), String> {
-    let Some(target) = event.target().and_then(|target| target.dyn_into::<Element>().ok()) else {
-        return Ok(());
-    };
-    let Some(button) =
-        target.closest("[data-observer-action]").map_err(|_| "observer action selector")?
-    else {
-        return Ok(());
-    };
-    let action = match button.get_attribute("data-observer-action").as_deref() {
-        Some("exit") => ObserverAction::Exit,
-        Some("select-player") => ObserverAction::SelectPlayer(
-            button.get_attribute("data-observer-player").ok_or("observer camera participant")?,
-        ),
-        _ => return Ok(()),
-    };
-    event.stop_propagation();
-    actions.borrow_mut().push(action);
-    Ok(())
-}
-
-fn paint_skills(
-    document: &Document,
-    root: &HtmlElement,
-    offers: &[ObserverSkillOfferPresentation],
-    events: &[ObserverSkillEvent],
-) -> Result<(), String> {
-    root.set_text_content(None);
-    append_text(document, root, "h2", "SKILL PICKS")?;
-    if offers.is_empty() {
-        append_text(document, root, "p", "NO ACTIVE SKILL CHOICE.")?;
-    }
-    for offer in offers {
-        activity_row(
-            document,
-            root,
-            "",
-            &format!("{} · {}", offer.player_name, offer.title),
-            &offer.options.join(" · "),
-        )?;
-    }
-    for event in events {
-        activity_row(
-            document,
-            root,
-            "resolved",
-            &format!("{} · {}", event.player_name, event.title),
-            &event.detail,
-        )?;
-    }
-    Ok(())
-}
-
-fn paint_chat(
-    document: &Document,
-    root: &HtmlElement,
-    messages: &[GameChatMessage],
-) -> Result<(), String> {
-    root.set_text_content(None);
-    append_text(document, root, "h2", "ALL MATCH CHAT")?;
-    if messages.is_empty() {
-        append_text(document, root, "p", "NO CHAT YET.")?;
-    }
-    for message in messages {
-        let mut label =
-            format!("[{}] {}", message.channel.label().to_uppercase(), message.sender.display_name);
-        if let Some(recipient) = &message.recipient {
-            label.push_str(&format!(" → {}", recipient.display_name));
-        }
-        activity_row(document, root, "", &label, &message.text)?;
-    }
-    Ok(())
-}
-
-fn activity_row(
-    document: &Document,
-    parent: &HtmlElement,
-    class: &str,
-    title: &str,
-    detail: &str,
-) -> Result<(), String> {
-    let row = element(document, "article", class)?;
-    append_text(document, &row, "strong", title)?;
-    append_text(document, &row, "span", detail)?;
-    append(parent, &row)
-}
-
-fn append_text(
-    document: &Document,
-    parent: &HtmlElement,
-    tag: &str,
-    text: &str,
-) -> Result<(), String> {
-    let child = element(document, tag, "")?;
-    child.set_text_content(Some(text));
-    append(parent, &child)
-}
-
-fn action_button(document: &Document, label: &str, action: &str) -> Result<HtmlElement, String> {
-    let button = element(document, "button", "")?;
-    button.set_attribute("type", "button").map_err(|_| "observer button type")?;
-    button.set_attribute("data-observer-action", action).map_err(|_| "observer button action")?;
-    button.set_text_content(Some(label));
-    Ok(button)
 }

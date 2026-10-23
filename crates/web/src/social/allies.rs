@@ -1,107 +1,146 @@
-//! Health rows from the host's canonical AllyHud projection. No actor state lives here.
+//! GPU ally health rows from the host's canonical projection.
 
-use solomon_sim::social::{AllyHudIdentity, AllyHudRow, clamp_ally_hud_health_ratio};
-use web_sys::HtmlElement;
+use egui::{Color32, FontFamily, FontId, Id, Order, Rect, Stroke, pos2, vec2};
+use solomon_sim::social::{AllyHudIdentity, GameChatWorldKind, clamp_ally_hud_health_ratio};
 
-use super::{SocialUi, attribute};
-use crate::ui::{append, element, style};
-
-pub(super) struct AllyRowView {
-    model: AllyHudRow,
-    root: HtmlElement,
-    bar: HtmlElement,
-    fill: HtmlElement,
-}
+use super::SocialUi;
+use crate::gpu_ui::UiFrame;
 
 impl SocialUi {
-    pub(super) fn draw_allies(&mut self) -> Result<(), String> {
-        let in_hub = self.snapshot.as_ref().is_some_and(|snapshot| {
-            snapshot.world_kind == solomon_sim::social::GameChatWorldKind::Hub
-        });
-        self.allies.set_hidden(
-            self.context.input_suspended || (self.coarse && in_hub && self.party_expanded),
+    pub(super) fn paint_allies(&self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        let in_hub = self
+            .snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.world_kind == GameChatWorldKind::Hub);
+        if self.context.input_suspended || (self.coarse && in_hub && self.party_expanded) {
+            return Ok(());
+        }
+        let ctx = frame.ctx.clone();
+        let area =
+            egui::Area::new(Id::unique("social/allies")).order(Order::Middle).constrain(false);
+        ctx.set_transform_layer(
+            area.layer(),
+            egui::emath::TSTransform {
+                scaling: if self.coarse { 0.72 } else { 1.0 },
+                translation: if self.coarse {
+                    vec2(6.0, if in_hub { 88.0 } else { 54.0 })
+                } else {
+                    egui::Vec2::ZERO
+                },
+            },
         );
-        attribute(&self.allies, "data-ally-count", &self.ally_rows.len().to_string())?;
-        attribute(&self.allies, "data-world-kind", if in_hub { "hub" } else { "boneyard" })?;
-        let structure_changed = self.ally_nodes.len() != self.ally_rows.len()
-            || self.ally_nodes.iter().zip(&self.ally_rows).any(|(view, model)| {
-                view.model.id != model.id
-                    || view.model.identity != model.identity
-                    || view.model.connected != model.connected
-                    || view.model.dead != model.dead
-            });
-        if structure_changed {
-            self.allies.set_text_content(None);
-            self.ally_nodes.clear();
-            for model in &self.ally_rows {
-                let root = element(&self.document, "div", "hub-hud-ally-row")?;
-                for (name, value) in [
-                    ("role", "listitem".to_owned()),
-                    ("aria-label", model.accessible_status()),
-                    ("data-ally-id", model.id.clone()),
-                    ("data-ally-connected", model.connected.to_string()),
-                    ("data-ally-dead", model.dead.to_string()),
-                ] {
-                    attribute(&root, name, &value)?;
-                }
-                let chip = element(&self.document, "span", "hub-hud-ally-chip")?;
-                match &model.identity {
-                    AllyHudIdentity::Player { element, .. } => {
-                        attribute(&root, "data-ally-kind", "player")?;
-                        attribute(&root, "data-ally-element", element.as_str())?;
-                        let body = self.portraits.body(&self.document, *element, 12)?;
-                        style(
-                            &body,
-                            "position:absolute;left:0;top:0;transform:translate(-25.4px,-11.7px) scale(.45);transform-origin:top left",
-                        )?;
-                        append(&chip, &body)?;
+        let width = if self.coarse { 164.0 } else { 196.0 };
+        area.fixed_pos(if self.coarse { egui::Pos2::ZERO } else { pos2(11.0, 60.0) })
+            .show(&ctx, |ui| -> Result<(), String> {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                for model in &self.ally_rows {
+                    let (bounds, _) =
+                        ui.allocate_exact_size(vec2(width, 34.0), egui::Sense::hover());
+                    let painter = ui.painter();
+                    let accent = match &model.identity {
+                        AllyHudIdentity::Player { element, .. } => match element.as_str() {
+                            "ether" => Color32::from_rgb(185, 143, 230),
+                            "fire" => Color32::from_rgb(224, 122, 69),
+                            "water" => Color32::from_rgb(95, 176, 220),
+                            "air" => Color32::from_rgb(165, 203, 228),
+                            _ => Color32::from_rgb(168, 191, 98),
+                        },
+                        AllyHudIdentity::Golem => Color32::from_rgb(216, 188, 114),
+                    };
+                    painter.rect_filled(
+                        bounds,
+                        3.0,
+                        Color32::from_rgba_unmultiplied(10, 9, 6, 190),
+                    );
+                    painter.rect_stroke(
+                        bounds,
+                        3.0,
+                        Stroke::new(1.0, accent.gamma_multiply(0.5)),
+                        egui::StrokeKind::Inside,
+                    );
+                    painter.line_segment(
+                        [bounds.left_top(), bounds.left_bottom()],
+                        Stroke::new(2.0, accent),
+                    );
+                    let chip = Rect::from_min_size(bounds.min + vec2(3.0, 3.0), vec2(27.0, 27.0));
+                    painter.circle_filled(chip.center(), 13.5, Color32::from_rgb(25, 26, 28));
+                    match &model.identity {
+                        AllyHudIdentity::Player { element, .. } => {
+                            let clipped = painter.with_clip_rect(chip);
+                            self.portraits.paint_body_clipped(
+                                frame,
+                                &clipped,
+                                *element,
+                                12,
+                                chip.min + vec2(12.85, 26.55),
+                                0.45,
+                                chip,
+                            )?;
+                        }
+                        AllyHudIdentity::Golem => {
+                            frame.image(
+                                painter,
+                                "assets/stock/skull-white.png",
+                                Rect::from_center_size(chip.center(), vec2(17.0, 17.0)),
+                                None,
+                                Color32::WHITE,
+                            );
+                        }
                     }
-                    AllyHudIdentity::Golem => {
-                        attribute(&root, "data-ally-kind", "golem")?;
-                        chip.set_class_name("hub-hud-ally-chip hub-hud-ally-chip-golem");
-                        let skull = element(&self.document, "img", "")?;
-                        attribute(&skull, "src", "assets/stock/skull-white.png")?;
-                        attribute(&skull, "alt", "")?;
-                        append(&chip, &skull)?;
+                    painter.circle_stroke(chip.center(), 13.5, Stroke::new(1.0, accent));
+                    painter.text(
+                        bounds.min + vec2(38.0, 10.0),
+                        egui::Align2::LEFT_CENTER,
+                        model.accessible_name(),
+                        FontId::new(12.0, FontFamily::Name("Georgia".into())),
+                        Color32::from_rgb(240, 226, 182),
+                    );
+                    let bar =
+                        Rect::from_min_size(bounds.min + vec2(38.0, 22.0), vec2(width - 50.0, 7.0));
+                    painter.rect_filled(bar, 4.0, Color32::from_rgb(25, 10, 9));
+                    let ratio = clamp_ally_hud_health_ratio(model.health_ratio) as f32;
+                    painter.rect_filled(
+                        Rect::from_min_size(bar.min, vec2(bar.width() * ratio, 7.0)),
+                        3.0,
+                        Color32::from_rgb(192, 57, 43),
+                    );
+                    painter.rect_stroke(
+                        bar,
+                        4.0,
+                        Stroke::new(1.0, Color32::BLACK),
+                        egui::StrokeKind::Inside,
+                    );
+                    if model.dead {
+                        painter.rect_filled(
+                            bounds,
+                            3.0,
+                            Color32::from_rgba_unmultiplied(117, 0, 0, 130),
+                        );
                     }
+                    if !model.connected {
+                        painter.rect_filled(bounds, 3.0, Color32::from_black_alpha(110));
+                    }
+                    if !model.connected || model.dead {
+                        painter.text(
+                            bounds.right_center() - vec2(7.0, 0.0),
+                            egui::Align2::RIGHT_CENTER,
+                            if !model.connected { "DISCONNECTED" } else { "DEAD" },
+                            FontId::proportional(9.0),
+                            Color32::WHITE,
+                        );
+                    }
+                    frame.record_rect(
+                        &format!("social/ally:{}", model.id),
+                        &model.accessible_status(),
+                        "progressbar",
+                        ctx.layer_transform_to_global(ui.layer_id()).unwrap_or_default() * bounds,
+                        true,
+                    );
+                    ui.add_space(5.0);
                 }
-                append(&root, &chip)?;
-                let main = element(&self.document, "span", "hub-hud-ally-main")?;
-                let name = element(&self.document, "span", "hub-hud-ally-name")?;
-                name.set_text_content(Some(model.accessible_name()));
-                append(&main, &name)?;
-                let bar = element(&self.document, "span", "hub-hud-ally-bar")?;
-                attribute(&bar, "role", "progressbar")?;
-                attribute(&bar, "aria-label", &format!("{} health", model.accessible_name()))?;
-                attribute(&bar, "aria-valuemin", "0")?;
-                attribute(&bar, "aria-valuemax", "100")?;
-                let fill = element(&self.document, "span", "hub-hud-ally-bar-fill")?;
-                append(&bar, &fill)?;
-                append(&main, &bar)?;
-                append(&root, &main)?;
-                if !model.connected || model.dead {
-                    let status = element(&self.document, "span", "hub-hud-ally-status")?;
-                    status.set_text_content(Some(if !model.connected {
-                        "DISCONNECTED"
-                    } else {
-                        "DEAD"
-                    }));
-                    append(&root, &status)?;
-                }
-                append(&self.allies, &root)?;
-                self.ally_nodes.push(AllyRowView { model: model.clone(), root, bar, fill });
-            }
-        }
-        for (view, model) in self.ally_nodes.iter_mut().zip(&self.ally_rows) {
-            let ratio = clamp_ally_hud_health_ratio(model.health_ratio);
-            attribute(&view.root, "data-health-ratio", &ratio.to_string())?;
-            attribute(&view.bar, "aria-valuenow", &(ratio * 100.0).to_string())?;
-            view.fill
-                .style()
-                .set_property("width", &format!("{}%", ratio * 100.0))
-                .map_err(|_| "ally health fill")?;
-            view.model = model.clone();
-        }
+                Ok(())
+            })
+            .inner?;
         Ok(())
     }
 }

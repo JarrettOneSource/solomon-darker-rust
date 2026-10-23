@@ -8,9 +8,10 @@ use std::rc::Rc;
 use js_sys::{Function, Promise, Reflect};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use wasm_bindgen_futures::{JsFuture, spawn_local};
-use web_sys::{Document, Element, Event, HtmlElement, Window};
+use web_sys::Window;
 
-use crate::ui::{append, element};
+use crate::gpu_ui::UiFrame;
+use egui::{Color32, FontFamily, FontId, Id, Order, RichText, Stroke, vec2};
 
 /// Credentials are intentionally absent from Debug/log output.
 #[derive(Clone)]
@@ -51,8 +52,6 @@ pub fn configured(window: &Window) -> Result<Option<DesktopEndpoint>, String> {
 }
 
 struct Notice {
-    document: Document,
-    root: HtmlElement,
     current_revision: Option<String>,
     dismissed_revision: Option<String>,
     active: bool,
@@ -70,31 +69,20 @@ impl Notice {
                     .ok_or("The desktop update revision is invalid")?,
             )
         };
-        self.paint()
+        Ok(())
     }
 
-    fn paint(&self) -> Result<(), String> {
-        let visible = self.active
+    fn visible(&self) -> bool {
+        self.active
             && self.current_revision.is_some()
-            && self.current_revision != self.dismissed_revision;
-        if visible && self.root.parent_node().is_none() {
-            self.document
-                .body()
-                .ok_or("The desktop document has no body")?
-                .append_child(&self.root)
-                .map_err(describe)?;
-        } else if !visible {
-            // Source conditionally returns null, rather than retaining a hidden
-            // interactive notice above the game.
-            self.root.remove();
-        }
-        Ok(())
+            && self.current_revision != self.dismissed_revision
     }
 }
 
 pub struct DesktopBridge {
     notice: Rc<RefCell<Notice>>,
-    click: Closure<dyn FnMut(Event)>,
+    desktop: JsValue,
+    download_update: Function,
     on_state: Closure<dyn FnMut(JsValue)>,
     remove_state: Option<Function>,
     remove_before_close: Option<Function>,
@@ -106,55 +94,11 @@ pub fn attach(window: &Window, before_close: &Function) -> Result<Option<Desktop
     let subscribe_state = method(&desktop, "onState")?;
     let subscribe_close = method(&desktop, "onBeforeClose")?;
     let download_update = method(&desktop, "downloadUpdate")?;
-    let document = window.document().ok_or("The desktop window has no document")?;
-    let root = element(&document, "aside", "desktop-update-notice")?;
-    root.set_attribute("role", "status").map_err(describe)?;
-    let text = element(&document, "span", "")?;
-    text.set_text_content(Some("A Solomon Darker update is available."));
-    append(&root, &text)?;
-    for (label, action) in [("Download update", "download"), ("Later", "later")] {
-        let button = element(&document, "button", "")?;
-        button.set_attribute("type", "button").map_err(describe)?;
-        button.set_attribute("data-desktop-update", action).map_err(describe)?;
-        button.set_text_content(Some(label));
-        append(&root, &button)?;
-    }
     let notice = Rc::new(RefCell::new(Notice {
-        document,
-        root: root.clone(),
         current_revision: None,
         dismissed_revision: None,
         active: true,
     }));
-    let click_notice = Rc::clone(&notice);
-    let click_desktop = desktop.clone();
-    let click = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-        let Some(target) = event.target().and_then(|target| target.dyn_into::<Element>().ok())
-        else {
-            return;
-        };
-        let Ok(Some(button)) = target.closest("[data-desktop-update]") else { return };
-        match button.get_attribute("data-desktop-update").as_deref() {
-            Some("later") => {
-                let mut notice = click_notice.borrow_mut();
-                notice.dismissed_revision = notice.current_revision.clone();
-                if let Err(error) = notice.paint() {
-                    report(error);
-                }
-            }
-            Some("download") => {
-                let result = download_update.call0(&click_desktop);
-                spawn_local(async move {
-                    if let Err(error) = settle(result).await {
-                        report(error);
-                    }
-                });
-            }
-            _ => {}
-        }
-    });
-    root.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())
-        .map_err(describe)?;
     let state_notice = Rc::clone(&notice);
     let on_state = Closure::<dyn FnMut(JsValue)>::new(move |value: JsValue| {
         let mut notice = state_notice.borrow_mut();
@@ -164,8 +108,14 @@ pub fn attach(window: &Window, before_close: &Function) -> Result<Option<Desktop
             report(error);
         }
     });
-    let mut bridge =
-        DesktopBridge { notice, click, on_state, remove_state: None, remove_before_close: None };
+    let mut bridge = DesktopBridge {
+        notice,
+        desktop: desktop.clone(),
+        download_update,
+        on_state,
+        remove_state: None,
+        remove_before_close: None,
+    };
     // Keep partial registration under the same Drop path if the preload throws.
     bridge.remove_before_close = Some(unsubscribe(
         subscribe_close.call1(&desktop, before_close.as_ref()).map_err(describe)?,
@@ -196,6 +146,76 @@ pub fn attach(window: &Window, before_close: &Function) -> Result<Option<Desktop
     Ok(Some(bridge))
 }
 
+impl DesktopBridge {
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        if !self.notice.borrow().visible() {
+            return Ok(());
+        }
+        let ctx = frame.ctx.clone();
+        let mut action = None;
+        let area = egui::Area::new(Id::unique("desktop/update"))
+            .order(Order::Foreground)
+            .anchor(egui::Align2::RIGHT_TOP, vec2(-12.0, 12.0))
+            .show(&ctx, |ui| {
+                egui::Frame::new()
+                    .fill(Color32::from_rgb(30, 24, 36))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(181, 152, 86)))
+                    .corner_radius(4.0)
+                    .inner_margin(egui::Margin::symmetric(16, 12))
+                    .show(ui, |ui| {
+                        ui.set_max_width((ctx.content_rect().width() - 58.0).max(100.0));
+                        ui.spacing_mut().item_spacing.x = 12.0;
+                        ui.horizontal_wrapped(|ui| {
+                            let copy = |text: &str| {
+                                RichText::new(text)
+                                    .font(FontId::new(14.0, FontFamily::Name("Georgia".into())))
+                                    .color(Color32::from_rgb(242, 230, 199))
+                            };
+                            ui.label(copy("A Solomon Darker update is available."));
+                            for (id, label) in [("download", "Download update"), ("later", "Later")]
+                            {
+                                let response = ui.add(
+                                    egui::Button::new(copy(label))
+                                        .stroke(Stroke::new(1.0, Color32::from_rgb(139, 114, 68)))
+                                        .corner_radius(3.0)
+                                        .min_size(vec2(0.0, 30.0)),
+                                );
+                                frame.record(&format!("desktop/{id}"), label, "button", &response);
+                                if response.clicked() {
+                                    action = Some(id);
+                                }
+                            }
+                        });
+                    })
+                    .response
+                    .rect
+            });
+        frame.record_rect(
+            "desktop/update",
+            "A Solomon Darker update is available.",
+            "status",
+            area.inner,
+            true,
+        );
+        match action {
+            Some("later") => {
+                let mut notice = self.notice.borrow_mut();
+                notice.dismissed_revision = notice.current_revision.clone();
+            }
+            Some("download") => {
+                let result = self.download_update.call0(&self.desktop);
+                spawn_local(async move {
+                    if let Err(error) = settle(result).await {
+                        report(error);
+                    }
+                });
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+}
+
 pub async fn open_website(window: &Window) -> Result<(), String> {
     invoke(window, "openWebsite").await
 }
@@ -212,13 +232,6 @@ impl Drop for DesktopBridge {
                 report(describe(error));
             }
         }
-        let root = &self.notice.borrow().root;
-        if let Err(error) =
-            root.remove_event_listener_with_callback("click", self.click.as_ref().unchecked_ref())
-        {
-            report(describe(error));
-        }
-        root.remove();
     }
 }
 
@@ -281,4 +294,23 @@ fn describe(error: JsValue) -> String {
 
 fn report(error: String) {
     web_sys::console::error_1(&JsValue::from_str(&error));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Notice;
+
+    #[test]
+    fn later_dismisses_only_the_displayed_update_and_unmounting_retires_the_notice() {
+        let mut notice = Notice { current_revision: None, dismissed_revision: None, active: true };
+        assert!(!notice.visible());
+        notice.current_revision = Some("first".into());
+        assert!(notice.visible());
+        notice.dismissed_revision = notice.current_revision.clone();
+        assert!(!notice.visible());
+        notice.current_revision = Some("second".into());
+        assert!(notice.visible());
+        notice.active = false;
+        assert!(!notice.visible());
+    }
 }

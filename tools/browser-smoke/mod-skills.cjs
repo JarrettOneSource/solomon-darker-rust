@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const {reachCollegeLoadout} = require('./menu-journey.cjs');
+const ui = require('./gpu-ui.cjs');
 
 const output = path.resolve(process.env.OUT);
 const contentDirectory = path.resolve(process.env.CONTENT_DIR);
@@ -31,9 +32,7 @@ const lessonCasts = () => state.runtime?.state_values?.find(row =>
   row.key === 'gravity.lesson.casts' && row.scope_kind === 'participant-run'
     && row.scope_id === `${state.id}:${state.frame?.snapshot.boneyard?.run_id ?? 'profile'}`)?.value || 0;
 const binding = () => state.runtime?.mod_quickbar?.find(row => row.content_id === gravitySpell);
-const quickbar = page => page.getByRole('navigation', {name: 'Mod spell quickbar', exact: true});
-const book = page => page.getByRole('complementary', {name: 'Mod skills', exact: true});
-const editor = page => page.locator('#cheat-menu-lua-editor');
+const spellButtonId = () => `mod/skill:binding:${gravitySpell}`;
 
 async function until(predicate, label) {
   const deadline = Date.now() + 30000;
@@ -62,7 +61,7 @@ function expectedTarget(character) {
     y: character.position.y - Math.cos(radians) * 300};
 }
 async function hiddenMenu(page) {
-  await page.locator('.game-menus[data-menu-screen="hidden"]').waitFor({state: 'attached'});
+  await ui.surface(page, 'hidden');
 }
 async function settledAuthority() {
   await until(() => player() && !player().economy.college_intro_pending
@@ -71,23 +70,21 @@ async function settledAuthority() {
   'unheld accepted College authority');
 }
 async function openBook(page) {
-  await page.locator('.hud-tome').click();
-  await book(page).waitFor();
+  await ui.click(page, 'hud:skills');
+  await ui.widget(page, 'mod/skill-book');
 }
 async function closeBook(page) {
   await page.keyboard.press('Escape');
-  await book(page).waitFor({state: 'hidden'});
+  await ui.noWidget(page, 'mod/skill-book');
 }
 async function openConsole(page) {
   await page.keyboard.press('Backquote');
-  await page.locator('[data-cheat-action="console"]').click();
-  await editor(page).waitFor();
-  await editor(page).fill('');
-  await editor(page).focus();
+  await ui.click(page, 'cheats/tab:console');
+  await ui.fill(page, 'cheats/lua-editor', '');
 }
 async function closeConsole(page) {
   await page.keyboard.press('Backquote');
-  await editor(page).waitFor({state: 'hidden'});
+  await ui.noWidget(page, 'cheats/lua-editor');
 }
 async function readyToCast() {
   await until(() => {
@@ -131,17 +128,9 @@ async function numericKey(page) {
 async function keySamples(page) {
   return page.evaluate(() => window.modSkillKeySamples);
 }
-async function geometry(page, selector) {
-  return page.locator(selector).evaluate(element => {
-    const rect = element.getBoundingClientRect();
-    const style = getComputedStyle(element);
-    const image = element.querySelector('img');
-    return {x: rect.x, y: rect.y, width: rect.width, height: rect.height,
-      fontSize: style.fontSize, padding: style.padding, gap: style.gap,
-      image: image && {loaded: image.complete && image.naturalWidth > 0,
-        width: image.naturalWidth, height: image.naturalHeight,
-        verifiedBlob: image.src.startsWith('blob:')}};
-  });
+async function geometry(page, id) {
+  const widget = await ui.widget(page, id);
+  return {id, ...ui.bounds(widget), value: widget.value};
 }
 
 (async () => {
@@ -180,8 +169,7 @@ async function geometry(page, selector) {
   });
   page.on('requestfailed', request => {
     const failure = {path: new URL(request.url()).pathname, error: request.failure()?.errorText};
-    if (request.resourceType() === 'media' && failure.error === 'net::ERR_ABORTED') cancelledMedia.push(failure);
-    else errors.push(`${failure.path}: ${failure.error}`);
+    errors.push(`${failure.path}: ${failure.error}`);
   });
   page.on('request', request => {
     const requested = new URL(request.url());
@@ -241,53 +229,42 @@ async function geometry(page, selector) {
   });
   try {
     await page.goto(url.href, {waitUntil: 'load'});
-    await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-      && document.querySelector('#status')?.textContent === '');
-    const prompt = page.locator('.title-prompt:not([hidden])');
-    if (await prompt.isVisible()) await prompt.locator('[data-menu-action="prompt-secondary"]').click();
+    await ui.ready(page);
+    if (ui.findWidget(await ui.readUi(page), 'prompt-secondary')) await ui.click(page, 'prompt-secondary');
     assert.equal(await page.evaluate(() => localStorage.getItem('sdr.token')), null);
 
     mark('enable real private cheats and subscribe through Cloud');
-    await page.locator('[data-menu-action="settings"]').click();
-    await page.locator('[data-menu-action="settings-page:cloud"]').click();
-    const cheats = page.locator('[data-menu-action="settings-toggle:cheats"]');
-    if (await cheats.getAttribute('aria-pressed') === 'false') await cheats.click();
-    const shared = page.locator('[data-menu-action="settings-toggle:shared-hub"]');
-    if (await shared.getAttribute('aria-pressed') === 'true') await shared.click();
-    await page.locator('[data-menu-action="settings-back"]').click();
-    await page.locator('[data-menu-action="settings-back"]').click();
-    await page.getByRole('button', {name: 'Explore the Dark Cloud', exact: true}).click();
-    await page.locator('.dark-cloud-rows[aria-busy="false"]').waitFor();
-    const subscribe = page.locator(`[data-menu-action="cloud-subscription:subscribe:${acceptedPackage.slug}"]`);
-    if (await subscribe.count()) await subscribe.click();
-    await page.locator(`[data-mod-slug="${acceptedPackage.slug}"] .dark-cloud-row-state.enabled`).waitFor();
+    await ui.click(page, 'settings');
+    await ui.click(page, 'settings-page:cloud');
+    if ((await ui.widget(page, 'settings-toggle:cheats')).selected === false) await ui.click(page, 'settings-toggle:cheats');
+    if ((await ui.widget(page, 'settings-toggle:shared-hub')).selected === true) await ui.click(page, 'settings-toggle:shared-hub');
+    await ui.click(page, 'settings-back'); await ui.click(page, 'settings-back');
+    await ui.click(page, 'dark-cloud');
+    const subscribeId = `cloud-subscription:subscribe:${acceptedPackage.slug}`;
+    await ui.waitForUi(page, snapshot => ui.findWidget(snapshot, subscribeId)
+      || ui.findWidget(snapshot, `cloud-subscription:disable:${acceptedPackage.slug}`), 'available subscription');
+    if (ui.findWidget(await ui.readUi(page), subscribeId)) await ui.click(page, subscribeId);
+    await ui.widget(page, `cloud-subscription:disable:${acceptedPackage.slug}`);
     await page.screenshot({path: path.join(output, 'gravity-enabled.png')});
     check('the real QA account subscribes to the unchanged Source Gravity Lesson package');
 
     mark('start the real private College with its accepted package');
     await page.keyboard.press('Escape');
-    await page.getByRole('button', {name: 'MAIN MENU', exact: true}).click();
-    await page.locator('[data-menu-action="play"]').click();
-    await page.locator('[data-menu-action="new-game"]').click();
-    const consent = page.getByRole('dialog', {name: 'Local play is active', exact: true});
-    // A previous failed attempt may already have saved this QA wizard. Source
-    // requires its real kill-character confirmation before starting another.
-    await until(async () => await prompt.isVisible() || await consent.isVisible(),
-      'the real New Game confirmation or content consent');
-    if (await prompt.isVisible()) await prompt.locator('[data-menu-action="prompt-primary"]').click();
-    await consent.waitFor();
-    assert.ok((await consent.innerText()).includes('Gravity Lesson'));
-    await consent.getByRole('button', {name: 'CONTINUE LOCAL', exact: true}).click();
-    await until(async () => await page.locator('.game-menus[data-menu-screen="create"]').count()
-      || await page.locator('.player-panels:not([hidden]) [data-player-panel="dialogue"]').count(),
-    'actual College admission or Create');
-    if (await page.locator('.player-panels:not([hidden]) [data-player-panel="dialogue"]').count())
-      await reachCollegeLoadout(page);
-    const name = page.getByRole('textbox', {name: 'Wizard name', exact: true});
-    await name.fill('Gravitas');
-    assert.equal(await name.inputValue(), 'Gravitas', 'the real Source-width name input accepts this name');
-    await page.locator('[data-menu-action="element:ether"]').click();
-    await page.locator('[data-menu-action="discipline:arcane"]').click();
+    await ui.click(page, 'leave');
+    await ui.click(page, 'play'); await ui.click(page, 'new-game');
+    await ui.waitForUi(page, snapshot => snapshot.surface === 'routing'
+      || ui.findWidget(snapshot, 'prompt-primary'), 'New Game confirmation or content consent');
+    if (ui.findWidget(await ui.readUi(page), 'prompt-primary')) await ui.click(page, 'prompt-primary');
+    await ui.surface(page, 'routing');
+    const consent = await ui.widget(page, 'routing/dialog');
+    assert.ok(consent.value.includes('Gravity Lesson'));
+    await ui.click(page, 'routing-continue');
+    await ui.waitForUi(page, snapshot => snapshot.surface === 'create'
+      || ui.findWidget(snapshot, 'panel:dialogue'), 'actual College admission or Create');
+    if (ui.findWidget(await ui.readUi(page), 'panel:dialogue')) await reachCollegeLoadout(page);
+    await ui.fill(page, 'create-name', 'Gravitas');
+    await ui.value(page, 'create-name', 'Gravitas');
+    await ui.click(page, 'element:ether'); await ui.click(page, 'discipline:arcane');
     await hiddenMenu(page);
     await until(() => state.runtime?.skills?.some(row => row.name === 'Gravity Student') && player(),
       'the accepted prepared skills runtime');
@@ -302,27 +279,34 @@ async function geometry(page, selector) {
     assert.ok(!state.runtime.skill_ranks.some(row => row.content_id === gravitySkill),
       'use a fresh QA profile: Source intentionally retains authored ranks across New Game');
     check('the actual authority admits private cheats and the exact accepted content digest');
+    await ui.click(page,'social/party');await ui.click(page,'social/party-mods');
+    const packageRow=await ui.widget(page,`social/party-mod:${acceptedPackage.packageId}`);
+    assert.ok(packageRow.label.includes(acceptedPackage.name || 'Gravity Lesson'));
+    assert.equal(packageRow.value,acceptedPackage.version);
+    await ui.assertGpuOnly(page);await page.screenshot({path:path.join(output,'gravity-party-mods.png')});
+    await page.keyboard.press('Escape');await ui.noWidget(page,'social/party-menu');
+    check('Party Mods lists the actually admitted package name and version inside stock chrome');
+
 
     mark('earn the native offer with the real stock Grant XP control');
     // Source grantPlayerExperience requires XP strictly above the threshold.
     const experience = Math.floor(player().progression.next_threshold - player().progression.experience) + 1;
     assert.ok(experience > 0);
     await page.keyboard.press('Backquote');
-    await page.getByRole('spinbutton', {name: 'EXPERIENCE', exact: true}).fill(String(experience));
+    await ui.fill(page, 'cheats/experience', String(experience));
     const luaBefore = state.luaRequests.length;
-    await page.getByRole('button', {name: 'GRANT XP', exact: true}).click();
+    await ui.click(page, 'cheats/submit:experience');
     await until(() => state.luaRequests.length > luaBefore, 'real stock Cheat XP Lua request');
     await until(() => player()?.progression.level >= 2 && player().progression.pending_offer,
       'the real derived native level offer');
-    const picker = page.getByRole('complementary', {name: 'Mod skill choices', exact: true});
-    await picker.waitFor();
-    await picker.getByRole('button', {name: /Gravity Student/}).waitFor();
-    const pickerGeometry = await geometry(page, '.mod-skill-picker');
+    await ui.widget(page, 'mod/skill-picker');
+    await ui.widget(page, `mod/skill:offer:${gravitySkill}`);
+    const pickerGeometry = await geometry(page, 'mod/skill-picker');
     assert.ok(Math.abs(pickerGeometry.width - 400) <= 1 / 64, 'Source picker width is 25 × 16px');
     await page.screenshot({path: path.join(output, 'gravity-picker.png')});
     const nativeSequence = player().progression.pending_offer.sequence;
     const modSequence = state.runtime.skill_offers.find(row => row.player_id === state.id).sequence;
-    await picker.getByRole('button', {name: /Gravity Student/}).click();
+    await ui.click(page, `mod/skill:offer:${gravitySkill}`);
     await until(() => state.runtime.skill_ranks.some(row => row.content_id === gravitySkill && row.rank === 1)
       && state.runtime.spells.some(row => row.name === 'Gravity Well')
       && !player().progression.pending_offer, 'accepted authored skill choice and spell unlock');
@@ -335,28 +319,25 @@ async function geometry(page, selector) {
 
     mark('bind Gravity Well through the real Skill Book');
     await openBook(page);
-    assert.ok((await book(page).innerText()).includes('Rank 1 / 3'));
-    const spellButton = book(page).getByRole('button', {name: /Gravity Well/});
-    assert.ok((await spellButton.innerText()).includes('Add to slot 1'));
-    await spellButton.click();
+    assert.ok((await ui.widget(page, `mod/skill:learned:${gravitySkill}`)).value.includes('Rank 1 / 3'));
+    assert.ok((await ui.widget(page, spellButtonId())).value.includes('Add to slot 1'));
+    await ui.click(page, spellButtonId());
     await until(() => binding()?.slot === 0, 'actual slot-one binding');
-    await quickbar(page).waitFor();
-    const bookGeometry = await geometry(page, '.mod-skill-book');
+    await ui.widget(page, 'mod/quickbar:0');
+    const bookGeometry = await geometry(page, 'mod/skill-book');
     assert.ok(Math.abs(bookGeometry.width - 288) <= 1 / 64, 'Source Book width is 18 × 16px');
-    const quickbarGeometry = await geometry(page, '.mod-skill-quickbar button');
-    assert.ok(Math.abs(quickbarGeometry.width - 41.6) <= 1 / 64,
-      'Source quickbar width retains Chromium layout-unit quantization only');
-    assert.ok(quickbarGeometry.image.loaded && quickbarGeometry.image.verifiedBlob);
-    assert.equal(quickbarGeometry.image.width, 100);
-    assert.equal(quickbarGeometry.image.height, 100);
+    const quickbarGeometry = await geometry(page, 'mod/quickbar:0');
+    assert.ok(Math.abs(quickbarGeometry.width - 41.6) <= 1 / 64, 'Source quickbar width remains 41.6px');
+    await ui.waitForUi(page, snapshot => /^100x100 blob:/.test(ui.findWidget(snapshot, 'mod/quickbar-icon:0')?.value || ''), 'verified 100px icon texture ready');
+    await ui.assertGpuOnly(page);
     await page.screenshot({path: path.join(output, 'gravity-book-bound.png')});
     await closeBook(page);
     check('the real Skill Book binds its unlocked spell, verified icon and Source-sized quickbar');
 
     mark('cast the actual authored area with the quickbar button');
-    await acceptedCast(() => quickbar(page).getByTitle('Gravity Well (Shift+1)', {exact: true}).click(),
+    await acceptedCast(() => ui.click(page, 'mod/quickbar:0'),
       'quickbar click');
-    await page.locator('.mod-spell-effect__area').waitFor();
+    await ui.waitForUi(page, snapshot => snapshot.widgets.some(widget => widget.id.startsWith('mod/effect:') && widget.label === 'area'), 'drawn authored area effect');
     await until(() => state.statuses.some(status => status.targetId === state.id), 'actual Steady caster status');
     await page.screenshot({path: path.join(output, 'gravity-area-cast.png')});
     check('a real quickbar click reaches the heading target, area actor, Steady status and lesson reducer');
@@ -364,10 +345,10 @@ async function geometry(page, selector) {
     mark('check Source keyboard behavior with actual editable Console focus');
     await openConsole(page);
     await noCast(() => page.keyboard.press('Shift+Digit1'), 'US Shift+1 is !, so Source sends no cast');
-    assert.equal(await editor(page).inputValue(), '!');
-    await editor(page).fill('');
+    await ui.value(page, 'cheats/lua-editor', '!');
+    await ui.fill(page, 'cheats/lua-editor', '');
     await noCast(() => page.keyboard.press('Control+Shift+Numpad1'), 'Control excludes the quickbar shortcut');
-    await editor(page).fill('');
+    await ui.fill(page, 'cheats/lua-editor', '');
     await acceptedCast(async () => {
       const count = state.casts.length;
       await page.keyboard.down('Shift');
@@ -379,19 +360,19 @@ async function geometry(page, selector) {
     }, 'focused Console keypad');
     const focusedKeys = await keySamples(page);
     assert.ok(focusedKeys.some(row => row.key === '1' && row.code === 'Numpad1'
-      && row.trusted && row.defaultPrevented && row.target === 'cheat-menu-lua-editor' && !row.repeat));
+      && row.trusted && row.defaultPrevented && row.target === 'TEXTAREA' && !row.repeat));
     assert.ok(focusedKeys.some(row => row.repeat && row.code === 'Numpad1' && !row.defaultPrevented));
-    assert.equal(await editor(page).evaluate(element => element === document.activeElement), true);
+    await ui.focused(page, 'cheats/lua-editor');
     await page.screenshot({path: path.join(output, 'gravity-focused-shortcut.png')});
     await closeConsole(page);
     check('trusted editable-focus numeric key casts; US !, Control and repeated keys preserve Source exclusions');
 
     mark('unbind and rebind through the real Skill Book');
     await openBook(page);
-    assert.ok((await spellButton.innerText()).includes('Remove from slot 1'));
-    await spellButton.click();
+    assert.ok((await ui.widget(page, spellButtonId())).value.includes('Remove from slot 1'));
+    await ui.click(page, spellButtonId());
     await until(() => !binding(), 'actual binding removal');
-    await quickbar(page).waitFor({state: 'hidden'});
+    await ui.noWidget(page, 'mod/quickbar:0');
     await closeBook(page);
     await openConsole(page);
     const keysBefore = (await keySamples(page)).length;
@@ -400,7 +381,7 @@ async function geometry(page, selector) {
     assert.ok(unboundKeys.some(row => row.key === '1' && !row.defaultPrevented));
     await closeConsole(page);
     await openBook(page);
-    await spellButton.click();
+    await ui.click(page, spellButtonId());
     await until(() => binding()?.slot === 0, 'actual slot-one rebinding');
     await closeBook(page);
     await openConsole(page);
@@ -411,11 +392,11 @@ async function geometry(page, selector) {
     mark('leave the actual session and check quickbar disposal');
     const leaveBefore = state.leaveReceipts;
     await page.keyboard.press('Escape');
-    await page.locator('[data-menu-action="leave"]').click();
-    await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
+    await ui.click(page, 'leave');
+    await ui.surface(page, 'title');
     assert.ok(state.leaveReceipts > leaveBefore);
     assert.ok(state.checkpoints > 0);
-    await quickbar(page).waitFor({state: 'hidden'});
+    await ui.noWidget(page, 'mod/quickbar:0');
     await noCast(() => numericKey(page), 'leaving the session removes the quickbar listener');
     assert.equal(await page.evaluate(() => localStorage.getItem('sdr.token')), null);
     assert.ok(await page.evaluate(() => Boolean(localStorage.getItem('sdr.token:/game-stg'))));
@@ -433,13 +414,12 @@ async function geometry(page, selector) {
     console.log(JSON.stringify({passed: true, checks, errors}));
   } catch (error) {
     await page.screenshot({path: path.join(output, 'mod-skills-failure.png')});
-    const ui = await page.evaluate(() => ({menu: document.querySelector('.game-menus')?.dataset.menuScreen,
-      status: document.querySelector('#status')?.textContent, text: document.body.innerText.slice(-3500)}));
+    const gpu = await ui.readUi(page);
     fs.writeFileSync(path.join(output, 'mod-skills-failure.json'), JSON.stringify({passed: false,
       step, error: error.stack, checks, errors, requests, expectedNotFound, cancelledMedia,
       bundles: [...bundles], accepted: snapshot(), actions: state.actions, casts: state.casts,
       lua: state.luaResults.map(({request_id, ok, values, error}) => ({request_id, ok, values, error})),
-      keys: await keySamples(page), ui}, null, 2));
+      keys: await keySamples(page), gpu}, null, 2));
     throw error;
   } finally {
     let timeout;

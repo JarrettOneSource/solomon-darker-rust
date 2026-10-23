@@ -6,6 +6,8 @@ const path = require('node:path');
 const {chromium} = require(process.env.PW);
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const {walkSolomonEntrance} = require('./solomon-entrance.cjs');
+const {reachCollegeLoadout} = require('./menu-journey.cjs');
+const ui = require('./gpu-ui.cjs');
 
 const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
 const output = path.resolve(process.env.OUT);
@@ -113,12 +115,7 @@ async function open(account, label) {
   });
   page.on('requestfailed', item => {
     const failure = `${new URL(item.url()).pathname}: ${item.failure()?.errorText}`;
-    if (item.resourceType() === 'media' && item.failure()?.errorText === 'net::ERR_ABORTED') {
-      client.cancelledMedia.push(failure);
-    } else if (client.accountNavigating && item.failure()?.errorText === 'net::ERR_ABORTED'
-      && !new URL(item.url()).pathname.includes('/api/') && item.resourceType() !== 'document') {
-      client.cancelledNavigation.push(failure);
-    } else client.errors.push(failure);
+    client.errors.push(failure);
   });
   page.on('response', response => {
     const pathname = new URL(response.url()).pathname;
@@ -160,16 +157,13 @@ async function open(account, label) {
     });
   });
   await page.goto(url, {waitUntil: 'load'});
-  await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0
-    && document.querySelector('#status')?.textContent === '');
+  await ui.ready(page);
   client.renderer = await page.evaluate(() => {
     const gl = document.querySelector('canvas').getContext('webgl2');
     const extension = gl.getExtension('WEBGL_debug_renderer_info');
     return extension ? gl.getParameter(extension.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
   });
-  if (await page.locator('.title-prompt:not([hidden])').isVisible()) {
-    await page.locator('.title-prompt:not([hidden]) [data-menu-action="prompt-secondary"]').click();
-  }
+  if(ui.findWidget(await ui.readUi(page),'prompt-secondary'))await ui.click(page,'prompt-secondary');
   if (!account.token) await registerPeer(client, account);
   return client;
 }
@@ -179,11 +173,11 @@ async function registerPeer(client, account) {
   client.accountNavigating = true;
   const catalog = page.waitForResponse(response => new URL(response.url()).pathname
     === '/game-stg/api/mods' && response.request().method() === 'GET');
-  await page.locator('[data-menu-action="explore"]').click();
+  await ui.click(page,'dark-cloud');
   const response = await catalog;
   assert.equal(response.status(), 200);
   await response.finished();
-  await page.locator('[data-menu-action="cloud-sign-in"]').click();
+  await ui.click(page,'cloud-sign-in');
   await page.waitForURL(current => current.pathname === '/game-stg/login');
   await page.getByRole('link', {name: 'Create an account', exact: true}).click();
   await page.waitForURL(current => current.pathname === '/game-stg/register');
@@ -207,12 +201,9 @@ async function registerPeer(client, account) {
   await page.waitForURL(current => current.pathname === '/game-stg/account');
   await page.getByRole('link', {name: 'Play', exact: true}).first().click();
   await page.waitForURL(current => current.pathname === '/game-stg/');
-  await page.waitForFunction(expected => window.wasmBindings?.wizard_state().length > 0
-    && document.querySelector('#status')?.textContent === ''
-    && document.querySelector('.game-account-name-title')?.getAttribute('data-account-username') === expected,
-  account.username);
-  const prompt = page.locator('.title-prompt:not([hidden])');
-  if (await prompt.isVisible()) await prompt.locator('[data-menu-action="prompt-secondary"]').click();
+  await ui.ready(page);
+  await ui.waitForUi(page,snapshot=>snapshot.widgets.some(widget=>widget.label===account.username),'actual account name after registration');
+  if(ui.findWidget(await ui.readUi(page),'prompt-secondary'))await ui.click(page,'prompt-secondary');
   const storage = await page.evaluate(() => ({unscopedAbsent: localStorage.getItem('sdr.token') === null,
     token: localStorage.getItem('sdr.token:/game-stg')}));
   assert.equal(storage.unscopedAbsent, true);
@@ -247,27 +238,14 @@ function castAuthority(client) {
     projectiles: client.frame?.snapshot.spells.projectiles.map(row => Object.keys(row)[0]),
     transients: client.frame?.snapshot.spells.transients.map(row => Object.keys(row)[0])};
 }
-async function inputBoundary(client, label) {
-  const browser = await client.page.evaluate(() => {
-    const node = value => value && {tag: value.tagName, id: value.id,
-      className: value.className, hidden: value.hidden};
-    return {input: Array.from(window.wasmBindings.gameplay_input_state()),
-      active: node(document.activeElement), hit: node(document.elementFromPoint(1000, 350)),
-      menu: document.querySelector('.game-menus')?.dataset.menuScreen,
-      joysticks: [...document.querySelectorAll('[data-joystick]')].map(value => ({
-        lane: value.dataset.joystick, blocked: value.hasAttribute('data-blocked'),
-        castDisabled: value.hasAttribute('data-cast-disabled')}))};
-  });
-  client.inputBoundaries.push({label, authority: castAuthority(client), browser});
+async function inputBoundary(client,label){
+  const browser=await client.page.evaluate(()=>({input:Array.from(window.wasmBindings.gameplay_input_state()),gpu:JSON.parse(window.wasmBindings.gpu_ui_state())}));
+  client.inputBoundaries.push({label,authority:castAuthority(client),browser});
 }
-async function castReady(client) {
-  await client.page.waitForFunction(() => {
-    const primary = document.querySelector('[data-joystick="primary"]');
-    return primary && !primary.hasAttribute('data-blocked')
-      && !primary.hasAttribute('data-cast-disabled')
-      && document.querySelector('.game-menus')?.dataset.menuScreen === 'hidden'
-      && document.elementFromPoint(1000, 350)?.id === 'game';
-  });
+async function castReady(client){
+  await ui.waitForUi(client.page,snapshot=>snapshot.surface==='hidden'&&!ui.findWidget(snapshot,'cheats/dialog')
+    &&!snapshot.widgets.some(widget=>widget.id.startsWith('panel:')),'ordinary gameplay input surface');
+  await until(()=>!client.frame.host.pause&&!client.frame.host.resume_grace&&!client.frame.host.loading_run_id,'accepted cast readiness');
 }
 function observeFlame(client) {
   const frame = client.frame.flame_presentation;
@@ -290,20 +268,17 @@ function observeFlame(client) {
     if (client.flame.actors.length > 20) client.flame.actors.shift();
   }
 }
-async function selection(client, name) {
-  await client.page.locator('.game-menus[data-menu-screen="create"]').waitFor();
-  await client.page.getByRole('textbox', {name: 'Wizard name', exact: true}).fill(name);
-  await client.page.locator('[data-menu-action="element:fire"]').click();
-  await client.page.locator('[data-menu-action="discipline:arcane"]').click();
-  await until(() => client.id && participant(client), `${client.label} actual admission`);
-  await client.page.locator('.game-menus[data-menu-screen="hidden"]').waitFor({state: 'attached'});
+async function selection(client,name){
+  await ui.waitForUi(client.page,snapshot=>snapshot.surface==='create'||ui.findWidget(snapshot,'panel:dialogue')||ui.findWidget(snapshot,'college-intro'),'actual fresh character admission',{timeout:120000});
+  if((await ui.readUi(client.page)).surface!=='create')await reachCollegeLoadout(client.page);
+  await ui.fill(client.page,'create-name',name);await ui.click(client.page,'element:fire');await ui.click(client.page,'discipline:arcane');
+  await until(()=>client.id&&participant(client),`${client.label} actual admission`);await ui.surface(client.page,'hidden');
 }
 async function move(client, key, distance) {
   const before = {...participant(client).wizard.position};
   const previousInput = client.inputs.at(-1)?.sequence ?? 0;
   await client.page.bringToFront();
-  await client.page.locator('[data-joystick="movement"]:not([data-blocked])')
-    .waitFor({state: 'attached'});
+  await castReady(client);
   await client.page.keyboard.down(key);
   try {
     await until(() => Math.hypot(participant(client).wizard.position.x - before.x,
@@ -319,10 +294,10 @@ async function move(client, key, distance) {
 async function consoleCommand(client, code) {
   await client.page.bringToFront();
   await client.page.keyboard.press('Backquote');
-  await client.page.locator('[data-cheat-action="console"]').click();
-  await client.page.locator('#cheat-menu-lua-editor').fill(code);
+  await ui.click(client.page,'cheats/tab:console');
+  await ui.fill(client.page,'cheats/lua-editor',code);
   const firstRequest = client.luaRequests.length;
-  await client.page.getByRole('button', {name: 'RUN LUA', exact: true}).click();
+  await ui.click(client.page,'cheats/run');
   await until(() => client.luaRequests.slice(firstRequest).some(request => request.code === code),
     'the actual Console execution request');
   const request = client.luaRequests.slice(firstRequest).find(request => request.code === code);
@@ -331,8 +306,7 @@ async function consoleCommand(client, code) {
   const result = client.lua.find(result => result.request_id === request.request_id);
   assert.equal(result.ok, true, result.error || 'ordinary Console command accepted');
   await client.page.keyboard.press('Backquote');
-  await client.page.locator('[data-joystick="movement"]:not([data-blocked])')
-    .waitFor({state: 'attached'});
+  await castReady(client);
   return result;
 }
 async function flamePresentation(client) {
@@ -405,26 +379,26 @@ async function leave(client) {
   const previous = client.leaves;
   await client.page.bringToFront();
   await client.page.keyboard.press('Escape');
-  await client.page.locator('.game-menus[data-menu-screen="pause"]').waitFor({state: 'attached'});
-  await client.page.locator('[data-menu-action="leave"]:visible').click();
-  await client.page.locator('.game-menus[data-menu-screen="title"]').waitFor({state: 'attached'});
+  await ui.surface(client.page,'pause');
+  await ui.click(client.page,'leave');
+  await ui.surface(client.page,'title');
   await until(() => client.leaves > previous, 'actual saved Leave acknowledgement');
 }
 async function shadowSettings(client, lighting, shadows, name) {
   await client.page.bringToFront();
   await client.page.keyboard.press('Escape');
-  await client.page.locator('.game-menus[data-menu-screen="pause"]').waitFor({state: 'attached'});
-  await client.page.locator('[data-menu-action="pause-settings"]').click();
-  await client.page.locator('[data-menu-action="settings-page:performance"]').click();
+  await ui.surface(client.page,'pause');
+  await ui.click(client.page,'pause-settings');
+  await ui.click(client.page,'settings-page:performance');
   for (const [key, enabled] of [['lighting', lighting], ['shadows', shadows]]) {
-    const toggle = client.page.locator(`[data-menu-action="settings-toggle:${key}"]`);
-    if (await toggle.getAttribute('aria-pressed') !== String(enabled)) await toggle.click();
-    await until(async () => await toggle.getAttribute('aria-pressed') === String(enabled),
+    const toggle=`settings-toggle:${key}`;
+    if(String((await ui.widget(client.page,toggle)).selected)!==String(enabled))await ui.click(client.page,toggle);
+    await until(async()=>String((await ui.widget(client.page,toggle)).selected)===String(enabled),
       `the actual ${key} setting reaches its rendered state`);
   }
-  await client.page.locator('[data-menu-action="settings-back"]').click();
-  await client.page.locator('[data-menu-action="settings-back"]').click();
-  await client.page.locator('[data-menu-action="resume"]').click();
+  await ui.click(client.page,'settings-back');
+  await ui.click(client.page,'settings-back');
+  await ui.click(client.page,'resume');
   await until(() => !client.frame.host.pause && !client.frame.host.resume_grace,
     'real settings resume admission');
   await client.page.screenshot({path: path.join(output, `${name}.png`)});
@@ -439,11 +413,11 @@ async function combatAdmission(client) {
       && response.request().method() === 'PUT';
   });
   await client.page.keyboard.press('Escape');
-  await client.page.locator('.game-menus[data-menu-screen="pause"]').waitFor({state: 'attached'});
+  await ui.surface(client.page,'pause');
   const response = await persisted;
   assert.equal(response.status(), 200);
   await response.finished();
-  await client.page.locator('[data-menu-action="resume"]').click();
+  await ui.click(client.page,'resume');
   await until(() => !client.frame.host.pause && !client.frame.host.resume_grace,
     'real resume before the Solomon entrance');
   await castReady(client);
@@ -516,42 +490,34 @@ async function close(client) {
     step = 'private College';
     const leader = await open(leaderAccount, 'leader');
     const guest = await open(peer, 'living-peer');
-    await leader.page.locator('[data-menu-action="settings"]:visible').click();
-    await leader.page.locator('[data-menu-action="settings-page:cloud"]').click();
+    await ui.click(leader.page,'settings');
+    await ui.click(leader.page,'settings-page:cloud');
     for (const [key, value] of [['shared-hub', 'false'], ['cheats', 'true']]) {
-      const toggle = leader.page.locator(`[data-menu-action="settings-toggle:${key}"]`);
-      if (await toggle.getAttribute('aria-pressed') !== value) await toggle.click();
+      const toggle=`settings-toggle:${key}`;
+      if(String((await ui.widget(leader.page,toggle)).selected)!==value)await ui.click(leader.page,toggle);
     }
-    await leader.page.locator('[data-menu-action="settings-back"]').click();
-    await leader.page.locator('[data-menu-action="settings-back"]').click();
-    await leader.page.locator('[data-menu-action="play"]').click();
-    await leader.page.locator('[data-menu-action="new-game"]').click();
-    await leader.page.locator('.game-menus[data-menu-screen="create"], [role="dialog"][aria-label="Kill character?"]')
-      .first().waitFor();
-    const confirmation = leader.page.getByRole('dialog', {name: 'Kill character?', exact: true});
-    if (await confirmation.isVisible()) await confirmation.locator('[data-menu-action="prompt-primary"]').click();
+    await ui.click(leader.page,'settings-back');
+    await ui.click(leader.page,'settings-back');
+    await ui.click(leader.page,'play');
+    await ui.click(leader.page,'new-game');
+    await ui.waitForUi(leader.page,snapshot=>['create','routing'].includes(snapshot.surface)||ui.findWidget(snapshot,'prompt-primary')||ui.findWidget(snapshot,'college-intro')||ui.findWidget(snapshot,'panel:dialogue'),'New Game admission',{timeout:120000});
+    if(ui.findWidget(await ui.readUi(leader.page),'prompt-primary'))await ui.click(leader.page,'prompt-primary');
+    if((await ui.readUi(leader.page)).surface==='routing')await ui.click(leader.page,'routing-continue');
     await selection(leader, 'Severin');
-    await leader.page.locator('[data-social-action="party"]').click();
-    await leader.page.locator('[data-native-ui-party-tab-action="settings"]').click();
-    const code = await leader.page.locator('[data-party-code]').getAttribute('data-party-code');
-    assert.ok(code);
-    await leader.page.keyboard.press('Escape');
-    await leader.page.locator('[data-native-ui-party-tab-action="settings"]').waitFor({state: 'detached'});
-    assert.equal(await leader.page.locator('.game-menus').getAttribute('data-menu-screen'), 'hidden',
-      'closing direct-chip Party with Escape does not open Pause underneath');
-    await guest.page.locator('[data-menu-action="play"]').click();
-    await guest.page.locator('[data-menu-action="join-party"]').click();
-    await guest.page.getByRole('textbox', {name: 'Party ID', exact: true}).fill(code);
-    await guest.page.locator('button[data-menu-action="join-code"]').click();
-    await guest.page.getByRole('dialog', {name: 'Join party consent', exact: true})
-      .getByRole('button', {name: 'JOIN PARTY', exact: true}).click();
+    await ui.click(leader.page,'social/party');await ui.click(leader.page,'social/party-settings');
+    const code=(await ui.widget(leader.page,'social/copy')).value;assert.ok(code);
+    await leader.page.keyboard.press('Escape');await ui.noWidget(leader.page,'social/party-menu');
+    assert.equal((await ui.readUi(leader.page)).surface,'hidden','closing Party with Escape leaves gameplay active');
+    await ui.click(guest.page,'play');await ui.click(guest.page,'join-party');
+    await ui.fill(guest.page,'join-party-code',code);await ui.click(guest.page,'join-code');
+    await ui.surface(guest.page,'routing');await ui.click(guest.page,'routing-continue');
     await selection(guest, 'Lucian');
     await until(() => leader.frame.host.connected_player_ids.length === 2
       && guest.frame.host.connected_player_ids.length === 2, 'same actual two-player College');
     checked('actual private party code and consent admit two fresh wizard selections');
 
     step = 'Boneyard readiness';
-    await leader.page.getByRole('button', {name: 'Enter the Boneyard', exact: true}).click();
+    await ui.click(leader.page,(await ui.byLabel(leader.page,'Enter the Boneyard',{role:'button'})).id);
     await until(() => clients.every(client => client.frame?.snapshot.boneyard
       && !client.frame.host.loading_run_id && !client.frame.host.resume_grace
       && !client.frame.host.pause), 'both actual renderers ready');
@@ -591,11 +557,10 @@ async function close(client) {
     await until(() => life(leader) === 'spectating', 'real enemy damage through terminal player pose');
     assert.equal(life(guest), 'alive');
     assert.equal(leader.frame.snapshot.run.phase.toLowerCase(), 'active');
-    const status = leader.page.locator('.boneyard-spectator-status:not([hidden])');
-    await status.waitFor();
-    assert.equal(await status.getAttribute('data-target-player-id'), guest.id);
-    assert.equal(await status.getAttribute('data-run-id'), runId);
-    assert.ok((await status.getAttribute('aria-label')).includes('Lucian'));
+    const spectator=async()=>JSON.parse((await ui.widget(leader.page,'spectator/status')).value);
+    assert.equal((await spectator()).targetPlayerId,guest.id);assert.equal((await spectator()).runId,runId);
+    assert.ok((await ui.widget(leader.page,'spectator/status')).label.includes('Lucian'));
+    await ui.assertGpuOnly(leader.page);
     checked('actual combat death selects the eligible living peer and renders Source spectator status');
     await leader.page.screenshot({path: path.join(output, 'spectator-follow-before.png')});
 
@@ -608,7 +573,7 @@ async function close(client) {
     });
     await move(guest, peerDirection, 75);
     assert.deepEqual(participant(leader).wizard.position, deadPosition);
-    assert.equal(await status.getAttribute('data-target-player-id'), guest.id);
+    assert.equal((await spectator()).targetPlayerId,guest.id);
     await leader.page.bringToFront();
     await leader.page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const firstSequence = leader.inputs.at(-1)?.sequence ?? 0;
@@ -619,7 +584,7 @@ async function close(client) {
       // Unchanged input deliberately sends no wire message. Observe actual UI
       // frames and a later accepted snapshot without inventing a cast heartbeat.
       await until(() => leader.frame.sequence > previousFrame, 'later accepted spectator frame');
-      assert.equal(await status.getAttribute('data-target-player-id'), guest.id);
+      assert.equal((await spectator()).targetPlayerId,guest.id);
     }
     assert.ok(leader.inputs.filter(input => input.sequence > firstSequence)
       .every(input => !input.primary && input.quickbar === null));
@@ -634,7 +599,7 @@ async function close(client) {
 
     step = 'actual saved Leave and reset';
     await leave(leader);
-    await leader.page.locator('.boneyard-spectator-status').waitFor({state: 'hidden'});
+    await ui.noWidget(leader.page,'spectator/status');
     // The authority's Leave ends this private run. Its surviving participant
     // returns to College, where a second Boneyard Pause is no longer available.
     await until(() => !guest.frame.snapshot.boneyard
@@ -651,7 +616,7 @@ async function close(client) {
     for (const client of clients) {
       await inputBoundary(client, 'failure').catch(() => {});
       await client.page.screenshot({path: path.join(output, `${client.label}-failure.png`)}).catch(() => {});
-      failure[client.label] = await client.page.locator('body').innerText().catch(() => 'page closed');
+      failure[client.label] = await ui.readUi(client.page).catch(()=>'page closed');
     }
   } finally {
     for (const client of clients) {

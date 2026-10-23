@@ -8,6 +8,7 @@ const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
+const ui = require('./gpu-ui.cjs');
 const output = path.resolve(process.env.OUT);
 const contentDirectory = path.resolve(process.env.CONTENT_DIR);
 const account = JSON.parse(fs.readFileSync(path.join(contentDirectory, 'private-account.json')));
@@ -149,9 +150,7 @@ async function moveTo(page, x, y, admitted) {
               id: document.activeElement?.id,
               type: document.activeElement?.getAttribute('type'),
             },
-            menu: document.querySelector('.game-menus')?.dataset.menuScreen,
-            panelsVisible: Boolean(document.querySelector('.player-panels')?.getClientRects().length),
-            status: document.querySelector('#status')?.textContent,
+            gpu: JSON.parse(window.wasmBindings.gpu_ui_state()),
           })),
         };
         assert.fail(`movement blocked approaching ${x},${y}`);
@@ -167,126 +166,85 @@ async function moveTo(page, x, y, admitted) {
   } finally {for (const key of held) await page.keyboard.up(key);}
 }
 async function hiddenMenu(page) {
-  await page.locator('.game-menus[data-menu-screen="hidden"]').waitFor({state: 'attached'});
+  await ui.surface(page, 'hidden');
 }
 async function resumeFromPause(page) {
-  const resume = page.locator('[data-menu-action="resume"]:visible');
-  await resume.waitFor({state: 'visible'});
-  await resume.click();
-  await hiddenMenu(page);
+  await ui.click(page, 'resume'); await hiddenMenu(page);
+}
+async function actionByLabel(page, label, options = {}) {
+  return ui.byLabel(page, label, {role:'button', ...options});
+}
+async function clickLabel(page, label, options) {
+  await ui.click(page, (await actionByLabel(page,label,options)).id);
 }
 async function approachApothecary(page) {
-  const buy = page.getByRole('button', {name: /Apprentice Apothecary · 8 gold/});
-  const admitted = () => buy.isVisible();
+  const admitted = async () => (await ui.readUi(page)).widgets.some(widget =>
+    widget.id.startsWith('mod/panel:shop:') && /Apprentice Apothecary · 8 gold/.test(widget.label));
   if (await admitted()) return;
-  // Source exposes this actual shop button only inside its mounted radius.
-  // The east detour is clear for the real retained storeroom approach.
-  await moveTo(page, 1510, 740, admitted);
-  if (await admitted()) return;
-  await moveTo(page, 1450, 740, admitted);
-  await buy.waitFor({state: 'visible'});
+  await moveTo(page,1510,740,admitted); if (await admitted()) return;
+  await moveTo(page,1450,740,admitted);
+  await actionByLabel(page,/Apprentice Apothecary · 8 gold/,{prefix:'mod/panel:'});
 }
 async function openInventory(page) {
-  const surface = page.locator('.player-panels:not([hidden]) [data-player-panel="inventory"]');
-  if (!await surface.isVisible()) {
-    await page.getByRole('button', {name: /Inventory, \d+ gold/}).click();
-    await surface.waitFor({state: 'visible'});
-  }
-  // Source holds input during its 400 ms book reveal, after cells are visible.
-  await page.waitForFunction(() => {
-    const content = document.querySelector('.player-panel-content');
-    return content && getComputedStyle(content).opacity === '1';
-  });
-  await page.locator('[data-native-inventory-flyby-phase]').waitFor({state: 'detached'});
+  if (!ui.findWidget(await ui.readUi(page),'panel:surface:inventory')) await ui.click(page,'hud:inventory');
+  await ui.widget(page,'panel:surface:inventory');
+  await ui.waitForUi(page,snapshot => snapshot.widgets.some(widget => widget.id.startsWith('panel:item:') && widget.enabled)
+    && !ui.findWidget(snapshot,'panel:inventory-flyby'), 'settled enabled Inventory cells');
 }
-async function assertAuthoredIcon(button) {
-  const crop = button.locator('.mod-item-icon .mod-frame-crop').first();
-  await crop.waitFor({state: 'visible'});
-  const proof = await crop.evaluate(node => {
-    const bounds = node.getBoundingClientRect();
-    const style = getComputedStyle(node);
-    return {background: style.backgroundImage, width: bounds.width, height: bounds.height,
-      backgroundPosition: style.backgroundPosition};
-  });
-  assert.match(proof.background, /^url\(["']?blob:/);
-  assert.ok(proof.width > 0 && proof.height > 0, 'the actual authored frame occupies visible pixels');
+async function assertAuthoredIcon(page, itemId) {
+  const widget = await ui.widget(page,`panel:mod-icon:${itemId}`);
+  const proof = {bounds:ui.bounds(widget),frame:JSON.parse(widget.value)};
+  assert.ok(proof.bounds.width>0 && proof.bounds.height>0,'the actual authored texture crop occupies visible GPU pixels');
+  assert.match(proof.frame.url,/^blob:/);
   state.iconProof.push(proof);
 }
-async function assertRejectedCustomPotionBinding(page, tonicButton) {
-  // Current HubInventoryActions.dropInventorySource restores an unbindable
-  // custom item locally. A belt tap activates it; only a drag attempts binding.
-  const previousBelt = JSON.stringify(player().belt.entries);
-  const previousTonic = JSON.stringify(items('Ward Tonic'));
-  const beforeRejectedBinding = state.frame.snapshot.ticks;
-  const beforeBindingRequests = state.beltBindings.length;
-  const tonicSlot = await tonicButton.boundingBox();
-  const beltSlot = await page.locator('[data-panel-action="belt:7"]').boundingBox();
-  assert.ok(tonicSlot && beltSlot, 'the actual Inventory item and bank-zero belt target are visible');
-  state.rejectedBeltProof = {source: tonicSlot, destination: beltSlot};
+async function observePanelInput(page) {
   await page.evaluate(() => {
-    window.authoredFlybyFrames = [];
-    window.authoredDragEvents = [];
-    const pointerTypes = ['pointerdown', 'pointermove', 'pointerup',
-      'gotpointercapture', 'lostpointercapture', 'pointercancel'];
-    const observePointer = event => {
-      const bounds = document.querySelector('.player-panel-stage').getBoundingClientRect();
-      window.authoredDragEvents.push({type: event.type, pointerId: event.pointerId,
-        client: {x: event.clientX, y: event.clientY},
-        logical: {x: (event.clientX - bounds.left) * 1600 / bounds.width,
-          y: (event.clientY - bounds.top) * 900 / bounds.height},
-        target: event.target.closest?.('[data-panel-action]')?.dataset.panelAction || event.target.className,
-        hit: document.elementFromPoint(event.clientX, event.clientY)
-          ?.closest('[data-panel-action]')?.dataset.panelAction,
-        captured: document.querySelector('.player-panels').hasPointerCapture(event.pointerId)});
+    const observation={pointers:[],flybys:[]};let running=true;
+    const read=()=>JSON.parse(window.wasmBindings.gpu_ui_state());
+    const observe=event=>{
+      const snapshot=read();const [x,y]=[event.clientX,event.clientY];
+      const hit=[...snapshot.widgets].reverse().find(widget=>widget.role==='button' && widget.rect[0]<=x && widget.rect[1]<=y && x<widget.rect[0]+widget.rect[2] && y<widget.rect[1]+widget.rect[3]);
+      observation.pointers.push({type:event.type,trusted:event.isTrusted,client:{x,y},target:event.target.tagName,
+        hit:hit?.id.replace(/^panel:/,''),captured:snapshot.capture.pointer,
+        draggerChildren:snapshot.widgets.some(widget=>widget.id==='panel:dragger')?1:0});
     };
-    for (const type of pointerTypes) document.addEventListener(type, observePointer, true);
-    const observer = new MutationObserver(mutations => {
-      for (const mutation of mutations) {
-        const target = mutation.target;
-        const phase = target.getAttribute('data-native-inventory-flyby-phase');
-        if (phase) window.authoredFlybyFrames.push({phase,
-          tick: target.getAttribute('data-native-inventory-flyby-ticks'),
-          mainItems: target.getAttribute('data-native-inventory-flyby-main-items')});
-      }
-    });
-    observer.observe(document.body, {subtree: true, attributes: true,
-      attributeFilter: ['data-native-inventory-flyby-phase', 'data-native-inventory-flyby-ticks']});
-    window.stopAuthoredFlybyObservation = () => {
-      observer.disconnect();
-      for (const type of pointerTypes) document.removeEventListener(type, observePointer, true);
-      return {flybys: window.authoredFlybyFrames, pointers: window.authoredDragEvents};
-    };
+    const sample=()=>{if(!running)return;const flyby=read().widgets.find(widget=>widget.id==='panel:inventory-flyby');if(flyby){const value=JSON.parse(flyby.value);observation.flybys.push({...value,bounds:flyby.rect});}requestAnimationFrame(sample);};
+    for(const type of ['pointerdown','pointermove','pointerup','pointercancel'])document.addEventListener(type,observe,true);
+    requestAnimationFrame(sample);
+    window.stopAuthoredPanelObservation=()=>{running=false;for(const type of ['pointerdown','pointermove','pointerup','pointercancel'])document.removeEventListener(type,observe,true);return observation;};
   });
-  await page.mouse.move(tonicSlot.x + tonicSlot.width / 2, tonicSlot.y + tonicSlot.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(beltSlot.x + beltSlot.width / 2, beltSlot.y + beltSlot.height / 2, {steps: 15});
-  await page.waitForFunction(() => document.querySelector('.player-panel-dragger')?.childElementCount > 0);
-  await page.mouse.up();
-  await until(() => state.frame.snapshot.ticks > beforeRejectedBinding + 30,
-    'later authoritative ticks after the local binding rejection');
-  const {flybys, pointers} = await page.evaluate(() => window.stopAuthoredFlybyObservation());
-  state.rejectedBeltProof = {...state.rejectedBeltProof, flybys, pointers, beforeTick: beforeRejectedBinding,
-    afterTick: state.frame.snapshot.ticks, bindingCommands: state.beltBindings.length - beforeBindingRequests};
-  assert.ok(flybys.some(frame => frame.phase === 'flying'), 'the actual item restoration flew back');
-  await tonicButton.waitFor({state: 'visible'});
-  assert.equal(state.beltBindings.length, beforeBindingRequests,
-    'Source local admission rejects the custom item before any BindBelt command');
-  assert.equal(JSON.stringify(player().belt.entries), previousBelt);
-  assert.equal(JSON.stringify(items('Ward Tonic')), previousTonic);
-  assert.equal(itemQuantity('Ward Tonic'), 1);
+}
+async function assertRejectedCustomPotionBinding(page, tonicId) {
+  const previousBelt=JSON.stringify(player().belt.entries),previousTonic=JSON.stringify(items('Ward Tonic'));
+  const tick=state.frame.snapshot.ticks,beforeBindings=state.beltBindings.length;
+  const source=ui.bounds(await ui.widget(page,`panel:item:${tonicId}`));
+  const destination=ui.bounds(await ui.widget(page,'panel:belt:7'));
+  await observePanelInput(page);
+  const start=ui.center(source),end=ui.center(destination);
+  await page.mouse.move(start.x,start.y);await page.mouse.down();
+  await page.mouse.move(end.x,end.y,{steps:15});await ui.widget(page,'panel:dragger');await page.mouse.up();
+  await until(()=>state.frame.snapshot.ticks>tick+30,'later authoritative ticks after local binding rejection');
+  const observation=await page.evaluate(()=>window.stopAuthoredPanelObservation());
+  state.rejectedBeltProof={source,destination,...observation,beforeTick:tick,afterTick:state.frame.snapshot.ticks,bindingCommands:state.beltBindings.length-beforeBindings};
+  assert.ok(observation.flybys.some(frame=>frame.phase==='flying'),'the actual item restoration drew its GPU flight');
+  await ui.widget(page,`panel:item:${tonicId}`);
+  assert.equal(state.beltBindings.length,beforeBindings,'Source rejects the custom item before a BindBelt command');
+  assert.equal(JSON.stringify(player().belt.entries),previousBelt);
+  assert.equal(JSON.stringify(items('Ward Tonic')),previousTonic);assert.equal(itemQuantity('Ward Tonic'),1);
   check('Source local drag admission restores the custom potion without a bind command or inventory change');
 }
 async function runLua(page, code) {
   const before = state.luaRequests.length;
-  await page.locator('#cheat-menu-lua-editor').fill(code);
-  await page.locator('[data-cheat-action="run"]').click();
+  await ui.fill(page,'cheats/lua-editor',code);
+  await ui.click(page,'cheats/run');
   await until(() => state.luaRequests.slice(before).some(request => request.code === code),
     'actual Console request');
   const request = state.luaRequests.slice(before).find(request => request.code === code);
   await until(() => state.lua.some(response => response.request_id === request.requestId),
     'matching authoritative Lua response');
   const response = state.lua.find(response => response.request_id === request.requestId);
-  await page.locator(`[data-console-result="${response.ok ? 'ok' : 'error'}"]`).first().waitFor();
+  await ui.widget(page,`cheats/console-result:${response.request_id}`);
   return response;
 }
 
@@ -331,18 +289,17 @@ async function runLua(page, code) {
   page.on('console', message => {
     if (message.type() !== 'error') return;
     const location = message.location().url;
-    if (message.text().includes('404') && (/\/api\/game\/saves\//.test(location) || location.endsWith('/api/game/rejoin'))) return;
+    if (message.text().includes('404') && (/\/api\/game\/saves\/0$/.test(location) || location.endsWith('/api/game/rejoin'))) return;
     errors.push(message.text());
   });
   page.on('requestfailed', request => {
     const receipt = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
-    if (request.resourceType() === 'media' && request.failure()?.errorText === 'net::ERR_ABORTED') cancelledMedia.push(receipt);
-    else errors.push(receipt);
+    errors.push(receipt);
   });
   page.on('response', response => {
     const pathname = new URL(response.url()).pathname;
     if (pathname.includes('/api/')) requests.push({path: pathname, status: response.status(), method: response.request().method()});
-    if (response.status() === 404 && (/\/api\/game\/saves\//.test(pathname) || pathname.endsWith('/api/game/rejoin'))) expectedNotFound.push(pathname);
+    if (response.status() === 404 && (/\/api\/game\/saves\/0$/.test(pathname) || pathname.endsWith('/api/game/rejoin'))) expectedNotFound.push(pathname);
     else if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
     if (/\/api\/game\/content\//.test(pathname) && response.ok()) state.assets.push(pathname.split('/').at(-1));
   });
@@ -399,56 +356,47 @@ async function runLua(page, code) {
   });
   try {
     await page.goto(url.href, {waitUntil: 'load'});
-    await page.waitForFunction(() => window.wasmBindings?.wizard_state().length > 0 && document.querySelector('#status')?.textContent === '', null, {timeout: 60000});
-    const prompt = page.locator('.title-prompt:not([hidden])');
-    const consent = page.getByRole('dialog', {name: 'Local play is active', exact: true});
-    if (await prompt.isVisible()) await prompt.locator('[data-menu-action="prompt-secondary"]').click();
+    await ui.ready(page);
+    const consentVisible=async()=> (await ui.readUi(page)).surface==='routing';
+    if(ui.findWidget(await ui.readUi(page),'prompt-secondary')) await ui.click(page,'prompt-secondary');
     if (!priorOnwardPhase) {
       mark('enable the real uploaded package through Cloud');
-      await page.getByRole('button', {name: 'Explore the Dark Cloud', exact: true}).click();
-      await page.locator('.dark-cloud-rows[aria-busy="false"]').waitFor();
-      const subscribe = page.locator(`[data-menu-action="cloud-subscription:subscribe:${acceptedPackage.slug}"]`);
-      let activatedHere = false;
-      if (await subscribe.isVisible()) {await subscribe.click(); activatedHere = true;}
-      else {
-        const enable = page.locator(`[data-menu-action="cloud-subscription:enable:${acceptedPackage.slug}"]`);
-        if (await enable.isVisible()) {await enable.click(); activatedHere = true;}
-      }
-      await page.locator(`[data-mod-slug="${acceptedPackage.slug}"] .dark-cloud-row-state.enabled`).waitFor();
+      await ui.click(page,'dark-cloud');
+      const subscribe=`cloud-subscription:subscribe:${acceptedPackage.slug}`;
+      const enable=`cloud-subscription:enable:${acceptedPackage.slug}`;
+      const disable=`cloud-subscription:disable:${acceptedPackage.slug}`;
+      await ui.waitForUi(page,snapshot=>[subscribe,enable,disable].some(id=>ui.findWidget(snapshot,id)),'accepted Cloud subscription row');
+      let activatedHere=false;
+      if(ui.findWidget(await ui.readUi(page),subscribe)){await ui.click(page,subscribe);activatedHere=true;}
+      else if(ui.findWidget(await ui.readUi(page),enable)){await ui.click(page,enable);activatedHere=true;}
+      await ui.widget(page,disable);
       await page.screenshot({path: path.join(output, 'authored-enabled.png')});
       check(activatedHere ? 'actual account Cloud subscription enables the unchanged uploaded Source package'
         : 'retained Source package remains enabled after its earlier actual Cloud activation');
       await page.keyboard.press('Escape');
-      await page.getByRole('button', {name: 'MAIN MENU', exact: true}).click();
+      await ui.click(page,'leave');
     }
-    await page.locator('[data-menu-action="play"]').click();
+    await ui.click(page,'play');
     if (continueAuthored) {
-      await page.locator('[data-menu-action="continue"]').click();
-      await until(async () => player() || await consent.isVisible(), 'actual retained authored profile');
-      if (await consent.isVisible()) {
-        await consent.getByRole('button', {name: 'CONTINUE LOCAL', exact: true}).click();
+      await ui.click(page,'continue');
+      await until(async () => player() || await consentVisible(), 'actual retained authored profile');
+      if (await consentVisible()) {
+        await ui.click(page,'routing-continue');
       }
       await hiddenMenu(page);
       await until(() => player() && !state.frame.host.loading_run_id && !state.frame.host.resume_grace,
         'actual retained authority readiness');
       state.continuedProfile = snapshot();
     } else {
-      await page.locator('[data-menu-action="new-game"]').click();
-      await until(async () => await consent.isVisible() || await prompt.isVisible(),
-        'local content consent or the retained QA character replacement prompt');
-      if (await prompt.isVisible()) {
-        assert.match(await prompt.innerText(), /Kill character\?/i);
-        await prompt.locator('[data-menu-action="prompt-primary"]').click();
-      }
-      await consent.waitFor();
-      assert.ok((await consent.innerText()).includes('Apprentice Apothecary'));
-      await consent.getByRole('button', {name: 'CONTINUE LOCAL', exact: true}).click();
-      await until(async () => await page.locator('.game-menus[data-menu-screen="create"]').count()
-        || await page.locator('.player-panels:not([hidden]) [data-player-panel="dialogue"]').count(), 'real Create or College admission');
-      if (await page.locator('.player-panels:not([hidden]) [data-player-panel="dialogue"]').count()) await reachCollegeLoadout(page);
-      await page.getByRole('textbox', {name: 'Wizard name', exact: true}).fill('PipStudent');
-      await page.locator('[data-menu-action="element:ether"]').click();
-      await page.locator('[data-menu-action="discipline:arcane"]').click();
+      await ui.click(page,'new-game');
+      await ui.waitForUi(page,snapshot=>snapshot.surface==='routing'||ui.findWidget(snapshot,'prompt-primary'),'local consent or character replacement prompt');
+      if(ui.findWidget(await ui.readUi(page),'prompt-primary')) await ui.click(page,'prompt-primary');
+      await ui.surface(page,'routing');
+      assert.ok((await ui.widget(page,'routing/dialog')).value.includes('Apprentice Apothecary'));
+      await ui.click(page,'routing-continue');
+      await ui.waitForUi(page,snapshot=>snapshot.surface==='create'||ui.findWidget(snapshot,'panel:dialogue'),'real Create or College admission');
+      if(ui.findWidget(await ui.readUi(page),'panel:dialogue'))await reachCollegeLoadout(page);
+      await ui.fill(page,'create-name','PipStudent');await ui.click(page,'element:ether');await ui.click(page,'discipline:arcane');
       await hiddenMenu(page);
     }
     await until(() => state.runtime?.shops?.length && player(), 'real accepted content and runtime');
@@ -480,29 +428,25 @@ async function runLua(page, code) {
         for (const [x, y] of [[840, 195], [810, 195], [720, 345], [735, 465],
           [1450, 740]]) await moveTo(page, x, y);
         const beforeGold = player().economy.gold;
-        await page.getByRole('button', {name: /Apprentice Apothecary · 8 gold/}).click();
+        await clickLabel(page,/Apprentice Apothecary · 8 gold/,{prefix:'mod/panel:'});
         await until(() => itemQuantity('Moondust') === 2 && firstPurchase(), 'actual purchase plus Lua grant and semantic state');
         assert.equal(player().economy.gold, beforeGold - 8);
         assert.ok(state.audioEvents.some(event => event.path === 'audio/handleCoins.ogg'));
-        const buyTonic = page.getByRole('button', {name: /Apprentice Apothecary · 30 gold/});
-        if (await buyTonic.isDisabled()) {
-          mark('wait for the real retained shop stock to restock');
-          await until(() => buyTonic.isEnabled(), 'the actual two-minute shop restock', 180000);
-        }
-        await buyTonic.click();
+        const buyTonic=(await actionByLabel(page,/Apprentice Apothecary · 30 gold/,{prefix:'mod/panel:'})).id;
+        if(!(await ui.widget(page,buyTonic)).enabled){mark('wait for actual retained shop stock');await ui.waitForUi(page,snapshot=>ui.findWidget(snapshot,buyTonic)?.enabled,'actual two-minute restock',{timeout:180000});}
+        await ui.click(page,buyTonic);
         await until(() => itemQuantity('Ward Tonic') === 1 && itemQuantity('Moondust') === 3, 'custom potion inventory grant');
       }
       if (priorPhase) {
         check('matched-bundle prior receipt retains the proven custom potion rejection/restoration');
       } else {
         await openInventory(page);
-        const tonicButton = page.getByRole('button', {name: 'Ward Tonic, quantity 1', exact: true});
-        await assertAuthoredIcon(tonicButton);
-        await assertAuthoredIcon(page.getByRole('button', {name: 'Moondust, quantity 3', exact: true}));
-        await assertRejectedCustomPotionBinding(page, tonicButton);
+        const tonicId=items('Ward Tonic')[0].id;
+        await assertAuthoredIcon(page,tonicId);await assertAuthoredIcon(page,items('Moondust')[0].id);
+        await assertRejectedCustomPotionBinding(page,tonicId);
         await page.screenshot({path: path.join(output, 'authored-inventory.png')});
-        await page.locator('[data-panel-action="close"]').first().click();
-        await page.locator('.player-panels').waitFor({state: 'hidden'});
+        await ui.click(page,'panel:close');
+        await ui.noWidget(page,'panel:surface:inventory');
       }
       // Source forbids removing worn robes. The earlier real character replacement
       // left its gear in Luthacus's scavenged bag; retrieve that actual spare robe.
@@ -523,86 +467,47 @@ async function runLua(page, code) {
       } else {
         if (!player().economy.backpack.some(item => item.id === bag.id)) {
           await moveTo(page, 1640, 520);
-          await page.getByRole('button', {name: 'Luthacus', exact: true}).click();
-          await page.locator('.player-panels:not([hidden]) [data-player-panel="luthacus"]').waitFor();
-          await page.locator(`[data-panel-action="storage:${bag.id}"]`).dblclick();
+          await ui.click(page,'hud:shortcut:2');
+          await ui.widget(page,'panel:luthacus');
+          await ui.click(page,`panel:storage:${bag.id}`,{clickCount:2});
           await until(() => player().economy.backpack.some(item => item.id === bag.id),
             'actual scavenged bag transfer');
-          await page.locator('[data-panel-action="close"]').first().click();
-          await page.locator('.player-panels').waitFor({state: 'hidden'});
+          await ui.click(page,'panel:close');
+          await ui.noWidget(page,'panel:surface:inventory');
         }
         await openInventory(page);
-        await page.locator(`[data-panel-action="item:${bag.id}"]`).dblclick();
-        // Child cells appear during the Source sack slide, while input is locked.
-        await page.locator('[data-native-sack-page-state]').waitFor({state: 'detached'});
-        const robeButton = page.locator(`[data-panel-action="item:${robeId}"]`);
-        await robeButton.waitFor({state: 'visible'});
-        const robeAdmission = () => robeButton.evaluate(button => ({
-          disabled: button.disabled,
-          page: button.closest('[data-native-sack-page]')?.getAttribute('data-native-sack-page'),
-          pageState: document.querySelector('.player-panel-stage')?.dataset.nativeSackPageState,
-          bookOpacity: getComputedStyle(document.querySelector('.player-panel-content')).opacity,
-          flyby: Boolean(document.querySelector('[data-native-inventory-flyby-phase]')),
-        }));
-        state.robeDragProof = {before: await robeAdmission()};
-        // Visible incoming pages are disabled. Wait for the real current/enabled
-        // page, including a slide that has not started in the frame after dblclick.
-        await until(async () => {
-          const admission = await robeAdmission();
-          return !admission.disabled && admission.page === 'current'
-            && admission.bookOpacity === '1' && !admission.flyby;
-        }, 'enabled robe on the settled current Sack page');
-        state.robeDragProof.ready = await robeAdmission();
-        const robeSlot = await robeButton.boundingBox();
-        const backTarget = page.locator('[data-panel-action="back"]');
-        const backSlot = await backTarget.boundingBox();
-        assert.ok(robeSlot && backSlot, 'the actual open bag exposes its robe and Back target');
-        state.robeDragProof.source = robeSlot;
-        state.robeDragProof.destination = backSlot;
-        await page.evaluate(() => {
-          window.authoredRobePointers = [];
-          const observe = event => {
-            const hit = document.elementFromPoint(event.clientX, event.clientY);
-            window.authoredRobePointers.push({type: event.type,
-              client: {x: event.clientX, y: event.clientY},
-              target: event.target.closest?.('[data-panel-action]')?.dataset.panelAction,
-              hit: hit?.closest('[data-panel-action]')?.dataset.panelAction,
-              captured: document.querySelector('.player-panels').hasPointerCapture(event.pointerId),
-              draggerChildren: document.querySelector('.player-panel-dragger')?.childElementCount});
-          };
-          for (const type of ['pointerdown', 'pointermove', 'pointerup']) {
-            document.addEventListener(type, observe, true);
-          }
-          window.stopAuthoredRobeObservation = () => {
-            for (const type of ['pointerdown', 'pointermove', 'pointerup']) {
-              document.removeEventListener(type, observe, true);
-            }
-            return window.authoredRobePointers;
-          };
-        });
-        await page.mouse.move(robeSlot.x + robeSlot.width / 2, robeSlot.y + robeSlot.height / 2);
-        await page.mouse.down();
-        await page.mouse.move(backSlot.x + backSlot.width / 2, backSlot.y + backSlot.height / 2, {steps: 12});
-        await page.waitForFunction(() => document.querySelector('.player-panel-dragger')?.childElementCount > 0);
-        await page.mouse.up();
-        state.robeDragProof.pointers = await page.evaluate(() => window.stopAuthoredRobeObservation());
+        await ui.click(page,`panel:item:${bag.id}`,{clickCount:2});
+        const robeAdmission=async()=>{
+          const snapshot=await ui.readUi(page);const item=ui.findWidget(snapshot,`panel:item:${robeId}`);
+          const sack=ui.findWidget(snapshot,'panel:sack-page');const pageState=sack?.value?JSON.parse(sack.value):null;
+          return {disabled:!item?.enabled,page:pageState?.phase==='current'?'current':pageState?.phase,
+            pageState,bookOpacity:item?.enabled?'1':'0',flyby:Boolean(ui.findWidget(snapshot,'panel:inventory-flyby'))};
+        };
+        state.robeDragProof={before:await robeAdmission()};
+        await until(async()=>{const state=await robeAdmission();return !state.disabled&&state.page==='current'&&!state.flyby;},'enabled robe on settled current Sack page');
+        state.robeDragProof.ready=await robeAdmission();
+        const source=ui.bounds(await ui.widget(page,`panel:item:${robeId}`));const destination=ui.bounds(await ui.widget(page,'panel:back'));
+        state.robeDragProof.source=source;state.robeDragProof.destination=destination;
+        await observePanelInput(page);const start=ui.center(source),end=ui.center(destination);
+        await page.mouse.move(start.x,start.y);await page.mouse.down();await page.mouse.move(end.x,end.y,{steps:12});await ui.widget(page,'panel:dragger');await page.mouse.up();
+        state.robeDragProof.pointers=(await page.evaluate(()=>window.stopAuthoredPanelObservation())).pointers;
         await until(() => player().economy.backpack.some(item => item.id === robeId),
           'actual spare robe movement into the root backpack');
         state.spareRobeProof.movedToRoot = true;
-        await page.locator('[data-native-inventory-flyby-phase]').waitFor({state: 'detached'});
+        await ui.noWidget(page,'panel:inventory-flyby');
         // The footer closes the book directly; Back starts another Sack slide and
         // an immediate Escape can be consumed by that still-active transition.
-        await page.locator('[data-panel-action="close"]').first().click();
-        await page.locator('.player-panels').waitFor({state: 'hidden'});
+        await ui.click(page,'panel:close');
+        await ui.noWidget(page,'panel:surface:inventory');
       }
       await approachApothecary(page);
       const goldBeforeReforge = player().economy.gold;
-      await page.getByRole('button', {name: /Apprentice Apothecary · Reforge · 25 gold/}).click();
+      await clickLabel(page,/Apprentice Apothecary · Reforge · 25 gold/,{prefix:'mod/panel:'});
       await until(() => player().economy.backpack.some(item => item.id === robeId
         && item.mod_affixes?.some(affix => affix.name === 'Clear Minded')), 'actual Clear Minded reforge');
       assert.equal(player().economy.gold, goldBeforeReforge - 25);
       await openInventory(page);
-      await page.locator(`[data-panel-action="item:${robeId}"]`).dblclick();
+      await ui.click(page,`panel:item:${robeId}`,{clickCount:2});
       await until(() => !player().economy.backpack.some(item => item.id === robeId), 'actual robe re-equip');
       await page.screenshot({path: path.join(output, 'authored-affix.png')});
       await page.keyboard.press('Escape');
@@ -610,14 +515,13 @@ async function runLua(page, code) {
         ? 'real retained purchase outputs, custom icons, semantic state and new robe affix'
         : 'real stock, gold, custom icons, purchase rule, bonus item, semantic state, robe affix and authored audio');
       mark('enter an ordinary Boneyard and activate the authored minimap');
-      await page.getByRole('button', {name: 'Enter the Boneyard', exact: true}).click();
+      await clickLabel(page,'Enter the Boneyard',{prefix:'mod/panel:'});
       await until(() => state.frame?.snapshot.boneyard && !state.frame.host.loading_run_id && !state.frame.host.resume_grace && !state.frame.host.pause, 'actual Boneyard readiness', 120000);
       runId = state.frame.snapshot.boneyard.run_id;
-      const minimap = page.getByRole('region', {name: 'Apprentice survey minimap', exact: true});
-      await minimap.waitFor();
+      await ui.widget(page,'mod/minimap');
       const beforeAudio = await page.evaluate(() => window.authoredAudioStarts.length);
       const beforePresentation = new Set(state.audioEvents.map(event => event.owner));
-      await minimap.locator('[data-mod-minimap-action="ping"]').click();
+      await ui.click(page,'mod/minimap-action:ping');
       await until(() => state.actions.some(action => action.action === 'ui-action') && state.audioEvents.some(event => event.path === 'audio/bookOpen.ogg' && !beforePresentation.has(event.owner)), 'actual authored UI rule and sound event');
       const pageSoundHash = state.welcomes.at(-1).mod_assets.find(asset => asset.path === 'audio/bookOpen.ogg').sha256;
       await until(() => page.evaluate(({count, hash}) => window.authoredAudioStarts.slice(count)
@@ -629,37 +533,37 @@ async function runLua(page, code) {
       check('actual minimap ping crosses the host rule boundary and submits authored audio');
       mark('consume the actual custom potion');
       await openInventory(page);
-      await page.getByRole('button', {name: 'Ward Tonic, quantity 1', exact: true}).dblclick();
+      await ui.click(page,`panel:item:${items('Ward Tonic')[0].id}`,{clickCount:2});
       await until(() => itemQuantity('Ward Tonic') === 0 && state.content?.statuses?.some(status =>
         status.targetId === state.id), 'real custom potion consume and on-use status');
       const appliedStatus = state.content.statuses.find(status => status.targetId === state.id);
       assert.equal(appliedStatus.expiresTick - appliedStatus.startedTick, 2000,
         'the accepted 20-second Source status is applied by the real rule');
       await page.keyboard.press('Escape');
-      await page.locator('.player-panels').waitFor({state: 'hidden'});
+      await ui.noWidget(page,'panel:surface:inventory');
       check('actual custom potion Inventory use commits inventory and source on-use effects');
     }
     if (includeConsole || observeConsole) {
       mark('execute real authoritative Console work');
       await page.keyboard.press('Escape');
-      await page.locator('[data-menu-action="pause-settings"]').click();
-      await page.locator('[data-menu-action="settings-page:cloud"]').click();
-      const cheats = page.locator('[data-menu-action="settings-toggle:cheats"]');
-      state.cheatProof = {before: await cheats.getAttribute('aria-pressed')};
-      if (await cheats.getAttribute('aria-pressed') === 'false') await cheats.click();
+      await ui.click(page,'pause-settings');
+      await ui.click(page,'settings-page:cloud');
+      const cheats='settings-toggle:cheats';
+      state.cheatProof = {before: String((await ui.widget(page,cheats)).selected)};
+      if (String((await ui.widget(page,cheats)).selected) === 'false') await ui.click(page,cheats);
       await pause(1000);
       if (witnessConsole) {
         let replyCount = state.cheatModes.length;
-        await cheats.click();
+        await ui.click(page,cheats);
         await until(() => state.cheatModes.slice(replyCount).some(reply => !reply.enabled),
           'actual disabled cheat-mode reply');
         replyCount = state.cheatModes.length;
-        await cheats.click();
+        await ui.click(page,cheats);
         await until(() => state.cheatModes.slice(replyCount).some(reply => reply.enabled),
           'actual re-enabled cheat-mode reply');
       }
-      state.cheatProof.after = await cheats.getAttribute('aria-pressed');
-      state.cheatProof.disabled = await cheats.isDisabled();
+      state.cheatProof.after = String((await ui.widget(page,cheats)).selected);
+      state.cheatProof.disabled = !(await ui.widget(page,cheats)).enabled;
       const welcome = state.welcomes.at(-1);
       const party = state.social?.party_state?.party;
       state.cheatProof.admission = {
@@ -676,13 +580,12 @@ async function runLua(page, code) {
           memberPlayerIds: party.member_player_ids, visibility: party.visibility},
       };
       fs.writeFileSync(path.join(output, 'console-admission.json'), JSON.stringify(state.cheatProof, null, 2));
-      await page.locator('[data-menu-action="settings-back"]').click();
-      await page.locator('[data-settings-page="root"]').waitFor({state: 'visible'});
-      await page.locator('[data-menu-action="settings-back"]').click();
-      await page.locator('.game-menus[data-menu-screen="pause"]').waitFor({state: 'visible'});
-      state.cheatProof.pauseRowVisible = await page.locator('[data-menu-action="pause-cheats"]').isVisible();
-      state.cheatProof.pauseRows = await page.locator('.game-menus [data-menu-action]:visible').evaluateAll(
-        buttons => buttons.map(button => ({action: button.dataset.menuAction, label: button.getAttribute('aria-label')})));
+      await ui.click(page,'settings-back');
+      await ui.widget(page,'settings-page:cloud');
+      await ui.click(page,'settings-back');
+      await ui.surface(page,'pause');
+      state.cheatProof.pauseRowVisible = Boolean(ui.findWidget(await ui.readUi(page),'pause-cheats'));
+      state.cheatProof.pauseRows=(await ui.readUi(page)).widgets.filter(widget=>['resume','pause-cheats','pause-settings','leave'].includes(widget.id)).map(widget=>({action:widget.id,label:widget.label}));
       fs.writeFileSync(path.join(output, 'console-admission.json'), JSON.stringify(state.cheatProof, null, 2));
       if (witnessConsole) {
         assert.equal(state.cheatProof.admission.authorityPlayerId, state.id);
@@ -696,14 +599,14 @@ async function runLua(page, code) {
         assert.deepEqual(errors, []);
         return;
       }
-      if (includeConsole) await page.locator('[data-menu-action="pause-cheats"]').waitFor({state: 'visible'});
+      if (includeConsole) await ui.widget(page,'pause-cheats');
       await resumeFromPause(page);
       await gameplayReady();
       if (includeConsole) {
         await page.keyboard.press('Backquote');
-        await page.locator('.cheat-menu-backdrop').waitFor({state: 'visible'});
-        await page.locator('[data-cheat-action="console"]').click();
-        await page.locator('#cheat-menu-lua-editor').waitFor({state: 'visible'});
+        await ui.widget(page,'cheats/dialog');
+        await ui.click(page,'cheats/tab:console');
+        await ui.widget(page,'cheats/lua-editor');
         let result = await runLua(page, "return _VERSION, sd.runtime.api_version, sd.player.get_state().gold, type(sd.dev)");
         assert.equal(result.ok, true, result.error);
         assert.deepEqual(result.values, ['Lua 5.4', '1.0.0', player().economy.gold, 'nil']);
@@ -725,7 +628,7 @@ async function runLua(page, code) {
         assert.deepEqual(result.values, [42]);
         await page.screenshot({path: path.join(output, 'authored-console.png')});
         await page.keyboard.press('Backquote');
-        await page.locator('.cheat-menu-backdrop').waitFor({state: 'hidden'});
+        await ui.noWidget(page,'cheats/dialog');
         check('real Lua values, state, timer, sandbox, queued mutation and timeout recovery keep the client alive');
       }
     }
@@ -743,10 +646,10 @@ async function runLua(page, code) {
     mark('save and resume the same authored run');
     const beforeLeave = state.leaveReceipts;
     await gameplayReady();
-    await page.locator('[data-hud-action="pause"]').click();
-    await page.locator('.game-menus[data-menu-screen="pause"]').waitFor({state: 'visible'});
-    await page.locator('[data-menu-action="leave"]').click();
-    await page.locator('.game-menus[data-menu-screen="title"]').waitFor();
+    await ui.click(page,'hud:pause');
+    await ui.surface(page,'pause');
+    await ui.click(page,'leave');
+    await ui.surface(page,'title');
     assert.ok(state.leaveReceipts > beforeLeave);
     assert.ok(state.lastSave, 'the actual host supplied its signed source continuation');
     const saved = JSON.parse(state.lastSave);
@@ -755,12 +658,12 @@ async function runLua(page, code) {
     const beforeReload = snapshot();
     state.frame = null; state.runtime = null;
     await page.reload({waitUntil: 'load'});
-    await page.waitForFunction(() => document.querySelector('#status')?.textContent === '', null, {timeout: 60000});
-    await page.locator('[data-menu-action="play"]').click();
-    await page.locator('[data-menu-action="continue"]').click();
-    await until(async () => state.frame?.snapshot.boneyard?.run_id === runId || await consent.isVisible(),
+    await ui.ready(page);
+    await ui.click(page,'play');
+    await ui.click(page,'continue');
+    await until(async () => state.frame?.snapshot.boneyard?.run_id === runId || await consentVisible(),
       'actual resume admission or local-content consent', 120000);
-    if (await consent.isVisible()) await consent.getByRole('button', {name: 'CONTINUE LOCAL', exact: true}).click();
+    if (await consentVisible()) await ui.click(page,'routing-continue');
     await until(() => state.frame?.snapshot.boneyard?.run_id === runId && firstPurchase() && itemQuantity('Moondust') === 3 && !state.frame.host.loading_run_id && !state.frame.host.resume_grace, 'real saved run and prepared state continuation', 120000);
     assert.equal(player().selection.name, 'PipStudent');
     assert.equal(player().economy.gold, beforeReload.gold);
@@ -789,7 +692,7 @@ async function runLua(page, code) {
       spareRobeProof: state.spareRobeProof,
       robeDragProof: state.robeDragProof ? {...state.robeDragProof,
         pointers: await page.evaluate(() => window.authoredRobePointers || [])} : undefined,
-      ui: await page.evaluate(() => ({menu: document.querySelector('.game-menus')?.dataset.menuScreen, status: document.querySelector('#status')?.textContent, text: document.body.innerText.slice(-3000)}))}, null, 2));
+      ui: await ui.readUi(page)}, null, 2));
     throw error;
   } finally {
     const cleanup = {};
