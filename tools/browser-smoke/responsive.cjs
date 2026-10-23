@@ -147,6 +147,7 @@ async function walkToFomentius(page) {
       'native desktop controls replace the phone navigation toolbar');
     await ui.assertGpuOnly(page);
     await shot(page,'responsive-desktop-inventory-rust.png');
+    await ui.settleErrors(page);
     assert.deepEqual(observed.errors,[]);
     fs.writeFileSync(path.join(output,'responsive-browser-receipt.json'),JSON.stringify({passed:true,
       errors:observed.errors,viewports:[[390,844],[844,390],[1600,900]],

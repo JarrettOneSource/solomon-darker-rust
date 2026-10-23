@@ -129,6 +129,7 @@ async function scenery(page,filename) {
       const continuedPixels=await scenery(current,path.join(output,`${name}-continued.png`));
       const submissions=await ui.gpuDraws(current);
       assert.ok(submissions.canvasCalls.game>0,'the actual game canvas submitted the world and HUD');
+      await ui.settleErrors(current);
       receipt.maps.push({name,seed:world.seed,runId:world.run_id,
         sourceSha256:world.source_sha256,geometrySha256:world.geometry_sha256,
         entrySide:side,entry,walked,paused,resumed,loading,
@@ -142,6 +143,7 @@ async function scenery(page,filename) {
     receipt.status='passed';
   } catch(error) {
     receipt.status='failed';receipt.failure=error.stack;
+    if(current)await ui.settleErrors(current);
     receipt.errors.push(...currentErrors);
     if(current) {
       receipt.failedUi=await ui.readUi(current);

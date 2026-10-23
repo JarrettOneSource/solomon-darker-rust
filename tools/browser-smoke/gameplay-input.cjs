@@ -105,6 +105,7 @@ async function pad(page,buttons=[],axes=[0,0,0,0],analog={}){
     await ui.assertGpuOnly(page);
     if(process.env.OUT)fs.mkdirSync(process.env.OUT,{recursive:true});
     if(process.env.OUT)await page.screenshot({path:path.join(process.env.OUT,'gameplay-input-pause.png')});
+    await ui.settleErrors(page);
     const receipt={passed:errors.length===0,errors,gamepadReads:reads,gamepadFrames:8,
       gamepadReadsPerFrame:reads/8,selection:(await ui.readUi(page)).acceptedSelection,
       focusEvents:await page.evaluate(()=>__solomonFocusEvents),submissions:await ui.gpuDraws(page),

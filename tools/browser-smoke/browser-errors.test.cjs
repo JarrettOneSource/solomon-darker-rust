@@ -1,0 +1,49 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const {residentSuspension}=require('./browser-errors.cjs');
+
+function evidence() {
+  const url='http://127.0.0.1:4181/assets/stock/audio/music/death.mp3';
+  const channel={id:3,cue:'death',src:url,url,connected:true,hidden:true,controls:false,
+    preload:'auto',loads:1,sources:[url],ready:4,network:1,error:null,retired:false,
+    events:[{type:'loadstart',trusted:true},{type:'loadeddata',trusted:true},
+      {type:'suspend',trusted:true,network:1}]};
+  const captured={documentId:123,documentUrl:'http://127.0.0.1:4181/',channels:[channel]};
+  return {failure:{url,method:'GET',resourceType:'media',status:200,errorText:'net::ERR_ABORTED'},
+    captured,settled:structuredClone(captured)};
+}
+
+test('a ready resident channel with directly witnessed browser suspension owns its cancelled transfer',()=>{
+  const {failure,captured,settled}=evidence();
+  assert.deepEqual(residentSuspension(failure,captured,settled),{cue:'death',channelId:3,
+    documentId:123,reason:'ready resident channel suspended by the browser'});
+});
+
+test('URL and ERR_ABORTED alone never classify a failed request',()=>{
+  const {failure}=evidence();
+  assert.equal(residentSuspension(failure,null,null),null);
+});
+
+for(const [name,change] of [
+  ['a real network failure',(f)=>{f.failure.errorText='net::ERR_CONNECTION_RESET'}],
+  ['an image request',(f)=>{f.failure.resourceType='image'}],
+  ['an HTTP failure',(f)=>{f.failure.status=503}],
+  ['a different resource',(f)=>{f.failure.url=f.failure.url.replace('death.mp3','other.mp3')}],
+  ['missing loadeddata',(f)=>{f.captured.channels[0].events.shift();f.captured.channels[0].events.shift()}],
+  ['no native suspend',(f)=>{f.captured.channels[0].events.pop()}],
+  ['a fabricated suspend',(f)=>{f.captured.channels[0].events[2].trusted=false}],
+  ['a channel still loading',(f)=>{f.settled.channels[0].network=2}],
+  ['readiness lost',(f)=>{f.settled.channels[0].ready=1}],
+  ['a media error after the network callback',(f)=>{f.settled.channels[0].error=2}],
+  ['a media abort event',(f)=>{f.settled.channels[0].events.push({type:'abort',trusted:true})}],
+  ['a repeated load',(f)=>{f.settled.channels[0].loads=2}],
+  ['a changed source',(f)=>{f.settled.channels[0].sources.push('https://example.com/other.mp3')}],
+  ['a reused owner',(f)=>{f.settled.channels[0].id=4}],
+  ['a removed owner',(f)=>{f.settled.channels[0].connected=false}],
+  ['a retired and reattached owner',(f)=>{f.settled.channels[0].retired=true}],
+  ['a replaced document',(f)=>{f.settled.documentId=124}],
+  ['multiple owners for the failed resource',(f)=>{f.captured.channels.push({...f.captured.channels[0],id:4})}],
+])test(`${name} remains fatal`,()=>{
+  const fixture=evidence();change(fixture);
+  assert.equal(residentSuspension(fixture.failure,fixture.captured,fixture.settled),null);
+});
