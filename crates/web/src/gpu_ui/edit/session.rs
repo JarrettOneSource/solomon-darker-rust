@@ -68,7 +68,7 @@ impl Session {
             );
         }
         let mut receipt = Receipt {
-            id: Some(self.descriptor.id),
+            owner: Some(self.descriptor.owner),
             sequence,
             time,
             before: self.model.text().into(),
@@ -200,7 +200,7 @@ pub(crate) fn reconcile_session(
         return false;
     }
     match (session.as_mut(), focused) {
-        (Some(current), Some(descriptor)) if current.descriptor.id == descriptor.id => {
+        (Some(current), Some(descriptor)) if current.descriptor.owner == descriptor.owner => {
             current.update(descriptor)
         }
         (_, Some(descriptor)) => *session = Some(Session::new(descriptor)),
@@ -234,7 +234,7 @@ mod tests {
         let field = Rect::from_min_size(Pos2::ZERO, Vec2::new(384.0, 49.0));
         let model = Model::new(text);
         EditorDescriptor {
-            id: egui::Id::unique("create-name"),
+            owner: super::super::EditorOwner { id: egui::Id::unique("create-name"), instance: 1 },
             text: text.into(),
             model: std::sync::Arc::new(model),
             rules: EditorRules::default(),
@@ -317,7 +317,7 @@ mod tests {
     #[test]
     fn an_earlier_blur_or_other_field_cannot_retire_future_native_composition() {
         let mut later = descriptor("B");
-        later.id = egui::Id::unique("later-field");
+        later.owner.id = egui::Id::unique("later-field");
         let mut session = Some(Session::new(later));
         let active = session.as_mut().unwrap();
         active.receipt(8, 1.0, Intent::CompositionStart, None, None);
@@ -330,7 +330,7 @@ mod tests {
         );
         assert!(!reconcile_session(&mut session, None, 7));
         assert!(!reconcile_session(&mut session, Some(descriptor("A")), 8));
-        assert_eq!(session.as_ref().unwrap().descriptor.id, egui::Id::unique("later-field"));
+        assert_eq!(session.as_ref().unwrap().descriptor.owner.id, egui::Id::unique("later-field"));
         assert_eq!(session.as_ref().unwrap().model.text(), "B語");
         assert!(session.as_ref().unwrap().model.composition.is_some());
         assert!(

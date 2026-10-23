@@ -410,7 +410,7 @@ impl BrowserInput {
                         if queue
                             .session
                             .as_ref()
-                            .is_none_or(|session| session.descriptor.id != descriptor.id)
+                            .is_none_or(|session| session.descriptor.owner != descriptor.owner)
                         {
                             queue.session = Some(Session::new(descriptor));
                         }

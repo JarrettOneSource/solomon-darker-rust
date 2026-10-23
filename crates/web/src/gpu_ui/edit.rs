@@ -82,9 +82,37 @@ pub(crate) enum EditorFont {
     NativeName { origin: Pos2, scale: f32, field: Rect },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct EditorOwner {
+    pub id: egui::Id,
+    pub instance: u64,
+}
+
+#[derive(Clone, Default)]
+struct EditorMounts {
+    active: std::collections::BTreeMap<egui::Id, u64>,
+    next: u64,
+}
+
+pub(super) fn owner(ctx: &egui::Context, id: egui::Id) -> EditorOwner {
+    ctx.data_mut(|data| {
+        let mounts =
+            data.get_temp_mut_or_default::<EditorMounts>(egui::Id::unique("native-editor-mounts"));
+        let instance = if let Some(instance) = mounts.active.get(&id) {
+            *instance
+        } else {
+            mounts.next += 1;
+            let instance = mounts.next;
+            mounts.active.insert(id, instance);
+            instance
+        };
+        EditorOwner { id, instance }
+    })
+}
+
 #[derive(Clone)]
 pub(crate) struct EditorDescriptor {
-    pub id: egui::Id,
+    pub owner: EditorOwner,
     pub text: Arc<str>,
     pub model: Arc<model::Model>,
     pub rules: EditorRules,
@@ -204,6 +232,15 @@ pub fn text_edit_focused(ctx: &egui::Context) -> bool {
 }
 
 pub(super) fn set_focus(ctx: &egui::Context, editors: &[EditorDescriptor]) {
-    let id = editors.iter().find(|editor| editor.enabled && editor.focused).map(|editor| editor.id);
-    ctx.data_mut(|data| data.insert_temp(egui::Id::unique("native-editor-focus"), NativeFocus(id)));
+    let id = editors
+        .iter()
+        .find(|editor| editor.enabled && editor.focused)
+        .map(|editor| editor.owner.id);
+    ctx.data_mut(|data| {
+        data.insert_temp(egui::Id::unique("native-editor-focus"), NativeFocus(id));
+        let mounts =
+            data.get_temp_mut_or_default::<EditorMounts>(egui::Id::unique("native-editor-mounts"));
+        mounts.active =
+            editors.iter().map(|editor| (editor.owner.id, editor.owner.instance)).collect();
+    });
 }
