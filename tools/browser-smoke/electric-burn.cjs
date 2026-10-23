@@ -68,7 +68,7 @@ async function clientReady(page) {
   await ui.noWidget(page,'cheats/dialog');
   await page.mouse.move(1120,360);
   await ui.nextFrame(page);
-  await ui.waitForUi(page,snapshot=>!snapshot.capture.pointer&&!snapshot.capture.keyboard
+  await ui.waitForUi(page,snapshot=>!snapshot.capture.pointer&&!snapshot.capture.text&&!snapshot.inputScope
     &&!snapshot.widgets.some(widget=>widget.id.startsWith('panel:surface:')),
     'actual gameplay input ownership');
 }
