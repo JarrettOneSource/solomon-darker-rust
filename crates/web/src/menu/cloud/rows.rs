@@ -1,580 +1,638 @@
-//! Website `DarkCloudRows.tsx`: catalog and admitted directory projections.
-
-use solomon_sim::menu::party_directory::{
-    DirectoryPartyAction, directory_party_action, directory_party_presentation,
-};
-use solomon_sim::native_ui_text::NativeUiFontName::{Medium, Menu};
-use solomon_sim::social::GameSessionKind;
-use web_sys::{Document, HtmlElement};
-
-use super::images::CloudImages;
-use super::widgets::{self, narrative, text};
+//! GPU catalog, directory and developer presence rows from `DarkCloudRows.tsx`.
+use super::{super::widgets, art::CloudArt, images::CloudImages};
+use crate::gpu_ui::UiFrame;
 use crate::hosted::{
     ConnectedGamePlayer, ConnectedPlayerActivity, DeveloperGameMatch, ModSubscription, ModSummary,
     PartyActivity, PublicGameParty,
 };
-use crate::ui::{append, element};
-
+use egui::{Align2, Rect, Ui, Vec2};
+use solomon_sim::menu::party_directory::{
+    DirectoryPartyAction, directory_party_action, directory_party_presentation,
+};
+use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
+use solomon_sim::social::{GameSessionKind, PartyVisibility};
+fn ink(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    text: &str,
+    font: NativeUiFontName,
+    scale: f32,
+    tint: u32,
+    rect: Rect,
+    center: bool,
+) {
+    let spec = solomon_sim::native_ui_text::NativeUiTextSpec {
+        scale: f64::from(scale),
+        tint,
+        align: if center { NativeUiTextAlign::Center } else { NativeUiTextAlign::Left },
+        ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
+            font,
+            text,
+            f64::from(if center { rect.center().x } else { rect.left() }),
+            f64::from(rect.center().y + 6.0 * scale),
+        )
+    };
+    let layout = solomon_sim::native_ui_text::layout_native_ui_text(&spec);
+    let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
+    if layout.unsupported_code_points.is_empty() {
+        crate::gpu_ui::paint_text_layout(frame, &painter, &layout);
+    } else {
+        let font = egui::FontId::new(
+            solomon_sim::native_ui_text::native_ui_font(font).metrics[0] as f32 * scale,
+            egui::FontFamily::Name("Cinzel".into()),
+        );
+        painter.text(
+            if center { rect.center() } else { rect.left_center() },
+            if center { Align2::CENTER_CENTER } else { Align2::LEFT_CENTER },
+            text,
+            font,
+            widgets::color(tint),
+        );
+    }
+}
 pub(super) fn mod_row(
-    document: &Document,
+    frame: &mut UiFrame<'_>,
+    ui: &mut Ui,
+    _art: &CloudArt,
     content: &ModSummary,
     subscription: Option<&ModSubscription>,
     selected: bool,
     busy: bool,
     subscribed: bool,
     images: &mut CloudImages,
-) -> Result<HtmlElement, String> {
-    let row = element(
-        document,
-        "article",
-        &format!("dark-cloud-row dark-cloud-mod-row{}", if selected { " selected" } else { "" }),
-    )?;
-    row.set_attribute("data-mod-slug", &content.slug).map_err(|_| "mod row identity")?;
-    row.set_attribute("role", "listitem").map_err(|_| "mod row role")?;
-    let main = selector(
-        document,
+    width: f32,
+    viewport_width: f32,
+    enabled: bool,
+    actions: &mut Vec<String>,
+) -> Result<(), String> {
+    let phone = viewport_width <= 700.0;
+    let action_height = if phone && selected { 56.0 } else { 0.0 };
+    let height = if phone { 92.0 + action_height } else { 76.0 };
+    let (_, row) = ui.allocate_space(Vec2::new(width, height));
+    if selected {
+        ui.painter().rect_filled(row, 0.0, widgets::alpha(0xbfffbf, 0.06));
+    }
+    ui.painter().line_segment(
+        [row.left_bottom(), row.right_bottom()],
+        egui::Stroke::new(1.0, widgets::alpha(0xd2b263, 0.12)),
+    );
+    let action_width = if viewport_width <= 880.0 {
+        200.0
+    } else if viewport_width <= 1300.0 {
+        270.0
+    } else {
+        300.0
+    };
+    let main = Rect::from_min_size(
+        row.min,
+        Vec2::new(
+            if phone { width } else { width - action_width },
+            if phone { 92.0 } else { height },
+        ),
+    );
+    let id = format!("cloud-select:mod:{}", content.slug);
+    let response = widgets::interact(
+        frame,
+        ui,
+        &id,
         &format!("Select {}", content.name),
-        &format!("mod:{}", content.slug),
-        selected,
-    )?;
-    append(
-        &main,
-        &images.media(
-            document,
-            content.thumbnail_url.as_deref(),
-            &content.name,
-            "dark-cloud-row-thumbnail",
-            false,
-            false,
-        )?,
-    )?;
-    let copy = element(document, "span", "dark-cloud-row-copy")?;
-    text(
-        document,
-        &copy,
-        "strong",
-        "",
+        "button",
+        main,
+        enabled,
+    );
+    frame.record_value(&id, &content.slug, Some(selected));
+    if enabled {
+        if response.double_clicked() {
+            actions.push(format!("cloud-open:mod:{}", content.slug));
+        } else if response.clicked() {
+            actions.push(id);
+        }
+    }
+    let thumb = Rect::from_min_size(
+        main.min + Vec2::new(3.0, if phone { 12.0 } else { 10.0 }),
+        Vec2::new(if phone { 44.0 } else { 56.0 }, if phone { 48.0 } else { 56.0 }),
+    );
+    images.paint(frame, ui, content.thumbnail_url.as_deref(), &content.name, thumb, false);
+    let title_left = thumb.right() + 9.0;
+    let author_w = if viewport_width <= 880.0 {
+        80.0
+    } else if viewport_width <= 1300.0 {
+        95.0
+    } else {
+        120.0
+    };
+    let status_w = if viewport_width <= 1300.0 { 135.0 } else { 165.0 };
+    let version_w = if viewport_width <= 1050.0 {
+        0.0
+    } else if viewport_width <= 1300.0 {
+        75.0
+    } else {
+        90.0
+    };
+    let copy_right =
+        if phone { main.right() } else { main.right() - author_w - status_w - version_w - 24.0 };
+    let copy = Rect::from_min_max(
+        egui::pos2(title_left, main.top() + 7.0),
+        egui::pos2(copy_right, main.top() + 33.0),
+    );
+    ink(
+        frame,
+        ui,
         &content.name,
-        Menu,
+        NativeUiFontName::Menu,
         0.85,
         if selected { 0xbfffbf } else { 0xd9ba70 },
-        true,
-    )?;
-    narrative(document, &copy, "small", "", &content.summary)?;
-    text(
-        document,
-        &copy,
-        "span",
-        "dark-cloud-row-tags",
-        &content.tags.iter().take(3).cloned().collect::<Vec<_>>().join(", "),
-        Medium,
-        0.85,
-        0xa99a70,
-        true,
-    )?;
-    append(&main, &copy)?;
-    text(
-        document,
-        &main,
-        "span",
-        "dark-cloud-row-author",
-        &content.author.username,
-        Medium,
-        1.0,
-        0xd9ba70,
-        true,
-    )?;
-    text(
-        document,
-        &main,
-        "span",
-        "dark-cloud-row-version",
-        &format!("v{}", content.latest_version),
-        Medium,
-        1.0,
-        0xd9ba70,
-        true,
-    )?;
-    let enabled = subscription.is_some_and(|subscription| subscription.enabled);
-    text(
-        document,
-        &main,
-        "span",
-        if enabled { "dark-cloud-row-state enabled" } else { "dark-cloud-row-state" },
-        if enabled {
-            "ENABLED"
-        } else if subscription.is_some() {
-            "DISABLED"
-        } else {
-            "NOT SUBSCRIBED"
-        },
-        Medium,
-        0.85,
-        if enabled { 0xa9d29d } else { 0xa99a70 },
+        copy,
         false,
-    )?;
-    append(&row, &main)?;
-    let actions = element(document, "div", "dark-cloud-row-actions")?;
-    let view = widgets::button(
-        document,
-        "VIEW",
-        &format!("cloud-open-mod:{}", content.slug),
-        "",
-        None,
-        44.0,
-        0.55,
-        false,
-    )?;
-    view.set_attribute("aria-label", &format!("View {}", content.name))
-        .map_err(|_| "mod View label")?;
-    append(&actions, &view)?;
-    if subscribed && let Some(subscription) = subscription {
-        let (label, action) =
-            if subscription.enabled { ("DISABLE", "disable") } else { ("ENABLE", "enable") };
-        let change = widgets::button(
-            document,
-            label,
-            &format!("cloud-subscription:{action}:{}", content.slug),
-            "",
-            None,
-            44.0,
-            0.55,
-            busy,
-        )?;
-        change
-            .set_attribute(
-                "aria-label",
-                &format!(
-                    "{} {}",
-                    if subscription.enabled { "Disable" } else { "Enable" },
-                    content.name
-                ),
-            )
-            .map_err(|_| "mod change label")?;
-        append(&actions, &change)?;
-        let remove = widgets::button(
-            document,
-            "REMOVE",
-            &format!("cloud-subscription:unsubscribe:{}", content.slug),
-            "",
-            None,
-            44.0,
-            0.55,
-            busy,
-        )?;
-        remove
-            .set_attribute("aria-label", &format!("Unsubscribe from {}", content.name))
-            .map_err(|_| "mod remove label")?;
-        append(&actions, &remove)?;
-    } else if subscription.is_none() {
-        append(
-            &actions,
-            &widgets::button(
-                document,
-                if busy { "WORKING..." } else { "SUBSCRIBE" },
-                &format!("cloud-subscription:subscribe:{}", content.slug),
-                "",
-                None,
-                44.0,
-                0.55,
-                busy,
-            )?,
-        )?;
+    );
+    let summary_rect = Rect::from_min_max(
+        egui::pos2(title_left, main.top() + 34.0),
+        egui::pos2(copy_right, main.top() + 52.0),
+    );
+    let painter = ui.painter().with_clip_rect(summary_rect.intersect(ui.clip_rect()));
+    painter.text(
+        summary_rect.left_center(),
+        Align2::LEFT_CENTER,
+        &content.summary,
+        egui::FontId::new(
+            if phone { 13.0 } else { 14.0 },
+            egui::FontFamily::Name("IM FELL English".into()),
+        ),
+        widgets::color(0xb2a78d),
+    );
+    if !phone {
+        ink(
+            frame,
+            ui,
+            &content.tags.iter().take(3).cloned().collect::<Vec<_>>().join(", "),
+            NativeUiFontName::Medium,
+            0.85,
+            0xa99a70,
+            Rect::from_min_max(
+                egui::pos2(title_left, main.top() + 54.0),
+                egui::pos2(copy_right, main.top() + 72.0),
+            ),
+            false,
+        );
     }
-    append(&row, &actions)?;
-    Ok(row)
+    let author = if phone {
+        Rect::from_min_size(
+            egui::pos2(title_left, main.top() + 52.0),
+            Vec2::new(main.right() - title_left, 17.0),
+        )
+    } else {
+        Rect::from_min_size(egui::pos2(copy_right + 8.0, main.top()), Vec2::new(author_w, height))
+    };
+    ink(
+        frame,
+        ui,
+        &content.author.username,
+        NativeUiFontName::Medium,
+        if phone { 0.85 } else { 1.0 },
+        0xd9ba70,
+        author,
+        !phone,
+    );
+    if !phone && version_w > 0.0 {
+        ink(
+            frame,
+            ui,
+            &format!("v{}", content.latest_version),
+            NativeUiFontName::Medium,
+            1.0,
+            0xd9ba70,
+            Rect::from_min_size(
+                egui::pos2(author.right() + 8.0, main.top()),
+                Vec2::new(version_w, height),
+            ),
+            true,
+        );
+    }
+    let on = subscription.is_some_and(|s| s.enabled);
+    let state = if on {
+        "ENABLED"
+    } else if subscription.is_some() {
+        "DISABLED"
+    } else {
+        "NOT SUBSCRIBED"
+    };
+    let status = if phone {
+        Rect::from_min_size(
+            egui::pos2(title_left, main.top() + 70.0),
+            Vec2::new(main.right() - title_left, 18.0),
+        )
+    } else {
+        Rect::from_min_size(
+            egui::pos2(main.right() - status_w, main.top()),
+            Vec2::new(status_w, height),
+        )
+    };
+    ink(
+        frame,
+        ui,
+        state,
+        NativeUiFontName::Medium,
+        0.85,
+        if on { 0xa9d29d } else { 0xa99a70 },
+        status,
+        !phone,
+    );
+    if !phone || selected {
+        let mut choices = vec![("VIEW", format!("cloud-open-mod:{}", content.slug), true)];
+        if subscribed && let Some(s) = subscription {
+            choices.push((
+                if s.enabled { "DISABLE" } else { "ENABLE" },
+                format!(
+                    "cloud-subscription:{}:{}",
+                    if s.enabled { "disable" } else { "enable" },
+                    content.slug
+                ),
+                !busy,
+            ));
+            choices.push((
+                "REMOVE",
+                format!("cloud-subscription:unsubscribe:{}", content.slug),
+                !busy,
+            ));
+        } else if subscription.is_none() {
+            choices.push((
+                if busy { "WORKING..." } else { "SUBSCRIBE" },
+                format!("cloud-subscription:subscribe:{}", content.slug),
+                !busy,
+            ));
+        }
+        let r = if phone {
+            Rect::from_min_size(row.min + Vec2::new(4.0, 96.0), Vec2::new(width - 8.0, 44.0))
+        } else {
+            Rect::from_min_size(
+                egui::pos2(main.right() + 8.0, row.center().y - 22.0),
+                Vec2::new(action_width - 16.0, 44.0),
+            )
+        };
+        let w = (r.width() - (choices.len() - 1) as f32 * 10.0) / choices.len() as f32;
+        for (index, (label, id, admit)) in choices.into_iter().enumerate() {
+            let b = Rect::from_min_size(
+                r.min + Vec2::new(index as f32 * (w + 10.0), 0.0),
+                Vec2::new(w, 44.0),
+            );
+            if widgets::stock_button(frame, ui, &id, label, b, 0.55, enabled && admit).clicked()
+                && enabled
+                && admit
+            {
+                actions.push(id);
+            }
+        }
+    }
+    Ok(())
 }
-
 pub(super) fn party_row(
-    document: &Document,
+    frame: &mut UiFrame<'_>,
+    ui: &mut Ui,
+    _art: &CloudArt,
     party: &PublicGameParty,
     selected: bool,
     busy: bool,
     pending: bool,
-) -> Result<HtmlElement, String> {
-    let playing = matches!(party.activity, PartyActivity::Playing { .. });
-    let action = directory_party_action(party.visibility, playing);
+    width: f32,
+    viewport_width: f32,
+    enabled: bool,
+    actions: &mut Vec<String>,
+) -> Result<(), String> {
+    let phone = viewport_width <= 700.0;
+    let height = if phone { 116.0 + if selected { 54.0 } else { 0.0 } } else { 88.0 };
+    let (_, row) = ui.allocate_space(Vec2::new(width, height));
+    if selected {
+        ui.painter().rect_filled(row, 0.0, widgets::alpha(0xbfffbf, 0.06));
+    }
+    ui.painter().line_segment(
+        [row.left_bottom(), row.right_bottom()],
+        egui::Stroke::new(1.0, widgets::alpha(0xd2b263, 0.12)),
+    );
+    let main = Rect::from_min_size(
+        row.min,
+        Vec2::new(if phone { width } else { width - 160.0 }, if phone { 116.0 } else { 88.0 }),
+    );
+    let id = format!("cloud-select:party:{}", party.id);
+    let response = widgets::interact(
+        frame,
+        ui,
+        &id,
+        &format!("Select {}'s party", party.leader),
+        "button",
+        main,
+        enabled,
+    );
+    if enabled {
+        if response.double_clicked() {
+            actions.push(format!("cloud-open:party:{}", party.id));
+        } else if response.clicked() {
+            actions.push(id);
+        }
+    }
+    let mark = Rect::from_min_size(
+        main.min + Vec2::new(3.0, 12.0),
+        Vec2::splat(if phone { 44.0 } else { 50.0 }),
+    );
+    ink(
+        frame,
+        ui,
+        &party.leader.chars().next().unwrap_or(' ').to_uppercase().to_string(),
+        NativeUiFontName::Menu,
+        1.0,
+        0xd9ba70,
+        mark,
+        true,
+    );
+    let left = mark.right() + 9.0;
+    let copy_right = if phone { main.right() } else { main.right() - 365.0 };
+    ink(
+        frame,
+        ui,
+        &format!("{}'s party", party.leader),
+        NativeUiFontName::Menu,
+        0.85,
+        if selected { 0xbfffbf } else { 0xd9ba70 },
+        Rect::from_min_max(
+            egui::pos2(left, main.top() + 6.0),
+            egui::pos2(copy_right, main.top() + 30.0),
+        ),
+        false,
+    );
+    let mut flags = Vec::new();
+    if party.session_kind == GameSessionKind::PrivateCollege {
+        flags.push("PRIVATE COLLEGE".to_owned());
+    }
+    if party.mod_count > 0 {
+        flags.push(format!("MODDED ({})", party.mod_count));
+    }
+    if party.cheats_enabled {
+        flags.push("CHEATS".to_owned());
+    }
+    ink(
+        frame,
+        ui,
+        &flags.join(" · "),
+        NativeUiFontName::Medium,
+        0.85,
+        0xd9ba70,
+        Rect::from_min_max(
+            egui::pos2(left, main.top() + 30.0),
+            egui::pos2(copy_right, main.top() + 48.0),
+        ),
+        false,
+    );
+    let members = Rect::from_min_max(
+        egui::pos2(left, main.top() + 50.0),
+        egui::pos2(copy_right, main.top() + 68.0),
+    );
+    ui.painter().with_clip_rect(members.intersect(ui.clip_rect())).text(
+        members.left_center(),
+        Align2::LEFT_CENTER,
+        party.members.join(", "),
+        egui::FontId::new(14.0, egui::FontFamily::Name("IM FELL English".into())),
+        widgets::color(0xb2a78d),
+    );
     let location = match &party.activity {
         PartyActivity::Hub => None,
         PartyActivity::Playing { boneyard_name } => Some(boneyard_name.as_str()),
     };
-    let presentation =
-        directory_party_presentation(party.member_count, party.max_members, location);
-    let row = element(
-        document,
-        "article",
-        &format!("dark-cloud-row dark-cloud-party-row{}", if selected { " selected" } else { "" }),
-    )?;
-    row.set_attribute("data-party-id", &party.id).map_err(|_| "party row identity")?;
-    row.set_attribute("role", "listitem").map_err(|_| "party row role")?;
-    let mut label = format!("Select {}'s party", party.leader);
-    if party.mod_count > 0 {
-        label.push_str(&format!(
-            ", modded with {} {}",
-            party.mod_count,
-            if party.mod_count == 1 { "mod" } else { "mods" }
-        ));
-    }
-    if party.cheats_enabled {
-        label.push_str(", cheats enabled");
-    }
-    let main = selector(document, &label, &format!("party:{}", party.id), selected)?;
-    let initial: String =
-        js_sys::JsString::from(party.leader.as_str()).slice(0, 1).to_upper_case().into();
-    text(document, &main, "span", "dark-cloud-party-mark", &initial, Menu, 1.0, 0xd9ba70, true)?;
-    let copy = element(document, "span", "dark-cloud-row-copy")?;
-    text(
-        document,
-        &copy,
-        "strong",
-        "",
-        &format!("{}'s party", party.leader),
-        Menu,
-        0.85,
-        if selected { 0xbfffbf } else { 0xd9ba70 },
-        true,
-    )?;
-    let flags = element(document, "span", "dark-cloud-party-flags")?;
-    if party.session_kind == GameSessionKind::PrivateCollege {
-        text(document, &flags, "em", "", "PRIVATE COLLEGE", Medium, 0.85, 0xd9ba70, false)?;
-    }
-    if party.mod_count > 0 {
-        text(
-            document,
-            &flags,
-            "em",
-            "",
-            &format!("MODDED ({})", party.mod_count),
-            Medium,
+    let p = directory_party_presentation(party.member_count, party.max_members, location);
+    let action = directory_party_action(party.visibility, location.is_some());
+    if phone {
+        ink(
+            frame,
+            ui,
+            &format!("{} WIZARDS · {}", p.squad, p.status),
+            NativeUiFontName::Medium,
             0.85,
             0xd9ba70,
+            Rect::from_min_size(
+                egui::pos2(left, main.top() + 72.0),
+                Vec2::new(main.right() - left, 18.0),
+            ),
             false,
-        )?;
-    }
-    if party.cheats_enabled {
-        text(document, &flags, "em", "cheats", "CHEATS", Medium, 0.85, 0xe6a078, false)?;
-    }
-    append(&copy, &flags)?;
-    narrative(document, &copy, "small", "", &party.members.join(", "))?;
-    append(&main, &copy)?;
-    text(
-        document,
-        &main,
-        "span",
-        "dark-cloud-party-members",
-        &presentation.squad,
-        Medium,
-        0.85,
-        0xd9ba70,
-        false,
-    )?;
-    text(
-        document,
-        &main,
-        "span",
-        if playing { "dark-cloud-party-status playing" } else { "dark-cloud-party-status hub" },
-        presentation.status,
-        Medium,
-        0.85,
-        0xd9ba70,
-        false,
-    )?;
-    text(
-        document,
-        &main,
-        "span",
-        "dark-cloud-party-location",
-        presentation.location,
-        Medium,
-        0.85,
-        0xd9ba70,
-        true,
-    )?
-    .set_attribute("title", presentation.location)
-    .map_err(|_| "party location title")?;
-    append(&row, &main)?;
-    let actions = element(document, "div", "dark-cloud-row-actions")?;
-    let label = if pending {
-        "REQUESTED"
+        );
+        ink(
+            frame,
+            ui,
+            p.location,
+            NativeUiFontName::Medium,
+            0.85,
+            0xd9ba70,
+            Rect::from_min_size(
+                egui::pos2(left, main.top() + 92.0),
+                Vec2::new(main.right() - left, 18.0),
+            ),
+            false,
+        );
     } else {
-        match action {
-            DirectoryPartyAction::Join => "JOIN",
-            DirectoryPartyAction::Request => "REQUEST",
-            DirectoryPartyAction::Wait => "IN GAME",
+        for (text, x, w) in [
+            (p.squad.as_str(), main.right() - 365.0, 95.0),
+            (p.status, main.right() - 270.0, 90.0),
+            (p.location, main.right() - 180.0, 165.0),
+        ] {
+            ink(
+                frame,
+                ui,
+                text,
+                NativeUiFontName::Medium,
+                0.85,
+                0xd9ba70,
+                Rect::from_min_size(egui::pos2(x, main.top()), Vec2::new(w, main.height())),
+                true,
+            );
         }
-    };
-    append(
-        &actions,
-        &widgets::button(
-            document,
-            label,
-            &format!("cloud-join-party:{}", party.id),
-            "",
-            None,
-            44.0,
-            0.55,
-            busy || action == DirectoryPartyAction::Wait,
-        )?,
-    )?;
-    append(&row, &actions)?;
-    Ok(row)
-}
-
-fn selector(
-    document: &Document,
-    label: &str,
-    key: &str,
-    selected: bool,
-) -> Result<HtmlElement, String> {
-    let button = element(document, "button", "dark-cloud-row-main")?;
-    for (name, value) in [
-        ("type", "button"),
-        ("aria-label", label),
-        ("aria-pressed", if selected { "true" } else { "false" }),
-    ] {
-        button.set_attribute(name, value).map_err(|_| "Cloud row selector semantics")?;
     }
-    button
-        .set_attribute("data-menu-action", &format!("cloud-select:{key}"))
-        .map_err(|_| "Cloud selection action")?;
-    button.set_attribute("data-cloud-row-key", key).map_err(|_| "Cloud double click target")?;
-    Ok(button)
+    if !phone || selected {
+        let label = if pending {
+            "REQUESTED"
+        } else {
+            match action {
+                DirectoryPartyAction::Join => "JOIN",
+                DirectoryPartyAction::Request => "REQUEST",
+                DirectoryPartyAction::Wait => "IN GAME",
+            }
+        };
+        let b = if phone {
+            Rect::from_min_size(row.min + Vec2::new(4.0, 120.0), Vec2::new(width - 8.0, 44.0))
+        } else {
+            Rect::from_min_size(
+                egui::pos2(main.right() + 18.0, row.center().y - 22.0),
+                Vec2::new(130.0, 44.0),
+            )
+        };
+        let id = format!("cloud-join-party:{}", party.id);
+        let admitted = enabled && !busy && action != DirectoryPartyAction::Wait;
+        if widgets::stock_button(frame, ui, &id, label, b, 0.55, admitted).clicked() && admitted {
+            actions.push(id);
+        }
+    }
+    Ok(())
 }
-
-pub(super) struct PresenceSnapshot<'a> {
-    pub players: &'a [ConnectedGamePlayer],
-    pub matches: &'a [DeveloperGameMatch],
-    pub loading: bool,
-    pub error: Option<&'a str>,
-    pub observing: Option<&'a str>,
-}
-
 pub(super) fn developer_presence(
-    document: &Document,
-    snapshot: PresenceSnapshot<'_>,
-) -> Result<HtmlElement, String> {
-    let root = element(document, "section", "dark-cloud-dev-presence")?;
-    root.set_attribute("aria-label", "All connected players (developer)")
-        .map_err(|_| "developer presence label")?;
-    let header = element(document, "header", "dark-cloud-dev-presence-heading")?;
-    text(document, &header, "span", "", "DEVELOPER SIGHT", Medium, 1.0, 0xd9ba70, false)?;
-    let count = if snapshot.loading && snapshot.players.is_empty() {
-        "SCRYING...".to_owned()
-    } else {
-        format!(
-            "{} CONNECTED {}",
-            snapshot.players.len(),
-            if snapshot.players.len() == 1 { "WIZARD" } else { "WIZARDS" }
-        )
-    };
-    text(
-        document,
-        &header,
-        "span",
-        "dark-cloud-dev-presence-count",
-        &count,
-        Medium,
+    frame: &mut UiFrame<'_>,
+    ui: &mut Ui,
+    _art: &CloudArt,
+    players: &[ConnectedGamePlayer],
+    matches: &[DeveloperGameMatch],
+    loading: bool,
+    error: Option<&str>,
+    observing: Option<&str>,
+    width: f32,
+    enabled: bool,
+    actions: &mut Vec<String>,
+) -> Result<(), String> {
+    ui.add_space(24.0);
+    let (_, header) = ui.allocate_space(Vec2::new(width, 44.0));
+    ink(
+        frame,
+        ui,
+        &format!(
+            "DEVELOPER SIGHT   {} CONNECTED {}",
+            players.len(),
+            if players.len() == 1 { "WIZARD" } else { "WIZARDS" }
+        ),
+        NativeUiFontName::Medium,
         1.0,
         0xd9ba70,
+        header,
         false,
-    )?;
-    append(&root, &header)?;
-    if let Some(error) = snapshot.error {
-        narrative(document, &root, "p", "dark-cloud-dev-presence-note", error)?
-            .set_attribute("role", "alert")
-            .map_err(|_| "developer error role")?;
+    );
+    if let Some(error) = error {
+        let (_, r) = ui.allocate_space(Vec2::new(width, 50.0));
+        widgets::paragraph(ui, error, r, "IM FELL English", 15.0, widgets::ERROR);
     }
-    if !snapshot.loading && snapshot.error.is_none() && snapshot.players.is_empty() {
-        text(
-            document,
-            &root,
-            "p",
-            "dark-cloud-dev-presence-note",
-            "NO CONNECTED WIZARDS.",
-            Medium,
+    if loading && players.is_empty() {
+        let (_, r) = ui.allocate_space(Vec2::new(width, 40.0));
+        ink(frame, ui, "SCRYING...", NativeUiFontName::Medium, 1.0, 0xd9ba70, r, false);
+    } else if !loading && error.is_none() && players.is_empty() {
+        let (_, r) = ui.allocate_space(Vec2::new(width, 40.0));
+        ink(frame, ui, "NO WIZARDS CONNECTED.", NativeUiFontName::Medium, 1.0, 0xd9ba70, r, false);
+    }
+    let phone = width < 600.0;
+    for game in matches {
+        let (_, r) = ui.allocate_space(Vec2::new(width, if phone { 132.0 } else { 76.0 }));
+        let info = Rect::from_min_size(r.min, Vec2::new(r.width() - 130.0, 48.0));
+        ink(
+            frame,
+            ui,
+            &game.boneyard_name,
+            NativeUiFontName::Medium,
             1.0,
             0xd9ba70,
+            Rect::from_min_size(info.min, Vec2::new(info.width(), 24.0)),
             false,
-        )?;
-    }
-    let matches = element(document, "div", "dark-cloud-dev-matches")?;
-    presence_heading(document, &matches, "ACTIVE MATCHES", snapshot.matches.len())?;
-    if !snapshot.loading && snapshot.error.is_none() && snapshot.matches.is_empty() {
-        text(
-            document,
-            &matches,
-            "p",
-            "dark-cloud-dev-presence-note",
-            "NO ACTIVE MATCHES.",
-            Medium,
-            1.0,
-            0xd9ba70,
-            false,
-        )?;
-    }
-    for game in snapshot.matches {
-        let row = element(document, "div", "dark-cloud-dev-match-row")?;
-        let names = element(document, "span", "")?;
-        text(document, &names, "strong", "", &game.boneyard_name, Medium, 1.0, 0xd9ba70, true)?;
-        text(
-            document,
-            &names,
-            "small",
-            "",
+        );
+        ink(
+            frame,
+            ui,
             &game.players.join(", "),
-            Medium,
+            NativeUiFontName::Medium,
             0.85,
             0xd9ba70,
-            true,
-        )?;
-        append(&row, &names)?;
+            Rect::from_min_size(info.min + Vec2::new(0.0, 26.0), Vec2::new(info.width(), 22.0)),
+            false,
+        );
         let status = if game.wave_number > 0 {
             format!("WAVE {}", game.wave_number)
         } else {
             "STAGING".to_owned()
         };
-        text(document, &row, "span", "", &status, Medium, 0.85, 0xd9ba70, false)?;
-        text(
-            document,
-            &row,
-            "span",
-            "",
-            match game.visibility {
-                solomon_sim::social::PartyVisibility::Public => "PUBLIC",
-                solomon_sim::social::PartyVisibility::InviteOnly => "INVITE-ONLY",
-                solomon_sim::social::PartyVisibility::Private => "PRIVATE",
-            },
-            Medium,
+        let visibility = match game.visibility {
+            PartyVisibility::Public => "PUBLIC",
+            PartyVisibility::InviteOnly => "INVITE-ONLY",
+            PartyVisibility::Private => "PRIVATE",
+        };
+        ink(
+            frame,
+            ui,
+            &format!("{status} · {visibility} · {}", session_label(game.session)),
+            NativeUiFontName::Medium,
             0.85,
             0xd9ba70,
+            Rect::from_min_size(r.min + Vec2::new(0.0, 50.0), Vec2::new(r.width() - 130.0, 22.0)),
             false,
-        )?;
-        text(
-            document,
-            &row,
-            "span",
-            "",
-            session_label(game.session),
-            Medium,
-            0.85,
-            0xd9ba70,
-            false,
-        )?;
-        append(
-            &row,
-            &widgets::button(
-                document,
-                if snapshot.observing == Some(game.id.as_str()) { "OPENING..." } else { "OBSERVE" },
-                &format!("cloud-observe:{}", game.id),
-                "",
-                None,
-                44.0,
-                0.55,
-                snapshot.observing.is_some(),
-            )?,
-        )?;
-        append(&matches, &row)?;
+        );
+        let b = Rect::from_min_size(
+            egui::pos2(r.right() - 120.0, r.top() + if phone { 80.0 } else { 10.0 }),
+            Vec2::new(110.0, 44.0),
+        );
+        let id = format!("cloud-observe:{}", game.id);
+        let admitted = enabled && observing.is_none();
+        if widgets::stock_button(
+            frame,
+            ui,
+            &id,
+            if observing == Some(game.id.as_str()) { "OPENING..." } else { "OBSERVE" },
+            b,
+            0.55,
+            admitted,
+        )
+        .clicked()
+            && admitted
+        {
+            actions.push(id);
+        }
     }
-    append(&root, &matches)?;
-    presence_heading(document, &root, "CONNECTED WIZARDS", snapshot.players.len())?;
-    for player in snapshot.players {
-        let row = element(document, "div", "dark-cloud-dev-presence-row")?;
-        let wizard = element(document, "span", "dark-cloud-dev-presence-wizard")?;
-        text(document, &wizard, "strong", "", &player.display_name, Medium, 1.0, 0xd9ba70, true)?;
+    let (_, r) = ui.allocate_space(Vec2::new(width, 36.0));
+    ink(
+        frame,
+        ui,
+        &format!("CONNECTED WIZARDS   {}", players.len()),
+        NativeUiFontName::Medium,
+        1.0,
+        0xd9ba70,
+        r,
+        false,
+    );
+    for player in players {
+        let (_, r) = ui.allocate_space(Vec2::new(width, if phone { 130.0 } else { 80.0 }));
         let detail = if player.bot {
             "ML BOT"
         } else {
             player.account_username.as_deref().unwrap_or("GUEST WIZARD")
         };
-        text(
-            document,
-            &wizard,
-            "small",
-            "",
-            &format!("{detail}{}", if player.developer { ", DEV" } else { "" }),
-            Medium,
-            0.85,
-            0xd9ba70,
-            true,
-        )?;
-        append(&row, &wizard)?;
-        text(
-            document,
-            &row,
-            "span",
-            "dark-cloud-dev-presence-session",
-            session_label(player.session),
-            Medium,
-            1.0,
-            0xd9ba70,
-            false,
-        )?;
-        let (activity, location, status) = match &player.activity {
-            ConnectedPlayerActivity::Hub => ("hub", "COLLEGE COURTYARD", "IN HUB".to_owned()),
+        let (status, location) = match &player.activity {
+            ConnectedPlayerActivity::Hub => ("IN HUB".to_owned(), "COLLEGE COURTYARD"),
             ConnectedPlayerActivity::Boneyard { boneyard_name, wave_number } => (
-                "boneyard",
-                boneyard_name.as_str(),
                 if *wave_number > 0 { format!("WAVE {wave_number}") } else { "STAGING".to_owned() },
+                boneyard_name.as_str(),
             ),
         };
-        text(
-            document,
-            &row,
-            "span",
-            &format!("dark-cloud-dev-presence-status {activity}"),
-            &status,
-            Medium,
-            0.85,
-            0xd9ba70,
-            false,
-        )?;
-        text(
-            document,
-            &row,
-            "span",
-            "dark-cloud-dev-presence-location",
-            location,
-            Medium,
-            0.85,
-            0xd9ba70,
-            true,
-        )?
-        .set_attribute("title", location)
-        .map_err(|_| "developer location title")?;
         let party = match (&player.party_leader, player.party_size) {
             (Some(leader), Some(size)) => format!("{leader}'s party of {size}"),
             _ => "NO PARTY".to_owned(),
         };
-        text(
-            document,
-            &row,
-            "span",
-            "dark-cloud-dev-presence-party",
-            &party,
-            Medium,
-            0.85,
-            0xd9ba70,
-            true,
-        )?
-        .set_attribute("title", &party)
-        .map_err(|_| "developer party title")?;
-        append(&root, &row)?;
+        for (index, text) in [
+            player.display_name.clone(),
+            format!(
+                "{detail}{} · {}",
+                if player.developer { ", DEV" } else { "" },
+                session_label(player.session)
+            ),
+            format!("{status} · {location}"),
+            party,
+        ]
+        .iter()
+        .enumerate()
+        {
+            ink(
+                frame,
+                ui,
+                text,
+                NativeUiFontName::Medium,
+                if index == 0 { 1.0 } else { 0.85 },
+                0xd9ba70,
+                Rect::from_min_size(
+                    r.min + Vec2::new(0.0, index as f32 * 20.0),
+                    Vec2::new(width, 20.0),
+                ),
+                false,
+            );
+        }
     }
-    Ok(root)
+    Ok(())
 }
-
-fn presence_heading(
-    document: &Document,
-    parent: &HtmlElement,
-    title: &str,
-    count: usize,
-) -> Result<(), String> {
-    let row = element(document, "div", "dark-cloud-dev-subheading")?;
-    text(document, &row, "span", "", title, Medium, 1.0, 0xd9ba70, false)?;
-    text(document, &row, "span", "", &count.to_string(), Medium, 1.0, 0xd9ba70, false)?;
-    append(parent, &row)
-}
-
 fn session_label(kind: GameSessionKind) -> &'static str {
     if kind == GameSessionKind::GlobalHub { "GLOBAL HUB" } else { "PRIVATE COLLEGE" }
 }
