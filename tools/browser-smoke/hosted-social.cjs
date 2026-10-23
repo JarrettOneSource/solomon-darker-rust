@@ -252,6 +252,7 @@ async function closeClient(client) {
   const process = client.server.process();
   let mode = 'graceful';
   try {
+    await bounded(client.browser.close(), 'Playwright disconnect', 5000);
     await bounded(client.server.close(), 'Chrome close', 15000);
   } catch {
     // The retained process belongs to this harness, never another fleet browser.
