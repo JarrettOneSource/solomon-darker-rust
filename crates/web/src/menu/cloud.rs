@@ -92,6 +92,7 @@ pub(super) struct CloudView {
     download_progress: Option<(u64, u64, bool)>,
     actions: Vec<HostedMenuAction>,
     tab_scroll_reset: bool,
+    return_focus: Option<String>,
 }
 impl CloudView {
     pub async fn new() -> Result<Self, String> {
@@ -130,6 +131,7 @@ impl CloudView {
             download_progress: None,
             actions: Vec::new(),
             tab_scroll_reset: true,
+            return_focus: None,
         })
     }
     pub fn open(&mut self) -> Result<(), String> {
@@ -138,6 +140,7 @@ impl CloudView {
         self.sort = Sort::Newest;
         self.query.clear();
         self.selected = None;
+        self.return_focus = None;
         self.action_error = None;
         self.subscription_error = None;
 
@@ -308,6 +311,7 @@ impl CloudView {
             }
             self.tab = Tab::from_id(tab).ok_or("unknown Cloud section")?;
             self.tab_scroll_reset = true;
+            self.return_focus = None;
             self.query.clear();
             self.sheet = None;
             self.selected = match self.tab {
@@ -338,11 +342,13 @@ impl CloudView {
             return Ok(true);
         }
         if let Some(key) = action.strip_prefix("cloud-open:") {
+            self.return_focus = Some(format!("cloud-select:{key}"));
             self.selected = Some(key.to_owned());
             self.primary()?;
             return Ok(true);
         }
         if let Some(slug) = action.strip_prefix("cloud-open-mod:") {
+            self.return_focus = Some(action.to_owned());
             self.open_mod(slug)?;
             return Ok(true);
         }
@@ -367,7 +373,10 @@ impl CloudView {
             return Ok(true);
         }
         match action {
-            "cloud-primary" => self.primary()?,
+            "cloud-primary" | "cloud-options" => {
+                self.return_focus = Some(action.to_owned());
+                self.primary()?;
+            }
             "cloud-refresh" => {
                 if self.tab == Tab::Parties {
                     self.request_directory(now);
@@ -773,10 +782,12 @@ impl CloudView {
         }
     }
     fn show_search(&mut self) -> Result<(), String> {
+        self.return_focus = Some("cloud-search".to_owned());
         self.sheet = Some(Sheet::Search { input: self.query.clone() });
         Ok(())
     }
     fn show_sort(&mut self) -> Result<(), String> {
+        self.return_focus = Some("cloud-sort".to_owned());
         self.sheet = Some(Sheet::Sort);
         Ok(())
     }
@@ -788,7 +799,7 @@ impl CloudView {
         } else if matches!(self.sheet, Some(Sheet::Sort)) {
             Some(format!("cloud-sort:{}", self.sort.id()))
         } else {
-            Some(format!("cloud-tab:{}", self.tab.id()))
+            self.return_focus.clone().or_else(|| Some(format!("cloud-tab:{}", self.tab.id())))
         }
     }
     pub fn navigation_scope(&self) -> String {
@@ -1088,6 +1099,38 @@ impl CloudView {
         self.images.finish_paint();
         Ok(())
     }
+    fn status_label(&self, count: usize) -> String {
+        if self.loading() && count == 0 {
+            "CONSULTING THE DARK CLOUD...".to_owned()
+        } else if !self.query.is_empty() {
+            format!(
+                "\"{}\", {} {}",
+                self.query.to_uppercase(),
+                count,
+                if count == 1 { "MATCH" } else { "MATCHES" }
+            )
+        } else {
+            format!(
+                "{} {}",
+                count,
+                match self.tab {
+                    Tab::Parties =>
+                        if count == 1 {
+                            "PARTY"
+                        } else {
+                            "PARTIES"
+                        },
+                    Tab::Subscribed => "SUBSCRIBED",
+                    _ =>
+                        if count == 1 {
+                            "MOD"
+                        } else {
+                            "MODS"
+                        },
+                }
+            )
+        }
+    }
     fn paint_rows(
         &mut self,
         frame: &mut UiFrame<'_>,
@@ -1101,79 +1144,145 @@ impl CloudView {
         let compact = view.width() < 1100.0;
         let status_height = if compact { 44.0 } else { 48.0 };
         let status = Rect::from_min_size(content.min, Vec2::new(content.width(), status_height));
-        let label = if self.loading() && rows.is_empty() {
-            "CONSULTING THE DARK CLOUD...".to_owned()
-        } else if !self.query.is_empty() {
-            format!(
-                "\"{}\", {} {}",
-                self.query.to_uppercase(),
-                rows.len(),
-                if rows.len() == 1 { "MATCH" } else { "MATCHES" }
-            )
-        } else {
-            format!(
-                "{} {}",
-                rows.len(),
-                match self.tab {
-                    Tab::Parties =>
-                        if rows.len() == 1 {
-                            "PARTY"
-                        } else {
-                            "PARTIES"
-                        },
-                    Tab::Subscribed => "SUBSCRIBED",
-                    _ =>
-                        if rows.len() == 1 {
-                            "MOD"
-                        } else {
-                            "MODS"
-                        },
-                }
-            )
-        };
-        frame.record_rect("cloud-list-status", &label, "status", status, false);
-        frame.record_value("cloud-list-status", &label, None);
-        widgets::native(
-            frame,
-            ui,
-            &label,
-            NativeUiFontName::Medium,
-            status.min + Vec2::new(0.0, 24.0),
-            0.85,
-            0xd9ba70,
-            NativeUiTextAlign::Left,
-        );
-        if !self.query.is_empty() {
-            let r = Rect::from_min_size(
-                egui::pos2(status.right() - 180.0, status.top()),
-                Vec2::new(170.0, 40.0),
+        let label = self.status_label(rows.len());
+        if view.width() <= 700.0 {
+            let tools = if self.tab == Tab::Parties { 128.0 } else { 0.0 }
+                + if !self.query.is_empty() { 128.0 } else { 0.0 };
+            let label_rect = Rect::from_min_size(
+                status.min,
+                Vec2::new((status.width() - tools).max(10.0), status.height()),
             );
-            if widgets::stock_button(
+            frame.record_rect("cloud-list-status", &label, "status", label_rect, false);
+            frame.record_value("cloud-list-status", &label, None);
+            rows::ink(
                 frame,
                 ui,
-                "cloud-clear-query",
-                "CLEAR SEARCH",
-                r,
-                0.55,
-                enabled,
-            )
-            .clicked()
-                && enabled
-            {
-                actions.push("cloud-clear-query".to_owned());
-            }
-        }
-        if self.tab == Tab::Parties {
-            let r = Rect::from_min_size(
-                egui::pos2(status.right() - 120.0, status.top()),
-                Vec2::new(110.0, 40.0),
+                &label,
+                NativeUiFontName::Medium,
+                0.85,
+                0xd9ba70,
+                label_rect,
+                false,
             );
-            if widgets::stock_button(frame, ui, "cloud-refresh", "REFRESH", r, 0.55, enabled)
-                .clicked()
-                && enabled
-            {
-                actions.push("cloud-refresh".to_owned());
+            let mut right = status.right();
+            if self.tab == Tab::Parties {
+                let r = Rect::from_min_size(
+                    egui::pos2(right - 120.0, status.top()),
+                    Vec2::new(120.0, 44.0),
+                );
+                if self
+                    .art
+                    .button(frame, ui, "cloud-refresh", "REFRESH", r, 0.55, enabled)
+                    .clicked()
+                    && enabled
+                {
+                    actions.push("cloud-refresh".to_owned());
+                }
+                right -= 128.0;
             }
+            if !self.query.is_empty() {
+                let r = Rect::from_min_size(
+                    egui::pos2(right - 120.0, status.top()),
+                    Vec2::new(120.0, 44.0),
+                );
+                if self
+                    .art
+                    .button(frame, ui, "cloud-clear-query", "CLEAR SEARCH", r, 0.55, enabled)
+                    .clicked()
+                    && enabled
+                {
+                    actions.push("cloud-clear-query".to_owned());
+                }
+            }
+        } else {
+            let party = self.tab == Tab::Parties;
+            let gap = if view.width() <= 1300.0 { 8.0 } else { 12.0 };
+            let action_width = if party {
+                160.0
+            } else if view.width() <= 880.0 {
+                200.0
+            } else if view.width() <= 1300.0 {
+                270.0
+            } else {
+                300.0
+            };
+            let author_width = if party && view.width() <= 1050.0 {
+                75.0
+            } else if view.width() <= 880.0 {
+                80.0
+            } else if view.width() <= 1300.0 {
+                95.0
+            } else {
+                120.0
+            };
+            let version_width = if !party && view.width() <= 1050.0 {
+                0.0
+            } else if party && view.width() <= 1050.0 {
+                85.0
+            } else if view.width() <= 1300.0 {
+                75.0
+            } else {
+                90.0
+            };
+            let state_width = if party && view.width() <= 1050.0 {
+                125.0
+            } else if view.width() <= 1300.0 {
+                135.0
+            } else {
+                165.0
+            };
+            let count = if version_width > 0.0 { 5.0 } else { 4.0 };
+            let first = status.width()
+                - action_width
+                - author_width
+                - version_width
+                - state_width
+                - gap * (count - 1.0);
+            let mut x = status.left();
+            let captions = if party {
+                ["party", "wizards", "status", "location", "action"]
+            } else if self.tab == Tab::Subscribed {
+                ["subscribed mod", "author", "version", "status", "manage"]
+            } else {
+                ["mod", "author", "version", "status", "action"]
+            };
+            for (index, (caption, width)) in captions
+                .into_iter()
+                .zip([first, author_width, version_width, state_width, action_width])
+                .enumerate()
+            {
+                if width <= 0.0 {
+                    continue;
+                }
+                let r = Rect::from_min_size(
+                    egui::pos2(x, status.top()),
+                    Vec2::new(width, status.height()),
+                );
+                if party && index == 4 {
+                    let button = Rect::from_center_size(r.center(), Vec2::new(100.0, 44.0));
+                    if self
+                        .art
+                        .button(frame, ui, "cloud-refresh", "REFRESH", button, 0.55, enabled)
+                        .clicked()
+                        && enabled
+                    {
+                        actions.push("cloud-refresh".to_owned());
+                    }
+                } else {
+                    rows::ink(
+                        frame,
+                        ui,
+                        caption,
+                        NativeUiFontName::Menu,
+                        1.0,
+                        0xd9ba70,
+                        r,
+                        index > 0,
+                    );
+                }
+                x += width + gap;
+            }
+            frame.record_rect("cloud-columns", &captions.join(" · "), "heading", status, false);
         }
         let list = Rect::from_min_max(content.min + Vec2::new(0.0, status_height), content.max);
         frame.record_rect("cloud-list", "Dark Cloud entries", "region", list, enabled);
@@ -1213,16 +1322,18 @@ impl CloudView {
                     );
                     if self.active_error().is_some() {
                         let (_, r) = ui.allocate_space(Vec2::new(list.width(), 50.0));
-                        if widgets::stock_button(
-                            frame,
-                            ui,
-                            "cloud-refresh",
-                            "RETRY",
-                            Rect::from_min_size(r.min, Vec2::new(170.0, 44.0)),
-                            0.55,
-                            enabled,
-                        )
-                        .clicked()
+                        if self
+                            .art
+                            .button(
+                                frame,
+                                ui,
+                                "cloud-refresh",
+                                "RETRY",
+                                Rect::from_min_size(r.min, Vec2::new(170.0, 44.0)),
+                                0.55,
+                                enabled,
+                            )
+                            .clicked()
                             && enabled
                         {
                             actions.push("cloud-refresh".to_owned());
@@ -1373,16 +1484,18 @@ impl CloudView {
         } else {
             Rect::from_min_size(footer.min + Vec2::new(239.5, 6.0), Vec2::new(353.0, 69.0))
         };
-        if widgets::stock_button(
-            frame,
-            ui,
-            "cloud-primary",
-            label,
-            primary,
-            primary.height() / 69.0,
-            enabled && !disabled,
-        )
-        .clicked()
+        if self
+            .art
+            .button(
+                frame,
+                ui,
+                "cloud-primary",
+                label,
+                primary,
+                primary.height() / 69.0,
+                enabled && !disabled,
+            )
+            .clicked()
             && enabled
             && !disabled
         {
@@ -1405,7 +1518,45 @@ impl CloudView {
                 options,
                 enabled && matches!(selected, Some(Row::Mod(..))),
             )? {
-                actions.push("cloud-primary".to_owned());
+                actions.push("cloud-options".to_owned());
+            }
+        }
+        if view.width() > 1360.0 {
+            let label = self.status_label(self.filtered_rows().len());
+            let status = Rect::from_min_size(
+                egui::pos2(footer.left() - 260.0, footer.bottom() - 62.0),
+                Vec2::new(240.0, 44.0),
+            );
+            let count_rect = if self.query.is_empty() {
+                status
+            } else {
+                Rect::from_min_size(status.min, Vec2::new(112.0, 44.0))
+            };
+            frame.record_rect("cloud-list-status", &label, "status", count_rect, false);
+            frame.record_value("cloud-list-status", &label, None);
+            rows::ink(
+                frame,
+                ui,
+                &label,
+                NativeUiFontName::Medium,
+                0.85,
+                0xd9ba70,
+                count_rect,
+                false,
+            );
+            if !self.query.is_empty() {
+                let r = Rect::from_min_size(
+                    egui::pos2(status.right() - 120.0, status.top()),
+                    Vec2::new(120.0, 44.0),
+                );
+                if self
+                    .art
+                    .button(frame, ui, "cloud-clear-query", "CLEAR SEARCH", r, 0.55, enabled)
+                    .clicked()
+                    && enabled
+                {
+                    actions.push("cloud-clear-query".to_owned());
+                }
             }
         }
         if let Some((done, total, active)) =

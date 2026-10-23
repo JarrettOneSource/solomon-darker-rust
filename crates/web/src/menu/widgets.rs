@@ -150,15 +150,20 @@ pub(crate) fn stock_button(
     let pressed =
         if response.is_pointer_button_down_on() { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
     if !text.is_empty() {
-        native(
+        crate::gpu_ui::native_text(
             frame,
-            ui,
-            text,
-            NativeUiFontName::Menu,
-            rect.center() + Vec2::new(0.0, 9.0 * scale) + pressed,
-            scale,
-            if enabled { 0xd9ba70 } else { 0x5b4e2f },
-            NativeUiTextAlign::Center,
+            ui.painter(),
+            &NativeUiTextSpec {
+                scale: f64::from(scale),
+                alpha: if enabled { 1.0 } else { 0.36 },
+                tint: 0xd9ba70,
+                ..NativeUiTextSpec::new(
+                    NativeUiFontName::Menu,
+                    text,
+                    f64::from(rect.center().x + pressed.x),
+                    f64::from(rect.center().y + 9.0 * scale + pressed.y),
+                )
+            },
         );
     }
     response
@@ -172,10 +177,37 @@ pub(crate) fn paint_stock_button(
     scale: f32,
     enabled: bool,
 ) {
-    let opacity = if enabled { 1.0 } else { 0.36 };
-    let tint = alpha(0xffffff, opacity);
+    paint_stock_button_highlight(
+        frame,
+        ui,
+        rect,
+        scale,
+        enabled,
+        response.hovered() || response.has_focus(),
+    );
+}
+/// Shared nativeUI54 chrome; each source family chooses its actual highlighted state.
+pub(crate) fn paint_stock_button_highlight(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+    highlight: bool,
+) {
+    paint_stock_button_tinted(frame, ui, rect, scale, enabled, highlight, Color32::WHITE);
+}
+pub(crate) fn paint_stock_button_tinted(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+    highlight: bool,
+    tint: Color32,
+) {
     image(frame, ui, "main-menu-button", rect, tint);
-    if enabled && (response.hovered() || response.has_focus()) {
+    if enabled && highlight {
         image(frame, ui, "main-menu-button-hover", rect, tint);
     }
     let surround = 6.0 * scale;
@@ -199,6 +231,7 @@ pub(crate) fn paint_stock_button(
         image(frame, ui, "main-menu-button-rail", rail, tint);
     }
 }
+
 pub(super) fn stone_button(
     frame: &UiFrame<'_>,
     ui: &Ui,
