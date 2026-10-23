@@ -129,7 +129,7 @@ async function adminRestart() {
     args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
   const browser = browserOwner.browser;
   const page = await browser.newPage({ ignoreHTTPSErrors: true,
-    viewport: { width: 1280, height: 720 } });
+    viewport: { width: 1600, height: 900 } });
   await ui.watchRequestFailures(page, {errors}).ready;
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => errors.push(redact(error.message)));
