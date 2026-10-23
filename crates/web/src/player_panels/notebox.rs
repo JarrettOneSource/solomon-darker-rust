@@ -72,6 +72,7 @@ impl NpcNotebox {
         .gamma_multiply(opacity);
         let mut error = None;
         egui::Area::new(layer.id)
+            .fade_in(false)
             .order(layer.order)
             .fixed_pos(egui::Pos2::ZERO)
             .constrain(false)

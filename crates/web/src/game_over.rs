@@ -76,6 +76,7 @@ impl GameOverOverlay {
         ))
         .display_scale as f32;
         egui::Area::new(egui::Id::unique("game-over"))
+            .fade_in(false)
             .order(egui::Order::Foreground)
             .fixed_pos(bounds.min)
             .show(frame.ctx, |ui| {

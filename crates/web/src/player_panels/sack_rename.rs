@@ -148,6 +148,7 @@ impl PlayerPanels {
         let mut error = None;
         let bounds = frame.ctx.content_rect();
         egui::Area::new(egui::Id::unique("sack-rename"))
+            .fade_in(false)
             .order(egui::Order::Tooltip)
             .fixed_pos(egui::Pos2::ZERO)
             .constrain(false)
