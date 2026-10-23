@@ -124,12 +124,12 @@ pub(super) fn paint(input: &MovementInput, frame: &UiFrame<'_>) -> Result<(), St
                 let response = ui.interact(
                     geometry.bounds(),
                     egui::Id::unique(id),
-                    egui::Sense::drag(),
+                    egui::Sense::DRAG,
                 );
                 let p = ui.painter();
                 let r = geometry.size / 2.0;
                 let mut shadow = egui::epaint::RectShape::filled(
-                    geometry.bounds().translate(egui::vec2(0.0, 4.0 * geometry.scale)),
+                    geometry.bounds().translate(egui::emath::Rot2::from_angle(geometry.rotation) * egui::vec2(0.0, 4.0 * geometry.scale)),
                     r,
                     Color32::from_black_alpha(112),
                 );
