@@ -42,8 +42,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
   page.on('requestfinished', request => pending.delete(request));
   page.on('requestfailed', request => {
     pending.delete(request);
-    if (!(request.resourceType() === 'media' && request.failure()?.errorText === 'net::ERR_ABORTED'))
-      errors.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
+    errors.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
   });
   page.on('response', async response => {
     const pathname = new URL(response.url()).pathname;

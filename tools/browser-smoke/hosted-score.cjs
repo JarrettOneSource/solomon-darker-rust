@@ -19,10 +19,8 @@ assert.ok(Number.isSafeInteger(coldStartTimeout) && coldStartTimeout > 0,
   'COLD_START_TIMEOUT_MS must be a positive integer');
 const checks = [];
 const errors = [];
-const cancelledMedia = [];
 const failedResources = [];
 const pendingPageArt = new Set();
-const resourceChecks = [];
 const apiRequests = [];
 const registrationRequests = [];
 const scoreReceipts = [];
@@ -150,13 +148,7 @@ function observe(page) {
     failedResources.push({path: new URL(request.url()).pathname,
       type: request.resourceType(), failure: request.failure()?.errorText,
       step, pagePath: new URL(page.url()).pathname});
-    const check = (async () => {
-      const failure = `${new URL(request.url()).pathname}: ${request.failure()?.errorText}`;
-      if (request.resourceType() === 'media' && request.failure()?.errorText === 'net::ERR_ABORTED') {
-        cancelledMedia.push(failure);
-      } else errors.push(redact(failure));
-    })();
-    resourceChecks.push(check);
+    errors.push(redact(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
   });
   page.on('websocket', socket => {
     const read = createNativeMessageReader();
@@ -429,7 +421,7 @@ async function main() {
     driverSha256: digest(fs.readFileSync(__filename)),
     sourceRevision: process.env.SOURCE_REV || 'fa08ae249ff5563570bdb2a653e2ef9358ce7b83',
     scope: 'Real registration, unmodified hosted gameplay, passive combat death, signed score POST and Global Hall',
-    checks, errors, cancelledMedia, failedResources, apiRequests, registrationRequests,
+    checks, errors, failedResources, apiRequests, registrationRequests,
     admissions, welcomes, commands, inputSamples,
     scoreReceipts, scorePosts, hallRequests, hallActivations, healthSamples};
   let browserServer;
@@ -467,7 +459,6 @@ async function main() {
       checked('a fresh browser signs into the actual account through the unchanged mounted form');
       step = `persisted Global Hall via ordinary ${mode}`;
       await globalHall(page, entry.runId, mode);
-      await Promise.all(resourceChecks);
       assert.deepEqual(errors, []);
       checked(`the persisted run appears on all four Global boards via ordinary ${mode} activation`);
       receipt.passed = true;
@@ -544,7 +535,6 @@ async function main() {
     assert.equal(published.body.accountUsername, account.username);
     assert.equal(published.body.elapsedTicks, receipt.completedScore.elapsed_ticks);
     assert.equal(published.body.awesomeness, receipt.completedScore.awesomeness);
-    await Promise.all(resourceChecks);
     assert.deepEqual(errors, []);
     checked('the real signed completion receipt is POSTed once and the unchanged API returns 201');
 
@@ -563,7 +553,6 @@ async function main() {
     assert.ok(state.leaveReceipts > 0);
     await globalHall(page, runId, 'pointer');
     assert.equal(commands.some(command => command.kind === 'set_cheats'), false);
-    await Promise.all(resourceChecks);
     assert.deepEqual(errors, []);
     checked('normal continuation and save-before-leave reach a Global Hall row backed by the actual API');
     receipt.passed = true;
