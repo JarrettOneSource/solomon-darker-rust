@@ -1322,11 +1322,12 @@ impl Game {
             return Ok(());
         }
         let run = self.session.boneyard.as_ref().map(|world| world.loaded.run_id.as_str());
-        let feedback = self.session.participants[&self.local_player_id]
-            .player
-            .economy
-            .action_feedback
-            .as_ref();
+        let Some(participant) = self.session.participants.get(&self.local_player_id) else {
+            self.book_feedback_scope = None;
+            self.panels.reset_skill_book_feedback(None);
+            return Ok(());
+        };
+        let feedback = participant.player.economy.action_feedback.as_ref();
         if self.book_feedback_scope.as_ref().is_none_or(|(player, previous_run)| {
             player != &self.local_player_id || previous_run.as_deref() != run
         }) {
@@ -2341,7 +2342,8 @@ impl Game {
             "canvas": { "width": ui.viewport[0], "height": ui.viewport[1], "pixelsPerPoint": ui.pixels_per_point },
             "capture": ui.capture,
             "inputScope": ui.input_scope, "frame": ui.frame,
-            "draw": { "meshes": ui.meshes, "triangles": ui.triangles, "textures": ui.textures },
+            "draw": { "meshes": ui.meshes, "triangles": ui.triangles, "textures": ui.textures,
+                "borrowedImages": ui.borrowed_images, "borrowedImagePaths": self.gpu_ui.borrowed_image_paths() },
             "widgets": widgets,
         })
     }

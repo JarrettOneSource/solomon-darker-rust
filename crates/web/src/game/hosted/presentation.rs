@@ -51,6 +51,9 @@ impl Game {
             Ok(images) => Some(images),
             Err(error) => return self.native_disconnected(&error),
         };
+        for (path, texture) in self.mod_assets.as_ref().unwrap().ui_images() {
+            self.gpu_ui.register_image(path, texture);
+        }
         self.mod_audio = Some(ModAudioDriver::new(self.audio.assets(), prepared.audio));
         let hosted = self.hosted.as_mut().unwrap();
         hosted.content_pending = false;
@@ -83,6 +86,9 @@ impl Game {
         )?;
         self.wizard_view.set_equipment(&stock);
         if let Some(mut assets) = self.mod_assets.take() {
+            for (path, _) in assets.ui_images() {
+                self.gpu_ui.forget_image(path);
+            }
             assets.destroy(&mut self.renderer);
         }
         if let Some(hosted) = &mut self.hosted {

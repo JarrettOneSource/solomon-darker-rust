@@ -23,7 +23,7 @@ pub struct PreparedModPresentationAssets {
     images: BTreeMap<String, ModPresentationImage>,
 }
 
-/// DOM consumers use the same verified URL and dimensions as the WebGL frames.
+/// UI consumers use the same verified URL, dimensions and uploaded texture as world frames.
 pub struct ModPresentationImage {
     url: ModContentUrl,
     image: HtmlImageElement,
@@ -152,6 +152,15 @@ pub enum ModWearableLayer {
 }
 
 impl ModPresentationAssets {
+    pub fn ui_images(&self) -> impl Iterator<Item = (&str, &Texture)> {
+        self.images.iter().map(|(key, image)| {
+            (
+                image.url(),
+                self.bases.get(key).expect("a live verified image owns its uploaded texture"),
+            )
+        })
+    }
+
     pub fn destroy(&mut self, renderer: &mut Renderer) {
         if self.destroyed {
             return;
