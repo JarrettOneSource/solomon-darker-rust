@@ -71,17 +71,48 @@ function center(bounds) {
   return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
 }
 
+const interactiveRoles=new Set(['button','textbox','password','input','text-entry','slider',
+  'checkbox','switch','combobox','radio','tab','menuitem']);
+
+async function actionable(page,id,{timeout=45000}={}) {
+  const deadline=Date.now()+timeout;
+  let previous;
+  let last;
+  while(Date.now()<deadline) {
+    const snapshot=await readUi(page);
+    if(snapshot?.error)throw new Error(`GPU UI failed: ${snapshot.error}`);
+    const target=snapshot&&findWidget(snapshot,id);
+    if(target?.enabled&&target.rect.every(Number.isFinite)
+      &&target.rect[2]>0&&target.rect[3]>0) {
+      const point=center(bounds(target));
+      assert.ok(Number.isFinite(target.z),'actual widget hit order is available');
+      const covering=snapshot.widgets.filter(widget=>widget.id!==id
+        &&interactiveRoles.has(widget.role)&&widget.z>target.z
+        &&point.x>=widget.rect[0]&&point.x<widget.rect[0]+widget.rect[2]
+        &&point.y>=widget.rect[1]&&point.y<widget.rect[1]+widget.rect[3]);
+      const stable=previous&&snapshot.frame!==previous.frame
+        &&target.rect.every((value,index)=>value===previous.rect[index]);
+      if(stable&&covering.length===0)return {target,point};
+      previous={frame:snapshot.frame,rect:target.rect};
+      last={target,covering:covering.map(widget=>widget.id),frame:snapshot.frame};
+    } else {
+      previous=undefined;
+      last={target,surface:snapshot?.surface};
+    }
+    // Observe actual consecutive GPU frames, as a DOM locator waits for a
+    // stable hit target. No fixed animation delay or hidden action is used.
+    await nextFrame(page);
+  }
+  throw new Error(`GPU widget ${id} never became stable and unobstructed: ${JSON.stringify(last)}`);
+}
+
 async function click(page, id, options) {
-  const target = await widget(page, id, {enabled:true});
-  assert.equal(target.enabled, true, `GPU widget is enabled: ${id}`);
-  const point = center(bounds(target));
+  const {point}=await actionable(page,id);
   await page.mouse.click(point.x, point.y, options);
 }
 
 async function tap(page, id) {
-  const target = await widget(page, id, {enabled:true});
-  assert.equal(target.enabled, true, `GPU widget is enabled: ${id}`);
-  const point = center(bounds(target));
+  const {point}=await actionable(page,id);
   await page.touchscreen.tap(point.x, point.y);
 }
 
@@ -127,8 +158,8 @@ async function wheel(page, id, deltaX, deltaY) {
 }
 
 async function drag(page, fromId, toId, { touch = false } = {}) {
-  const from = center(bounds(await widget(page, fromId)));
-  const to = center(bounds(await widget(page, toId)));
+  const from=(await actionable(page,fromId)).point;
+  const to=(await actionable(page,toId)).point;
   if (!touch) {
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
@@ -318,7 +349,7 @@ async function nextFrame(page) {
 }
 
 module.exports = {
-  readUi, waitForUi, findWidget, widget, noWidget, byLabel, surface, ready, bounds, center, click, tap,
+  readUi, waitForUi, findWidget, widget, noWidget, byLabel, surface, ready, bounds, center, actionable, click, tap,
   fill, value, focused, setSlider, wheel, drag, assertGpuOnly, watchErrors, installController, controller, nextFrame,
   observeGpu, gpuDraws,
   observeAnnouncements, announcements, announced,
