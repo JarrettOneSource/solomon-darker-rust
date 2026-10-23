@@ -570,13 +570,6 @@ impl MenuUi {
             && !self.routing.active()
             && self.cloud.boneyards_selected()
     }
-    pub fn request_boneyard_library_menu(&mut self) -> Result<(), String> {
-        if self.screen == Screen::Cloud {
-            self.handle_event(UiEvent::Key(self.settings.controls.open_menu.clone(), false))?;
-        }
-        Ok(())
-    }
-
     pub fn complete_dark_cloud_catalog(
         &mut self,
         id: u64,

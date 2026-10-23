@@ -251,6 +251,7 @@ impl JoinView {
         if edited.changed() {
             self.code = normalize_party_code(&self.code);
         }
+        frame.record_value("join-party-code", &self.code, None);
         if edited.has_focus()
             && ui.input(|i| i.key_pressed(egui::Key::Enter))
             && complete_party_code(&self.code)
