@@ -146,7 +146,12 @@ async function walkToFomentius(page) {
     await ui.noWidget(page,'panel:close');
     await walkToFomentius(page);await settle(page);
     await shot(page,'phone-shop-rust.png');
-    const dye=await ui.byLabel(page,'Buy Dye for 300 gold',{prefix:'panel:',role:'button'});
+    const dyes=(await ui.readUi(page)).widgets.filter(widget=>widget.id.startsWith('panel:shop:')
+      &&widget.role==='button'&&widget.enabled&&widget.label==='Buy Dye for 300 gold')
+      .sort((a,b)=>a.rect[0]-b.rect[0]||a.rect[1]-b.rect[1]);
+    assert.ok(dyes.length===2||dyes.length===3,'Source stocks two or three identical Dye kits');
+    const dye=dyes[0];
+    fs.writeFileSync(path.join(output,'phone-dye-purchase.json'),JSON.stringify({stock:dyes,chosen:dye.id},null,2));
     await ui.tap(page,dye.id);await ui.tap(page,dye.id);await settle(page);
     await action(page,'close');await settle(page);
     await ui.tap(page,'hud:inventory');await settle(page);

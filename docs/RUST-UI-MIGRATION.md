@@ -753,6 +753,13 @@ right-edge origin is 376.923 and Fomentius' x1397 projects to x530.44. The test'
 projection using the same bounded viewport/camera contract, retain the real joystick
 route and single native touch, and record its actual dialogue result. This evidence
 establishes a driver projection error; it does not establish a game input defect.
+The corrected single touch opens the actual Fomentius dialogue/shop in
+`responsive-source-camera/phone-world-entry.json`. The next test-only failure assumes
+one uniquely named Dye kit, while fa08 `core-kernels/hub-economy.ts:526` rolls two or
+three identical 300-gold kits (`rollBound:2`, `quantityOffset:2`). The actual GPU shop
+contains two distinct rows, IDs16/17, and errors[]/graceful exit0. Select its first
+visible kit after requiring that source stock range; keep the real purchase and owned
+inventory quantity assertions instead of weakening the common unique-label helper.
 
 The Tutorial text-bounds helper currently has no executable caller, so its syntax check
 does not qualify Tutorial layout. Pinned fa08 `core-kernels/native-tutorial.ts`
