@@ -427,3 +427,17 @@ no-remaining-choices opening fallback in `hub-npc-dialogue.ts:98`, not this Done
 Retain actual touch Skip/question/Done and visible-close assertions, remove the invented
 extra dismissal/Skip step, and rerun the unchanged HUD movement/cancel requirements.
 The original red is `common-browser/88c3dfe/hud-input/run.log`; cleanup exits zero.
+
+The subsequent real-touch run isolates the production input defect:
+`joystick-native-trace/receipt.json` records computed canvas touch-action auto, visual
+scale one and native focus true. The real pointerdown acquires implicit capture; its
+first move is followed immediately by a trusted pointercancel/lostpointercapture before
+any test cancellation. Accepted movement stays zero. Dialogue is already closed and
+the input scope is null, so delaying that transition is not the repair. Pinned fa08
+`input/touch-joystick.css:17` and `hub.css:1029` disable native touch manipulation for
+the joystick/scene. [Pointer Events section 8](https://www.w3.org/TR/pointerevents3/#declaring-direct-manipulation-behavior)
+requires touch-action before the gesture; cancelling pointer events alone cannot
+prevent browser pan/zoom, which cancels the pointer stream. Restore that nonvisual
+platform input policy on the actual game canvas at adapter attachment. Keep genuine
+pointer capture, explicit cancel/blur clearing, GPU joystick state and movement checks;
+no keyboard, synthetic game command, delayed gesture or hidden control substitutes for it.
