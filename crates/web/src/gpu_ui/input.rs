@@ -112,10 +112,10 @@ impl InputQueue {
     }
 
     fn sync_editor(&mut self, textarea: &HtmlTextAreaElement) {
-        if let Some(session) = &self.session {
-            if let Err(error) = session.sync(textarea) {
-                self.clipboard_error = Some(error);
-            }
+        if let Some(session) = &self.session
+            && let Err(error) = session.sync(textarea)
+        {
+            self.clipboard_error = Some(error);
         }
     }
 
@@ -336,9 +336,10 @@ impl BrowserInput {
                     queue.edit(Intent::Replace { range, text: key.key() }, None);
                     handled = true;
                 }
-                if handled || queue.capture.keyboard && !active {
-                    event.prevent_default();
-                } else if active && mapped == Some(Key::Tab) {
+                if handled
+                    || queue.capture.keyboard && !active
+                    || active && mapped == Some(Key::Tab)
+                {
                     event.prevent_default();
                 }
                 if handled {

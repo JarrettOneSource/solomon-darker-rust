@@ -258,20 +258,20 @@ impl<'a> NativeTextEdit<'a> {
         let selection = state.model.selection();
         let caret = state.pointer_caret.unwrap_or_else(|| geometry.caret(selection.focus));
         let changed_or_focused = response.changed() || self.request_focus || self.select_all;
-        if changed_or_focused || has_focus && !frame.editor_receipts.is_empty() {
-            if matches!(font, EditorFont::Browser(_)) {
-                for (offset, min, max, viewport) in [
-                    (&mut state.offset.x, caret.min.x, caret.max.x + 2.0, content.width()),
-                    (&mut state.offset.y, caret.min.y, caret.max.y, content.height()),
-                ] {
-                    if min < *offset {
-                        *offset = min;
-                    }
-                    if max > *offset + viewport {
-                        *offset = max - viewport;
-                    }
-                    *offset = offset.max(0.0);
+        if (changed_or_focused || has_focus && !frame.editor_receipts.is_empty())
+            && matches!(font, EditorFont::Browser(_))
+        {
+            for (offset, min, max, viewport) in [
+                (&mut state.offset.x, caret.min.x, caret.max.x + 2.0, content.width()),
+                (&mut state.offset.y, caret.min.y, caret.max.y, content.height()),
+            ] {
+                if min < *offset {
+                    *offset = min;
                 }
+                if max > *offset + viewport {
+                    *offset = max - viewport;
+                }
+                *offset = offset.max(0.0);
             }
         }
         if self.multiline && response.hovered() {
