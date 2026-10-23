@@ -106,7 +106,20 @@ async function walkToFomentius(page) {
       return point.x>=target.x&&point.x<=target.x+target.width
         &&point.y>=target.y&&point.y<=target.y+target.height;
     },'real Health Potion moved into column-first cell 5');
+    const afterDrag=await ui.readUi(page);
+    const toolbarActions=new Set(['panel:view-stats','panel:view-backpack',
+      'panel:view-equipment','panel:skills','panel:close']);
+    for(const widget of afterDrag.widgets.filter(widget=>widget.enabled
+      &&widget.id.startsWith('panel:')&&!toolbarActions.has(widget.id))) {
+      assert.ok(widget.rect[1]>=48,'scrolled native body hits stay below its fixed toolbar');
+    }
     await action(page,'view-equipment');
+    await ui.widget(page,'panel:equipment:hat');
+    await ui.noWidget(page,health.id);
+    fs.writeFileSync(path.join(output,'phone-navigation-after-drag.json'),JSON.stringify({
+      before:afterDrag,afterFirstEquipTap:await ui.readUi(page),
+    },null,2));
+    await shot(page,'phone-equipment-first-tap-rust.png');
     await action(page,'equipment:hat');await action(page,'equipment:hat');
     const notice=await ui.widget(page,'panel:notice-title');
     assert.equal(notice.label,'A WIZARD WOULD NEVER REMOVE HIS HAT!');
