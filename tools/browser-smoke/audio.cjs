@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const {reachCollegeLoadout} = require('./menu-journey.cjs');
+const ui = require('./gpu-ui.cjs');
 const tree = path.resolve(__dirname,'../..');
 const output = process.env.OUT || '/tmp';
 const catalog = fs.readFileSync(path.join(tree,'crates/sim/src/audio/catalog.rs'),'utf8');
@@ -18,9 +19,7 @@ const browser = await chromium.launch({headless:true,executablePath:process.env.
 const errors=[];
 try {
 const page=await browser.newPage({viewport:{width:1600,height:900}});
-page.on('pageerror',error=>errors.push(error.message));
-page.on('console',message=>{if(message.type()==='error')errors.push(message.text())});
-page.on('response',response=>{if(response.status()>=400)errors.push(`${response.status()} ${response.url()}`)});
+ui.watchErrors(page,{errors});
 await page.addInitScript(({files})=>{
   const contexts=[],events=[],gains=[],metadata=new WeakMap(),connections=new WeakMap();
   window.audioReceipt={contexts,events,gains};
@@ -45,36 +44,34 @@ await page.addInitScript(({files})=>{
   AudioScheduledSourceNode.prototype.stop=function(...args){events.push({action:'stop',cues:metadata.get(this.buffer),at:this.context.currentTime});return stop.call(this,...args)};
 },{files});
 await page.goto(process.env.URL || 'http://127.0.0.1:4185/');
-await page.waitForFunction(()=>window.wasmBindings?.wizard_state().length>0&&!document.querySelector('#status').textContent,null,{timeout:60000});
+await ui.ready(page);
 assert.equal(await page.evaluate(()=>audioReceipt.contexts.length),1);
 const musicBeforeActivation=()=>page.locator('audio').evaluateAll(nodes=>nodes.map(node=>({paused:node.paused})));
 const initialState=await page.evaluate(()=>audioReceipt.contexts[0].state);
 await page.evaluate(()=>audioReceipt.contexts[0].suspend());
 assert.equal(await page.evaluate(()=>audioReceipt.contexts[0].state),'suspended');
 assert.ok((await musicBeforeActivation()).every(track=>track.paused));
-const tutorialPrompt=page.locator('.title-prompt:not([hidden])');
-if(await tutorialPrompt.isVisible()) {
-  await tutorialPrompt.locator('[data-menu-action="prompt-secondary"]').click();
-}
-await page.locator('[data-menu-action="play"]').click();
+if(ui.findWidget(await ui.readUi(page),'prompt-secondary'))await ui.click(page,'prompt-secondary');
+await ui.click(page,'play');
 await page.waitForFunction(()=>audioReceipt.contexts[0].state==='running');
 await page.waitForTimeout(1100);
 const music=()=>page.locator('audio').evaluateAll(nodes=>nodes.map(node=>({cue:node.dataset.audioCue,volume:node.volume,paused:node.paused,time:node.currentTime,ready:node.readyState})));
 let tracks=await music();
 assert.ok(tracks.find(track=>track.cue==='solomondarktheme').time>0);
 assert.equal(tracks.filter(track=>!track.paused).length,1);
-await page.locator('[data-menu-action="new-game"]').click();
+await ui.click(page,'new-game');
 await reachCollegeLoadout(page);
 await page.waitForFunction(()=>audioReceipt.events.some(event=>event.action==='start'&&event.cues?.includes('choose-element')),null,{timeout:10000});
 let events=await page.evaluate(()=>audioReceipt.events);
 assert.ok(events.some(event=>event.action==='start'&&event.cues.includes('start-cast')));
 assert.ok(events.some(event=>event.action==='start'&&event.cues.includes('choose-element')));
 assert.ok(events.some(event=>event.action==='stop'&&event.cues.includes('start-cast')));
-await page.getByRole('textbox',{name:'Wizard name',exact:true}).fill('Felix');
-await page.locator('[data-menu-action="element:ether"]').click();
-await page.locator('[data-menu-action="discipline:arcane"]').waitFor({state:'visible'});
-await page.locator('[data-menu-action="discipline:arcane"]').click();
-await page.waitForFunction(()=>document.querySelector('.game-menus').dataset.menuScreen==='hidden');
+await ui.fill(page,'create-name','Felix');
+await ui.value(page,'create-name','Felix');
+await ui.click(page,'element:ether');
+await ui.widget(page,'discipline:arcane');
+await ui.click(page,'discipline:arcane');
+await ui.surface(page,'hidden');
 const hubEntryBeforeReady=await page.evaluate(()=>Array.from(window.wasmBindings.wizard_state()));
 // Final Create includes the stock incoming walk; inventory commands are rejected
 // during that transition, just as the shared startNewGame helper expects.
@@ -91,26 +88,29 @@ tracks=await music();
 assert.ok(tracks.find(track=>track.cue==='academy').time>0);
 assert.equal(tracks.filter(track=>!track.paused).length,1);
 await page.keyboard.press('KeyI'); await page.waitForTimeout(450);
-await page.getByRole('button',{name:'Health Potion, quantity 1',exact:true}).dblclick();
+const potion=await ui.byLabel(page,'Health Potion, quantity 1',{prefix:'panel:item:',role:'button'});
+await ui.click(page,potion.id,{clickCount:2});
 await page.waitForFunction(()=>audioReceipt.events.some(event=>event.action==='start'&&event.cues?.includes('drink')));
 assert.ok(await page.evaluate(()=>audioReceipt.events.some(event=>event.action==='start'&&event.cues.includes('drink'))));
 await page.keyboard.press('Escape');
-await page.locator('.player-panels').waitFor({state:'hidden'});
+await ui.noWidget(page,'panel:close');
 await page.keyboard.press('Escape');
-await page.locator('.game-menus[data-menu-screen="pause"]').waitFor();
-await page.locator('[data-menu-action="pause-settings"]').click();await page.waitForTimeout(450);
+await ui.surface(page,'pause');
+await ui.click(page,'pause-settings');
+await ui.surface(page,'settings');
 
 
-await page.locator('[data-setting="music"]').fill('0');
-await page.locator('[data-setting="sound"]').fill('0');
+await ui.setSlider(page,'settings-range:music',0);
+await ui.setSlider(page,'settings-range:sound',0);
 await page.waitForFunction(()=>[...document.querySelectorAll('audio')].every(track=>track.volume===0)&&audioReceipt.gains[0].gain.value===0);
 assert.ok((await music()).every(track=>track.volume===0));
 assert.equal(await page.evaluate(()=>audioReceipt.gains[0].gain.value),0);
-await page.locator('[data-setting="sound"]').fill('73');
-await page.locator('[data-setting="music"]').fill('41');
+await ui.setSlider(page,'settings-range:sound',73);
+await ui.setSlider(page,'settings-range:music',41);
 await page.waitForFunction(()=>Math.abs(audioReceipt.gains[0].gain.value-.73)<1e-6&&Math.abs(document.querySelector('audio[data-audio-cue="academy"]').volume-.41)<1e-6);
 assert.ok(Math.abs(await page.evaluate(()=>audioReceipt.gains[0].gain.value)-.73)<1e-6);
 assert.ok(Math.abs((await music()).find(track=>track.cue==='academy').volume-.41)<1e-6);
+await ui.assertGpuOnly(page);
 assert.deepEqual(errors,[]);
 const receipt={passed:true,initialState,errors,hubEntryBeforeReady,hubMusicBeforeSettlement,tracks:await music(),events:await page.evaluate(()=>audioReceipt.events),loadedAudioResources:await page.evaluate(()=>performance.getEntriesByType('resource').filter(entry=>entry.name.includes('/audio/')).length)};
 fs.writeFileSync(path.join(output,'audio-browser-receipt.json'),JSON.stringify(receipt,null,2));
