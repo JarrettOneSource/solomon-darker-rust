@@ -1184,7 +1184,7 @@ impl CloudView {
                 0xd9ba70,
                 label_rect,
                 false,
-            );
+            )?;
             let mut right = status.right();
             if self.tab == Tab::Parties {
                 let r = Rect::from_min_size(
@@ -1309,7 +1309,7 @@ impl CloudView {
                         0xd9ba70,
                         r,
                         index > 0,
-                    );
+                    )?;
                 }
                 x += width + gap;
             }
@@ -1566,7 +1566,7 @@ impl CloudView {
                 0xd9ba70,
                 count_rect,
                 false,
-            );
+            )?;
             if !self.query.is_empty() {
                 let r = Rect::from_min_size(
                     egui::pos2(status.right() - 120.0, status.top()),

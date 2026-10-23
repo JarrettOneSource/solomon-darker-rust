@@ -75,11 +75,10 @@ impl CloudImages {
         alt: &str,
         rect: Rect,
         contain: bool,
-    ) {
+    ) -> Result<(), String> {
         ui.painter().rect_filled(rect, 0.0, widgets::color(0x090806));
         let Some(source) = source else {
-            missing(frame, ui, rect, alt);
-            return;
+            return missing(frame, ui, rect, alt);
         };
         self.used.insert(source.to_owned());
         if !self.entries.contains_key(source) {
@@ -92,15 +91,14 @@ impl CloudImages {
         }
         let Some(Image::Ready(url)) = self.entries.get(source) else {
             if matches!(self.entries.get(source), Some(Image::Failed)) {
-                missing(frame, ui, rect, alt);
+                missing(frame, ui, rect, alt)?;
             }
-            return;
+            return Ok(());
         };
         if frame.image_error(url.url()).is_some() {
             self.retired.push(url.url().to_owned());
             self.entries.insert(source.to_owned(), Image::Failed);
-            missing(frame, ui, rect, alt);
-            return;
+            return missing(frame, ui, rect, alt);
         }
         let size = frame.image_size(url.url());
         let dest = if contain {
@@ -125,9 +123,10 @@ impl CloudImages {
             None,
             egui::Color32::WHITE,
         );
+        Ok(())
     }
 }
-fn missing(frame: &UiFrame<'_>, ui: &Ui, rect: Rect, _alt: &str) {
+fn missing(frame: &UiFrame<'_>, ui: &Ui, rect: Rect, _alt: &str) -> Result<(), String> {
     super::rows::ink(
         frame,
         ui,
@@ -137,5 +136,5 @@ fn missing(frame: &UiFrame<'_>, ui: &Ui, rect: Rect, _alt: &str) {
         0xa99a70,
         rect,
         true,
-    );
+    )
 }
