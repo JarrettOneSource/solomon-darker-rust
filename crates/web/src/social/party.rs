@@ -159,7 +159,7 @@ impl SocialUi {
                         ],
                         uv,
                         gpu::GOLD,
-                        crate::render::BlendMode::Normal,
+                        solomon_graphics::BlendMode::Normal,
                     );
                     if response.clicked() {
                         action = Some("party-settings".to_owned());

@@ -140,7 +140,7 @@ impl WidgetGeometry {
 
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct UiDiagnostics {
-    pub frame:u64,
+    pub frame: u64,
     pub viewport: [f32; 2],
     pub pixels_per_point: f32,
     pub meshes: usize,
@@ -637,7 +637,7 @@ impl GpuUi {
         }
         let (meshes, triangles) = painted?;
         self.diagnostics = UiDiagnostics {
-            frame:self.diagnostics.frame+1,
+            frame: self.diagnostics.frame + 1,
             viewport,
             pixels_per_point,
             meshes,

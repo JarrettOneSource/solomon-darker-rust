@@ -5,6 +5,32 @@ use crate::social::HostedSocialAction;
 use solomon_sim::social::GameSessionKind;
 
 impl Game {
+    pub(in crate::game) fn update_hosted_party_mods(&mut self) {
+        let mods = self
+            .hosted
+            .as_ref()
+            .and_then(|hosted| {
+                hosted.welcome.as_ref().map(|welcome| {
+                    welcome
+                        .content
+                        .mods
+                        .iter()
+                        .map(|item| crate::social::PartyModView {
+                            id: item.id.clone(),
+                            name: hosted
+                                .active_mods
+                                .iter()
+                                .find(|active| active.id == item.id)
+                                .map_or_else(|| item.id.clone(), |active| active.name.clone()),
+                            version: item.version.clone(),
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .unwrap_or_default();
+        self.social.set_party_mods(&mods);
+    }
+
     pub(super) fn poll_hosted_social(&mut self) -> Result<(), String> {
         for action in self.social.take_hosted_actions() {
             match action {

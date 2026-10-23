@@ -180,7 +180,7 @@ impl StockPortraits {
                         positions,
                         uvs,
                         Color32::WHITE,
-                        crate::render::BlendMode::Normal,
+                        solomon_graphics::BlendMode::Normal,
                     );
                 }
             } else {

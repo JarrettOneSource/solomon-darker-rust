@@ -2250,7 +2250,13 @@ impl Game {
                 self.spectator_ui.paint(frame)?;
                 self.menu.paint(frame)?;
                 self.fullscreen.paint(frame)?;
+                if let Some(desktop) = &mut self.desktop_bridge {
+                    desktop.paint(frame)?;
+                }
                 self.match_loading_view.paint(frame)?;
+                if let Some(hosted) = &mut self.hosted {
+                    hosted.deployment_update.paint(frame)?;
+                }
                 crate::runtime_ui::paint(frame);
                 Ok(())
             })();
@@ -2295,6 +2301,7 @@ impl Game {
             "loading": null, "error": ui.error.clone().or_else(crate::runtime_ui::error),
             "canvas": { "width": ui.viewport[0], "height": ui.viewport[1], "pixelsPerPoint": ui.pixels_per_point },
             "capture": ui.capture,
+            "inputScope": ui.input_scope, "frame": ui.frame,
             "draw": { "meshes": ui.meshes, "triangles": ui.triangles, "textures": ui.textures },
             "widgets": widgets,
         })
