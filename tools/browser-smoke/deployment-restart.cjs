@@ -82,7 +82,7 @@ async function register(page) {
   fs.writeFileSync(path.join(out, 'private-account.json'), JSON.stringify(account), { mode: 0o600 });
   const catalogResponse = page.waitForResponse(response => new URL(response.url()).pathname
     === `${mount}/api/mods` && response.request().method() === 'GET');
-  await ui.click(page,'dark-cloud');
+  await ui.click(page,'explore');
   const catalog = await catalogResponse;
   assert.equal(catalog.status(), 200);
   await catalog.finished();

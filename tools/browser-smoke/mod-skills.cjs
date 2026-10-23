@@ -239,7 +239,7 @@ async function geometry(page, id) {
     if ((await ui.widget(page, 'settings-toggle:cheats')).selected === false) await ui.click(page, 'settings-toggle:cheats');
     if ((await ui.widget(page, 'settings-toggle:shared-hub')).selected === true) await ui.click(page, 'settings-toggle:shared-hub');
     await ui.click(page, 'settings-back'); await ui.click(page, 'settings-back');
-    await ui.click(page, 'dark-cloud');
+    await ui.click(page, 'explore');
     const subscribeId = `cloud-subscription:subscribe:${acceptedPackage.slug}`;
     await ui.waitForUi(page, snapshot => ui.findWidget(snapshot, subscribeId)
       || ui.findWidget(snapshot, `cloud-subscription:disable:${acceptedPackage.slug}`), 'available subscription');

@@ -361,7 +361,7 @@ async function runLua(page, code) {
     if(ui.findWidget(await ui.readUi(page),'prompt-secondary')) await ui.click(page,'prompt-secondary');
     if (!priorOnwardPhase) {
       mark('enable the real uploaded package through Cloud');
-      await ui.click(page,'dark-cloud');
+      await ui.click(page,'explore');
       const subscribe=`cloud-subscription:subscribe:${acceptedPackage.slug}`;
       const enable=`cloud-subscription:enable:${acceptedPackage.slug}`;
       const disable=`cloud-subscription:disable:${acceptedPackage.slug}`;
