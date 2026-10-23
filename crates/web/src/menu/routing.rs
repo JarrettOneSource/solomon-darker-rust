@@ -77,6 +77,10 @@ impl RoutingView {
         self.prompt.is_some()
     }
 
+    pub(super) fn stack_level(&self) -> i32 {
+        if matches!(self.prompt, Some(Prompt::Mismatch(_))) { 40 } else { 52_000 }
+    }
+
     fn show(&mut self, request_id: u64, prompt: Prompt) -> Result<(), String> {
         self.request_id = Some(request_id);
         self.prompt = Some(prompt);

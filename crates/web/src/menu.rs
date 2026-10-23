@@ -181,8 +181,51 @@ pub struct MenuUi {
 pub(crate) fn scene_layer() -> egui::LayerId {
     egui::LayerId::new(egui::Order::Middle, Id::unique("game-menu-scene"))
 }
+pub(crate) fn overlay_layer() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Foreground, Id::unique("game-menu-modal"))
+}
+pub(crate) fn orientation_layer() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Foreground, Id::unique("landscape-guidance"))
+}
+pub(crate) fn cloud_dialog_layer() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Foreground, Id::unique("cloud-dialog"))
+}
+pub(crate) fn library_layer() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Middle, Id::unique("boneyard-library"))
+}
 
 impl MenuUi {
+    /// Source sibling stacking levels within the shared main-menu stage.
+    pub(crate) fn scene_stack_level(&self) -> i32 {
+        match self.screen {
+            Screen::Create => 30,
+            Screen::Hall => 20,
+            Screen::Join => 24_000,
+            _ => 9,
+        }
+    }
+    pub(crate) fn overlay_stack_level(&self) -> Option<i32> {
+        if self.orientation_blocked {
+            None
+        } else if self.routing.active() {
+            Some(self.routing.stack_level())
+        } else if self.prompt.kind.is_some() {
+            Some(120)
+        } else if self.screen == Screen::Settings {
+            Some(100_000)
+        } else if self.screen == Screen::Pause {
+            Some(80)
+        } else {
+            None
+        }
+    }
+    pub(crate) fn orientation_visible(&self) -> bool {
+        self.orientation_blocked
+    }
+    /// The Source NativeUiDialog is a browser top-layer owner while mounted.
+    pub(crate) fn cloud_dialog_visible(&self) -> bool {
+        !self.orientation_blocked && self.cloud_visible(self.screen) && self.cloud.modal_open()
+    }
     pub fn discard_gameplay_keys(&mut self) {
         if self.screen == Screen::Hidden {
             self.discard_keys = true;
@@ -325,8 +368,8 @@ impl MenuUi {
             frame.input_scope("landscape-guidance");
             let view = frame.ctx.input(|i| i.content_rect());
             let ctx = frame.ctx.clone();
-            egui::Modal::new(Id::unique("landscape-guidance"))
-                .area(egui::Modal::default_area(Id::unique("landscape-guidance")).fade_in(false))
+            egui::Modal::new(orientation_layer().id)
+                .area(egui::Modal::default_area(orientation_layer().id).fade_in(false))
                 .frame(egui::Frame::NONE)
                 .backdrop_color(Color32::BLACK)
                 .show(&ctx, |ui| {
@@ -401,9 +444,9 @@ impl MenuUi {
             });
         std::mem::replace(&mut result, Ok(()))?;
         if overlay {
-            egui::Modal::new(Id::unique("game-menu-modal"))
+            egui::Modal::new(overlay_layer().id)
                 .area(
-                    egui::Area::new(Id::unique("game-menu-modal"))
+                    egui::Area::new(overlay_layer().id)
                         .fade_in(false)
                         .fixed_pos(view.min)
                         .order(egui::Order::Foreground),
