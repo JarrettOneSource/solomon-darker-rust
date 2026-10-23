@@ -124,6 +124,7 @@ pub(super) async fn load(document: &Document, ctx: &Context) -> Result<BrowserFo
         "JetBrains Mono Semibold",
         "JetBrains Mono Bold",
         "IM FELL English",
+        "IM FELL English Bold",
     ] {
         definitions.families.insert(FontFamily::Name(family.into()), fallback.clone());
     }
@@ -170,6 +171,7 @@ pub(super) fn font_css(family: &FontFamily, size: f32) -> String {
         "Palatino" => ("400", "normal", "Palatino,'Palatino Linotype',Georgia,serif"),
         "Arial" => ("400", "normal", "Arial,Helvetica,sans-serif"),
         "IM FELL English" => ("400", "normal", "'IM FELL English',Georgia,serif"),
+        "IM FELL English Bold" => ("700", "normal", "'IM FELL English',Georgia,serif"),
         "Georgia Bold" => ("700", "normal", "Georgia,'Times New Roman',serif"),
         _ => ("400", "normal", "Georgia,'Times New Roman',serif"),
     };
