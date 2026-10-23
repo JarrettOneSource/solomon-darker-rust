@@ -461,4 +461,28 @@ mod tests {
         model.apply(&insert(6, text, range, &inserted), Rules::default(), false);
         assert_eq!(model.text(), "مرحبا\nשלום 🧑‍💻", "backspace removes the combined e cluster once");
     }
+
+    #[test]
+    fn native_cut_paste_and_undo_preserve_distinct_source_transactions() {
+        let mut model = Model::new("abc");
+        model.select(Selection { anchor: 0, focus: 3 });
+        let mut cut = insert(1, "abc", model.selection(), "");
+        cut.intent = Intent::Cut;
+        model.apply(&cut, Rules::default(), false);
+        assert_eq!(model.text(), "");
+        model.apply(&insert(2, "", Selection::caret(0), "abc"), Rules::default(), false);
+        assert_eq!(model.text(), "abc");
+        let mut undo = insert(3, "abc", Selection::caret(3), "");
+        undo.intent = Intent::Undo;
+        model.apply(&undo, Rules::default(), false);
+        assert_eq!(model.text(), "", "native Undo first removes the paste, not the earlier cut");
+        undo.sequence = 4;
+        model.apply(&undo, Rules::default(), false);
+        assert_eq!(model.text(), "abc");
+        assert_eq!(
+            model.selection(),
+            Selection { anchor: 0, focus: 3 },
+            "Undo cut restores its selected text"
+        );
+    }
 }
