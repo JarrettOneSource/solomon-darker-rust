@@ -6,6 +6,7 @@ use super::{
     HubEconomyRejection, HubEconomyResult, HubEconomyState, HubInventoryAction,
     NativeUnforgeOutcome, TransferDirection,
 };
+use crate::profile::NATIVE_SKILL_CATALOG;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
@@ -98,6 +99,51 @@ pub struct HubActionFeedback {
     pub transfer_direction: Option<TransferDirection>,
     pub transfer_gesture: Option<HubTransferGesture>,
     pub unforge_outcome: Option<NativeUnforgeOutcome>,
+}
+
+/// `skill-book-feedback.ts::NativeSkillBookFeedbackCursor`: retained receipts never replay.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NativeSkillBookFeedbackCursor {
+    sequence: u64,
+}
+
+/// One newer accepted native book outcome, shared by the modal and world-text consumers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NativeSkillBookReceipt {
+    pub sequence: u64,
+    pub outcome: NativeSkillBookOutcome,
+}
+
+impl NativeSkillBookFeedbackCursor {
+    #[must_use]
+    pub fn new(initial: Option<&HubActionFeedback>) -> Self {
+        Self { sequence: initial.map_or(0, |feedback| feedback.sequence) }
+    }
+
+    pub fn consume(
+        &mut self,
+        feedback: Option<&HubActionFeedback>,
+    ) -> Option<NativeSkillBookReceipt> {
+        let feedback = feedback?;
+        if feedback.sequence <= self.sequence {
+            return None;
+        }
+        self.sequence = feedback.sequence;
+        if !feedback.accepted || feedback.action != HubActionFeedbackAction::ReadSkillBook {
+            return None;
+        }
+        feedback
+            .skill_book_outcome
+            .map(|outcome| NativeSkillBookReceipt { sequence: feedback.sequence, outcome })
+    }
+}
+
+/// `nativeSkillBookResultText`: only the authored rank-award rows 8..81 are valid.
+pub fn native_skill_book_result_text(skill_id: usize) -> Result<String, String> {
+    if !(8..=81).contains(&skill_id) {
+        return Err("Book result must name a native rank-award skill".to_owned());
+    }
+    Ok(format!("{} +1", NATIVE_SKILL_CATALOG[skill_id].name))
 }
 
 impl HubEconomyState {
