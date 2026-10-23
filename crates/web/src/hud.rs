@@ -1,26 +1,17 @@
-//! Stock College HUD in screen space. Geometry and meter rules live in `sim::hud`;
-//! Website `GameHud.tsx`, `hub.css`, `SkillQuickbar.tsx` own the presentation reference.
-
-mod belt_pull_off;
+//! Stock College and run HUD. Simulation `hud`/`mobile_ui` kernels own its geometry
+//! and meter rules; `GameHud.tsx` and `SkillQuickbar.tsx` are the presentation reference.
 mod quickbar;
-mod touch;
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
-use solomon_sim::belt::{NATIVE_BELT_SLOT_COUNT, PLAYER_BELT_SLOT_COUNT};
+use crate::gpu_ui::{StockAtlas, UiFrame};
+use crate::hotbar::{HotbarControls, HotbarSelection};
+use solomon_sim::belt::NATIVE_BELT_SLOT_COUNT;
 use solomon_sim::hud::{
-    HudBeltEntry, HudHealthLayerKind, HudState, clamp_unit, native_health_hud_layers,
+    HudBeltEntry, HudHealthLayerKind, HudRect, HudState, clamp_unit, native_health_hud_layers,
     native_health_hud_presentation, native_hud_control_layout, native_mana_hud_presentation,
 };
-use solomon_sim::mobile_ui::{MobileUiElementId, MobileUiLayoutState};
-use wasm_bindgen::JsCast;
-use wasm_bindgen::prelude::*;
-use web_sys::{Document, Element, Event, HtmlElement};
-
-use crate::hotbar::{HotbarControls, HotbarSelection};
-use crate::mobile_layout::apply_mobile_ui_element;
-use crate::ui::{StockAtlas, append, element, style};
+use solomon_sim::mobile_ui::{MobileUiElementId, MobileUiLayoutState, default_mobile_ui_geometry};
+use std::cell::{Cell, RefCell};
+use web_sys::Document;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HudAction {
@@ -57,28 +48,21 @@ impl HudAccess {
 
 pub struct Hud {
     document: Document,
-    root: HtmlElement,
-    diagnostics: HtmlElement,
-    fps: HtmlElement,
-    ping: HtmlElement,
+    visible: Cell<bool>,
     frame_intervals: u64,
     frame_sample_started_at: Option<f64>,
-    meters: HtmlElement,
-    selected_skills: HtmlElement,
-    belt: HtmlElement,
+    fps: String,
+    ping: String,
     hotbar: HotbarSelection,
     hotbar_controls: HotbarControls,
-    xp_fill: HtmlElement,
-    backpack: HtmlElement,
-    tome: HtmlElement,
     ui: StockAtlas,
     skills: StockAtlas,
     inventory: StockAtlas,
-    actions: Rc<RefCell<Vec<HudAction>>>,
-    _click: Closure<dyn FnMut(Event)>,
-    _burst_finished: Closure<dyn FnMut(Event)>,
-    controls: Vec<HtmlElement>,
-    previous: Option<HudState>,
+    college: StockAtlas,
+    portraits: StockAtlas,
+    actions: RefCell<Vec<HudAction>>,
+    disabled_actions: RefCell<Vec<HudAction>>,
+    snapshot: Option<HudState>,
     viewport: (i32, i32),
     actions_enabled: bool,
     hotbar_enabled: bool,
@@ -86,103 +70,34 @@ pub struct Hud {
     mode: HudMode,
     controller_belt_slot: Option<usize>,
     tutorial_access: HudAccess,
-    touch_layout: Option<touch::TouchBeltLayout>,
     mobile_layout: MobileUiLayoutState,
     mod_belt_icons: [Option<Vec<crate::ui::mod_icon::ModIconLayer>>; 8],
     quickbar: [Option<quickbar::QuickbarSlot>; 8],
+    bursts: RefCell<Vec<(usize, crate::ui::belt_pull_off::BeltPullOffBurst)>>,
+    now: f64,
+    bank: usize,
 }
 
 impl Hud {
     pub async fn attach(document: &Document, hotbar: HotbarSelection) -> Result<Self, String> {
-        let ui = StockAtlas::load("UI").await?;
-        let skills = StockAtlas::load("Skills").await?;
-        let inventory = StockAtlas::load("Inventory").await?;
-        let college = StockAtlas::load("College").await?;
-        let portraits = StockAtlas::load("LevelPicker").await?;
-        let root = element(document, "div", "game-hud")?;
-        root.set_attribute("data-mode", "hub").map_err(|_| "HUD mode")?;
-        root.set_attribute("aria-label", "Player status").map_err(|_| "HUD label")?;
-        let diagnostics = element(document, "div", "hud-diagnostics")?;
-        diagnostics
-            .set_attribute("aria-label", "Performance")
-            .map_err(|_| "HUD diagnostics label")?;
-        let fps = element(document, "span", "hud-fps")?;
-        fps.set_text_content(Some("-- FPS"));
-        fps.set_attribute("aria-label", "Measuring frames per second")
-            .map_err(|_| "HUD FPS label")?;
-        let ping = element(document, "span", "hud-ping")?;
-        ping.set_text_content(Some("-- ms"));
-        ping.set_attribute("aria-label", "Measuring network ping").map_err(|_| "HUD ping label")?;
-        append(&diagnostics, &fps)?;
-        append(&diagnostics, &ping)?;
-        append(&root, &diagnostics)?;
-        let meters = element(document, "div", "hud-meters")?;
-        let selected_skills = element(document, "div", "hud-selected-skills")?;
-        let belt = element(document, "div", "hud-belt")?;
-        belt.set_attribute("aria-label", "Item belt").map_err(|_| "belt label")?;
-        let hotbar_controls = HotbarControls::new(document, hotbar.clone(), None)?;
-        let xp = element(document, "div", "hud-xp")?;
-        xp.set_attribute("role", "progressbar").map_err(|_| "experience role")?;
-        xp.set_attribute("aria-label", "Experience").map_err(|_| "experience label")?;
-        xp.set_attribute("aria-valuemin", "0").map_err(|_| "experience minimum")?;
-        xp.set_attribute("aria-valuemax", "100").map_err(|_| "experience maximum")?;
-        let xp_fill = ui.sprite(document, 81, "hud-xp-fill")?;
-        append(&xp, &xp_fill)?;
-        append(&xp, &ui.sprite(document, 82, "hud-xp-frame")?)?;
-        for layer in [&meters, &selected_skills, &belt, &xp] {
-            append(&root, layer)?;
-        }
-        let backpack = element(document, "button", "hud-backpack hud-button")?;
-        let tome = element(document, "button", "hud-tome hud-button")?;
-        backpack
-            .set_attribute("data-tutorial-anchor", "inventory")
-            .map_err(|_| "Tutorial inventory anchor")?;
-        tome.set_attribute("data-tutorial-anchor", "skills")
-            .map_err(|_| "Tutorial skills anchor")?;
-        append(&backpack, &ui.sprite(document, 47, "hud-control-art")?)?;
-        append(&tome, &ui.sprite(document, 48, "hud-control-art")?)?;
-        let actions = Rc::new(RefCell::new(Vec::new()));
-        let clicked = actions.clone();
-        // Delegate from one stable root: updating a meter or belt does not retain closures
-        // for detached controls, and all buttons share the same native click semantics.
-        let click =
-            Closure::<dyn FnMut(Event)>::new(move |event: Event| match clicked_action(&event) {
-                Ok(Some(action)) => {
-                    event.prevent_default();
-                    clicked.borrow_mut().push(action);
-                }
-                Ok(None) => {}
-                Err(error) => web_sys::console::error_1(&JsValue::from_str(&error)),
-            });
-        root.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())
-            .map_err(|_| "HUD click listener")?;
-        let burst_finished = crate::ui::belt_pull_off::listen_to_burst_completion(&root)?;
-        let mut hud = Self {
+        let bank = hotbar.bank();
+        Ok(Self {
             document: document.clone(),
-            root,
-            diagnostics,
-            fps,
-            ping,
+            visible: Cell::new(true),
             frame_intervals: 0,
             frame_sample_started_at: None,
-            meters,
-            selected_skills,
-            belt,
+            fps: "-- FPS".into(),
+            ping: "-- ms".into(),
+            hotbar_controls: HotbarControls::new(document, hotbar.clone(), None)?,
             hotbar,
-            hotbar_controls,
-            xp_fill,
-            backpack,
-            tome,
-            ui,
-            skills,
-            inventory,
-            actions,
-            _click: click,
-            _burst_finished: burst_finished,
-            controls: Vec::new(),
-            previous: None,
-            mod_belt_icons: std::array::from_fn(|_| None),
-            quickbar: std::array::from_fn(|_| None),
+            ui: StockAtlas::load("UI").await?,
+            skills: StockAtlas::load("Skills").await?,
+            inventory: StockAtlas::load("Inventory").await?,
+            college: StockAtlas::load("College").await?,
+            portraits: StockAtlas::load("LevelPicker").await?,
+            actions: RefCell::new(Vec::new()),
+            disabled_actions: RefCell::new(Vec::new()),
+            snapshot: None,
             viewport: (0, 0),
             actions_enabled: false,
             hotbar_enabled: false,
@@ -190,197 +105,75 @@ impl Hud {
             mode: HudMode::Hub,
             controller_belt_slot: None,
             tutorial_access: HudAccess::UNRESTRICTED,
-            touch_layout: None,
             mobile_layout: MobileUiLayoutState::default(),
-        };
-        let skull = element(document, "button", "hud-menu hud-button")?;
-        for (element, id) in [
-            (&skull, MobileUiElementId::Pause),
-            (&hud.diagnostics, MobileUiElementId::Diagnostics),
-            (&hud.meters, MobileUiElementId::Meters),
-            (&hud.backpack, MobileUiElementId::Inventory),
-            (&hud.tome, MobileUiElementId::Skillbook),
-            (&xp, MobileUiElementId::Xp),
-        ] {
-            apply_mobile_ui_element(element, &hud.mobile_layout, id)?;
-        }
-        append(&skull, &hud.ui.sprite(document, 42, "hud-menu-art")?)?;
-        hud.action_button(&skull, "Menu (Esc)", HudAction::Pause)?;
-        let backpack = hud.backpack.clone();
-        let tome = hud.tome.clone();
-        hud.action_button(&backpack, "Inventory (I)", HudAction::Inventory)?;
-        hud.action_button(&tome, "Skills (K)", HudAction::Skills)?;
-        let help = element(document, "span", "hud-help")?;
-        append(&help, &college.sprite(document, 37, "hud-help-art")?)?;
-        help.set_attribute("role", "img").map_err(|_| "Help decoration role")?;
-        help.set_attribute("aria-label", "Help").map_err(|_| "Help decoration label")?;
-        append(&hud.root, &help)?;
-        for (index, (record, name)) in
-            [(0, "Provokatus"), (6, "Hagatha"), (4, "Luthacus"), (5, "Fomentius"), (2, "Shlorio")]
-                .into_iter()
-                .enumerate()
-        {
-            let button = element(document, "button", "hud-shortcut hud-button")?;
-            style(&button, &format!("top:{}px", 55 + index * 95))?;
-            append(&button, &portraits.sprite(document, record, "hud-portrait")?)?;
-            hud.action_button(&button, name, HudAction::Shortcut(index))?;
-        }
-        let map = element(document, "button", "hud-map hud-button")?;
-        append(&map, &college.sprite(document, 16, "hud-map-art")?)?;
-        append(&map, &college.sprite(document, 18, "hud-map-art")?)?;
-        hud.action_button(&map, "Enter the Boneyard", HudAction::Map)?;
-        let body = document.body().ok_or("page has no body")?;
-        append(&body, &hud.root)?;
-        Ok(hud)
+            mod_belt_icons: std::array::from_fn(|_| None),
+            quickbar: std::array::from_fn(|_| None),
+            bursts: RefCell::new(Vec::new()),
+            now: 0.0,
+            bank,
+        })
     }
-
-    /// Enable only once the caller owns every emitted action; idle buttons still paint art.
     pub fn set_actions_enabled(&mut self, enabled: bool) -> Result<(), String> {
         self.actions_enabled = enabled;
-        for control in &self.controls {
-            control
-                .toggle_attribute_with_force("disabled", !enabled)
-                .map_err(|_| "HUD control availability")?;
-        }
-        self.previous = None;
         Ok(())
     }
-
     pub fn take_actions(&self) -> Vec<HudAction> {
         std::mem::take(&mut *self.actions.borrow_mut())
     }
-
-    /// The source hotbar admission is narrower than the other visible HUD
-    /// controls. Game projects the same predicate used by the capture shortcut.
     pub fn set_hotbar_enabled(&mut self, enabled: bool) {
         self.hotbar_enabled = enabled;
     }
-
     pub fn set_tutorial_access(&mut self, access: Option<HudAccess>) -> Result<(), String> {
-        let access = access.unwrap_or(HudAccess::UNRESTRICTED);
-        if self.tutorial_access == access {
-            return Ok(());
-        }
-        for (name, visible) in [
-            ("combat", access.combat),
-            ("inventory", access.inventory),
-            ("quickbar", access.quickbar),
-            ("skills", access.skills),
-            ("spell", access.spell),
-        ] {
-            self.root
-                .set_attribute(
-                    &format!("data-tutorial-{name}"),
-                    if visible { "true" } else { "false" },
-                )
-                .map_err(|_| "Tutorial HUD access")?;
-        }
-        self.tutorial_access = access;
+        self.tutorial_access = access.unwrap_or(HudAccess::UNRESTRICTED);
         Ok(())
     }
-
     pub fn set_mode(&mut self, mode: HudMode) -> Result<(), String> {
-        if self.mode == mode {
-            return Ok(());
-        }
         self.mode = mode;
-        self.root
-            .set_attribute(
-                "data-mode",
-                match mode {
-                    HudMode::Hub => "hub",
-                    HudMode::Run => "run",
-                },
-            )
-            .map_err(|_| "HUD mode".into())
+        Ok(())
     }
-
-    /// Source SkillQuickbar keeps a visible outline even when the controller selects
-    /// an empty slot. This is view context supplied by the canonical input sample.
     pub fn set_controller_belt_slot(&mut self, slot: Option<usize>) {
-        assert!(
-            slot.is_none_or(|slot| slot < 8),
-            "controller belt selection is within eight slots"
-        );
-        if self.controller_belt_slot != slot {
-            self.controller_belt_slot = slot;
-            self.previous = None;
-        }
+        assert!(slot.is_none_or(|slot| slot < 8));
+        self.controller_belt_slot = slot;
     }
-
-    /// Static shortcuts can become available as their owning surfaces are connected.
     pub fn set_action_enabled(&self, action: HudAction, enabled: bool) -> Result<(), String> {
-        let id = action_id(action);
-        for control in &self.controls {
-            if control.get_attribute("data-hud-action").as_deref() == Some(&id) {
-                control
-                    .toggle_attribute_with_force("disabled", !enabled)
-                    .map_err(|_| "HUD shortcut availability")?;
-            }
+        let mut disabled = self.disabled_actions.borrow_mut();
+        disabled.retain(|a| *a != action);
+        if !enabled {
+            disabled.push(action);
         }
         Ok(())
     }
-
     pub fn set_visible(&self, visible: bool) {
-        self.root.set_hidden(!visible);
+        self.visible.set(visible);
     }
-
     pub fn set_ui_scale(&mut self, scale: f64) {
         self.ui_scale = scale;
-        self.viewport = (0, 0);
     }
-
-    /// Call once per actual presentation frame, using the rAF timestamp and the
-    /// connection's measured ping. `GameHud.FpsCounter` samples one-second intervals;
-    /// neither accepted snapshots nor simulation ticks are rendering frame receipts.
     pub fn update_diagnostics(&mut self, now_ms: f64, ping_ms: Option<f64>) -> Result<(), String> {
-        if let Some(started_at) = self.frame_sample_started_at {
+        self.now = now_ms;
+        if let Some(started) = self.frame_sample_started_at {
             self.frame_intervals += 1;
-            let elapsed = now_ms - started_at;
+            let elapsed = now_ms - started;
             if elapsed >= 1000.0 {
-                let fps = (self.frame_intervals as f64 * 1000.0 / elapsed + 0.5).floor();
-                self.fps.set_text_content(Some(&format!("{fps} FPS")));
-                self.fps
-                    .set_attribute("aria-label", &format!("{fps} frames per second"))
-                    .map_err(|_| "HUD measured FPS")?;
+                self.fps = format!(
+                    "{} FPS",
+                    (self.frame_intervals as f64 * 1000.0 / elapsed + 0.5).floor()
+                );
                 self.frame_intervals = 0;
                 self.frame_sample_started_at = Some(now_ms);
             }
         } else {
             self.frame_sample_started_at = Some(now_ms);
         }
-        let (text, label) = ping_ms.map_or_else(
-            || ("-- ms".to_owned(), "Measuring network ping".to_owned()),
-            |ping| (format!("{ping} ms"), format!("{ping} milliseconds ping")),
-        );
-        self.ping.set_text_content(Some(&text));
-        self.ping.set_attribute("aria-label", &label).map_err(|_| "HUD measured ping".to_owned())
-    }
-
-    pub fn set_mobile_layout(&mut self, state: &MobileUiLayoutState) -> Result<(), String> {
-        if self.mobile_layout == *state {
-            return Ok(());
-        }
-        self.mobile_layout = state.clone();
-        let nodes = self
-            .root
-            .query_selector_all("[data-mobile-ui-element]")
-            .map_err(|_| "mobile HUD controls")?;
-        for index in 0..nodes.length() {
-            let Some(node) = nodes.item(index) else { continue };
-            let element = node.dyn_into::<HtmlElement>().map_err(|_| "mobile HUD element")?;
-            let id = element
-                .get_attribute("data-mobile-ui-element")
-                .and_then(|id| MobileUiElementId::from_id(&id))
-                .ok_or("mobile HUD element identity")?;
-            apply_mobile_ui_element(&element, state, id)?;
-        }
-        self.previous = None;
+        self.ping = ping_ms.map_or_else(|| "-- ms".into(), |ping| format!("{ping} ms"));
         Ok(())
     }
-
-    /// Borrow the real belt/economy and verified image owner. This retains only
-    /// resolved icon layers, not another inventory or binding store.
+    pub fn set_mobile_layout(&mut self, state: &MobileUiLayoutState) -> Result<(), String> {
+        if self.mobile_layout != *state {
+            self.mobile_layout = state.clone();
+        }
+        Ok(())
+    }
     pub fn set_mod_belt_icons(
         &mut self,
         player: Option<(
@@ -405,89 +198,362 @@ impl Hud {
                 }
             }
         }
-        if self.mod_belt_icons != icons {
-            self.mod_belt_icons = icons;
-            self.previous = None;
+        self.mod_belt_icons = icons;
+        Ok(())
+    }
+    pub fn update(&mut self, state: &HudState, width: i32, height: i32) -> Result<(), String> {
+        self.viewport = (width, height);
+        self.snapshot = Some(state.clone());
+        if self.hotbar_controls.update(!self.actions_enabled || !self.hotbar_enabled)?
+            || self.bank != self.hotbar.bank()
+        {
+            self.bursts.borrow_mut().clear();
+            self.bank = self.hotbar.bank();
         }
         Ok(())
     }
-
-    pub fn update(&mut self, state: &HudState, width: i32, height: i32) -> Result<(), String> {
-        if self.viewport != (width, height) {
-            let scale =
-                (f64::from(width) / 1600.0).min(f64::from(height) / 900.0).min(1.0) * self.ui_scale;
-            let logical_width = f64::from(width) / scale;
-            let logical_height = f64::from(height) / scale;
-            style(
-                &self.root,
-                &format!(
-                    "width:{logical_width}px;height:{logical_height}px;transform:scale({scale});--hud-scale:{scale}"
-                ),
-            )?;
-            self.root
-                .set_attribute("data-hud-input-scale", &scale.to_string())
-                .map_err(|_| "HUD pointer scale")?;
-            let layout = native_hud_control_layout(logical_width, logical_height, None);
-            for (element, rect, id) in [
-                (&self.backpack, layout.backpack, MobileUiElementId::Inventory),
-                (&self.tome, layout.tome, MobileUiElementId::Skillbook),
-            ] {
-                style(element, &format!("left:{}px;top:{}px", rect.x, rect.y))?;
-                apply_mobile_ui_element(element, &self.mobile_layout, id)?;
-            }
-            self.viewport = (width, height);
+    pub fn show_belt_pull_off(&self, slot: usize) -> Result<(), String> {
+        self.bursts
+            .borrow_mut()
+            .push((slot, crate::ui::belt_pull_off::BeltPullOffBurst::new(self.now)));
+        Ok(())
+    }
+    fn coarse(&self) -> bool {
+        self.document
+            .default_view()
+            .and_then(|window| {
+                window.match_media("(hover:none) and (pointer:coarse)").ok().flatten()
+            })
+            .is_some_and(|query| query.matches())
+    }
+    fn action(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &egui::Ui,
+        action: HudAction,
+        rect: egui::Rect,
+        label: &str,
+    ) -> egui::Response {
+        let enabled = self.actions_enabled && !self.disabled_actions.borrow().contains(&action);
+        let mut child = crate::player_panels::chrome::child_ui(ui, "hud-admission", ui.max_rect());
+        if !(enabled) {
+            child.disable();
         }
-        self.update_touch_layout(width, height)?;
-        if self.hotbar_controls.update(!self.actions_enabled || !self.hotbar_enabled)? {
-            crate::ui::belt_pull_off::clear_belt_pull_off_bursts(&self.root)?;
-            self.previous = None;
+        let id = format!("hud:{}", action_id(action));
+        let response = child.interact(rect, egui::Id::unique(&id), egui::Sense::click());
+        frame.record(&id, label, "button", &response);
+        if response.has_focus() {
+            ui.painter().rect_stroke(
+                rect.expand(3.0),
+                2.0,
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(219, 197, 148)),
+                egui::StrokeKind::Outside,
+            );
         }
-        if self.previous.as_ref() == Some(state) {
+        if response.clicked() && enabled {
+            self.actions.borrow_mut().push(action);
+        }
+        response
+    }
+    fn action_rotated(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &egui::Ui,
+        action: HudAction,
+        rect: egui::Rect,
+        label: &str,
+        rotation: f32,
+    ) -> egui::Response {
+        let enabled = self.actions_enabled && !self.disabled_actions.borrow().contains(&action);
+        let mut child = crate::player_panels::chrome::child_ui(ui, "hud-admission", ui.max_rect());
+        if !(enabled) {
+            child.disable();
+        }
+        let id = format!("hud:{}", action_id(action));
+        let response = child.interact(rect, egui::Id::unique(&id), egui::Sense::click());
+        frame.record(&id, label, "button", &response);
+        if response.has_focus() {
+            ui.painter().rect_stroke(
+                rect.expand(3.0),
+                2.0,
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(219, 197, 148)),
+                egui::StrokeKind::Outside,
+            );
+        }
+        let valid_pointer =
+            ui.ctx().input(|input| input.pointer.interact_pos()).is_none_or(|pos| {
+                let transform =
+                    ui.ctx().layer_transform_to_global(ui.layer_id()).unwrap_or_default();
+                let local = transform.inverse() * pos;
+                let unrotated = rect.center()
+                    + egui::emath::Rot2::from_angle(-rotation) * (local - rect.center());
+                rect.contains(unrotated)
+            });
+        if response.clicked()
+            && enabled
+            && (valid_pointer || !ui.ctx().input(|input| input.pointer.any_released()))
+        {
+            self.actions.borrow_mut().push(action);
+        }
+        response
+    }
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        if !self.visible.get() {
             return Ok(());
         }
-        self.draw_meters(state)?;
-        self.draw_selected_skills(state)?;
-        self.draw_belt(state)?;
-        self.backpack
-            .set_attribute("aria-label", &format!("Inventory, {} gold (I)", state.gold))
-            .map_err(|_| "inventory label")?;
-        self.xp_fill
-            .style()
-            .set_property(
-                "clip-path",
-                &format!("inset({}% 0 0)", (1.0 - clamp_unit(state.experience_progress)) * 100.0),
-            )
-            .map_err(|_| "experience fill")?;
-        if let Some(xp) = self.xp_fill.parent_element() {
-            xp.set_attribute(
-                "aria-valuenow",
-                &(clamp_unit(state.experience_progress) * 100.0).to_string(),
-            )
-            .map_err(|_| "experience value")?;
+        let Some(state) = self.snapshot.as_ref() else { return Ok(()) };
+        let scale = ((self.viewport.0 as f64 / 1600.0).min(self.viewport.1 as f64 / 900.0).min(1.0)
+            * self.ui_scale) as f32;
+        let size = egui::vec2(self.viewport.0 as f32 / scale, self.viewport.1 as f32 / scale);
+        let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::unique("game-hud"));
+        frame.ctx.set_transform_layer(layer, egui::emath::TSTransform::from_scaling(scale));
+        let coarse = self.coarse();
+        let mut error = None;
+        egui::Area::new(layer.id)
+            .order(layer.order)
+            .fixed_pos(egui::Pos2::ZERO)
+            .constrain(false)
+            .show(frame.ctx, |ui| {
+                ui.set_min_size(size);
+                let result = self.paint_contents(frame, ui, state, size, scale, coarse);
+                if let Err(value) = result {
+                    error = Some(value);
+                }
+            });
+        error.map_or(Ok(()), Err)
+    }
+    fn mobile_rect(
+        &self,
+        id: MobileUiElementId,
+        natural: egui::Rect,
+        size: egui::Vec2,
+        scale: f32,
+        coarse: bool,
+    ) -> (egui::Rect, f32) {
+        if !coarse {
+            return (natural, 0.0);
         }
-        self.previous = Some(state.clone());
+        let geometry = default_mobile_ui_geometry(
+            self.viewport.0 as f64,
+            self.viewport.1 as f64,
+            self.ui_scale,
+        );
+        let transform = if self.mobile_layout.customized {
+            self.mobile_layout.layout.get(id)
+        } else {
+            geometry.layout.get(id)
+        };
+        let dimensions = geometry.sizes[id as usize];
+        let rect = egui::Rect::from_center_size(
+            egui::pos2(size.x * transform.x as f32 / 100.0, size.y * transform.y as f32 / 100.0),
+            egui::vec2(dimensions.width as f32 / scale, dimensions.height as f32 / scale)
+                * transform.scale as f32,
+        );
+        (rect, transform.rotation.to_radians() as f32)
+    }
+    fn mobile_scale(&self, id: MobileUiElementId, coarse: bool) -> f32 {
+        if coarse && self.mobile_layout.customized {
+            self.mobile_layout.layout.get(id).scale as f32
+        } else {
+            1.0
+        }
+    }
+    fn paint_contents(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &egui::Ui,
+        state: &HudState,
+        size: egui::Vec2,
+        scale: f32,
+        coarse: bool,
+    ) -> Result<(), String> {
+        let p = ui.painter();
+        let layout = native_hud_control_layout(size.x as f64, size.y as f64, None);
+        let white = egui::Color32::WHITE;
+        if self.tutorial_access.combat {
+            let pause = egui::Rect::from_min_size(egui::pos2(11.0, 7.0), egui::vec2(31.0, 33.0));
+            let (rect, rotation) =
+                self.mobile_rect(MobileUiElementId::Pause, pause, size, scale, coarse);
+            self.ui.paint_centered(
+                frame,
+                p,
+                42,
+                rect.center(),
+                if coarse { rect.width() / 31.0 * 0.82 } else { 1.0 },
+                rotation,
+                white,
+            )?;
+            self.action_rotated(frame, ui, HudAction::Pause, rect, "Menu (Esc)", rotation);
+            let (rect, rotation) = self.mobile_rect(
+                MobileUiElementId::Diagnostics,
+                egui::Rect::from_min_size(egui::pos2(50.0, 12.0), egui::vec2(160.0, 16.0)),
+                size,
+                scale,
+                coarse,
+            );
+            let custom = self.mobile_scale(MobileUiElementId::Diagnostics, coarse);
+            let font_size = if coarse { 12.0 * 0.85 / scale * custom } else { 12.0 };
+            paint_rotated_text(
+                p,
+                &format!("{}   {}", self.fps, self.ping),
+                egui::FontId::new(font_size, egui::FontFamily::Name("JetBrains Mono".into())),
+                egui::Color32::from_rgb(216, 212, 200),
+                if coarse { rect.center() } else { rect.min },
+                if coarse { egui::Align2::CENTER_CENTER } else { egui::Align2::LEFT_TOP },
+                rect.center(),
+                rotation,
+            );
+            self.paint_meters(frame, p, state, size, scale, coarse)?;
+            let (rect, rotation) = self.mobile_rect(
+                MobileUiElementId::Xp,
+                egui::Rect::from_min_size(
+                    egui::pos2(size.x / 2.0 - 2.0, size.y - 72.0),
+                    egui::vec2(12.0, 56.0),
+                ),
+                size,
+                scale,
+                coarse,
+            );
+            let art_scale = rect.width() / 12.0;
+            let rotated = frame.with_rotation(rect.center(), rotation);
+            let record = self.ui.record(81)?;
+            let [ox, oy] = record.registered_origin();
+            let cut = ((1.0 - clamp_unit(state.experience_progress)) as f32
+                * record.logical_height as f32
+                - oy)
+                .clamp(0.0, record.height as f32);
+            if cut < record.height as f32 {
+                let source = egui::Rect::from_min_size(
+                    egui::pos2(0.0, cut),
+                    egui::vec2(record.width as f32, record.height as f32 - cut),
+                );
+                let dest = egui::Rect::from_min_size(
+                    rect.min + (egui::vec2(3.5, 4.0) + egui::vec2(ox, oy + cut)) * art_scale,
+                    source.size() * art_scale,
+                );
+                self.ui.paint_slice(&rotated, p, 81, source, dest, white)?;
+            }
+            self.ui.paint(&rotated, p, 82, rect.min, art_scale, white)?;
+            let transform = frame.ctx.layer_transform_to_global(p.layer_id()).unwrap_or_default();
+            frame.record_rect(
+                "hud:xp",
+                &format!(
+                    "Experience: {}%",
+                    (clamp_unit(state.experience_progress) * 100.0).round()
+                ),
+                "progressbar",
+                transform * rotated_bounds(rect, rect.center(), rotation),
+                false,
+            );
+        }
+        for (id, action, record, natural, label, show) in [
+            (
+                MobileUiElementId::Inventory,
+                HudAction::Inventory,
+                47,
+                layout.backpack,
+                format!("Inventory, {} gold (I)", state.gold),
+                self.tutorial_access.inventory,
+            ),
+            (
+                MobileUiElementId::Skillbook,
+                HudAction::Skills,
+                48,
+                layout.tome,
+                "Skills (K)".into(),
+                self.tutorial_access.skills,
+            ),
+        ] {
+            if !show {
+                continue;
+            }
+            let (rect, rotation) = self.mobile_rect(id, rect(natural), size, scale, coarse);
+            let art_scale = if coarse { rect.width() / 130.0 * 2.0 } else { 1.0 };
+            let center = if coarse {
+                egui::pos2(
+                    rect.left() + 7.0 * rect.width() / 130.0 + 29.0 * art_scale,
+                    rect.bottom() - 3.0 * rect.width() / 130.0 - 31.0 * art_scale,
+                )
+            } else {
+                rect.center()
+            };
+            self.ui.paint_centered(frame, p, record, center, art_scale, rotation, white)?;
+            self.action_rotated(frame, ui, action, rect, &label, rotation);
+        }
+        if self.tutorial_access.spell {
+            let records = [
+                (Some(state.primary_icon_record), 12),
+                (state.concentration_icon_records[1], 20),
+                (state.concentration_icon_records[0], 16),
+            ];
+            let count = records.iter().filter(|(r, _)| r.is_some()).count();
+            let mut index = 0;
+            for (record, binding) in records {
+                let Some(record) = record else { continue };
+                let x = size.x / 2.0 - 20.0 * (count as f32 - 1.0) + index as f32 * 40.0;
+                self.skills.paint_centered(
+                    frame,
+                    p,
+                    record,
+                    egui::pos2(x, 25.5),
+                    0.75,
+                    0.0,
+                    white.gamma_multiply(0.75),
+                )?;
+                self.action(
+                    frame,
+                    ui,
+                    HudAction::SkillBinding(binding),
+                    egui::Rect::from_min_size(egui::pos2(x - 20.0, -7.0), egui::vec2(40.0, 65.0)),
+                    if binding == 12 { "Select primary attack" } else { "Select concentration" },
+                );
+                index += 1;
+            }
+        }
+        if self.mode == HudMode::Hub {
+            self.college.paint(frame, p, 37, egui::pos2(size.x - 41.0, 8.0), 1.0, white)?;
+            if !coarse {
+                for (index, (record, name)) in [
+                    (0, "Provokatus"),
+                    (6, "Hagatha"),
+                    (4, "Luthacus"),
+                    (5, "Fomentius"),
+                    (2, "Shlorio"),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let rect = egui::Rect::from_min_size(
+                        egui::pos2(size.x - 100.0, 55.0 + index as f32 * 95.0),
+                        egui::vec2(95.0, 93.0),
+                    );
+                    self.portraits.paint(frame, p, record, rect.min, 1.0, white)?;
+                    self.action(frame, ui, HudAction::Shortcut(index), rect, name);
+                }
+            }
+            let rect = egui::Rect::from_min_size(
+                egui::pos2(size.x - 138.0, if coarse { 55.0 } else { size.y - 134.0 }),
+                egui::vec2(121.0, 118.0),
+            );
+            for record in [16, 18] {
+                self.college.paint(frame, p, record, rect.min, 1.0, white)?;
+            }
+            self.action(frame, ui, HudAction::Map, rect, "Enter the Boneyard");
+        }
+        if self.tutorial_access.quickbar {
+            self.paint_belt(frame, ui, state, size, scale, coarse)?;
+        }
         Ok(())
     }
-
-    fn action_button(
-        &mut self,
-        button: &HtmlElement,
-        label: &str,
-        action: HudAction,
+    fn paint_meters(
+        &self,
+        frame: &UiFrame<'_>,
+        p: &egui::Painter,
+        state: &HudState,
+        size: egui::Vec2,
+        _scale: f32,
+        coarse: bool,
     ) -> Result<(), String> {
-        button.set_attribute("type", "button").map_err(|_| "HUD button type")?;
-        button.set_attribute("aria-label", label).map_err(|_| "HUD button label")?;
-        button.set_attribute("title", label).map_err(|_| "HUD button title")?;
-        button
-            .toggle_attribute_with_force("disabled", !self.actions_enabled)
-            .map_err(|_| "HUD button availability")?;
-        button.set_attribute("data-hud-action", &action_id(action)).map_err(|_| "HUD action")?;
-        self.controls.push(button.clone());
-        append(&self.root, button)
-    }
-
-    fn draw_meters(&self, state: &HudState) -> Result<(), String> {
-        self.meters.set_text_content(None);
         let health = native_health_hud_presentation(
             state.current_health,
             state.maximum_health,
@@ -499,355 +565,442 @@ impl Hud {
             state.maximum_mana,
             state.reserved_mana,
         );
-        for (class, track, core, current, maximum) in [
-            (
-                "hud-health",
-                health.track_width,
-                health.core_width,
-                state.current_health,
-                state.maximum_health,
-            ),
-            ("hud-mana", mana.track_width, mana.core_width, state.current_mana, state.maximum_mana),
+        let mut center = egui::pos2(size.x / 2.0, 24.5);
+        let mut multiplier = 1.0;
+        let mut rotation = 0.0;
+        if coarse && self.mobile_layout.customized {
+            let t = self.mobile_layout.layout.get(MobileUiElementId::Meters);
+            center = egui::pos2(size.x * t.x as f32 / 100.0, size.y * t.y as f32 / 100.0);
+            multiplier = t.scale as f32;
+            rotation = t.rotation.to_radians() as f32;
+        }
+        let additive = frame.with_blend(crate::render::BlendMode::Add);
+        let rotated = additive.with_rotation(center, rotation);
+        for (health_meter, track, core, label) in [
+            (true, health.track_width, health.core_width, "Health"),
+            (false, mana.track_width, mana.core_width, "Mana"),
         ] {
-            let meter = element(&self.document, "div", &format!("hud-meter {class}"))?;
-            if class == "hud-health" {
-                meter
-                    .set_attribute("data-tutorial-anchor", "health-meter")
-                    .map_err(|_| "Tutorial health anchor")?;
-            }
-            meter.set_attribute("role", "meter").map_err(|_| "meter role")?;
-            meter
-                .set_attribute("aria-label", if class == "hud-health" { "Health" } else { "Mana" })
-                .map_err(|_| "meter label")?;
-            for (name, value) in [
-                ("aria-valuemin", 0.0),
-                ("aria-valuemax", maximum),
-                ("aria-valuenow", current.max(0.0)),
-            ] {
-                meter.set_attribute(name, &value.to_string()).map_err(|_| "meter value")?;
-            }
-            style(&meter, &format!("width:{track}px"))?;
-            append(&meter, &self.ui.strip(&self.document, 70, track, "hud-meter-frame")?)?;
-            if class == "hud-health" {
+            let x = if health_meter {
+                center.x - (50.0 + track as f32) * multiplier
+            } else {
+                center.x + 50.0 * multiplier
+            };
+            let r = egui::Rect::from_min_size(
+                egui::pos2(x, center.y - 10.0 * multiplier),
+                egui::vec2(track as f32 * multiplier, 20.0 * multiplier),
+            );
+            self.ui.paint_strip(&rotated, p, 70, r, egui::Color32::WHITE)?;
+            let fill = egui::Rect::from_min_size(
+                r.min + egui::vec2(5.0, 5.0) * multiplier,
+                egui::vec2(core as f32, 10.0) * multiplier,
+            );
+            if health_meter {
                 for layer in native_health_hud_layers(
                     health.fill_progress,
                     health.shield_progress,
                     state.poisoned,
                 ) {
-                    let fill =
-                        self.ui.strip(&self.document, layer.record, core, "hud-meter-fill")?;
-                    fill.style()
-                        .set_property(
-                            "clip-path",
-                            &format!("inset(0 {}% 0 0)", (1.0 - layer.progress) * 100.0),
-                        )
-                        .map_err(|_| "health clipping")?;
-                    if layer.kind == HudHealthLayerKind::Shield {
-                        fill.style()
-                            .set_property("filter", "url(#hud-shield-tint)")
-                            .map_err(|_| "shield tint")?;
-                    }
-                    append(&meter, &fill)?;
-                }
-            } else {
-                let fill = self.ui.strip(&self.document, 40, core, "hud-meter-fill")?;
-                fill.style()
-                    .set_property(
-                        "clip-path",
-                        &format!("inset(0 {}% 0 0)", (1.0 - mana.fill_progress) * 100.0),
-                    )
-                    .map_err(|_| "mana clipping")?;
-                append(&meter, &fill)?;
-                if mana.reserve_progress > 0.0 {
-                    append(
-                        &meter,
-                        &self.ui.strip(
-                            &self.document,
-                            41,
-                            mana.reserve_width,
-                            "hud-mana-reserve",
-                        )?,
+                    let clip = egui::Rect::from_min_size(
+                        fill.min,
+                        egui::vec2(fill.width() * layer.progress as f32, fill.height()),
+                    );
+                    self.ui.paint_strip_clipped(
+                        &rotated,
+                        p,
+                        layer.record,
+                        fill,
+                        clip,
+                        if layer.kind == HudHealthLayerKind::Shield {
+                            egui::Color32::from_rgb(128, 255, 255)
+                        } else {
+                            egui::Color32::WHITE
+                        },
                     )?;
                 }
+            } else {
+                let clip = egui::Rect::from_min_size(
+                    fill.min,
+                    egui::vec2(fill.width() * mana.fill_progress as f32, fill.height()),
+                );
+                self.ui.paint_strip_clipped(&rotated, p, 40, fill, clip, egui::Color32::WHITE)?;
+                if mana.reserve_progress > 0.0 {
+                    let reserve = egui::Rect::from_min_size(
+                        egui::pos2(
+                            r.right() - 5.0 * multiplier - mana.reserve_width as f32 * multiplier,
+                            fill.top(),
+                        ),
+                        egui::vec2(mana.reserve_width as f32 * multiplier, fill.height()),
+                    );
+                    self.ui.paint_strip(&rotated, p, 41, reserve, egui::Color32::WHITE)?;
+                }
             }
-            append(&self.meters, &meter)?;
+            let id = if health_meter { "hud:health" } else { "hud:mana" };
+            let transform = frame.ctx.layer_transform_to_global(p.layer_id()).unwrap_or_default();
+            frame.record_rect(
+                id,
+                label,
+                "meter",
+                transform * rotated_bounds(r, center, rotation),
+                false,
+            );
+            frame.record_value(
+                id,
+                &if health_meter { state.current_health } else { state.current_mana }.to_string(),
+                None,
+            );
         }
         Ok(())
     }
-
-    fn draw_selected_skills(&self, state: &HudState) -> Result<(), String> {
-        self.selected_skills.set_text_content(None);
-        let records = [
-            (Some(state.primary_icon_record), 12),
-            (state.concentration_icon_records[1], 20),
-            (state.concentration_icon_records[0], 16),
-        ];
-        let count = records.iter().filter(|(record, _)| record.is_some()).count();
-        let mut index = 0;
-        for (record, binding) in records {
-            let Some(record) = record else { continue };
-            let offset = -20.0 * (count as f64 - 1.0) + index as f64 * 40.0;
-            let sprite = self.skills.sprite(&self.document, record, "hud-selected-skill")?;
-            sprite
-                .style()
-                .set_property("left", &format!("calc(50% + {offset}px)"))
-                .map_err(|_| "selected skill position")?;
-            append(&self.selected_skills, &sprite)?;
-            let action = element(&self.document, "button", "hud-skill-action hud-button")?;
-            action.set_attribute("type", "button").map_err(|_| "skill action type")?;
-            action
-                .set_attribute(
-                    "aria-label",
-                    if binding == 12 { "Select primary attack" } else { "Select concentration" },
-                )
-                .map_err(|_| "skill action label")?;
-            action
-                .set_attribute("data-hud-action", &action_id(HudAction::SkillBinding(binding)))
-                .map_err(|_| "skill action")?;
-            if binding == 12 || binding == 16 {
-                action
-                    .set_attribute(
-                        "data-tutorial-anchor",
-                        if binding == 12 { "primary-skill" } else { "concentration-a" },
-                    )
-                    .map_err(|_| "Tutorial selected skill anchor")?;
-            }
-            action
-                .toggle_attribute_with_force("disabled", !self.actions_enabled)
-                .map_err(|_| "skill availability")?;
-            style(&action, &format!("left:calc(50% + {offset}px - 20px)"))?;
-            append(&self.selected_skills, &action)?;
-            index += 1;
-        }
-        Ok(())
-    }
-
-    fn draw_belt(&self, state: &HudState) -> Result<(), String> {
-        self.belt.set_text_content(None);
-        self.belt
-            .set_attribute("data-hotbar-bank", &self.hotbar.bank().to_string())
-            .map_err(|_| "HUD belt bank")?;
-        let health_potion = state
+    fn paint_belt(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &egui::Ui,
+        state: &HudState,
+        size: egui::Vec2,
+        scale: f32,
+        coarse: bool,
+    ) -> Result<(), String> {
+        let p = ui.painter();
+        let mut belt = [HudRect::new(0.0, 0.0, 53.0, 53.0); 8];
+        let health = state
             .belt
             .iter()
             .position(|entry| matches!(entry, Some(HudBeltEntry::HealthPotion { .. })));
-        let mana_potion = state
+        let mana = state
             .belt
             .iter()
             .position(|entry| matches!(entry, Some(HudBeltEntry::ManaPotion { .. })));
-        // Empty entries paint no art; a controller selection still needs its source outline.
         for (slot, entry) in state.belt.iter().enumerate() {
-            if entry.is_none() && self.controller_belt_slot != Some(slot) {
-                continue;
-            }
-            let button = element(&self.document, "button", "hud-belt-slot hud-button")?;
-            button.set_attribute("type", "button").map_err(|_| "belt button type")?;
-            button.set_attribute("data-slot", &slot.to_string()).map_err(|_| "belt slot")?;
-            button
-                .set_attribute("data-belt-index", &self.hotbar.slot(slot).to_string())
-                .map_err(|_| "belt authority index")?;
-            self.place_touch_belt_slot(&button, slot)?;
-            if health_potion == Some(slot) || mana_potion == Some(slot) {
-                button
-                    .set_attribute(
-                        "data-touch-potion",
-                        if health_potion == Some(slot) { "health" } else { "mana" },
-                    )
-                    .map_err(|_| "touch potion alias")?;
-            }
-            let mobile_id = if health_potion == Some(slot) {
+            let natural = egui::Rect::from_min_size(
+                egui::pos2(
+                    size.x / 2.0
+                        + [-332.0, -272.0, -212.0, -152.0, 98.0, 158.0, 218.0, 278.0][slot],
+                    size.y - 67.5,
+                ),
+                egui::vec2(53.0, 53.0),
+            );
+            let mobile_id = if health == Some(slot) {
                 MobileUiElementId::HealthPotion
-            } else if mana_potion == Some(slot) {
+            } else if mana == Some(slot) {
                 MobileUiElementId::ManaPotion
             } else {
                 MobileUiElementId::SLOTS[slot]
             };
-            apply_mobile_ui_element(&button, &self.mobile_layout, mobile_id)?;
-            if slot == 0 || health_potion == Some(slot) {
-                button
-                    .set_attribute(
-                        "data-tutorial-anchor",
-                        if slot == 0 { "secondary-slot" } else { "health-potion" },
-                    )
-                    .map_err(|_| "Tutorial potion anchor")?;
+            let (rect, rotation) = self.mobile_rect(mobile_id, natural, size, scale, coarse);
+            belt[slot] = HudRect::new(
+                rect.left() as f64,
+                rect.top() as f64,
+                rect.width() as f64,
+                rect.height() as f64,
+            );
+            if entry.is_none() && self.controller_belt_slot != Some(slot) {
+                continue;
             }
-            button
-                .set_attribute(
-                    "data-controller-selected",
-                    if self.controller_belt_slot == Some(slot) { "true" } else { "false" },
-                )
-                .map_err(|_| "controller belt outline")?;
-            let offset = [-332, -272, -212, -152, 98, 158, 218, 278][slot];
-            button
-                .style()
-                .set_property("--belt-offset", &format!("{offset}px"))
-                .map_err(|_| "belt position")?;
+            let control_scale = self.mobile_scale(mobile_id, coarse);
+            let icon_frame = frame.with_rotation(rect.center(), rotation);
+            if coarse {
+                paint_rotated_rect(
+                    p,
+                    rect,
+                    14.0 * control_scale,
+                    rotation,
+                    egui::Color32::from_rgba_unmultiplied(9, 13, 18, 158),
+                    egui::Stroke::new(
+                        2.0 * control_scale,
+                        egui::Color32::from_rgba_unmultiplied(226, 216, 181, 107),
+                    ),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            if self.controller_belt_slot == Some(slot)
+                || self.quickbar[slot].as_ref().is_some_and(|row| row.active)
+            {
+                paint_rotated_rect(
+                    p,
+                    rect.expand(4.0 * control_scale),
+                    6.0 * control_scale,
+                    rotation,
+                    egui::Color32::TRANSPARENT,
+                    egui::Stroke::new(2.0 * control_scale, egui::Color32::from_rgb(231, 193, 105)),
+                    egui::StrokeKind::Outside,
+                );
+            }
             let Some(entry) = entry else {
-                button
-                    .set_attribute(
-                        "aria-label",
-                        &format!("Empty belt slot {}, controller selected", slot + 1),
-                    )
-                    .map_err(|_| "empty belt label")?;
-                button.set_attribute("disabled", "").map_err(|_| "empty belt availability")?;
-                append(&self.belt, &button)?;
+                frame.record_rect(
+                    &format!("hud:belt:{}", self.hotbar.slot(slot)),
+                    "Empty belt slot, controller selected",
+                    "button",
+                    rect,
+                    false,
+                );
                 continue;
             };
-            let (sprite, count, label, unavailable) = match *entry {
-                HudBeltEntry::Skill { record, unavailable } => (
-                    self.skills.sprite(&self.document, record, "hud-belt-skill")?,
-                    0,
-                    "Secondary skill",
-                    unavailable,
-                ),
-                HudBeltEntry::HealthPotion { count } => (
-                    self.inventory.sprite(&self.document, 46, "hud-belt-item")?,
-                    count,
-                    "Health Potion",
-                    count == 0,
-                ),
-                HudBeltEntry::ManaPotion { count } => (
-                    self.inventory.sprite(&self.document, 47, "hud-belt-item")?,
-                    count,
-                    "Mana Potion",
-                    count == 0,
-                ),
-                HudBeltEntry::Item { record, count } => {
-                    let sprite = if let Some(layers) = &self.mod_belt_icons[slot] {
-                        let icon = crate::ui::mod_icon::paint_mod_item_icon_layers(
-                            &self.document,
-                            layers,
-                            solomon_sim::Vec2::ZERO,
-                        )?;
-                        icon.style()
-                            .set_property("left", "50%")
-                            .map_err(|_| "mod belt icon horizontal anchor")?;
-                        icon.style()
-                            .set_property("top", "50%")
-                            .map_err(|_| "mod belt icon vertical anchor")?;
-                        icon
-                    } else if let Some(record) = record {
-                        self.inventory.sprite(&self.document, record, "hud-belt-item")?
-                    } else {
-                        element(&self.document, "span", "hud-belt-item")?
-                    };
-                    (sprite, count, "Item", false)
-                }
-            };
             let row = self.quickbar[slot].as_ref();
-            let combat_disabled = row.is_some_and(|row| row.combat_disabled);
-            button
-                .set_attribute(
-                    "data-belt-cast-eligible",
-                    if combat_disabled { "false" } else { "true" },
-                )
-                .map_err(|_| "belt cast admission")?;
-            if combat_disabled {
-                button
-                    .set_attribute("aria-disabled", "true")
-                    .map_err(|_| "Hub belt cast disabled")?;
-            }
+            let (icon_record, skill, count, unavailable, label) = match entry {
+                HudBeltEntry::Skill { record, unavailable } => {
+                    (Some(*record), true, 0, *unavailable, "Secondary skill")
+                }
+                HudBeltEntry::HealthPotion { count } => {
+                    (Some(46), false, *count, *count == 0, "Health Potion")
+                }
+                HudBeltEntry::ManaPotion { count } => {
+                    (Some(47), false, *count, *count == 0, "Mana Potion")
+                }
+                HudBeltEntry::Item { record, count } => (*record, false, *count, false, "Item"),
+            };
             let unavailable =
                 row.map_or(unavailable, |row| row.combat_disabled || row.insufficient_mana);
-            let count = row.and_then(|row| row.quantity).unwrap_or(u64::from(count));
-            if unavailable {
-                button
-                    .set_attribute("data-unavailable", "true")
-                    .map_err(|_| "belt availability")?;
-            }
-            let label = if let Some(row) = row {
-                format!(
-                    "{}{}",
-                    row.label,
-                    if self.controller_belt_slot == Some(slot) {
-                        ", controller selected"
-                    } else {
-                        ""
-                    }
-                )
-            } else if matches!(entry, HudBeltEntry::Skill { .. }) {
-                format!("{label}, belt slot {}", slot + 1)
+            let alpha = row.and_then(|row| row.icon_alpha).unwrap_or(if unavailable {
+                0.35
+            } else if skill {
+                0.75
             } else {
-                format!("{label}, belt slot {}, {count} available", slot + 1)
-            };
-            button.set_attribute("aria-label", &label).map_err(|_| "belt label")?;
-            button
-                .toggle_attribute_with_force("disabled", !self.actions_enabled)
-                .map_err(|_| "belt button availability")?;
-            self.decorate_quickbar_slot(&button, &sprite, slot)?;
-            append(&button, &sprite)?;
-            if count > 1 {
-                let quantity = element(&self.document, "span", "hud-belt-count")?;
-                quantity.set_text_content(Some(&count.to_string()));
-                append(&button, &quantity)?;
+                1.0
+            }) as f32;
+            let tint = if skill && self.mode == HudMode::Hub {
+                egui::Color32::from_gray(64)
+            } else {
+                egui::Color32::WHITE
             }
-            self.draw_quickbar_binding(&button, slot)?;
-            button
-                .set_attribute(
-                    "data-hud-action",
-                    &action_id(HudAction::Belt(self.hotbar.slot(slot))),
-                )
-                .map_err(|_| "belt action")?;
-            append(&self.belt, &button)?;
+            .gamma_multiply(alpha);
+            if let Some(layers) = &self.mod_belt_icons[slot] {
+                crate::ui::mod_icon::paint_mod_item_icon_layers(
+                    &icon_frame,
+                    p,
+                    layers,
+                    rect.center(),
+                    control_scale,
+                );
+            } else if let Some(record) = icon_record {
+                if skill {
+                    self.skills.paint_centered(
+                        &icon_frame,
+                        p,
+                        record,
+                        rect.center(),
+                        control_scale,
+                        0.0,
+                        tint,
+                    )?;
+                } else {
+                    self.inventory.paint_centered(
+                        &icon_frame,
+                        p,
+                        record,
+                        rect.center(),
+                        control_scale,
+                        0.0,
+                        tint,
+                    )?;
+                }
+            }
+            if let Some(row) = row
+                && row.cooldown.remaining > 0.0
+                && row.cooldown.capacity > 0.0
+            {
+                let points = crate::gpu_ui::cooldown_sector_points(
+                    row.cooldown.remaining,
+                    row.cooldown.capacity,
+                );
+                let overlay = egui::Rect::from_center_size(
+                    rect.center(),
+                    egui::Vec2::splat(53.0 * control_scale),
+                );
+                let rot = egui::emath::Rot2::from_angle(rotation);
+                let mut mesh = egui::Mesh::default();
+                let fill = egui::Color32::from_rgba_unmultiplied(128, 26, 26, 191);
+                mesh.colored_vertex(rect.center(), fill);
+                for point in &points {
+                    let point = overlay.min + point.to_vec2() * control_scale;
+                    mesh.colored_vertex(rect.center() + rot * (point - rect.center()), fill);
+                }
+                for index in 1..points.len() {
+                    mesh.add_triangle(0, index as u32, index as u32 + 1);
+                }
+                p.add(egui::Shape::mesh(mesh));
+            }
+            let count = row.and_then(|row| row.quantity).unwrap_or(count as u64);
+            if count > 1 {
+                paint_rotated_text(
+                    p,
+                    &count.to_string(),
+                    egui::FontId::new(
+                        12.0 * control_scale,
+                        egui::FontFamily::Name("Georgia".into()),
+                    ),
+                    egui::Color32::from_rgb(244, 229, 180),
+                    rect.right_bottom() - egui::vec2(1.0, 1.0) * control_scale,
+                    egui::Align2::RIGHT_BOTTOM,
+                    rect.center(),
+                    rotation,
+                );
+            }
+            if !coarse {
+                self.paint_binding(frame, p, slot, rect)?;
+            }
+            let response = self.action_rotated(
+                frame,
+                ui,
+                HudAction::Belt(self.hotbar.slot(slot)),
+                rect,
+                &row.map_or_else(
+                    || format!("{label}, belt slot {}", slot + 1),
+                    |row| row.label.clone(),
+                ),
+                rotation,
+            );
+            frame.record_value(&format!("hud:belt:{}",self.hotbar.slot(slot)),&serde_json::json!({"inputScale":scale,"castEligible":!row.is_some_and(|row|row.combat_disabled),"authoritySlot":self.hotbar.slot(slot),"count":count}).to_string(),None);
+            if slot == 0 {
+                frame.record("hud:secondary-slot", label, "button", &response);
+            }
+            if health == Some(slot) {
+                frame.record("hud:health-potion", label, "button", &response);
+            }
         }
-        append(&self.belt, &self.hotbar_controls.root)?;
+        self.hotbar_controls.paint(frame, ui, &belt, coarse, size);
+        self.bursts.borrow_mut().retain(|(_, burst)| !burst.finished(self.now));
+        for (slot, burst) in self.bursts.borrow().iter() {
+            if *slot / 8 == self.hotbar.bank() {
+                let visible = slot % 8;
+                let id = if health == Some(visible) {
+                    MobileUiElementId::HealthPotion
+                } else if mana == Some(visible) {
+                    MobileUiElementId::ManaPotion
+                } else {
+                    MobileUiElementId::SLOTS[visible]
+                };
+                let angle = if coarse && self.mobile_layout.customized {
+                    self.mobile_layout.layout.get(id).rotation.to_radians() as f32
+                } else {
+                    0.0
+                };
+                let center = rect(belt[visible]).center();
+                burst.paint(
+                    &frame.with_rotation(center, angle),
+                    p,
+                    &self.ui,
+                    center,
+                    self.now,
+                    self.mobile_scale(id, coarse),
+                    &format!("hud:belt-burst:{slot}:{}", burst.sequence()),
+                )?;
+            }
+        }
+        Ok(())
+    }
+    fn paint_binding(
+        &self,
+        frame: &UiFrame<'_>,
+        p: &egui::Painter,
+        slot: usize,
+        rect: egui::Rect,
+    ) -> Result<(), String> {
+        let code = self.quickbar[slot].as_ref().map_or_else(
+            || if slot == 0 { "Mouse2".into() } else { format!("Digit{slot}") },
+            |row| row.binding_code.clone(),
+        );
+        if code == "Mouse2" {
+            return self.ui.paint(
+                frame,
+                p,
+                100,
+                rect.min + egui::vec2(15.5, 44.5),
+                1.0,
+                egui::Color32::WHITE.gamma_multiply(0.6),
+            );
+        }
+        let label = self.quickbar[slot]
+            .as_ref()
+            .map_or_else(
+                || solomon_sim::settings::game_binding_label(&code),
+                |row| row.binding_label.clone(),
+            )
+            .to_uppercase();
+        let binding = solomon_sim::hud::quickbar::layout_native_quickbar_binding(&label);
+        let backing = egui::Rect::from_min_size(
+            rect.min + egui::vec2(binding.backing_left as f32, 53.0),
+            egui::vec2(binding.backing_width as f32, 15.0),
+        );
+        for (dest_x, width, source_x) in [
+            (0.0, 5.0, 0.0),
+            (5.0, (backing.width() - 10.0).max(0.0), 5.0),
+            (backing.width() - 5.0, 5.0, 10.0),
+        ] {
+            frame.image(
+                p,
+                "assets/stock/hub-hud-key-backing.png",
+                egui::Rect::from_min_size(
+                    backing.min + egui::vec2(dest_x, 0.0),
+                    egui::vec2(width, 15.0),
+                ),
+                Some(egui::Rect::from_min_max(
+                    egui::pos2(source_x / 15.0, 0.0),
+                    egui::pos2((source_x + 5.0) / 15.0, 1.0),
+                )),
+                egui::Color32::WHITE.gamma_multiply(0.6),
+            );
+        }
+        let mut layout = binding.text;
+        for glyph in &mut layout.glyphs {
+            glyph.center_x += rect.min.x as f64;
+            glyph.center_y += rect.min.y as f64;
+        }
+        crate::gpu_ui::paint_text_layout(frame, p, &layout);
         Ok(())
     }
 }
-
-impl Drop for Hud {
-    fn drop(&mut self) {
-        for (name, listener) in [("click", &self._click), ("animationend", &self._burst_finished)] {
-            if let Err(error) = self
-                .root
-                .remove_event_listener_with_callback(name, listener.as_ref().unchecked_ref())
-            {
-                web_sys::console::error_1(&error);
-            }
-        }
-    }
+fn rect(r: HudRect) -> egui::Rect {
+    egui::Rect::from_min_size(
+        egui::pos2(r.x as f32, r.y as f32),
+        egui::vec2(r.width as f32, r.height as f32),
+    )
 }
-
 fn action_id(action: HudAction) -> String {
     match action {
-        HudAction::Pause => "pause".to_string(),
-        HudAction::Inventory => "inventory".to_string(),
-        HudAction::Skills => "skills".to_string(),
-        HudAction::Map => "map".to_string(),
-        HudAction::Shortcut(index) => format!("shortcut:{index}"),
-        HudAction::Belt(index) => format!("belt:{index}"),
-        HudAction::SkillBinding(binding) => format!("skill:{binding}"),
+        HudAction::Pause => "pause".into(),
+        HudAction::Inventory => "inventory".into(),
+        HudAction::Skills => "skills".into(),
+        HudAction::Map => "map".into(),
+        HudAction::Shortcut(i) => format!("shortcut:{i}"),
+        HudAction::Belt(i) => format!("belt:{i}"),
+        HudAction::SkillBinding(i) => format!("skill-binding:{i}"),
     }
 }
 
-fn clicked_action(event: &Event) -> Result<Option<HudAction>, String> {
-    let Some(target) = event.target() else { return Ok(None) };
-    let Ok(target) = target.dyn_into::<Element>() else { return Ok(None) };
-    let Some(button) = target.closest("[data-hud-action]").map_err(|_| "HUD action selector")?
-    else {
-        return Ok(None);
-    };
-    if button.has_attribute("disabled") {
-        return Ok(None);
-    }
-    let Some(id) = button.get_attribute("data-hud-action") else { return Ok(None) };
-    let action = match id.as_str() {
-        "pause" => HudAction::Pause,
-        "inventory" => HudAction::Inventory,
-        "skills" => HudAction::Skills,
-        "map" => HudAction::Map,
-        _ => {
-            let Some((kind, index)) = id.split_once(':') else {
-                return Err("unknown HUD action".to_string());
-            };
-            let index = index.parse::<usize>().map_err(|_| "invalid HUD action index")?;
-            match kind {
-                "shortcut" if index < 5 => HudAction::Shortcut(index),
-                "belt" if index < PLAYER_BELT_SLOT_COUNT => HudAction::Belt(index),
-                "skill" if [12, 16, 20].contains(&index) => HudAction::SkillBinding(index),
-                _ => return Err("unknown HUD action".to_string()),
-            }
-        }
-    };
-    Ok(Some(action))
+fn rotated_bounds(rect: egui::Rect, pivot: egui::Pos2, angle: f32) -> egui::Rect {
+    let rotation = egui::emath::Rot2::from_angle(angle);
+    [rect.left_top(), rect.right_top(), rect.right_bottom(), rect.left_bottom()]
+        .into_iter()
+        .map(|point| pivot + rotation * (point - pivot))
+        .fold(egui::Rect::NOTHING, |bounds, point| {
+            bounds.union(egui::Rect::from_min_max(point, point))
+        })
+}
+fn paint_rotated_rect(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    radius: f32,
+    angle: f32,
+    fill: egui::Color32,
+    stroke: egui::Stroke,
+    kind: egui::StrokeKind,
+) {
+    let mut shape = egui::epaint::RectShape::new(rect, radius, fill, stroke, kind);
+    shape.angle = angle;
+    painter.add(shape);
+}
+fn paint_rotated_text(
+    painter: &egui::Painter,
+    text: &str,
+    font: egui::FontId,
+    color: egui::Color32,
+    anchor: egui::Pos2,
+    align: egui::Align2,
+    pivot: egui::Pos2,
+    angle: f32,
+) {
+    let galley = painter.layout_no_wrap(text.into(), font, color);
+    let rect = align.anchor_size(anchor, galley.size());
+    let position = pivot + egui::emath::Rot2::from_angle(angle) * (rect.min - pivot);
+    painter.add(egui::epaint::TextShape::new(position, galley, color).with_angle(angle));
 }

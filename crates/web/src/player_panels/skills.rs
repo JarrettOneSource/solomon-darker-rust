@@ -1,5 +1,7 @@
 //! Learned SkillScreen pages, stock leather/chain art and item/skill hover text.
 
+use super::chrome::PanelCanvas;
+use super::{PlayerPanelSnapshot, PlayerPanels, Target};
 use solomon_sim::belt::native_belt_owned_item;
 use solomon_sim::float;
 use solomon_sim::hud::HudRect;
@@ -20,59 +22,25 @@ use solomon_sim::player_panels::skill_text::{
 use solomon_sim::profile::{
     NATIVE_SKILL_CATALOG, native_skill_category, native_skill_root, native_weld_build,
 };
-use wasm_bindgen::JsCast;
-use web_sys::HtmlElement;
-
-use super::chrome::{art, bitmap_text, button, place, tint};
-use super::{PlayerPanelSnapshot, PlayerPanels, Target};
-use crate::ui::{append, element};
-
 impl PlayerPanels {
-    pub(super) fn update_skill_ambient(&self, now: f64) -> Result<(), String> {
-        let seals = self
-            .content
-            .query_selector_all("[data-skill-ambient]")
-            .map_err(|_| "skill ambient sprites")?;
-        let tick = ((now - self.opened_at) / 10.0).floor().max(0.0);
-        for index in 0..seals.length() {
-            let seal = seals
-                .item(index)
-                .ok_or("missing skill ambient sprite")?
-                .dyn_into::<HtmlElement>()
-                .map_err(|_| "skill ambient element")?;
-            let angle = f64::from(index) * 45.0;
-            let x = 800.0 + float::sin(angle * 2.0 * std::f64::consts::PI / 180.0) * 40.0;
-            seal.style().set_property("left", &format!("{x}px")).map_err(|_| "skill ambient x")?;
-            seal.style()
-                .set_property(
-                    "transform",
-                    &format!("translate(-50%,-50%) rotate({}deg) scale(1.9)", angle - tick / 60.0),
-                )
-                .map_err(|_| "skill ambient rotation")?;
-        }
-        Ok(())
-    }
-
-    pub(super) fn draw_skills(&self, snapshot: &PlayerPanelSnapshot<'_>) -> Result<(), String> {
-        let leather = self.ui.tiles(&self.document, 49, 1600.0, 760.0)?;
-        place(&leather, HudRect::new(0.0, 50.0, 1600.0, 760.0))?;
-        append(&self.content, &leather)?;
+    pub(super) fn draw_skills(
+        &self,
+        c: &PanelCanvas<'_, '_>,
+        s: &PlayerPanelSnapshot<'_>,
+    ) -> Result<(), String> {
+        c.tiles(&self.ui, 49, HudRect::new(0.0, 50.0, 1600.0, 760.0), 1.0, 0xffffff)?;
+        let tick = ((self.now - self.opened_at) / 10.0).floor().max(0.0);
         for index in 0..8 {
-            let seal = art(
-                &self.document,
-                &self.content,
+            let angle = index as f64 * 45.0;
+            let x = 800.0 + float::sin(angle * 2.0 * std::f64::consts::PI / 180.0) * 40.0;
+            c.additive().faded(0.15).art(
                 &self.ui,
                 3,
-                [800.0, 490.0],
+                [x, 490.0],
                 [1.9, 1.9],
-                index as f64 * 45.0,
+                angle - tick / 60.0,
+                0xffffff,
             )?;
-            seal.set_attribute("data-skill-ambient", &index.to_string())
-                .map_err(|_| "skill seal index")?;
-            seal.style().set_property("opacity", "0.15").map_err(|_| "skill seal alpha")?;
-            seal.style()
-                .set_property("mix-blend-mode", "plus-lighter")
-                .map_err(|_| "skill seal blend")?;
         }
         for (record, x, y, sx, rotation) in [
             (33, 80.0, 30.0, 1.0, -90.0),
@@ -82,36 +50,24 @@ impl PlayerPanels {
             (30, 0.0, 860.0, 1.0, 0.0),
             (30, 1600.0, 860.0, 1.0, 0.0),
         ] {
-            art(&self.document, &self.content, &self.ui, record, [x, y], [sx, 1.0], rotation)?;
+            c.art(&self.ui, record, [x, y], [sx, 1.0], rotation, 0xffffff)?;
         }
-        let warriors = element(&self.document, "div", "panel-clipped-warriors")?;
-        place(&warriors, HudRect::new(0.0, 820.0, 1600.0, 80.0))?;
+        let warriors = c.at(0.0, 820.0).clip(HudRect::new(0.0, 0.0, 1600.0, 80.0));
         for (x, sx) in [(60.0, 1.0), (1540.0, -1.0)] {
-            art(&self.document, &warriors, &self.ui, 32, [x, 60.0], [sx, 1.0], 0.0)?;
+            warriors.art(&self.ui, 32, [x, 60.0], [sx, 1.0], 0.0, 0xffffff)?;
         }
-        append(&self.content, &warriors)?;
         for y in [44.0, 807.0] {
-            let chain = self.ui.tiles(&self.document, 10, 1600.0, 19.0)?;
-            place(&chain, HudRect::new(0.0, y, 1600.0, 19.0))?;
-            append(&self.content, &chain)?;
+            c.tiles(&self.ui, 10, HudRect::new(0.0, y, 1600.0, 19.0), 1.0, 0xffffff)?;
         }
-        let header = self.ui.frame(&self.document, 4, 114.0, 34.0, 5.0)?;
-        place(&header, HudRect::new(743.0, 34.0, 114.0, 34.0))?;
-        append(&self.content, &header)?;
-        shadowed_text(
-            &self.document,
-            &self.content,
-            &NativeUiTextSpec {
-                tint: 0x808080,
-                ..NativeUiTextSpec::new(NativeUiFontName::Menu, "SKILLS", 800.0, 60.0)
-            },
-        )?;
+        c.frame(&self.ui, 4, HudRect::new(743.0, 34.0, 114.0, 34.0), 5.0, 0xffffff)?;
+        c.shadow_text(&NativeUiTextSpec {
+            tint: 0x808080,
+            ..NativeUiTextSpec::new(NativeUiFontName::Menu, "SKILLS", 800.0, 60.0)
+        });
         let coarse = self
             .document
             .default_view()
-            .ok_or("Skills window")?
-            .match_media("(pointer: coarse)")
-            .map_err(|_| "Skills pointer capability")?
+            .and_then(|window| window.match_media("(pointer: coarse)").ok().flatten())
             .is_some_and(|query| query.matches());
         for (line, y) in [
             (
@@ -126,294 +82,199 @@ impl PlayerPanels {
             ("skills with a gold or green border", 701.0),
             ("can be dragged into your belt", 719.0),
         ] {
-            shadowed_text(
-                &self.document,
-                &self.content,
-                &NativeUiTextSpec {
-                    tint: 0x808080,
-                    alpha: 0.75,
-                    ..NativeUiTextSpec::new(NativeUiFontName::Menu, line, 800.0, y)
-                },
-            )?;
-        }
-        for (page_index, page) in
-            native_skill_book_page_placements(snapshot.book).into_iter().enumerate()
-        {
-            // The source highlights only the first selected row on a page. A later
-            // primary/concentration on the same page does not add another label.
-            let page_selection = page.skills.iter().copied().find(|id| {
-                *id == snapshot.book.primary_skill_id
-                    || snapshot.concentrations.contains(&Some(*id))
+            c.shadow_text(&NativeUiTextSpec {
+                tint: 0x808080,
+                alpha: 0.75,
+                ..NativeUiTextSpec::new(NativeUiFontName::Menu, line, 800.0, y)
             });
-            let page_selected = page_selection.is_some();
-            let panel = self.skills.frame(&self.document, 0, page.width, 300.0, 30.0)?;
-            place(&panel, HudRect::new(page.x, page.y, page.width, 300.0))?;
-            let page_tint = native_skill_page_tint(
-                native_skill_root(page.root_skill_id).expect("learned page has a native root"),
+        }
+        for (page_index, page) in native_skill_book_page_placements(s.book).into_iter().enumerate()
+        {
+            let selection =
+                page.skills.iter().copied().find(|id| {
+                    *id == s.book.primary_skill_id || s.concentrations.contains(&Some(*id))
+                });
+            let selected = selection.is_some();
+            let tint = native_skill_page_tint(
+                native_skill_root(page.root_skill_id).expect("native page root"),
             );
-            let fill = element(&self.document, "span", "panel-skill-page-fill")?;
-            place(&fill, HudRect::new(page.x + 12.0, page.y + 12.0, page.width - 24.0, 276.0))?;
-            fill.style()
-                .set_property("background", &format!("#{page_tint:06x}"))
-                .map_err(|_| "skill page fill")?;
-            fill.style()
-                .set_property("opacity", if page_selected { "0.5" } else { "0.1" })
-                .map_err(|_| "skill page fill alpha")?;
-            append(&self.content, &fill)?;
-            tint(&self.document, &panel, page_tint)?;
-            panel
-                .style()
-                .set_property("opacity", if page_selected { "0.5" } else { "0.1" })
-                .map_err(|_| "page alpha")?;
-            append(&self.content, &panel)?;
-            for _ in 0..if page_selected { 2 } else { 1 } {
-                let edge = self.skills.frame(&self.document, 0, page.width, 300.0, 30.0)?;
-                place(&edge, HudRect::new(page.x, page.y, page.width, 300.0))?;
-                edge.style().set_property("opacity", "0.5").map_err(|_| "skill page edge alpha")?;
-                edge.style()
-                    .set_property("mix-blend-mode", "plus-lighter")
-                    .map_err(|_| "skill page edge blend")?;
-                append(&self.content, &edge)?;
+            let r = HudRect::new(page.x, page.y, page.width, 300.0);
+            c.fill(
+                HudRect::new(page.x + 12.0, page.y + 12.0, page.width - 24.0, 276.0),
+                tint,
+                if selected { 0.5 } else { 0.1 },
+            );
+            c.faded(if selected { 0.5 } else { 0.1 }).frame(&self.skills, 0, r, 30.0, tint)?;
+            for _ in 0..if selected { 2 } else { 1 } {
+                c.additive().faded(0.5).frame(&self.skills, 0, r, 30.0, 0xffffff)?;
             }
             for (index, id) in page.skills.iter().copied().enumerate() {
-                let definition = &NATIVE_SKILL_CATALOG[id];
+                let def = &NATIVE_SKILL_CATALOG[id];
                 let weld = if id == 52 {
                     Some(
-                        snapshot
-                            .book
+                        s.book
                             .weld_build_id
                             .and_then(native_weld_build)
-                            .expect("learned Spell Welding has its native build"),
+                            .expect("native welding build"),
                     )
                 } else {
                     None
                 };
-                let center_x =
+                let x =
                     page.x + if index == 0 { 100.0 } else { 280.0 + 160.0 * (index - 1) as f64 };
-                let center_y = page.y + 80.0;
+                let y = page.y + 80.0;
                 if index > 0 {
-                    art(
-                        &self.document,
-                        &self.content,
-                        &self.skills,
-                        6,
-                        [center_x - 80.0, center_y],
-                        [1.0, 1.0],
-                        0.0,
-                    )?;
+                    c.art(&self.skills, 6, [x - 80.0, y], [1.0, 1.0], 0.0, 0xffffff)?;
                 }
-                art(
-                    &self.document,
-                    &self.content,
-                    &self.skills,
-                    13,
-                    [center_x, center_y],
-                    [1.15, 1.15],
-                    0.0,
-                )?;
-                let glow_roots = if let Some(build) = weld {
-                    vec![
-                        (build.color_roots[0], Some("polygon(0 0,100% 0,0 100%)")),
-                        (build.color_roots[1], Some("polygon(100% 0,0 100%,100% 100%)")),
-                    ]
-                } else {
-                    vec![(native_skill_root(id).expect("learned skill root"), None)]
-                };
-                for (root, clip) in glow_roots {
-                    let glow = art(
-                        &self.document,
-                        &self.content,
+                c.art(&self.skills, 13, [x, y], [1.15, 1.15], 0.0, 0xffffff)?;
+                if let Some(build) = weld {
+                    c.split_art(
                         &self.skills,
                         164,
-                        [center_x, center_y],
+                        [x, y],
+                        [1.15, 1.15],
+                        [
+                            native_skill_page_tint(build.color_roots[0]),
+                            native_skill_page_tint(build.color_roots[1]),
+                        ],
+                    )?;
+                } else {
+                    c.art(
+                        &self.skills,
+                        164,
+                        [x, y],
                         [1.15, 1.15],
                         0.0,
+                        native_skill_page_tint(native_skill_root(id).expect("native skill root")),
                     )?;
-                    tint(&self.document, &glow, native_skill_page_tint(root))?;
-                    if let Some(clip) = clip {
-                        glow.style()
-                            .set_property("clip-path", clip)
-                            .map_err(|_| "Weld glow half")?;
-                    }
                 }
-                let category = native_skill_category(id).expect("page skill category");
-                let selected = page_selection == Some(id);
-                let frame = art(
-                    &self.document,
-                    &self.content,
+                let category = native_skill_category(id).expect("native category");
+                let selected = selection == Some(id);
+                c.art(
                     &self.skills,
                     if !selected && (1..=3).contains(&category) { 14 } else { 5 },
-                    [center_x, center_y],
+                    [x, y],
                     [1.0, 1.0],
                     0.0,
+                    if selected { 0x97c797 } else { 0xffffff },
                 )?;
-                if selected {
-                    tint(&self.document, &frame, 0x97c797)?;
-                }
-                let icon = snapshot.book.skill_icon_record(id);
-                let shadow = art(
-                    &self.document,
-                    &self.content,
-                    &self.skills,
-                    icon,
-                    [center_x + 4.0, center_y + 4.0],
-                    [1.0, 1.0],
-                    0.0,
-                )?;
-                tint(&self.document, &shadow, 0)?;
-                art(
-                    &self.document,
-                    &self.content,
-                    &self.skills,
-                    icon,
-                    [center_x, center_y],
-                    [1.0, 1.0],
-                    0.0,
-                )?;
-                let action = button(
-                    &self.document,
-                    &self.content,
+                let icon = s.book.skill_icon_record(id);
+                c.art(&self.skills, icon, [x + 4.0, y + 4.0], [1.0, 1.0], 0.0, 0)?;
+                c.art(&self.skills, icon, [x, y], [1.0, 1.0], 0.0, 0xffffff)?;
+                let target = HudRect::new(x - 43.5, y - 43.5, 87.0, 87.0);
+                c.button(
                     &format!("skill:{id}"),
-                    &format!("{}, rank {}", definition.name, snapshot.book.effective_ranks[id]),
-                    HudRect::new(center_x - 43.5, center_y - 43.5, 87.0, 87.0),
-                )?;
-                action
-                    .set_attribute("data-tutorial-skill-page", &page_index.to_string())
-                    .map_err(|_| "Tutorial skill page")?;
-                action
-                    .set_attribute("data-tutorial-skill-index", &index.to_string())
-                    .map_err(|_| "Tutorial skill position")?;
-                action
-                    .set_attribute("aria-pressed", if selected { "true" } else { "false" })
-                    .map_err(|_| "skill selected")?;
-                if index == 0 {
-                    action
-                        .set_attribute("data-game-default-focus", "true")
-                        .map_err(|_| "skill focus")?;
-                }
+                    &format!("{}, rank {}", def.name, s.book.effective_ranks[id]),
+                    target,
+                );
+                c.semantic(
+                    &format!("panel:skill-page:{page_index}:{index}"),
+                    def.name,
+                    "image",
+                    target,
+                );
                 if selected {
-                    shadowed_text(
-                        &self.document,
-                        &self.content,
-                        &NativeUiTextSpec {
-                            tint: 0x97c797,
-                            ..NativeUiTextSpec::new(
-                                NativeUiFontName::Body,
-                                if id == snapshot.book.primary_skill_id {
-                                    "casting"
-                                } else {
-                                    "concentrate"
-                                },
-                                center_x,
-                                center_y - 45.0,
-                            )
-                        },
-                    )?;
+                    c.shadow_text(&NativeUiTextSpec {
+                        tint: 0x97c797,
+                        ..NativeUiTextSpec::new(
+                            NativeUiFontName::Body,
+                            if id == s.book.primary_skill_id { "casting" } else { "concentrate" },
+                            x,
+                            y - 45.0,
+                        )
+                    });
                 }
-                let name = weld.map_or(definition.name, |build| build.synthetic_name);
-                let rank = snapshot.book.effective_ranks[id];
-                let title = native_skill_page_display_name(name, rank);
-                let name_lines = native_skill_page_wrapped_lines(&title);
+                let name = weld.map_or(def.name, |build| build.synthetic_name);
+                let title = native_skill_page_display_name(name, s.book.effective_ranks[id]);
+                let names = native_skill_page_wrapped_lines(&title);
                 let name_y = page.y + 150.0;
-                shadowed_text(
-                    &self.document,
-                    &self.content,
-                    &NativeUiTextSpec::new(
-                        NativeUiFontName::Medium,
-                        &name_lines.join("\n"),
-                        center_x,
-                        name_y,
-                    ),
-                )?;
-                shadowed_text(
-                    &self.document,
-                    &self.content,
-                    &NativeUiTextSpec::new(
-                        NativeUiFontName::SkillUppercase,
-                        &definition.family.to_uppercase(),
-                        center_x,
-                        name_y + native_skill_page_text_height(&name_lines),
-                    ),
-                )?;
-                let description =
-                    weld.map_or(definition.quick_description, |build| build.pair_description);
-                let description_lines = native_skill_page_wrapped_lines(description);
-                let description_y =
-                    page.y + 230.0 - native_skill_page_text_height(&description_lines) / 2.0;
-                bitmap_text(
-                    &self.document,
-                    &self.content,
-                    &NativeUiTextSpec::new(
-                        NativeUiFontName::Medium,
-                        &description_lines.join("\n"),
-                        center_x,
-                        description_y,
-                    ),
-                )?;
+                c.shadow_text(&NativeUiTextSpec::new(
+                    NativeUiFontName::Medium,
+                    &names.join("\n"),
+                    x,
+                    name_y,
+                ));
+                c.shadow_text(&NativeUiTextSpec::new(
+                    NativeUiFontName::SkillUppercase,
+                    &def.family.to_uppercase(),
+                    x,
+                    name_y + native_skill_page_text_height(&names),
+                ));
+                let description = native_skill_page_wrapped_lines(
+                    weld.map_or(def.quick_description, |build| build.pair_description),
+                );
+                c.text(&NativeUiTextSpec::new(
+                    NativeUiFontName::Medium,
+                    &description.join("\n"),
+                    x,
+                    page.y + 230.0 - native_skill_page_text_height(&description) / 2.0,
+                ));
                 let footer = match category {
                     1 => "primary cast",
                     2 => "secondary cast",
                     _ => "",
                 };
                 if !footer.is_empty() {
-                    shadowed_text(
-                        &self.document,
-                        &self.content,
-                        &NativeUiTextSpec::new(
-                            NativeUiFontName::Body,
-                            footer,
-                            center_x,
-                            page.y + 280.0,
-                        ),
-                    )?;
+                    c.shadow_text(&NativeUiTextSpec::new(
+                        NativeUiFontName::Body,
+                        footer,
+                        x,
+                        page.y + 280.0,
+                    ));
                 }
             }
         }
+        c.semantic(
+            "panel:surface:skills",
+            "Skills",
+            "dialog",
+            HudRect::new(0.0, 0.0, 1600.0, 900.0),
+        );
         Ok(())
     }
-
-    pub(super) fn update_tooltip(
+    pub(super) fn paint_tooltip(
         &self,
+        c: &PanelCanvas<'_, '_>,
         snapshot: &PlayerPanelSnapshot<'_>,
         now: f64,
     ) -> Result<(), String> {
         if self.inventory_flyby_active() || self.press.is_some_and(|press| press.dragging) {
-            self.tooltip.set_text_content(None);
-            self.tooltip
-                .remove_attribute("data-native-hover-key")
-                .map_err(|_| "retire moving skill detail")?;
-            self.tooltip
-                .remove_attribute("data-native-item-hover-key")
-                .map_err(|_| "retire moving item detail")?;
-            self.tooltip
-                .style()
-                .set_property("display", "none")
-                .map_err(|_| "hide moving item tooltip")?;
             return Ok(());
         }
-        let focused_skill = self
-            .document
-            .active_element()
-            .and_then(|element| element.get_attribute("data-panel-action"))
-            .and_then(|action| {
-                action.strip_prefix("skill:").and_then(|id| id.parse::<usize>().ok())
-            });
         let selected_skill = if self.compact {
             if let Some(Target::Skill(id)) = self.selected { Some(id) } else { None }
         } else {
             None
         };
-        let skill = self.hovered_skill.or(focused_skill).or(selected_skill);
-        let inspection = format!("{skill:?}:{:?}:{:?}", self.selected, self.hovered_service);
-        self.tooltip.style().set_property("display", "none").map_err(|_| "hide tooltip")?;
+        let skill = self.hovered_skill.or(selected_skill);
         if let Some(id) = skill {
-            self.tooltip
-                .remove_attribute("data-native-item-hover")
-                .map_err(|_| "retire item detail owner")?;
-            self.tooltip
-                .remove_attribute("data-native-item-hover-key")
-                .map_err(|_| "retire item detail cache")?;
-            return self.update_skill_hover(id, snapshot, &inspection);
+            if let Some(source) = c.target_rect(Target::Skill(id)) {
+                let source = solomon_sim::Vec2::new(
+                    source.center().x as f64 - c.origin.x as f64,
+                    source.center().y as f64 - c.origin.y as f64,
+                );
+                let lines = native_skill_book_tooltip_lines(
+                    id,
+                    snapshot.book.permanent_ranks[id],
+                    snapshot.book.effective_ranks[id],
+                );
+                let layout = native_skill_hover_box_layout(&lines, source);
+                let (origin, scale, painter) = self.tooltip_placement(c, layout.rect, source, 50.0);
+                crate::ui::skill_hover::paint_skill_hover_box(
+                    c.frame, &painter, &layout, id, origin, scale,
+                );
+                c.frame.record_rect(
+                    "panel:tooltip",
+                    &lines.iter().map(|line| line.text.as_str()).collect::<Vec<_>>().join("\n"),
+                    "tooltip",
+                    egui::Rect::from_min_size(
+                        origin,
+                        egui::vec2(layout.rect.width as f32, layout.rect.height as f32) * scale,
+                    ),
+                    false,
+                );
+            }
+            return Ok(());
         }
         if now - self.selected_at < 200.0 && self.hovered_service.is_none() {
             return Ok(());
@@ -472,179 +333,66 @@ impl PlayerPanels {
                 )
             }
         };
-        let action = match target {
-            Target::Item(id) => format!("item:{id}"),
-            Target::Equipment(slot) => format!("equipment:{}", slot.as_str()),
-            Target::Shop(id) => format!("shop:{id}"),
-            Target::Storage(id) => format!("storage:{id}"),
-            Target::Hagatha(selector) => format!("hagatha:{selector}"),
-            Target::OwnedPerk(selector) => format!("owned-perk:{selector}"),
-            _ => return Ok(()),
-        };
-        let Some(icon) = self
-            .content
-            .query_selector(&format!("[data-panel-action='{action}']"))
-            .map_err(|_| "native item hover source")?
-        else {
-            return Ok(());
-        };
-        let bounds = icon.get_bounding_client_rect();
-        let stage = self.stage.get_bounding_client_rect();
+        let Some(bounds) = c.target_rect(target) else { return Ok(()) };
         let source = solomon_sim::Vec2::new(
-            (bounds.left() + bounds.width() / 2.0 - stage.left()) * 1600.0 / stage.width(),
-            (bounds.top() + bounds.height() / 2.0 - stage.top()) * 900.0 / stage.height(),
+            bounds.center().x as f64 - c.origin.x as f64,
+            bounds.center().y as f64 - c.origin.y as f64,
         );
-        let key = format!(
-            "{target:?}:{}:{}:{}",
-            snapshot.economy.revision,
-            snapshot.progression.level,
-            snapshot.book.permanent_ranks[63]
-        );
-        let size =
-            if self.tooltip.get_attribute("data-native-item-hover-key").as_deref() == Some(&key) {
-                solomon_sim::Vec2::new(
-                    self.tooltip
-                        .get_attribute("data-native-item-hover-width")
-                        .expect("cached hover width")
-                        .parse()
-                        .expect("native hover width"),
-                    self.tooltip
-                        .get_attribute("data-native-item-hover-height")
-                        .expect("cached hover height")
-                        .parse()
-                        .expect("native hover height"),
-                )
-            } else {
-                self.tooltip
-                    .remove_attribute("data-native-hover")
-                    .map_err(|_| "retire skill detail owner")?;
-                self.tooltip
-                    .remove_attribute("data-native-hover-key")
-                    .map_err(|_| "retire skill detail cache")?;
-                let layout = crate::ui::item_hover::paint_item_hover_box(
-                    &self.document,
-                    &self.tooltip,
-                    &lines,
-                    source,
-                    gap,
-                )?;
-                for (name, value) in [
-                    ("data-native-item-hover-key", key),
-                    ("data-native-item-hover-width", layout.rect.width.to_string()),
-                    ("data-native-item-hover-height", layout.rect.height.to_string()),
-                ] {
-                    self.tooltip.set_attribute(name, &value).map_err(|_| "item hover cache")?;
-                }
-                solomon_sim::Vec2::new(layout.rect.width, layout.rect.height)
-            };
-        self.place_native_tooltip(
-            hub_contextual_hover_rect(size, source, gap),
-            solomon_sim::Vec2::new(
-                bounds.left() + bounds.width() / 2.0,
-                bounds.top() + bounds.height() / 2.0,
+        let layout = crate::ui::item_hover::item_hover_layout(c.frame, &lines, source, gap)?;
+        let (origin, scale, painter) = self.tooltip_placement(
+            c,
+            hub_contextual_hover_rect(
+                solomon_sim::Vec2::new(layout.rect.width, layout.rect.height),
+                source,
+                gap,
             ),
+            source,
             gap,
-            &inspection,
-        )
-    }
-
-    fn update_skill_hover(
-        &self,
-        id: usize,
-        snapshot: &PlayerPanelSnapshot<'_>,
-        inspection: &str,
-    ) -> Result<(), String> {
-        let Some(icon) = self
-            .content
-            .query_selector(&format!("[data-panel-action='skill:{id}']"))
-            .map_err(|_| "native skill hover source")?
-        else {
-            return Ok(());
-        };
-        let bounds = icon.get_bounding_client_rect();
-        let stage = self.stage.get_bounding_client_rect();
-        let source = solomon_sim::Vec2::new(
-            (bounds.left() + bounds.width() / 2.0 - stage.left()) * 1600.0 / stage.width(),
-            (bounds.top() + bounds.height() / 2.0 - stage.top()) * 900.0 / stage.height(),
         );
-        let lines = native_skill_book_tooltip_lines(
-            id,
-            snapshot.book.permanent_ranks[id],
-            snapshot.book.effective_ranks[id],
-        );
-        let layout = native_skill_hover_box_layout(&lines, source);
-        let key = format!(
-            "{id}:{}:{}",
-            snapshot.book.permanent_ranks[id], snapshot.book.effective_ranks[id]
-        );
-        if self.tooltip.get_attribute("data-native-hover-key").as_deref() != Some(&key) {
-            crate::ui::skill_hover::paint_skill_hover_box(
-                &self.document,
-                &self.tooltip,
-                &layout,
-                id,
-            )?;
-            self.tooltip
-                .set_attribute("data-native-hover-key", &key)
-                .map_err(|_| "native skill hover cache")?;
-        }
-        self.place_native_tooltip(
-            layout.rect,
-            solomon_sim::Vec2::new(
-                bounds.left() + bounds.width() / 2.0,
-                bounds.top() + bounds.height() / 2.0,
+        crate::ui::item_hover::paint_item_hover_box(
+            c.frame, &painter, &lines, &layout, origin, scale,
+        )?;
+        c.frame.record_rect(
+            "panel:tooltip",
+            &lines.iter().map(|line| line.text.as_str()).collect::<Vec<_>>().join("\n"),
+            "tooltip",
+            egui::Rect::from_min_size(
+                origin,
+                egui::vec2(layout.rect.width as f32, layout.rect.height as f32) * scale,
             ),
-            50.0,
-            inspection,
-        )
+            false,
+        );
+        Ok(())
     }
-
-    fn place_native_tooltip(
+    fn tooltip_placement(
         &self,
-        rect: HudRect,
+        c: &PanelCanvas<'_, '_>,
+        r: HudRect,
         source: solomon_sim::Vec2,
         gap: f64,
-        inspection: &str,
-    ) -> Result<(), String> {
-        let (x, y, scale) = if self.compact {
-            let scale = ((f64::from(self.viewport_size.0) - 24.0) / rect.width).min(1.0);
-            let width = rect.width * scale;
-            let height = rect.height * scale;
+    ) -> (egui::Pos2, f32, egui::Painter) {
+        if self.compact {
+            let scale = ((self.viewport_size.0 as f64 - 24.0) / r.width).min(1.0);
+            let width = r.width * scale;
+            let height = r.height * scale;
+            let source = solomon_sim::Vec2::new(
+                self.stage_origin.x + source.x * self.view_scale,
+                self.stage_origin.y + source.y * self.view_scale,
+            );
             let x = (source.x - width / 2.0)
-                .clamp(12.0, (f64::from(self.viewport_size.0) - width - 12.0).max(12.0));
+                .clamp(12.0, (self.viewport_size.0 as f64 - width - 12.0).max(12.0));
             let mut y = source.y - gap * self.view_scale - height;
             if y < 52.0 {
                 y = source.y + gap * self.view_scale;
             }
-            (x, y.clamp(52.0, (f64::from(self.viewport_size.1) - height - 12.0).max(52.0)), scale)
+            y = y.clamp(52.0, (self.viewport_size.1 as f64 - height - 12.0).max(52.0));
+            let painter = c.frame.ctx.layer_painter(egui::LayerId::new(
+                egui::Order::Tooltip,
+                egui::Id::unique("panel-tooltip"),
+            ));
+            (egui::pos2(x as f32, y as f32), scale as f32, painter)
         } else {
-            (rect.x, rect.y, 1.0)
-        };
-        crate::ui::style(
-            &self.tooltip,
-            &format!(
-                "display:block;left:{x}px;top:{y}px;width:{}px;height:{}px;max-width:none;max-height:none;overflow:visible;padding:0;border:0;background:none;--native-hover-scale:{scale}",
-                rect.width * scale,
-                rect.height * scale,
-            ),
-        )?;
-        self.tooltip
-            .set_attribute("data-inspection", inspection)
-            .map_err(|_| "native inspection")?;
-        Ok(())
+            (egui::pos2(r.x as f32, r.y as f32) + c.origin, 1.0, c.painter.clone())
+        }
     }
-}
-
-fn shadowed_text(
-    document: &web_sys::Document,
-    parent: &HtmlElement,
-    spec: &NativeUiTextSpec<'_>,
-) -> Result<(), String> {
-    bitmap_text(
-        document,
-        parent,
-        &NativeUiTextSpec { x: spec.x + 1.0, y: spec.y + 1.0, tint: 0x000000, ..*spec },
-    )?;
-    bitmap_text(document, parent, spec)?;
-    Ok(())
 }
