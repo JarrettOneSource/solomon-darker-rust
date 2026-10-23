@@ -416,3 +416,14 @@ rerun qualifies the full process gate after the inherited-stdio repair, with Chr
 zero and no timeout or forced termination. Two real Node process regressions separately
 prove the inherited-pipe failure, preserve live stderr/nonzero exit, and leave the holder
 running when the parent's streams are released.
+
+The first actual coarse-touch HUD journey on 88c3dfe exposes a stale common test contract,
+after its desktop geometry/controller/blur checks pass. `reachCollegeLoadout` expected
+`ARCH_DISMISS_0` after Q1 speech → question list → Done. Pinned fa08
+`HubDialogueActions.tsx:249` calls onDone, and `HubInventorySurface.tsx:855` delegates to
+`dismissOrCloseChat` at line 514, which closes the surface directly. Rust c14068b3 and
+the GPU candidate match that behavior. The compiled dismissal row belongs to the
+no-remaining-choices opening fallback in `hub-npc-dialogue.ts:98`, not this Done action.
+Retain actual touch Skip/question/Done and visible-close assertions, remove the invented
+extra dismissal/Skip step, and rerun the unchanged HUD movement/cancel requirements.
+The original red is `common-browser/88c3dfe/hud-input/run.log`; cleanup exits zero.
