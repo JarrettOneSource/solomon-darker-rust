@@ -15,7 +15,6 @@ use super::geometry::clip_image_rect;
 use solomon_graphics::assets;
 
 pub struct StockAtlas {
-    name: &'static str,
     path: String,
     records: Vec<SpriteRecord>,
 }
@@ -24,11 +23,38 @@ impl StockAtlas {
     pub async fn load(name: &'static str) -> Result<Self, String> {
         let bytes = assets::fetch_bytes(&format!("assets/stock/{name}.bundle")).await?;
         let records = parse_bundle(&bytes).map_err(|error| format!("{name}.bundle: {error}"))?;
-        Ok(Self { name, path: format!("assets/stock/{name}.png"), records })
+        Ok(Self { path: format!("assets/stock/{name}.png"), records })
+    }
+
+    /// A whole decoded image shares the bundle's tiling/slicing implementation.
+    pub fn from_image(path: &str, size: Vec2) -> Result<Self, String> {
+        let width = size.x as u32;
+        let height = size.y as u32;
+        if width == 0
+            || height == 0
+            || width > i32::MAX as u32
+            || size != vec2(width as f32, height as f32)
+        {
+            return Err(format!("{path} has invalid image dimensions"));
+        }
+        Ok(Self {
+            path: path.to_owned(),
+            records: vec![SpriteRecord {
+                x: 0,
+                y: 0,
+                width,
+                height,
+                logical_width: width as i32,
+                logical_height: height,
+                center_x: 0.0,
+                center_y: 0.0,
+                points: Vec::new(),
+            }],
+        })
     }
 
     pub fn record(&self, index: usize) -> Result<&SpriteRecord, String> {
-        self.records.get(index).ok_or_else(|| format!("{}.bundle has no record {index}", self.name))
+        self.records.get(index).ok_or_else(|| format!("{} has no sprite record {index}", self.path))
     }
 
     pub fn path(&self) -> &str {
