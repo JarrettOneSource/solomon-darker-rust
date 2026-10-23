@@ -155,6 +155,7 @@ impl PlayerPanels {
                 )?;
             }
         }
+        c.frame.record_value("panel:notice-title", title, None);
         Ok(())
     }
     pub(super) fn paint_notice_modal(
