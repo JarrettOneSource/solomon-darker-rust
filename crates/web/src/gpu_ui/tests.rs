@@ -244,19 +244,23 @@ fn a_clicked_binding_row_commits_before_the_following_escape_dispatch() {
 }
 
 #[test]
-fn a_new_field_has_committed_geometry_before_an_immediate_click_and_first_character() {
+fn a_new_field_has_committed_geometry_before_an_immediate_click_and_submit() {
     let ctx = Context::default();
     let mut opened = false;
     let mut text = String::new();
+    let submitted = std::cell::Cell::new(0);
     let mut paint = |frame: &mut UiFrame<'_>| {
         frame.ctx.root_ui(|ui| {
             if opened {
-                // A stock space exercises actual editing/focus without requiring
-                // a browser image upload in this native interaction regression.
-                NativeTextEdit::singleline(&mut text, "new-name", "Name")
+                // Source permits empty drafts; no stock glyph image is needed
+                // for this native focus/dispatch regression.
+                let response = NativeTextEdit::singleline(&mut text, "new-name", "Name")
                     .native_name(Pos2::ZERO, 1.0)
                     .margin(Vec2::ZERO)
                     .show(frame, ui, Rect::from_min_size(pos2(20.0, 100.0), vec2(250.0, 45.0)));
+                if response.submitted {
+                    submitted.set(submitted.get() + 1);
+                }
             } else {
                 let response = ui.interact(
                     Rect::from_min_size(pos2(20.0, 30.0), vec2(100.0, 45.0)),
@@ -274,15 +278,11 @@ fn a_new_field_has_committed_geometry_before_an_immediate_click_and_first_charac
     let mut events = pointer(true, pos2(50.0, 50.0));
     events.extend(pointer(false, pos2(50.0, 50.0)));
     events.extend(pointer(true, pos2(50.0, 120.0)));
-    events.push(enter_key(egui::Key::Space));
-    let receipt = edit::model::Receipt::unbound(
-        1,
-        1.0,
-        edit::model::Intent::Replace { range: TextSelection::caret(0), text: " ".into() },
-    );
+    events.push(enter_key(egui::Key::Enter));
+    let receipt = edit::model::Receipt::unbound(1, 1.0, edit::model::Intent::Submit);
     let passes = batches::into_passes(
         egui::RawInput { events, ..Default::default() },
-        vec![browser_key("Space", " ")],
+        vec![browser_key("Enter", "Enter")],
         vec![receipt],
         vec![
             batches::DispatchEnd { events: 2, codes: 0, edits: 0 },
@@ -296,7 +296,8 @@ fn a_new_field_has_committed_geometry_before_an_immediate_click_and_first_charac
         widgets = frame_native(&ctx, pass.raw.events, &pass.codes, &pass.edits, &mut paint);
     }
     assert!(opened);
-    assert_eq!(text, " ");
+    assert_eq!(text, "");
+    assert_eq!(submitted.get(), 1);
     assert!(widgets["new-name"].focused);
     assert!(text_edit_focused(&ctx));
 }
@@ -314,7 +315,7 @@ fn enter_key(key: egui::Key) -> egui::Event {
 #[test]
 fn native_editor_enter_is_per_dispatch_and_keeps_the_real_singleline_focus() {
     let ctx = Context::default();
-    let mut text = " ".to_owned();
+    let mut text = String::new();
     let descriptor = RefCell::new(None);
     let submitted = std::cell::Cell::new(false);
     let mut paint = |frame: &mut UiFrame<'_>| {
@@ -339,13 +340,13 @@ fn native_editor_enter_is_per_dispatch_and_keeps_the_real_singleline_focus() {
     let widgets = frame_native(&ctx, vec![enter_key(egui::Key::Enter)], &[], &[next], &mut paint);
     assert!(submitted.get());
     assert!(widgets["native-form"].focused);
-    assert_eq!(text, " ");
+    assert_eq!(text, "");
 }
 
 #[test]
 fn a_remounted_field_does_not_accept_a_native_receipt_from_its_retired_instance() {
     let ctx = Context::default();
-    let mut text = " ".to_owned();
+    let mut text = String::new();
     let mut descriptor = None;
     frame(&ctx, Vec::new(), |frame| {
         frame.ctx.root_ui(|ui| {
@@ -357,25 +358,20 @@ fn a_remounted_field_does_not_accept_a_native_receipt_from_its_retired_instance(
         })
     });
     let mut old_session = edit::session::Session::new(descriptor.unwrap());
-    let old_input = old_session.receipt(
-        1,
-        1.0,
-        edit::model::Intent::Replace { range: TextSelection::caret(1), text: " ".into() },
-        None,
-        None,
-    );
+    let old_input = old_session.receipt(1, 1.0, edit::model::Intent::Submit, None, None);
     frame(&ctx, Vec::new(), |_| {});
-    text.clear();
+    let mut submitted = false;
     frame_native(&ctx, Vec::new(), &[], &[old_input], |frame| {
         frame.ctx.root_ui(|ui| {
-            NativeTextEdit::singleline(&mut text, "rename", "Name")
+            submitted = NativeTextEdit::singleline(&mut text, "rename", "Name")
                 .native_name(Pos2::ZERO, 1.0)
                 .request_focus(true)
-                .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(250.0, 45.0)));
+                .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(250.0, 45.0)))
+                .submitted;
         })
     });
-    assert_eq!(
-        text, "",
+    assert!(
+        !submitted,
         "the same public field name does not revive a retired native editing owner"
     );
 }

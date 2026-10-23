@@ -415,6 +415,11 @@ fn paint_native_name(
 ) {
     use solomon_sim::menu::create_name::layout_create_wizard_name;
     use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextLayout};
+    // Source permits the empty editable draft and paints no heading glyphs.
+    // Genericus is substituted only by final loadout admission.
+    if text.is_empty() {
+        return;
+    }
     let mut name = layout_create_wizard_name(text);
     for glyph in &mut name.glyphs {
         glyph.center_x = f64::from(origin.x) + glyph.center_x * f64::from(scale);
