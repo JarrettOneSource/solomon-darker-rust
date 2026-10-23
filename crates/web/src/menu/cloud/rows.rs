@@ -5,13 +5,12 @@ use crate::hosted::{
     ConnectedGamePlayer, ConnectedPlayerActivity, DeveloperGameMatch, ModSubscription, ModSummary,
     PartyActivity, PublicGameParty,
 };
-use egui::{Color32, Rect, Ui, Vec2};
+use egui::{Rect, Ui, Vec2};
 use solomon_sim::menu::party_directory::{
     DirectoryPartyAction, directory_party_action, directory_party_presentation,
 };
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
 use solomon_sim::social::{GameSessionKind, PartyVisibility};
-use unicode_segmentation::UnicodeSegmentation;
 // NativeDarkCloudText keeps stock glyphs, with the Source display family for external Unicode.
 // Bitmap font, placement and tint are the authored drawing contract.
 #[allow(clippy::too_many_arguments)]
@@ -60,49 +59,6 @@ pub(super) fn ink(
         run.paint(frame, &painter, origin, 1.0)?;
     }
     Ok(())
-}
-
-fn narrative_line(
-    frame: &UiFrame<'_>,
-    ui: &Ui,
-    text: &str,
-    rect: Rect,
-    size: f32,
-    color: Color32,
-) -> Result<(), String> {
-    let font = egui::FontId::new(size, egui::FontFamily::Name("IM FELL English".into()));
-    let source = text
-        .split([' ', '\t', '\n', '\r', '\u{000c}'])
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-    let mut run = crate::gpu_ui::font_run(ui.ctx(), font.clone(), color, &source, None)?;
-    if run.size().x > rect.width() {
-        let boundaries: Vec<_> = source.grapheme_indices(true).map(|(offset, _)| offset).collect();
-        let mut low = 0;
-        let mut high = boundaries.len();
-        while low < high {
-            let middle = low + (high - low).div_ceil(2);
-            let end = boundaries.get(middle).copied().unwrap_or(source.len());
-            let candidate = format!("{}…", &source[..end]);
-            let measured =
-                crate::gpu_ui::font_run(ui.ctx(), font.clone(), color, &candidate, None)?;
-            if measured.size().x <= rect.width() {
-                low = middle;
-            } else {
-                high = middle - 1;
-            }
-        }
-        let end = boundaries.get(low).copied().unwrap_or(source.len());
-        run =
-            crate::gpu_ui::font_run(ui.ctx(), font, color, &format!("{}…", &source[..end]), None)?;
-    }
-    run.paint(
-        frame,
-        &ui.painter().with_clip_rect(rect.intersect(ui.clip_rect())),
-        rect.left_center() - Vec2::new(0.0, run.size().y / 2.0),
-        1.0,
-    )
 }
 
 // The row paints borrowed catalog state and emits actions through the scene owner.
@@ -205,7 +161,7 @@ pub(super) fn mod_row(
         egui::pos2(title_left, main.top() + 34.0),
         egui::pos2(copy_right, main.top() + 52.0),
     );
-    narrative_line(
+    widgets::narrative_line(
         frame,
         ui,
         &content.summary,
@@ -439,7 +395,14 @@ pub(super) fn party_row(
         egui::pos2(left, main.top() + 50.0),
         egui::pos2(copy_right, main.top() + 68.0),
     );
-    narrative_line(frame, ui, &party.members.join(", "), members, 14.0, widgets::color(0xb2a78d))?;
+    widgets::narrative_line(
+        frame,
+        ui,
+        &party.members.join(", "),
+        members,
+        14.0,
+        widgets::color(0xb2a78d),
+    )?;
     let location = match &party.activity {
         PartyActivity::Hub => None,
         PartyActivity::Playing { boneyard_name } => Some(boneyard_name.as_str()),

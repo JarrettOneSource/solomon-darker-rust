@@ -6,6 +6,7 @@ use egui::{
     Align2, Color32, FontId, Id, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2,
 };
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
+use unicode_segmentation::UnicodeSegmentation;
 
 pub(super) const GOLD: Color32 = Color32::from_rgb(217, 186, 112);
 pub(super) const PALE: Color32 = Color32::from_rgb(191, 255, 191);
@@ -548,4 +549,88 @@ mod tests {
         );
         assert!(!form_pass(&ctx, &mut text, vec![enter()]).1);
     }
+}
+
+pub(crate) fn narrative_line(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    text: &str,
+    rect: Rect,
+    size: f32,
+    color: Color32,
+) -> Result<(), String> {
+    let font = egui::FontId::new(size, egui::FontFamily::Name("IM FELL English".into()));
+    let source = text
+        .split([' ', '\t', '\n', '\r', '\u{000c}'])
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut run = crate::gpu_ui::font_run(ui.ctx(), font.clone(), color, &source, None)?;
+    if run.size().x > rect.width() {
+        let boundaries: Vec<_> = source.grapheme_indices(true).map(|(offset, _)| offset).collect();
+        let mut low = 0;
+        let mut high = boundaries.len();
+        while low < high {
+            let middle = low + (high - low).div_ceil(2);
+            let end = boundaries.get(middle).copied().unwrap_or(source.len());
+            let candidate = format!("{}…", &source[..end]);
+            let measured =
+                crate::gpu_ui::font_run(ui.ctx(), font.clone(), color, &candidate, None)?;
+            if measured.size().x <= rect.width() {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        let end = boundaries.get(low).copied().unwrap_or(source.len());
+        run =
+            crate::gpu_ui::font_run(ui.ctx(), font, color, &format!("{}…", &source[..end]), None)?;
+    }
+    run.paint(
+        frame,
+        &ui.painter().with_clip_rect(rect.intersect(ui.clip_rect())),
+        rect.left_center() - Vec2::new(0.0, run.size().y / 2.0),
+        1.0,
+    )
+}
+
+/// A Source circle gradient, including its premultiplied alpha, painted once per pixel.
+pub(crate) fn radial_gradient(
+    ui: &Ui,
+    rect: Rect,
+    center: Pos2,
+    radius: f32,
+    inner: Color32,
+    outer: Color32,
+) {
+    const STEPS: u32 = 32;
+    let mut mesh = egui::Mesh::default();
+    let from = inner.to_array();
+    let to = outer.to_array();
+    for y in 0..=STEPS {
+        for x in 0..=STEPS {
+            let position = rect.min
+                + rect.size() * Vec2::new(x as f32 / STEPS as f32, y as f32 / STEPS as f32);
+            let t = (position.distance(center) / radius).clamp(0.0, 1.0);
+            let channels = std::array::from_fn::<u8, 4, _>(|index| {
+                (f32::from(from[index]) + (f32::from(to[index]) - f32::from(from[index])) * t)
+                    .round() as u8
+            });
+            mesh.colored_vertex(
+                position,
+                Color32::from_rgba_premultiplied(
+                    channels[0],
+                    channels[1],
+                    channels[2],
+                    channels[3],
+                ),
+            );
+            if x > 0 && y > 0 {
+                let i = y * (STEPS + 1) + x;
+                mesh.add_triangle(i - STEPS - 2, i - 1, i);
+                mesh.add_triangle(i - STEPS - 2, i, i - STEPS - 1);
+            }
+        }
+    }
+    ui.painter().add(egui::Shape::mesh(mesh));
 }
