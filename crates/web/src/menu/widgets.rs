@@ -198,14 +198,28 @@ pub(crate) fn stock_button(
     let paint =
         frame.with_brightness(if enabled && frame.focus_visible(&response) { 1.2 } else { 1.0 });
     paint_stock_button(&paint, ui, &response, rect, scale, enabled);
-    let pressed = if enabled && stock_button_pressed(ui, &response) {
+    paint_stock_button_label(&paint, ui, &response, text, rect, scale, enabled);
+    response
+}
+
+/// Native labels may sit above sibling chrome, as in the fixed panel toolbar.
+pub(crate) fn paint_stock_button_label(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    response: &Response,
+    text: &str,
+    rect: Rect,
+    scale: f32,
+    enabled: bool,
+) {
+    let pressed = if enabled && stock_button_pressed(ui, response) {
         Vec2::splat(6.0 * scale)
     } else {
         Vec2::ZERO
     };
     if !text.is_empty() {
         crate::gpu_ui::native_text(
-            &paint,
+            frame,
             ui.painter(),
             &NativeUiTextSpec {
                 scale: f64::from(scale),
@@ -220,7 +234,6 @@ pub(crate) fn stock_button(
             },
         );
     }
-    response
 }
 pub(crate) fn stock_button_pressed(ui: &Ui, response: &Response) -> bool {
     response.is_pointer_button_down_on()

@@ -270,25 +270,44 @@ impl PlayerPanels {
                     .show(&mut scroll_ui, |ui| {
                         ui.set_min_size(egui::vec2(content_width, COMPACT_NAVIGATION_HEIGHT));
                         let origin = ui.min_rect().min;
+                        let enabled = ui.is_enabled();
+                        let mut labels = Vec::with_capacity(actions.len());
                         for (index, (action, label)) in actions.iter().enumerate() {
                             let rect = egui::Rect::from_min_size(
                                 origin + egui::vec2(index as f32 * (button_width + gap), 4.0),
                                 egui::vec2(button_width, 40.0),
                             );
-                            let response = crate::menu::widgets::stock_button(
+                            let response = crate::menu::widgets::interact(
                                 frame,
                                 ui,
                                 &format!("panel:{action}"),
                                 label,
+                                "button",
                                 rect,
-                                1.0,
-                                ui.is_enabled(),
+                                enabled,
+                            );
+                            let paint = frame.with_brightness(
+                                if enabled && frame.focus_visible(&response) { 1.2 } else { 1.0 },
+                            );
+                            crate::menu::widgets::paint_stock_button(
+                                &paint, ui, &response, rect, 1.0, enabled,
                             );
                             if response.clicked() {
                                 self.events.push(PanelEvent::Activate(
                                     super::target_from_action(action).expect("section action"),
                                 ));
                             }
+                            labels.push((response, rect, *label));
+                        }
+                        // Source labels have z-index 1 across sibling buttons,
+                        // so neighbouring corners cannot cover their glyphs.
+                        for (response, rect, label) in labels {
+                            let paint = frame.with_brightness(
+                                if enabled && frame.focus_visible(&response) { 1.2 } else { 1.0 },
+                            );
+                            crate::menu::widgets::paint_stock_button_label(
+                                &paint, ui, &response, label, rect, 1.0, enabled,
+                            );
                         }
                     });
             });
