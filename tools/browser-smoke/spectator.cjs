@@ -104,7 +104,7 @@ async function open(account, label) {
   const page = await context.newPage();
   const client = {label, browserOwner, page, id: null, frame: null, loaded: null,
     errors: [], cancelledMedia: [], cancelledNavigation: [], accountNavigating: false,
-    inputs: [], inputBoundaries: [], movementAttempts: [], lua: [], luaRequests: [],
+    inputs: [], inputBoundaries: [], movementAttempts: [], transitions: [], commands: [], lua: [], luaRequests: [],
     flame: {active: false, births: new Map(), frames: [], actors: []},
     checkpoints: 0, leaves: 0, wasm: new Set()};
   clients.push(client);
@@ -127,6 +127,12 @@ async function open(account, label) {
     const read = createNativeMessageReader();
     socket.on('framesent', ({payload}) => {
       const row = JSON.parse(payload.toString());
+      if (row.type === 'command' || row.type === 'hosted') {
+        client.commands.push({step, time: Date.now(), type: row.type,
+          sequence: row.sequence, kind: row.command?.kind,
+          command: row.type === 'command' ? row.command : undefined});
+        if (client.commands.length > 200) client.commands.shift();
+      }
       if (row.type === 'input') {
         client.inputs.push({sequence: row.sequence, primary: row.input.primary,
           quickbar: row.input.quickbar, movement: row.input.movement, aim: row.input.aim});
@@ -151,6 +157,21 @@ async function open(account, label) {
       }
       if ((row.type === 'welcome' || row.type === 'snapshot') && client.flame.active) {
         observeFlame(client);
+      }
+      if (row.type === 'welcome' || row.type === 'snapshot') {
+        const snapshot = client.frame.snapshot;
+        const transition = {runId: snapshot.run.run_id, phase: snapshot.run.phase,
+          world: snapshot.boneyard?.run_id,
+          players: Object.fromEntries(Object.entries(snapshot.participants).map(([id, actor]) =>
+            [id, actor.player.combat.life_state]))};
+        const key = JSON.stringify(transition);
+        if (key !== client.lastTransition) {
+          client.lastTransition = key;
+          client.transitions.push({step, time: Date.now(), tick: snapshot.ticks, ...transition,
+            actors: Object.fromEntries(Object.entries(snapshot.participants).map(([id, actor]) =>
+              [id, {position: actor.wizard.position, health: actor.player.combat.current_health}])),
+            host: client.frame.host});
+        }
       }
     });
   });
@@ -275,13 +296,18 @@ async function selection(client,name){
 }
 async function move(client, key, distance) {
   const before = {...participant(client).wizard.position};
+  const runId = client.frame.snapshot.run.run_id;
   const previousInput = client.inputs.at(-1)?.sequence ?? 0;
   await client.page.bringToFront();
   await castReady(client);
   await client.page.keyboard.down(key);
   try {
-    await until(() => Math.hypot(participant(client).wizard.position.x - before.x,
-      participant(client).wizard.position.y - before.y) >= distance, 'accepted living peer movement');
+    await until(() => {
+      assert.equal(client.frame.snapshot.run.run_id, runId, 'living peer movement keeps the same run');
+      assert.equal(life(client), 'alive', 'movement belongs to the living peer');
+      return Math.hypot(participant(client).wizard.position.x - before.x,
+        participant(client).wizard.position.y - before.y) >= distance;
+    }, 'accepted living peer movement');
   } finally {
     await client.page.keyboard.up(key);
     const input = client.inputs.findLast(input => input.sequence > previousInput
@@ -437,7 +463,7 @@ function summary(client) {
   return {label: client.label, id: client.id, tick: client.frame?.snapshot.ticks,
     runId: client.frame?.snapshot.run.run_id, lifeState: actor?.player.combat.life_state,
     position: actor?.wizard.position, health: actor?.player.combat.current_health,
-    movementAttempts: client.movementAttempts,
+    movementAttempts: client.movementAttempts, transitions: client.transitions, commands: client.commands,
     inputBoundaries: client.inputBoundaries, authority: castAuthority(client),
     checkpoints: client.checkpoints, leaves: client.leaves, lua: client.lua,
     recentInputs: client.inputs.slice(-30),
