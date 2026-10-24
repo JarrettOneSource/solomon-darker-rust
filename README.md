@@ -4,7 +4,9 @@ A Rust rebuild of the Solomon Darker web game: deterministic simulation kernels,
 the stock sprite bundles, and a WebGL2 browser client compiled to WebAssembly. The reference
 is [Website `fa08ae24`](https://github.com/JarrettOneSource/solomon-dark-website/tree/fa08ae249ff5563570bdb2a653e2ef9358ce7b83).
 This standalone repository owns the
-game, its native host, WASM client, save tools and desktop packages. The Website owns
+game, its native host, WASM client, save tools and desktop packages. Menus, HUD, loading,
+social controls and game overlays use the shared Rust GPU UI runtime. Browser adapters
+own text composition, accessibility, files, audio, network and storage. The Website owns
 accounts, content and editing, and embeds the built WASM artifact.
 
 [The source inventory](docs/SOURCE-PARITY.md) maps current behavior to its implementation
@@ -24,6 +26,8 @@ revisions, release artifacts and deployment status.
 - [docs/WORK-QUEUE.md](docs/WORK-QUEUE.md): tickets for parallel agents and what is done.
 - [docs/SOURCE-PARITY.md](docs/SOURCE-PARITY.md): current Website behavior, implementation
   ownership and verification boundaries.
+- [docs/RUST-UI-MIGRATION.md](docs/RUST-UI-MIGRATION.md): GPU UI ownership, complete surface
+  matrix, candidate qualification and remaining release checks.
 
 ## Layout
 
@@ -31,7 +35,7 @@ revisions, release artifacts and deployment status.
 | --- | --- | --- |
 | `crates/sim` | `solomon-sim` | Pure kernels with no browser dependency: native lagged-Fibonacci RNG and the semantic-word random domain, f32-exact float helpers (`fround`, V8-compatible `hypot`), headings, player/enemy movement, segment-sweep collision, the Hub courtyard (spawn, camera, segments, wizard tick), painter order and the fixed-actor tables, courtyard ambient life (fountain spray, seal pulse, statue bob, teacher clock), the teacher cycle and burst, Hub regions with portals and scripted transitions, starter equipment tints, wizard layer offsets. |
 | `crates/assets` | `solomon-assets` | Stock `.bundle` records, retained Boneyard catalog, identity-checked navigation and the shared save-document codec. |
-| `crates/web` | `solomon-web` | Asset loading, keyboard/gamepad/touch input, canonical `GameSession`, WebGL2 world and actor rendering, browser UI and audio. Static previews run locally; native sessions consume accepted host snapshots. |
+| `crates/web` | `solomon-web` | Asset loading, keyboard/gamepad/touch input, canonical `GameSession`, WebGL2 world and actor rendering, Rust GPU game UI and native browser audio. Static previews run locally; native sessions consume accepted host snapshots. |
 | `crates/protocol` | `solomon-protocol` | Typed host commands, completed snapshots, input acknowledgements and reliable results. |
 | `crates/launcher` | `solomon-launcher` | Native executable serving bundled assets and a WebSocket authority, owning durable saves and opening the system browser. |
 | `web/` | — | Trunk root: `index.html`, `Trunk.toml`, and the synced stock assets under `web/assets/stock/` (tracked and hash-verified). |

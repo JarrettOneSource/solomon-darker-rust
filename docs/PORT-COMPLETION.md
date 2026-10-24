@@ -1,11 +1,14 @@
 # Rust game parity and release
 
-The full Rust GPU UI cutover is still under acceptance. Its current requirements and
-scoped evidence are in [RUST-UI-MIGRATION.md](RUST-UI-MIGRATION.md). Production serves
-the retained PixiJS release `093aee99` following the October24 rollback request;
-the M5 automatic deployment scheduler remains held during private development.
-The release receipts below qualify the earlier parity release and do not certify
-the unfinished GPU cutover.
+The Rust GPU UI implementation and candidate qualification are complete at
+`b264cac5b8497a39d0455169e5322c375fd0b83a`. All 696 native tests, the four canonical
+desktop package journeys, 28 reviewed screenshots and Windows static runtime
+inspection pass. [RUST-UI-MIGRATION.md](RUST-UI-MIGRATION.md) owns the complete
+surface matrix, exact candidate run and retained evidence. Canonical main release,
+Website artifact admission, installed/live recovery and final cleanup remain pending.
+Production still serves the retained PixiJS release `093aee99` following the
+October 24 rollback request, with M5 automatic deployment held. The older release
+receipts below retain their original scope.
 
 The earlier Website parity implementation passed its complete local gates.
 The independent repository and Linux game artifact are public. All 44 public acceptance

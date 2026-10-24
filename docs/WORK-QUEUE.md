@@ -9,10 +9,11 @@ Current Website behavior, ownership and verification are mapped in
 complete release/deployment acceptance record. Earlier ticket receipts below retain their
 actual revisions and bounded scope.
 
-The current follow-up is the full Rust GPU UI cutover. The
-[migration matrix](RUST-UI-MIGRATION.md) owns its complete surface inventory, test ownership
-and remaining acceptance. Earlier DOM-era browser receipts below establish behavior at
-their recorded revisions; they do not establish GPU UI or correct startup presentation.
+The full Rust GPU UI implementation and browser/candidate qualification are complete
+at `b264cac5`. The [migration matrix](RUST-UI-MIGRATION.md) owns the accepted surface
+inventory and all four actual package journeys. Canonical main release, Website artifact
+admission, live recovery and task cleanup remain. Earlier DOM-era receipts below retain
+their original behavior scope and do not substitute for GPU acceptance.
 
 Scenery Puppet hits, Earthquake pivots, repaint/retirement metadata, dynamic scenes, trusted
 mod content, custom frame/wearable geometry and current shadow behavior are integrated.

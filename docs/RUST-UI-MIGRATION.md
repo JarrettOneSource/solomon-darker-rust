@@ -37,56 +37,58 @@ TODOs. Final integration, publication, installed/live checks and task cleanup be
 
 ## Current candidate acceptance
 
-The first four-platform candidate `c96e72a` reached actual Linux packaged play,
-saved close/relaunch/Continue and the update notice. Its retained receipt then
-found two distinct desktop boundaries: the shared Trunk output kept a root base
-tag prohibited by the existing `base-uri 'none'` policy, and the journey's generic
-GPU helper rejected the exact storage conflict deliberately created by its
-failed-close case. Desktop preparation now omits the redundant base and remains
-idempotent; mounted Website builds still require their explicit base. The failed
-close journey uses ordinary Escape and independently requires the exact expected
-notice, resumed GPU surface and accepted native movement. The generic GPU error
-guards and strict resource collector remain unchanged. The regression is red
-before the base fix; all30 desktop contracts and44 browser-support tests pass
-after it. New four-platform packaged receipts remain required.
+Candidate `b264cac5b8497a39d0455169e5322c375fd0b83a` passes the complete
+[canonical workflow 40129031748](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40129031748):
+the Linux game gates and all four packages built from that exact source. The game
+suite passes 696 native tests with none failed or ignored. Each platform passes 31
+desktop contracts; Windows additionally passes 47 native launcher tests and its
+actual import inspection finds no external Visual C++ runtime dependency.
 
-The b34e419 M5 diagnostic package passes the complete journey with all seven
-screenshots reviewed and all six native/peer stops after document retirement.
-It retains ce12d7c native/WASM provenance after proving those build inputs
-unchanged. Its Linux CI package also passes the repaired conflict recovery and
-Return to launcher, then the driver reads GPU state while Host game replaces the
-launcher document. The raw error is an execution context destroyed by navigation,
-with no application errors. The desktop journey now waits for its actual
-`solomon-darker://app/game` document before reading GPU state; it does not suppress
-navigation errors in shared GPU helpers. Canonical platform qualification remains
-required for this driver repair.
+| Package | Successful job | Inspected archive entries | Native authority SHA256 prefix |
+| --- | --- | --- | --- |
+| Linux x64 | 120976571200 | 5,815 | `5f41e75f62b97613` |
+| Apple Silicon Mac | 120976571120 | 12,476 | `4820be7fda812edc` |
+| Intel Mac | 120976571176 | 12,476 | `d56c4857692c4bf3` |
+| Windows x64 | 120976571263 | 5,816 | `c61dc7743558d4e5` |
 
-The next Linux c0d0c3c receipt catches the failed-close observer reading the prior
-GPU frame immediately after the Electron warning response. Its error is still null;
-the subsequent retained frame and screenshot show the exact conflict on Pause.
-The driver now waits for that submitted error/Pause state before sending Escape,
-still rejecting any different error and preserving all save, host and movement checks.
-The b34e419 Windows build separately fails before packaging: cmd passes literal
-quotes as part of the Python hook path. The Windows hook now invokes Python with
-one relative script argument. [Trunk0.22 runs hooks from the configuration directory](https://github.com/trunk-rs/trunk/blob/v0.22.0/src/hooks.rs),
-including an explicit config path. An added native-platform contract executes the
-configured hook from a checkout with spaces and Windows extended path environment
-values; all31 desktop contracts pass on M2. Windows execution and the corrected
-four-platform journeys remain required.
+Every archive contains the verified 5,679 stock files and 13 copied source files.
+The four real packaged journeys pass offline movement, Source schema 51 save and
+Continue, retained preferences, the GPU update notice, both actual save-conflict
+choices, repeated close/quit, saved Return to launcher and two peers in one Boneyard.
+Keep playing preserves the committed save bytes, native host, participant and socket,
+then accepts ordinary movement. Each platform records all six native/peer stop
+requests after the document reaches `about:blank`. All 28 screenshots are reviewed.
+The strict resource assertions pass with no cancelled music or menu images; no
+media allowance was added. These rendering checks establish functionality, not
+GPU performance.
 
-Product revision `ce12d7cd993ae39d3ef3fcdf39d57ffbf75f94f0` passes all696 native tests,
-formatting, strict native/main-WASM Clippy and44 browser-support tests on the M5.
-Its static and hosted artifacts have complete verified hashes/membership. The final
-native smoke passes14 checks, and the real routing-content journey passes4 groups,
-including the formerly failing Cancel/unchanged-save boundary. Authored-Boast3,
-match-loading4 and hosted-session5 retain their accepted aeb5768 artifact identity;
-the sole later product change restores Play beneath the mismatch dialog.
+Exact manifests, native and Node hashes, archive results, raw job logs, receipts,
+Windows imports and per-image reviews are retained in `desktop-candidate-b264cac/`
+under the full-UI task on M2 and M5. `qualification.json` records the complete
+candidate boundary. Earlier failures retain their own source and status: desktop
+preparation removes the root base prohibited by the existing CSP; the Windows
+Trunk hook invokes Python directly; the journey waits for its actual game document
+and the submitted conflict/Pause frame. Mounted Website builds retain their required
+base and generic GPU error guards remain strict. The older c0 Intel receipt also
+contains three unclassified music cancellations. A bounded M5 diagnostic did not
+reproduce them, and current b264 Intel passes without them; neither result
+retrospectively classifies that old failure.
 
-The matrix below records each family's actual accepted revision and controlled
-prerequisites. The final source producer audit passes4/4 and manually accounts for
-every remaining DOM adapter. Four current packaged desktop journeys, final
-publication/live acceptance and task cleanup remain required. Production stays on
-the requested PixiJS rollback while this candidate is qualified.
+Product revision `ce12d7cd993ae39d3ef3fcdf39d57ffbf75f94f0` retains its M5 native,
+strict native/main-WASM, 44 browser-support and 14 native smoke checks. Its static
+and hosted artifacts have complete verified hashes/membership. The real routing
+journey passes 4 groups, including Cancel preserving the entire save. The three authored Boast,
+four match-loading and five hosted-session checks retain their accepted aeb5768 artifact identity;
+the sole later game change restores Play beneath the mismatch dialog. Subsequent
+candidate changes are desktop preparation and observation fixes, covered above.
+
+Every required browser family and variant is accepted at its actual revision in
+the matrix below, with controlled prerequisites identified. The source producer
+audit passes 4/4 and manually accounts for every remaining DOM platform adapter.
+The implementation and candidate qualification are complete. Canonical main release,
+Website artifact admission, installed/live recovery and final task cleanup remain
+required. Production stays on the requested PixiJS rollback with scheduling held
+until that release boundary is ready.
 
 ## Startup evidence recorded before repair
 
