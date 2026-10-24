@@ -15,6 +15,8 @@ fs.mkdirSync(output, {recursive:true});
 const checks = [], clients = [], accounts = [];
 let step = 'registration';
 let releaseResolve = () => {};
+let resolveContext;
+let resolveFailure;
 function checked(label) {checks.push(label);console.log(label);}
 
 async function until(predicate, description, timeout = 45000) {
@@ -225,19 +227,27 @@ async function leavePlayer(owner) {
     let submittedCode;
     const resolveGate=new Promise(resolve=>{releaseResolve=resolve;});
     const resolving=async route=>{
-      submittedCode=route.request().postDataJSON().code;
-      await resolveGate;
-      await route.continue();
+      try{
+        submittedCode=route.request().postDataJSON().code;
+        await resolveGate;
+        await route.continue();
+      }catch(error){resolveFailure=error;}
     };
+    resolveContext=visitor.context;
     await visitor.context.route(new URL('api/game/join/resolve',game).href,resolving);
     await visitor.page.keyboard.press('Enter');
-    await until(()=>typeof submittedCode==='string','the actual code resolve request');
+    await until(()=>{
+      if(resolveFailure)throw resolveFailure;
+      return typeof submittedCode==='string';
+    },'the actual code resolve request');
     assert.equal(submittedCode,code);
     assert.equal((await gpu.widget(visitor.page,'join-party-code')).enabled,true);
     await gpu.fill(visitor.page,'join-party-code','');
     await gpu.value(visitor.page,'join-party-code','');
     releaseResolve();
-    await visitor.context.unroute(new URL('api/game/join/resolve',game).href,resolving);
+    await visitor.context.unrouteAll({behavior:'wait'});
+    resolveContext=undefined;
+    if(resolveFailure)throw resolveFailure;
     await gpu.widget(visitor.page,'routing/dialog');
     checked('native code Enter retains its submitted snapshot while the real pending field remains editable');
     await gpu.click(visitor.page,'routing-continue');
@@ -285,6 +295,8 @@ async function leavePlayer(owner) {
   } finally {
     releaseResolve();
     try {
+      if(resolveContext)await resolveContext.unrouteAll({behavior:'wait'});
+      if(resolveFailure)cleanup.push({label:'resolve route',error:resolveFailure.stack});
       if(failure)for(const owner of clients) {
         try {await leavePlayer(owner);cleanup.push({label:owner.state.label,left:true});}
         catch(error){cleanup.push({label:owner.state.label,error:error.stack});}
