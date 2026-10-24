@@ -134,7 +134,6 @@ mod browser {
         {
             let value = gl
                 .get_tex_parameter(Gl::TEXTURE_2D, parameter)
-                .map_err(|error| format!("borrowed texture parameter: {error:?}"))?
                 .as_f64()
                 .ok_or("borrowed texture parameter is not numeric")?;
             parameters.push(value as u32);
