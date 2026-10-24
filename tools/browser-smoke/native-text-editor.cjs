@@ -59,10 +59,12 @@ async function paintedSelection(page,count){
       Object.defineProperty(window,'__nativeEditorGamepadReads',{get:()=>reads});
       Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>{reads++;return getGamepads()}});
       const events=[];Object.defineProperty(window,'__nativeEditorEvents',{value:events});
-      for(const type of ['compositionstart','compositionupdate','compositionend','beforeinput','input','copy','cut','paste']){
+      for(const type of ['keydown','keyup','compositionstart','compositionupdate','compositionend','beforeinput','input','copy','cut','paste']){
         document.addEventListener(type,event=>{
-          if(!event.target?.hasAttribute?.('data-gpu-text-input'))return;
+          const transport=event.target?.hasAttribute?.('data-gpu-text-input');
+          if(!transport&&!['keydown','keyup'].includes(type))return;
           events.push({type,trusted:event.isTrusted,data:event.data??null,inputType:event.inputType??null,
+            key:event.key??null,code:event.code??null,shift:event.shiftKey??null,rafHeld:held,
             composing:event.isComposing??null,value:event.target.value,
             start:event.target.selectionStart,end:event.target.selectionEnd});
         },true);
@@ -210,6 +212,11 @@ async function paintedSelection(page,count){
     receipt.checks.push('UTF16 admission avoids surrogate splitting; native Enter submits one genuine rename');
     await ui.assertGpuOnly(page);await ui.settleErrors(page);assert.deepEqual(observed.errors,[]);
     receipt.nativeEvents=await page.evaluate(()=>__nativeEditorEvents);
+    const heldKeys=receipt.nativeEvents.filter(event=>event.rafHeld&&event.type==='keydown');
+    assert.ok(heldKeys.some(event=>event.key==='Tab'&&!event.shift&&event.trusted));
+    assert.ok(heldKeys.some(event=>event.key==='Tab'&&event.shift&&event.trusted));
+    for(const type of ['copy','paste'])assert.ok(receipt.nativeEvents.some(event=>
+      event.rafHeld&&event.type===type&&event.trusted),`trusted native ${type} runs while RAF is held`);
     assert.ok(receipt.nativeEvents.some(event=>event.type==='compositionstart'&&event.trusted));
     const commit=receipt.nativeEvents.find(event=>event.type==='compositionend'&&event.data==='日本語');
     assert.ok(commit,'the actual browser IME commit ends composition');
