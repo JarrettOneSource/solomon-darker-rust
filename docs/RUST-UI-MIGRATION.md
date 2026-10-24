@@ -768,3 +768,13 @@ into `self.back`. The GPU adapter now consumes that genuine Escape through the
 same typed panel-key owner once, deduplicates physical Escape and retains repeat,
 suspension, modal and rename admission. QA keeps the original first-B journey;
 no second press or timing replacement establishes acceptance.
+
+Create rejection retains native value-restoration semantics as well as its text.
+c140 `menu/create.rs:216` restores the accepted input value after a rejected edit.
+The trusted native-input oracle in `native-name-rejection-oracle.json` inserts an
+unsupported hyphen at UTF-16 position1 after accepted `HelvidiusX`: restoration
+moves the caret to10, and subsequent native Undo/Redo retain that accepted value.
+The Rust editor now restores end selection and retires editing/composition history
+on the same rejecting validator boundary. Readonly and ordinary UTF-16 capacity
+admission keep their distinct existing contracts. A focused model regression pins
+accepted text, caret and undo/redo together; no renderer or validation policy changes.

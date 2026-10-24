@@ -329,7 +329,15 @@ impl Model {
                 self.value.text = accepted;
                 self.value.selection = Selection::caret(boundary(&self.value.text, position));
             }
-            Err(reason) => change.rejected = Some(reason),
+            Err(reason) => {
+                // Source restores the accepted native value on rejection. That
+                // setter moves the caret to its end and retires native history.
+                self.value.selection = Selection::caret(self.value.text.encode_utf16().count());
+                self.history = History::default();
+                self.composition = None;
+                self.composition_before = None;
+                change.rejected = Some(reason);
+            }
         }
     }
 }
