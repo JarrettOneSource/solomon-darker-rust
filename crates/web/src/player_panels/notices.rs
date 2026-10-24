@@ -8,6 +8,8 @@ pub enum PlayerPanelNotice {
     UnforgeResult { title: String, body: String, summary: String, outcome_tint: u32 },
 }
 
+pub(super) const NOTICE_MODAL_SCOPE: &str = "panel-notice";
+
 use super::PlayerPanels;
 use super::chrome::PanelCanvas;
 use crate::gpu_ui::UiFrame;
@@ -155,6 +157,7 @@ impl PlayerPanels {
                 )?;
             }
         }
+        c.frame.record_value("panel:notice-title", title, None);
         Ok(())
     }
     pub(super) fn paint_notice_modal(
@@ -165,7 +168,7 @@ impl PlayerPanels {
         let scale = (self.viewport_size.0 as f32 / 1600.0).min(self.viewport_size.1 as f32 / 900.0);
         self.modal_canvas(
             frame,
-            "panel-notice",
+            NOTICE_MODAL_SCOPE,
             scale,
             egui::pos2(
                 (self.viewport_size.0 as f32 - 1600.0 * scale) / 2.0,

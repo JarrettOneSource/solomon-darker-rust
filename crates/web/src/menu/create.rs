@@ -2,15 +2,12 @@
 //! native motion, name admission and element VFX plans remain in `solomon-sim`.
 
 use super::widgets::{self, Stage};
-use crate::gpu_ui::{StockAtlas, UiFrame, paint_text_layout};
-use egui::{Align2, Color32, FontId, Id, Pos2, Rect, Ui, Vec2};
+use crate::gpu_ui::{ImageShadow, StockAtlas, UiFrame};
+use egui::{Align2, Color32, Pos2, Rect, Ui, Vec2};
 use solomon_graphics::BlendMode;
 use solomon_sim::element_vfx::{self, ElementVfxBlend, ElementVfxDraw};
-use solomon_sim::menu::create_name::{
-    finalize_create_wizard_name, layout_create_wizard_name, validate_create_wizard_name,
-};
+use solomon_sim::menu::create_name::{finalize_create_wizard_name, validate_create_wizard_name};
 use solomon_sim::menu::{self, CreateHandPose};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextLayout};
 use solomon_sim::profile::create::NATIVE_CREATE_ENTRY_FADE_MS;
 use solomon_sim::profile::{WizardDiscipline, WizardElement};
 
@@ -206,9 +203,11 @@ impl CreateView {
             ] {
                 let reveal = menu::create_element_reveal_motion_at(element, elapsed);
                 let center = stage.at(reveal.position.x, reveal.position.y);
+                let mut painter = ui.painter().clone();
+                painter.multiply_opacity(reveal.opacity as f32);
                 paint_vfx(
                     frame,
-                    ui.painter(),
+                    &painter,
                     &self.bad_guys,
                     center,
                     scale,
@@ -218,10 +217,24 @@ impl CreateView {
                 let size = Vec2::new(metrics.width as f32, metrics.height as f32) * scale;
                 let rect = Rect::from_center_size(center, size.max(Vec2::splat(44.0)));
                 let id = format!("element:{}", element.as_str());
-                let response =
-                    widgets::interact(frame, ui, &id, element.as_str(), "button", rect, enabled);
-                self.create.paint_centered(
+                let response = widgets::interact_unstyled(
                     frame,
+                    ui,
+                    &id,
+                    element.as_str(),
+                    "button",
+                    rect,
+                    enabled,
+                );
+                let paint = frame.with_brightness(
+                    if enabled && (response.hovered() || frame.focus_visible(&response)) {
+                        1.3
+                    } else {
+                        1.0
+                    },
+                );
+                self.create.paint_centered(
+                    &paint,
                     ui.painter(),
                     record,
                     center,
@@ -229,6 +242,7 @@ impl CreateView {
                     0.0,
                     widgets::alpha(0xffffff, reveal.opacity),
                 )?;
+                widgets::focus_outline(frame, ui, &response, 2.0, 8.0, widgets::GOLD);
                 if response.clicked() && enabled {
                     actions.push(id);
                 }
@@ -274,7 +288,7 @@ impl CreateView {
                 let size =
                     Vec2::new(metrics.logical_width as f32, metrics.logical_height as f32) * scale;
                 let id = format!("discipline:{}", discipline.as_str());
-                let response = widgets::interact(
+                let response = widgets::interact_unstyled(
                     frame,
                     ui,
                     &id,
@@ -283,8 +297,15 @@ impl CreateView {
                     Rect::from_center_size(center, size.max(Vec2::splat(44.0))),
                     enabled,
                 );
+                let paint = frame.with_brightness(
+                    if enabled && (response.hovered() || frame.focus_visible(&response)) {
+                        1.3
+                    } else {
+                        1.0
+                    },
+                );
                 self.create.paint_centered(
-                    frame,
+                    &paint,
                     ui.painter(),
                     record,
                     center,
@@ -292,6 +313,7 @@ impl CreateView {
                     0.0,
                     Color32::WHITE,
                 )?;
+                widgets::focus_outline(frame, ui, &response, 2.0, 8.0, widgets::GOLD);
                 if response.clicked() && enabled {
                     actions.push(id);
                 }
@@ -305,7 +327,7 @@ impl CreateView {
                 Color32::WHITE,
             )?;
         }
-        self.paint_name(frame, ui, name_stage, enabled, actions)?;
+        self.paint_name(frame, ui, name_stage, admitted, actions)?;
         let back = Rect::from_min_size(view.min + Vec2::splat(4.0), Vec2::splat(44.0));
         let response = widgets::interact(
             frame,
@@ -316,8 +338,9 @@ impl CreateView {
             back,
             enabled && self.back_enabled,
         );
+        let paint = frame.with_brightness(if response.hovered() { 1.2 } else { 1.0 });
         self.ui.paint_centered(
-            frame,
+            &paint,
             ui.painter(),
             42,
             back.center(),
@@ -338,7 +361,8 @@ impl CreateView {
             rect,
             enabled && self.finalized_name().is_ok(),
         );
-        self.create.paint(frame, ui.painter(), 6, dice.at(1518.0, 3.0), scale, Color32::WHITE)?;
+        let paint = frame.with_brightness(if response.hovered() { 1.2 } else { 1.0 });
+        self.create.paint(&paint, ui.painter(), 6, dice.at(1518.0, 3.0), scale, Color32::WHITE)?;
         if response.clicked() && enabled {
             actions.push("randomize-loadout".to_owned());
         }
@@ -385,57 +409,42 @@ impl CreateView {
             stage.rect(732.0, 7.0, 136.0, 15.0),
             Color32::WHITE,
         );
-        let previous = self.name.clone();
-        let edit = egui::TextEdit::singleline(&mut self.name)
-            .id(Id::unique("create-name"))
-            .font(FontId::new(40.0 * stage.scale, egui::FontFamily::Name("Georgia".into())))
-            .text_color(Color32::TRANSPARENT)
-            .frame(egui::Frame::NONE)
-            .margin(Vec2::ZERO)
-            .interactive(enabled);
-        let response = ui.put(field, edit);
-        frame.record("create-name", "Wizard name", "textbox", &response);
-        if self.focus_name {
-            response.request_focus();
+        let response =
+            crate::gpu_ui::NativeTextEdit::singleline(&mut self.name, "create-name", "Wizard name")
+                .native_name(origin, stage.scale)
+                .margin(Vec2::ZERO)
+                .color(widgets::GOLD)
+                .enabled(enabled)
+                .readonly(self.finalizing)
+                .rules(crate::gpu_ui::EditorRules {
+                    validate: Some(validate_name_edit),
+                    ..Default::default()
+                })
+                .request_focus(self.focus_name)
+                .show(frame, ui, field);
+        if ui.is_visible() && response.has_focus() {
             self.focus_name = false;
         }
-        if response.changed() {
-            if let Some(reason) = validate_create_wizard_name(&self.name)
-                && !self.name.is_empty()
-            {
-                self.name = previous;
-                self.message = Some(reason.message().to_owned());
-                frame.announce(reason.message());
-            } else {
-                self.restart();
-            }
+        if let Some(reason) = response.rejected.as_ref() {
+            self.message = Some(reason.clone());
+            frame.announce(reason);
+        } else if response.changed() {
+            self.restart();
         }
-        frame.record_value("create-name", &self.name, None);
-        if !self.name.is_empty() && validate_create_wizard_name(&self.name).is_none() {
-            let mut name = layout_create_wizard_name(&self.name);
-            for glyph in &mut name.glyphs {
-                glyph.center_x = f64::from(origin.x) + glyph.center_x * f64::from(stage.scale);
-                glyph.center_y = f64::from(origin.y) + glyph.center_y * f64::from(stage.scale);
-                glyph.scale *= f64::from(stage.scale);
-                glyph.tint = 0xd8ba70;
-            }
-            paint_text_layout(
-                frame,
-                &ui.painter().with_clip_rect(field),
-                &NativeUiTextLayout {
-                    font: NativeUiFontName::Heading,
-                    glyphs: name.glyphs,
-                    lines: Vec::new(),
-                    width: name.width,
-                    height: name.height,
-                    unsupported_code_points: Vec::new(),
-                },
-            );
-        }
+        widgets::focus_outline(frame, ui, &response, 2.0, 2.0, widgets::alpha(0xffffff, 0.8));
+        let editable = enabled && !self.finalizing;
         let clear = stage.rect(958.0, 38.0, 30.0, 30.0);
-        if widgets::interact(frame, ui, "clear-name", "Clear wizard name", "button", clear, enabled)
-            .clicked()
-            && enabled
+        if widgets::interact(
+            frame,
+            ui,
+            "clear-name",
+            "Clear wizard name",
+            "button",
+            clear,
+            editable,
+        )
+        .clicked()
+            && editable
         {
             actions.push("clear-name".to_owned());
         }
@@ -447,28 +456,34 @@ impl CreateView {
             widgets::alpha(0xffffff, 0.65),
         );
         let random = stage.rect(952.0, 92.0, 42.0, 30.0);
-        if widgets::interact(
+        let response = widgets::interact_unstyled(
             frame,
             ui,
             "randomize-name",
             "Randomize wizard name",
             "button",
             random,
-            enabled,
-        )
-        .clicked()
-            && enabled
-        {
+            editable,
+        );
+        if response.clicked() && editable {
             actions.push("randomize-name".to_owned());
         }
-        self.create.paint(
-            frame,
+        let hover = response.hovered();
+        let paint = frame.with_brightness(if hover { 1.25 } else { 1.0 });
+        self.create.paint_shadowed(
+            &paint,
             ui.painter(),
             6,
             stage.at(952.0, 92.825),
             stage.scale * 0.525,
-            widgets::alpha(0xffffff, 0.78),
+            ImageShadow {
+                offset: Vec2::new(0.0, if hover { 0.0 } else { stage.scale }),
+                blur: stage.scale * if hover { 3.0 } else { 1.0 },
+                color: if hover { widgets::alpha(0xfff0b7, 0.55) } else { Color32::BLACK },
+            },
+            widgets::alpha(0xffffff, if hover { 1.0 } else { 0.78 }),
         )?;
+        widgets::focus_outline(frame, ui, &response, 2.0, 2.0, widgets::alpha(0xffffff, 0.8));
         if let Some(error) = &self.message {
             let font =
                 egui::FontId::new(14.0 * stage.scale, egui::FontFamily::Name("Georgia".into()));
@@ -583,4 +598,12 @@ pub(super) fn paint_vfx(
         );
     }
     Ok(())
+}
+
+fn validate_name_edit(value: &str) -> Option<String> {
+    if value.is_empty() {
+        None
+    } else {
+        validate_create_wizard_name(value).map(|reason| reason.message().to_owned())
+    }
 }

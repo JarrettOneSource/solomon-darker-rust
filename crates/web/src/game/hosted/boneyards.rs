@@ -73,6 +73,7 @@ pub(super) struct BoneyardLibrary {
     window: Window,
     api: WebsiteApi,
     account: Option<String>,
+    date_format: js_sys::Intl::DateTimeFormat,
     local: Vec<DraftMeta>,
     cloud: Option<Vec<BoneyardDraftSummary>>,
     cloud_error: Option<String>,
@@ -125,6 +126,7 @@ impl BoneyardLibrary {
             window,
             api,
             account: account.map(str::to_owned),
+            date_format: date_format()?,
             cloud: None,
             cloud_error: None,
             confirming: None,
@@ -406,25 +408,44 @@ impl BoneyardLibrary {
     ) -> Result<(), String> {
         let ctx = frame.ctx.clone();
         let mut actions = Vec::new();
-        egui::Area::new(Id::unique("boneyard-library"))
+        let layer = crate::menu::library_layer();
+        ctx.set_sublayer(crate::menu::scene_layer(), layer);
+        let new_id = Id::unique("boneyards/new");
+        if self.focus_new && interactive && !self.opening {
+            ctx.memory_mut(|memory| memory.request_focus(new_id));
+        }
+        egui::Area::new(layer.id)
+            .fade_in(false)
             .fixed_pos(bounds.min)
-            .order(egui::Order::Middle)
+            .order(layer.order)
             .show(&ctx, |ui| {
                 ui.set_min_size(bounds.size());
+                ui.set_max_size(bounds.size());
                 ui.set_clip_rect(bounds);
+                widgets::scrollbar_style(ui, 0x876d37, 0x080808, true);
+                ui.spacing_mut().item_spacing = Vec2::ZERO;
                 if !interactive || self.opening {
                     ui.disable();
                     ui.set_opacity(1.0);
                 }
                 egui::ScrollArea::vertical()
+                    .animated(false)
                     .id_salt("boneyard-shelf-scroll")
                     .auto_shrink([false, false])
-                    .show(ui, |ui| self.paint_contents(frame, ui, bounds.width(), &mut actions))
+                    .show(ui, |ui| {
+                        let width = ui.available_width();
+                        self.paint_contents(frame, ui, width, &mut actions)
+                    })
                     .inner
             })
             .inner?;
-        if self.focus_new && interactive {
-            ctx.memory_mut(|memory| memory.request_focus(Id::unique("boneyards/new")));
+        if self.focus_new
+            && interactive
+            && ctx.memory(|memory| memory.has_focus(new_id))
+            && ctx
+                .read_response(new_id)
+                .is_some_and(|response| response.enabled() && response.visible())
+        {
             self.focus_new = false;
         }
         for action in actions {
@@ -440,16 +461,17 @@ impl BoneyardLibrary {
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
         let phone = frame.ctx.input(|input| input.content_rect().width() <= 700.0);
-        let padding = if phone { 4.0 } else { 10.0 };
-        let width = (physical_width - padding * 2.0).min(980.0);
-        let min = ui.cursor().min + Vec2::new((physical_width - width) / 2.0, padding);
+        let padding_x = if phone { 4.0 } else { 10.0 };
+        let padding_y = if phone { 8.0 } else { 10.0 };
+        let width = (physical_width - padding_x * 2.0).min(980.0);
+        let min = ui.cursor().min + Vec2::new((physical_width - width) / 2.0, padding_y);
         let mut content =
             ui.new_child(egui::UiBuilder::new().id_salt("boneyard-shelf-content").max_rect(
                 Rect::from_min_max(min, egui::pos2(min.x + width, ui.max_rect().bottom())),
             ));
         self.paint_shelf(frame, &mut content, width, actions)?;
         let height = content.min_rect().bottom() - min.y;
-        ui.allocate_space(Vec2::new(physical_width, height + padding * 2.0));
+        ui.allocate_space(Vec2::new(physical_width, height + padding_y * 2.0));
         Ok(())
     }
     fn paint_shelf(
@@ -461,10 +483,11 @@ impl BoneyardLibrary {
     ) -> Result<(), String> {
         let origin = ui.cursor().min;
         let narrow = frame.ctx.input(|input| input.content_rect().width() <= 700.0);
-        let wrapped = narrow || width < 750.0;
+        // Source title is 252px; its fixed tools are 390px with a 24px header gap.
+        let wrapped = narrow || width < 666.0;
         let columns = if narrow && width < 310.0 { 1 } else { 2 };
-        let header_height = if wrapped { if columns == 1 { 144.0 } else { 90.0 } } else { 50.0 };
-        ui.allocate_space(Vec2::new(ui.max_rect().width(), header_height + 10.0));
+        let header_height = if wrapped { if columns == 1 { 134.0 } else { 80.0 } } else { 44.0 };
+        ui.allocate_space(Vec2::new(ui.max_rect().width(), header_height + 14.0));
         stock_text(
             frame,
             ui,
@@ -473,12 +496,12 @@ impl BoneyardLibrary {
             1.0,
             0xd9ba70,
             Rect::from_min_size(
-                origin,
-                Vec2::new(if wrapped { width } else { width - 410.0 }, 34.0),
+                origin + Vec2::new(0.0, if wrapped { 0.0 } else { 10.0 }),
+                Vec2::new(if wrapped { width } else { 252.0 }, 24.0),
             ),
             narrow,
         );
-        let tool_top = origin.y + if wrapped { 46.0 } else { 0.0 };
+        let tool_top = origin.y + if wrapped { 36.0 } else { 0.0 };
         let tool_left = if wrapped { origin.x } else { origin.x + width - 390.0 };
         let tool_width =
             if narrow { if columns == 1 { width } else { (width - 10.0) / 2.0 } } else { 190.0 };
@@ -529,7 +552,11 @@ impl BoneyardLibrary {
         } else {
             for meta in &self.local {
                 let row = ShelfRow::Local(meta.id.clone());
-                let detail = format!("{} placed · {}", meta.residents, updated(meta.updated_at)?);
+                let detail = format!(
+                    "{} placed · {}",
+                    meta.residents,
+                    updated(&self.date_format, meta.updated_at)?
+                );
                 self.paint_row(
                     frame,
                     ui,
@@ -568,8 +595,10 @@ impl BoneyardLibrary {
             } else {
                 for item in rows {
                     let row = ShelfRow::Cloud(item.id);
-                    let detail =
-                        format!("Updated {}", updated(js_sys::Date::parse(&item.updated_at))?);
+                    let detail = format!(
+                        "Updated {}",
+                        updated(&self.date_format, js_sys::Date::parse(&item.updated_at))?
+                    );
                     self.paint_row(
                         frame,
                         ui,
@@ -587,6 +616,8 @@ impl BoneyardLibrary {
         }
         Ok(())
     }
+    // One row keeps its native labels, responsive width and emitted action IDs together.
+    #[allow(clippy::too_many_arguments)]
     fn paint_row(
         &self,
         frame: &mut UiFrame<'_>,
@@ -721,6 +752,8 @@ fn display_name(name: &str) -> &str {
     let trimmed = name.trim();
     if trimmed.is_empty() { "Untitled Acre" } else { trimmed }
 }
+// This drawing primitive keeps stock font/style and its clipping box explicit at the call site.
+#[allow(clippy::too_many_arguments)]
 fn stock_text(
     frame: &UiFrame<'_>,
     ui: &Ui,
@@ -765,8 +798,9 @@ fn stock_text(
     }
 }
 fn shelf_heading(frame: &UiFrame<'_>, ui: &mut Ui, text: &str, width: f32) {
-    ui.add_space(18.0);
-    let (_, r) = ui.allocate_space(Vec2::new(width, 28.0));
+    let viewport = frame.ctx.input(|input| input.content_rect());
+    ui.add_space(if viewport.width() >= 701.0 && viewport.height() <= 620.0 { 12.0 } else { 18.0 });
+    let (_, r) = ui.allocate_space(Vec2::new(width, 22.0));
     stock_text(
         frame,
         ui,
@@ -774,7 +808,7 @@ fn shelf_heading(frame: &UiFrame<'_>, ui: &mut Ui, text: &str, width: f32) {
         NativeUiFontName::Medium,
         1.0,
         0xd9ba70,
-        r.translate(Vec2::new(10.0, 0.0)),
+        Rect::from_min_size(r.min + Vec2::new(10.0, 0.0), Vec2::new(width - 10.0, 16.0)),
         false,
     );
 }
@@ -785,8 +819,9 @@ fn note(ui: &mut Ui, text: &str, width: f32) {
         Color32::from_rgb(178, 167, 141),
         width - 20.0,
     );
-    let (_, r) = ui.allocate_space(Vec2::new(width, galley.size().y + 12.0));
-    ui.painter().galley(r.min + Vec2::new(10.0, 4.0), galley, Color32::from_rgb(178, 167, 141));
+    // Source's 8px note margin collapses with the heading's 6px bottom margin.
+    let (_, r) = ui.allocate_space(Vec2::new(width, galley.rows.len() as f32 * 21.0 + 2.0));
+    ui.painter().galley(r.min + Vec2::new(10.0, 2.0), galley, Color32::from_rgb(178, 167, 141));
 }
 fn message(frame: &UiFrame<'_>, ui: &mut Ui, id: &str, text: &str, width: f32, tint: u32) {
     let color = Color32::from_rgb((tint >> 16) as u8, (tint >> 8) as u8, tint as u8);
@@ -802,16 +837,18 @@ fn message(frame: &UiFrame<'_>, ui: &mut Ui, id: &str, text: &str, width: f32, t
     frame.record_value(id, text, None);
     frame.announce(text);
 }
-fn updated(time: f64) -> Result<String, String> {
-    if !time.is_finite() {
-        return Err("Boneyard update time is not a valid date".to_owned());
-    }
+fn date_format() -> Result<js_sys::Intl::DateTimeFormat, String> {
     let options = js_sys::Object::new();
     for (key, value) in [("dateStyle", "medium"), ("timeStyle", "short")] {
         js_sys::Reflect::set(&options, &key.into(), &value.into())
             .map_err(|_| "Boneyard date format options could not be set")?;
     }
-    let formatter = js_sys::Intl::DateTimeFormat::new(&js_sys::Array::new(), &options);
+    Ok(js_sys::Intl::DateTimeFormat::new(&js_sys::Array::new(), &options))
+}
+fn updated(formatter: &js_sys::Intl::DateTimeFormat, time: f64) -> Result<String, String> {
+    if !time.is_finite() {
+        return Err("Boneyard update time is not a valid date".to_owned());
+    }
     formatter
         .format()
         .call1(&wasm_bindgen::JsValue::UNDEFINED, &time.into())

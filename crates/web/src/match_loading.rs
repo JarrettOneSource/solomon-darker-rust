@@ -15,6 +15,9 @@ pub struct MatchLoadingView {
 }
 
 impl MatchLoadingView {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("match-loading"))
+    }
     pub fn attach(_document: &Document) -> Result<Self, String> {
         Ok(Self::default())
     }
@@ -29,11 +32,12 @@ impl MatchLoadingView {
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let Some(loading) = self.loading else { return Ok(()) };
-        frame.input_scope("match-loading");
+        frame.input_scope("match-loading", self.layer_id());
         let ctx = frame.ctx.clone();
         let screen = ctx.content_rect();
-        egui::Area::new(Id::unique("match-loading"))
-            .order(Order::Foreground)
+        egui::Area::new(self.layer_id().id)
+            .order(self.layer_id().order)
+            .fade_in(false)
             .fixed_pos(screen.min)
             .show(&ctx, |ui| {
                 ui.set_min_size(screen.size());
