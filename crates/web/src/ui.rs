@@ -10,6 +10,7 @@ pub(crate) mod sack_name;
 pub(crate) mod settings;
 pub(crate) mod skill_hover;
 pub(crate) mod text;
+pub(crate) mod trusted_gesture;
 
 use solomon_assets::{SpriteRecord, parse_bundle};
 use wasm_bindgen::{JsCast, prelude::*};
