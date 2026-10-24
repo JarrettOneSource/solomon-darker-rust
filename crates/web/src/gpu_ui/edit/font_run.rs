@@ -37,6 +37,8 @@ pub enum OverflowWrap {
 pub struct FontRunOptions {
     pub wrap_width: Option<f32>,
     pub overflow_wrap: OverflowWrap,
+    /// Preserve trailing text while excluding its spaces from line alignment.
+    pub hang_line_end_spaces: bool,
     pub line_height: Option<f32>,
     pub tab_size: Option<f32>,
     pub letter_spacing: Option<f32>,
@@ -424,7 +426,7 @@ pub fn geometry(
                         options.tab_size.unwrap_or(8.0),
                     )?
                 };
-                if options.overflow_wrap == OverflowWrap::Normal {
+                if options.hang_line_end_spaces {
                     line.width = probe.width(
                         body[span].trim_end_matches([' ', '\t']),
                         options.tab_size.unwrap_or(8.0),
@@ -490,6 +492,7 @@ struct RunKey {
     color: Color32,
     wrap: Option<u32>,
     overflow_wrap: OverflowWrap,
+    hang_line_end_spaces: bool,
     line_height: Option<u32>,
     tab_size: Option<u32>,
     letter_spacing: Option<u32>,
@@ -509,7 +512,6 @@ pub struct NativeFontRun {
     pub(crate) geometry: Arc<Geometry>,
     pixels: f32,
     letter_spacing: f32,
-    overflow_wrap: OverflowWrap,
     stroke: Option<NativeFontStroke>,
     raster: Vec<RasterLine>,
     tiles: Mutex<BTreeMap<(usize, i32), TextureHandle>>,
@@ -522,20 +524,13 @@ struct RasterLine {
     baseline: f32,
 }
 
-fn aligned_origin(
-    line: &Line,
-    bounds: Rect,
-    align: egui::Align,
-    overflow_wrap: OverflowWrap,
-) -> Pos2 {
-    // Source CSS centers an inline row within its line box. An overlong row
-    // expands that box and starts at the clip's left edge.
-    let width = if overflow_wrap == OverflowWrap::Normal && align == egui::Align::Center {
-        line.width.min(bounds.width())
+fn aligned_origin(line: &Line, bounds: Rect, align: egui::Align, intrinsic_line_box: bool) -> Pos2 {
+    let bounds = if intrinsic_line_box {
+        Rect::from_min_size(bounds.min, vec2(bounds.width().max(line.width), bounds.height()))
     } else {
-        line.width
+        bounds
     };
-    pos2(align.align_size_within_range(width, bounds.x_range()).min, bounds.top())
+    pos2(align.align_size_within_range(line.width, bounds.x_range()).min, bounds.top())
 }
 
 impl NativeFontRun {
@@ -556,7 +551,7 @@ impl NativeFontRun {
         self.geometry.lines.iter().zip(&self.raster).filter(|(line, _)| !line.text.is_empty()).fold(
             Rect::NOTHING,
             |all, (line, raster)| {
-                let origin = aligned_origin(line, bounds, align, self.overflow_wrap);
+                let origin = aligned_origin(line, bounds, align, false);
                 line.paint_spans.iter().fold(all, |all, span| {
                     let source = raster.bounds.intersect(Rect::from_x_y_ranges(
                         span.source.start..=span.source.end,
@@ -637,9 +632,35 @@ impl NativeFontRun {
         align: egui::Align,
         opacity: f32,
     ) -> Result<(), String> {
+        self.paint_rows(frame, painter, bounds, align, opacity, false)
+    }
+
+    /// Paint within independent inline boxes whose width is at least `bounds.width()`.
+    /// The caller owns that containing layout and clipping. Overlong rows can
+    /// expand their own box without changing the alignment of fitting rows.
+    pub fn paint_in_line_boxes(
+        &self,
+        frame: &crate::gpu_ui::UiFrame<'_>,
+        painter: &Painter,
+        bounds: Rect,
+        align: egui::Align,
+        opacity: f32,
+    ) -> Result<(), String> {
+        self.paint_rows(frame, painter, bounds, align, opacity, true)
+    }
+
+    fn paint_rows(
+        &self,
+        frame: &crate::gpu_ui::UiFrame<'_>,
+        painter: &Painter,
+        bounds: Rect,
+        align: egui::Align,
+        opacity: f32,
+        intrinsic_line_box: bool,
+    ) -> Result<(), String> {
         let pixels = self.pixels;
         for (index, line) in self.geometry.lines.iter().enumerate() {
-            let origin = aligned_origin(line, bounds, align, self.overflow_wrap);
+            let origin = aligned_origin(line, bounds, align, intrinsic_line_box);
             let clip = painter.clip_rect().translate(-origin.to_vec2());
             let bounds = self.raster[index].bounds;
             if line.text.is_empty() {
@@ -792,6 +813,7 @@ pub fn font_run_with_options(
         color,
         wrap: options.wrap_width.map(f32::to_bits),
         overflow_wrap: options.overflow_wrap,
+        hang_line_end_spaces: options.hang_line_end_spaces,
         line_height: options.line_height.map(f32::to_bits),
         tab_size: options.tab_size.map(f32::to_bits),
         letter_spacing: options.letter_spacing.map(f32::to_bits),
@@ -857,7 +879,6 @@ pub fn font_run_with_options(
         geometry,
         pixels,
         letter_spacing: options.letter_spacing.unwrap_or(0.0),
-        overflow_wrap: options.overflow_wrap,
         stroke: options.stroke,
         raster,
         tiles: Mutex::new(BTreeMap::new()),
@@ -886,19 +907,16 @@ mod tests {
         let mut line = empty_line(0, 0.0, Rect::from_min_size(Pos2::ZERO, vec2(0.0, 37.8)));
         line.width = 445.375;
         let bounds = Rect::from_min_size(pos2(148.0, 36.0), vec2(405.0, 37.8));
+        assert_eq!(aligned_origin(&line, bounds, egui::Align::Center, true), pos2(148.0, 36.0));
         assert_eq!(
-            aligned_origin(&line, bounds, egui::Align::Center, OverflowWrap::Normal),
-            pos2(148.0, 36.0)
-        );
-        assert_eq!(
-            aligned_origin(&line, bounds, egui::Align::Center, OverflowWrap::BreakWord),
+            aligned_origin(&line, bounds, egui::Align::Center, false),
             pos2(127.8125, 36.0),
             "existing centered nowrap callers preserve their original placement"
         );
         line.width = 169.093_75;
         let bounds = Rect::from_min_size(pos2(28.0, 80.0), vec2(334.0, 37.8));
         assert_eq!(
-            aligned_origin(&line, bounds, egui::Align::Center, OverflowWrap::Normal),
+            aligned_origin(&line, bounds, egui::Align::Center, true),
             pos2(110.453_125, 80.0)
         );
     }

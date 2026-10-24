@@ -319,6 +319,7 @@ impl ModDetailView {
                 FontRunOptions {
                     wrap_width: phone.then_some(title_width),
                     overflow_wrap: OverflowWrap::Normal,
+                    hang_line_end_spaces: true,
                     line_height: Some(size * 1.5),
                     ..Default::default()
                 },
@@ -328,7 +329,7 @@ impl ModDetailView {
         frame.record_rect("cloud-detail-title", &summary.name, "heading", header.title, false);
         frame.record_value("cloud-detail-title", &summary.name, None);
         if let Some(run) = fallback {
-            run.paint_aligned(
+            run.paint_in_line_boxes(
                 frame,
                 &ui.painter().with_clip_rect(header.title.intersect(ui.clip_rect())),
                 header.title,
