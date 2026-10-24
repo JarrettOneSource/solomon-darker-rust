@@ -1046,5 +1046,12 @@ cover both native-only commits and rAF, without another controller sample or gue
 field. The existing actual bidi case gains an immediate assertion after ArrowRight.
 Two auxiliary game traces remain separately red on College Escape→Pause before reaching
 the field, each with errors[]/Chrome exit0; they do not establish a measured caret trace.
-The shared Escape owner is under independent investigation. Browser capacity is held
-by root; rebuilt actual editor acceptance remains required.
+The `native-editor-3660ab8/receipt.json` rebuilt journey now passes all nine groups,
+including ordinary College Escape, immediate ArrowRight, the original bidi weak-caret
+and selection assertions, Unicode undo/redo, browser IME, UTF-16 admission and one
+Enter rename. The held-rAF native Tab/ShiftTab→OS Copy/Paste phase keeps the entire
+published snapshot unchanged and gamepad reads1917→1917. Reviewed joined-script,
+bidi-selection and IME-preedit screenshots retain actual GPU glyph/selection geometry;
+errors[]/rawFailures[] and Chrome9760 graceful exit0 qualify the complete run. The
+Chromium Input-domain IME method retains the established untrusted composition-end
+qualification; it does not claim a hardware OS candidate-window test.
