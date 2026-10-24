@@ -182,6 +182,11 @@ async function pauseNotice(key,text,afterAnnouncement,name,{resume=true}={}) {
     receipt.checks.push('three actual Console-granted skills bind through the visible Skillbook and belt');
 
     step='actual mana overload';
+    // Session tick seals combat after movement until the real Solomon entrance
+    // completes, even though the native host already admits movement input.
+    await walkSolomonEntrance(page,{snapshot:()=>frame.snapshot,playerId:()=>playerId,output});await ready();
+    assert.ok(frame.snapshot.boneyard.encounter.run_event_id>0);
+    assert.equal(player().progression.hagatha_runtime.cheat_death_charges,1);
     const announcementStart=(await ui.announcements(page)).length;
     receipt.toggles=[];
     for(const [slot,name] of ['firewalker','mindstar','regenerate'].entries()) {
@@ -203,8 +208,6 @@ async function pauseNotice(key,text,afterAnnouncement,name,{resume=true}={}) {
     receipt.checks.push('real belt reservations overload, clear toggles and paint/announce the accepted notice once');
 
     step='actual lethal enemy damage';
-    await walkSolomonEntrance(page,{snapshot:()=>frame.snapshot,playerId:()=>playerId,output});await ready();
-    assert.ok(frame.snapshot.boneyard.encounter.run_event_id>0);
     assert.equal(player().progression.hagatha_runtime.cheat_death_charges,1);
     const deathAnnouncementStart=(await ui.announcements(page)).length;
     const at=actor().wizard.position;
