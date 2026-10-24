@@ -120,8 +120,18 @@ async function startNewGame(page, {
   await activate(page, `element:${element}`);
   await activate(page, `discipline:${discipline}`);
   await ui.surface(page, 'hidden');
-  await page.waitForFunction(() => window.wasmBindings.wizard_state()[6] === 0
-    && window.wasmBindings.wizard_state()[7] === -1, null, {timeout:20000});
+  try {
+    await page.waitForFunction(() => window.wasmBindings.wizard_state()[6] === 0
+      && window.wasmBindings.wizard_state()[7] === -1, null, {timeout:20000});
+  } catch (error) {
+    const observation = await page.evaluate(() => ({
+      wizard: Array.from(window.wasmBindings.wizard_state()),
+      ui: JSON.parse(window.wasmBindings.gpu_ui_state()),
+      visibility: document.visibilityState,
+      focus: document.hasFocus(),
+    }));
+    throw new Error(`College admission did not finish: ${JSON.stringify(observation)}`, {cause: error});
+  }
   const accepted=await ui.waitForUi(page,snapshot=>{
     const selection=snapshot.acceptedSelection;
     return selection?.name===expectedName&&selection.element.toLowerCase()===element

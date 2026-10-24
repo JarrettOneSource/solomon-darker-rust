@@ -220,6 +220,11 @@ try {
       sequence: state.frame?.sequence, tick: state.frame?.snapshot.ticks,
       loadingRunId: state.frame?.host.loading_run_id, resumeGrace: state.frame?.host.resume_grace,
       boneyardRunId: state.frame?.snapshot.boneyard?.run_id,
+      wizard: state.frame?.snapshot.participants[state.id] && {
+        position: state.frame.snapshot.participants[state.id].wizard.position,
+        region: state.frame.snapshot.participants[state.id].wizard.region,
+        transition: state.frame.snapshot.participants[state.id].wizard.transition,
+      },
       readyBoneyards: [...state.readyBoneyards], resumeReadies: [...state.resumeReadies],
       closedSockets: state.closedSockets, sentDisconnects: state.disconnects})),
   };

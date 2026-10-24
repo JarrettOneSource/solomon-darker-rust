@@ -26,21 +26,21 @@ pub(super) fn paint(model: &mut Model, frame: &mut UiFrame<'_>) -> Result<(), St
             egui::CentralPanel::default()
                 .frame(egui::Frame::NONE.fill(Color32::from_rgb(12, 9, 16)))
                 .show(ui, |ui| {
-            frame.input_scope("desktop-launcher", ui.layer_id());
-            let width = ui.available_width();
-            let compact = width <= 1000.0;
-            let padding = if compact { 24.0 } else { 38.0 };
-            let content_width = (width - padding * 2.0).min(1104.0);
-            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                ui.add_space(if compact { 28.0 } else { 42.0 });
-                ui.horizontal(|ui| {
-                    ui.add_space(((width - content_width) * 0.5).max(0.0));
-                    ui.vertical(|ui| {
-                        ui.set_width(content_width);
-                        content(model, frame, ui, compact);
+                    frame.input_scope("desktop-launcher", ui.layer_id());
+                    let width = ui.available_width();
+                    let compact = width <= 1000.0;
+                    let padding = if compact { 24.0 } else { 38.0 };
+                    let content_width = (width - padding * 2.0).min(1104.0);
+                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                        ui.add_space(if compact { 28.0 } else { 42.0 });
+                        ui.horizontal(|ui| {
+                            ui.add_space(((width - content_width) * 0.5).max(0.0));
+                            ui.vertical(|ui| {
+                                ui.set_width(content_width);
+                                content(model, frame, ui, compact);
+                            });
+                        });
                     });
-                });
-            });
                 });
         });
     Ok(())
