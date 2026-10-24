@@ -1190,3 +1190,13 @@ resident-media observer does not classify this as suspension. The channel had on
 load, ready4 and a trusted suspend at88.7s; AssetServer's30s socket write timeout is
 a transport hypothesis, not a proved cause. Root owns that source investigation.
 Chrome63643 and native63633 exit0; no complete Tutorial/earned-potion claim is made.
+
+
+The bounded `slow-combat-get-r1` control on the preserved4181 server does not
+reproduce the transport failure: a real Range GET receives206, declared and actual
+18,799,976 bytes, and stock SHA8663d4fa after a40s zero-read hold with a requested
+4KiB receive buffer. Thus the timeout hypothesis remains unproved; this control
+does not qualify native4190/browser suspension. The next required Tutorial attempt
+retains read-only CDP media request Range, actual response status/length/range,
+received byte totals and native completion/failure timestamps. It neither intercepts
+requests nor changes the fatal observer policy.

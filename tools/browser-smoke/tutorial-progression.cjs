@@ -21,7 +21,7 @@ const website=path.resolve(process.env.SOLOMON_WEBSITE_DIR||path.join(__dirname,
 const source=file=>import(pathToFileURL(path.join(website,'frontend/src/game',file)).href);
 const receipt={passed:false,url:url.href,artifact:process.env.ARTIFACT||null,
   scope:process.env.NATIVE_SAVE?'standalone-native-authority':'hosted-native-authority',
-  checks:[],stages:[],lessons:[],commands:[],welcomes:[],errors:[]};
+  checks:[],stages:[],lessons:[],commands:[],welcomes:[],mediaNetwork:[],errors:[]};
 const accepted={id:null,frame:null,loaded:null,checkpoint:null,checkpointEvidence:null};
 const held=new Set();
 let primary=false;
@@ -158,6 +158,38 @@ async function modal(kind) {
     ignoreHTTPSErrors:process.env.LOCAL_TLS==='1'});
   page=await context.newPage();
   observed=ui.watchErrors(page);
+  const network=await context.newCDPSession(page),mediaRequests=new Map();
+  const header=(headers,name)=>Object.entries(headers)
+    .find(([key])=>key.toLowerCase()===name)?.[1]??null;
+  network.on('Network.requestWillBeSent',event=>{
+    if(event.type!=='Media')return;
+    const row={requestId:event.requestId,url:event.request.url,method:event.request.method,
+      range:header(event.request.headers,'range'),started:event.timestamp,
+      wallTime:event.wallTime,dataBytes:0,encodedBytes:0};
+    mediaRequests.set(event.requestId,row);receipt.mediaNetwork.push(row);
+  });
+  network.on('Network.responseReceived',event=>{
+    const row=mediaRequests.get(event.requestId);if(!row)return;
+    const response=event.response;
+    row.response={time:event.timestamp,status:response.status,connectionId:response.connectionId,
+      contentLength:header(response.headers,'content-length'),
+      contentRange:header(response.headers,'content-range'),
+      contentType:header(response.headers,'content-type'),fromDiskCache:response.fromDiskCache};
+  });
+  network.on('Network.dataReceived',event=>{
+    const row=mediaRequests.get(event.requestId);if(!row)return;
+    row.dataBytes+=event.dataLength;row.encodedBytes+=event.encodedDataLength;
+    row.lastData=event.timestamp;
+  });
+  network.on('Network.loadingFinished',event=>{
+    const row=mediaRequests.get(event.requestId);
+    if(row)row.finished={time:event.timestamp,encodedBytes:event.encodedDataLength};
+  });
+  network.on('Network.loadingFailed',event=>{
+    const row=mediaRequests.get(event.requestId);
+    if(row)row.failed={time:event.timestamp,error:event.errorText,canceled:event.canceled};
+  });
+  await network.send('Network.enable');
   page.on('websocket',socket=>{
     const read=createNativeMessageReader();
     socket.on('framereceived',({payload})=>{
