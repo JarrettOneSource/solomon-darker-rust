@@ -4,6 +4,7 @@ mod cloud;
 mod create;
 mod hall;
 mod join;
+mod keyboard;
 pub(crate) mod navigation;
 mod prompt;
 pub(crate) mod routing;
@@ -163,7 +164,7 @@ pub struct MenuUi {
     create_rng: Option<NativeRng>,
     create_previous_phase_elapsed: f64,
     pending_pause: Option<(f64, PauseChoice)>,
-    discard_keys: bool,
+    keyboard: keyboard::MenuKeyboard,
     orientation_blocked: bool,
     actions: Vec<MenuAction>,
     hosted_actions: Vec<HostedMenuAction>,
@@ -238,7 +239,7 @@ impl MenuUi {
     }
     pub fn discard_gameplay_keys(&mut self) {
         if self.screen == Screen::Hidden {
-            self.discard_keys = true;
+            self.keyboard.set_gameplay_enabled(false);
         }
     }
     pub fn settings_open(&self) -> bool {
@@ -247,7 +248,7 @@ impl MenuUi {
     pub fn set_input_suspended(&mut self, suspended: bool) -> Result<(), String> {
         if self.input_suspended != suspended {
             self.input_suspended = suspended;
-            self.discard_keys = true;
+            self.keyboard.discard_pending();
             self.navigation.release();
         }
         Ok(())
@@ -286,7 +287,7 @@ impl MenuUi {
             create_rng: None,
             create_previous_phase_elapsed: 0.0,
             pending_pause: None,
-            discard_keys: false,
+            keyboard: keyboard::MenuKeyboard::default(),
             orientation_blocked: false,
             actions: Vec::new(),
             hosted_actions: Vec::new(),
@@ -336,15 +337,12 @@ impl MenuUi {
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         self.cloud.retire_images(frame);
-        let keys = frame.key_codes().to_vec();
+        let keys = self.keyboard.take(frame.key_codes(), self.screen == Screen::Hidden);
         let editing = crate::gpu_ui::text_edit_focused(frame.ctx);
         let capturing_binding =
             self.screen == Screen::Settings && self.settings_view.awaiting_binding();
-        let discard_keys = std::mem::take(&mut self.discard_keys);
         for key in keys {
-            if !discard_keys && key.pressed && !key.repeat && !key.alt && !key.ctrl && !key.meta {
-                self.handle_event(UiEvent::Key(key.code, editing))?;
-            }
+            self.handle_event(UiEvent::Key(key.code, editing))?;
         }
         if capturing_binding {
             frame.ctx.input_mut(|input| {
