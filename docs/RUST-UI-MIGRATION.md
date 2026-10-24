@@ -598,6 +598,14 @@ opacity1/phase target frame before its final Dye screenshot. The controller Coll
 helper likewise removes its stale second-B/ARCH_DISMISS expectation: pinned fa08
 `HubInventorySurface.tsx:514–534,855` closes the Q1 dialogue on the first Back/Done,
 matching the already-qualified touch source recovery; real B must prove that closure.
+The first actual f41 controller run reaches Title/Settings/Play and Q1 through real
+Gamepad input, then fails that unchanged first-B closure after a neutral release.
+The retained job `job_20261024T000845Z_9eafc8d36d` reports the actual speech/Q1 scope,
+Skip control and no focused widget; Chrome93904 exits zero gracefully, driver exits1.
+Its old failure branch did not finalize the observer, so it has no clean-error claim.
+The common driver now settles and records its actual pad/input/GPU state and screenshot
+on failures. Root's new input/controller transaction requires the same first-B rerun;
+no second press, pointer substitution or delay qualifies that behavior.
 
 The Tutorial text-bounds helper currently has no executable caller, so its syntax check
 does not qualify Tutorial layout. Pinned fa08 `core-kernels/native-tutorial.ts`

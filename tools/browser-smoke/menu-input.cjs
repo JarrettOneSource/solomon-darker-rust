@@ -73,8 +73,10 @@ async function modalFocus(page) {
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
   const {browser}=owned;
   const errors=[];
+  let current;
   try {
     const page=await browser.newPage({viewport:{width:1600,height:900}});
+    current=page;
     const desktopErrors=ui.watchErrors(page);errors.push(desktopErrors.errors);
     await desktopErrors.ready;
     await ui.observeGpu(page);
@@ -140,6 +142,7 @@ async function modalFocus(page) {
     await page.close();
 
     const touch=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
+    current=touch;
     const touchErrors=ui.watchErrors(touch);errors.push(touchErrors.errors);
     await touchErrors.ready;
     await ready(touch);
@@ -178,6 +181,21 @@ async function modalFocus(page) {
       'locked loadout Back','neutral handoff','controller pause','spatial focus',
       'modal focus ownership','source portrait guidance','landscape phone title/admission/Create',
       'phone pause targets','actual GPU UI'],errors:errors.flat()}));
+  } catch(error) {
+    const failure={failure:error.stack,errors:errors.flat()};
+    if(current&&!current.isClosed()){
+      try {
+        await ui.settleErrors(current);
+        failure.errors=errors.flat();
+        failure.actual=await current.evaluate(()=>({gpu:JSON.parse(wasmBindings.gpu_ui_state()),
+          pad:window.gpuTestPad,wizard:Array.from(wasmBindings.wizard_state()),
+          input:Array.from(wasmBindings.gameplay_input_state())}));
+      }catch(observationError){failure.observationError=observationError.stack;}
+      try {await current.screenshot({path:path.join(output,'menu-input-failure.png')});}
+      catch(screenshotError){failure.screenshotError=screenshotError.stack;}
+    }
+    fs.writeFileSync(path.join(output,'menu-input-failure.json'),JSON.stringify(failure,null,2));
+    throw error;
   } finally {
     try {
       fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(await owned.close(),null,2));
