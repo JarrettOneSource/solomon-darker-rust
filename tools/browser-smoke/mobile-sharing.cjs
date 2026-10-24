@@ -12,6 +12,7 @@ const account=JSON.parse(fs.readFileSync(path.join(process.env.PRIVATE_DIR,'priv
 const receipt={passed:false,checks:[],requests:[]};
 const observations=[];
 const pendingCatalogs=new WeakMap();
+const fault={request:null,response:null,error:null,message:'Owned layout availability failure'};
 let page,step='ordinary sign-in',releaseLoad;
 const stored=page=>page.evaluate(()=>Object.fromEntries(Object.entries(localStorage)
   .filter(([key])=>key.includes('mobile-ui-layout')).map(([key,value])=>[key,JSON.parse(value)])));
@@ -26,6 +27,11 @@ async function observe(page){const observed=ui.watchErrors(page);observations.pu
   page.on('request',request=>{if(new URL(request.url()).pathname.includes('/api/mods'))pending.add(request)});
   page.on('requestfinished',request=>pending.delete(request));page.on('requestfailed',request=>pending.delete(request));
   page.on('response',response=>{const pathname=new URL(response.url()).pathname;
+    if(response.request()===fault.request&&response.status()===503){
+      fault.response={url:response.url(),status:503};
+      const error=observed.errors.at(-1);
+      if(error?.type==='response'&&error.url===response.url()&&error.status===503)fault.error=error;
+    }
     if(pathname.includes('/api/game/layouts'))receipt.requests.push({path:pathname,status:response.status(),method:response.request().method()});});}
 async function shot(name){await page.screenshot({path:path.join(out,`${name}.png`)});}
 
@@ -67,6 +73,7 @@ async function shot(name){await page.screenshot({path:path.join(out,`${name}.png
     assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),code);
     await shot('layout-published-desktop');
     receipt.checks.push('real editor Save, authenticated layout publication and trusted clipboard preserve the complete document');
+    const publisher=page;
     await page.setViewportSize({width:390,height:844});await ui.nextFrame(page);
     await page.mouse.move(195,500);await page.mouse.wheel(0,600);await ui.nextFrame(page);
     await shot('layout-published-phone');
@@ -91,7 +98,11 @@ async function shot(name){await page.screenshot({path:path.join(out,`${name}.png
     assert.ok(Math.abs(ui.center(selection).x-ui.center(field).x)<1,'native selection shares the centered monospace text geometry');
     let captured;
     const gate=new Promise(resolve=>{releaseLoad=resolve});
-    await guest.route('**/api/game/layouts/*',async route=>{captured=route.request();await gate;await route.continue();});
+    await guest.route('**/api/game/layouts/*',async route=>{
+      if(fault.request){await route.continue();return;}
+      captured=route.request();fault.request=captured;await gate;
+      await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:fault.message})});
+    });
     await ui.click(page,'cloud-layout-load');
     await ui.waitForUi(page,s=>captured&&ui.findWidget(s,'cloud-layout-load')?.label==='LOADING...','actual pending layout request');
     assert.equal((await ui.widget(page,'cloud-layout-load')).enabled,false);
@@ -101,9 +112,13 @@ async function shot(name){await page.screenshot({path:path.join(out,`${name}.png
     assert.equal(new URL(captured.url()).pathname,`${mount}/api/game/layouts/${code}`);
     assert.deepEqual(await stored(page),{},'no layout is installed before the real response');
     await shot('layout-request-pending');releaseLoad();
+    await ui.waitForUi(page,s=>ui.findWidget(s,'cloud-layout-error')?.label===fault.message,'declared request failure reaches the visible alert');
+    assert.deepEqual(await stored(page),{});await shot('layout-request-error');
+    await ui.fill(page,'dark-cloud-layout-code',code);await ui.click(page,'cloud-layout-load');
     await ui.widget(page,'cloud-copy-layout');await ui.value(page,'dark-cloud-layout-code',code);
+    await ui.noWidget(page,'cloud-layout-error');
     assert.deepEqual(await stored(page),receipt.saved);
-    receipt.checks.push('guest code normalization and held real request preserve editable draft, disable actions and install the returned complete document');
+    receipt.checks.push('guest normalization, centered native selection, editable pending draft, disabled actions and declared error recover through an ordinary real retry');
     await shot('layout-loaded-guest');
     await ui.click(page,'cloud-menu');await ui.surface(page,'pause');await ui.click(page,'pause-settings');
     await revealSettingsControl(page,'settings-page:mobile-ui');await ui.click(page,'settings-page:mobile-ui');
@@ -111,13 +126,33 @@ async function shot(name){await page.screenshot({path:path.join(out,`${name}.png
     receipt.loadedPause=(await ui.widget(page,'mobile/control:pause')).value;
     assert.deepEqual(await stored(page),receipt.saved);await shot('layout-loaded-editor');
     await ui.assertGpuOnly(page);receipt.checks.push('loaded shared layout opens as customized through the ordinary Settings editor');
+    step='Settings account publication and clipboard';page=publisher;
+    await page.setViewportSize({width:1600,height:900});await ui.nextFrame(page);
+    await ui.click(page,'cloud-menu');await ui.surface(page,'pause');await ui.click(page,'pause-settings');
+    await ui.click(page,'settings-page:cloud');await revealSettingsControl(page,'settings-mobile-publish');
+    const settingsPublication=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith('/api/game/layouts')
+      &&response.request().method()==='POST'&&response.ok());
+    await ui.click(page,'settings-mobile-publish');receipt.settingsPublished=await(await settingsPublication).json();
+    assert.deepEqual(receipt.settingsPublished.layout,receipt.published.layout);
+    await revealSettingsControl(page,'settings-mobile-copy');await ui.click(page,'settings-mobile-copy');
+    await ui.waitForUi(page,s=>ui.findWidget(s,'settings-mobile-copy')?.label==='COPIED','Settings code copy completion');
+    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),receipt.settingsPublished.code);
+    await shot('layout-settings-published');receipt.checks.push('Online and Account settings publishes the same actual saved layout and copies its own returned code');
     receipt.passed=true;
   }catch(error){failure=error;receipt.failure=error.stack;receipt.step=step;
     if(page){receipt.failedUi=await ui.readUi(page).catch(error=>({error:error.message}));await shot('failure').catch(()=>{});}}
   finally{releaseLoad?.();receipt.errors=[];
-    for(const row of observations){try{await ui.settleErrors(row.page);receipt.errors.push(...row.observed.errors);}
+    for(const row of observations){try{await row.page.context().unrouteAll({behavior:'wait'});await ui.settleErrors(row.page);receipt.errors.push(...row.observed.errors);}
       catch(error){failure||=error;receipt.errors.push(error.message);}}
-    if(receipt.errors.length){receipt.passed=false;failure||=new Error('Unexpected browser errors');}
+    receipt.fault=fault.request?{method:fault.request.method(),url:fault.request.url(),message:fault.message,response:fault.response}:null;
+    let consoleFaults=0;
+    receipt.unexpectedErrors=receipt.errors.filter(error=>{
+      if(error===fault.error)return false;
+      if(error.type==='console'&&error.location?.url===fault.response?.url&&error.message.includes('503')&&consoleFaults++===0)return false;
+      return true;
+    });
+    if(fault.request&&(!fault.error||fault.response?.status!==503))receipt.unexpectedErrors.push('Declared fault lacks its exact response evidence');
+    if(receipt.unexpectedErrors.length){receipt.passed=false;failure||=new Error('Unexpected browser errors');}
     try{receipt.cleanup=await owner.close();}catch(error){failure||=error;receipt.passed=false;receipt.cleanup=error.cleanup;}
     fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify(receipt,null,2));}
   console.log(JSON.stringify({passed:receipt.passed,checks:receipt.checks,step,cleanup:receipt.cleanup}));
