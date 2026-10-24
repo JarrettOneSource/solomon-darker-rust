@@ -72,9 +72,17 @@ struct InputQueue {
     gamepad_active: bool,
     require_gamepad_neutral: bool,
     clipboard_error: Option<String>,
+    native_dispatch: Option<Rc<dyn Fn() -> Result<(), String>>>,
 }
 
 impl InputQueue {
+    fn has_native_input(&self) -> bool {
+        !self.events.is_empty()
+            || !self.codes.is_empty()
+            || !self.edits.is_empty()
+            || self.clipboard_error.is_some()
+    }
+
     fn finish_dispatch(&mut self) {
         let end = DispatchEnd {
             events: self.events.len(),
@@ -171,13 +179,16 @@ struct Listener {
     target: EventTarget,
     name: &'static str,
     callback: Closure<dyn FnMut(Event)>,
+    capture: bool,
 }
 
 impl Drop for Listener {
     fn drop(&mut self) {
-        let _ = self
-            .target
-            .remove_event_listener_with_callback(self.name, self.callback.as_ref().unchecked_ref());
+        let _ = self.target.remove_event_listener_with_callback_and_bool(
+            self.name,
+            self.callback.as_ref().unchecked_ref(),
+            self.capture,
+        );
     }
 }
 
@@ -201,11 +212,21 @@ fn listen(
     listeners: &mut Vec<Listener>,
     callback: impl FnMut(Event) + 'static,
 ) -> Result<(), String> {
+    listen_phase(target, name, listeners, false, callback)
+}
+
+fn listen_phase(
+    target: &EventTarget,
+    name: &'static str,
+    listeners: &mut Vec<Listener>,
+    capture: bool,
+    callback: impl FnMut(Event) + 'static,
+) -> Result<(), String> {
     let callback = Closure::<dyn FnMut(Event)>::new(callback);
     target
-        .add_event_listener_with_callback(name, callback.as_ref().unchecked_ref())
+        .add_event_listener_with_callback_and_bool(name, callback.as_ref().unchecked_ref(), capture)
         .map_err(|error| format!("GPU UI {name} listener: {error:?}"))?;
-    listeners.push(Listener { target: target.clone(), name, callback });
+    listeners.push(Listener { target: target.clone(), name, callback, capture });
     Ok(())
 }
 
@@ -264,6 +285,35 @@ impl BrowserInput {
             ..Default::default()
         }));
         let mut listeners = Vec::new();
+        // A prior UI action must commit actual focus before the next native
+        // editor default/clipboard event. Keep the queue unborrowed while Game
+        // paints its genuine controls; selection notifications may reenter it.
+        let window = document.default_view().ok_or("no window for native UI dispatch")?;
+        for name in [
+            "keydown",
+            "keyup",
+            "copy",
+            "cut",
+            "paste",
+            "beforeinput",
+            "compositionstart",
+            "pointerdown",
+        ] {
+            let queue = queue.clone();
+            listen_phase(window.as_ref(), name, &mut listeners, true, move |event| {
+                let handler = {
+                    let queue = queue.borrow();
+                    queue.has_native_input().then(|| queue.native_dispatch.clone()).flatten()
+                };
+                if let Some(handler) = handler
+                    && let Err(error) = handler()
+                {
+                    queue.borrow_mut().clipboard_error = Some(error);
+                    event.prevent_default();
+                    event.stop_immediate_propagation();
+                }
+            })?;
+        }
         for (name, pressed) in [("keydown", true), ("keyup", false)] {
             let queue = queue.clone();
             let textarea = textarea.clone();
@@ -795,6 +845,37 @@ impl BrowserInput {
         pixels_per_point: f32,
         time: f64,
     ) -> Result<Vec<InputPass>, String> {
+        self.take_input(viewport, pixels_per_point, time, true)
+    }
+
+    pub fn take_native(
+        &mut self,
+        viewport: [f32; 2],
+        pixels_per_point: f32,
+        time: f64,
+    ) -> Result<Option<Vec<InputPass>>, String> {
+        let pending = self.queue.borrow().has_native_input();
+        if pending {
+            self.take_input(viewport, pixels_per_point, time, false).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn set_native_dispatch_handler(
+        &mut self,
+        handler: impl Fn() -> Result<(), String> + 'static,
+    ) {
+        self.queue.borrow_mut().native_dispatch = Some(Rc::new(handler));
+    }
+
+    fn take_input(
+        &mut self,
+        viewport: [f32; 2],
+        pixels_per_point: f32,
+        time: f64,
+        sample_gamepad: bool,
+    ) -> Result<Vec<InputPass>, String> {
         let mut queue = self.queue.borrow_mut();
         queue.logical = viewport;
         let mut raw = egui::RawInput {
@@ -811,6 +892,9 @@ impl BrowserInput {
         let edits = std::mem::take(&mut queue.edits);
         if let Some(error) = queue.clipboard_error.take() {
             return Err(error);
+        }
+        if !sample_gamepad {
+            return Ok(into_passes(raw, codes, edits, dispatches));
         }
         let native_events = raw.events.len();
         let gamepads = if queue.scope.is_some() {
