@@ -464,9 +464,16 @@ async function close(client) {
     step = 'private College';
     const leader = await open(leaderAccount, 'leader');
     const guest = await open(peer, 'living-peer');
+    const accountResponse = await leader.page.context().request.get(new URL('api/auth/me', url).href,
+      {headers: {Authorization: `Bearer ${leaderAccount.token}`}});
+    assert.equal(accountResponse.status(), 200);
+    leader.developerAccess = (await accountResponse.json()).user.developerAccess;
+    assert.equal(leader.developerAccess, true, 'the actual account grants this Console journey');
     await ui.click(leader.page,'settings');
     await ui.click(leader.page,'settings-page:cloud');
-    for (const [key, value] of [['shared-hub', 'false'], ['cheats', 'true']]) {
+    // Source requestGameSettingsUpdate keeps the separate cheat preference off
+    // for developer accounts; their accepted permission grants Console access.
+    for (const [key, value] of [['shared-hub', 'false'], ['cheats', 'false']]) {
       const toggle=`settings-toggle:${key}`;
       if (key === 'cheats') await revealSettingsControl(leader.page, toggle);
       if(String((await ui.widget(leader.page,toggle)).selected)!==value)await ui.click(leader.page,toggle);
@@ -579,7 +586,8 @@ async function close(client) {
     for (const client of clients) await ui.settleErrors(client.page);
     assert.deepEqual(clients.flatMap(client => client.errors), []);
     if (build) {
-      const wasm = Object.keys(build.files).find(file => /^solomon-web-.*\.wasm$/.test(file));
+      const wasm = Object.keys(build.files).map(file => path.basename(file))
+        .find(file => /^solomon-web-.*\.wasm$/.test(file));
       assert.ok(wasm, 'the accepted artifact manifest names the game WASM');
       for (const client of clients) assert.ok(client.wasm.has(wasm));
     }
@@ -602,7 +610,7 @@ async function close(client) {
     }
     const artifact = build && {revision: build.revision, builtAt: build.builtAt,
       wasm: Object.fromEntries(Object.entries(build.files)
-        .filter(([file]) => /^solomon-web-.*\.wasm$/.test(file)))};
+        .filter(([file]) => /^solomon-web-.*\.wasm$/.test(path.basename(file))))};
     const receipt = {passed: !failure, step, artifact, checks, failure};
     receipt.browserClosed = (await Promise.all(clients.map(close))).every(Boolean);
     if (!receipt.browserClosed) receipt.passed = false;
