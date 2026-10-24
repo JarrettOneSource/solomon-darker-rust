@@ -90,8 +90,8 @@ async function waitUntil(predicate, label, timeout = 30000) {
     const enabled = `cloud-subscription:disable:${subscribedSlug}`;
     await gpu.widget(page, enabled);
     await waitUntil(() => pending.size === 0, 'immediate catalog completion');
-    assert.equal((await gpu.widget(page, enabled)).enabled, true);
-    checks.push('immediately completed subscription updates the actual enabled UI');
+    await gpu.widget(page, enabled, {enabled: true});
+    checks.push('completed subscription and content download update the actual enabled UI');
     await page.screenshot({path: path.join(output, 'cloud-subscription-enabled.png')});
     await gpu.click(page, enabled);
     const enable = `cloud-subscription:enable:${subscribedSlug}`;
