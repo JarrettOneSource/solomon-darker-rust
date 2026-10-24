@@ -1048,6 +1048,7 @@ impl GpuUi {
         let editors = RefCell::new(Vec::new());
         let editor_errors = RefCell::new(Vec::new());
         let mut result = Ok(());
+        edit::begin_native_focus(&self.ctx, &pass.codes);
         let mut output = self.ctx.run_pass(pass.raw, |ctx| {
             result = paint(&mut UiFrame {
                 ctx,
