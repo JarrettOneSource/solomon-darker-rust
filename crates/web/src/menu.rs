@@ -753,6 +753,11 @@ impl MenuUi {
         request_id: u64,
         mismatch: solomon_sim::menu::save_mods::GameSaveModMismatch,
     ) -> Result<(), String> {
+        // Source requestResumeLastGame retains Play beneath its cancellable dialog.
+        if self.screen == Screen::Hidden {
+            self.title.show_controls(true, self.can_resume)?;
+            self.set_screen(Screen::Play)?;
+        }
         self.routing.show_mismatch(request_id, mismatch)?;
 
         self.navigation.release();

@@ -737,3 +737,17 @@ The same browser witness measures the old loading label at23/22/28px for
 and a0/1/2px text shadow. The painter now uses the canonical native font run and
 Gaussian text shadow (sigma1), with native ellipsis for a constrained line. Its
 delay, progress, artwork, input scope and lifecycle remain unchanged.
+
+### Saved-content mismatch cancellation
+
+The actual `routing-content.cjs` journey changes three real packages after saving
+a wizard. Its added, missing and changed groups render correctly, but Cancel
+leaves a hidden menu because Continue hid Play before the mismatch was checked.
+Pinned `MainMenuScene.tsx::requestResumeLastGame` retains Play under the dialog;
+its cancellation clears only that dialog and the pending new-game admission.
+
+`Menu::show_mod_mismatch` now restores Play when the preceding admission hid it,
+using the same retained-menu rule as the local-content consent. Other visible
+contexts remain intact. The ordinary browser journey is the regression: Cancel
+must restore Play and preserve the complete saved document and revision before
+the same wizard can Continue with the changed content.
