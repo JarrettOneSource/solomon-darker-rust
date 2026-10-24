@@ -144,18 +144,13 @@ impl ModSkillsUi {
     pub fn take_actions(&mut self) -> Vec<ModSkillAction> {
         std::mem::take(&mut self.actions)
     }
-    pub fn book_layer(parent: egui::LayerId) -> egui::LayerId {
-        egui::LayerId::new(parent.order, Id::unique("mod/skill-book"))
+    pub fn book_layer() -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, Id::unique("mod/skill-book"))
     }
-    pub fn picker_layer(parent: egui::LayerId) -> egui::LayerId {
-        egui::LayerId::new(parent.order, Id::unique("mod/skill-picker"))
+    pub fn picker_layer() -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, Id::unique("mod/skill-picker"))
     }
-    pub fn paint(
-        &mut self,
-        frame: &mut UiFrame<'_>,
-        book_parent: egui::LayerId,
-        picker_parent: egui::LayerId,
-    ) -> Result<(), String> {
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let ctx = frame.ctx.clone();
         let small = ctx.content_rect().width() <= 700.0;
         let mut paint_error = None;
@@ -167,8 +162,7 @@ impl ModSkillsUi {
             } else {
                 vec2(-16.0, ctx.content_rect().height() * 0.12)
             };
-            let layer = Self::book_layer(book_parent);
-            ctx.set_sublayer(book_parent, layer);
+            let layer = Self::book_layer();
             let area = egui::Area::new(layer.id)
                 .fade_in(false)
                 .order(layer.order)
@@ -213,8 +207,7 @@ impl ModSkillsUi {
         }
         if !self.choices.is_empty() {
             frame.input_scope("mod/skill-picker");
-            let layer = Self::picker_layer(picker_parent);
-            ctx.set_sublayer(picker_parent, layer);
+            let layer = Self::picker_layer();
             let area = egui::Area::new(layer.id)
                 .fade_in(false)
                 .order(layer.order)
