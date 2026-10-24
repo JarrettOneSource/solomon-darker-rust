@@ -14,6 +14,7 @@ const output = path.resolve(process.env.OUT);
 fs.mkdirSync(output, {recursive:true});
 const checks = [], clients = [], accounts = [];
 let step = 'registration';
+let releaseResolve = () => {};
 function checked(label) {checks.push(label);console.log(label);}
 
 async function until(predicate, description, timeout = 45000) {
@@ -221,8 +222,24 @@ async function leavePlayer(owner) {
     await refresh(visitor,listing,'JOIN');
     await gpu.fill(visitor.page,'join-party-code',code.toLowerCase());
     await gpu.value(visitor.page,'join-party-code',code);
+    let submittedCode;
+    const resolveGate=new Promise(resolve=>{releaseResolve=resolve;});
+    const resolving=async route=>{
+      submittedCode=route.request().postDataJSON().code;
+      await resolveGate;
+      await route.continue();
+    };
+    await visitor.context.route(new URL('api/game/join/resolve',game).href,resolving);
     await visitor.page.keyboard.press('Enter');
+    await until(()=>typeof submittedCode==='string','the actual code resolve request');
+    assert.equal(submittedCode,code);
+    assert.equal((await gpu.widget(visitor.page,'join-party-code')).enabled,true);
+    await gpu.fill(visitor.page,'join-party-code','');
+    await gpu.value(visitor.page,'join-party-code','');
+    releaseResolve();
+    await visitor.context.unroute(new URL('api/game/join/resolve',game).href,resolving);
     await gpu.widget(visitor.page,'routing/dialog');
+    checked('native code Enter retains its submitted snapshot while the real pending field remains editable');
     await gpu.click(visitor.page,'routing-continue');
     await gpu.surface(visitor.page,'create');
     await gpu.fill(visitor.page,'create-name','Visitor');
@@ -266,6 +283,7 @@ async function leavePlayer(owner) {
     }
     process.exitCode = 1;
   } finally {
+    releaseResolve();
     try {
       if(failure)for(const owner of clients) {
         try {await leavePlayer(owner);cleanup.push({label:owner.state.label,left:true});}

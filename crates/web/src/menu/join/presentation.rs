@@ -178,7 +178,7 @@ pub(super) fn paint(
             .margin(Vec2::new(15.0, 9.0))
             .letter_spacing(3.2)
             .hint_text("XXXX-XXXX")
-            .enabled(!join.busy)
+            .enabled(true)
             .rules(crate::gpu_ui::EditorRules {
                 utf16_limit: Some(128),
                 normalize: Some(normalize_party_code),
