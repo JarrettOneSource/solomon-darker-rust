@@ -22,6 +22,7 @@ const working = fs.mkdtempSync(path.join(os.tmpdir(), 'solomon-native-'));
 const savePath = path.join(working, 'host.json');
 const checks = [];
 const errors = [];
+const speechEvidence = [];
 const shutdownResourceErrors = [];
 let intentionalHostShutdown = false;
 const requests = new Set();
@@ -223,6 +224,7 @@ async function approachSolomon(page, state) {
         return route.continue();
       });
       const page = await context.newPage();
+      await ui.observeAnnouncements(page);
       const state = observe(page);
       await loaded(page, state);
       return {page, state};
@@ -288,9 +290,17 @@ async function approachSolomon(page, state) {
       await first.page.keyboard.press('KeyT');
       // Actual key events exercise shortcuts in the underlying inventory as well as chat.
       await ui.focused(first.page,'social/chat-message');
+      const peerSpeechBefore = (await ui.announcements(second.page)).length;
       await first.page.keyboard.type('Shared College ready wasd',{delay:10});
       await first.page.keyboard.press('Enter');
       await waitUntil(() => second.state.messages.some(message => message.text === 'Shared College ready wasd'), 'accepted peer chat');
+      const incomingSpeech = 'Felix Shared College ready wasd';
+      await ui.announced(second.page,incomingSpeech,{afterIndex:peerSpeechBefore});
+      const incomingTrace = (await ui.announcements(second.page)).slice(peerSpeechBefore);
+      assert.deepEqual(incomingTrace.flatMap(event=>event.text.split('\n'))
+        .filter(line=>line===incomingSpeech),[incomingSpeech],
+      'the actual accepted inbound message is announced once with its visible author');
+      speechEvidence.push({kind:'accepted peer chat',events:incomingTrace});
       await ui.noWidget(first.page,'social/chat-message');
       await first.page.keyboard.press('KeyT');
       await ui.widget(first.page,'social/chat-message');
@@ -331,6 +341,22 @@ async function approachSolomon(page, state) {
       assert.equal((await ui.readUi(first.page)).surface, 'pause', 'closing chat preserves Pause');
       await ui.click(first.page,'resume');
       checks.push('chat focus and dismissal above Pause');
+
+      await first.page.keyboard.press('KeyT');
+      await ui.focused(first.page,'social/chat-message');
+      const statusSpeechBefore = (await ui.announcements(first.page)).length;
+      await first.page.keyboard.press('Enter');
+      const status = await ui.widget(first.page,'social/chat-status');
+      assert.equal(status.label,'Chat messages cannot be empty.');
+      await ui.announced(first.page,status.label,{afterIndex:statusSpeechBefore});
+      const statusTrace = (await ui.announcements(first.page)).slice(statusSpeechBefore);
+      assert.deepEqual(statusTrace.flatMap(event=>event.text.split('\n'))
+        .filter(line=>line===status.label),[status.label],
+      'the actual visible chat validation status is announced once');
+      speechEvidence.push({kind:'visible validation status',events:statusTrace});
+      await first.page.keyboard.press('Escape');
+      await ui.noWidget(first.page,'social/chat-message');
+      checks.push('accepted peer chat and visible validation status reach the real speech platform');
     }
     assert.equal(first.state.commands.some(command => command.kind === 'tutorial_action'), false,
       'ordinary College panels never send Tutorial surface acknowledgements');
@@ -427,7 +453,7 @@ async function approachSolomon(page, state) {
     const receipt = {passed: true, checks, renderer, socialChecked: process.env.SOCIAL !== '0', gameOverChecked: process.env.GAMEOVER === '1',
       clientRevision: process.env.CLIENT_REVISION || null, binarySha256: digest(binary),
       wasm: fs.readdirSync(assets).filter(file => file.endsWith('.wasm')).map(file => ({file, sha256: digest(path.join(assets, file))})),
-      origin, requests: requests.size, errors, shutdownResourceErrors};
+      origin, requests: requests.size, errors, shutdownResourceErrors, speechEvidence};
     fs.writeFileSync(path.join(output, 'native-session-receipt.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) {
@@ -442,7 +468,7 @@ async function approachSolomon(page, state) {
         ui: await ui.readUi(client.page).catch(() => null)};
       await client.page.screenshot({path: path.join(output, `native-failure-${name}.png`)}).catch(() => {});
     }
-    fs.writeFileSync(path.join(output, 'native-session-failure.json'), JSON.stringify({error: error.stack, checks, errors, shutdownResourceErrors, movementEvidence, state, hostLog}, null, 2));
+    fs.writeFileSync(path.join(output, 'native-session-failure.json'), JSON.stringify({error: error.stack, checks, errors, shutdownResourceErrors, movementEvidence, speechEvidence, state, hostLog}, null, 2));
     throw error;
   } finally {
     try {
