@@ -303,7 +303,10 @@ impl PlayerPanels {
                         }
                     }
                 }
-                if !pending && !self.input_suspended {
+                if !pending
+                    && !self.input_suspended
+                    && frame.ctx.memory(|memory| memory.allows_interaction(layer_id()))
+                {
                     if frame.ctx.input_mut(|input| {
                         input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
                     }) {

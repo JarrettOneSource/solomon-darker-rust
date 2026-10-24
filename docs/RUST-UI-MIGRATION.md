@@ -759,3 +759,12 @@ those overlaps: wide tooltip is below afterimages, while a compact portaled tool
 is above the stage and below navigation. All remain in body book30. The native
 regression drains the real graphics layers in both layouts, independently of paint
 registration order; Source afterimage lifetime and interaction admission stay intact.
+
+The retained f41 first-controller-B failure at `ARCH_Q1_0` loses focus but leaves
+the dialogue open. Its producer projects browser key codes only; controller Back
+is a genuine egui Escape without a browser KeyboardEvent. c140
+`PlayerPanels::update:909–910` explicitly routes the old navigation back result
+into `self.back`. The GPU adapter now consumes that genuine Escape through the
+same typed panel-key owner once, deduplicates physical Escape and retains repeat,
+suspension, modal and rename admission. QA keeps the original first-B journey;
+no second press or timing replacement establishes acceptance.
