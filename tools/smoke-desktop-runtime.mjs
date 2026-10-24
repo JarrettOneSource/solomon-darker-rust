@@ -356,6 +356,7 @@ async function launch(label, userData) {
   return instance;
 }
 async function title(page) {
+  await page.waitForURL('solomon-darker://app/game', {waitUntil: 'domcontentloaded'});
   await ui.ready(page);await ui.surface(page,'title');
   if(ui.findWidget(await ui.readUi(page),'prompt-secondary')){await ui.click(page,'prompt-secondary');await ui.noWidget(page,'prompt-secondary');}
   await ui.assertGpuOnly(page);

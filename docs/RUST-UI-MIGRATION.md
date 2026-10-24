@@ -50,6 +50,17 @@ guards and strict resource collector remain unchanged. The regression is red
 before the base fix; all30 desktop contracts and44 browser-support tests pass
 after it. New four-platform packaged receipts remain required.
 
+The b34e419 M5 diagnostic package passes the complete journey with all seven
+screenshots reviewed and all six native/peer stops after document retirement.
+It retains ce12d7c native/WASM provenance after proving those build inputs
+unchanged. Its Linux CI package also passes the repaired conflict recovery and
+Return to launcher, then the driver reads GPU state while Host game replaces the
+launcher document. The raw error is an execution context destroyed by navigation,
+with no application errors. The desktop journey now waits for its actual
+`solomon-darker://app/game` document before reading GPU state; it does not suppress
+navigation errors in shared GPU helpers. Canonical platform qualification remains
+required for this driver repair.
+
 Product revision `ce12d7cd993ae39d3ef3fcdf39d57ffbf75f94f0` passes all696 native tests,
 formatting, strict native/main-WASM Clippy and44 browser-support tests on the M5.
 Its static and hosted artifacts have complete verified hashes/membership. The final
