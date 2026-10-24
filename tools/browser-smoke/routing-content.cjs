@@ -190,9 +190,10 @@ function admittedMods() {return receipt.admissions.at(-1).mods.map(mod=>`${mod.i
     await ui.click(page,`cloud-subscription:disable:${b.slug}`);
     await ui.widget(page,`cloud-subscription:enable:${b.slug}`,{enabled:true});
     await ui.click(page,'cloud-tab:mods');await ui.click(page,`cloud-subscription:subscribe:${c.slug}`);
-    await ui.widget(page,`cloud-subscription:disable:${c.slug}`,{enabled:true});
     await until(()=>activeMods?.length===2&&activeMods.some(mod=>mod.id===a.id&&mod.version==='2.0.0')
       &&activeMods.some(mod=>mod.id===c.id)&&pending.size===0,'real replacement content set');
+    await ui.click(page,'cloud-tab:subscribed');
+    await ui.widget(page,`cloud-subscription:disable:${c.slug}`,{enabled:true});
     await leaveCloud();await ui.click(page,'play');await ui.click(page,'continue');
     const mismatch=await ui.widget(page,'routing/dialog');assert.equal(mismatch.label,'THE MOD LIST HAS CHANGED');
     for(const text of ['ADDED','MISSING','CHANGED',`${c.id} v1.0.0`,`${b.id} v1.0.0`,`${a.id} v1.0.0 → v2.0.0`])
