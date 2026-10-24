@@ -17,6 +17,18 @@ native downloads, screen-reader announcements, audio, network and persistence; t
 paint game controls or mirror them as hidden DOM. Accessibility uses native `ariaNotify`
 where supported or one specifically marked, nonvisual, text-only live region.
 
+The ordinary hosted Save/Leave/Continue journey must follow the same pinned Source
+recovery contract. `game-host.ts:3505–3561` retires the last disconnected player's
+world as suspended, and `publishSaveCheckpointForClient` defaults its signed claim
+to the current recovery revision. `game-session-supervisor.ts:166–173,719–815`
+keeps suspended claims eligible to seed their saved run, returning201; terminal,
+old-revision and invalid legacy claims have separate rejection paths. The24382f0
+browser receipt already returned201 and continued the exact Felix Boneyard run,
+but its final assertion incorrectly demanded an inactive-party404. The canonical
+journey now requires exactly one successful signed rejoin and the same player/run,
+with every HTTP failure still fatal. No host or save behavior changes; the matched
+current-artifact rerun remains required.
+
 The migration begins at Rust `c14068b3c95aa40f0b1c85d11f73fe2622349aae`. An implementation
 or a passing kernel fixture does not establish composed visual/input acceptance. Every pending
 row below remains required; there are no accepted placeholders, dropped variants or required
