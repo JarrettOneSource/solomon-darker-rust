@@ -161,7 +161,8 @@ function admittedMods() {return receipt.admissions.at(-1).mods.map(mod=>`${mod.i
     for(const id of ['routing-back','routing-continue','routing-vanilla'])assert.equal((await ui.widget(page,id)).enabled,false);
     await page.keyboard.press('Escape');await ui.surface(page,'routing');assert.equal(receipt.admissions.length,0);
     receipt.downloadPending=(await ui.widget(page,'routing/dialog')).value;
-    assert.match(receipt.downloadPending,/download/i);await shot('routing-download-pending');
+    // Source reports active:null until the first verified/read body progress arrives.
+    assert.ok(receipt.downloadPending.includes('Content ready · 0%'));await shot('routing-download-pending');
     releaseDownload();
     const errorText=`${a.name} was disabled because its content could not be loaded or verified.`;
     await ui.waitForUi(page,s=>ui.findWidget(s,'routing/dialog')?.value.includes(errorText),'actual failed-download alert');
