@@ -760,6 +760,8 @@ mod focus_scroll_tests {
             vec![
                 Event::PointerMoved(egui::pos2(150.0, 65.0)),
                 Event::MouseWheel {
+                    phase: egui::TouchPhase::Move,
+                    source: egui::MouseWheelSource::Unknown,
                     unit: egui::MouseWheelUnit::Point,
                     delta: Vec2::new(0.0, 100.0),
                     modifiers: Modifiers::NONE,
