@@ -326,6 +326,7 @@ impl ModDetailView {
         child.spacing_mut().item_spacing = Vec2::ZERO;
         let mut result = Ok(());
         let mut scroll = egui::ScrollArea::vertical()
+            .animated(false)
             .id_salt(format!("cloud-detail-scroll:{}", self.summary.slug))
             .auto_shrink([false, false]);
         if self.reset_scroll {
@@ -659,6 +660,7 @@ impl ModDetailView {
                 ui.new_child(egui::UiBuilder::new().id_salt("cloud-thumbnails").max_rect(thumbs));
             child.set_clip_rect(thumbs);
             egui::ScrollArea::horizontal()
+                .animated(false)
                 .id_salt("cloud-gallery-thumbnails")
                 .auto_shrink([false, false])
                 .show(&mut child, |ui| {

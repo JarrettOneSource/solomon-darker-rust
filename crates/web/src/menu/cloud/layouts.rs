@@ -161,6 +161,7 @@ impl LayoutsView {
         child.set_clip_rect(rect);
         let mut result = Ok(());
         egui::ScrollArea::vertical()
+            .animated(false)
             .id_salt("cloud-layouts-scroll")
             .auto_shrink([false, false])
             .show(&mut child, |ui| {

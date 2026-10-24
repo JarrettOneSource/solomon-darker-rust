@@ -606,6 +606,7 @@ mod focus_scroll_tests {
                 ctx.root_ui(|ui| {
                     let mut focused = None;
                     let scroll = egui::ScrollArea::vertical()
+                        .animated(false)
                         .id_salt("native-focus-scroll")
                         .max_height(130.0)
                         .auto_shrink([false, false])
@@ -651,7 +652,10 @@ mod focus_scroll_tests {
             pass(&ctx, vec![tab(true, false)]);
             let (focused, rect, viewport, offset) = pass(&ctx, vec![tab(false, false)]);
             assert_eq!(focused, index);
-            assert!(viewport.contains_rect(rect), "the actual focused response is fully revealed");
+            assert!(
+                viewport.contains_rect(rect),
+                "focused={focused} expected={index} rect={rect:?} viewport={viewport:?} offset={offset}: the actual focused response is fully revealed"
+            );
             if index == 8 {
                 assert!(offset > 0.0, "forward Tab moved the real scroll owner");
             }
@@ -660,7 +664,10 @@ mod focus_scroll_tests {
             pass(&ctx, vec![tab(true, true)]);
             let (focused, rect, viewport, offset) = pass(&ctx, vec![tab(false, true)]);
             assert_eq!(focused, index);
-            assert!(viewport.contains_rect(rect), "reverse focus reveals the earlier control");
+            assert!(
+                viewport.contains_rect(rect),
+                "focused={focused} expected={index} rect={rect:?} viewport={viewport:?} offset={offset}: reverse focus reveals the earlier control"
+            );
             if index == 0 {
                 assert_eq!(offset, 0.0, "reverse Tab restores the top");
             }
