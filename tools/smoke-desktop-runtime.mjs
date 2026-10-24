@@ -37,6 +37,7 @@ await mkdir(evidence, {
 const profiles = await mkdtemp(join(tmpdir(), 'solomon-darker-smoke-'));
 await writeFile(join(evidence, 'owned-profile.json'), JSON.stringify({profiles}));
 const running = new Set();
+const inputTrace = [];
 const errors = [];
 const resourceChecks = [];
 const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [], serviceStops: [], resourceFailures: [], mediaObservations: [] };
@@ -244,6 +245,7 @@ try {
   }
   throw sanitized;
 } finally {
+  await writeFile(join(evidence, 'input-trace.json'), JSON.stringify(inputTrace, null, 2)+'\n');
   for (const instance of running) {
     await bounded(instance.app.evaluate(() => {
       const dialog = globalThis.__desktopCloseSmoke;
@@ -306,11 +308,14 @@ async function launch(label, userData) {
     }
   };
   running.add(instance);
+  await page.context().addInitScript(observeInput);
+  await page.evaluate(observeInput);
   // The shared observer retains every raw failure and only retires one when
   // the actual resident media channel proves the browser suspended preloading.
   await ui.watchRequestFailures(page, {errors}).ready;
   page.on('pageerror', error => errors.push(redact(`${label}: ${error.message}`)));
   page.on('console', message => {
+    if (message.text().startsWith('__SDR_INPUT_TRACE__')) inputTrace.push({label, ...JSON.parse(message.text().slice('__SDR_INPUT_TRACE__'.length))});
     if (message.type() === 'warning' && message.text() === storageConflict
       && instance.state.expectedStorageConflict) {
       receipts.storageWarnings.push({label, message: message.text()});
@@ -824,4 +829,34 @@ async function freePort() {
   const port = server.address().port;
   await new Promise(resolveClose => server.close(resolveClose));
   return port;
+}
+
+function observeInput() {
+  if (window.__sdrInputObserved) return;
+  window.__sdrInputObserved = true;
+  let last;
+  const snapshot = () => {
+    const raw = window.wasmBindings?.gpu_ui_state?.();
+    const ui = raw ? JSON.parse(raw) : null;
+    return {frame: ui?.frame, surface: ui?.surface, scope: ui?.inputScope,
+      ready: ui?.ready, focused: ui?.widgets.filter(w => w.focused).map(w => w.id),
+      pointerTargets: ui?.widgets.filter(w => w.enabled && w.role === 'button').map(w => ({id:w.id,rect:w.rect}))};
+  };
+  const record = (type, detail={}) => console.log('__SDR_INPUT_TRACE__'+JSON.stringify({
+    type, now:performance.now(), documentId:performance.timeOrigin, url:location.href,
+    documentFocused:document.hasFocus(), visibility:document.visibilityState, ...detail, ui:snapshot()}));
+  for (const type of ['pointerdown','pointerup','pointercancel','lostpointercapture','pointerleave','click','focus','blur','visibilitychange']) {
+    window.addEventListener(type, event => record(type, {stamp:event.timeStamp, trusted:event.isTrusted,
+      target:event.target?.id || event.target?.tagName || 'window',x:event.clientX,y:event.clientY,
+      button:event.button,buttons:event.buttons,pointerId:event.pointerId,detail:event.detail}), true);
+  }
+  for (const type of ['keydown','keyup']) window.addEventListener(type,event => record(type,{key:event.key,code:event.code,stamp:event.timeStamp,trusted:event.isTrusted}),true);
+  try { new PerformanceObserver(list => {for(const entry of list.getEntries()) if(entry.duration>=100) record('longtask',{start:entry.startTime,duration:entry.duration});}).observe({type:'longtask',buffered:true}); } catch {}
+  function frame() {
+    const ui=snapshot();
+    const key=JSON.stringify([ui.surface,ui.scope,ui.ready,ui.focused]);
+    if(key!==last){record('ui-change');last=key;}
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 }
