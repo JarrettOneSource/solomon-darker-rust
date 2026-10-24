@@ -659,7 +659,7 @@ mod focus_scroll_tests {
                         .max_height(130.0)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            for index in 0..12 {
+                            for index in 0_usize..12 {
                                 let (_, rect) = ui.allocate_space(Vec2::new(240.0, 32.0));
                                 let response = ui.interact(
                                     rect,
@@ -692,7 +692,7 @@ mod focus_scroll_tests {
     #[test]
     fn real_tab_focus_reveals_controls_in_both_scroll_directions() {
         let ctx = Context::default();
-        ctx.memory_mut(|memory| memory.request_focus(Id::unique(("control", 0))));
+        ctx.memory_mut(|memory| memory.request_focus(Id::unique(("control", 0_usize))));
         let first = pass(&ctx, Vec::new());
         assert_eq!(first.0, 0);
         for index in 1..=8 {
