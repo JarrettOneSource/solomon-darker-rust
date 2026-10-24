@@ -58,7 +58,9 @@ async function shot(name){await page.screenshot({path:path.join(out,`${name}.png
     await ready();assert.equal(receipt.welcome.kind,'PrivateCollege');assert.equal(receipt.welcome.cheats,false);
     step='ordinary paid Health Potion';
     await shortcut('Fomentius');await ui.widget(page,'panel:service');
-    const offer=await ui.byLabel(page,'Buy Health Potion for 150 gold',{role:'button',prefix:'panel:shop:'});
+    const stock=await ui.waitForUi(page,s=>s.widgets.some(w=>w.id.startsWith('panel:shop:')
+      &&w.label==='Buy Health Potion for 150 gold'),'actual Health Potion stock');
+    const offer=stock.widgets.find(w=>w.id.startsWith('panel:shop:')&&w.label==='Buy Health Potion for 150 gold');
     const before=player().economy.gold;
     await ui.click(page,offer.id);await ui.click(page,offer.id);
     await until(()=>player().economy.gold===before-150,'actual potion payment');
