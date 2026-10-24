@@ -5,6 +5,7 @@ const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const output = process.env.OUT || '/tmp';
 const url = process.env.URL || 'http://127.0.0.1:4185/';
 fs.mkdirSync(output,{recursive:true});
@@ -17,10 +18,12 @@ const gold = (page,expected) => ui.value(page,'panel:gold',expected);
 const rows = snapshot => snapshot.widgets.filter(widget=>widget.id.startsWith('panel:dialogue-selector:'));
 
 (async()=>{
-  const browser=await chromium.launch({headless:true,
+  const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=metal','--ignore-gpu-blocklist']});
+  const browser=owned.browser;
   const checks=[];
+  const receipt={passed:false,artifact:process.env.ARTIFACT,generatedName:process.env.GENERATED_NAME==='1',checks,screenshots:output};
   let page,observed;
   try {
     page=await browser.newPage({viewport:{width:1600,height:900}});
@@ -85,10 +88,25 @@ const rows = snapshot => snapshot.widgets.filter(widget=>widget.id.startsWith('p
     assert.equal((await ui.readUi(page)).surface,'hidden','closing the conversation returns directly to play');
     await ui.assertGpuOnly(page);await ui.settleErrors(page);assert.deepEqual(observed.errors,[]);
     checks.push('all5 native boasts preserve frame/text geometry and accepted dialogue lifecycle');
-    console.log(JSON.stringify({passed:true,generatedName:process.env.GENERATED_NAME==='1',checks,errors:observed.errors,screenshots:output}));
+    receipt.passed=true;
   }catch(error){
+    receipt.failure=error.stack;
     if(page){await ui.settleErrors(page);await screenshot(page,'hub-services-failure.png');}
     fs.writeFileSync(path.join(output,'hub-services-failure.json'),JSON.stringify({error:error.stack,checks,errors:observed?.errors,ui:page?await ui.readUi(page):null},null,2));
     throw error;
-  }finally{await browser.close();}
+  }finally{
+    try {if(page)await ui.settleErrors(page)}
+    catch(error){receipt.passed=false;receipt.failure??=error.stack;throw error}
+    finally {
+      try{receipt.cleanup=await owned.close()}
+      catch(error){receipt.passed=false;receipt.cleanup=error.cleanup;throw error}
+      finally {
+        receipt.errors=observed?.errors||[];
+        if(receipt.errors.length)receipt.passed=false;
+        fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify(receipt,null,2));
+      }
+    }
+  }
+  assert.deepEqual(receipt.errors,[]);
+  console.log(JSON.stringify(receipt));
 })().catch(error=>{console.error(error);process.exitCode=1;});

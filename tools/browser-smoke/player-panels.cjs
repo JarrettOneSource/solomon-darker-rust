@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const { chromium } = require(path.resolve(process.env.PW));
 const { startNewGame } = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const output = process.env.OUT || '/tmp';
 fs.mkdirSync(output,{recursive:true});
 const state = page => page.evaluate(() => Array.from(window.wasmBindings.wizard_state()));
@@ -16,13 +17,15 @@ const notice = (page, title) => ui.waitForUi(page, snapshot => {
 }, `Inventory notice ${title}`);
 
 (async () => {
-  const browser = await chromium.launch({ headless: true,
+  const owned = await launchOwnedBrowser(chromium,{ headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-  let page;
+    args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
+  const browser=owned.browser;
+  const receipt={passed:false,artifact:process.env.ARTIFACT,generatedName:process.env.GENERATED_NAME==='1',screenshots:output};
+  let page,observed;
   try {
     page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-    const observed = ui.watchErrors(page);
+    observed = ui.watchErrors(page);
     const {errors}=observed;
     await observed.ready;
     await page.goto(process.env.URL || 'http://127.0.0.1:4185/'); await ui.ready(page);
@@ -77,9 +80,24 @@ const notice = (page, title) => ui.waitForUi(page, snapshot => {
     await page.keyboard.press('Escape');await ui.noWidget(page,'panel:surface:skills');
     await page.waitForFunction(tick => window.wasmBindings.wizard_state()[5] > tick,frozen[5]);
     await ui.assertGpuOnly(page); await ui.settleErrors(page); assert.deepEqual(errors,[]);
-    console.log(JSON.stringify({passed:true,generatedName:process.env.GENERATED_NAME==='1',errors,screenshots:output}));
+    receipt.passed=true;
   } catch(error) {
+    receipt.failure=error.stack;
     if(page){await ui.settleErrors(page);await shot(page,'player-panels-failure.png');fs.writeFileSync(path.join(output,'player-panels-failure.json'),JSON.stringify({error:error.stack,ui:await ui.readUi(page).catch(failure=>({readError:failure.message}))},null,2));}
     throw error;
-  } finally { await browser.close(); }
+  } finally {
+    try {if(page)await ui.settleErrors(page)}
+    catch(error){receipt.passed=false;receipt.failure??=error.stack;throw error}
+    finally {
+      try{receipt.cleanup=await owned.close()}
+      catch(error){receipt.passed=false;receipt.cleanup=error.cleanup;throw error}
+      finally {
+        receipt.errors=observed?.errors||[];
+        if(receipt.errors.length)receipt.passed=false;
+        fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify(receipt,null,2));
+      }
+    }
+  }
+  assert.deepEqual(receipt.errors,[]);
+  console.log(JSON.stringify(receipt));
 })().catch(error=>{console.error(error);process.exitCode=1;});
