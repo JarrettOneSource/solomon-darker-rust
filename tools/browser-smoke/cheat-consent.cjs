@@ -6,6 +6,7 @@ const {chromium} = require(path.resolve(process.env.PW));
 const gpu = require('./gpu-ui.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const {startNewGame} = require('./menu-journey.cjs');
+const {revealSettingsControl} = require('./settings-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const output = path.resolve(process.env.OUT);
 const checks = [], errors = [], requests = [], commands = [], welcomes = [];
@@ -104,6 +105,7 @@ async function until(predicate, label) {
     await gpu.surface(page, 'hidden');
     await page.keyboard.press('Escape');
     await cloudSettings();
+    await revealSettingsControl(page, 'settings-toggle:cheats');
     const beforePrompt = commands.length;
     await gpu.click(page, 'settings-toggle:cheats');
     await gpu.widget(page, 'routing/dialog');
