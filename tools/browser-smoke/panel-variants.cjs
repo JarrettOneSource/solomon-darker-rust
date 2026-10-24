@@ -10,6 +10,7 @@ const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const {startNewGame} = require('./menu-journey.cjs');
 const {revealSettingsControl} = require('./settings-journey.cjs');
 const {checkNativeBeltPullOff} = require('./belt-pull-off-check.cjs');
+const {walkSolomonEntrance} = require('./solomon-entrance.cjs');
 const ui = require('./gpu-ui.cjs');
 
 const output=path.resolve(process.env.OUT),url=process.env.URL;
@@ -129,9 +130,22 @@ async function buy(stock){const gold=player().economy.gold,before=player().econo
     await ui.click(page,'leave');await ui.surface(page,'title');
     await page.reload();await ui.ready(page);await ui.click(page,'continue');await ready();
     assert.deepEqual(player().belt,receipt.saved.belt);assert.deepEqual(item(clothingId).icon_tints,receipt.saved.clothing.icon_tints);
+    receipt.checks.push('owned potion drag into bank two and ordinary saved Leave/reload/Continue preserve all bindings and both colors');
+    step='native skill activation from the second and third banks';
+    await ui.click(page,'hud:hotbar:next');await ui.widget(page,'hud:belt:8');
+    await ui.click(page,(await ui.byLabel(page,'Enter the Boneyard',{role:'button'})).id);
+    await until(()=>frame?.snapshot.boneyard,'actual Boneyard admission');await ready();
+    await walkSolomonEntrance(page,{snapshot:()=>frame.snapshot,playerId:()=>playerId,output});await ready();
+    for(const [slot,expected] of [[8,true],[16,false]]){
+      await until(()=>frame.snapshot.secondary.players[playerId]?.global_cooldown_ticks<=0,'native secondary cooldown');
+      await ui.click(page,`hud:belt:${slot}`);
+      await until(()=>frame.snapshot.secondary.players[playerId]?.firewalker===expected,'actual banked skill changes the native toggle');
+      if(slot===8){await ui.click(page,'hud:hotbar:next');await ui.widget(page,'hud:belt:16');}
+    }
+    await shot('native-second-and-third-bank-casts');
     await page.keyboard.press('Escape');await ui.surface(page,'pause');await ui.click(page,'leave');await ui.surface(page,'title');
     await ui.assertGpuOnly(page);await ui.settleErrors(page);assert.deepEqual(observed.errors,[]);
-    receipt.checks.push('owned potion drag into bank two and ordinary saved Leave/reload/Continue preserve all bindings and both colors');
+    receipt.checks.push('second and third bank pointer activations toggle the real native Firewalker and save normally');
     receipt.passed=true;
   }catch(error){failure=error;receipt.failure=error.stack;receipt.step=step;receipt.failedPlayer=player();
     if(page){receipt.failedUi=await ui.readUi(page).catch(error=>({error:error.message}));await shot('failure').catch(()=>{});}}

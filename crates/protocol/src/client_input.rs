@@ -95,6 +95,32 @@ impl ClientInputSequence {
 mod tests {
     use super::*;
     use serde::Deserialize;
+
+    #[test]
+    fn all_three_hotbars_preserve_press_release_edges() {
+        for slot in [0, 7, 8, 15, 16, 23] {
+            let mut client = ClientInputSequence::default();
+            let press = GameSessionInput { quickbar: Some(slot), ..GameSessionInput::default() };
+            let Some(ClientMessage::Input { sequence: 1, target_tick: 11, input }) =
+                client.queue_input(10, press, false).unwrap()
+            else {
+                panic!("the selected hotbar slot must publish its press");
+            };
+            assert_eq!(input.quickbar, Some(slot));
+            let Some(ClientMessage::Input { sequence: 2, target_tick: 12, input }) =
+                client.queue_input(10, GameSessionInput::default(), false).unwrap()
+            else {
+                panic!("the release must occupy a separate tick");
+            };
+            assert_eq!(input.quickbar, None);
+        }
+        for slot in [24, usize::MAX] {
+            let mut client = ClientInputSequence::default();
+            let invalid = GameSessionInput { quickbar: Some(slot), ..GameSessionInput::default() };
+            assert!(client.queue_input(10, invalid, false).is_err());
+            assert_eq!(client.sequence, 0);
+        }
+    }
     use solomon_sim::Vec2;
 
     #[derive(Deserialize)]

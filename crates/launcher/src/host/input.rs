@@ -165,6 +165,32 @@ mod tests {
     use serde_json::{Value, json};
     use solomon_sim::Vec2;
 
+    #[test]
+    fn all_three_hotbars_rebase_late_edges_without_losing_a_press() {
+        for slot in [0, 7, 8, 15, 16, 23] {
+            let mut queue = InputQueue::default();
+            let press = GameSessionInput { quickbar: Some(slot), ..GameSessionInput::default() };
+            assert_eq!(
+                queue.accept(1, 11, press, 100, false),
+                Ok(InputAdmission::Queued { target_tick: 101 })
+            );
+            assert_eq!(
+                queue.accept(2, 12, GameSessionInput::default(), 100, false),
+                Ok(InputAdmission::Queued { target_tick: 102 })
+            );
+            assert_eq!(queue.for_tick(101).quickbar, Some(slot));
+            assert_eq!(queue.acknowledged_sequence(), 1);
+            assert_eq!(queue.for_tick(102).quickbar, None);
+            assert_eq!(queue.acknowledged_sequence(), 2);
+        }
+        for slot in [24, usize::MAX] {
+            let mut queue = InputQueue::default();
+            let invalid = GameSessionInput { quickbar: Some(slot), ..GameSessionInput::default() };
+            assert_eq!(queue.accept(1, 11, invalid, 10, false), Err(InputRejection::Quickbar));
+            assert_eq!(queue.last_received_sequence(), 0);
+        }
+    }
+
     fn point(value: &Value) -> Vec2 {
         Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
     }
