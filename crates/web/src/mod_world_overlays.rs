@@ -227,6 +227,9 @@ impl ModWorldOverlays {
     pub fn effect_layer() -> egui::LayerId {
         egui::LayerId::new(Order::Background, Id::unique("mod/effects"))
     }
+    pub fn scene_layer(&self) -> egui::LayerId {
+        self.scene.layer_id()
+    }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let ctx = frame.ctx.clone();
         let now = ctx.input(|input| input.time);

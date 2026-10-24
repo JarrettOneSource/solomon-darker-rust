@@ -60,14 +60,6 @@ enum Intent {
     PartyCopied { code: String, copied: bool },
 }
 
-pub(crate) fn layers_above_hud(ctx: &egui::Context, hud_layer: egui::LayerId) {
-    // Source HUD z10 is below the Social z60 parent. Keep its world children
-    // in that order when an interacted or newly visible Area rises.
-    for layer in [SocialUi::party_layer(), SocialUi::allies_layer(), SocialUi::chat_layer(false)] {
-        ctx.set_sublayer(hud_layer, layer);
-    }
-}
-
 pub struct SocialUi {
     document: Document,
     ui: StockAtlas,
@@ -263,13 +255,20 @@ impl SocialUi {
         Ok(())
     }
 
-    pub fn paint_above_hud(
-        &mut self,
-        frame: &mut UiFrame<'_>,
-        hud_layer: egui::LayerId,
-    ) -> Result<(), String> {
-        layers_above_hud(frame.ctx, hud_layer);
-        self.paint(frame)
+    /// Actual Source Social context, from auto children through local z52000.
+    /// Both chat Orders are genuine variants of the same source child.
+    pub fn fixed_layers() -> [egui::LayerId; 9] {
+        [
+            Self::party_layer(),
+            Self::allies_layer(),
+            Self::dialog_layer(),
+            Self::card_layer(),
+            Self::notice_layer(),
+            Self::party_invitation_layer(),
+            Self::chat_layer(false),
+            Self::chat_layer(true),
+            Self::college_invitation_layer(),
+        ]
     }
 
     pub fn allies_layer() -> egui::LayerId {
@@ -303,8 +302,8 @@ impl SocialUi {
         egui::LayerId::new(Order::Tooltip, Id::unique("social/notice"))
     }
 
-    pub fn card_layer(parent: egui::LayerId) -> egui::LayerId {
-        egui::LayerId::new(parent.order, Id::unique("social/player-card-surface"))
+    pub fn card_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("social/player-card-surface"))
     }
 
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
@@ -371,7 +370,7 @@ impl SocialUi {
                                 self.paint_native_party_menu(frame, ui, tab)?
                             }
                             Some(Surface::Card(_) | Surface::HubPlayer(_)) => {
-                                self.paint_card(frame, ui)?
+                                self.paint_card(frame)?
                             }
                             None => {}
                         }

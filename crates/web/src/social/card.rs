@@ -43,7 +43,6 @@ impl SocialUi {
     pub(super) fn paint_card(
         &mut self,
         frame: &mut crate::gpu_ui::UiFrame<'_>,
-        parent: &mut egui::Ui,
     ) -> Result<(), String> {
         let actor_profile = self.hub_player_profile();
         let Some(card) = self.current_card().or(actor_profile.as_ref()).cloned() else {
@@ -112,8 +111,7 @@ impl SocialUi {
         let padding = if coarse { egui::vec2(14.0, 12.0) } else { egui::vec2(26.0, 24.0) };
         let max_height = if coarse { screen.height() * 0.9 } else { screen.height() - 32.0 };
         let mut action = None;
-        let layer = Self::card_layer(parent.layer_id());
-        ctx.set_sublayer(parent.layer_id(), layer);
+        let layer = Self::card_layer();
         let area = egui::Area::new(layer.id)
             .fade_in(false)
             .order(layer.order)

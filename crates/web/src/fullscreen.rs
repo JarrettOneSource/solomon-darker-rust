@@ -98,6 +98,18 @@ impl FullscreenControl {
         }
         Ok(())
     }
+    /// Source menu.css raises this body root only for the native coarse portrait query.
+    pub fn above_orientation_guidance(&self) -> Result<bool, String> {
+        self.document
+            .default_view()
+            .ok_or("fullscreen window")?
+            .match_media("(orientation:portrait) and (hover:none) and (pointer:coarse)")
+            .map_err(|_| "fullscreen orientation query".to_owned())
+            .map(|query| query.is_some_and(|query| query.matches()))
+    }
+    pub fn fixed_layers() -> [egui::LayerId; 2] {
+        [Self::control_layer(), Self::help_layer()]
+    }
     pub fn control_layer() -> egui::LayerId {
         egui::LayerId::new(Order::Foreground, Id::unique("fullscreen/control"))
     }
