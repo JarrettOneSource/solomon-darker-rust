@@ -767,15 +767,6 @@ impl Game {
         self.update_skill_picker(time)?;
         self.update_social(time)?;
         self.update_cheats()?;
-        if self.panels.is_open()
-            || self.cheats.is_open()
-            || self.social.input_active()
-            || (!self.menu.is_blocking() && !self.can_pause())
-            || self.skill_selection_active()
-            || self.tutorial_access().is_some_and(|access| !access.combat)
-        {
-            self.menu.discard_gameplay_keys();
-        }
         self.menu.update(time, self.canvas.client_width(), self.canvas.client_height())?;
         if self.menu.is_create_pending() && self.match_loading.is_none() {
             self.begin_match_loading(MatchLoadingFlow::Hub, MatchLoadingStage::ConnectingTransport);
@@ -2419,6 +2410,13 @@ impl Game {
     fn ui_painter(
         &mut self,
     ) -> Result<(&mut GpuUi, impl FnMut(&mut UiFrame<'_>) -> Result<(), String> + '_), String> {
+        let gameplay_keys_enabled = !(self.panels.is_open()
+            || self.cheats.is_open()
+            || self.social.input_active()
+            || (!self.menu.is_blocking() && !self.can_pause())
+            || self.skill_selection_active()
+            || self.tutorial_access().is_some_and(|access| !access.combat));
+        self.menu.set_gameplay_keys_enabled(gameplay_keys_enabled);
         self.configure_ui_layers()?;
         let Self {
             gpu_ui,

@@ -4,22 +4,21 @@ use crate::gpu_ui::BrowserKey;
 
 #[derive(Default)]
 pub(super) struct MenuKeyboard {
+    gameplay_blocked: bool,
     discard: bool,
 }
 
 impl MenuKeyboard {
     pub(super) fn set_gameplay_enabled(&mut self, enabled: bool) {
-        if !enabled {
-            self.discard = true;
-        }
+        self.gameplay_blocked = !enabled;
     }
 
     pub(super) fn discard_pending(&mut self) {
         self.discard = true;
     }
 
-    pub(super) fn take(&mut self, keys: &[BrowserKey], _gameplay: bool) -> Vec<BrowserKey> {
-        if std::mem::take(&mut self.discard) {
+    pub(super) fn take(&mut self, keys: &[BrowserKey], gameplay: bool) -> Vec<BrowserKey> {
+        if std::mem::take(&mut self.discard) || gameplay && self.gameplay_blocked {
             return Vec::new();
         }
         keys.iter()
