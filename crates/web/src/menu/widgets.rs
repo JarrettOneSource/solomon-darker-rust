@@ -105,7 +105,7 @@ pub(crate) fn interact_unstyled(
     let enabled = enabled && ui.is_enabled();
     let response =
         ui.interact(rect, Id::unique(id), if enabled { Sense::click() } else { Sense::hover() });
-    focus_on_pointer(&response);
+    native_control_focus(&response);
     if enabled {
         frame.record(id, label, role, &response);
     } else {
@@ -114,14 +114,17 @@ pub(crate) fn interact_unstyled(
     response
 }
 
-/// Match native form controls: the actual pointer target retains keyboard focus.
-pub(crate) fn focus_on_pointer(response: &Response) {
+/// Native controls take pointer focus and reveal a newly focused control in its scroller.
+pub(crate) fn native_control_focus(response: &Response) {
     if response.enabled()
         && response.visible()
         && (response.is_pointer_button_down_on()
             || response.clicked_by(egui::PointerButton::Primary))
     {
         response.request_focus();
+    }
+    if response.enabled() && response.gained_focus() {
+        response.scroll_to_me_animation(None, egui::style::ScrollAnimation::none());
     }
 }
 
@@ -633,4 +636,82 @@ pub(crate) fn radial_gradient(
         }
     }
     ui.painter().add(egui::Shape::mesh(mesh));
+}
+
+#[cfg(test)]
+mod focus_scroll_tests {
+    use super::native_control_focus;
+    use egui::{Context, Event, Id, Key, Modifiers, RawInput, Rect, Sense, Vec2};
+
+    fn pass(ctx: &Context, events: Vec<Event>) -> (usize, Rect, Rect, f32) {
+        let mut observed = None;
+        ctx.run_pass(
+            RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, Vec2::new(300.0, 160.0))),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                ctx.root_ui(|ui| {
+                    let mut focused = None;
+                    let scroll = egui::ScrollArea::vertical()
+                        .id_salt("native-focus-scroll")
+                        .max_height(130.0)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            for index in 0..12 {
+                                let (_, rect) = ui.allocate_space(Vec2::new(240.0, 32.0));
+                                let response = ui.interact(
+                                    rect,
+                                    Id::unique(("control", index)),
+                                    Sense::click(),
+                                );
+                                native_control_focus(&response);
+                                if response.has_focus() {
+                                    focused = Some((index, response.rect));
+                                }
+                            }
+                        });
+                    let (index, rect) = focused.expect("a real control retains focus");
+                    observed = Some((index, rect, scroll.inner_rect, scroll.state.offset.y));
+                });
+            },
+        )
+        .drop_without_applying_deltas();
+        observed.expect("scroll area painted")
+    }
+    fn tab(pressed: bool, backwards: bool) -> Event {
+        Event::Key {
+            key: Key::Tab,
+            physical_key: Some(Key::Tab),
+            pressed,
+            repeat: false,
+            modifiers: Modifiers { shift: backwards, ..Modifiers::NONE },
+        }
+    }
+    #[test]
+    fn real_tab_focus_reveals_controls_in_both_scroll_directions() {
+        let ctx = Context::default();
+        ctx.memory_mut(|memory| memory.request_focus(Id::unique(("control", 0))));
+        let first = pass(&ctx, Vec::new());
+        assert_eq!(first.0, 0);
+        for index in 1..=8 {
+            pass(&ctx, vec![tab(true, false)]);
+            let (focused, rect, viewport, offset) = pass(&ctx, vec![tab(false, false)]);
+            assert_eq!(focused, index);
+            assert!(viewport.contains_rect(rect), "the actual focused response is fully revealed");
+            if index == 8 {
+                assert!(offset > 0.0, "forward Tab moved the real scroll owner");
+            }
+        }
+        for index in (0..8).rev() {
+            pass(&ctx, vec![tab(true, true)]);
+            let (focused, rect, viewport, offset) = pass(&ctx, vec![tab(false, true)]);
+            assert_eq!(focused, index);
+            assert!(viewport.contains_rect(rect), "reverse focus reveals the earlier control");
+            if index == 0 {
+                assert_eq!(offset, 0.0, "reverse Tab restores the top");
+            }
+        }
+    }
 }

@@ -924,7 +924,7 @@ DevTools: solomonDark.lua.help()",
         );
         let id = format!("settings-range:{id}");
         let response = ui.interact(track, egui::Id::unique(&id), egui::Sense::click_and_drag());
-        widgets::focus_on_pointer(&response);
+        widgets::native_control_focus(&response);
         frame.record(&id, label, "slider", &response);
         let paint = frame.with_brightness(if response.has_focus() { 1.16 } else { 1.0 });
         self.control_panel.paint_raw(&paint, ui.painter(), 3, rect, Color32::WHITE)?;
