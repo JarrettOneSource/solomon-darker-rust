@@ -168,7 +168,7 @@ impl WheelState {
                 // because it adds latency.
                 let is_smooth = self.status == Status::InTouch
                     || match unit {
-                        MouseWheelUnit::Point => delta.length() < 8.0, // a bit arbitrary here
+                        MouseWheelUnit::Point => options.raw_point_scroll || delta.length() < 8.0,
                         MouseWheelUnit::Line | MouseWheelUnit::Page => false,
                     };
 

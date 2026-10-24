@@ -27,6 +27,11 @@ Local changes are confined to the following implementation files:
   projection in `context.rs`: explicit native pointer cancellation retires its buttons,
   potential click/drag owners and motion without a normal release or click. It preserves
   the original raw Touch cancellation and leaves ordinary release/click behavior intact.
+- `input_state/mod.rs`, `input_state/wheel_state.rs`: opt-in
+  `InputOptions::raw_point_scroll` consumes browser/platform-paced pixel deltas once.
+  It preserves native wheel phase/source/modifiers, line/page handling and upstream
+  default smoothing. The game enables this option to match native browser scrolling
+  and prevent replayed wheel motion after a newly focused control has been revealed.
 
 Public integration methods are `Context::set_fixed_layer_order`,
 `Context::fixed_layer_order_index`, `Context::compare_layer_order`, `Context::set_widget_hit_test`,
@@ -48,3 +53,6 @@ upgrades must retain these contracts or replace the patch with equivalent suppor
 `crates/web/src/gpu_ui/input/cancel_tests.rs` drives the production native projection
 through real Context responses for cancellation, drag retirement, secondary touches,
 multiple mouse buttons and subsequent ordinary tap/double-click behavior.
+`crates/web/src/menu/widgets.rs` covers native point-delta pacing, unchanged line/page
+policy, held/released cardinal and Tab focus reveal, and retained user wheel scrolling
+at the actual input-commit/final-layout clock boundary.
