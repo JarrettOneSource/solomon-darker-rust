@@ -86,6 +86,7 @@ pub struct SocialUi {
     shown_party_invitation: Option<String>,
     chat_open: bool,
     chat_motion: chat::ChatMotion,
+    chat_announcements: chat::ChatAnnouncements,
     chat_draft: String,
     channel: GameChatChannel,
     whisper: Option<GameChatSender>,
@@ -138,6 +139,7 @@ impl SocialUi {
             shown_party_invitation: None,
             chat_open: false,
             chat_motion: chat::ChatMotion::default(),
+            chat_announcements: chat::ChatAnnouncements::default(),
             chat_draft: String::new(),
             channel: GameChatChannel::Party,
             whisper: None,
@@ -213,6 +215,13 @@ impl SocialUi {
         self.mark_activity();
     }
 
+    /// `GameChat.tsx` recreates its live-list ownership for a new session, even for
+    /// the same player when an intermediate empty snapshot was never painted.
+    pub fn reset_chat_announcements(&mut self) {
+        self.chat_announcements.reset();
+        self.chat_status = None;
+    }
+
     pub fn party_rejected(&mut self, rejection: PartyActionRejection) {
         self.party_error(rejection.text());
     }
@@ -249,6 +258,10 @@ impl SocialUi {
         if self.snapshot.as_ref() != snapshot {
             self.accept_snapshot(snapshot);
         }
+        self.chat_announcements.observe(
+            snapshot.into_iter().flat_map(|state| state.chat_messages.iter().map(|m| m.sequence)),
+            context.visible && context.chat_enabled && !context.input_suspended,
+        );
         self.ally_rows = allies.to_vec();
         if !context.visible || context.input_suspended || snapshot.is_none() {
             self.close_surfaces();
@@ -465,6 +478,7 @@ impl SocialUi {
             != snapshot.map(|state| &state.local_player_id)
         {
             self.close_surfaces();
+            self.reset_chat_announcements();
             self.last_sequence = snapshot
                 .and_then(|state| state.chat_messages.last())
                 .map_or(0, |message| message.sequence);
