@@ -260,6 +260,28 @@ fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_onc
                     },
                 )
                 .unwrap();
+            frame
+                .paint_outer_shadow_spread(
+                    &painter,
+                    ImageShadow { offset: Vec2::ZERO, blur: 12.0, color: Color32::BLACK },
+                    |caster| {
+                        caster.rect_filled(
+                            Rect::from_min_size(pos2(10.0, 10.0), vec2(50.0, 40.0)),
+                            0.0,
+                            Color32::WHITE,
+                        );
+                        Ok(())
+                    },
+                    |caster| {
+                        caster.rect_filled(
+                            Rect::from_min_size(pos2(18.0, 18.0), vec2(34.0, 24.0)),
+                            0.0,
+                            Color32::WHITE,
+                        );
+                        Ok(())
+                    },
+                )
+                .unwrap();
             painter.set_opacity(0.0);
             frame
                 .paint_group(&painter, GroupEffect::default(), |_, child| {
@@ -276,7 +298,7 @@ fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_onc
     let nodes =
         effects::parse(ctx.tessellate(output.shapes.clone(), output.pixels_per_point)).unwrap();
     output.drop_without_applying_deltas();
-    assert_eq!(nodes.len(), 4);
+    assert_eq!(nodes.len(), 5);
     let effects::Node::Group { style, children, .. } = &nodes[0] else { panic!("GPU group") };
     assert!((style.effect.opacity - 0.2).abs() < 0.00001);
     assert_eq!(style.filter.brightness, 1.2);
@@ -287,7 +309,16 @@ fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_onc
     assert!((style.effect.opacity - 0.4).abs() < 0.00001);
     let effects::Node::Group { style, .. } = &nodes[2] else { panic!("inner GPU shadow") };
     assert_eq!(style.output, solomon_graphics::ShadowOutput::Inner);
-    let effects::Node::Group { style, .. } = &nodes[3] else { panic!("zero-opacity GPU group") };
+    let effects::Node::Group { style, children, knockout, .. } = &nodes[3] else {
+        panic!("spread shadow keeps its independent caster and interior")
+    };
+    assert_eq!(style.output, solomon_graphics::ShadowOutput::Outer);
+    assert!((style.effect.opacity - 0.4).abs() < 0.00001);
+    let source = effects::content_bounds(children);
+    let interior = effects::content_bounds(knockout.as_ref().unwrap());
+    assert!(source.contains_rect(interior));
+    assert!((source.width() - interior.width() - 16.0).abs() < 0.01);
+    let effects::Node::Group { style, .. } = &nodes[4] else { panic!("zero-opacity GPU group") };
     assert_eq!(style.effect.opacity, 0.0);
 }
 

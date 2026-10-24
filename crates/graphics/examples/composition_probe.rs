@@ -20,6 +20,79 @@ mod browser {
         sampling(gl).map_err(|error| JsValue::from_str(&error))
     }
 
+    #[wasm_bindgen]
+    pub fn spread_shadow_probe(gl: Gl) -> Result<String, JsValue> {
+        spread_shadow(gl).map_err(|error| JsValue::from_str(&error))
+    }
+
+    fn spread_shadow(gl: Gl) -> Result<String, String> {
+        let mut renderer = Renderer::new(gl.clone())?;
+        let caster = renderer.upload_rgba(3, 1, &[255; 12])?;
+        let target = renderer.create_render_target_size([5, 3])?;
+        let nested = renderer.create_render_target_size([1, 1])?;
+        renderer.begin_frame(5, 4, [5.0, 4.0]);
+        let mut nested_ink = Err("nested capture did not run".to_owned());
+        renderer.render_ui_group(&target, [5.0, 3.0], |renderer| {
+            renderer.draw_image_shadow(
+                AlphaShadow {
+                    bounds: [0.0, 0.0, 1.0, 1.0],
+                    offset: [0.0, 0.0],
+                    sigma: [0.0, 0.0],
+                    color: [0.0, 0.0, 1.0, 1.0],
+                    output: ShadowOutput::Shadow,
+                },
+                |renderer| {
+                    quad(
+                        renderer,
+                        &caster,
+                        [0.0, 0.0, 3.0, 1.0],
+                        [1.0, 1.0, 3.0, 1.0],
+                        TextureColorMode::Texture,
+                        1.0,
+                    )
+                },
+            );
+            renderer.draw_erased(|renderer| {
+                renderer.render_ui_group(&nested, [1.0, 1.0], |renderer| {
+                    renderer.draw_solid([0.0, 0.0, 1.0, 1.0], [0.0, 1.0, 0.0, 1.0]);
+                    renderer.flush();
+                    nested_ink = pixel(&gl, 0, 0);
+                });
+                renderer.draw_solid([2.0, 1.0, 1.0, 1.0], [1.0; 4]);
+                renderer.draw_solid([3.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 0.5]);
+            });
+            renderer.draw_solid([0.0, 0.0, 1.0, 1.0], [1.0, 0.0, 0.0, 1.0]);
+        });
+        let mut capture = Err("spread capture did not run".to_owned());
+        renderer.render_onto(&target, [5.0, 3.0], |_| {
+            capture = (|| {
+                Ok((pixel(&gl, 1, 1)?, pixel(&gl, 2, 1)?, pixel(&gl, 3, 1)?, pixel(&gl, 0, 2)?))
+            })();
+        });
+        let (exterior, interior, antialias, restored) = capture?;
+        let nested_ink = nested_ink?;
+        renderer.draw_solid([0.0, 0.0, 5.0, 4.0], [0.0, 1.0, 0.0, 1.0]);
+        quad(
+            &mut renderer,
+            &target.texture,
+            [0.0, 3.0, 5.0, -3.0],
+            [0.0, 0.0, 5.0, 3.0],
+            TextureColorMode::Premultiplied,
+            0.5,
+        );
+        renderer.end_frame();
+        let through_hole = pixel(&gl, 2, 2)?;
+        renderer.destroy_texture(&caster);
+        renderer.destroy_render_target(&nested);
+        renderer.destroy_render_target(&target);
+        if gl.get_error() != Gl::NO_ERROR {
+            return Err("spread shadow proof produced a WebGL error".to_owned());
+        }
+        Ok(format!(
+            "{{\"exterior\":{exterior:?},\"interior\":{interior:?},\"antialias\":{antialias:?},\"restored\":{restored:?},\"nestedInk\":{nested_ink:?},\"throughHole\":{through_hole:?}}}"
+        ))
+    }
+
     fn sampling(gl: Gl) -> Result<String, String> {
         let mut renderer = Renderer::new(gl.clone())?;
         let texture = renderer.upload_rgba(2, 1, &[255, 0, 0, 255, 0, 0, 255, 255])?;

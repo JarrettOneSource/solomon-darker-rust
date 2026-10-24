@@ -265,6 +265,7 @@ pub struct Renderer {
     u_texture_premultiplied: WebGlUniformLocation,
     framebuffer: Option<WebGlFramebuffer>,
     standard_alpha: bool,
+    erasing: bool,
     texture_color_mode: TextureColorMode,
     forced_texture_color_mode: Option<TextureColorMode>,
     forced_opacity: Option<f32>,
@@ -420,6 +421,7 @@ impl Renderer {
             u_texture_premultiplied,
             framebuffer: None,
             standard_alpha: false,
+            erasing: false,
             texture_color_mode: TextureColorMode::Texture,
             forced_texture_color_mode: None,
             forced_opacity: None,
@@ -733,14 +735,39 @@ impl Renderer {
     ) {
         self.flush();
         let previous = self.standard_alpha;
+        let previous_erasing = self.erasing;
         self.standard_alpha = true;
+        self.erasing = false;
         self.bind_blend();
         self.render_to_color(target, logical, [0.0; 4], draw);
         self.standard_alpha = previous;
+        self.erasing = previous_erasing;
         self.bind_blend();
     }
 
+    /// Remove the actual source alpha from a premultiplied GPU composition.
+    pub fn draw_erased<R>(&mut self, draw: impl FnOnce(&mut Self) -> R) -> R {
+        self.flush();
+        let previous = self.erasing;
+        self.erasing = true;
+        self.bind_blend();
+        let result = draw(self);
+        self.flush();
+        self.erasing = previous;
+        self.bind_blend();
+        result
+    }
+
     fn bind_blend(&self) {
+        if self.erasing {
+            self.gl.blend_func_separate(
+                Gl::ZERO,
+                Gl::ONE_MINUS_SRC_ALPHA,
+                Gl::ZERO,
+                Gl::ONE_MINUS_SRC_ALPHA,
+            );
+            return;
+        }
         let (source, destination, source_alpha, destination_alpha) = self.blend.factors();
         let source_alpha = if self.standard_alpha && self.blend == BlendMode::Normal {
             Gl::ONE

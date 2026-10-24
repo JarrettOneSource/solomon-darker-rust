@@ -181,9 +181,16 @@ impl GpuPainter {
         for node in nodes {
             let rendered = match node {
                 Node::Mesh { mesh, clip } => self.draw_mesh(renderer, images, mesh, *clip, view)?,
-                Node::Group { style, clip, children } => {
-                    self.draw_group(renderer, images, children, style, *clip, view, depth)?
-                }
+                Node::Group { style, clip, children, knockout } => self.draw_group(
+                    renderer,
+                    images,
+                    children,
+                    knockout.as_deref(),
+                    style,
+                    *clip,
+                    view,
+                    depth,
+                )?,
             };
             counts.0 += rendered.0;
             counts.1 += rendered.1;
@@ -197,6 +204,7 @@ impl GpuPainter {
         renderer: &mut Renderer,
         images: &Images,
         children: &[Node],
+        knockout: Option<&[Node]>,
         style: &Style,
         clip: Rect,
         view: View,
@@ -221,7 +229,7 @@ impl GpuPainter {
         });
         let mut counts = rendered?;
         let source_uv = target_uv(&target.texture, source, scale);
-        if style.effect.shadows.len() <= 1 {
+        if style.effect.shadows.len() <= 1 && knockout.is_none() {
             let added = draw_texture(
                 renderer,
                 &target.texture,
@@ -242,6 +250,7 @@ impl GpuPainter {
                 aligned(effects::effect_bounds(source, &style.effect).intersect(clip), scale);
             let composite = self.groups.get(renderer, depth, true, output, scale)?;
             let capture = View::target(&composite, output, scale);
+            let mut erased = Ok((0, 0));
             renderer.render_ui_group(&composite, capture.logical, |renderer| {
                 for shadow in style.effect.shadows.iter().rev() {
                     let added = draw_texture(
@@ -260,22 +269,31 @@ impl GpuPainter {
                     counts.0 += added.0;
                     counts.1 += added.1;
                 }
-                let added = draw_texture(
-                    renderer,
-                    &target.texture,
-                    source,
-                    source_uv,
-                    None,
-                    ShadowOutput::Source,
-                    style.filter,
-                    BlendMode::Normal,
-                    1.0,
-                    output,
-                    capture,
-                );
-                counts.0 += added.0;
-                counts.1 += added.1;
+                if let Some(knockout) = knockout {
+                    erased = renderer.draw_erased(|renderer| {
+                        self.draw_nodes(renderer, images, knockout, capture, depth + 1)
+                    });
+                } else {
+                    let added = draw_texture(
+                        renderer,
+                        &target.texture,
+                        source,
+                        source_uv,
+                        None,
+                        ShadowOutput::Source,
+                        style.filter,
+                        BlendMode::Normal,
+                        1.0,
+                        output,
+                        capture,
+                    );
+                    counts.0 += added.0;
+                    counts.1 += added.1;
+                }
             });
+            let added = erased?;
+            counts.0 += added.0;
+            counts.1 += added.1;
             let added = draw_texture(
                 renderer,
                 &composite.texture,

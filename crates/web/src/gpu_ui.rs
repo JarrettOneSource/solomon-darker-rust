@@ -237,6 +237,29 @@ impl UiFrame<'_> {
         self.paint_box_shadow(painter, shadow, solomon_graphics::ShadowOutput::Outer, caster)
     }
 
+    /// Positive CSS spread changes only the caster; its original interior stays clear.
+    pub fn paint_outer_shadow_spread(
+        &self,
+        painter: &Painter,
+        shadow: ImageShadow,
+        expanded_caster: impl FnOnce(&Painter) -> Result<(), String>,
+        original_caster: impl FnOnce(&Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_group_output(
+            painter,
+            GroupEffect { shadows: vec![shadow], ..Default::default() },
+            solomon_graphics::ShadowOutput::Outer,
+            |_, caster| {
+                expanded_caster(caster)?;
+                caster.add(egui::Shape::Callback(egui::epaint::PaintCallback {
+                    rect: caster.clip_rect(),
+                    callback: std::sync::Arc::new(effects::Boundary::Knockout),
+                }));
+                original_caster(caster)
+            },
+        )
+    }
+
     /// Source inset box-shadow: the opaque caster is the rounded padding box.
     pub fn paint_inner_shadow(
         &self,

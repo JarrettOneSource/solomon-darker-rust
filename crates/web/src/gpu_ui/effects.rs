@@ -29,22 +29,34 @@ pub(super) struct Style {
 
 pub(super) enum Boundary {
     Begin(Style),
+    Knockout,
     End,
 }
 
 pub(super) enum Node {
     Mesh { mesh: egui::Mesh, clip: Rect },
-    Group { style: Style, clip: Rect, children: Vec<Node> },
+    Group { style: Style, clip: Rect, children: Vec<Node>, knockout: Option<Vec<Node>> },
 }
 
 pub(super) fn parse(primitives: Vec<ClippedPrimitive>) -> Result<Vec<Node>, String> {
-    collect(&mut primitives.into_iter(), false)
+    let (nodes, stop) = collect(&mut primitives.into_iter())?;
+    if stop == Stop::Done {
+        Ok(nodes)
+    } else {
+        Err("GPU UI group ended without a beginning".to_owned())
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Stop {
+    Done,
+    End,
+    Knockout,
 }
 
 fn collect(
     primitives: &mut impl Iterator<Item = ClippedPrimitive>,
-    in_group: bool,
-) -> Result<Vec<Node>, String> {
+) -> Result<(Vec<Node>, Stop), String> {
     let mut nodes = Vec::new();
     while let Some(primitive) = primitives.next() {
         match primitive.primitive {
@@ -60,27 +72,47 @@ fn collect(
                     .downcast_ref::<Boundary>()
                     .ok_or("GPU UI does not admit external paint callbacks")?;
                 match boundary {
-                    Boundary::Begin(style) => nodes.push(Node::Group {
-                        style: style.clone(),
-                        clip: primitive.clip_rect,
-                        children: collect(primitives, true)?,
-                    }),
-                    Boundary::End if in_group => return Ok(nodes),
-                    Boundary::End => {
-                        return Err("GPU UI group ended without a beginning".to_owned());
+                    Boundary::Begin(style) => {
+                        let (children, stop) = collect(primitives)?;
+                        let knockout = if stop == Stop::Knockout {
+                            if style.output != ShadowOutput::Outer
+                                || style.effect.shadows.len() != 1
+                            {
+                                return Err(
+                                    "GPU UI knockout requires one outer box shadow".to_owned()
+                                );
+                            }
+                            let (knockout, stop) = collect(primitives)?;
+                            if stop != Stop::End {
+                                return Err("GPU UI knockout has no ending".to_owned());
+                            }
+                            Some(knockout)
+                        } else if stop == Stop::End {
+                            None
+                        } else {
+                            return Err("GPU UI group has no ending".to_owned());
+                        };
+                        nodes.push(Node::Group {
+                            style: style.clone(),
+                            clip: primitive.clip_rect,
+                            children,
+                            knockout,
+                        });
                     }
+                    Boundary::Knockout => return Ok((nodes, Stop::Knockout)),
+                    Boundary::End => return Ok((nodes, Stop::End)),
                 }
             }
         }
     }
-    if in_group { Err("GPU UI group has no ending".to_owned()) } else { Ok(nodes) }
+    Ok((nodes, Stop::Done))
 }
 
 pub(super) fn content_bounds(nodes: &[Node]) -> Rect {
     nodes.iter().fold(Rect::NOTHING, |bounds, node| {
         let painted = match node {
             Node::Mesh { mesh, clip } => mesh.calc_bounds().intersect(*clip),
-            Node::Group { style, clip, children } => {
+            Node::Group { style, clip, children, .. } => {
                 effect_bounds(content_bounds(children), &style.effect).intersect(*clip)
             }
         };
@@ -172,7 +204,36 @@ mod tests {
     #[test]
     fn incomplete_or_external_group_callbacks_are_rejected_before_gpu_submission() {
         assert!(parse(vec![marker(Boundary::End)]).is_err());
+        assert!(parse(vec![marker(Boundary::Knockout)]).is_err());
         assert!(parse(vec![marker(Boundary::Begin(style())), mesh()]).is_err());
+        assert!(
+            parse(vec![
+                marker(Boundary::Begin(style())),
+                marker(Boundary::Knockout),
+                marker(Boundary::End)
+            ])
+            .is_err()
+        );
+        let outer = || Style { output: ShadowOutput::Outer, ..style() };
+        assert!(
+            parse(vec![
+                marker(Boundary::Begin(outer())),
+                mesh(),
+                marker(Boundary::Knockout),
+                mesh()
+            ])
+            .is_err()
+        );
+        assert!(
+            parse(vec![
+                marker(Boundary::Begin(outer())),
+                mesh(),
+                marker(Boundary::Knockout),
+                marker(Boundary::Knockout),
+                marker(Boundary::End)
+            ])
+            .is_err()
+        );
         assert!(
             parse(vec![ClippedPrimitive {
                 clip_rect: Rect::EVERYTHING,

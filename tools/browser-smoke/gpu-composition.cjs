@@ -39,7 +39,8 @@ const files = new Map([
       canvas.width = 5; canvas.height = 4;
       const gl = canvas.getContext('webgl2', {premultipliedAlpha:false, preserveDrawingBuffer:true});
       if (!gl) throw Error('WebGL2 is unavailable');
-      return {...JSON.parse(module.composition_probe(gl)), sampling:JSON.parse(module.sampling_probe(gl))};
+      return {...JSON.parse(module.composition_probe(gl)), sampling:JSON.parse(module.sampling_probe(gl)),
+        spread:JSON.parse(module.spread_shadow_probe(gl))};
     });
     const expected = {
       overlap:[64,128,0,192], border:[128,0,0,128], screen:[64,128,0,208],
@@ -65,6 +66,12 @@ const files = new Map([
     assert.deepEqual(sampling.nearest, [255,0,0,255]);
     assert.deepEqual(sampling.parameters, [9729,9729,33071,33071]);
     for (const name of ['nestedRestored','unbound','deleted']) assert.equal(sampling[name], true, name);
+    const spread = actual.spread;
+    for (const [name, expected] of Object.entries({exterior:[0,0,255,255], interior:[0,0,0,0],
+      antialias:[0,0,128,128], restored:[255,0,0,255], nestedInk:[0,255,0,255], throughHole:[0,255,0,255]})) {
+      assert.ok(expected.every((channel,i)=>Math.abs(channel-spread[name][i])<=1),
+        `spread ${name}: ${JSON.stringify(spread)}`);
+    }
     console.log('Actual Rust nested GPU composition, projection and group opacity passed');
   } finally {
     if (browser) await browser.close();

@@ -222,6 +222,23 @@ The offset outer rectangle and inset comparison differ by at most7/2 channel byt
 with exact zero unwanted interior/exterior alpha. The prior shader differs by223 in
 the inset case. There is one blur kernel, target pool and texture owner for these effects.
 
+Pinned `c14068b3:web/shared-gameplay.css` adds positive spread to the pause and resume
+shadows: `0 0 24px 8px #000` and `0 0 28px 10px #000`, beneath a separate
+`0 0 0 2px #57451f` ring. Their backgrounds remain translucent. The expanded border-box
+casts the blur, but the original unexpanded border-box clips its interior. A single
+expanded caster used for both cannot preserve that contract. The shared GPU operation
+captures expanded opaque geometry, reuses the existing Gaussian, then destination-out
+erases the independent original opaque geometry before final group opacity. Native
+caster/knockout layout and actual Renderer pixel/lifetime checks qualify this path;
+the composed shared-pause/resume producer remains Social-owned.
+
+The same pinned `web/mod-skill-quickbar.css` requires `image-rendering: pixelated` for
+its contain-fitted icons. Verified authored world textures remain LINEAR and borrowed
+by the UI, so changing those texture parameters would alter their world rendering.
+A renderer-owned WebGL2 sampler supplies NEAREST for the individual UI draw and restores
+the previous sampler afterward. The texture identity, upload count, owner and original
+filter/wrap parameters stay unchanged. Material keys include the draw sampler choice.
+
 ## World notifications recovered before repair
 
 The visual-producer inventory found `crates/web/src/loot/messages.rs` still constructing
