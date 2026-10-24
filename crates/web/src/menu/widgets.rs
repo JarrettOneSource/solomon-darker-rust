@@ -681,4 +681,60 @@ mod focus_scroll_tests {
             }
         }
     }
+
+    #[test]
+    fn real_cardinal_focus_reveals_controls_without_overriding_user_scroll() {
+        let ctx = Context::default();
+        ctx.memory_mut(|memory| memory.request_focus(Id::unique(("control", 0_usize))));
+        pass(&ctx, Vec::new());
+        let arrow = |key, pressed| Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        };
+        let mut bottom_offset = 0.0;
+        for index in 1..=8 {
+            dispatch(&ctx, arrow(Key::ArrowDown, true));
+            let (focused, rect, viewport, offset) = dispatch(&ctx, arrow(Key::ArrowDown, false));
+            assert_eq!(focused, index);
+            assert!(
+                viewport.contains_rect(rect),
+                "focused={focused} expected={index} rect={rect:?} viewport={viewport:?} offset={offset}: cardinal focus reveals the next control"
+            );
+            bottom_offset = offset;
+        }
+
+        pass(
+            &ctx,
+            vec![
+                Event::PointerMoved(egui::pos2(150.0, 65.0)),
+                Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: Vec2::new(0.0, 100.0),
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
+        let (focused, _, _, scrolled_offset) = pass(&ctx, Vec::new());
+        assert_eq!(focused, 8, "wheel scrolling keeps the actual focus owner");
+        assert!(scrolled_offset < bottom_offset, "the user's wheel moves the scroll owner");
+        let (focused, _, _, settled_offset) = pass(&ctx, Vec::new());
+        assert_eq!(focused, 8);
+        assert!(
+            settled_offset <= scrolled_offset,
+            "retained focus must not scroll back against the user's wheel"
+        );
+
+        for index in (0..8).rev() {
+            dispatch(&ctx, arrow(Key::ArrowUp, true));
+            let (focused, rect, viewport, offset) = dispatch(&ctx, arrow(Key::ArrowUp, false));
+            assert_eq!(focused, index);
+            assert!(
+                viewport.contains_rect(rect),
+                "focused={focused} expected={index} rect={rect:?} viewport={viewport:?} offset={offset}: cardinal focus reveals the previous control"
+            );
+        }
+    }
 }
