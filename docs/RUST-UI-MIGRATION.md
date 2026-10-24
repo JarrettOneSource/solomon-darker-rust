@@ -646,6 +646,16 @@ is announced. No ever-seen text set may suppress later messages. Source confiden
 high; shared native regressions and actual native/fallback browser proof remain the
 acceptance boundary. Social owns seeding/restoration and accepted chat-session epochs.
 
+The remaining Tutorial GPU proof must progress through the real run. Pinned fa08
+`core-kernels/native-tutorial.ts:581–705,744–773` makes primary casting clear the first
+lesson, Acid Rain begin the item wave, actual loot pickup admit Inventory, its close
+begin the club/level lesson, Skills close begin archers, and the authored Health Potion
+drink begin survival. `tutorial-modal-callouts.ts`/`TutorialOverlay.tsx` own the Inventory
+and Skills callouts. The browser may observe accepted native snapshots and use the
+unchanged Source navigator/camera to choose genuine input, as the existing Solomon
+entrance journey does; it may not install those planning values or bypass a stage.
+Entry/layout proof alone does not accept these later surfaces or the terminal return.
+
 Fixed GPU application ordering follows actual c14068b3 append/context ownership;
 pinned fa08 supplies native inner behavior/styles. `source-ui-stack.md` in the task
 records the accepted registry. Tutorial's current bodyz40 root appends prelude,
