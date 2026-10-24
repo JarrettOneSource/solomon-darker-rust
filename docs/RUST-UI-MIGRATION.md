@@ -634,6 +634,18 @@ HUD handed the bounded Tutorial announcement edit to acceptance; foundation hand
 the disjoint canonical accessibility batching seam to acceptance. Actual lesson
 announcements and unchanged-batch silence must pass on the rebuilt artifact.
 
+Announcement identity also belongs to its actual Source owner, rather than its text.
+Pinned fa08 `NativeWorldNotifications.tsx:15–18` keeps each source-keyed message in
+the live region, and `GameChat.tsx:474–499` keeps distinct accepted sequence rows;
+two legitimate receipts can therefore have identical text. Text-only frame membership
+would incorrectly suppress the second owner. Each GPU announcement must carry its
+stable status/DOM owner or accepted receipt/event ID, preserve producer order, and
+compare that owner's current text with the previous foreground frame. Repeated
+same-owner/text is quiet; changed text, a different event owner or a real later return
+is announced. No ever-seen text set may suppress later messages. Source confidence is
+high; shared native regressions and actual native/fallback browser proof remain the
+acceptance boundary. Social owns seeding/restoration and accepted chat-session epochs.
+
 Fixed GPU application ordering follows actual c14068b3 append/context ownership;
 pinned fa08 supplies native inner behavior/styles. `source-ui-stack.md` in the task
 records the accepted registry. Tutorial's current bodyz40 root appends prelude,

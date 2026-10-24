@@ -427,7 +427,7 @@ impl CreateView {
         }
         if let Some(reason) = response.rejected.as_ref() {
             self.message = Some(reason.clone());
-            frame.announce(reason);
+            frame.announce("create-name:validation", reason);
         } else if response.changed() {
             self.restart();
         }

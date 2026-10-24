@@ -227,7 +227,7 @@ impl WorldNotifications {
                     None,
                 );
                 if state.announced.get(&visual.message.key) != Some(&visual.message.text) {
-                    frame.announce(&visual.message.text);
+                    frame.announce(&id, &visual.message.text);
                     state.announced.insert(visual.message.key, visual.message.text.clone());
                 }
             }

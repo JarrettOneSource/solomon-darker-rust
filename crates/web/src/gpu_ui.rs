@@ -195,7 +195,7 @@ pub struct UiFrame<'a> {
     key_codes: &'a [BrowserKey],
     blend: BlendMode,
     color_filter: ColorFilter,
-    announcements: &'a RefCell<Vec<String>>,
+    announcements: &'a RefCell<Vec<accessibility::Announcement>>,
     rotation: egui::emath::Rot2,
     translation: Vec2,
     input_scope: &'a RefCell<Option<(egui::LayerId, String)>>,
@@ -342,8 +342,11 @@ impl UiFrame<'_> {
             *current = Some((layer, scope.to_owned()));
         }
     }
-    pub fn announce(&self, text: &str) {
-        self.announcements.borrow_mut().push(text.to_owned());
+    /// Current Source status owner, or accepted receipt/event identity for distinct messages.
+    pub fn announce(&self, owner: &str, text: &str) {
+        self.announcements
+            .borrow_mut()
+            .push(accessibility::Announcement { owner: owner.to_owned(), text: text.to_owned() });
     }
     pub fn with_blend(&self, blend: BlendMode) -> UiFrame<'_> {
         UiFrame {

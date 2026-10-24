@@ -119,6 +119,6 @@ pub(crate) fn paint(frame: &mut UiFrame<'_>) {
         );
         frame.record_rect("runtime:status", status.as_str(), "status", bounds, true);
         frame.record_value("runtime:status", status.as_str(), None);
-        frame.announce(status.as_str());
+        frame.announce("runtime:status", status.as_str());
     });
 }

@@ -835,7 +835,7 @@ fn message(frame: &UiFrame<'_>, ui: &mut Ui, id: &str, text: &str, width: f32, t
     ui.painter().galley(r.min, galley, color);
     frame.record_rect(id, text, if id.ends_with("error") { "alert" } else { "status" }, r, false);
     frame.record_value(id, text, None);
-    frame.announce(text);
+    frame.announce(id, text);
 }
 fn date_format() -> Result<js_sys::Intl::DateTimeFormat, String> {
     let options = js_sys::Object::new();

@@ -155,17 +155,19 @@ impl TutorialUi {
         let Some(model) = &self.model else { return Ok(()) };
         let view = &model.view();
         if view.intro.is_some() {
-            frame.announce("Midnight, six months ago");
+            frame.announce("tutorial:prelude", "Midnight, six months ago");
         }
         if let Some(heading) = view.heading {
-            frame.announce(&format!(
-                "{}. {}",
-                heading.replace('\n', " "),
-                view.subheading.unwrap_or("")
-            ));
+            frame.announce(
+                "tutorial:instruction",
+                &format!("{}. {}", heading.replace('\n', " "), view.subheading.unwrap_or("")),
+            );
         }
         if let Some(narration) = view.narration {
-            frame.announce(&format!("{}: {}", narration.speaker, narration.text));
+            frame.announce(
+                &format!("tutorial:narration:{}", narration.event_id),
+                &format!("{}: {}", narration.speaker, narration.text),
+            );
         }
         let (width, height) = self.viewport;
         let viewport = HudRect::new(0.0, 0.0, width as f64, height as f64);
