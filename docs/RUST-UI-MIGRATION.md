@@ -1063,8 +1063,15 @@ cover both native-only commits and rAF, without another controller sample or gue
 field. The existing actual bidi case gains an immediate assertion after ArrowRight.
 Two auxiliary game traces remain separately red on College Escape→Pause before reaching
 the field, each with errors[]/Chrome exit0; they do not establish a measured caret trace.
-The shared Escape owner is under independent investigation. Browser capacity is held
-by root; rebuilt actual editor acceptance remains required.
+The `native-editor-3660ab8/receipt.json` rebuilt journey now passes all nine groups,
+including ordinary College Escape, immediate ArrowRight, the original bidi weak-caret
+and selection assertions, Unicode undo/redo, browser IME, UTF-16 admission and one
+Enter rename. The held-rAF native Tab/ShiftTab→OS Copy/Paste phase keeps the entire
+published snapshot unchanged and gamepad reads1917→1917. Reviewed joined-script,
+bidi-selection and IME-preedit screenshots retain actual GPU glyph/selection geometry;
+errors[]/rawFailures[] and Chrome9760 graceful exit0 qualify the complete run. The
+Chromium Input-domain IME method retains the established untrusted composition-end
+qualification; it does not claim a hardware OS candidate-window test.
 
 The shared Escape failure is reproduced independently by the College dialogue and
 native-session journeys on57626c4, each with errors[] and graceful Chrome exit0.
@@ -1083,7 +1090,8 @@ each existing UI pass. It therefore observes committed close/open actions withou
 adding a pass, delaying input or filtering the raw browser-key receipt. Visible
 menus retain their own keys. The proposed raw-key projection change was withdrawn;
 its duplicate-helper compile failure is retained separately from this behavioral
-red. Rebuilt College, Inventory and immediate subsequent Pause checks remain required.
+red. The rebuilt3660 smoke and menu journeys now prove College, Inventory and the
+immediate subsequent Pause boundary with empty strict errors and clean browser exits.
 
 Current57626c4 startup guard passes in
 `common-browser/57626c4/startup-held-input-diagnostic/startup-receipt.json`: actual
