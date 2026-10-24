@@ -417,35 +417,8 @@ impl UiFrame<'_> {
     fn paint_position(&self, point: Pos2) -> Pos2 {
         (self.rotation * point.to_vec2() + self.translation).to_pos2()
     }
-    #[must_use]
-    pub fn key_codes(&self) -> Vec<BrowserKey> {
-        self.ctx.input(|state| {
-            self.key_codes
-                .iter()
-                .filter(|native| {
-                    if !native.pressed {
-                        return true;
-                    }
-                    let Some(mapped) = input::key_from_browser(&native.key) else {
-                        return true;
-                    };
-                    // Logical keys and physical codes describe the same native
-                    // dispatch. A consumer must not leave its code replayable.
-                    state.events.iter().any(|event| {
-                        matches!(
-                            event,
-                            egui::Event::Key { key, pressed: true, modifiers, .. }
-                                if *key == mapped
-                                    && modifiers.alt == native.alt
-                                    && modifiers.ctrl == native.ctrl
-                                    && modifiers.shift == native.shift
-                                    && modifiers.mac_cmd == native.meta
-                        )
-                    })
-                })
-                .cloned()
-                .collect()
-        })
+    pub fn key_codes(&self) -> &[BrowserKey] {
+        self.key_codes
     }
     pub fn image(
         &self,
