@@ -23,6 +23,7 @@ const savePath = path.join(working, 'host.json');
 const checks = [];
 const errors = [];
 const speechEvidence = [];
+const partyEvidence = {};
 const shutdownResourceErrors = [];
 let intentionalHostShutdown = false;
 const requests = new Set();
@@ -313,11 +314,19 @@ async function approachSolomon(page, state) {
       await ui.noWidget(first.page,'panel:surface:inventory');
       checks.push('real chat delivery and keyboard focus above Inventory');
 
+      const beforeParty = await ui.readUi(first.page);
+      partyEvidence.afterInventoryClose = {surface:beforeParty.surface,inputScope:beforeParty.inputScope};
       await ui.click(first.page,'social/party');
       await ui.widget(first.page,'social/party-menu');
-      await ui.widget(first.page,`social/member:${first.state.id}`);
-      await ui.widget(first.page,`social/member:${second.state.id}`);
+      const roster = first.state.social?.party_state?.party?.member_player_ids;
+      assert.deepEqual(new Set(roster),new Set([first.state.id,second.state.id]),
+        'the actual Party dialog paints the accepted two-player roster');
+      partyEvidence.acceptedRoster = roster;
       await first.page.screenshot({path:path.join(output,'native-party.png')});
+      // Source Party dialog names are passive. Profiles open through the actual
+      // chip member after closing the dialog, never through its covered geometry.
+      await ui.click(first.page,'social/close');
+      await ui.noWidget(first.page,'social/party-menu');
       await ui.click(first.page,`social/member:${second.state.id}`);
       assert.equal((await ui.widget(first.page,'social/player-card')).label,'Caius');
       await ui.click(first.page,'social/card-message');
@@ -453,7 +462,7 @@ async function approachSolomon(page, state) {
     const receipt = {passed: true, checks, renderer, socialChecked: process.env.SOCIAL !== '0', gameOverChecked: process.env.GAMEOVER === '1',
       clientRevision: process.env.CLIENT_REVISION || null, binarySha256: digest(binary),
       wasm: fs.readdirSync(assets).filter(file => file.endsWith('.wasm')).map(file => ({file, sha256: digest(path.join(assets, file))})),
-      origin, requests: requests.size, errors, shutdownResourceErrors, speechEvidence};
+      origin, requests: requests.size, errors, shutdownResourceErrors, speechEvidence, partyEvidence};
     fs.writeFileSync(path.join(output, 'native-session-receipt.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) {
@@ -468,7 +477,7 @@ async function approachSolomon(page, state) {
         ui: await ui.readUi(client.page).catch(() => null)};
       await client.page.screenshot({path: path.join(output, `native-failure-${name}.png`)}).catch(() => {});
     }
-    fs.writeFileSync(path.join(output, 'native-session-failure.json'), JSON.stringify({error: error.stack, checks, errors, shutdownResourceErrors, movementEvidence, speechEvidence, state, hostLog}, null, 2));
+    fs.writeFileSync(path.join(output, 'native-session-failure.json'), JSON.stringify({error: error.stack, checks, errors, shutdownResourceErrors, movementEvidence, speechEvidence, partyEvidence, state, hostLog}, null, 2));
     throw error;
   } finally {
     try {
