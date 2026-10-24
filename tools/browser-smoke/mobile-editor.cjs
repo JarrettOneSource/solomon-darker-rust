@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(process.env.PW || '/Users/jarrett/Projects/Solomon Dark/Website/frontend/node_modules/playwright-core');
 const ui = require('./gpu-ui.cjs');
+const {revealSettingsControl} = require('./settings-journey.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const out = process.env.OUT || '/tmp';
 const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
@@ -15,6 +16,7 @@ async function openEditor(page, touch = false) {
   const activate = touch ? ui.tap : ui.click;
   if (ui.findWidget(await ui.readUi(page), 'prompt-secondary')) await activate(page, 'prompt-secondary');
   await activate(page, 'settings');
+  await revealSettingsControl(page, 'settings-page:mobile-ui');
   await activate(page, 'settings-page:mobile-ui');
   await ui.widget(page, 'mobile/editor');
   await ui.assertGpuOnly(page);
@@ -43,6 +45,7 @@ async function dragBy(page, id, dx, dy) {
 }
 async function saved(page) {
   await ui.noWidget(page, 'mobile/editor');
+  await revealSettingsControl(page, 'settings-page:mobile-ui');
   await ui.widget(page, 'settings-page:mobile-ui');
 }
 
