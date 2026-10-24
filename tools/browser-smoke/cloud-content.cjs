@@ -188,6 +188,12 @@ async function swipe(page,distance) {
     await page.setViewportSize({width:390,height:844});
     await gpu.click(page,`cloud-open-mod:${slug}`);
     await gpu.value(page,'cloud-gallery-image','1 / 2');
+    const phoneTitle=gpu.bounds(await gpu.widget(page,'cloud-detail-title'),{paint:true});
+    assert.ok(phoneTitle.height>=75.5,'Source phone fallback heading preserves its two native37.8px lines');
+    const phoneGallery=gpu.bounds(await gpu.widget(page,'cloud-gallery-image'));
+    assert.ok(phoneGallery.y>phoneTitle.y+phoneTitle.height+23,
+      'the actual gallery follows the wrapped heading and author flow');
+    checked('the phone Unicode heading wraps and expands the native header before gallery content');
     await swipe(page,-30);
     await gpu.value(page,'cloud-gallery-image','1 / 2');
     await swipe(page,-72);
