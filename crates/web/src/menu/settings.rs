@@ -430,6 +430,9 @@ impl SettingsView {
             Page::MobileUi => None,
         }
     }
+    pub(super) fn mobile_editor_active(&self) -> bool {
+        self.page == Page::MobileUi && self.mobile_editor.is_some()
+    }
     pub fn navigation_scope(&self) -> String {
         format!("settings-{}-{}", self.context.as_str(), self.page.as_str())
     }
