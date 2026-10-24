@@ -1073,3 +1073,15 @@ remains Chromium Input-domain emulation, without a hardware candidate-window cla
 The later Tutorial driver also awaits the canonical read-only route-helper migration
 from legacy save reconstruction to the actual accepted world geometry; its genuine
 pause/checkpoint persistence assertion remains independent of path planning.
+
+
+The first later-Tutorial native run on3660 is retained as
+`common-browser/3660ab8/m5/tutorial-native-r1/receipt.json`. It admits real Sirmin
+Ether/Arcane with a genuine Welcome and shipped Tutorial SHA, but stops on a driver
+assumption that Escape during Movement opens Pause. Pinned fa08
+`BoneyardScene.tsx:308–314` and `native-tutorial.ts::nativeTutorialHudAccess` make
+Pause unavailable until combat access (stage14 or later); current `Game::can_pause`
+retains that rule. The revised driver checks that this real Escape leaves the world
+uncovered and unpaused, then independently observes the actual durable native
+checkpoint. It does not add a pause bypass or alter product timing. Original errors[]
+and graceful Chrome22848/native22826 exits0 stay attached to the failed attempt.

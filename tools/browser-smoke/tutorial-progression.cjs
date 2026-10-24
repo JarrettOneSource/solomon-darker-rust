@@ -210,14 +210,17 @@ async function modal(kind) {
       geometrySha256:world().geometry_sha256,selection:player().player.selection,stage:stage()};
     assert.equal(accepted.loaded.source_sha256,world().source_sha256);
     await lesson('USE YOUR KEYBOARD\nTO MOVE THE WIZARD');
-    await page.keyboard.press('Escape');await ui.surface(page,'pause');
-    await until(()=>accepted.frame.host.pause,'accepted native Tutorial pause');
+    const beforeEscape=await ui.readUi(page);
+    await page.keyboard.press('Escape');
+    const afterEscape=await ui.waitForUi(page,snapshot=>snapshot.frame>beforeEscape.frame+1,
+      'the actual early Tutorial Escape frame');
+    assert.equal(afterEscape.surface,'hidden','Source seals Pause before combat access');
+    assert.ok(!accepted.frame.host.pause,'early Escape does not pause the native Tutorial');
+    receipt.earlyEscape={beforeFrame:beforeEscape.frame,afterFrame:afterEscape.frame,
+      surface:afterEscape.surface,stage:stage()};
     await actualCheckpoint();
-    await ui.click(page,'resume');
-    await until(()=>!accepted.frame.host.pause&&!accepted.frame.host.resume_grace,
-      'ordinary Tutorial resume');
     await walkSolomonEntrance(page,{snapshot:()=>accepted.frame.snapshot,playerId:()=>accepted.id,output});
-    checked('real Title YES, retained Tutorial geometry and ordinary Solomon confrontation');
+    checked('real Title YES, Source-gated early Escape, durable checkpoint and ordinary Solomon confrontation');
     const deadline=Date.now()+480000;
     while(world()?.tutorial&&Date.now()<deadline){
       const current=stage();
