@@ -39,6 +39,25 @@ async function paintedSelection(page,count){
   try{
     await observed.ready;
     await page.addInitScript(()=>{
+      // Platform scheduling only: native events keep running while the next
+      // animation callback waits. The gate never calls a game binding or edits
+      // accepted app state, and always releases after its bounded test window.
+      const request=window.requestAnimationFrame.bind(window);
+      const cancel=window.cancelAnimationFrame.bind(window);
+      const waiting=new Map();let held=false,timer;
+      const gate={expired:false,
+        start(){held=true;gate.expired=false;timer=setTimeout(()=>{gate.expired=true;gate.stop()},5000);
+          return new Promise(resolve=>request(()=>resolve(waiting.size)))},
+        stop(){clearTimeout(timer);held=false;for(const callback of waiting.values())request(callback);waiting.clear()},
+      };
+      window.requestAnimationFrame=callback=>{
+        const id=request(time=>{if(held)waiting.set(id,callback);else callback(time)});return id;
+      };
+      window.cancelAnimationFrame=id=>{waiting.delete(id);cancel(id)};
+      Object.defineProperty(window,'__nativeEditorRafGate',{value:gate});
+      const getGamepads=navigator.getGamepads.bind(navigator);let reads=0;
+      Object.defineProperty(window,'__nativeEditorGamepadReads',{get:()=>reads});
+      Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>{reads++;return getGamepads()}});
       const events=[];Object.defineProperty(window,'__nativeEditorEvents',{value:events});
       for(const type of ['compositionstart','compositionupdate','compositionend','beforeinput','input','copy','cut','paste']){
         document.addEventListener(type,event=>{
@@ -61,6 +80,51 @@ async function paintedSelection(page,count){
     await ui.click(page,sack.id);await ui.click(page,'panel:rename-sack');
     await ui.focused(page,field);
     receipt.checks.push('ordinary paid Sack purchase and real rename-field focus');
+
+    // Seed the OS clipboard solely by a genuine selection and Copy, then hold
+    // RAF while trusted keyboard/clipboard defaults cross actual focus owners.
+    await page.keyboard.press('Home');await page.keyboard.press('Shift+ArrowRight');
+    await selected(page,0,1);await page.keyboard.press('ControlOrMeta+C');
+    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'S');
+    await page.keyboard.press('End');await selected(page,4,4);await ui.nextFrame(page);
+    await page.evaluate(()=>__nativeEditorRafGate.start());
+    const beforeBoundary=await ui.readUi(page);
+    const readsBefore=await page.evaluate(()=>__nativeEditorGamepadReads);
+    try{
+      await page.keyboard.press('Tab');
+      assert.equal((await native(page)).focused,false,'Tab releases the actual OS text owner before RAF');
+      await page.keyboard.press('Shift+Tab');
+      const returned=await native(page);
+      assert.equal(returned.focused,true);
+      assert.deepEqual([returned.start,returned.end],[0,4],'native Tab entry resolves and selects all before RAF');
+      await page.keyboard.press('ControlOrMeta+C');
+      assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'Sack',
+        'native Copy reads the newly resolved field selection synchronously');
+      await page.keyboard.press('Home');await page.keyboard.press('Shift+ArrowRight');
+      await page.keyboard.press('ControlOrMeta+C');
+      assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'S');
+      await page.keyboard.press('ControlOrMeta+A');
+      await page.keyboard.press('ControlOrMeta+V');
+      const nativeBoundary=await native(page);
+      assert.equal(nativeBoundary.text,'S','Paste follows the genuinely resolved new field before RAF');
+      await page.keyboard.press('ControlOrMeta+A');await page.keyboard.press('ControlOrMeta+C');
+      assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'S');
+      const duringBoundary=await ui.readUi(page);
+      fs.writeFileSync(path.join(output,'native-boundary-before.json'),JSON.stringify(beforeBoundary,null,2));
+      fs.writeFileSync(path.join(output,'native-boundary-during.json'),JSON.stringify(duringBoundary,null,2));
+      assert.equal(await page.evaluate(()=>__nativeEditorRafGate.expired),false,'the bounded scheduling gate remains active');
+      assert.equal(await page.evaluate(()=>__nativeEditorGamepadReads),readsBefore,
+        'native-only editing never samples gamepads');
+      assert.deepEqual(duringBoundary,beforeBoundary,
+        'public frame, draw counters and all metadata remain the last actual GPU submission');
+      receipt.nativeBoundary={frame:beforeBoundary.frame,gamepadReadsBefore:readsBefore,
+        gamepadReadsDuring:await page.evaluate(()=>__nativeEditorGamepadReads),native:nativeBoundary,
+        publicSnapshotUnchanged:true,clipboard:'S',scheduling:'bounded native RAF callback hold'};
+    }finally{await page.evaluate(()=>__nativeEditorRafGate.stop())}
+    await ui.value(page,field,'S');
+    await ui.waitForUi(page,state=>state.frame>beforeBoundary.frame,'the next genuine GPU frame publishes committed editing');
+    await ui.fill(page,field,'Sack');await ui.value(page,field,'Sack');
+    receipt.checks.push('trusted Tab/ShiftTab and Copy/Paste commit before RAF; public diagnostics remain the last drawn frame');
 
     await page.keyboard.press('End');await selected(page,4,4);
     await page.keyboard.press('Tab');await ui.focused(page,'panel:sack-rename:save');
