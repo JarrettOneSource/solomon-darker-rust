@@ -749,3 +749,13 @@ through Call Comet (76), the actual eighth row, before requiring all eight. It
 keeps real Tab scrolling, full-row visibility, purchase rejection, reopening and
 all 26 librarian rows/one-shot Lace removal. No product catalog or focus behavior
 changes to accommodate the stale target; the original five-row failure remains.
+
+Book layer recovery also retains actual nesting. c140 `player-panels.css` places
+belt effects4, tooltip8, flybys9 and dragger10 inside the transformed stage;
+`viewport.rs:129–132` reparents compact tooltips to the book root, before fixed
+navigation10. Active flight/drag suppresses tooltip, but trailing afterimages can
+coexist with a tooltip or new drag. Separate actual passive GPU painters preserve
+those overlaps: wide tooltip is below afterimages, while a compact portaled tooltip
+is above the stage and below navigation. All remain in body book30. The native
+regression drains the real graphics layers in both layouts, independently of paint
+registration order; Source afterimage lifetime and interaction admission stay intact.

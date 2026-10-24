@@ -478,16 +478,7 @@ impl PlayerPanels {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("player-panels"))
     }
     pub fn layer_ids(&self) -> Vec<egui::LayerId> {
-        let mut layers = vec![
-            self.layer_id(),
-            viewport::navigation_layer_id(),
-            skills::tooltip_layer_id(),
-            chrome::modal_layer_id(crafting::DYE_MODAL_SCOPE),
-            chrome::modal_layer_id(notices::NOTICE_MODAL_SCOPE),
-            sack_rename::layer_id(),
-        ];
-        layers.extend(self.skill_book_feedback.layer_id());
-        layers
+        chrome::book_layers(self.layer_id(), self.compact, self.skill_book_feedback.layer_id())
     }
     /// Source attaches the NPC notebox directly to the viewport, outside the book.
     pub fn notebox_layer_id(&self) -> egui::LayerId {
@@ -1414,8 +1405,8 @@ impl PlayerPanels {
                 if !matches!(panel, PlayerPanel::Dialogue | PlayerPanel::SkillSelector(_)) {
                     self.draw_footer(&canvas, &snapshot)?;
                 }
-                self.paint_inventory_flybys(&canvas, &snapshot)?;
-                self.paint_dragger(&canvas, &snapshot)?;
+                self.paint_inventory_flybys(&canvas.on_layer(flyby::layer_id()), &snapshot)?;
+                self.paint_dragger(&canvas.on_layer(chrome::dragger_layer_id()), &snapshot)?;
                 if self.notice.is_none() && self.dye.is_none() && self.rename_sack.is_none() {
                     self.paint_tooltip(&canvas, &snapshot, self.now)?;
                     self.draw_sack_rename_open(&canvas, &snapshot)?;

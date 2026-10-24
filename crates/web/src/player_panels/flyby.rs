@@ -7,6 +7,10 @@ use solomon_sim::player_panels::flyby::{
     INVENTORY_FLYBY_TRAVEL_MS, InventoryFlybyRequest, hub_inventory_flyby_frame,
     hub_inventory_flyby_point,
 };
+
+pub(super) fn layer_id() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("panel-flybys"))
+}
 pub(super) struct InventoryFlyby {
     request: InventoryFlybyRequest,
     started_at_ms: f64,
