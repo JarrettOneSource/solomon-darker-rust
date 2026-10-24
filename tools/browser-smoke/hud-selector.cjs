@@ -5,13 +5,16 @@ const fs = require('node:fs');
 const { chromium } = require(path.resolve(process.env.PW));
 const { startNewGame } = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const output = process.env.OUT || '/tmp/hud-selector';
 fs.mkdirSync(output, {recursive:true});
 
 (async () => {
-  const browser = await chromium.launch({ headless: true,
+  const owned = await launchOwnedBrowser(chromium,{ headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+    args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
+  const browser=owned.browser;
+  const receipt={passed:false,artifact:process.env.ARTIFACT,generatedName:process.env.GENERATED_NAME==='1'};
   let page, observed;
   let phase = 'admission';
   try {
@@ -38,13 +41,24 @@ fs.mkdirSync(output, {recursive:true});
     if (process.env.OUT) await page.screenshot({ path: path.join(process.env.OUT, 'phone-hud-primary-selector-rust.png') });
     await ui.tap(page, 'panel:hud-select-skill:8'); await ui.noWidget(page, 'panel:skill-selector');
     await ui.assertGpuOnly(page); await ui.settleErrors(page); assert.deepEqual(observed.errors, []);
-    const receipt = {passed:true, generatedName:process.env.GENERATED_NAME==='1', errors:observed.errors};
-    fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify(receipt,null,2));
-    console.log(JSON.stringify(receipt));
+    receipt.passed=true;
   } catch(error) {
     if(page){await ui.settleErrors(page);await page.screenshot({path:path.join(output,'failure.png')});}
-    fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify({passed:false,phase,
-      error:error.stack,errors:observed?.errors,ui:page?await ui.readUi(page).catch(failure=>({readError:failure.message})):null},null,2));
+    Object.assign(receipt,{phase,error:error.stack,ui:page?await ui.readUi(page).catch(failure=>({readError:failure.message})):null});
     throw error;
-  } finally { await browser.close(); }
+  } finally {
+    try {if(page)await ui.settleErrors(page)}
+    catch(error){receipt.passed=false;receipt.failure??=error.stack;throw error}
+    finally {
+      try{receipt.cleanup=await owned.close()}
+      catch(error){receipt.passed=false;receipt.cleanup=error.cleanup;throw error}
+      finally {
+        receipt.errors=observed?.errors||[];
+        if(receipt.errors.length)receipt.passed=false;
+        fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify(receipt,null,2));
+      }
+    }
+  }
+  assert.deepEqual(receipt.errors,[]);
+  console.log(JSON.stringify(receipt));
 })().catch(error => { console.error(error); process.exitCode = 1; });
