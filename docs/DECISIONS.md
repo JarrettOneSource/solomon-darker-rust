@@ -652,3 +652,19 @@ already-installed `miniz_oxide` codec (a simulation test dependency only). The n
 compares every original byte before removing the redundant uncompressed file; subsequent
 oracle recordings produce the compressed fixture and its JSON hash together. Simulation
 assertions, source inputs and expected numeric values are unchanged by packaging.
+
+### Fullscreen activation ownership
+
+The fullscreen capability runs synchronously in its trusted browser click, while
+native egui responses handle keyboard/controller activation. A mutable
+`gesture_handled` flag cleared by every paint could be consumed by an intermediate
+layout before the queued pointer release. The actual7954665 browser trace records
+one pointer click requesting fullscreen at1628.1ms and exiting it at1640.8ms.
+`fullscreen-runtime.cjs` retains the failing browser calls and checks actual
+pointer, touch, Enter and Space activation against both the browser and GPU label.
+
+Classify the native response by its existing pointer provenance: a primary pointer
+click belongs exclusively to the trusted DOM listener; only non-pointer clicks
+activate from the egui response. No timing window or duplicate-action suppression
+state is needed. Existing hit ownership still checks the topmost enabled widget,
+clipping, transforms and modal admission.

@@ -2,7 +2,7 @@
 //! Platform requests run inside the original trusted canvas click.
 
 use crate::gpu_ui::UiFrame;
-use egui::{Color32, Id, Order, Stroke, pos2, vec2};
+use egui::{Color32, Id, Order, PointerButton, Stroke, pos2, vec2};
 use js_sys::{Function, Object, Promise, Reflect};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -31,7 +31,6 @@ struct FullscreenState {
     show_help: bool,
     error: Option<String>,
     target: Option<egui::Response>,
-    gesture_handled: bool,
 }
 pub struct FullscreenControl {
     document: Document,
@@ -48,7 +47,6 @@ impl FullscreenControl {
             show_help: false,
             error: None,
             target: None,
-            gesture_handled: false,
         }));
         let clicked = state.clone();
         let clicked_document = document.clone();
@@ -65,7 +63,6 @@ impl FullscreenControl {
             }
             event.prevent_default();
             event.stop_propagation();
-            clicked.borrow_mut().gesture_handled = true;
             activate(&clicked_document, &clicked);
         });
         document
@@ -194,12 +191,15 @@ impl FullscreenControl {
                     if active { "true" } else { "false" },
                     Some(active),
                 );
-                keyboard_activation = response.clicked() && !self.state.borrow().gesture_handled;
+                // Pointer/touch clicks already invoked the browser capability in
+                // their trusted DOM event. Intermediate paints cannot consume
+                // that ownership; only non-pointer activation belongs here.
+                keyboard_activation =
+                    response.clicked() && !response.clicked_by(PointerButton::Primary);
             });
         if keyboard_activation {
             activate(&self.document, &self.state);
         }
-        self.state.borrow_mut().gesture_handled = false;
         if show_help || error.is_some() {
             let message=error.unwrap_or_else(||"Fullscreen on iPhone or iPad\nTap Share, Add to Home Screen, keep Open as Web App enabled if shown, then launch Solomon Darker from its icon.\nOtherwise, open the game in a browser that supports fullscreen.".into());
             egui::Area::new(Self::help_layer().id)

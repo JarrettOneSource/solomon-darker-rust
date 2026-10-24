@@ -50,6 +50,22 @@ const receipt = {passed:false, checks:[]};
         ['requestFullscreen','exitFullscreen'],'each actual activation calls its browser capability once');
       receipt.checks.push({name,trace});
     }
+    for (const [key, expected] of [['Enter',true],['Space',false]]) {
+      for (let count=0; count<30 && !(await ui.widget(page,'fullscreen/toggle')).focused; count++) {
+        await page.keyboard.press('Tab'); await ui.nextFrame(page);
+      }
+      assert.equal((await ui.widget(page,'fullscreen/toggle')).focused,true,
+        'native Tab reaches the real fullscreen control');
+      const before = await page.evaluate(() => window.fullscreenTrace.length);
+      await page.keyboard.press(key);
+      await page.waitForFunction(expected => !!document.fullscreenElement === expected,expected);
+      await ui.value(page,'fullscreen/toggle',String(expected),{timeout:5000});
+      await ui.nextFrame(page); await ui.nextFrame(page);
+      const trace = await page.evaluate(before => window.fullscreenTrace.slice(before),before);
+      assert.deepEqual(trace.filter(row => row.kind !== 'change').map(row => row.kind),
+        [expected ? 'requestFullscreen' : 'exitFullscreen']);
+      receipt.checks.push({name:key,trace});
+    }
     await ui.assertGpuOnly(page); await ui.settleErrors(page);
     assert.deepEqual(observed.errors,[]); receipt.passed = true;
   } catch(error) {
