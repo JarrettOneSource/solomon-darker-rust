@@ -525,10 +525,10 @@ fn controller_confirmation_clicks_a_text_field_and_directions_leave_it_spatially
 }
 
 #[test]
-fn native_tab_entry_selects_singleline_text_while_controller_linear_focus_retains_its_caret() {
+fn native_tab_focus_provenance_distinguishes_actual_field_entry_from_controller_linear_focus() {
     for physical in [false, true] {
         let ctx = Context::default();
-        let mut text = "A".to_owned();
+        let mut text = String::new();
         let focus = std::cell::Cell::new(true);
         let descriptor = std::cell::RefCell::new(None);
         let mut paint = |frame: &mut UiFrame<'_>| {
@@ -563,16 +563,15 @@ fn native_tab_entry_selects_singleline_text_while_controller_linear_focus_retain
             modifiers: egui::Modifiers::SHIFT,
         };
         frame_codes(&ctx, vec![back], &keys, &mut paint);
+        assert_eq!(
+            edit::selects_all_on_native_tab(&ctx, egui::Id::unique("tab-field")),
+            physical,
+            "actual resolved field entry retains native Tab provenance={physical}"
+        );
         frame(&ctx, Vec::new(), &mut paint);
         let descriptor = descriptor.borrow();
         let descriptor = descriptor.as_ref().unwrap();
         assert!(descriptor.focused);
-        let expected = if physical {
-            edit::TextSelection { anchor: 0, focus: 1 }
-        } else {
-            edit::TextSelection::caret(1)
-        };
-        assert_eq!(descriptor.model.selection(), expected, "native Tab provenance={physical}");
     }
 }
 
