@@ -68,13 +68,16 @@ async function shot(name){await page.screenshot({path:path.join(out,`${name}.png
       const state=await ui.readUi(page);
       const row=state.widgets.find(w=>w.id.startsWith(`panel:npc:${content.packageId}:`)&&w.label===boastName);
       const viewport=ui.bounds(await ui.widget(page,'panel:selector-scroll'));
-      if(row&&ui.bounds(row).y>=viewport.y&&ui.bounds(row).y+ui.bounds(row).height<=viewport.y+viewport.height)break;
+      if(row&&ui.bounds(row).y>=viewport.y&&ui.bounds(row).y+ui.bounds(row).height<=viewport.y+viewport.height
+        &&Math.abs(ui.bounds(row).height-ui.bounds(row,{paint:true}).height)<1)break;
       // The native SwipeBox advances25px per wheel direction, regardless of magnitude.
       await ui.wheel(page,'panel:selector-scroll',0,1);await ui.nextFrame(page);
     }
     const row=await ui.byLabel(page,boastName,{role:'button',prefix:`panel:npc:${content.packageId}:`});
     const choice=row.id,contentId=choice.split(':').at(-1);
     assert.match(contentId,/^[1-9][0-9]{0,18}$/);
+    assert.ok(Math.abs(ui.bounds(row).height-ui.bounds(row,{paint:true}).height)<1,'the entire authored row is revealed');
+    receipt.choiceRow=row;
     await shot('authored-boast-choice');
     const commandsBefore=receipt.commands.length;
     await ui.click(page,choice);
