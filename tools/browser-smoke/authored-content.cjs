@@ -507,8 +507,13 @@ async function runLua(page, code) {
           'actual spare robe movement into the root backpack');
         state.spareRobeProof.movedToRoot = true;
         await ui.noWidget(page,'panel:inventory-flyby');
-        // The footer closes the book directly; Back starts another Sack slide and
-        // an immediate Escape can be consumed by that still-active transition.
+        // Source's footer returns from the open Sack before closing Inventory.
+        // Observe that real page transition before activating its root close.
+        await ui.click(page,'panel:close');
+        await ui.waitForUi(page,snapshot=>{
+          const value=ui.findWidget(snapshot,'panel:sack-page')?.value;
+          return value&&JSON.parse(value).path.length===0;
+        },'footer returns to the settled root backpack');
         await ui.click(page,'panel:close');
         await ui.noWidget(page,'panel:surface:inventory');
       }
@@ -519,6 +524,10 @@ async function runLua(page, code) {
         && item.mod_affixes?.some(affix => affix.name === 'Clear Minded')), 'actual Clear Minded reforge');
       assert.equal(player().economy.gold, goldBeforeReforge - 25);
       await openInventory(page);
+      if (priorPhase) {
+        await assertAuthoredIcon(page,items('Ward Tonic')[0].id);
+        await assertAuthoredIcon(page,items('Moondust')[0].id);
+      }
       await ui.click(page,`panel:item:${robeId}`,{clickCount:2});
       await until(() => !player().economy.backpack.some(item => item.id === robeId), 'actual robe re-equip');
       await page.screenshot({path: path.join(output, 'authored-affix.png')});
@@ -716,7 +725,8 @@ async function runLua(page, code) {
       textureProof: state.textureProof,
       spareRobeProof: state.spareRobeProof,
       robeDragProof: state.robeDragProof ? {...state.robeDragProof,
-        pointers: await page.evaluate(() => window.authoredRobePointers || [])} : undefined,
+        pointers: state.robeDragProof.pointers ?? await page.evaluate(() =>
+          window.stopAuthoredPanelObservation?.().pointers || [])} : undefined,
       ui: await ui.readUi(page)}, null, 2));
     throw error;
   } finally {
