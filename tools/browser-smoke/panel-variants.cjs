@@ -133,7 +133,8 @@ async function buyClothing(recipes){
     await page.keyboard.press('KeyK');await ui.widget(page,'panel:skill:52');
     assert.match((await ui.widget(page,'panel:skill:23')).label,/rank 2/);
     const weld=ui.center(ui.bounds(await ui.widget(page,'panel:skill:52')));await page.mouse.move(weld.x,weld.y);
-    await ui.waitForUi(page,s=>ui.findWidget(s,'panel:tooltip')?.label.includes('FLAME LASH'),'actual welded hover text');
+    // Source paints Flame Lash on the page but keeps the generic Spell Welding hover.
+    await ui.waitForUi(page,s=>ui.findWidget(s,'panel:tooltip')?.label.includes('SPELL WELDING'),'actual Spell Welding hover text');
     await shot('ranked-and-welded-skillbook');receipt.bankBindings=[];
     for(const bank of [0,1,2]){await ui.drag(page,'panel:skill:23',`panel:belt:${bank*8}`);
       await until(()=>player().belt.entries[bank*8]?.Skill?.skill_id===23,'actual drag addresses the selected bank');
