@@ -509,16 +509,19 @@ impl NativeFontRun {
     /// Align each native wrapped row within the supplied horizontal bounds.
     /// The top edge remains the run's first line-box edge.
     pub fn ink_bounds_aligned(&self, bounds: Rect, align: egui::Align) -> Rect {
-        self.geometry.lines.iter().zip(&self.raster).fold(Rect::NOTHING, |all, (line, raster)| {
-            let origin = aligned_origin(line, bounds, align);
-            line.paint_spans.iter().fold(all, |all, span| {
-                let source = raster.bounds.intersect(Rect::from_x_y_ranges(
-                    span.source.start..=span.source.end,
-                    f32::NEG_INFINITY..=f32::INFINITY,
-                ));
-                all.union(source.translate(origin.to_vec2() + vec2(span.offset, 0.0)))
-            })
-        })
+        self.geometry.lines.iter().zip(&self.raster).filter(|(line, _)| !line.text.is_empty()).fold(
+            Rect::NOTHING,
+            |all, (line, raster)| {
+                let origin = aligned_origin(line, bounds, align);
+                line.paint_spans.iter().fold(all, |all, span| {
+                    let source = raster.bounds.intersect(Rect::from_x_y_ranges(
+                        span.source.start..=span.source.end,
+                        f32::NEG_INFINITY..=f32::INFINITY,
+                    ));
+                    all.union(source.translate(origin.to_vec2() + vec2(span.offset, 0.0)))
+                })
+            },
+        )
     }
 
     pub fn paint(
@@ -535,6 +538,51 @@ impl NativeFontRun {
             egui::Align::Min,
             opacity,
         )
+    }
+
+    /// Paint one nowrap line with a native ellipsis, retaining the original
+    /// joining/ligatures instead of reshaping a truncated logical string.
+    pub fn paint_elided(
+        &self,
+        frame: &crate::gpu_ui::UiFrame<'_>,
+        painter: &Painter,
+        bounds: Rect,
+        opacity: f32,
+    ) -> Result<Rect, String> {
+        if self.geometry.lines.len() != 1 {
+            return Err("elided font paint requires one unwrapped line".into());
+        }
+        let clip = painter.clip_rect().intersect(bounds);
+        let painter = painter.with_clip_rect(clip);
+        if self.size().x <= bounds.width() {
+            self.paint(frame, &painter, bounds.min, opacity)?;
+            return Ok(self.ink_bounds().translate(bounds.min.to_vec2()).intersect(clip));
+        }
+        let ellipsis = font_run_with_options(
+            frame.ctx,
+            self.font.clone(),
+            self.color,
+            "…",
+            FontRunOptions {
+                letter_spacing: Some(self.letter_spacing),
+                stroke: self.stroke,
+                ..Default::default()
+            },
+        )?;
+        let edge =
+            self.geometry.lines[0].elision_edge((bounds.width() - ellipsis.size().x).max(0.0));
+        let text_clip = clip
+            .intersect(Rect::from_min_max(bounds.min, pos2(bounds.left() + edge, bounds.bottom())));
+        if edge > 0.0 {
+            self.paint(frame, &painter.with_clip_rect(text_clip), bounds.min, opacity)?;
+        }
+        let origin = bounds.min + vec2(edge, self.baseline() - ellipsis.baseline());
+        ellipsis.paint(frame, &painter, origin, opacity)?;
+        Ok(self
+            .ink_bounds()
+            .translate(bounds.min.to_vec2())
+            .intersect(text_clip)
+            .union(ellipsis.ink_bounds().translate(origin.to_vec2()).intersect(clip)))
     }
 
     pub fn paint_aligned(
