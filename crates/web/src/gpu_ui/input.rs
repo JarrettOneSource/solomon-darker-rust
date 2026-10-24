@@ -894,6 +894,12 @@ impl BrowserInput {
         sample_gamepad: bool,
     ) -> Result<Vec<InputPass>, String> {
         let mut queue = self.queue.borrow_mut();
+        // Native caret defaults precede their asynchronous selectionchange.
+        // Retain that selection before an earlier queued layout can sync it back.
+        if self.document.active_element().is_some_and(|element| element == **self.textarea) {
+            queue.sync_selection(&self.textarea);
+            queue.finish_dispatch();
+        }
         queue.logical = viewport;
         let mut raw = egui::RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(viewport[0], viewport[1]))),
