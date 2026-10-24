@@ -642,6 +642,14 @@ mod focus_scroll_tests {
             modifiers: Modifiers { shift: backwards, ..Modifiers::NONE },
         }
     }
+
+    fn dispatch(ctx: &Context, event: Event) -> (usize, Rect, Rect, f32) {
+        pass(ctx, vec![event]);
+        // Game's native dispatch and drawn frame both finish their input commits
+        // with paint_layout. Assert the resulting geometry, not the input pass.
+        pass(ctx, Vec::new())
+    }
+
     #[test]
     fn real_tab_focus_reveals_controls_in_both_scroll_directions() {
         let ctx = Context::default();
@@ -649,8 +657,8 @@ mod focus_scroll_tests {
         let first = pass(&ctx, Vec::new());
         assert_eq!(first.0, 0);
         for index in 1..=8 {
-            pass(&ctx, vec![tab(true, false)]);
-            let (focused, rect, viewport, offset) = pass(&ctx, vec![tab(false, false)]);
+            dispatch(&ctx, tab(true, false));
+            let (focused, rect, viewport, offset) = dispatch(&ctx, tab(false, false));
             assert_eq!(focused, index);
             assert!(
                 viewport.contains_rect(rect),
@@ -661,8 +669,8 @@ mod focus_scroll_tests {
             }
         }
         for index in (0..8).rev() {
-            pass(&ctx, vec![tab(true, true)]);
-            let (focused, rect, viewport, offset) = pass(&ctx, vec![tab(false, true)]);
+            dispatch(&ctx, tab(true, true));
+            let (focused, rect, viewport, offset) = dispatch(&ctx, tab(false, true));
             assert_eq!(focused, index);
             assert!(
                 viewport.contains_rect(rect),
