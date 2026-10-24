@@ -209,6 +209,56 @@ fn a_slow_reader_keeps_ordered_messages_and_receives_the_current_snapshot_after_
 }
 
 #[test]
+fn a_peer_close_drains_the_started_frame_and_close_reply_after_output_resumes() {
+    let assets = TestAssets::new();
+    let server = assets.start(TransportConfig::default());
+    let origin = format!("http://{}", server.local_addr());
+    let mut client = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
+    let peer = connected(&server);
+    let large: Arc<str> = Arc::from("0123456789abcdef".repeat(1024 * 1024));
+    for _ in 0..4 {
+        peer.send_reliable(Arc::clone(&large)).unwrap();
+    }
+    assert!(matches!(
+        server.recv_timeout(Duration::from_millis(300)),
+        Err(RecvTimeoutError::Timeout)
+    ));
+    client
+        .close(Some(CloseFrame {
+            code: tungstenite::protocol::frame::coding::CloseCode::Normal,
+            reason: "reader finished".into(),
+        }))
+        .unwrap();
+    assert!(
+        matches!(server.recv_timeout(Duration::from_millis(100)), Err(RecvTimeoutError::Timeout)),
+        "receiving Close cannot discard the started output frame or its queued close reply"
+    );
+
+    let mut complete_frames = 0;
+    let close = loop {
+        match next_message(&mut client) {
+            Message::Text(text) => {
+                assert_eq!(text.as_str(), large.as_ref());
+                complete_frames += 1;
+                assert!(complete_frames <= 4);
+            }
+            Message::Close(Some(close)) => break close,
+            other => panic!("unexpected output while closing: {other:?}"),
+        }
+    };
+    assert!(complete_frames > 0, "the in-flight frame finishes before the close reply");
+    assert_eq!(u16::from(close.code), 1000);
+    assert_eq!(close.reason, "reader finished");
+    finish_close(&mut client);
+    let TransportEvent::Disconnected { peer_id, close } = next_event(&server) else {
+        panic!("the fully closed peer leaves authority");
+    };
+    assert_eq!(peer_id, peer.id());
+    assert_eq!(close.code, Some(1000));
+    assert_eq!(close.reason, "reader finished");
+}
+
+#[test]
 fn a_stalled_large_frame_still_expires_at_the_existing_heartbeat_deadline() {
     let assets = TestAssets::new();
     let server = assets.start(TransportConfig {
