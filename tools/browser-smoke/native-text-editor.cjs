@@ -62,6 +62,14 @@ async function paintedSelection(page,count){
     await ui.focused(page,field);
     receipt.checks.push('ordinary paid Sack purchase and real rename-field focus');
 
+    await page.keyboard.press('End');await selected(page,4,4);
+    await page.keyboard.press('Tab');await ui.focused(page,'panel:sack-rename:save');
+    await page.keyboard.press('Shift+Tab');await ui.focused(page,field);
+    const tabSelection=await native(page);
+    assert.deepEqual([tabSelection.start,tabSelection.end],[0,4],
+      'native Tab entry selects the complete singleline value');
+    receipt.checks.push('actual Tab into a singleline field selects all without changing its value');
+
     await ui.installController(page);await ui.controller(page,[]);await ui.nextFrame(page);
     await ui.controller(page,[0]);await ui.nextFrame(page);
     await ui.focused(page,field);await ui.widget(page,'panel:sack-rename');
