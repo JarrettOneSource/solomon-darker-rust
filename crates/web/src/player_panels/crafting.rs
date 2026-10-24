@@ -14,6 +14,8 @@ use solomon_sim::player_panels::dye::{
     native_dye_modal_opacity, native_dye_selected_pulse, native_dye_swatch_rect,
 };
 use solomon_sim::player_panels::inventory_slot_rect;
+pub(super) const DYE_MODAL_SCOPE: &str = "fabric-dye";
+
 impl PlayerPanels {
     pub(super) fn open_dye(&mut self, dye_item_id: u64, now: f64) -> Result<(), String> {
         let session_id = self
@@ -233,7 +235,7 @@ impl PlayerPanels {
         } else {
             egui::pos2(self.stage_origin.x as f32, self.stage_origin.y as f32)
         };
-        self.modal_canvas(frame, "fabric-dye", scale, origin, 0.75, |panels, c| {
+        self.modal_canvas(frame, DYE_MODAL_SCOPE, scale, origin, 0.75, |panels, c| {
             if compact { panels.draw_compact_dye(c, s) } else { panels.draw_dye(c, s) }
         })
     }

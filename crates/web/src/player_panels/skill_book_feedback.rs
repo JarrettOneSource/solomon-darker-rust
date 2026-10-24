@@ -24,7 +24,15 @@ struct SkillBookResult {
     text: String,
     pause_panel: PlayerPanel,
 }
+impl SkillBookResult {
+    fn scope(&self) -> String {
+        format!("skill-book-result:{}", self.sequence)
+    }
+}
 impl SkillBookFeedback {
+    pub fn layer_id(&self) -> Option<egui::LayerId> {
+        self.result.as_ref().map(|result| super::chrome::modal_layer_id(&result.scope()))
+    }
     pub fn new() -> Self {
         Self { cursor: NativeSkillBookFeedbackCursor::new(None), result: None }
     }
@@ -108,7 +116,7 @@ impl PlayerPanels {
     ) -> Result<(), String> {
         let Some(result) = &self.skill_book_feedback.result else { return Ok(()) };
         let layout = result_layout(&result.text)?;
-        let scope = format!("skill-book-result:{}", result.sequence);
+        let scope = result.scope();
         let value =
             serde_json::json!({"skillId":result.skill_id,"sequence":result.sequence}).to_string();
         if !self.input_suspended {

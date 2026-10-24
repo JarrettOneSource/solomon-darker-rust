@@ -15,6 +15,9 @@ pub struct CollegeIntroOverlay {
 }
 
 impl CollegeIntroOverlay {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("college-intro"))
+    }
     pub async fn attach(_document: &Document) -> Result<Self, String> {
         Ok(Self { atlas: StockAtlas::load("Title").await?, view: None, viewport: [0.0; 2] })
     }
@@ -39,10 +42,7 @@ impl CollegeIntroOverlay {
         let Some((record, y, alpha, cover)) = self.view else { return Ok(()) };
         let scale = game_viewport(Vec2::new(self.viewport[0] as f64, self.viewport[1] as f64))
             .display_scale as f32;
-        let painter = frame.ctx.layer_painter(egui::LayerId::new(
-            egui::Order::Foreground,
-            egui::Id::unique("college-intro"),
-        ));
+        let painter = frame.ctx.layer_painter(self.layer_id());
         let bounds = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::from(self.viewport));
         painter.rect_filled(bounds, 0.0, egui::Color32::BLACK.gamma_multiply(cover as f32));
         frame.record_rect("college-intro", "College admission", "group", bounds, false);

@@ -6,9 +6,12 @@ use solomon_sim::{Vec2, hud::HudRect};
 
 pub(super) const COMPACT_NAVIGATION_HEIGHT: f32 = 48.0;
 
+pub(super) fn navigation_layer_id() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("panel-sections"))
+}
+
 pub(super) fn navigation_layer(ctx: &egui::Context, body: egui::LayerId) -> egui::LayerId {
-    let navigation =
-        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("panel-sections"));
+    let navigation = navigation_layer_id();
     // An interacted Area rises within its order. Source's fixed toolbar must
     // remain above the scrolling book after that interaction too.
     ctx.set_sublayer(body, navigation);

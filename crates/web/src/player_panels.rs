@@ -477,6 +477,22 @@ impl PlayerPanels {
     pub fn layer_id(&self) -> egui::LayerId {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("player-panels"))
     }
+    pub fn layer_ids(&self) -> Vec<egui::LayerId> {
+        let mut layers = vec![
+            self.layer_id(),
+            viewport::navigation_layer_id(),
+            skills::tooltip_layer_id(),
+            chrome::modal_layer_id(crafting::DYE_MODAL_SCOPE),
+            chrome::modal_layer_id(notices::NOTICE_MODAL_SCOPE),
+            sack_rename::layer_id(),
+        ];
+        layers.extend(self.skill_book_feedback.layer_id());
+        layers
+    }
+    /// Source attaches the NPC notebox directly to the viewport, outside the book.
+    pub fn notebox_layer_id(&self) -> egui::LayerId {
+        notebox::NpcNotebox::layer_id()
+    }
 
     pub fn covers_world(&self) -> bool {
         matches!(

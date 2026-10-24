@@ -1,5 +1,9 @@
 //! Learned SkillScreen pages, stock leather/chain art and item/skill hover text.
 
+pub(super) fn tooltip_layer_id() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("panel-tooltip"))
+}
+
 use super::chrome::PanelCanvas;
 use super::{PlayerPanelSnapshot, PlayerPanels, Target};
 use solomon_sim::belt::native_belt_owned_item;
@@ -388,10 +392,7 @@ impl PlayerPanels {
                 y = source.y + gap * self.view_scale;
             }
             y = y.clamp(52.0, (self.viewport_size.1 as f64 - height - 12.0).max(52.0));
-            let painter = c.frame.ctx.layer_painter(egui::LayerId::new(
-                egui::Order::Tooltip,
-                egui::Id::unique("panel-tooltip"),
-            ));
+            let painter = c.frame.ctx.layer_painter(tooltip_layer_id());
             (egui::pos2(x as f32, y as f32), scale as f32, painter)
         } else {
             (egui::pos2(r.x as f32, r.y as f32) + c.origin, 1.0, c.painter.clone())

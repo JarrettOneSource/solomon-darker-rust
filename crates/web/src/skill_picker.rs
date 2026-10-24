@@ -88,6 +88,12 @@ impl SkillPicker {
     pub fn layer_id(&self) -> egui::LayerId {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("skill-picker"))
     }
+    fn tooltip_layer_id() -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("picker-tooltip"))
+    }
+    pub fn layer_ids(&self) -> [egui::LayerId; 2] {
+        [self.layer_id(), Self::tooltip_layer_id()]
+    }
     pub fn take_actions(&mut self) -> Vec<SkillPickerAction> {
         std::mem::take(&mut self.actions)
     }
@@ -733,9 +739,9 @@ impl SkillPicker {
             solomon_sim::Vec2::new(skill_picker_centers(offer.options.len())[index], 382.5),
         );
         let mut close = false;
-        egui::Area::new(egui::Id::unique("picker-tooltip"))
+        egui::Area::new(Self::tooltip_layer_id().id)
             .fade_in(false)
-            .order(egui::Order::Tooltip)
+            .order(Self::tooltip_layer_id().order)
             .fixed_pos(egui::Pos2::ZERO)
             .constrain(false)
             .show(frame.ctx, |ui| {
