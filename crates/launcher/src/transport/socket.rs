@@ -251,6 +251,7 @@ pub(super) fn serve_connection(
             return;
         }
         let close = drive_peer(socket, &worker_server, &peer);
+        eprintln!("native-close-trace finish peer={id} detail={close:?}");
         finish_peer(&worker_server, &peer);
         // The bounded channel may block this socket worker, never the authority. Shutdown
         // drops its receiver first, guaranteeing this critical send can finish or fail.
@@ -337,6 +338,13 @@ fn drive_peer(
         if let Some(close) = &closing
             && close.started.elapsed() >= server.config.close_timeout
         {
+            eprintln!(
+                "native-close-trace deadline peer={} queued={} write_pending={} detail={:?}",
+                peer.id(),
+                close.queued,
+                write_pending,
+                close.detail
+            );
             return close.detail.clone();
         }
         if closing.as_ref().is_none_or(|close| !close.queued) {
