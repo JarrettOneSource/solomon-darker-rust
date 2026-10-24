@@ -2441,7 +2441,7 @@ impl Game {
             match_loading_view,
             ..
         } = self;
-        Ok((gpu_ui, move |frame| {
+        Ok((gpu_ui, move |frame: &mut UiFrame<'_>| {
             mod_overlays.paint(frame)?;
             mod_minimap.paint(frame)?;
             hud.paint(frame)?;
