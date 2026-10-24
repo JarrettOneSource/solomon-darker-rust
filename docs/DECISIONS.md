@@ -321,6 +321,10 @@ path. The controller reuses the existing Source spatial kernel, then wraps in na
 registration order; native widget filters and consumed keys retain their ownership.
 The small egui accessors expose actual focus registrations and its deferred focus
 request, rather than maintaining a second application target inventory.
+Controller A queues one ordinary native activation independently of movement, using
+the pre-move active control or the winning scope's real preferred control. The
+existing empty commit delivers it only if the same enabled, visible widget/layer
+registers again. It expires immediately otherwise; physical Enter is not replayed.
 
 **No engine crate.** Bevy, macroquad and friends bring their own loop, scheduling and asset
 pipeline, and the game's whole value is that its loop, order and numbers are the native

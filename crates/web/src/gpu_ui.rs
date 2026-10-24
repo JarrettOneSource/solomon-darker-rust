@@ -1189,7 +1189,7 @@ impl GpuUi {
                 navigation::finish(
                     ctx,
                     direction,
-                    input_scope.borrow().as_ref().map(|(layer, _)| *layer),
+                    input_scope.borrow().as_ref().map(|(layer, scope)| (*layer, scope.as_str())),
                 );
             }
         });

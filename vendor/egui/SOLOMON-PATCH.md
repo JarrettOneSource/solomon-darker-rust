@@ -38,13 +38,20 @@ Local changes are confined to the following implementation files:
   its recovered Source policy under the highest active input scope. Actual widget
   filters and consumed events retain ownership; physical keyboard traversal and
   unmodified/default contexts keep normal egui behavior.
+  A controller confirmation can queue one genuine widget activation for the next
+  existing commit, independently of focus movement. Queue and delivery require the
+  same actual enabled, visible click widget/layer and native modal admission. A
+  missing target expires after that pass; previous-pass response lookup cannot
+  deliver an activation. This preserves click-only A behavior without replaying
+  Enter or manufacturing pointer/accessibility input.
 
 Public integration methods are `Context::set_fixed_layer_order`,
 `Context::fixed_layer_order_index`, `Context::compare_layer_order`, `Context::set_widget_hit_test`,
 `Context::pointer_widget_at`, `Area::background_interactable`, and
 `Event::PointerCancelled`.
 Controller navigation additionally uses `Context::focusable_widgets_in_layer`,
-`Memory::take_focus_direction`, and `Memory::request_focus_next_frame`.
+`Context::request_activation_next_frame`, `Memory::take_focus_direction`, and
+`Memory::request_focus_next_frame`.
 The application supplies its recovered fixed registry before input/layout. Hit predicates
 reuse its canonical ellipse/rotation geometry and cannot call Context while it is locked.
 The native textarea adapter resolves its target through the same real widget hit test.

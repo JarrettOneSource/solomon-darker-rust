@@ -488,18 +488,19 @@ impl MenuUi {
         if !self.input_suspended && self.pending_start.is_none() {
             let scope = self.navigation_scope();
             let navigation_requested = !crate::gpu_ui::text_edit_focused(&ctx)
-                && ctx.input(|input| {
-                    [
-                        egui::Key::Enter,
-                        egui::Key::Tab,
-                        egui::Key::ArrowUp,
-                        egui::Key::ArrowDown,
-                        egui::Key::ArrowLeft,
-                        egui::Key::ArrowRight,
-                    ]
-                    .into_iter()
-                    .any(|key| input.key_pressed(key))
-                });
+                && (crate::gpu_ui::navigation::confirmation_pending(&ctx)
+                    || ctx.input(|input| {
+                        [
+                            egui::Key::Enter,
+                            egui::Key::Tab,
+                            egui::Key::ArrowUp,
+                            egui::Key::ArrowDown,
+                            egui::Key::ArrowLeft,
+                            egui::Key::ArrowRight,
+                        ]
+                        .into_iter()
+                        .any(|key| input.key_pressed(key))
+                    }));
             let preferred = if self.routing.active() {
                 Some("routing-back".to_owned())
             } else if self.prompt.kind.is_some() {
