@@ -15,6 +15,9 @@ pub(super) struct NpcNotebox {
     active: Option<Notice>,
 }
 impl NpcNotebox {
+    pub fn layer_id() -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("npc-notebox"))
+    }
     pub fn new() -> Self {
         Self { active: None }
     }
@@ -51,7 +54,7 @@ impl NpcNotebox {
         let Some(notice) = &mut self.active else { return Ok(()) };
         let layout = native_notebox_layout(&notice.text);
         let scale = (viewport.0 as f32 / 1600.0).min(viewport.1 as f32 / 900.0);
-        let layer = egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("npc-notebox"));
+        let layer = Self::layer_id();
         frame.ctx.set_transform_layer(
             layer,
             egui::emath::TSTransform::new(

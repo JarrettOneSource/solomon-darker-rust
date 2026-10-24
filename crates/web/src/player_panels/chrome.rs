@@ -783,7 +783,7 @@ impl PlayerPanels {
     ) -> Result<(), String> {
         let hits = RefCell::new(Vec::new());
         let events = RefCell::new(Vec::new());
-        let layer = egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique(id));
+        let layer = modal_layer_id(id);
         let transform = egui::emath::TSTransform::new(origin.to_vec2(), scale);
         let mut result = Ok(());
         native_area(frame.ctx, layer, transform).show(frame.ctx, |ui| {
@@ -806,6 +806,10 @@ impl PlayerPanels {
         self.events.extend(events.into_inner());
         result
     }
+}
+
+pub(super) fn modal_layer_id(scope: &str) -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique(scope))
 }
 
 /// Native Spell Welding divides its glow along the top-right/bottom-left diagonal.

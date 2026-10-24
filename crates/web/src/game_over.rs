@@ -32,6 +32,9 @@ pub struct GameOverOverlay {
 }
 
 impl GameOverOverlay {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("game-over"))
+    }
     pub fn attach(_document: &Document) -> Result<Self, String> {
         Ok(Self { view: None, accepted: None, actions: Vec::new(), focus_next: false })
     }
@@ -75,11 +78,10 @@ impl GameOverOverlay {
             bounds.height() as f64,
         ))
         .display_scale as f32;
-        egui::Area::new(egui::Id::unique("game-over"))
-            .fade_in(false)
-            .order(egui::Order::Foreground)
-            .fixed_pos(bounds.min)
-            .show(frame.ctx, |ui| {
+        let layer = self.layer_id();
+        egui::Area::new(layer.id).fade_in(false).order(layer.order).fixed_pos(bounds.min).show(
+            frame.ctx,
+            |ui| {
                 let mut input =
                     crate::player_panels::chrome::child_ui(ui, "game-over-input", bounds);
                 if !view.accepts_input {
@@ -174,7 +176,8 @@ impl GameOverOverlay {
                     egui::Color32::BLACK.gamma_multiply(view.exit_fade_alpha as f32),
                 );
                 ui.set_min_size(bounds.size());
-            });
+            },
+        );
         Ok(())
     }
 }

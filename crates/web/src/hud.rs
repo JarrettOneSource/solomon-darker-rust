@@ -330,16 +330,15 @@ impl Hud {
         let transform = egui::emath::TSTransform::from_scaling(scale);
         let coarse = self.coarse();
         let mut error = None;
-        crate::player_panels::chrome::native_area(frame.ctx, layer, transform).show(
-            frame.ctx,
-            |ui| {
+        crate::player_panels::chrome::native_area(frame.ctx, layer, transform)
+            .background_interactable(false)
+            .show(frame.ctx, |ui| {
                 ui.set_min_size(size);
                 let result = self.paint_contents(frame, ui, state, size, scale, coarse);
                 if let Err(value) = result {
                     error = Some(value);
                 }
-            },
-        );
+            });
         error.map_or(Ok(()), Err)
     }
     fn mobile_rect(

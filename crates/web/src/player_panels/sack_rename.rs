@@ -17,6 +17,10 @@ use solomon_sim::player_panels::sack_rename::{
     inventory_sack_rename_target,
 };
 
+pub(super) fn layer_id() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("sack-rename"))
+}
+
 pub(super) struct SackRenameDialog {
     pub item_id: u64,
     draft: String,
@@ -147,9 +151,9 @@ impl PlayerPanels {
         let mut submit = false;
         let mut error = None;
         let bounds = frame.ctx.content_rect();
-        egui::Area::new(egui::Id::unique("sack-rename"))
+        egui::Area::new(layer_id().id)
             .fade_in(false)
-            .order(egui::Order::Tooltip)
+            .order(layer_id().order)
             .fixed_pos(egui::Pos2::ZERO)
             .constrain(false)
             .show(frame.ctx, |ui| {

@@ -443,6 +443,9 @@ impl MovementInput {
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         joystick::paint(self, frame)
     }
+    pub fn layer_id(&self) -> egui::LayerId {
+        joystick::layer_id()
+    }
     pub fn set_blocked(&self, blocked: bool) -> Result<(), String> {
         let pointers = {
             let mut state = self.state.borrow_mut();

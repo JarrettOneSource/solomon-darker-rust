@@ -7,6 +7,10 @@ use solomon_sim::mobile_ui::{
     mobile_ui_joystick_knob_offset,
 };
 
+pub(super) fn layer_id() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Middle, egui::Id::unique("gameplay-joysticks"))
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct JoystickGeometry {
     pub center: Pos2,
@@ -109,8 +113,10 @@ pub(super) fn paint(input: &MovementInput, frame: &UiFrame<'_>) -> Result<(), St
     if lanes.is_empty() {
         return Ok(());
     }
-    egui::Area::new(egui::Id::unique("gameplay-joysticks"))
-        .order(egui::Order::Middle)
+    egui::Area::new(layer_id().id)
+        .order(layer_id().order)
+        .fade_in(false)
+        .background_interactable(false)
         .fixed_pos(Pos2::ZERO)
         .constrain(false)
         .show(frame.ctx, |ui| -> Result<(), String> {
