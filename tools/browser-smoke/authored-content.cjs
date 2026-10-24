@@ -477,16 +477,20 @@ async function runLua(page, code) {
       // out of the bag through the visible Back target before returning to Pip.
       const isRobe = item => String(item.equipment_type).toLowerCase() === 'robe';
       const rootRobe = player().economy.backpack.find(isRobe);
+      const worn = player().economy.equipment.robe;
+      const alreadyWornRobe = priorPhase?.reforge && worn?.id === priorPhase.reforge.itemId ? worn : null;
       const hasSpareRobe = item => item.contents?.some(isRobe);
       const bag = player().economy.backpack.find(hasSpareRobe)
         || player().economy.storage.find(hasSpareRobe);
-      assert.ok(rootRobe || bag, 'the retained profile supplies its real scavenged robe');
-      const robeId = rootRobe?.id ?? bag.contents.find(isRobe).id;
-      state.spareRobeProof = {robeId, location: rootRobe ? 'root backpack' : 'scavenged bag'};
-      if (rootRobe) {
+      assert.ok(rootRobe || bag || alreadyWornRobe, 'the retained profile supplies its real scavenged robe');
+      const robeId = alreadyWornRobe?.id ?? rootRobe?.id ?? bag.contents.find(isRobe).id;
+      state.spareRobeProof = {robeId, location: alreadyWornRobe
+        ? 'already equipped in the actual earlier continuation' : rootRobe ? 'root backpack' : 'scavenged bag'};
+      if (rootRobe || alreadyWornRobe) {
         // A prior ordinary child→Back drag already moved this item. Continue from
         // the actual accepted inventory instead of repeating that passed phase.
-        check('the real spare robe remains in the root backpack for the remaining reforge phase');
+        check(alreadyWornRobe ? 'the exact already-paid robe remains equipped after the actual earlier continuation'
+          : 'the real spare robe remains in the root backpack for the remaining reforge phase');
       } else {
         if (!player().economy.backpack.some(item => item.id === bag.id)) {
           mark('retrieve the real scavenged bag from Luthacus');
@@ -534,7 +538,7 @@ async function runLua(page, code) {
       if (priorPhase?.reforge) {
         assert.equal(robeId, priorPhase.reforge.itemId);
         assert.equal(player().economy.gold, priorPhase.reforge.afterGold);
-        assert.ok(player().economy.backpack.find(item => item.id === robeId)
+        assert.ok((alreadyWornRobe ?? player().economy.backpack.find(item => item.id === robeId))
           .mod_affixes?.some(affix => affix.name === 'Clear Minded'),
         'fresh accepted authority retains the exact already-paid robe affix');
         state.reforgeProof = {kind:'retained actual transaction', ...priorPhase.reforge,
@@ -554,15 +558,16 @@ async function runLua(page, code) {
         await assertAuthoredIcon(page,items('Ward Tonic')[0].id);
         await assertAuthoredIcon(page,items('Moondust')[0].id);
       }
-      await ui.click(page,`panel:item:${robeId}`,{clickCount:2});
-      await until(() => !player().economy.backpack.some(item => item.id === robeId), 'actual robe re-equip');
+      if (!alreadyWornRobe) await ui.click(page,`panel:item:${robeId}`,{clickCount:2});
+      await until(() => player().economy.equipment.robe?.id === robeId
+        && !player().economy.backpack.some(item => item.id === robeId), 'actual robe re-equip');
       await page.screenshot({path: path.join(output, 'authored-affix.png')});
       await page.keyboard.press('Escape');
       check(continueAuthored
         ? 'real retained purchase outputs, custom icons, semantic state and new robe affix'
         : 'real stock, gold, custom icons, purchase rule, bonus item, semantic state, robe affix and authored audio');
       mark('enter an ordinary Boneyard and activate the authored minimap');
-      await clickLabel(page,'Enter the Boneyard',{prefix:'mod/panel:'});
+      await ui.click(page,'hud:map');
       await until(() => state.frame?.snapshot.boneyard && !state.frame.host.loading_run_id && !state.frame.host.resume_grace && !state.frame.host.pause, 'actual Boneyard readiness', 120000);
       runId = state.frame.snapshot.boneyard.run_id;
       await ui.widget(page,'mod/minimap');
