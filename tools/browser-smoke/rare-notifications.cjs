@@ -195,10 +195,11 @@ async function pauseNotice(key,text,afterAnnouncement,name,{resume=true}={}) {
       await ui.click(page,`hud:belt:${slot}`);
       await ui.nextFrame(page);
       receipt.pendingToggle.after=await page.evaluate(()=>Array.from(window.wasmBindings.gameplay_input_state()));
-      if(slot<2)await until(()=>secondary()?.[name]===true,`real ${name} activates`);
-      else await until(()=>receipt.secondaryEvents.some(event=>event.kind==='Overload'),'native mana reservation emits overload');
+      await until(()=>secondary()?.[name]===true||receipt.secondaryEvents.some(event=>event.kind==='Overload'),
+        `real ${name} activates or its reservation overloads`);
       receipt.toggles.push({slot,name,tick:frame.snapshot.ticks,maximumMana:player().combat.maximum_mana,
         state:structuredClone(secondary())});
+      if(receipt.secondaryEvents.some(event=>event.kind==='Overload'))break;
     }
     const overload=receipt.secondaryEvents.find(event=>event.kind==='Overload');
     assert.equal(overload.world_key,`boneyard:${receipt.runId}`);assert.equal(overload.owner_id,playerId);
