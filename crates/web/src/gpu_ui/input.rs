@@ -117,6 +117,7 @@ impl InputQueue {
             codes: self.codes.len(),
             edits: self.edits.len(),
             click_count: None,
+            controller: false,
         };
         if !self.dispatches.last().copied().unwrap_or_default().same_endpoint(end) {
             self.dispatches.push(end);
@@ -1016,6 +1017,7 @@ impl BrowserInput {
                 codes: codes.len(),
                 edits: edits.len(),
                 click_count: None,
+                controller: true,
             });
         }
         Ok(into_passes(raw, codes, edits, dispatches))

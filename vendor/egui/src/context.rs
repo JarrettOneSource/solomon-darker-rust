@@ -3692,6 +3692,22 @@ impl Context {
         self.memory(|memory| memory.areas().compare_order(a, b))
     }
 
+    /// This pass's enabled, visible, focusable widgets in their real registration order.
+    ///
+    /// Rectangles retain local layer coordinates. Offscreen widgets keep their full
+    /// rectangles so native focus can reveal them. Passive container backgrounds
+    /// are excluded. Call after the layer's widgets have registered.
+    pub fn focusable_widgets_in_layer(&self, layer: LayerId) -> Vec<WidgetRect> {
+        self.pass_state(|pass| {
+            pass.widgets
+                .focusable_widgets_in_layer(layer)
+                .filter_map(|id| pass.widgets.get(id))
+                .filter(|widget| widget.visible)
+                .copied()
+                .collect()
+        })
+    }
+
     /// Restrict this pass's real widget to an authored hit shape in global coordinates.
     ///
     /// The predicate runs under the Context lock: it must be pure and must not call

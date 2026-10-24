@@ -234,6 +234,13 @@ and settings emits `GameSettings`; views never grant ranks or fabricate inventor
 input is scoped to its active surface and requires a controller-neutral handoff. Cost:
 the host must apply the preferences and supply the actual saved session behind Continue.
 
+Controller focus resolves after all real widgets register, under the highest active
+input scope. Explicit dispatch provenance keeps physical Tab on egui's global native
+path. The controller reuses the existing Source spatial kernel, then wraps in native
+registration order; native widget filters and consumed keys retain their ownership.
+The small egui accessors expose actual focus registrations and its deferred focus
+request, rather than maintaining a second application target inventory.
+
 **No engine crate.** Bevy, macroquad and friends bring their own loop, scheduling and asset
 pipeline, and the game's whole value is that its loop, order and numbers are the native
 ones. The renderer is a few hundred lines of WebGL2 over `web-sys`. Cost: shadows, text and

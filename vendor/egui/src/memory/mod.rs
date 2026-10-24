@@ -926,7 +926,7 @@ impl Memory {
     }
 
     /// Defer focus until the next pass so an already rendered widget sees `gained_focus`.
-    pub(crate) fn request_focus_next_frame(&mut self, id: Id) {
+    pub fn request_focus_next_frame(&mut self, id: Id) {
         self.focus_mut().id_next_frame = Some(id);
         self.interrupt_ime();
     }
@@ -1001,6 +1001,16 @@ impl Memory {
     pub(crate) fn focus_direction(&self) -> FocusDirection {
         self.focus()
             .map_or(FocusDirection::None, |focus| focus.focus_direction)
+    }
+
+    /// Hold this pass's navigation after applying the focused widget's event filter.
+    ///
+    /// The backend can resolve it after all widgets register in the actual active
+    /// layer. Input events remain available to their widget owners.
+    pub fn take_focus_direction(&mut self) -> FocusDirection {
+        let direction = self.focus_direction();
+        self.focus_mut().reset_focus();
+        direction
     }
 
     /// Limit focus to widgets on the given layer and above.

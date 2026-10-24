@@ -460,9 +460,9 @@ fn a_clicked_binding_row_commits_before_the_following_escape_dispatch() {
         vec![browser_key("Escape", "Escape")],
         Vec::new(),
         vec![
-            batches::DispatchEnd { events: 2, codes: 0, edits: 0, click_count: None },
-            batches::DispatchEnd { events: 4, codes: 0, edits: 0, click_count: None },
-            batches::DispatchEnd { events: 5, codes: 1, edits: 0, click_count: None },
+            batches::DispatchEnd { events: 2, ..Default::default() },
+            batches::DispatchEnd { events: 4, ..Default::default() },
+            batches::DispatchEnd { events: 5, codes: 1, ..Default::default() },
         ],
     );
     for pass in passes {
@@ -567,10 +567,10 @@ fn a_new_field_has_committed_geometry_before_an_immediate_click_and_submit() {
         vec![browser_key("Enter", "Enter")],
         vec![receipt],
         vec![
-            batches::DispatchEnd { events: 2, codes: 0, edits: 0, click_count: None },
-            batches::DispatchEnd { events: 4, codes: 0, edits: 0, click_count: None },
-            batches::DispatchEnd { events: 6, codes: 0, edits: 0, click_count: None },
-            batches::DispatchEnd { events: 7, codes: 1, edits: 1, click_count: None },
+            batches::DispatchEnd { events: 2, ..Default::default() },
+            batches::DispatchEnd { events: 4, ..Default::default() },
+            batches::DispatchEnd { events: 6, ..Default::default() },
+            batches::DispatchEnd { events: 7, codes: 1, edits: 1, ..Default::default() },
         ],
     );
     for pass in passes {

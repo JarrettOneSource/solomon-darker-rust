@@ -32,11 +32,19 @@ Local changes are confined to the following implementation files:
   It preserves native wheel phase/source/modifiers, line/page handling and upstream
   default smoothing. The game enables this option to match native browser scrolling
   and prevent replayed wheel motion after a newly focused control has been revealed.
+- `context.rs`, `memory/mod.rs`: expose the existing per-pass focus direction,
+  ordered native focusable registrations and deferred focus request. The application
+  holds navigation only for explicitly sampled controller dispatches, then resolves
+  its recovered Source policy under the highest active input scope. Actual widget
+  filters and consumed events retain ownership; physical keyboard traversal and
+  unmodified/default contexts keep normal egui behavior.
 
 Public integration methods are `Context::set_fixed_layer_order`,
 `Context::fixed_layer_order_index`, `Context::compare_layer_order`, `Context::set_widget_hit_test`,
 `Context::pointer_widget_at`, `Area::background_interactable`, and
 `Event::PointerCancelled`.
+Controller navigation additionally uses `Context::focusable_widgets_in_layer`,
+`Memory::take_focus_direction`, and `Memory::request_focus_next_frame`.
 The application supplies its recovered fixed registry before input/layout. Hit predicates
 reuse its canonical ellipse/rotation geometry and cannot call Context while it is locked.
 The native textarea adapter resolves its target through the same real widget hit test.
