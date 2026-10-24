@@ -117,6 +117,11 @@ pub enum Event {
         modifiers: Modifiers,
     },
 
+    /// The native pointer was cancelled, so its click/drag gesture must end without a click.
+    /// Unlike a normal button release, this retires all pointer buttons and ownership.
+    /// Touch integrations should also send the original [`Self::Touch`] cancellation.
+    PointerCancelled,
+
     /// The mouse left the screen, or the last/primary touch input disappeared.
     ///
     /// This means there is no longer a cursor on the screen for hovering etc.

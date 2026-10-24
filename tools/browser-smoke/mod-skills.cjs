@@ -331,6 +331,11 @@ async function geometry(page, id) {
     const quickbarGeometry = await geometry(page, 'mod/quickbar:0');
     assert.ok(Math.abs(quickbarGeometry.width - 41.6) <= 1 / 64, 'Source quickbar width remains 41.6px');
     await ui.waitForUi(page, snapshot => /^100x100 blob:/.test(ui.findWidget(snapshot, 'mod/quickbar-icon:0')?.value || ''), 'verified 100px icon texture ready');
+    const iconGeometry = await geometry(page, 'mod/quickbar-icon:0');
+    assert.ok(Math.abs(iconGeometry.width - 33.2) <= 1 / 64, 'Source icon width excludes its 1px border and 3.2px padding');
+    assert.ok(Math.abs(iconGeometry.height - 33.2) <= 1 / 64, 'the verified square icon preserves its aspect ratio');
+    assert.ok(Math.abs(iconGeometry.x - quickbarGeometry.x - 4.2) <= 1 / 64);
+    assert.ok(Math.abs(iconGeometry.y - quickbarGeometry.y - 4.2) <= 1 / 64);
     await ui.assertGpuOnly(page);
     await page.screenshot({path: path.join(output, 'gravity-book-bound.png')});
     await closeBook(page);
@@ -346,6 +351,11 @@ async function geometry(page, id) {
 
     mark('check Source keyboard behavior with actual editable Console focus');
     await openConsole(page);
+    const unicodeDraft = '-- مرحباً بالعالم 👩🏽‍🚀\n-- שלום עולם 👨‍👩‍👧‍👦';
+    await ui.fill(page, 'cheats/lua-editor', unicodeDraft);
+    await ui.value(page, 'cheats/lua-editor', unicodeDraft);
+    await page.screenshot({path: path.join(output, 'gravity-unicode-console-draft.png')});
+    await ui.fill(page, 'cheats/lua-editor', '');
     await noCast(() => page.keyboard.press('Shift+Digit1'), 'US Shift+1 is !, so Source sends no cast');
     await ui.value(page, 'cheats/lua-editor', '!');
     await ui.fill(page, 'cheats/lua-editor', '');

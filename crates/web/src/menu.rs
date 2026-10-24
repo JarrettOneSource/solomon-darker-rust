@@ -6,7 +6,7 @@ mod hall;
 mod join;
 pub(crate) mod navigation;
 mod prompt;
-mod routing;
+pub(crate) mod routing;
 mod settings;
 mod title;
 pub(crate) mod widgets;
@@ -181,8 +181,61 @@ pub struct MenuUi {
 pub(crate) fn scene_layer() -> egui::LayerId {
     egui::LayerId::new(egui::Order::Middle, Id::unique("game-menu-scene"))
 }
+pub(crate) fn overlay_layer() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Foreground, Id::unique("game-menu-modal"))
+}
+pub(crate) fn orientation_layer() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Foreground, Id::unique("landscape-guidance"))
+}
+pub(crate) fn cloud_dialog_layer() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Foreground, Id::unique("cloud-dialog"))
+}
+pub(crate) fn library_layer() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Middle, Id::unique("boneyard-library"))
+}
 
 impl MenuUi {
+    /// Source sibling stacking levels within the shared main-menu stage.
+    pub(crate) fn scene_stack_level(&self) -> i32 {
+        match self.screen {
+            Screen::Create => 30,
+            Screen::Hall => 20,
+            Screen::Join => 24_000,
+            _ => 9,
+        }
+    }
+    pub(crate) fn overlay_stack_level(&self) -> Option<i32> {
+        if self.orientation_blocked {
+            None
+        } else if self.routing.active() {
+            Some(self.routing.stack_level())
+        } else if self.prompt.kind.is_some() {
+            Some(120)
+        } else if self.screen == Screen::Settings {
+            Some(100_000)
+        } else if self.screen == Screen::Pause {
+            Some(80)
+        } else {
+            None
+        }
+    }
+    pub(crate) fn orientation_visible(&self) -> bool {
+        self.orientation_blocked
+    }
+    /// The Source NativeUiDialog is a browser top-layer owner while mounted.
+    pub(crate) fn cloud_dialog_visible(&self) -> bool {
+        !self.orientation_blocked && self.cloud_visible(self.screen) && self.cloud.modal_open()
+    }
+    pub(crate) fn mobile_editor_parent_layer(&self) -> Option<egui::LayerId> {
+        if self.screen != Screen::Settings
+            || self.orientation_blocked
+            || !self.settings_view.mobile_editor_active()
+        {
+            return None;
+        }
+        // Retained Settings paint in the scene behind routing; active Settings use the modal.
+        Some(if self.routing.active() { scene_layer() } else { overlay_layer() })
+    }
     pub fn discard_gameplay_keys(&mut self) {
         if self.screen == Screen::Hidden {
             self.discard_keys = true;
@@ -321,11 +374,12 @@ impl MenuUi {
                 self.handle_event(UiEvent::Pointer(button))?;
             }
         }
-        if self.orientation_blocked {
-            frame.input_scope("landscape-guidance");
+        if self.orientation_visible() {
+            frame.input_scope("landscape-guidance", orientation_layer());
             let view = frame.ctx.input(|i| i.content_rect());
             let ctx = frame.ctx.clone();
-            egui::Modal::new(Id::unique("landscape-guidance"))
+            egui::Modal::new(orientation_layer().id)
+                .area(egui::Modal::default_area(orientation_layer().id).fade_in(false))
                 .frame(egui::Frame::NONE)
                 .backdrop_color(Color32::BLACK)
                 .show(&ctx, |ui| {
@@ -351,7 +405,14 @@ impl MenuUi {
             return Ok(());
         }
         if !self.input_suspended && self.pending_start.is_none() && self.is_blocking() {
-            frame.input_scope(&self.navigation_scope());
+            let layer = if self.cloud_dialog_visible() {
+                cloud_dialog_layer()
+            } else if self.overlay_stack_level().is_some() {
+                overlay_layer()
+            } else {
+                scene_layer()
+            };
+            frame.input_scope(&self.navigation_scope(), layer);
         }
         if self.screen == Screen::Hidden && !self.routing.active() {
             return Ok(());
@@ -368,9 +429,11 @@ impl MenuUi {
             || self.prompt.kind.is_some()
             || self.routing.active();
         let enabled = !self.input_suspended && !overlay;
-        egui::Area::new(scene_layer().id).fixed_pos(view.min).order(scene_layer().order).show(
-            &ctx,
-            |ui| {
+        egui::Area::new(scene_layer().id)
+            .fade_in(false)
+            .fixed_pos(view.min)
+            .order(scene_layer().order)
+            .show(&ctx, |ui| {
                 ui.set_min_size(view.size());
                 ui.set_clip_rect(view);
                 if !enabled {
@@ -395,13 +458,13 @@ impl MenuUi {
                 if result.is_ok() && self.screen == Screen::Settings && self.routing.active() {
                     result = self.settings_view.paint(frame, ui, view, &mut Vec::new());
                 }
-            },
-        );
+            });
         std::mem::replace(&mut result, Ok(()))?;
         if overlay {
-            egui::Modal::new(Id::unique("game-menu-modal"))
+            egui::Modal::new(overlay_layer().id)
                 .area(
-                    egui::Area::new(Id::unique("game-menu-modal"))
+                    egui::Area::new(overlay_layer().id)
+                        .fade_in(false)
                         .fixed_pos(view.min)
                         .order(egui::Order::Foreground),
                 )

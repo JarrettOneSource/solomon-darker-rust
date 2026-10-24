@@ -9,7 +9,7 @@ use web_sys::{HtmlImageElement, WebGl2RenderingContext};
 
 use solomon_graphics::assets;
 use solomon_graphics::{AlphaShadow, ColorFilter};
-use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
+use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, TextureSampling, Vertex};
 
 use super::material::{Material, Materials, TextureSource};
 
@@ -195,6 +195,14 @@ impl Images {
         self.0.borrow().images.get(&path_key(path)).and_then(|entry| entry.size)
     }
 
+    pub fn ready(&self, path: &str) -> bool {
+        self.0
+            .borrow()
+            .images
+            .get(&path_key(path))
+            .is_some_and(|entry| matches!(entry.state, ImageState::Ready(_)))
+    }
+
     pub fn error(&self, path: &str) -> Option<String> {
         match &self.0.borrow().images.get(&path_key(path))?.state {
             ImageState::Failed(error) => Some(error.clone()),
@@ -210,13 +218,26 @@ impl Images {
         filter: ColorFilter,
         shadow: Option<AlphaShadow>,
     ) -> Option<TextureId> {
+        self.sampled_texture_id(path, blend, mask, filter, shadow, TextureSampling::Texture)
+    }
+
+    pub fn sampled_texture_id(
+        &self,
+        path: &str,
+        blend: BlendMode,
+        mask: bool,
+        filter: ColorFilter,
+        shadow: Option<AlphaShadow>,
+        sampling: TextureSampling,
+    ) -> Option<TextureId> {
         self.request(path);
         let mut cache = self.0.borrow_mut();
         let entry = cache.images.get(&path_key(path))?;
         if !matches!(entry.state, ImageState::Ready(_)) {
             return None;
         }
-        let mut material = Material::new(TextureSource::Image(entry.id), blend, mask, filter);
+        let mut material = Material::new(TextureSource::Image(entry.id), blend, mask, filter)
+            .with_sampling(sampling);
         if let Some(shadow) = shadow {
             material = material.with_shadow(shadow);
         }
@@ -392,44 +413,47 @@ impl GpuPainter {
         if !mesh.is_valid() {
             return Err("GPU UI produced an invalid mesh".to_owned());
         }
-        let (texture, blend, mode, sampling, filter, shadow) = match mesh.texture_id {
-            TextureId::Managed(_) => (
-                self.textures
-                    .get(&mesh.texture_id)
-                    .cloned()
-                    .ok_or("GPU UI mesh references a missing managed texture")?,
-                BlendMode::Normal,
-                TextureColorMode::Texture,
-                None,
-                ColorFilter::default(),
-                None,
-            ),
-            TextureId::User(id) => {
-                let material =
-                    images.material(id).ok_or("GPU UI mesh references a retired material")?;
-                let (texture, owned) = match material.source {
-                    TextureSource::Image(id) => {
-                        images.texture(id).ok_or("GPU UI mesh references a retired image")?
-                    }
-                    TextureSource::Managed(id) => (
-                        self.textures
-                            .get(&TextureId::Managed(id))
-                            .cloned()
-                            .ok_or("GPU UI mesh references a missing managed texture")?,
-                        false,
-                    ),
-                };
-                let mask = material.mask;
-                (
-                    texture,
-                    material.blend(),
-                    if mask { TextureColorMode::AlphaMask } else { TextureColorMode::Texture },
-                    owned.then_some(mask),
-                    material.filter(),
-                    material.shadow(),
-                )
-            }
-        };
+        let (texture, blend, mode, sampling, filter, shadow, override_sampling) =
+            match mesh.texture_id {
+                TextureId::Managed(_) => (
+                    self.textures
+                        .get(&mesh.texture_id)
+                        .cloned()
+                        .ok_or("GPU UI mesh references a missing managed texture")?,
+                    BlendMode::Normal,
+                    TextureColorMode::Texture,
+                    None,
+                    ColorFilter::default(),
+                    None,
+                    TextureSampling::Texture,
+                ),
+                TextureId::User(id) => {
+                    let material =
+                        images.material(id).ok_or("GPU UI mesh references a retired material")?;
+                    let (texture, owned) = match material.source {
+                        TextureSource::Image(id) => {
+                            images.texture(id).ok_or("GPU UI mesh references a retired image")?
+                        }
+                        TextureSource::Managed(id) => (
+                            self.textures
+                                .get(&TextureId::Managed(id))
+                                .cloned()
+                                .ok_or("GPU UI mesh references a missing managed texture")?,
+                            false,
+                        ),
+                    };
+                    let mask = material.mask;
+                    (
+                        texture,
+                        material.blend(),
+                        if mask { TextureColorMode::AlphaMask } else { TextureColorMode::Texture },
+                        owned.then_some(mask),
+                        material.filter(),
+                        material.shadow(),
+                        material.sampling,
+                    )
+                }
+            };
         if let Some(nearest) = sampling {
             renderer.set_texture_sampling(&texture, nearest);
         }
@@ -458,22 +482,24 @@ impl GpuPainter {
                 ]
             })
             .collect();
-        renderer.draw_clipped(clip, 1.0, |renderer| {
-            let draw = |renderer: &mut Renderer| {
-                renderer.draw_triangles_with_color_mode(&texture, &mesh_triangles, blend, mode);
-            };
-            let filtered = |renderer: &mut Renderer| {
-                if filter == ColorFilter::default() {
-                    draw(renderer);
+        renderer.draw_sampled(override_sampling, |renderer| {
+            renderer.draw_clipped(clip, 1.0, |renderer| {
+                let draw = |renderer: &mut Renderer| {
+                    renderer.draw_triangles_with_color_mode(&texture, &mesh_triangles, blend, mode);
+                };
+                let filtered = |renderer: &mut Renderer| {
+                    if filter == ColorFilter::default() {
+                        draw(renderer);
+                    } else {
+                        renderer.draw_color_filtered(filter, draw);
+                    }
+                };
+                if let Some(shadow) = shadow {
+                    renderer.draw_image_shadow(shadow, filtered);
                 } else {
-                    renderer.draw_color_filtered(filter, draw);
+                    filtered(renderer);
                 }
-            };
-            if let Some(shadow) = shadow {
-                renderer.draw_image_shadow(shadow, filtered);
-            } else {
-                filtered(renderer);
-            }
+            })
         });
         Ok((1, mesh_triangles.len()))
     }

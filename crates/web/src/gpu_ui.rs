@@ -37,6 +37,7 @@ pub use effects::GroupEffect;
 pub use geometry::{clip_polygon_ellipse, css_bezier};
 pub use input::{BrowserKey, canvas_point, key_from_browser};
 pub use painter::clip_scissor;
+pub use solomon_graphics::TextureSampling;
 pub use stock::{StockAtlas, message_frame, message_frame_scaled, native_text, paint_text_layout};
 
 pub fn cooldown_sector_points(remaining: f64, capacity: f64) -> Vec<Pos2> {
@@ -194,10 +195,10 @@ pub struct UiFrame<'a> {
     key_codes: &'a [BrowserKey],
     blend: BlendMode,
     color_filter: ColorFilter,
-    announcements: &'a RefCell<Vec<String>>,
+    announcements: &'a RefCell<Vec<accessibility::Announcement>>,
     rotation: egui::emath::Rot2,
     translation: Vec2,
-    input_scope: &'a RefCell<Option<String>>,
+    input_scope: &'a RefCell<Option<(egui::LayerId, String)>>,
     retired_images: &'a RefCell<Vec<String>>,
     focus_from_keyboard: bool,
     editor_receipts: &'a [edit::model::Receipt],
@@ -234,6 +235,29 @@ impl UiFrame<'_> {
         caster: impl FnOnce(&Painter) -> Result<(), String>,
     ) -> Result<(), String> {
         self.paint_box_shadow(painter, shadow, solomon_graphics::ShadowOutput::Outer, caster)
+    }
+
+    /// Positive CSS spread changes only the caster; its original interior stays clear.
+    pub fn paint_outer_shadow_spread(
+        &self,
+        painter: &Painter,
+        shadow: ImageShadow,
+        expanded_caster: impl FnOnce(&Painter) -> Result<(), String>,
+        original_caster: impl FnOnce(&Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_group_output(
+            painter,
+            GroupEffect { shadows: vec![shadow], ..Default::default() },
+            solomon_graphics::ShadowOutput::Outer,
+            |_, caster| {
+                expanded_caster(caster)?;
+                caster.add(egui::Shape::Callback(egui::epaint::PaintCallback {
+                    rect: caster.clip_rect(),
+                    callback: std::sync::Arc::new(effects::Boundary::Knockout),
+                }));
+                original_caster(caster)
+            },
+        )
     }
 
     /// Source inset box-shadow: the opaque caster is the rounded padding box.
@@ -307,13 +331,22 @@ impl UiFrame<'_> {
     pub fn forget_image(&self, path: &str) {
         self.retired_images.borrow_mut().push(path.to_owned());
     }
-    /// The last foreground owner painted this frame owns controller navigation.
-    /// Frames without an owner leave the gamepad with gameplay.
-    pub fn input_scope(&self, scope: &str) {
-        *self.input_scope.borrow_mut() = Some(scope.to_owned());
+    /// The highest real layer owns controller navigation, using the same ordering
+    /// as painting, hit testing and modals. No scope leaves the gamepad with gameplay.
+    pub fn input_scope(&self, scope: &str, layer: egui::LayerId) {
+        let mut current = self.input_scope.borrow_mut();
+        if current
+            .as_ref()
+            .is_none_or(|(previous, _)| !self.ctx.compare_layer_order(layer, *previous).is_lt())
+        {
+            *current = Some((layer, scope.to_owned()));
+        }
     }
-    pub fn announce(&self, text: &str) {
-        self.announcements.borrow_mut().push(text.to_owned());
+    /// Current Source status owner, or accepted receipt/event identity for distinct messages.
+    pub fn announce(&self, owner: &str, text: &str) {
+        self.announcements
+            .borrow_mut()
+            .push(accessibility::Announcement { owner: owner.to_owned(), text: text.to_owned() });
     }
     pub fn with_blend(&self, blend: BlendMode) -> UiFrame<'_> {
         UiFrame {
@@ -395,9 +428,32 @@ impl UiFrame<'_> {
         uv: Option<Rect>,
         tint: Color32,
     ) -> bool {
-        self.image_quad(
-            painter,
+        self.image_sampled(painter, path, destination, uv, tint, TextureSampling::Texture)
+    }
+
+    /// Per-draw pixelated sampling leaves an admitted world texture unchanged.
+    pub fn image_sampled(
+        &self,
+        painter: &Painter,
+        path: &str,
+        destination: Rect,
+        uv: Option<Rect>,
+        tint: Color32,
+        sampling: TextureSampling,
+    ) -> bool {
+        let Some(texture) = self.images.sampled_texture_id(
             path,
+            self.blend,
+            false,
+            self.color_filter,
+            None,
+            sampling,
+        ) else {
+            return false;
+        };
+        self.paint_texture_quad(
+            painter,
+            texture,
             [
                 destination.left_top(),
                 destination.right_top(),
@@ -406,7 +462,8 @@ impl UiFrame<'_> {
             ],
             uv.unwrap_or(Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0))),
             tint,
-        )
+        );
+        true
     }
 
     pub fn image_size(&self, path: &str) -> Option<Vec2> {
@@ -481,6 +538,35 @@ impl UiFrame<'_> {
         assert!(shadow.blur.is_finite() && shadow.blur >= 0.0);
         assert!(shadow.offset.is_finite());
         if !destination.is_positive() {
+            return true;
+        }
+        let layer = self.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
+        let physical_sigma = shadow.blur
+            * layer.scaling.abs()
+            * (self.rotation * Vec2::X).length()
+            * self.ctx.pixels_per_point();
+        if physical_sigma > 3.0 {
+            if !self.images.ready(path) {
+                self.images.request(path);
+                return false;
+            }
+            let [red, green, blue, alpha] = tint.to_srgba_unmultiplied();
+            self.with_blend(BlendMode::Normal)
+                .paint_group(
+                    painter,
+                    GroupEffect { opacity: f32::from(alpha) / 255.0, shadows: vec![shadow] },
+                    |frame, painter| {
+                        frame.atlas_image(
+                            painter,
+                            path,
+                            source,
+                            destination,
+                            Color32::from_rgb(red, green, blue),
+                        );
+                        Ok(())
+                    },
+                )
+                .expect("an image shadow capture only records GPU geometry");
             return true;
         }
         let Some(size) = self.image_size(path) else {
@@ -655,9 +741,6 @@ impl UiFrame<'_> {
             widget.modal = self.ctx.memory(|memory| memory.top_modal_layer().is_some());
             widget.egui_id = Some(response.id);
             widget.layer_id = Some(response.layer_id);
-            if let Some(index) = self.ctx.fixed_layer_order_index(response.layer_id) {
-                widget.z = index;
-            }
             widget.activated = response.clicked();
             widget.interactive = response.sense.interactive();
             widget.keyboard_activated = response.clicked()
@@ -706,6 +789,30 @@ impl UiFrame<'_> {
                 response.id,
                 std::sync::Arc::new(move |pos| region.contains(pos)),
             );
+        }
+    }
+
+    /// Geometry of a painted control whose real gestures are owned outside egui.
+    pub fn record_painted_rect(
+        &self,
+        painter: &Painter,
+        id: &str,
+        label: &str,
+        role: &str,
+        rect: Rect,
+        enabled: bool,
+    ) {
+        let transform = self.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
+        self.record_clipped_rect(
+            id,
+            label,
+            role,
+            transform * rect,
+            transform * painter.clip_rect(),
+            enabled,
+        );
+        if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
+            widget.layer_id = Some(painter.layer_id());
         }
     }
 
@@ -807,7 +914,7 @@ pub struct GpuUi {
     _fonts: fonts::BrowserFonts,
     accessibility: accessibility::Accessibility,
     widgets: BTreeMap<String, WidgetGeometry>,
-    diagnostics: UiDiagnostics,
+    input_diagnostics: UiDiagnostics,
     drawn_diagnostics: UiDiagnostics,
     deferred_textures: egui::TexturesDelta,
     deferred_retired_images: Vec<String>,
@@ -851,7 +958,8 @@ impl GpuUi {
         let ctx = Context::default();
         // A controller emits actions once per game frame, including egui sizing frames.
         ctx.options_mut(|options| {
-            options.max_passes = std::num::NonZeroUsize::new(1).expect("one UI pass")
+            options.max_passes = std::num::NonZeroUsize::new(1).expect("one UI pass");
+            options.input_options.raw_point_scroll = true;
         });
         let fonts = fonts::load(document, &ctx).await?;
         let images = painter::Images::default();
@@ -880,7 +988,7 @@ impl GpuUi {
             _fonts: fonts,
             accessibility,
             widgets: BTreeMap::new(),
-            diagnostics: UiDiagnostics::default(),
+            input_diagnostics: UiDiagnostics::default(),
             drawn_diagnostics: UiDiagnostics::default(),
             deferred_textures: egui::TexturesDelta::default(),
             deferred_retired_images: Vec::new(),
@@ -903,11 +1011,11 @@ impl GpuUi {
     /// Commit prior native UI events before the next native editing/clipboard
     /// dispatch. This performs no controller poll, simulation or GPU submission.
     pub fn begin_native_dispatch(&mut self, time_seconds: f64) -> Result<Option<UiRun>, String> {
-        let viewport = self.diagnostics.viewport;
+        let viewport = self.input_diagnostics.viewport;
         if viewport[0] <= 0.0 || viewport[1] <= 0.0 {
             return Ok(None);
         }
-        let pixels_per_point = self.diagnostics.pixels_per_point;
+        let pixels_per_point = self.input_diagnostics.pixels_per_point;
         let Some(pending) = self.input.take_native(viewport, pixels_per_point, time_seconds)?
         else {
             return Ok(None);
@@ -926,7 +1034,7 @@ impl GpuUi {
         self.deferred_retired_images.append(&mut run.retired_images);
         self.deferred_keyboard_activations = run.keyboard_activations;
         run.failure.map_or(result, Err).inspect_err(|error| {
-            self.diagnostics.error = Some(error.clone());
+            self.input_diagnostics.error = Some(error.clone());
             self.drawn_diagnostics.error = Some(error.clone());
         })
     }
@@ -964,7 +1072,7 @@ impl GpuUi {
         let physical = [self.canvas.width() as i32, self.canvas.height() as i32];
         let pixels_per_point = physical[0] as f32 / viewport[0];
         let pending = self.input.take(viewport, pixels_per_point, time_seconds)?;
-        self.diagnostics.frame += 1;
+        self.input_diagnostics.frame += 1;
         Ok(self.input_run(viewport, pixels_per_point, pending))
     }
 
@@ -1081,6 +1189,7 @@ impl GpuUi {
         edit::set_focus(&self.ctx, &editors);
         self.input.set_editors(editors, pass.edits.last().map(|receipt| receipt.sequence))?;
         self.widgets = widgets.into_inner();
+        rank_widgets(&self.ctx, &mut self.widgets);
         if let Some(widget) = self.widgets.values().find(|widget| widget.duplicate) {
             let error = format!("GPU UI widget id {} was painted more than once", widget.id);
             return Err(error);
@@ -1093,7 +1202,7 @@ impl GpuUi {
             widget.keyboard_activated |= run.keyboard_activations.contains(&widget.id);
         }
         self.input.set_widgets(&self.widgets);
-        let input_scope = input_scope.into_inner();
+        let input_scope = input_scope.into_inner().map(|(_, scope)| scope);
         self.input.set_scope(input_scope.as_deref());
         let pointer = self.ctx.input(|input| input.pointer.interact_pos());
         let capture = UiCapture {
@@ -1116,11 +1225,11 @@ impl GpuUi {
         if let Some(error) = fonts::take_error() {
             return Err(error);
         }
-        self.diagnostics.viewport = run.viewport;
-        self.diagnostics.pixels_per_point = run.pixels_per_point;
-        self.diagnostics.capture = capture;
-        self.diagnostics.input_scope = input_scope;
-        self.diagnostics.widgets = self.widgets.values().cloned().collect();
+        self.input_diagnostics.viewport = run.viewport;
+        self.input_diagnostics.pixels_per_point = run.pixels_per_point;
+        self.input_diagnostics.capture = capture;
+        self.input_diagnostics.input_scope = input_scope;
+        self.input_diagnostics.widgets = self.widgets.values().cloned().collect();
         run.capture = capture;
         run.output = Some(output);
         Ok(())
@@ -1162,22 +1271,23 @@ impl GpuUi {
             } else {
                 error
             };
-            self.diagnostics.error = Some(error.clone());
+            self.input_diagnostics.error = Some(error.clone());
             self.drawn_diagnostics.error = Some(error.clone());
             return Err(error);
         }
         let (meshes, triangles) = painted.inspect_err(|error| {
-            self.diagnostics.error = Some(error.clone());
+            self.input_diagnostics.error = Some(error.clone());
             self.drawn_diagnostics.error = Some(error.clone());
         })?;
-        self.diagnostics.meshes = meshes;
-        self.diagnostics.triangles = triangles;
-        self.diagnostics.textures = self.painter.texture_count() + self.images.texture_count();
-        self.diagnostics.borrowed_images = self.images.borrowed_count();
-        self.diagnostics.static_images_ready = self.images.static_images_ready();
-        self.diagnostics.static_images_total = self.images.static_image_count();
-        self.diagnostics.error = None;
-        self.drawn_diagnostics = self.diagnostics.clone();
+        self.input_diagnostics.meshes = meshes;
+        self.input_diagnostics.triangles = triangles;
+        self.input_diagnostics.textures =
+            self.painter.texture_count() + self.images.texture_count();
+        self.input_diagnostics.borrowed_images = self.images.borrowed_count();
+        self.input_diagnostics.static_images_ready = self.images.static_images_ready();
+        self.input_diagnostics.static_images_total = self.images.static_image_count();
+        self.input_diagnostics.error = None;
+        self.drawn_diagnostics = self.input_diagnostics.clone();
         Ok(run.capture)
     }
 
@@ -1200,7 +1310,21 @@ impl GpuUi {
     /// Actual latest UI ownership for input admission, including native-only
     /// commits. Public diagnostics remain the last completed GPU submission.
     pub fn input_diagnostics(&self) -> &UiDiagnostics {
-        &self.diagnostics
+        &self.input_diagnostics
+    }
+}
+
+fn rank_widgets(ctx: &Context, widgets: &mut BTreeMap<String, WidgetGeometry>) {
+    let mut ordered: Vec<_> = widgets.values_mut().collect();
+    ordered.sort_by(|a, b| {
+        ctx.compare_layer_order(
+            a.layer_id.unwrap_or_else(egui::LayerId::background),
+            b.layer_id.unwrap_or_else(egui::LayerId::background),
+        )
+        .then_with(|| a.z.cmp(&b.z))
+    });
+    for (z, widget) in ordered.into_iter().enumerate() {
+        widget.z = z;
     }
 }
 
@@ -1231,27 +1355,17 @@ fn focus_pointer_text(
         else {
             continue;
         };
-        let layer = ctx.layer_id_at(*pos);
-        for widget in widgets.values().rev() {
-            if !widget.enabled
-                || !widget.is_interactive()
-                || !matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
-                || widget.layer_id != layer
-            {
-                continue;
-            }
-            let rect = Rect::from_min_size(
-                pos2(widget.bounds.x, widget.bounds.y),
-                vec2(widget.bounds.width, widget.bounds.height),
-            );
-            if rect.contains(*pos)
-                && let Some(id) = widget.egui_id
-            {
-                // egui0.37 lays out TextEdit content before its pointer response.
-                // Focus the actual hit target before its first queued text event.
-                ctx.memory_mut(|memory| memory.request_focus(id));
-                break;
-            }
+        let Some(id) = ctx.pointer_widget_at(*pos) else { continue };
+        if widgets.values().any(|widget| {
+            widget.egui_id == Some(id)
+                && widget.enabled
+                && widget.is_interactive()
+                && matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
+                && widget.contains(*pos)
+        }) {
+            // The canonical native query includes same-layer occlusion and modals.
+            // Focus only that actual editor before its first queued text receipt.
+            ctx.memory_mut(|memory| memory.request_focus(id));
         }
     }
 }

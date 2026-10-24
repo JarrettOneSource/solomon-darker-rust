@@ -430,6 +430,9 @@ impl SettingsView {
             Page::MobileUi => None,
         }
     }
+    pub(super) fn mobile_editor_active(&self) -> bool {
+        self.page == Page::MobileUi && self.mobile_editor.is_some()
+    }
     pub fn navigation_scope(&self) -> String {
         format!("settings-{}-{}", self.context.as_str(), self.page.as_str())
     }
@@ -499,6 +502,7 @@ impl SettingsView {
             child.set_clip_rect(content);
             child.spacing_mut().item_spacing = Vec2::ZERO;
             let mut scroll = egui::ScrollArea::vertical()
+                .animated(false)
                 .id_salt(self.navigation_scope())
                 .auto_shrink([false, false]);
             if self.scroll_reset {
@@ -921,7 +925,7 @@ DevTools: solomonDark.lua.help()",
         );
         let id = format!("settings-range:{id}");
         let response = ui.interact(track, egui::Id::unique(&id), egui::Sense::click_and_drag());
-        widgets::focus_on_pointer(&response);
+        widgets::native_control_focus(&response);
         frame.record(&id, label, "slider", &response);
         let paint = frame.with_brightness(if response.has_focus() { 1.16 } else { 1.0 });
         self.control_panel.paint_raw(&paint, ui.painter(), 3, rect, Color32::WHITE)?;
@@ -1119,19 +1123,14 @@ fn paint_panel_background(frame: &UiFrame<'_>, ui: &Ui, panel: Rect) -> Result<(
     let painter = ui.painter().with_clip_rect(panel.intersect(ui.clip_rect()));
     let center = panel.center_top();
     let radius = Vec2::new(panel.width() / 2.0, panel.height()).length() * 0.36;
-    let mut radial = egui::Mesh::default();
-    radial.colored_vertex(center, widgets::alpha(0x5f5230, 0.26));
-    for index in 0..=64 {
-        let angle = index as f32 / 64.0 * std::f32::consts::TAU;
-        radial.colored_vertex(
-            center + Vec2::new(angle.cos(), angle.sin()) * radius,
-            Color32::TRANSPARENT,
-        );
-        if index > 0 {
-            radial.add_triangle(0, index, index + 1);
-        }
-    }
-    painter.add(egui::Shape::mesh(radial));
+    widgets::radial_gradient(
+        ui,
+        panel,
+        center,
+        radius,
+        widgets::alpha(0x5f5230, 0.26),
+        Color32::TRANSPARENT,
+    );
     for outside in [
         Rect::from_min_max(
             panel.min - Vec2::splat(40.0),

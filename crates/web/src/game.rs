@@ -13,6 +13,7 @@ mod hosted_save;
 mod native;
 mod social;
 mod spectator;
+mod ui_layers;
 use native::{CommandFeedback, NativeGame};
 use solomon_protocol::{ClientMessage, GameCommand};
 
@@ -96,11 +97,23 @@ const MAX_CATCH_UP_MILLISECONDS: f64 = 250.0;
 /// The source host publishes an autosave every thirty seconds of active simulation.
 const AUTOSAVE_TICKS: u64 = 3000;
 
+/// Game-owned metadata from the last submitted UI frame. Input dispatch can advance
+/// the live menu between draws without changing the browser's rendered observation.
+struct GameUiSnapshot {
+    surface: &'static str,
+    ready: bool,
+    selection: Option<NewGameSelection>,
+    error: Option<String>,
+    borrowed_image_paths: Vec<String>,
+}
+
 pub struct Game {
     canvas: HtmlCanvasElement,
     renderer: Renderer,
     gpu_ui: GpuUi,
     ui_ready: bool,
+    ui_snapshot: Option<GameUiSnapshot>,
+    ui_top_layers: Vec<egui::LayerId>,
     scene: CourtyardScene,
     rooms: PrivateRoomScenes,
     wizard_view: WizardView,
@@ -310,6 +323,8 @@ impl Game {
                 renderer,
                 gpu_ui,
                 ui_ready: false,
+                ui_snapshot: None,
+                ui_top_layers: Vec::new(),
                 scene,
                 rooms,
                 wizard_view,
@@ -615,6 +630,59 @@ impl Game {
         Ok(())
     }
 
+    pub(crate) fn attach_native_ui(
+        game: &Rc<RefCell<Self>>,
+        window: &web_sys::Window,
+    ) -> Result<(), String> {
+        let clock = window.document().ok_or("The game document is unavailable.")?.timeline();
+        let owner = Rc::downgrade(game);
+        game.borrow_mut().gpu_ui.set_native_dispatch_handler(move || {
+            // Native events and rAF use one document animation clock. A performance
+            // sample can be newer than the next rAF timestamp; inactive documents
+            // have no animation time and leave input queued until they become active.
+            let Some(time) = clock.current_time() else { return Ok(()) };
+            let game = owner.upgrade().ok_or("The game is no longer available for input.")?;
+            game.borrow_mut().dispatch_native_ui(time)
+        });
+        Ok(())
+    }
+
+    /// Native clipboard and editing defaults observe the preceding UI action's
+    /// committed focus. Simulation, transport polling and drawing remain on rAF.
+    fn dispatch_native_ui(&mut self, time: f64) -> Result<(), String> {
+        if self.editor_test_disposed()
+            || self.canvas.client_width() <= 0
+            || self.canvas.client_height() <= 0
+        {
+            return Ok(());
+        }
+        let Some(mut run) = self.gpu_ui.begin_native_dispatch(time / 1000.0)? else {
+            return Ok(());
+        };
+        let result = (|| {
+            loop {
+                let menu_was_open = self.menu.is_blocking();
+                let more = {
+                    let (gpu_ui, paint) = self.ui_painter()?;
+                    gpu_ui.paint_next(&mut run, paint)?
+                };
+                if !more {
+                    break;
+                }
+                self.commit_ui(time, menu_was_open)?;
+                if self.editor_test_disposed() {
+                    return Ok(());
+                }
+            }
+            let (gpu_ui, paint) = self.ui_painter()?;
+            gpu_ui.paint_layout(&mut run, paint)
+        })();
+        self.gpu_ui.finish_native_dispatch(run, result)?;
+        self.input
+            .set_ui_geometry(self.gpu_ui.input_diagnostics(), &self.hud.belt_input_geometry());
+        Ok(())
+    }
+
     pub fn frame(&mut self, time: f64) -> Result<(), String> {
         if self.editor_test_disposed() {
             return Ok(());
@@ -648,7 +716,7 @@ impl Game {
             loop {
                 let menu_was_open = self.menu.is_blocking();
                 let more = {
-                    let (gpu_ui, paint) = self.ui_painter();
+                    let (gpu_ui, paint) = self.ui_painter()?;
                     gpu_ui.paint_next(&mut run, paint)?
                 };
                 if !more {
@@ -659,7 +727,8 @@ impl Game {
                     return Ok(());
                 }
             }
-            self.input.set_ui_geometry(self.gpu_ui.diagnostics(), &self.hud.belt_input_geometry());
+            self.input
+                .set_ui_geometry(self.gpu_ui.input_diagnostics(), &self.hud.belt_input_geometry());
             if !self.deployment_restarting() {
                 if self.is_hosted_observer() {
                     self.frame_hosted_observer(time)?;
@@ -669,7 +738,7 @@ impl Game {
                 self.update_audio()?;
             }
             self.render_world_and_notifications()?;
-            let (gpu_ui, paint) = self.ui_painter();
+            let (gpu_ui, paint) = self.ui_painter()?;
             gpu_ui.paint_layout(&mut run, paint)
         })();
         // Managed textures can be allocated before a later controller/action fails.
@@ -678,7 +747,8 @@ impl Game {
         if self.editor_test_disposed() {
             return Ok(());
         }
-        self.input.set_ui_geometry(self.gpu_ui.diagnostics(), &self.hud.belt_input_geometry());
+        self.input
+            .set_ui_geometry(self.gpu_ui.input_diagnostics(), &self.hud.belt_input_geometry());
         self.finish_ready_frame()
     }
 
@@ -2341,12 +2411,15 @@ impl Game {
                 self.ui_ready = true;
             }
         }
+        self.capture_ui_snapshot();
         Ok(())
     }
 
+    #[allow(clippy::type_complexity)] // The closure borrows the actual UI owners without allocation.
     fn ui_painter(
         &mut self,
-    ) -> (&mut GpuUi, impl FnMut(&mut UiFrame<'_>) -> Result<(), String> + '_) {
+    ) -> Result<(&mut GpuUi, impl FnMut(&mut UiFrame<'_>) -> Result<(), String> + '_), String> {
+        self.configure_ui_layers()?;
         let Self {
             gpu_ui,
             mod_overlays,
@@ -2375,7 +2448,7 @@ impl Game {
             match_loading_view,
             ..
         } = self;
-        (gpu_ui, move |frame| {
+        Ok((gpu_ui, move |frame: &mut UiFrame<'_>| {
             mod_overlays.paint(frame)?;
             mod_minimap.paint(frame)?;
             hud.paint(frame)?;
@@ -2386,13 +2459,13 @@ impl Game {
             mod_skill_quickbar.paint(frame)?;
             shared_gameplay.paint(frame)?;
             panels.paint(frame)?;
-            mod_skills.paint(frame, panels.layer_id(), skill_picker.layer_id())?;
+            mod_skills.paint(frame)?;
             mod_panels.paint(frame)?;
             tutorial_ui.paint(frame)?;
             college_overlay.paint(frame)?;
             game_over.paint(frame)?;
             skill_picker.paint(frame)?;
-            social.paint_above_hud(frame, hud.layer_id())?;
+            social.paint(frame)?;
             cheats.paint(frame)?;
             observer_ui.paint(frame)?;
             spectator_ui.paint(frame)?;
@@ -2410,7 +2483,7 @@ impl Game {
             }
             crate::runtime_ui::paint(frame);
             Ok(())
-        })
+        }))
     }
 
     pub(crate) fn present_failure(&mut self, time: f64) -> Result<(), String> {
@@ -2427,10 +2500,30 @@ impl Game {
                 crate::runtime_ui::error().as_deref().unwrap_or("Game initialization failed"),
             );
         }
+        self.capture_ui_snapshot();
         Ok(())
     }
 
+    fn capture_ui_snapshot(&mut self) {
+        self.ui_snapshot = Some(GameUiSnapshot {
+            surface: self.menu.surface_name(),
+            ready: self.ui_ready,
+            selection: self
+                .has_game
+                .then(|| {
+                    self.session
+                        .participants
+                        .get(&self.local_player_id)
+                        .map(|participant| participant.player.selection.clone())
+                })
+                .flatten(),
+            error: self.gpu_ui.diagnostics().error.clone().or_else(crate::runtime_ui::error),
+            borrowed_image_paths: self.gpu_ui.borrowed_image_paths(),
+        });
+    }
+
     pub(crate) fn gpu_ui_snapshot(&self) -> serde_json::Value {
+        let Some(snapshot) = &self.ui_snapshot else { return serde_json::Value::Null };
         let ui = self.gpu_ui.diagnostics();
         let widgets: Vec<_> = ui
             .widgets
@@ -2449,17 +2542,14 @@ impl Game {
             })
             .collect();
         serde_json::json!({
-            "schemaVersion": 1, "surface": self.menu.surface_name(), "ready": self.ui_ready,
-            "acceptedSelection": self.has_game.then(|| {
-                self.session.participants.get(&self.local_player_id)
-                    .map(|participant| &participant.player.selection)
-            }).flatten(),
-            "loading": null, "error": ui.error.clone().or_else(crate::runtime_ui::error),
+            "schemaVersion": 1, "surface": snapshot.surface, "ready": snapshot.ready,
+            "acceptedSelection": snapshot.selection,
+            "loading": null, "error": snapshot.error,
             "canvas": { "width": ui.viewport[0], "height": ui.viewport[1], "pixelsPerPoint": ui.pixels_per_point },
             "capture": ui.capture,
             "inputScope": ui.input_scope, "frame": ui.frame,
             "draw": { "meshes": ui.meshes, "triangles": ui.triangles, "textures": ui.textures,
-                "borrowedImages": ui.borrowed_images, "borrowedImagePaths": self.gpu_ui.borrowed_image_paths() },
+                "borrowedImages": ui.borrowed_images, "borrowedImagePaths": snapshot.borrowed_image_paths },
             "widgets": widgets,
         })
     }

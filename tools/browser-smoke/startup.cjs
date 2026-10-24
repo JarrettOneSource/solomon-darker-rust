@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const url = process.env.URL || 'http://127.0.0.1:4181/';
 const output = process.env.OUT || '/tmp/solomon-gpu-startup';
 const allCases=['cold','warm','delayedTitle','delayedFont','delayedWasm','delayedResidentMusic','failedRequiredTitle'];
@@ -160,13 +161,40 @@ async function collect(page, name, navigate, observed=ui.watchErrors(page)) {
   throw new Error(`${name} did not complete: ${JSON.stringify(samples.at(-1))}`);
 }
 
-async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}) {
+async function heldAsset(browser, name, pattern, {wasm=false, fallback=false, keyboardDuringHold=false}={}) {
   const context=await browser.newContext({viewport:{width:1600,height:900},deviceScaleFactor:1});
   const page=await context.newPage();
   await ui.observeGpu(page);
   await ui.observeAnnouncements(page,{forceFallback:fallback});
   const observed=ui.watchErrors(page);
   await observed.ready;
+  if(keyboardDuringHold)await page.addInitScript(()=>{
+    const observation={keys:[],main:[],contexts:[]};
+    Object.defineProperty(window,'__solomonBootAdmission',{value:observation});
+    for(const name of ['AudioContext','webkitAudioContext']){
+      const Native=window[name];
+      if(typeof Native!=='function')continue;
+      window[name]=new Proxy(Native,{construct(target,args,newTarget){
+        const context=Reflect.construct(target,args,newTarget);
+        observation.contexts.push(context);
+        return context;
+      }});
+    }
+    window.addEventListener('keydown',event=>observation.keys.push({code:event.code,
+      trusted:event.isTrusted,loaderActive:Boolean(document.querySelector('canvas[data-gpu-loader]'))}),true);
+    const sample=()=>{
+      const read=window.wasmBindings?.gpu_ui_state;
+      if(read&&!document.querySelector('canvas[data-gpu-loader]')){
+        const snapshot=JSON.parse(read());
+        if(snapshot?.ready&&snapshot.loading===null&&observation.main.at(-1)?.frame!==snapshot.frame)
+          observation.main.push({frame:snapshot.frame,surface:snapshot.surface,
+            inputScope:snapshot.inputScope,acceptedSelection:snapshot.acceptedSelection,
+            widgets:snapshot.widgets.map(widget=>widget.id)});
+      }
+      if(observation.main.length<8)requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
   let release;
   const held=new Promise(resolve=>{release=resolve});
   let arrived;
@@ -211,6 +239,18 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
       else assert.equal(still.loading.progress,0,'unknown code loading invents no percentage');
     }
     const second=await visual(page,`${name}-still-held`);
+    let bootAdmission;
+    if(keyboardDuringHold){
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Enter');
+      const heldAfterInput=await ui.readUi(page);
+      pending(heldAfterInput);
+      bootAdmission=await page.evaluate(()=>({keys:window.__solomonBootAdmission.keys,
+        audioStates:window.__solomonBootAdmission.contexts.map(context=>context.state)}));
+      assert.deepEqual(bootAdmission.keys.map(event=>event.code),['Tab','Enter']);
+      assert.ok(bootAdmission.keys.every(event=>event.trusted&&event.loaderActive),
+        'actual trusted keyboard input occurs while only the Rust splash is admitted');
+    }
     let heldAnnouncements;
     if(fallback) {
       await page.waitForFunction(()=>window.__solomonAnnouncementOwnership
@@ -244,6 +284,14 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
     }
     release();
     await ui.ready(page);
+    if(keyboardDuringHold){
+      await page.waitForFunction(()=>window.__solomonBootAdmission.main.length>=8,null,{timeout:10000});
+      bootAdmission.main=await page.evaluate(()=>window.__solomonBootAdmission.main);
+      assert.ok(bootAdmission.main.every(snapshot=>snapshot.surface==='title'
+        &&snapshot.acceptedSelection===null
+        &&snapshot.widgets.includes('prompt-primary')&&snapshot.widgets.includes('prompt-secondary')),
+      'loading keyboard input never activates or dismisses the fresh main Title prompt');
+    }
     await ui.surface(page,'title');
     const handoff=await finishedLoader(page);
     let announcementHandoff;
@@ -272,14 +320,27 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
       assert.ok(announcementHandoff.events.slice(afterIndex).some(event=>!event.loaderActive
         &&event.text.toLowerCase().includes(control.label.toLowerCase())),
       'the retained main owner announces real control focus after loader retirement');
+      if(keyboardDuringHold){
+        await page.waitForFunction(()=>{
+          const title=document.querySelector('audio[data-audio-cue="solomondarktheme"]');
+          return window.__solomonBootAdmission.contexts.some(context=>context.state==='running')
+            &&title&&!title.paused&&title.currentTime>0;
+        },null,{timeout:10000});
+        bootAdmission.audioAfter=await page.evaluate(()=>({
+          states:window.__solomonBootAdmission.contexts.map(context=>context.state),
+          tracks:[...document.querySelectorAll('audio')]
+            .map(track=>({cue:track.dataset.audioCue,paused:track.paused,time:track.currentTime})),
+        }));
+      }
     }
     await ui.assertGpuOnly(page);
     await page.screenshot({path:path.join(output,`${name}-title.png`)});
     await ui.settleErrors(page);
     assert.deepEqual(observed.errors,[],'delayed successful work has no runtime/asset errors');
     return {...observed,requestUrl,expectedCompleted,before,waiting,still,first,second,resizes,handoff,heldAnnouncements,announcementHandoff,
-      ready:await ui.readUi(page)};
+      bootAdmission,ready:await ui.readUi(page)};
   } catch(error) {
+    await ui.settleErrors(page);
     const failure={requestUrl,failure:error.stack,...observed};
     try {failure.snapshot=await ui.readUi(page)}
     catch(observationError) {failure.observationError=observationError.stack}
@@ -287,6 +348,10 @@ async function heldAsset(browser, name, pattern, {wasm=false, fallback=false}={}
       owners:window.__solomonAnnouncementOwnership,
       fallback:[...document.querySelectorAll('[data-gpu-announcer]')].map(node=>node.textContent),
     })).catch(error=>({observationError:error.message}));
+    if(keyboardDuringHold)failure.bootAdmission=await page.evaluate(()=>({
+      keys:window.__solomonBootAdmission.keys,main:window.__solomonBootAdmission.main,
+      audioStates:window.__solomonBootAdmission.contexts.map(context=>context.state),
+    }));
     try {await page.screenshot({path:path.join(output,`${name}-failure.png`)})}
     catch(screenshotError) {failure.screenshotError=screenshotError.stack}
     fs.writeFileSync(path.join(output,`${name}-failure.json`),JSON.stringify(failure,null,2));
@@ -337,9 +402,10 @@ async function failedAsset(browser) {
 }
 
 async function main() {
-  const browser=await chromium.launch({headless:true,
+  const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+  const {browser}=owned;
   const receipt={source:'Website fa08ae24 loader-render-contract.ts, loader-renderer.ts, pages/Game.tsx; native ledger041',
     url,cases:selectedCases,scope:process.env.CASES?'focused startup cases':'complete startup matrix'};
   try {
@@ -370,13 +436,14 @@ async function main() {
     if(selected('delayedWasm'))receipt.delayedWasm=await heldAsset(browser,'delayed-wasm',
       /\/solomon[-_]web(?:-[a-z0-9]+)?(?:_bg)?\.wasm(?:\?.*)?$/,{wasm:true});
     if(selected('delayedResidentMusic'))receipt.delayedResidentMusic=await heldAsset(browser,'delayed-resident-music',
-      '**/assets/stock/audio/music/solomondarktheme.mp3',{fallback:true});
+      '**/assets/stock/audio/music/solomondarktheme.mp3',{fallback:true,keyboardDuringHold:true});
     if(selected('failedRequiredTitle'))receipt.failedRequiredTitle=await failedAsset(browser);
     receipt.passed=true;
   } catch(error) {receipt.passed=false;receipt.failure=error.stack;throw error}
   finally {
-    fs.writeFileSync(path.join(output,'startup-receipt.json'),JSON.stringify(receipt,null,2));
-    await browser.close();
+    try {receipt.cleanup=await owned.close();}
+    catch(error){receipt.passed=false;receipt.cleanup=error.cleanup||{error:error.stack};throw error;}
+    finally{fs.writeFileSync(path.join(output,'startup-receipt.json'),JSON.stringify(receipt,null,2));}
   }
   console.log(JSON.stringify({passed:receipt.passed,output}));
 }

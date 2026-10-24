@@ -10,6 +10,7 @@ mod hosted;
 mod hub_players;
 #[cfg(test)]
 mod layer_tests;
+mod motion;
 mod party;
 
 use std::cell::RefCell;
@@ -60,16 +61,6 @@ enum Intent {
     PartyCopied { code: String, copied: bool },
 }
 
-pub(crate) fn layers_above_hud(ctx: &egui::Context, hud_layer: egui::LayerId) {
-    // Source HUD z10 is below the Social z60 parent. Keep its world children
-    // in that order when an interacted or newly visible Area rises.
-    let allies = SocialUi::allies_layer();
-    let party = SocialUi::party_layer();
-    ctx.set_sublayer(hud_layer, allies);
-    ctx.set_sublayer(allies, party);
-    ctx.set_sublayer(party, SocialUi::chat_layer(false));
-}
-
 pub struct SocialUi {
     document: Document,
     ui: StockAtlas,
@@ -79,6 +70,7 @@ pub struct SocialUi {
     portraits: StockPortraits,
     snapshot: Option<SocialSnapshot>,
     ally_rows: Vec<AllyHudRow>,
+    ally_motion: allies::AllyMotion,
     surface: Option<Surface>,
     hub_players: Vec<hub_players::HubPlayerCard>,
     requested_card: Option<(bool, String)>,
@@ -95,6 +87,8 @@ pub struct SocialUi {
     clipboard: party::PartyClipboard,
     shown_party_invitation: Option<String>,
     chat_open: bool,
+    chat_motion: chat::ChatMotion,
+    chat_announcements: chat::ChatAnnouncements,
     chat_draft: String,
     channel: GameChatChannel,
     whisper: Option<GameChatSender>,
@@ -130,6 +124,7 @@ impl SocialUi {
             portraits: StockPortraits::load().await?,
             snapshot: None,
             ally_rows: Vec::new(),
+            ally_motion: allies::AllyMotion::default(),
             surface: None,
             hub_players: Vec::new(),
             requested_card: None,
@@ -145,6 +140,8 @@ impl SocialUi {
             party_ui: party::PartyMenuInteraction::default(),
             shown_party_invitation: None,
             chat_open: false,
+            chat_motion: chat::ChatMotion::default(),
+            chat_announcements: chat::ChatAnnouncements::default(),
             chat_draft: String::new(),
             channel: GameChatChannel::Party,
             whisper: None,
@@ -220,6 +217,13 @@ impl SocialUi {
         self.mark_activity();
     }
 
+    /// `GameChat.tsx` recreates its live-list ownership for a new session, even for
+    /// the same player when an intermediate empty snapshot was never painted.
+    pub fn reset_chat_announcements(&mut self) {
+        self.chat_announcements.reset();
+        self.chat_status = None;
+    }
+
     pub fn party_rejected(&mut self, rejection: PartyActionRejection) {
         self.party_error(rejection.text());
     }
@@ -240,6 +244,10 @@ impl SocialUi {
     ) -> Result<(), String> {
         self.now = now_ms;
         self.context = context;
+        if !context.visible {
+            self.ally_motion.hide();
+            self.chat_motion.hide();
+        }
         self.size = (width, height);
         self.party_ui.expire_copy(now_ms);
         self.coarse = self
@@ -252,6 +260,10 @@ impl SocialUi {
         if self.snapshot.as_ref() != snapshot {
             self.accept_snapshot(snapshot);
         }
+        self.chat_announcements.observe(
+            snapshot.into_iter().flat_map(|state| state.chat_messages.iter().map(|m| m.sequence)),
+            context.visible && context.chat_enabled && !context.input_suspended,
+        );
         self.ally_rows = allies.to_vec();
         if !context.visible || context.input_suspended || snapshot.is_none() {
             self.close_surfaces();
@@ -265,28 +277,55 @@ impl SocialUi {
         Ok(())
     }
 
-    pub fn paint_above_hud(
-        &mut self,
-        frame: &mut UiFrame<'_>,
-        hud_layer: egui::LayerId,
-    ) -> Result<(), String> {
-        layers_above_hud(frame.ctx, hud_layer);
-        self.paint(frame)
+    /// Actual Source Social context, from auto children through local z52000.
+    /// Both chat Orders are genuine variants of the same source child.
+    pub fn fixed_layers() -> [egui::LayerId; 9] {
+        [
+            Self::party_layer(),
+            Self::allies_layer(),
+            Self::dialog_layer(),
+            Self::card_layer(),
+            Self::notice_layer(),
+            Self::party_invitation_layer(),
+            Self::chat_layer(false),
+            Self::chat_layer(true),
+            Self::college_invitation_layer(),
+        ]
     }
 
-    fn allies_layer() -> egui::LayerId {
+    pub fn allies_layer() -> egui::LayerId {
         egui::LayerId::new(Order::Middle, Id::unique("social/allies"))
     }
 
-    fn party_layer() -> egui::LayerId {
+    pub fn party_layer() -> egui::LayerId {
         egui::LayerId::new(Order::Middle, Id::unique("social/party-chip"))
     }
 
-    fn chat_layer(open: bool) -> egui::LayerId {
+    pub fn chat_layer(open: bool) -> egui::LayerId {
         egui::LayerId::new(
             if open { Order::Foreground } else { Order::Middle },
             Id::unique("social/chat"),
         )
+    }
+
+    pub fn dialog_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("social/dialog"))
+    }
+
+    pub fn party_invitation_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("social/party-invitation"))
+    }
+
+    pub fn college_invitation_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("social/college-invitation"))
+    }
+
+    pub fn notice_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Tooltip, Id::unique("social/notice"))
+    }
+
+    pub fn card_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("social/player-card-surface"))
     }
 
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
@@ -295,18 +334,27 @@ impl SocialUi {
             return Ok(());
         }
         if self.chat_open {
-            frame.input_scope(&format!("social/chat:{}", channel_id(self.channel)));
+            frame.input_scope(
+                &format!("social/chat:{}", channel_id(self.channel)),
+                Self::chat_layer(true),
+            );
         }
         if self.college_visible() {
-            frame.input_scope(&format!("social/college:{}", self.college_invitations[0].id));
+            frame.input_scope(
+                &format!("social/college:{}", self.college_invitations[0].id),
+                Self::college_invitation_layer(),
+            );
         } else if self.party_invitation_visible() {
-            frame.input_scope("social/party-invitation");
+            frame.input_scope("social/party-invitation", Self::party_invitation_layer());
         } else if let Some(surface) = &self.surface {
-            frame.input_scope(&match surface {
-                Surface::Party(tab) => format!("social/party:{}", tab.id()),
-                Surface::Card(card) => format!("social/card:{}", card.player_reference),
-                Surface::HubPlayer(id) => format!("social/hub-player:{id}"),
-            });
+            frame.input_scope(
+                &match surface {
+                    Surface::Party(tab) => format!("social/party:{}", tab.id()),
+                    Surface::Card(card) => format!("social/card:{}", card.player_reference),
+                    Surface::HubPlayer(id) => format!("social/hub-player:{id}"),
+                },
+                Self::dialog_layer(),
+            );
         }
         let ctx = frame.ctx.clone();
         self.paint_allies(frame)?;
@@ -319,8 +367,18 @@ impl SocialUi {
             self.college_visible() || self.party_invitation_visible() || self.surface.is_some();
         if modal {
             let mut close = false;
-            egui::Area::new(Id::unique("social/modal"))
-                .order(Order::Foreground)
+            let college = self.college_visible();
+            let outside_closes = !college && !self.party_invitation_visible();
+            let layer = if college {
+                Self::college_invitation_layer()
+            } else if self.party_invitation_visible() {
+                Self::party_invitation_layer()
+            } else {
+                Self::dialog_layer()
+            };
+            egui::Area::new(layer.id)
+                .fade_in(false)
+                .order(layer.order)
                 .fixed_pos(egui::Pos2::ZERO)
                 .show(&ctx, |ui| -> Result<(), String> {
                     ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
@@ -328,7 +386,11 @@ impl SocialUi {
                     ui.set_min_size(screen.size());
                     let back =
                         ui.interact(screen, Id::unique("social/backdrop"), egui::Sense::CLICK);
-                    ui.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(178));
+                    ui.painter().rect_filled(
+                        screen,
+                        0.0,
+                        Color32::from_black_alpha(if college { 209 } else { 191 }),
+                    );
                     if self.college_visible() {
                         self.paint_college_invitation(frame, ui)?;
                     } else if self.party_invitation_visible() {
@@ -339,12 +401,12 @@ impl SocialUi {
                                 self.paint_native_party_menu(frame, ui, tab)?
                             }
                             Some(Surface::Card(_) | Surface::HubPlayer(_)) => {
-                                self.paint_card(frame, ui)?
+                                self.paint_card(frame)?
                             }
                             None => {}
                         }
                     }
-                    close = back.clicked()
+                    close = (outside_closes && back.is_pointer_button_down_on())
                         || ui.input_mut(|input| {
                             input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
                         });
@@ -356,13 +418,66 @@ impl SocialUi {
             }
         }
         if let Some(notice) = &self.hosted_notice {
-            egui::Area::new(Id::unique("social/notice"))
-                .order(Order::Tooltip)
-                .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 16.0))
-                .show(&ctx, |ui| {
-                    let response = ui.label(gpu::rich(notice, 16.0, gpu::GOLD));
-                    frame.record("social/notice", notice, "status", &response);
-                });
+            let screen = ctx.content_rect();
+            let font_size = screen.width() * 0.015;
+            let padding = egui::vec2(screen.width() * 0.015, screen.height() * 0.007);
+            let label = crate::gpu_ui::font_run_with_options(
+                frame.ctx,
+                egui::FontId::new(font_size, egui::FontFamily::Name("Cinzel".into())),
+                Color32::from_rgb(234, 216, 170),
+                notice,
+                crate::gpu_ui::FontRunOptions {
+                    wrap_width: Some((screen.width() * 0.7 - padding.x * 2.0 - 2.0).max(1.0)),
+                    letter_spacing: Some(font_size * 0.08),
+                    ..Default::default()
+                },
+            )?;
+            let size = label.size() + padding * 2.0 + egui::vec2(2.0, 2.0);
+            egui::Area::new(Self::notice_layer().id)
+                .fade_in(false)
+                .background_interactable(false)
+                .order(Self::notice_layer().order)
+                .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -screen.height() * 0.04))
+                .show(&ctx, |ui| -> Result<(), String> {
+                    let (bounds, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+                    ui.painter().rect_filled(
+                        bounds,
+                        0.0,
+                        Color32::from_rgba_unmultiplied(7, 6, 14, 224),
+                    );
+                    ui.painter().rect_stroke(
+                        bounds,
+                        0.0,
+                        egui::Stroke::new(1.0, Color32::from_rgba_unmultiplied(211, 177, 101, 153)),
+                        egui::StrokeKind::Inside,
+                    );
+                    frame.paint_group(
+                        ui.painter(),
+                        crate::gpu_ui::GroupEffect {
+                            shadows: vec![crate::gpu_ui::ImageShadow {
+                                offset: egui::vec2(0.0, 2.0),
+                                blur: 1.0,
+                                color: Color32::BLACK,
+                            }],
+                            ..Default::default()
+                        },
+                        |frame, painter| {
+                            label.paint_aligned(
+                                frame,
+                                painter,
+                                egui::Rect::from_min_size(
+                                    bounds.min + padding + egui::vec2(1.0, 1.0),
+                                    label.size(),
+                                ),
+                                egui::Align::Center,
+                                1.0,
+                            )
+                        },
+                    )?;
+                    frame.record_rect("social/notice", notice, "status", bounds, true);
+                    Ok(())
+                })
+                .inner?;
         }
         self.clipboard.finish_frame();
         Ok(())
@@ -374,6 +489,7 @@ impl SocialUi {
             != snapshot.map(|state| &state.local_player_id)
         {
             self.close_surfaces();
+            self.reset_chat_announcements();
             self.last_sequence = snapshot
                 .and_then(|state| state.chat_messages.last())
                 .map_or(0, |message| message.sequence);

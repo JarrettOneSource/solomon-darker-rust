@@ -8,11 +8,15 @@ use solomon_sim::secondary::NativeSecondaryEventState;
 use solomon_sim::session::GameSessionOptions;
 
 #[test]
-fn the_real_paint_queue_keeps_notifications_above_world_effects_and_below_hud() {
+fn the_fixed_native_context_keeps_notifications_above_gameplay_and_below_hud() {
     let ctx = egui::Context::default();
+    let world = LayerId::new(Order::Foreground, egui::Id::unique("notification-test-world"));
+    let notification = world_notification_layer_id(false);
+    let hud = LayerId::new(Order::Middle, egui::Id::unique("game-hud"));
     let rect = Rect::from_min_size(egui::Pos2::ZERO, vec2(40.0, 40.0));
     let mut colors = Vec::new();
     for _ in 0..2 {
+        ctx.set_fixed_layer_order(&[world, notification, hud]);
         let output = ctx.run_pass(
             egui::RawInput {
                 screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 300.0))),
@@ -29,13 +33,8 @@ fn the_real_paint_queue_keeps_notifications_above_world_effects_and_below_hud() 
                         ui.set_min_size(vec2(40.0, 40.0));
                         ui.painter().rect_filled(rect, 0.0, egui::Color32::GREEN);
                     });
-                ctx.layer_painter(notification_layer(ctx)).rect_filled(
-                    rect,
-                    0.0,
-                    egui::Color32::RED,
-                );
-                ctx.layer_painter(LayerId::new(Order::Background, egui::Id::unique("mod/world")))
-                    .rect_filled(rect, 0.0, egui::Color32::BLUE);
+                ctx.layer_painter(notification).rect_filled(rect, 0.0, egui::Color32::RED);
+                ctx.layer_painter(world).rect_filled(rect, 0.0, egui::Color32::BLUE);
             },
         );
         colors = output

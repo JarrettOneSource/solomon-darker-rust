@@ -9,7 +9,7 @@ pub mod assets;
 use solomon_sim::float;
 use web_sys::{
     HtmlImageElement, WebGl2RenderingContext as Gl, WebGlBuffer, WebGlFramebuffer, WebGlProgram,
-    WebGlShader, WebGlTexture, WebGlUniformLocation, WebGlVertexArrayObject,
+    WebGlSampler, WebGlShader, WebGlTexture, WebGlUniformLocation, WebGlVertexArrayObject,
 };
 
 const VERTEX_SHADER: &str = r"#version 300 es
@@ -48,13 +48,18 @@ uniform vec2 u_shadow_offset;
 uniform vec2 u_shadow_sigma;
 uniform float u_shadow_only;
 uniform float u_texture_premultiplied;
+uniform vec4 u_blur_bounds;
+uniform vec2 u_blur_sigma;
 out vec4 o_color;
-vec4 cropped_texture(vec2 uv) {
-    if (any(lessThan(uv, u_shadow_bounds.xy)) || any(greaterThanEqual(uv, u_shadow_bounds.zw))) {
+vec4 bounded_texture(vec2 uv, vec4 bounds) {
+    if (any(lessThan(uv, bounds.xy)) || any(greaterThanEqual(uv, bounds.zw))) {
         return vec4(0.0);
     }
     vec2 halfTexel = 0.5 / vec2(textureSize(u_texture, 0));
-    return textureLod(u_texture, clamp(uv, u_shadow_bounds.xy + halfTexel, u_shadow_bounds.zw - halfTexel), 0.0);
+    return textureLod(u_texture, clamp(uv, bounds.xy + halfTexel, bounds.zw - halfTexel), 0.0);
+}
+vec4 cropped_texture(vec2 uv) {
+    return bounded_texture(uv, u_shadow_bounds);
 }
 float shadow_alpha(vec2 uv) {
     if (u_shadow_sigma.x == 0.0 || u_shadow_sigma.y == 0.0) {
@@ -75,6 +80,23 @@ float shadow_alpha(vec2 uv) {
     return alpha;
 }
 void main() {
+    if (any(greaterThan(u_blur_sigma, vec2(0.0)))) {
+        vec2 size = vec2(textureSize(u_texture, 0));
+        vec2 stepSize = sign(u_blur_sigma) / size;
+        float sigma = dot(u_blur_sigma, size);
+        int radius = int(ceil(3.0 * sigma));
+        float alpha = 0.0;
+        float total = 0.0;
+        for (int i = -radius; i <= radius; ++i) {
+            float distance = float(i) / sigma;
+            float weight = exp(-0.5 * distance * distance);
+            alpha += bounded_texture(v_uv + stepSize * float(i), u_blur_bounds).a * weight;
+            total += weight;
+        }
+        alpha /= total;
+        o_color = vec4(vec3(alpha), alpha);
+        return;
+    }
     bool shadow = u_shadow_sigma.x >= 0.0;
     vec4 texel = shadow ? cropped_texture(v_uv) : texture(u_texture, v_uv);
     if (u_texture_premultiplied > 0.5 && texel.a > 0.0) {
@@ -169,6 +191,14 @@ pub enum TextureColorMode {
     Premultiplied,
 }
 
+/// Per-draw sampling without changing the shared texture's own parameters.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TextureSampling {
+    #[default]
+    Texture,
+    Nearest,
+}
+
 /// Source CSS `saturate(...) brightness(...)` in sRGB, with alpha preserved.
 /// Filter Effects 1 requires non-premultiplied colour and clamps each operation:
 /// https://drafts.csswg.org/filter-effects/#ShorthandEquivalents
@@ -217,6 +247,12 @@ pub struct AlphaShadow {
     pub output: ShadowOutput,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+struct AlphaBlur {
+    bounds: [f32; 4],
+    sigma: [f32; 2],
+}
+
 /// Where a quad's texels come from and where they land.
 #[derive(Clone, Copy, Debug)]
 pub struct Quad {
@@ -255,8 +291,12 @@ pub struct Renderer {
     shadow: Option<AlphaShadow>,
     u_shadow_only: WebGlUniformLocation,
     u_texture_premultiplied: WebGlUniformLocation,
+    u_blur_bounds: WebGlUniformLocation,
+    u_blur_sigma: WebGlUniformLocation,
+    blur: Option<AlphaBlur>,
     framebuffer: Option<WebGlFramebuffer>,
     standard_alpha: bool,
+    erasing: bool,
     texture_color_mode: TextureColorMode,
     forced_texture_color_mode: Option<TextureColorMode>,
     forced_opacity: Option<f32>,
@@ -267,6 +307,8 @@ pub struct Renderer {
     native_world_pixel_centers: bool,
     vertices: Vec<f32>,
     bound_texture: Option<u32>,
+    sampling: TextureSampling,
+    nearest_sampler: WebGlSampler,
     blend: BlendMode,
     next_texture_id: std::cell::Cell<u32>,
     white_texture: Texture,
@@ -279,6 +321,7 @@ pub struct Renderer {
 impl Drop for Renderer {
     fn drop(&mut self) {
         self.gl.delete_texture(Some(&self.white_texture.handle));
+        self.gl.delete_sampler(Some(&self.nearest_sampler));
         self.gl.delete_buffer(Some(&self._vertex_buffer));
         self.gl.delete_vertex_array(Some(&self._vertex_array));
         self.gl.delete_program(Some(&self._program));
@@ -347,6 +390,10 @@ impl Renderer {
         let u_texture_premultiplied = gl
             .get_uniform_location(&program, "u_texture_premultiplied")
             .ok_or("u_texture_premultiplied is missing")?;
+        let u_blur_bounds =
+            gl.get_uniform_location(&program, "u_blur_bounds").ok_or("u_blur_bounds is missing")?;
+        let u_blur_sigma =
+            gl.get_uniform_location(&program, "u_blur_sigma").ok_or("u_blur_sigma is missing")?;
         gl.uniform1i(Some(&u_texture), 0);
         gl.uniform2f(Some(&u_pixel_center_offset), 0.0, 0.0);
         gl.uniform1f(Some(&u_saturation), 1.0);
@@ -357,7 +404,18 @@ impl Renderer {
         gl.uniform2f(Some(&u_shadow_sigma), -1.0, -1.0);
         gl.uniform1f(Some(&u_shadow_only), 0.0);
         gl.uniform1f(Some(&u_texture_premultiplied), 0.0);
+        gl.uniform2f(Some(&u_blur_sigma), 0.0, 0.0);
         gl.active_texture(Gl::TEXTURE0);
+        let nearest_sampler = gl.create_sampler().ok_or("cannot create the UI texture sampler")?;
+        for (parameter, value) in [
+            (Gl::TEXTURE_MIN_FILTER, Gl::NEAREST),
+            (Gl::TEXTURE_MAG_FILTER, Gl::NEAREST),
+            (Gl::TEXTURE_WRAP_S, Gl::CLAMP_TO_EDGE),
+            (Gl::TEXTURE_WRAP_T, Gl::CLAMP_TO_EDGE),
+        ] {
+            gl.sampler_parameteri(&nearest_sampler, parameter, value as i32);
+        }
+        gl.bind_sampler(0, None);
         gl.enable(Gl::BLEND);
         let (source, destination, source_alpha, destination_alpha) = BlendMode::Normal.factors();
         gl.blend_func_separate(source, destination, source_alpha, destination_alpha);
@@ -397,8 +455,12 @@ impl Renderer {
             shadow: None,
             u_shadow_only,
             u_texture_premultiplied,
+            u_blur_bounds,
+            u_blur_sigma,
+            blur: None,
             framebuffer: None,
             standard_alpha: false,
+            erasing: false,
             texture_color_mode: TextureColorMode::Texture,
             forced_texture_color_mode: None,
             forced_opacity: None,
@@ -409,6 +471,8 @@ impl Renderer {
             native_world_pixel_centers: false,
             vertices: Vec::new(),
             bound_texture: None,
+            sampling: TextureSampling::Texture,
+            nearest_sampler,
             blend: BlendMode::Normal,
             next_texture_id: std::cell::Cell::new(1),
             white_texture: Texture { id: 0, handle: white, width: 1.0, height: 1.0 },
@@ -677,6 +741,35 @@ impl Renderer {
         self.set_shadow(previous);
     }
 
+    /// One dense Gaussian alpha pass; exactly one normalized sigma axis is positive.
+    /// Two orthogonal passes avoid undersampling wide opaque edges at large radii.
+    pub fn draw_alpha_blurred(
+        &mut self,
+        bounds: [f32; 4],
+        sigma: [f32; 2],
+        draw: impl FnOnce(&mut Self),
+    ) {
+        assert!(sigma.iter().all(|value| value.is_finite() && *value >= 0.0));
+        assert!((sigma[0] > 0.0) != (sigma[1] > 0.0));
+        let previous = self.blur;
+        self.set_alpha_blur(Some(AlphaBlur { bounds, sigma }));
+        draw(self);
+        self.set_alpha_blur(previous);
+    }
+
+    fn set_alpha_blur(&mut self, blur: Option<AlphaBlur>) {
+        if self.blur != blur {
+            self.flush();
+            if let Some(blur) = blur {
+                self.gl.uniform4fv_with_f32_array(Some(&self.u_blur_bounds), &blur.bounds);
+                self.gl.uniform2fv_with_f32_array(Some(&self.u_blur_sigma), &blur.sigma);
+            } else {
+                self.gl.uniform2f(Some(&self.u_blur_sigma), 0.0, 0.0);
+            }
+            self.blur = blur;
+        }
+    }
+
     fn set_shadow(&mut self, shadow: Option<AlphaShadow>) {
         if shadow != self.shadow {
             self.flush();
@@ -710,14 +803,39 @@ impl Renderer {
     ) {
         self.flush();
         let previous = self.standard_alpha;
+        let previous_erasing = self.erasing;
         self.standard_alpha = true;
+        self.erasing = false;
         self.bind_blend();
         self.render_to_color(target, logical, [0.0; 4], draw);
         self.standard_alpha = previous;
+        self.erasing = previous_erasing;
         self.bind_blend();
     }
 
+    /// Remove the actual source alpha from a premultiplied GPU composition.
+    pub fn draw_erased<R>(&mut self, draw: impl FnOnce(&mut Self) -> R) -> R {
+        self.flush();
+        let previous = self.erasing;
+        self.erasing = true;
+        self.bind_blend();
+        let result = draw(self);
+        self.flush();
+        self.erasing = previous;
+        self.bind_blend();
+        result
+    }
+
     fn bind_blend(&self) {
+        if self.erasing {
+            self.gl.blend_func_separate(
+                Gl::ZERO,
+                Gl::ONE_MINUS_SRC_ALPHA,
+                Gl::ZERO,
+                Gl::ONE_MINUS_SRC_ALPHA,
+            );
+            return;
+        }
         let (source, destination, source_alpha, destination_alpha) = self.blend.factors();
         let source_alpha = if self.standard_alpha && self.blend == BlendMode::Normal {
             Gl::ONE
@@ -813,6 +931,33 @@ impl Renderer {
         let filter = if nearest { Gl::NEAREST } else { Gl::LINEAR };
         for parameter in [Gl::TEXTURE_MIN_FILTER, Gl::TEXTURE_MAG_FILTER] {
             self.gl.tex_parameteri(Gl::TEXTURE_2D, parameter, filter as i32);
+        }
+    }
+
+    /// A pixelated UI draw may borrow a linearly filtered world texture unchanged.
+    pub fn draw_sampled<R>(
+        &mut self,
+        sampling: TextureSampling,
+        draw: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let previous = self.sampling;
+        self.set_sampling(sampling);
+        let result = draw(self);
+        self.set_sampling(previous);
+        result
+    }
+
+    fn set_sampling(&mut self, sampling: TextureSampling) {
+        if self.sampling != sampling {
+            self.flush();
+            self.gl.bind_sampler(
+                0,
+                match sampling {
+                    TextureSampling::Texture => None,
+                    TextureSampling::Nearest => Some(&self.nearest_sampler),
+                },
+            );
+            self.sampling = sampling;
         }
     }
 

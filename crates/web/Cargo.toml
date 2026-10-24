@@ -26,7 +26,7 @@ unicode-segmentation = "=1.13.3"
 unicode-linebreak = "=0.1.5"
 egui = { version = "=0.37.0", default-features = false, features = ["default_fonts"] }
 web-sys = { workspace = true, features = [
-  "AbortController", "AbortSignal", "Window", "VisualViewport", "MediaQueryList", "Document", "Element", "HtmlElement", "Node", "HtmlCanvasElement", "HtmlImageElement",
+  "AbortController", "AbortSignal", "AnimationTimeline", "Window", "VisualViewport", "MediaQueryList", "Document", "DocumentTimeline", "Element", "HtmlElement", "Node", "HtmlCanvasElement", "HtmlImageElement",
   "CanvasRenderingContext2d", "CanvasPattern", "ImageData", "TextMetrics",
   "SvgTextContentElement", "SvgPoint", "SvgRect", "Range", "DomRectList",
   "WebGl2RenderingContext", "WebGlProgram", "WebGlShader", "WebGlBuffer", "WebGlTexture",

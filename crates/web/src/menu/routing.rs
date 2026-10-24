@@ -1,12 +1,15 @@
 //! GPU versions of `PartyJoinConsentDialog`, `ModdedPlayDialog` and
 //! `GameSaveModMismatchDialog`. Only the coordinator owns actual admission.
-use super::{HostedMenuAction, widgets};
+use super::HostedMenuAction;
 use crate::gpu_ui::UiFrame;
 use crate::hosted::{ActiveWebMod, PartyJoinTarget};
-use egui::{Align2, Color32, Rect, Ui, Vec2};
+use egui::{Rect, Ui};
+
 use solomon_sim::menu::save_mods::GameSaveModMismatch;
-use solomon_sim::social::GameSessionKind;
 use std::cell::RefCell;
+
+mod presentation;
+pub(crate) use presentation::{consent_button, consent_button_size, consent_frame};
 pub struct RoutingDownloadProgress<'a> {
     pub completed_bytes: u64,
     pub total_bytes: u64,
@@ -72,6 +75,15 @@ impl RoutingView {
 
     pub fn active(&self) -> bool {
         self.prompt.is_some()
+    }
+
+    pub(super) fn stack_level(&self) -> i32 {
+        match self.prompt {
+            Some(Prompt::Mismatch(_)) => 40,
+            // c140 play-routing.css keeps this consent above retained Settings.
+            Some(Prompt::Cheats) => 100_001,
+            _ => 52_000,
+        }
     }
 
     fn show(&mut self, request_id: u64, prompt: Prompt) -> Result<(), String> {
@@ -193,237 +205,7 @@ impl RoutingView {
         view: Rect,
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
-        let Some(prompt) = &self.prompt else { return Ok(()) };
-        ui.painter().rect_filled(view, 0.0, Color32::from_black_alpha(210));
-        let width = 680.0_f32.min(view.width() - 32.0);
-        let panel = Rect::from_center_size(
-            view.center(),
-            Vec2::new(width, 640.0_f32.min(view.height() - 40.0)),
-        );
-        widgets::gradient(ui, panel, widgets::color(0x241e13), widgets::color(0x080706));
-        ui.painter().rect_stroke(
-            panel,
-            0.0,
-            egui::Stroke::new(2.0, widgets::color(0x947b42)),
-            egui::StrokeKind::Inside,
-        );
-        let inner = panel.shrink2(Vec2::new(24.0, 22.0));
-        let mut lines = Vec::<(String, bool)>::new();
-        let mut vanilla = None;
-        let (heading, continue_label) = match prompt {
-            Prompt::Party { target, requires_vanilla, signed_in } => {
-                lines.push((if target.kind==GameSessionKind::GlobalHub{"This is a vanilla global-Hub party.".to_owned()}else{"The room decides its content and cheat policy. Your unrelated mods and settings are ignored for this session.".to_owned()},false));
-                if !target.content.mods.is_empty() {
-                    lines.push((
-                        format!(
-                            "{} {}",
-                            target.content.mods.len(),
-                            if target.content.mods.len() == 1 { "MOD" } else { "MODS" }
-                        ),
-                        true,
-                    ));
-                    for content in &target.content.mods {
-                        lines.push((format!("{} · v{}", content.name, content.version), false));
-                    }
-                }
-                if target.cheats_enabled {
-                    lines.push(("CHEATS ENABLED FOR THIS COLLEGE".to_owned(), true));
-                }
-                if target.kind == GameSessionKind::PrivateCollege {
-                    lines.push(("LOCAL HALL ONLY · GLOBAL SCORES OFF".to_owned(), true));
-                }
-                if *requires_vanilla {
-                    lines.push(("ACTIVE MODS AND CHEATS WILL BE DISABLED".to_owned(), true));
-                }
-                (
-                    format!("{}'S COLLEGE", target.leader.to_uppercase()),
-                    if self.busy {
-                        "PREPARING…"
-                    } else if *requires_vanilla {
-                        "DISABLE & JOIN"
-                    } else if !target.content.mods.is_empty() && *signed_in {
-                        "SYNC MODS & JOIN"
-                    } else if !target.content.mods.is_empty() {
-                        "DOWNLOAD & JOIN ONCE"
-                    } else {
-                        "JOIN PARTY"
-                    },
-                )
-            }
-            Prompt::Modded { active_mods, cheats_enabled } => {
-                lines.push(("Mods and cheats use a private College. These runs stay in your local Hall of Fame.".to_owned(),false));
-                if !active_mods.is_empty() {
-                    lines.push(("ACTIVE MODS".to_owned(), true));
-                    for content in active_mods {
-                        lines.push((format!("{} · v{}", content.name, content.version), false));
-                    }
-                }
-                if *cheats_enabled {
-                    lines.push(("CHEATS ENABLED".to_owned(), true));
-                }
-                vanilla = Some(if !active_mods.is_empty() && *cheats_enabled {
-                    "DISABLE MODS & CHEATS"
-                } else if !active_mods.is_empty() {
-                    "DISABLE ALL MODS"
-                } else {
-                    "DISABLE CHEATS"
-                });
-                (
-                    "LOCAL PLAY IS ACTIVE".to_owned(),
-                    if self.busy { "PREPARING…" } else { "CONTINUE LOCAL" },
-                )
-            }
-            Prompt::Cheats => {
-                lines.push((
-                    "Leave the global Hub, then use Last Game to continue this wizard locally."
-                        .to_owned(),
-                    false,
-                ));
-                ("CHEATS USE PRIVATE COLLEGES".to_owned(), "LEAVE & CONTINUE")
-            }
-            Prompt::Mismatch(m) => {
-                lines.push(("This save was made with a different Dark Cloud. Continue with the currently enabled mods?".to_owned(),false));
-                for (title, rows) in [
-                    (
-                        "ADDED",
-                        m.added
-                            .iter()
-                            .map(|e| format!("{} v{}", e.id, e.version))
-                            .collect::<Vec<_>>(),
-                    ),
-                    (
-                        "MISSING",
-                        m.removed.iter().map(|e| format!("{} v{}", e.id, e.version)).collect(),
-                    ),
-                    (
-                        "CHANGED",
-                        m.changed
-                            .iter()
-                            .map(|e| {
-                                format!(
-                                    "{} v{} → v{}",
-                                    e.saved.id, e.saved.version, e.active.version
-                                )
-                            })
-                            .collect(),
-                    ),
-                ] {
-                    if !rows.is_empty() {
-                        lines.push((title.to_owned(), true));
-                        for row in rows {
-                            lines.push((row, false));
-                        }
-                    }
-                }
-                lines.push(("Missing or changed mod state will be discarded. If the save is inside a missing mod Boneyard, the wizard returns to the College.".to_owned(),true));
-                ("THE MOD LIST HAS CHANGED".to_owned(), "CONTINUE")
-            }
-        };
-        frame.record_rect("routing/dialog", &heading, "dialog", panel, !self.busy);
-        frame.record_value(
-            "routing/dialog",
-            &std::iter::once(heading.as_str())
-                .chain(lines.iter().map(|(text, _)| text.as_str()))
-                .collect::<Vec<_>>()
-                .join("\n"),
-            None,
-        );
-        widgets::label(
-            ui,
-            &heading,
-            egui::pos2(panel.center().x, inner.top()),
-            Align2::CENTER_TOP,
-            "Cinzel Bold",
-            20.0,
-            widgets::GOLD,
-        );
-        let bottom = panel.bottom() - if vanilla.is_some() { 126.0 } else { 72.0 };
-        let content =
-            Rect::from_min_max(inner.min + Vec2::new(0.0, 48.0), egui::pos2(inner.right(), bottom));
-        let mut child =
-            ui.new_child(egui::UiBuilder::new().id_salt("routing-content").max_rect(content));
-        child.set_clip_rect(content);
-        egui::ScrollArea::vertical().id_salt("routing-scroll").auto_shrink([false, false]).show(
-            &mut child,
-            |ui| {
-                for (text, warning) in &lines {
-                    let (_, r) = ui.allocate_space(Vec2::new(
-                        content.width(),
-                        if *warning { 30.0 } else { 52.0 },
-                    ));
-                    widgets::paragraph(
-                        ui,
-                        text,
-                        r,
-                        if *warning { "Cinzel Bold" } else { "IM FELL English" },
-                        if *warning { 12.0 } else { 17.0 },
-                        if *warning { widgets::color(0xe6a078) } else { widgets::color(0xe4d8b6) },
-                    );
-                }
-                if let Some((done, total, active)) = &*self.progress.borrow() {
-                    let percent = (*done as f64 / *total as f64 * 100.0 + 0.5).floor().min(100.0);
-                    let (_, r) = ui.allocate_space(Vec2::new(content.width(), 48.0));
-                    ui.painter().rect_filled(
-                        r.shrink2(Vec2::new(0.0, 16.0)),
-                        0.0,
-                        widgets::color(0x19150d),
-                    );
-                    let fill = Rect::from_min_size(
-                        r.min + Vec2::new(0.0, 16.0),
-                        Vec2::new(r.width() * percent as f32 / 100.0, 16.0),
-                    );
-                    ui.painter().rect_filled(fill, 0.0, widgets::GOLD);
-                    widgets::label(
-                        ui,
-                        &format!(
-                            "{} · {percent}%",
-                            active.as_ref().map_or("Content ready".to_owned(), |id| format!(
-                                "Downloading {id}"
-                            ))
-                        ),
-                        r.min,
-                        Align2::LEFT_TOP,
-                        "IM FELL English",
-                        14.0,
-                        widgets::GOLD,
-                    );
-                }
-                if let Some(error) = &self.error {
-                    let (_, r) = ui.allocate_space(Vec2::new(content.width(), 56.0));
-                    widgets::paragraph(ui, error, r, "IM FELL English", 16.0, widgets::ERROR);
-                }
-            },
-        );
-        if let Some(label) = vanilla {
-            let r = Rect::from_min_size(
-                egui::pos2(inner.left(), panel.bottom() - 116.0),
-                Vec2::new(inner.width(), 44.0),
-            );
-            if widgets::flat_button(frame, ui, "routing-vanilla", label, r, !self.busy).clicked()
-                && !self.busy
-            {
-                actions.push("routing-vanilla".to_owned());
-            }
-        }
-        for (label, id, x, w) in [
-            (
-                if matches!(prompt, Prompt::Cheats | Prompt::Mismatch(_)) {
-                    "CANCEL"
-                } else {
-                    "BACK"
-                },
-                "routing-back",
-                inner.left(),
-                112.0,
-            ),
-            (continue_label, "routing-continue", inner.left() + 124.0, inner.width() - 124.0),
-        ] {
-            let r = Rect::from_min_size(egui::pos2(x, panel.bottom() - 60.0), Vec2::new(w, 44.0));
-            if widgets::flat_button(frame, ui, id, label, r, !self.busy).clicked() && !self.busy {
-                actions.push(id.to_owned());
-            }
-        }
-        Ok(())
+        presentation::paint(self, frame, ui, view, actions)
     }
 }
 

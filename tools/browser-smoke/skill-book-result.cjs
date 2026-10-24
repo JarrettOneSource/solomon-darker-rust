@@ -46,6 +46,8 @@ async function admitted(page,value,accepted) {
       &&host.loading_run_id===null&&host.resume_grace===null
       &&(host.pause===null||host.pause.owner_player_id===accepted.id);
   },`actual admitted ${expected.displayName}/${value.world} and ready authority`,{timeout:120000});
+  assert.deepEqual(uiState.widgets.filter(widget=>widget.id.startsWith('world-notification:book:'))
+    .map(widget=>widget.id),[],'admission never replays a retained accepted rank notification');
   return{selection:uiState.acceptedSelection,frame:uiState.frame,inputScope:uiState.inputScope,
     authority:{playerId:accepted.id,ticks:accepted.frame.snapshot.ticks,
       phase:accepted.frame.snapshot.run.phase,host:accepted.frame.host}};
@@ -105,6 +107,7 @@ async function tick(page) {
       const result={world:value.world,retainedSequence:value.retainedSequence,reads:[]};
       try {
         await observed.ready;
+        await ui.observeAnnouncements(page);
         result.admission=await importSave(page,value,accepted);
         assert.equal(ui.findWidget(await ui.readUi(page),'panel:skill-book-result'),undefined,
           'admission seeds the retained accepted rank receipt without replaying it');
@@ -112,6 +115,7 @@ async function tick(page) {
           await page.keyboard.press('KeyI');await ui.widget(page,'panel:surface:inventory');
           const book=`panel:item:${bookId}`;await ui.widget(page,book,{enabled:true});
           if(value.world==='boneyard'&&accepted.frame)await until(()=>accepted.frame?.host.pause?.source==='inventory','authoritative Inventory pause');
+          const announcementsBefore=(await ui.announcements(page)).length;
           await ui.click(page,book,{clickCount:2});
           const modal=await ui.widget(page,'panel:skill-book-result');
           const outcome=JSON.parse(modal.value);
@@ -119,6 +123,7 @@ async function tick(page) {
           const expected=layouts.find(row=>row.skillId===outcome.skillId);
           assert.ok(expected,'accepted result names an authored native rank row');
           await ui.value(page,'panel:skill-book-result-text',expected.layout.lines[1].text);
+          await ui.announced(page,`Skill improved. ${expected.text}. OKAY.`,{afterIndex:announcementsBefore});
           await ui.noWidget(page,'panel:surface:inventory');
           const before=await position(page),pausedTick=await tick(page);
           await page.keyboard.down('KeyS');await page.waitForTimeout(220);await page.keyboard.up('KeyS');
@@ -133,11 +138,26 @@ async function tick(page) {
           await ui.noWidget(page,'panel:skill-book-result');
           assert.equal((await ui.readUi(page)).surface,'hidden','dismissing the result does not open Pause');
           if(value.world==='boneyard')await until(async()=>await tick(page)>pausedTick,'authoritative play resumes after confirmation');
-          const notification=await ui.widget(page,`world-notification:book:-${outcome.sequence}`);
+          const notificationId=`world-notification:book:-${outcome.sequence}`;
+          const entered=await ui.waitForUi(page,snapshot=>{
+            const message=ui.findWidget(snapshot,notificationId);
+            return message&&JSON.parse(message.value).offset===0;
+          },'the actual rank notification completes its native entrance');
+          const notification=ui.findWidget(entered,notificationId);
           assert.equal(notification.label,expected.text,'the actual accepted rank also paints its native world +1 message');
+          const presentation=JSON.parse(notification.value);
+          assert.equal(presentation.baseline,67,'Source places the settled Menu text at50+17');
+          assert.equal(presentation.clipTop,50,'Source world-notification ink clips atnativeY50');
+          assert.equal(presentation.scale,1);
+          await page.waitForFunction(({text,afterIndex})=>window.__solomonAnnouncements
+            .slice(afterIndex).some(event=>event.text.split('\n').includes(text)),
+          {text:expected.text,afterIndex:announcementsBefore});
+          const noticeAnnouncements=(await ui.announcements(page)).slice(announcementsBefore)
+            .filter(event=>event.text.split('\n').includes(expected.text));
+          assert.equal(noticeAnnouncements.length,1,'each accepted rank announces its distinct world receipt once');
           await page.screenshot({path:path.join(output,`${value.world}-rank-${index}-notification.png`)});
           result.reads.push({bookId,skillId:outcome.skillId,sequence:outcome.sequence,
-            dismiss:index===0?'OKAY':'Escape',notification});
+            dismiss:index===0?'OKAY':'Escape',notification,noticeAnnouncements});
         }
         await ui.observeDocumentReplacement(page,()=>page.reload());await ui.ready(page);await ui.click(page,'play');await ui.click(page,'continue');
         result.restoredAdmission=await admitted(page,value,accepted);

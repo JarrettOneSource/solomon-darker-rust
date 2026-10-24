@@ -92,15 +92,17 @@ pub(crate) fn set_error(message: &str) {
 pub(crate) fn error() -> Option<String> {
     ERROR.with(|error| error.borrow().clone())
 }
+pub(crate) fn layer_id() -> egui::LayerId {
+    egui::LayerId::new(Order::Tooltip, Id::unique("runtime-status"))
+}
+
 pub(crate) fn paint(frame: &mut UiFrame<'_>) {
     STATUS.with(|status| {
         let status = status.borrow();
         if status.is_empty() {
             return;
         }
-        let painter = frame
-            .ctx
-            .layer_painter(egui::LayerId::new(Order::Tooltip, Id::unique("runtime-status")));
+        let painter = frame.ctx.layer_painter(layer_id());
         let screen = frame.ctx.content_rect();
         let position = pos2(screen.left() + 12.0, screen.bottom() - 10.0);
         let color = if error().is_some() {
@@ -117,6 +119,6 @@ pub(crate) fn paint(frame: &mut UiFrame<'_>) {
         );
         frame.record_rect("runtime:status", status.as_str(), "status", bounds, true);
         frame.record_value("runtime:status", status.as_str(), None);
-        frame.announce(status.as_str());
+        frame.announce("runtime:status", status.as_str());
     });
 }

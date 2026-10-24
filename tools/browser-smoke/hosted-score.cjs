@@ -290,10 +290,7 @@ async function activateHall(page, action, mode) {
       const snapshot = await gpu.readUi(page);
       const actual = snapshot.widgets.find(widget => widget.focused);
       if (actual?.id === action) break;
-      const backwards = actual?.id === 'hall-back'
-        || (actual?.id.startsWith('hall-') && !actual.id.startsWith('hall-toggle:')
-          && actual.rect[0] > target.rect[0]);
-      await page.keyboard.press(backwards ? 'Shift+Tab' : 'Tab');
+      await page.keyboard.press('Tab');
       await gpu.nextFrame(page);
     }
     await gpu.focused(page, action);

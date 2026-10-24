@@ -1,7 +1,7 @@
 //! GPU native spectator rails/text from `NativeSpectatorStatus.tsx`.
 
 use crate::gpu_ui::{self, StockAtlas, UiFrame};
-use egui::{Color32, Id, Order, Rect, pos2, vec2};
+use egui::{Color32, Rect, pos2, vec2};
 use solomon_sim::boneyard::spectator::{
     BoneyardSpectatorStatusPresentation, NativeSpectatorHudLayout, native_spectator_hud_layout,
 };
@@ -14,6 +14,10 @@ pub struct SpectatorStatusView {
     previous: Option<(BoneyardSpectatorStatusPresentation, GameViewport)>,
 }
 impl SpectatorStatusView {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("spectator/status"))
+    }
+
     pub async fn attach(_document: &Document) -> Result<Self, String> {
         Ok(Self { atlas: StockAtlas::load("UI").await?, previous: None })
     }
@@ -32,9 +36,7 @@ impl SpectatorStatusView {
         let Some((status, viewport)) = &self.previous else { return Ok(()) };
         let layout = native_spectator_hud_layout(viewport.logical_size);
         let scale = viewport.display_scale as f32;
-        let painter = frame
-            .ctx
-            .layer_painter(egui::LayerId::new(Order::Foreground, Id::unique("spectator/status")));
+        let painter = frame.ctx.layer_painter(self.layer_id());
         let origin = pos2(layout.surface.x as f32 * scale, layout.surface.y as f32 * scale);
         self.panel(frame, &painter, &layout, &status.display_text, origin, scale)?;
         let second = origin + vec2(0.0, (layout.surface.height as f32 + 8.0) * scale);

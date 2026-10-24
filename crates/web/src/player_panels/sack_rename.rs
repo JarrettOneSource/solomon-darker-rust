@@ -140,7 +140,7 @@ impl PlayerPanels {
     }
     pub(super) fn paint_sack_rename(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let Some(mut dialog) = self.rename_sack.take() else { return Ok(()) };
-        frame.input_scope("sack-rename");
+        frame.input_scope("sack-rename", layer_id());
         let layout = inventory_sack_rename_dialog_layout(
             self.viewport_size.0 as f64,
             self.viewport_size.1 as f64,

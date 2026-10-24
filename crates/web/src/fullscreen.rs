@@ -2,7 +2,7 @@
 //! Platform requests run inside the original trusted canvas click.
 
 use crate::gpu_ui::UiFrame;
-use egui::{Color32, Id, Order, Rect, Stroke, pos2, vec2};
+use egui::{Color32, Id, Order, Stroke, pos2, vec2};
 use js_sys::{Function, Object, Promise, Reflect};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -30,7 +30,7 @@ struct FullscreenState {
     active: bool,
     show_help: bool,
     error: Option<String>,
-    bounds: Option<Rect>,
+    target: Option<egui::Response>,
     gesture_handled: bool,
 }
 pub struct FullscreenControl {
@@ -47,7 +47,7 @@ impl FullscreenControl {
             active: fullscreen_active(document),
             show_help: false,
             error: None,
-            bounds: None,
+            target: None,
             gesture_handled: false,
         }));
         let clicked = state.clone();
@@ -55,7 +55,12 @@ impl FullscreenControl {
         let click = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
             let Some(mouse) = event.dyn_ref::<MouseEvent>() else { return };
             let point = pos2(mouse.client_x() as f32, mouse.client_y() as f32);
-            if !clicked.borrow().bounds.is_some_and(|bounds| bounds.contains(point)) {
+            if !clicked
+                .borrow()
+                .target
+                .as_ref()
+                .is_some_and(|target| crate::ui::trusted_gesture::owns_point(target, point))
+            {
                 return;
             }
             event.prevent_default();
@@ -94,9 +99,27 @@ impl FullscreenControl {
     pub fn update(&mut self, placement: FullscreenPlacement) -> Result<(), String> {
         self.placement = placement;
         if placement == FullscreenPlacement::Hidden {
-            self.state.borrow_mut().bounds = None;
+            self.state.borrow_mut().target = None;
         }
         Ok(())
+    }
+    /// Source menu.css raises this body root only for the native coarse portrait query.
+    pub fn above_orientation_guidance(&self) -> Result<bool, String> {
+        self.document
+            .default_view()
+            .ok_or("fullscreen window")?
+            .match_media("(orientation:portrait) and (hover:none) and (pointer:coarse)")
+            .map_err(|_| "fullscreen orientation query".to_owned())
+            .map(|query| query.is_some_and(|query| query.matches()))
+    }
+    pub fn fixed_layers() -> [egui::LayerId; 2] {
+        [Self::control_layer(), Self::help_layer()]
+    }
+    pub fn control_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Foreground, Id::unique("fullscreen/control"))
+    }
+    pub fn help_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Tooltip, Id::unique("fullscreen/help"))
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let (mode, active, show_help, error) = {
@@ -104,7 +127,7 @@ impl FullscreenControl {
             (state.mode, state.active, state.show_help, state.error.clone())
         };
         if self.placement == FullscreenPlacement::Hidden || mode == ControlMode::Hidden {
-            self.state.borrow_mut().bounds = None;
+            self.state.borrow_mut().target = None;
             return Ok(());
         }
         let ctx = frame.ctx.clone();
@@ -127,12 +150,13 @@ impl FullscreenControl {
             "Enter fullscreen"
         };
         let mut keyboard_activation = false;
-        egui::Area::new(Id::unique("fullscreen/control"))
-            .order(Order::Foreground)
+        egui::Area::new(Self::control_layer().id)
+            .fade_in(false)
+            .order(Self::control_layer().order)
             .fixed_pos(point)
             .show(&ctx, |ui| {
                 let (bounds, response) = ui.allocate_exact_size(size, egui::Sense::click());
-                self.state.borrow_mut().bounds = Some(bounds);
+                self.state.borrow_mut().target = Some(response.clone());
                 let painter = ui.painter();
                 painter.rect_filled(bounds, 3.0, Color32::from_black_alpha(178));
                 painter.rect_stroke(
@@ -178,8 +202,9 @@ impl FullscreenControl {
         self.state.borrow_mut().gesture_handled = false;
         if show_help || error.is_some() {
             let message=error.unwrap_or_else(||"Fullscreen on iPhone or iPad\nTap Share, Add to Home Screen, keep Open as Web App enabled if shown, then launch Solomon Darker from its icon.\nOtherwise, open the game in a browser that supports fullscreen.".into());
-            egui::Area::new(Id::unique("fullscreen/help"))
-                .order(Order::Tooltip)
+            egui::Area::new(Self::help_layer().id)
+                .fade_in(false)
+                .order(Self::help_layer().order)
                 .fixed_pos(pos2(
                     (point.x - 290.0).max(8.0),
                     (point.y + 40.0).min(screen.bottom() - 180.0).max(8.0),

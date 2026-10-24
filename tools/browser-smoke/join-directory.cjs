@@ -14,6 +14,7 @@ const output = path.resolve(process.env.OUT);
 fs.mkdirSync(output, {recursive:true});
 const checks = [], clients = [], accounts = [];
 let step = 'registration';
+let releaseResolve = () => {};
 function checked(label) {checks.push(label);console.log(label);}
 
 async function until(predicate, description, timeout = 45000) {
@@ -182,7 +183,13 @@ async function leavePlayer(owner) {
     await visibility(leader,'public','Public');
     assert.equal((await refresh(visitor,listing,'JOIN')).enabled,true);
     await gpu.click(visitor.page,`join-listing:${listing}`);
-    await gpu.widget(visitor.page,'routing/dialog');
+    const consent=gpu.bounds(await gpu.widget(visitor.page,'routing/dialog'));
+    assert.equal(consent.width,680,'Source keeps its ordinary consent border box');
+    assert.ok(consent.height<300,'the short consent uses its real content height');
+    const back=gpu.bounds(await gpu.widget(visitor.page,'routing-back'));
+    const join=gpu.bounds(await gpu.widget(visitor.page,'routing-continue'));
+    assert.equal(back.y,join.y,'Source keeps the two intrinsic actions in one centered row');
+    assert.ok(back.width<112&&join.width<300,'consent actions retain intrinsic label widths');
     assert.ok(visitor.state.joins.some(row => row.status === 200));
     assert.equal(visitor.state.id,null,'the consent has not admitted a player');
     await visitor.page.screenshot({path:path.join(output,'owned-public-consent.png')});
@@ -215,8 +222,24 @@ async function leavePlayer(owner) {
     await refresh(visitor,listing,'JOIN');
     await gpu.fill(visitor.page,'join-party-code',code.toLowerCase());
     await gpu.value(visitor.page,'join-party-code',code);
+    let submittedCode;
+    const resolveGate=new Promise(resolve=>{releaseResolve=resolve;});
+    const resolving=async route=>{
+      submittedCode=route.request().postDataJSON().code;
+      await resolveGate;
+      await route.continue();
+    };
+    await visitor.context.route(new URL('api/game/join/resolve',game).href,resolving);
     await visitor.page.keyboard.press('Enter');
+    await until(()=>typeof submittedCode==='string','the actual code resolve request');
+    assert.equal(submittedCode,code);
+    assert.equal((await gpu.widget(visitor.page,'join-party-code')).enabled,true);
+    await gpu.fill(visitor.page,'join-party-code','');
+    await gpu.value(visitor.page,'join-party-code','');
+    releaseResolve();
+    await visitor.context.unroute(new URL('api/game/join/resolve',game).href,resolving);
     await gpu.widget(visitor.page,'routing/dialog');
+    checked('native code Enter retains its submitted snapshot while the real pending field remains editable');
     await gpu.click(visitor.page,'routing-continue');
     await gpu.surface(visitor.page,'create');
     await gpu.fill(visitor.page,'create-name','Visitor');
@@ -238,6 +261,12 @@ async function leavePlayer(owner) {
     const playing = await refresh(spectator,listing,'IN GAME');
     assert.equal(playing.enabled,false,'the actual playing party cannot be joined through its row');
     await spectator.page.screenshot({path:path.join(output,'owned-party-in-game.png')});
+    await spectator.page.setViewportSize({width:896,height:414});
+    await gpu.noWidget(spectator.page,'join-subtitle');
+    const compactHeading=gpu.bounds(await gpu.widget(spectator.page,'join-heading'));
+    assert.ok(compactHeading.height<35,'Source compact Join uses the actual20px heading');
+    assert.equal((await gpu.widget(spectator.page,`join-listing:${listing}`)).enabled,false);
+    await spectator.page.screenshot({path:path.join(output,'owned-party-in-game-compact.png')});
     checked('the actual running owned party is displayed IN GAME with its Join action disabled');
     for (const owner of [leader,visitor]) await leavePlayer(owner);
     checked('both admitted players leave through the real menu and persist their actual final checkpoint');
@@ -254,6 +283,7 @@ async function leavePlayer(owner) {
     }
     process.exitCode = 1;
   } finally {
+    releaseResolve();
     try {
       if(failure)for(const owner of clients) {
         try {await leavePlayer(owner);cleanup.push({label:owner.state.label,left:true});}

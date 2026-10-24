@@ -1,6 +1,6 @@
 //! GPU mod detail, screenshot gallery, versions and comments. The controller
 //! ports `DarkCloudModDetail`, `DarkCloudGallery` and `DarkCloudComments` lifetimes.
-use super::rows::{ink, ink_with_fallback};
+use super::rows::ink;
 use super::{super::widgets, art::CloudArt, format, images::CloudImages};
 use crate::gpu_ui::{FontRunOptions, NativeFontRun, UiFrame, font_run, font_run_with_options};
 use crate::hosted::{ModComments, ModDetail, ModSubscription, ModSummary};
@@ -277,7 +277,7 @@ impl ModDetailView {
             ),
             true,
         )?;
-        ink_with_fallback(
+        ink(
             frame,
             ui,
             &format!("BY {}", summary.author.username),
@@ -289,7 +289,6 @@ impl ModDetailView {
                 Vec2::new(rect.width() - title_pad * 2.0, 23.2),
             ),
             true,
-            "IM FELL English",
         )?;
         let back = Rect::from_min_size(
             egui::pos2(
@@ -327,6 +326,7 @@ impl ModDetailView {
         child.spacing_mut().item_spacing = Vec2::ZERO;
         let mut result = Ok(());
         let mut scroll = egui::ScrollArea::vertical()
+            .animated(false)
             .id_salt(format!("cloud-detail-scroll:{}", self.summary.slug))
             .auto_shrink([false, false]);
         if self.reset_scroll {
@@ -660,6 +660,7 @@ impl ModDetailView {
                 ui.new_child(egui::UiBuilder::new().id_salt("cloud-thumbnails").max_rect(thumbs));
             child.set_clip_rect(thumbs);
             egui::ScrollArea::horizontal()
+                .animated(false)
                 .id_salt("cloud-gallery-thumbnails")
                 .auto_shrink([false, false])
                 .show(&mut child, |ui| {
@@ -1282,7 +1283,7 @@ fn content_width(ui: &Ui, text: &str, scale: f32) -> Result<f32, String> {
     } else {
         Ok(font_run(
             ui.ctx(),
-            egui::FontId::new(16.0 * scale, egui::FontFamily::Name("Alegreya".into())),
+            egui::FontId::new(16.0 * scale, egui::FontFamily::Name("Cinzel".into())),
             widgets::GOLD,
             text,
             None,

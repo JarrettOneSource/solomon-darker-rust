@@ -6,6 +6,7 @@ use egui::{
     Align2, Color32, FontId, Id, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2,
 };
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
+use unicode_segmentation::UnicodeSegmentation;
 
 pub(super) const GOLD: Color32 = Color32::from_rgb(217, 186, 112);
 pub(super) const PALE: Color32 = Color32::from_rgb(191, 255, 191);
@@ -104,7 +105,7 @@ pub(crate) fn interact_unstyled(
     let enabled = enabled && ui.is_enabled();
     let response =
         ui.interact(rect, Id::unique(id), if enabled { Sense::click() } else { Sense::hover() });
-    focus_on_pointer(&response);
+    native_control_focus(&response);
     if enabled {
         frame.record(id, label, role, &response);
     } else {
@@ -113,14 +114,37 @@ pub(crate) fn interact_unstyled(
     response
 }
 
-/// Match native form controls: the actual pointer target retains keyboard focus.
-pub(crate) fn focus_on_pointer(response: &Response) {
+#[derive(Clone, Copy)]
+struct FocusObservation {
+    pass: u64,
+    focused: bool,
+}
+
+/// Native controls take pointer focus and reveal a newly focused control in its scroller.
+pub(crate) fn native_control_focus(response: &Response) {
     if response.enabled()
         && response.visible()
         && (response.is_pointer_button_down_on()
             || response.clicked_by(egui::PointerButton::Primary))
     {
         response.request_focus();
+    }
+    let focused = response.enabled() && response.has_focus();
+    let pass = response.ctx.cumulative_pass_nr();
+    let newly_focused = response.ctx.data_mut(|data| {
+        let id = response.id.with("native-control-focus");
+        let previous = data.get_temp::<FocusObservation>(id);
+        data.insert_temp(id, FocusObservation { pass, focused });
+        // Cardinal navigation assigns focus at end_pass, so gained_focus never
+        // reaches its next Response. Observe the actual owner across paints.
+        focused
+            && !previous.is_some_and(|previous| {
+                previous.focused
+                    && (previous.pass == pass || previous.pass.checked_add(1) == Some(pass))
+            })
+    });
+    if newly_focused {
+        response.scroll_to_me_animation(None, egui::style::ScrollAnimation::none());
     }
 }
 
@@ -499,4 +523,308 @@ pub(crate) fn cloud_button_with_label(
         focus_outline(frame, ui, &response, 2.0, 3.0, alpha(0xefd17d, 0.9));
     }
     response
+}
+
+pub(crate) fn narrative_line(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    text: &str,
+    rect: Rect,
+    size: f32,
+    color: Color32,
+) -> Result<(), String> {
+    let font = egui::FontId::new(size, egui::FontFamily::Name("IM FELL English".into()));
+    let source = text
+        .split([' ', '\t', '\n', '\r', '\u{000c}'])
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut run = crate::gpu_ui::font_run(ui.ctx(), font.clone(), color, &source, None)?;
+    if run.size().x > rect.width() {
+        let boundaries: Vec<_> = source.grapheme_indices(true).map(|(offset, _)| offset).collect();
+        let mut low = 0;
+        let mut high = boundaries.len();
+        while low < high {
+            let middle = low + (high - low).div_ceil(2);
+            let end = boundaries.get(middle).copied().unwrap_or(source.len());
+            let candidate = format!("{}…", &source[..end]);
+            let measured =
+                crate::gpu_ui::font_run(ui.ctx(), font.clone(), color, &candidate, None)?;
+            if measured.size().x <= rect.width() {
+                low = middle;
+            } else {
+                high = middle - 1;
+            }
+        }
+        let end = boundaries.get(low).copied().unwrap_or(source.len());
+        run =
+            crate::gpu_ui::font_run(ui.ctx(), font, color, &format!("{}…", &source[..end]), None)?;
+    }
+    run.paint(
+        frame,
+        &ui.painter().with_clip_rect(rect.intersect(ui.clip_rect())),
+        rect.left_center() - Vec2::new(0.0, run.size().y / 2.0),
+        1.0,
+    )
+}
+
+/// A Source circle gradient, including its premultiplied alpha, painted once per pixel.
+pub(crate) fn radial_gradient(
+    ui: &Ui,
+    rect: Rect,
+    center: Pos2,
+    radius: f32,
+    inner: Color32,
+    outer: Color32,
+) {
+    const STEPS: u32 = 32;
+    let mut mesh = egui::Mesh::default();
+    let from = inner.to_array();
+    let to = outer.to_array();
+    for y in 0..=STEPS {
+        for x in 0..=STEPS {
+            let position = rect.min
+                + rect.size() * Vec2::new(x as f32 / STEPS as f32, y as f32 / STEPS as f32);
+            let t = (position.distance(center) / radius).clamp(0.0, 1.0);
+            let channels = std::array::from_fn::<u8, 4, _>(|index| {
+                (f32::from(from[index]) + (f32::from(to[index]) - f32::from(from[index])) * t)
+                    .round() as u8
+            });
+            mesh.colored_vertex(
+                position,
+                Color32::from_rgba_premultiplied(
+                    channels[0],
+                    channels[1],
+                    channels[2],
+                    channels[3],
+                ),
+            );
+            if x > 0 && y > 0 {
+                let i = y * (STEPS + 1) + x;
+                mesh.add_triangle(i - STEPS - 2, i - 1, i);
+                mesh.add_triangle(i - STEPS - 2, i, i - STEPS - 1);
+            }
+        }
+    }
+    ui.painter().add(egui::Shape::mesh(mesh));
+}
+
+#[cfg(test)]
+mod focus_scroll_tests {
+    use super::native_control_focus;
+    use egui::{Context, Event, Id, Key, Modifiers, RawInput, Rect, Sense, Vec2};
+
+    fn native_context() -> Context {
+        let ctx = Context::default();
+        ctx.options_mut(|options| options.input_options.raw_point_scroll = true);
+        ctx
+    }
+
+    fn wheel_delta(ctx: &Context, time: f64, unit: Option<egui::MouseWheelUnit>) -> Vec2 {
+        let mut delta = Vec2::ZERO;
+        ctx.run_pass(
+            RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, Vec2::new(300.0, 160.0))),
+                time: Some(time),
+                events: unit
+                    .map(|unit| Event::MouseWheel {
+                        phase: egui::TouchPhase::Move,
+                        source: egui::MouseWheelSource::Unknown,
+                        unit,
+                        delta: Vec2::new(0.0, 100.0),
+                        modifiers: Modifiers::NONE,
+                    })
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            },
+            |ctx| delta = ctx.input(|input| input.smooth_scroll_delta()),
+        )
+        .drop_without_applying_deltas();
+        delta
+    }
+
+    #[test]
+    fn native_pixel_wheel_is_applied_once_without_changing_line_or_page_policy() {
+        for unit in
+            [egui::MouseWheelUnit::Point, egui::MouseWheelUnit::Line, egui::MouseWheelUnit::Page]
+        {
+            let native = native_context();
+            let default = Context::default();
+            let initial = wheel_delta(&native, 0.0, Some(unit));
+            let upstream = wheel_delta(&default, 0.0, Some(unit));
+            let later = wheel_delta(&native, 1.0 / 60.0, None);
+            let upstream_later = wheel_delta(&default, 1.0 / 60.0, None);
+            if unit == egui::MouseWheelUnit::Point {
+                assert_eq!(initial, Vec2::new(0.0, 100.0), "native pixels apply immediately");
+                assert_eq!(later, Vec2::ZERO, "no old pixels are replayed after native focus");
+                assert_ne!(initial, upstream, "upstream smoothing remains the default");
+                assert_ne!(upstream_later, Vec2::ZERO);
+            } else {
+                assert_eq!(initial, upstream, "unchanged {unit:?} input");
+                assert_eq!(later, upstream_later, "unchanged {unit:?} pacing");
+            }
+        }
+    }
+
+    fn pass(ctx: &Context, events: Vec<Event>) -> (usize, Rect, Rect, f32) {
+        pass_at(ctx, events, ctx.input(|input| input.time))
+    }
+
+    fn pass_at(ctx: &Context, events: Vec<Event>, time: f64) -> (usize, Rect, Rect, f32) {
+        let mut observed = None;
+        ctx.run_pass(
+            RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, Vec2::new(300.0, 160.0))),
+                time: Some(time),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                ctx.root_ui(|ui| {
+                    let mut focused = None;
+                    let scroll = egui::ScrollArea::vertical()
+                        .animated(false)
+                        .id_salt("native-focus-scroll")
+                        .max_height(130.0)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            for index in 0_usize..12 {
+                                let (_, rect) = ui.allocate_space(Vec2::new(240.0, 32.0));
+                                let response = ui.interact(
+                                    rect,
+                                    Id::unique(("control", index)),
+                                    Sense::click(),
+                                );
+                                native_control_focus(&response);
+                                if response.has_focus() {
+                                    focused = Some((index, response.rect));
+                                }
+                            }
+                        });
+                    let (index, rect) = focused.expect("a real control retains focus");
+                    observed =
+                        Some((index, rect, scroll.inner_rect, scroll.state.clamped_offset().y));
+                });
+            },
+        )
+        .drop_without_applying_deltas();
+        observed.expect("scroll area painted")
+    }
+    fn tab(pressed: bool, backwards: bool) -> Event {
+        Event::Key {
+            key: Key::Tab,
+            physical_key: Some(Key::Tab),
+            pressed,
+            repeat: false,
+            modifiers: Modifiers { shift: backwards, ..Modifiers::NONE },
+        }
+    }
+
+    fn dispatch(ctx: &Context, event: Event) -> (usize, Rect, Rect, f32) {
+        dispatch_events(ctx, vec![event])
+    }
+
+    fn dispatch_events(ctx: &Context, events: Vec<Event>) -> (usize, Rect, Rect, f32) {
+        let time = ctx.input(|input| input.time + f64::from(input.predicted_dt));
+        pass_at(ctx, events, time);
+        // BrowserInput's into_passes materializes each dispatch's committed
+        // widgets/focus in an empty pass with the same frame clock.
+        pass_at(ctx, Vec::new(), time);
+        // Game then finishes the transaction with paint_layout before drawing.
+        pass_at(ctx, Vec::new(), time)
+    }
+
+    #[test]
+    fn real_tab_focus_reveals_controls_in_both_scroll_directions() {
+        let ctx = native_context();
+        ctx.memory_mut(|memory| memory.request_focus(Id::unique(("control", 0_usize))));
+        let first = pass(&ctx, Vec::new());
+        assert_eq!(first.0, 0);
+        for index in 1..=8 {
+            dispatch(&ctx, tab(true, false));
+            let (focused, rect, viewport, offset) = dispatch(&ctx, tab(false, false));
+            assert_eq!(focused, index);
+            assert!(
+                viewport.contains_rect(rect),
+                "focused={focused} expected={index} rect={rect:?} viewport={viewport:?} offset={offset}: the actual focused response is fully revealed"
+            );
+            if index == 8 {
+                assert!(offset > 0.0, "forward Tab moved the real scroll owner");
+            }
+        }
+        for index in (0..8).rev() {
+            dispatch(&ctx, tab(true, true));
+            let (focused, rect, viewport, offset) = dispatch(&ctx, tab(false, true));
+            assert_eq!(focused, index);
+            assert!(
+                viewport.contains_rect(rect),
+                "focused={focused} expected={index} rect={rect:?} viewport={viewport:?} offset={offset}: reverse focus reveals the earlier control"
+            );
+            if index == 0 {
+                assert_eq!(offset, 0.0, "reverse Tab restores the top");
+            }
+        }
+    }
+
+    #[test]
+    fn real_cardinal_focus_reveals_controls_without_overriding_user_scroll() {
+        let ctx = native_context();
+        ctx.memory_mut(|memory| memory.request_focus(Id::unique(("control", 0_usize))));
+        pass(&ctx, Vec::new());
+        let arrow = |key, pressed| Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        };
+        let mut bottom_offset = 0.0;
+        for index in 1..=8 {
+            for pressed in [true, false] {
+                let (focused, rect, viewport, offset) =
+                    dispatch(&ctx, arrow(Key::ArrowDown, pressed));
+                assert_eq!(focused, index);
+                assert!(
+                    viewport.contains_rect(rect),
+                    "pressed={pressed} focused={focused} expected={index} rect={rect:?} viewport={viewport:?} offset={offset}: cardinal focus reveals the next control before drawing"
+                );
+                bottom_offset = offset;
+            }
+        }
+
+        let (focused, _, _, scrolled_offset) = dispatch_events(
+            &ctx,
+            vec![
+                Event::PointerMoved(egui::pos2(150.0, 65.0)),
+                Event::MouseWheel {
+                    phase: egui::TouchPhase::Move,
+                    source: egui::MouseWheelSource::Unknown,
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: Vec2::new(0.0, 100.0),
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
+        assert_eq!(focused, 8, "wheel scrolling keeps the actual focus owner");
+        assert!(scrolled_offset < bottom_offset, "the user's wheel moves the scroll owner");
+        let (focused, _, _, settled_offset) = pass(&ctx, Vec::new());
+        assert_eq!(focused, 8);
+        assert!(
+            settled_offset <= scrolled_offset,
+            "retained focus must not scroll back against the user's wheel"
+        );
+
+        for index in (0..8).rev() {
+            for pressed in [true, false] {
+                let (focused, rect, viewport, offset) =
+                    dispatch(&ctx, arrow(Key::ArrowUp, pressed));
+                assert_eq!(focused, index);
+                assert!(
+                    viewport.contains_rect(rect),
+                    "pressed={pressed} focused={focused} expected={index} rect={rect:?} viewport={viewport:?} offset={offset}: cardinal focus reveals the previous control before drawing"
+                );
+            }
+        }
+    }
 }

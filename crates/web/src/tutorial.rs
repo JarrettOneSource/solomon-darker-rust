@@ -131,6 +131,11 @@ pub struct TutorialUi {
     now: f64,
 }
 impl TutorialUi {
+    pub fn layer_id(&self) -> egui::LayerId {
+        // Existing application body z40; all native Tutorial descendants stay here.
+        egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("tutorial-overlay"))
+    }
+
     pub async fn attach(_document: &Document) -> Result<Self, String> {
         Ok(Self { atlas: StockAtlas::load("UI").await?, model: None, viewport: (0, 0), now: 0.0 })
     }
@@ -149,8 +154,20 @@ impl TutorialUi {
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let Some(model) = &self.model else { return Ok(()) };
         let view = &model.view();
+        if view.intro.is_some() {
+            frame.announce("tutorial:prelude", "Midnight, six months ago");
+        }
+        if let Some(heading) = view.heading {
+            frame.announce(
+                "tutorial:instruction",
+                &format!("{}. {}", heading.replace('\n', " "), view.subheading.unwrap_or("")),
+            );
+        }
         if let Some(narration) = view.narration {
-            frame.announce(&format!("{}: {}", narration.speaker, narration.text));
+            frame.announce(
+                &format!("tutorial:narration:{}", narration.event_id),
+                &format!("{}: {}", narration.speaker, narration.text),
+            );
         }
         let (width, height) = self.viewport;
         let viewport = HudRect::new(0.0, 0.0, width as f64, height as f64);
@@ -271,10 +288,7 @@ impl TutorialUi {
         }
         let (callouts, modal_pointers) = modal_plans(view, &targets, view.coarse_pointer);
         pointers.extend(modal_pointers);
-        let painter = frame.ctx.layer_painter(egui::LayerId::new(
-            egui::Order::Tooltip,
-            egui::Id::unique("tutorial-overlay"),
-        ));
+        let painter = frame.ctx.layer_painter(self.layer_id());
         if let Some(intro) = view.intro {
             painter.rect_filled(
                 egui::Rect::from_min_size(

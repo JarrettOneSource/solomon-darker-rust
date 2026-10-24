@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const {chromium} = require(path.resolve(process.env.PW));
 const {leaveCollegeOffice,reachCollegeLoadout} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const url = process.env.URL || 'http://127.0.0.1:4185/';
 const output = process.env.OUT || '/tmp';
 fs.mkdirSync(output,{recursive:true});
@@ -48,9 +49,6 @@ async function controllerCollegeLoadout(page) {
   await ui.value(page,'panel:dialogue-key','ARCH_Q1_0');
   await pad(page);
   await pad(page,[1]);
-  await ui.value(page,'panel:dialogue-key','ARCH_DISMISS_0');
-  await pad(page);
-  await pad(page,[1]);
   await ui.noWidget(page,'panel:dialogue');
   await pad(page);
   await leaveCollegeOffice(page,(x,y)=>pad(page,[],x,y));
@@ -59,6 +57,14 @@ async function controllerCollegeLoadout(page) {
 async function settledCollege(page) {
   await page.waitForFunction(()=>window.wasmBindings.wizard_state()[6]===0
     &&window.wasmBindings.wizard_state()[7]===-1,null,{timeout:30000});
+}
+
+async function accepted(page,name,element,discipline) {
+  const snapshot=await ui.waitForUi(page,snapshot=>{
+    const selected=snapshot.acceptedSelection;
+    return selected?.name===name&&selected.element===element&&selected.discipline===discipline;
+  },`actual admitted ${name}/${element}/${discipline}`);
+  return snapshot.acceptedSelection;
 }
 
 async function modalFocus(page) {
@@ -70,12 +76,16 @@ async function modalFocus(page) {
 }
 
 (async()=>{
-  const browser=await chromium.launch({headless:true,
+  const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+  const {browser}=owned;
   const errors=[];
+  const admissions=[];
+  let current;
   try {
     const page=await browser.newPage({viewport:{width:1600,height:900}});
+    current=page;
     const desktopErrors=ui.watchErrors(page);errors.push(desktopErrors.errors);
     await desktopErrors.ready;
     await ui.observeGpu(page);
@@ -112,6 +122,7 @@ async function modalFocus(page) {
     await screen(page,'create');
     await pad(page);
     await ui.widget(page,'element:earth');
+    const controllerName=(await ui.widget(page,'create-name')).value||'Genericus';
     await pad(page,[0]);
     await ui.widget(page,'discipline:arcane');
     await pad(page);
@@ -119,6 +130,7 @@ async function modalFocus(page) {
     await screen(page,'hidden');
     await pad(page);
     await settledCollege(page);
+    admissions.push(await accepted(page,controllerName,'Earth','Arcane'));
     await pad(page,[9]);
     await screen(page,'pause');
     await pad(page);
@@ -141,6 +153,7 @@ async function modalFocus(page) {
     await page.close();
 
     const touch=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
+    current=touch;
     const touchErrors=ui.watchErrors(touch);errors.push(touchErrors.errors);
     await touchErrors.ready;
     await ready(touch);
@@ -164,6 +177,7 @@ async function modalFocus(page) {
     await ui.tap(touch,'discipline:body');
     await screen(touch,'hidden');
     await settledCollege(touch);
+    admissions.push(await accepted(touch,'Felix','Water','Body'));
     await ui.tap(touch,'hud:pause');
     await screen(touch,'pause');
     await touch.waitForTimeout(350);
@@ -175,9 +189,33 @@ async function modalFocus(page) {
     await ui.assertGpuOnly(touch);
     await ui.settleErrors(touch);
     assert.deepEqual(touchErrors.errors,[]);
-    console.log(JSON.stringify({checks:['controller College admission and sole loadout',
+    const receipt={passed:true,checks:['controller College admission and sole loadout',
       'locked loadout Back','neutral handoff','controller pause','spatial focus',
       'modal focus ownership','source portrait guidance','landscape phone title/admission/Create',
-      'phone pause targets','actual GPU UI'],errors:errors.flat()}));
-  } finally {await browser.close()}
+      'phone pause targets','actual GPU UI'],admissions,errors:errors.flat()};
+    fs.writeFileSync(path.join(output,'menu-input-receipt.json'),JSON.stringify(receipt,null,2));
+    console.log(JSON.stringify(receipt));
+  } catch(error) {
+    const failure={failure:error.stack,errors:errors.flat()};
+    if(current&&!current.isClosed()){
+      try {
+        await ui.settleErrors(current);
+        failure.errors=errors.flat();
+        failure.actual=await current.evaluate(()=>({gpu:JSON.parse(wasmBindings.gpu_ui_state()),
+          pad:window.gpuTestPad,wizard:Array.from(wasmBindings.wizard_state()),
+          input:Array.from(wasmBindings.gameplay_input_state())}));
+      }catch(observationError){failure.observationError=observationError.stack;}
+      try {await current.screenshot({path:path.join(output,'menu-input-failure.png')});}
+      catch(screenshotError){failure.screenshotError=screenshotError.stack;}
+    }
+    fs.writeFileSync(path.join(output,'menu-input-failure.json'),JSON.stringify(failure,null,2));
+    throw error;
+  } finally {
+    try {
+      fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(await owned.close(),null,2));
+    } catch(error) {
+      fs.writeFileSync(path.join(output,'browser-cleanup-failure.json'),JSON.stringify(error.cleanup||{error:error.stack},null,2));
+      throw error;
+    }
+  }
 })().catch(error=>{console.error(error);process.exitCode=1});

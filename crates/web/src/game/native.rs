@@ -692,6 +692,7 @@ impl Game {
         );
         self.cheats.close();
         self.pending_cheat_open = false;
+        self.social.reset_chat_announcements();
         let native = self.native.as_mut().unwrap();
         native.connection = Some(connection);
         if let Some(hosted) = &mut self.hosted {

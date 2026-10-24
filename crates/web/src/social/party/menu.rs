@@ -322,7 +322,7 @@ impl SocialUi {
                 && !action.disabled
                 && let Some(code) = &code
             {
-                self.clipboard.target(response.rect, code.clone());
+                self.clipboard.target(&response, code.clone());
                 frame.record_value("social/copy", code, None);
             }
             if response.clicked() && !action.disabled {

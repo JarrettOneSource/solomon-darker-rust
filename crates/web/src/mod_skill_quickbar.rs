@@ -2,7 +2,7 @@
 
 use crate::gpu_ui::UiFrame;
 use crate::mod_presentation_assets::ModPresentationAssets;
-use egui::{Color32, FontFamily, FontId, Id, Order, Stroke, vec2};
+use egui::{Color32, FontFamily, FontId, Stroke, vec2};
 use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::assets::GameModAsset;
 use solomon_sim::modding::skill_quickbar::{
@@ -47,6 +47,10 @@ pub struct ModSkillQuickbarView {
     listening: bool,
 }
 impl ModSkillQuickbarView {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Middle, egui::Id::unique("mod/quickbar"))
+    }
+
     pub fn new(window: &Window) -> Result<Self, String> {
         let current = Rc::new(RefCell::new(QuickbarState::default()));
         let actions = Rc::new(RefCell::new(Vec::new()));
@@ -143,12 +147,13 @@ impl ModSkillQuickbarView {
             return Ok(());
         }
         let ctx = frame.ctx.clone();
-        egui::Area::new(Id::unique("mod/quickbar"))
-            .order(Order::Middle)
+        egui::Area::new(self.layer_id().id)
+            .fade_in(false)
+            .order(self.layer_id().order)
             .anchor(egui::Align2::CENTER_BOTTOM, vec2(0.0, -80.0))
-            .show(&ctx, |ui| {
+            .show(&ctx, |ui| -> Result<(), String> {
                 ui.spacing_mut().item_spacing.x = 4.0;
-                ui.horizontal(|ui| {
+                ui.horizontal(|ui| -> Result<(), String> {
                     for row in &self.buttons {
                         let (bounds, response) =
                             ui.allocate_exact_size(vec2(41.6, 41.6), egui::Sense::click());
@@ -164,24 +169,27 @@ impl ModSkillQuickbarView {
                             egui::StrokeKind::Inside,
                         );
                         if let Some(url) = &row.image_url {
-                            frame.image(
-                                ui.painter(),
-                                url,
-                                bounds.shrink(3.2),
-                                None,
-                                Color32::WHITE,
-                            );
-                        }
-                        if let Some(url) = &row.image_url {
-                            let id = format!("mod/quickbar-icon:{}", row.slot);
-                            frame.record_rect(
-                                &id,
-                                &format!("{} icon", row.name),
-                                "img",
-                                bounds.shrink(3.2),
-                                true,
-                            );
+                            let content = bounds.shrink(4.2);
                             if let Some(size) = frame.image_size(url) {
+                                let fit = size
+                                    * (content.width() / size.x).min(content.height() / size.y);
+                                let image = egui::Rect::from_center_size(content.center(), fit);
+                                frame.image_sampled(
+                                    ui.painter(),
+                                    url,
+                                    image,
+                                    None,
+                                    Color32::WHITE,
+                                    crate::gpu_ui::TextureSampling::Nearest,
+                                );
+                                let id = format!("mod/quickbar-icon:{}", row.slot);
+                                frame.record_rect(
+                                    &id,
+                                    &format!("{} icon", row.name),
+                                    "img",
+                                    image,
+                                    true,
+                                );
                                 frame.record_value(
                                     &id,
                                     &format!("{}x{} {url}", size.x, size.y),
@@ -189,12 +197,39 @@ impl ModSkillQuickbarView {
                                 );
                             }
                         }
-                        ui.painter().text(
-                            bounds.right_bottom() - vec2(1.92, 0.0),
-                            egui::Align2::RIGHT_BOTTOM,
-                            (row.slot + 1).to_string(),
+                        let slot = crate::gpu_ui::font_run(
+                            frame.ctx,
                             FontId::new(9.28, FontFamily::Name("Alegreya Bold".into())),
                             Color32::from_rgb(241, 230, 198),
+                            &(row.slot + 1).to_string(),
+                            None,
+                        )?;
+                        frame.paint_group(
+                            ui.painter(),
+                            crate::gpu_ui::GroupEffect {
+                                shadows: vec![crate::gpu_ui::ImageShadow {
+                                    offset: vec2(0.0, 1.0),
+                                    blur: 1.0,
+                                    color: Color32::BLACK,
+                                }],
+                                ..Default::default()
+                            },
+                            |frame, painter| {
+                                slot.paint(
+                                    frame,
+                                    painter,
+                                    bounds.right_bottom() - vec2(2.92, 1.0) - slot.size(),
+                                    1.0,
+                                )
+                            },
+                        )?;
+                        crate::menu::widgets::focus_outline(
+                            frame,
+                            ui,
+                            &response,
+                            2.0,
+                            2.0,
+                            Color32::from_rgba_unmultiplied(65, 227, 255, 179),
                         );
                         frame.record(
                             &format!("mod/quickbar:{}", row.slot),
@@ -211,8 +246,12 @@ impl ModSkillQuickbarView {
                             self.actions.borrow_mut().push(action);
                         }
                     }
-                });
-            });
+                    Ok(())
+                })
+                .inner?;
+                Ok(())
+            })
+            .inner?;
         Ok(())
     }
     fn set_listening(&mut self, listening: bool) -> Result<(), String> {

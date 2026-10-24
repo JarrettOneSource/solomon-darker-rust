@@ -15,7 +15,7 @@ const suffix = `${Date.now().toString(36)}${crypto.randomBytes(2).toString('hex'
 const account = {username:`Gallery${suffix}`, email:`gallery-${suffix}@example.invalid`,
   password:`Qa!${crypto.randomBytes(18).toString('base64url')}`};
 fs.writeFileSync(path.join(output, 'private-account.json'), JSON.stringify(account), {mode:0o600,flag:'wx'});
-const modName = `GPU Gallery ${suffix}`;
+const modName = `GPU Gallery ${suffix} é שלום`;
 const checks = [], observations = [], pages = [], requests = [], comments = [];
 let slug, token, step = 'ordinary registration', created, secondVersion;
 let releasePost = () => {};

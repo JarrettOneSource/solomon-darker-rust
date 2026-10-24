@@ -2,7 +2,7 @@
 
 use egui::{Context, Event, Id, LayerId, Modifiers, Order, Pos2, Rect, Sense, pos2, vec2};
 
-use super::{SocialUi, layers_above_hud};
+use super::SocialUi;
 
 #[derive(Default)]
 struct Journey {
@@ -14,6 +14,10 @@ struct Journey {
 fn pass(ctx: &Context, journey: &mut Journey, ordered: bool, events: Vec<Event>) {
     let viewport = Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0));
     let hud = LayerId::new(Order::Middle, Id::unique("game-hud"));
+    if ordered {
+        let layers = std::iter::once(hud).chain(SocialUi::fixed_layers()).collect::<Vec<_>>();
+        ctx.set_fixed_layer_order(&layers);
+    }
     let book = journey.book;
     ctx.run_pass(
         egui::RawInput { screen_rect: Some(viewport), events, ..Default::default() },
@@ -48,9 +52,6 @@ fn pass(ctx: &Context, journey: &mut Journey, ordered: bool, events: Vec<Event>)
                             journey.book = false;
                         }
                     });
-            }
-            if ordered {
-                layers_above_hud(ctx, hud);
             }
             let layer = SocialUi::party_layer();
             egui::Area::new(layer.id)

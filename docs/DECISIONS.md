@@ -21,7 +21,11 @@ native textarea resolves its pointer target through that same canonical widget q
 Unregistered/default egui behavior remains intact. Application Areas opt out of unsolicited
 entrance fades explicitly; this patch does not change animation defaults.
 
-Cost: upgrades must review seven small implementation-file changes and replay the focused
+The native pointer bridge also sends explicit cancellation rather than inventing a normal
+button release: cancellation retires click/drag ownership and motion without activation.
+Original raw Touch cancellation and ordinary pointer releases remain distinct.
+
+Cost: upgrades must review the local integration patch and replay the focused
 Context/actual browser contracts. Provenance and exact interfaces are in
 [`vendor/egui/SOLOMON-PATCH.md`](../vendor/egui/SOLOMON-PATCH.md). The Source registry owns
 game layering; this is not another window manager or a visual DOM adapter.

@@ -408,9 +408,14 @@ impl BoneyardLibrary {
     ) -> Result<(), String> {
         let ctx = frame.ctx.clone();
         let mut actions = Vec::new();
-        let layer = egui::LayerId::new(egui::Order::Middle, Id::unique("boneyard-library"));
+        let layer = crate::menu::library_layer();
         ctx.set_sublayer(crate::menu::scene_layer(), layer);
+        let new_id = Id::unique("boneyards/new");
+        if self.focus_new && interactive && !self.opening {
+            ctx.memory_mut(|memory| memory.request_focus(new_id));
+        }
         egui::Area::new(layer.id)
+            .fade_in(false)
             .fixed_pos(bounds.min)
             .order(layer.order)
             .show(&ctx, |ui| {
@@ -424,6 +429,7 @@ impl BoneyardLibrary {
                     ui.set_opacity(1.0);
                 }
                 egui::ScrollArea::vertical()
+                    .animated(false)
                     .id_salt("boneyard-shelf-scroll")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
@@ -433,8 +439,13 @@ impl BoneyardLibrary {
                     .inner
             })
             .inner?;
-        if self.focus_new && interactive {
-            ctx.memory_mut(|memory| memory.request_focus(Id::unique("boneyards/new")));
+        if self.focus_new
+            && interactive
+            && ctx.memory(|memory| memory.has_focus(new_id))
+            && ctx
+                .read_response(new_id)
+                .is_some_and(|response| response.enabled() && response.visible())
+        {
             self.focus_new = false;
         }
         for action in actions {
@@ -824,7 +835,7 @@ fn message(frame: &UiFrame<'_>, ui: &mut Ui, id: &str, text: &str, width: f32, t
     ui.painter().galley(r.min, galley, color);
     frame.record_rect(id, text, if id.ends_with("error") { "alert" } else { "status" }, r, false);
     frame.record_value(id, text, None);
-    frame.announce(text);
+    frame.announce(id, text);
 }
 fn date_format() -> Result<js_sys::Intl::DateTimeFormat, String> {
     let options = js_sys::Object::new();

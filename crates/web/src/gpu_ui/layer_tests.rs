@@ -90,6 +90,15 @@ fn fixed_source_order_agrees_for_real_paint_pointer_modal_and_reappearance() {
     let ctx = Context::default();
     let ids = layers();
     ctx.set_fixed_layer_order(&ids);
+    assert!(ctx.compare_layer_order(ids[2], ids[3]).is_lt());
+    assert!(
+        ctx.compare_layer_order(LayerId::new(Order::Middle, Id::unique("unregistered")), ids[0])
+            .is_lt()
+    );
+    assert!(
+        ctx.compare_layer_order(ids[4], LayerId::new(Order::Foreground, Id::unique("popup")))
+            .is_lt()
+    );
     let scrambled = [3, 2, 0];
     ordered_pass(&ctx, &scrambled, &[], Vec::new());
     let (_, painted) = ordered_pass(&ctx, &scrambled, &[], Vec::new());
@@ -117,6 +126,8 @@ fn fixed_source_order_agrees_for_real_paint_pointer_modal_and_reappearance() {
         Some(ids[3]),
         "highest Source modal wins regardless of callback order"
     );
+    let (_, painted) = ordered_pass(&ctx, &[4, 3, 2, 0], &[], Vec::new());
+    assert_eq!(painted, [0, 2, 3], "a newly created Area retains its native sizing pass");
     let (_, painted) = ordered_pass(&ctx, &[4, 3, 2, 0], &[], Vec::new());
     assert_eq!(painted, [0, 2, 3, 4]);
 }
@@ -156,7 +167,12 @@ fn passive_pass(ctx: &Context, events: Vec<Event>, passive: bool) -> Vec<&'stati
                     .show(ctx, |ui| {
                         ui.set_min_size(vec2(400.0, 300.0));
                         if upper {
-                            ui.label("Passive text keeps its real font/layout rectangle");
+                            ui.add(
+                                egui::Label::new(
+                                    "Passive text keeps its real font/layout rectangle",
+                                )
+                                .selectable(false),
+                            );
                             let body = ui.interact(
                                 Rect::from_center_size(pos2(100.0, 100.0), vec2(100.0, 100.0)),
                                 Id::unique("map-circle"),
@@ -211,7 +227,7 @@ fn passive_container_keeps_children_and_shapes_without_stealing_lower_equipment(
         (pos2(55.0, 55.0), "equipment", ids[1]),
         (pos2(100.0, 100.0), "map", ids[3]),
     ] {
-        assert_eq!(ctx.layer_id_at(point), Some(owner));
+        assert_eq!(ctx.layer_id_at(point), Some(owner), "actual clipped owner at {point:?}");
         passive_pass(&ctx, pointer(true, point), true);
         assert_eq!(passive_pass(&ctx, pointer(false, point), true), [expected]);
     }

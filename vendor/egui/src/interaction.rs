@@ -159,6 +159,12 @@ pub(crate) fn interact(
         match pointer_event {
             PointerEvent::Moved(_) => {}
 
+            PointerEvent::Cancelled => {
+                interaction.potential_click_id = None;
+                interaction.potential_drag_id = None;
+                dragged = None;
+            }
+
             PointerEvent::Pressed { .. } => {
                 // Maybe new click?
                 if interaction.potential_click_id.is_none() {

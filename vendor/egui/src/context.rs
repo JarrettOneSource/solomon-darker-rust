@@ -1828,6 +1828,10 @@ impl Context {
             for pointer_event in &input.pointer.pointer_events {
                 match pointer_event {
                     PointerEvent::Moved(_) => {}
+                    PointerEvent::Cancelled => {
+                        res.flags.set(Flags::IS_POINTER_BUTTON_DOWN_ON, false);
+                        res.flags.set(Flags::DRAGGED, false);
+                    }
                     PointerEvent::Pressed { .. } => {
                         any_press = true;
                     }
@@ -3680,6 +3684,12 @@ impl Context {
     /// The registered back-to-front index, for read-only presentation diagnostics.
     pub fn fixed_layer_order_index(&self, layer: LayerId) -> Option<usize> {
         self.memory(|memory| memory.areas().fixed_layer_order_index(layer))
+    }
+
+    /// Compare the effective back-to-front order used by paint, hits and modals.
+    /// This includes both registered fixed layers and ordinary unregistered layers.
+    pub fn compare_layer_order(&self, a: LayerId, b: LayerId) -> core::cmp::Ordering {
+        self.memory(|memory| memory.areas().compare_order(a, b))
     }
 
     /// Restrict this pass's real widget to an authored hit shape in global coordinates.

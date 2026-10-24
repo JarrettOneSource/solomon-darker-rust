@@ -48,20 +48,29 @@ async function walkToFomentius(page) {
     await session.detach();
   }
   const [x,y]=await page.evaluate(()=>Array.from(wasmBindings.wizard_state()));
-  const originX=Math.max(0,Math.min(2000-1600/1.2,x-800/1.2));
-  const originY=Math.max(0,Math.min(1024-900/1.2,y-450/1.2));
   const viewport=page.viewportSize();
-  const scale=Math.min(viewport.width/1600,viewport.height/900);
-  const target={x:(viewport.width-1600*scale)/2+(1397-originX)*1.2*scale,
-    y:(viewport.height-900*scale)/2+(664-originY)*1.2*scale};
+  // Source game-viewport.ts and hub-math.ts expand the world view before its
+  // regional camera clamp; the world does not use the fixed UI stage's offset.
+  const scale=Math.min(1,viewport.width/1600,viewport.height/900);
+  const logical={width:viewport.width/scale,height:viewport.height/scale};
+  const boundedScale=Math.max(scale,viewport.width/Math.max(1600,2000*1.2),
+    viewport.height/Math.max(900,1024*1.2));
+  const cameraScale=1.2*boundedScale/scale;
+  const view={width:logical.width/cameraScale,height:logical.height/cameraScale};
+  const originX=Math.max(0,Math.min(2000-view.width,x-view.width/2));
+  const originY=Math.max(0,Math.min(1024-view.height,y-view.height/2));
+  const target={x:(1397-originX)*cameraScale*scale,
+    y:(664-originY)*cameraScale*scale};
+  const entry={before:[x,y],viewport,logical,cameraScale,origin:[originX,originY],target};
   await page.touchscreen.tap(target.x,target.y);
   try {
     const dialogue=await ui.widget(page,'panel:dialogue',{timeout:3000});
     assert.equal(dialogue.label,'Fomentius');
+    fs.writeFileSync(path.join(output,'phone-world-entry.json'),JSON.stringify({...entry,dialogue},null,2));
   } catch(error) {
     const after=await page.evaluate(()=>({wizard:Array.from(wasmBindings.wizard_state()),
       input:Array.from(wasmBindings.gameplay_input_state()),gpu:JSON.parse(wasmBindings.gpu_ui_state())}));
-    fs.writeFileSync(path.join(output,'phone-world-entry-failure.json'),JSON.stringify({before:[x,y],target,after},null,2));
+    fs.writeFileSync(path.join(output,'phone-world-entry-failure.json'),JSON.stringify({...entry,after},null,2));
     await shot(page,'phone-world-entry-failure.png');
     throw error;
   }
@@ -137,7 +146,12 @@ async function walkToFomentius(page) {
     await ui.noWidget(page,'panel:close');
     await walkToFomentius(page);await settle(page);
     await shot(page,'phone-shop-rust.png');
-    const dye=await ui.byLabel(page,'Buy Dye for 300 gold',{prefix:'panel:',role:'button'});
+    const dyes=(await ui.readUi(page)).widgets.filter(widget=>widget.id.startsWith('panel:shop:')
+      &&widget.role==='button'&&widget.enabled&&widget.label==='Buy Dye for 300 gold')
+      .sort((a,b)=>a.rect[0]-b.rect[0]||a.rect[1]-b.rect[1]);
+    assert.ok(dyes.length===2||dyes.length===3,'Source stocks two or three identical Dye kits');
+    const dye=dyes[0];
+    fs.writeFileSync(path.join(output,'phone-dye-purchase.json'),JSON.stringify({stock:dyes,chosen:dye.id},null,2));
     await ui.tap(page,dye.id);await ui.tap(page,dye.id);await settle(page);
     await action(page,'close');await settle(page);
     await ui.tap(page,'hud:inventory');await settle(page);
@@ -149,7 +163,28 @@ async function walkToFomentius(page) {
     assert.equal(swatches.length,18);
     await action(page,'dye-swatch:0');await action(page,'dye-swatch:7');
     assert.ok(ui.bounds(await ui.widget(page,'panel:dye-swatch:7')).width>=44);
+    const dyePaint=await ui.waitForUi(page,snapshot=>{
+      const value=ui.findWidget(snapshot,'panel:dye')?.value;
+      return value&&JSON.parse(value).opacity===1;
+    },'fully painted native Fabric Dye opening');
+    const dyePresentation=JSON.parse(ui.findWidget(dyePaint,'panel:dye').value);
+    assert.equal(dyePresentation.phase,'target','the actual selected colors expose the clothing step');
     await shot(page,'phone-dye-rust.png');
+    const dyeViewport=ui.bounds(await ui.widget(page,'panel:dye'));
+    const scroll=await page.context().newCDPSession(page);
+    const scrollStart={x:dyeViewport.x+dyeViewport.width-20,
+      y:dyeViewport.y+dyeViewport.height-30};
+    await scroll.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...scrollStart,id:1}]});
+    try {
+      for(let step=1;step<=8;step++){
+        await scroll.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{
+          x:scrollStart.x,y:scrollStart.y-step*25,id:1}]});
+        await ui.nextFrame(page);
+      }
+    }finally{
+      await scroll.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      await scroll.detach();
+    }
     await action(page,'dye-cancel');
     await ui.noWidget(page,'panel:dye');
     await page.setViewportSize({width:390,height:844});
@@ -170,7 +205,7 @@ async function walkToFomentius(page) {
     fs.writeFileSync(path.join(output,'responsive-browser-receipt.json'),JSON.stringify({passed:true,
       errors:observed.errors,viewports:[[390,844],[844,390],[1600,900]],
       portraitNativeStage:'source landscape guidance',touchWorldEntry:'Fomentius',touchDrag:true,
-      submissions:await ui.gpuDraws(page)},null,2));
+      dyePresentation,submissions:await ui.gpuDraws(page)},null,2));
     console.log(JSON.stringify({passed:true,errors:observed.errors}));
   } catch(error) {
     const failure={error:error.stack};

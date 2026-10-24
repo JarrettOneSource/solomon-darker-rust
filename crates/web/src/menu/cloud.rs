@@ -957,6 +957,7 @@ impl CloudView {
         let mut child = ui.new_child(egui::UiBuilder::new().id_salt("cloud-tabs").max_rect(tabs));
         child.set_clip_rect(tabs);
         let mut scroll = egui::ScrollArea::horizontal()
+            .animated(false)
             .id_salt("cloud-tabs-scroll")
             .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
             .auto_shrink([false, false]);
@@ -1078,9 +1079,10 @@ impl CloudView {
                     ),
                 )
             };
-            let modal = egui::Modal::new(egui::Id::unique("cloud-dialog"))
+            let modal = egui::Modal::new(super::cloud_dialog_layer().id)
                 .area(
-                    egui::Area::new(egui::Id::unique("cloud-dialog"))
+                    egui::Area::new(super::cloud_dialog_layer().id)
+                        .fade_in(false)
                         .fixed_pos(dialog_rect.min)
                         .order(egui::Order::Foreground),
                 )
@@ -1322,6 +1324,7 @@ impl CloudView {
         child.set_clip_rect(list);
         let mut result = Ok(());
         egui::ScrollArea::vertical()
+            .animated(false)
             .id_salt(format!("cloud-list-{}", self.tab.id()))
             .auto_shrink([false, false])
             .show(&mut child, |ui| {

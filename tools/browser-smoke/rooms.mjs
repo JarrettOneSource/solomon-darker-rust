@@ -9,16 +9,18 @@ const require = createRequire(import.meta.url)
 const { chromium } = require(resolve(process.env.PW))
 const { startNewGame } = require('./menu-journey.cjs')
 const ui = require('./gpu-ui.cjs')
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs')
 const regions = await loadKernel('core-kernels/hub-regions.ts')
 const url = process.env.URL || 'http://127.0.0.1:4183/'
 const output = resolve(process.env.SHOTS || 'room-smoke')
 mkdirSync(output, { recursive: true })
 const receipt = { url, journeys: [], errors: [] }
-const browser = await chromium.launch({
+const owned = await launchOwnedBrowser(chromium,{
   headless: true,
   executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 })
+const {browser}=owned
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
 await ui.watchErrors(page, { errors: receipt.errors }).ready
 const state = () => page.evaluate(() => Array.from(window.wasmBindings.wizard_state()))
@@ -176,7 +178,13 @@ try {
   process.exitCode = 1
 } finally {
   await keys([])
-  writeFileSync(`${output}/receipt.json`,`${JSON.stringify(receipt,null,2)}\n`)
-  await browser.close()
+  try { receipt.cleanup = await owned.close() }
+  catch (error) {
+    receipt.passed = false
+    receipt.cleanup = error.cleanup || {error:error.stack}
+    throw error
+  } finally {
+    writeFileSync(`${output}/receipt.json`,`${JSON.stringify(receipt,null,2)}\n`)
+  }
 }
 console.log(JSON.stringify(receipt))

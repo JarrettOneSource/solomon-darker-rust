@@ -1,13 +1,16 @@
 // Actual IndexedDB writes and full page reloads. The second tab must never overwrite
 // the first tab's newer run; the test reads the stored document rather than a UI counter.
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const ui = require('./gpu-ui.cjs');
+const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const { chromium } = require(path.resolve(process.env.PW));
 const { startNewGame } = require('./menu-journey.cjs');
 const { readSave, waitForSave: saved, localParticipant, savedWizardState } = require('./saved-game.cjs');
 const url = process.env.URL || 'http://127.0.0.1:4181/';
 const output = process.env.OUT || '/tmp';
+fs.mkdirSync(output,{recursive:true});
 const screen = ui.surface;
 const wizard = page => page.evaluate(() => Array.from(window.wasmBindings.wizard_state()));
 
@@ -24,10 +27,11 @@ async function resume(page) {
 }
 
 (async () => {
-  const browser = await chromium.launch({headless:true,
+  const owned = await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
   const errors=[];
+  const {browser}=owned;
   try {
     const context=await browser.newContext({viewport:{width:1600,height:900}});
     const page=await context.newPage();
@@ -106,5 +110,12 @@ async function resume(page) {
     await ui.settleErrors(other);
     assert.deepEqual(errors,[]);
     console.log(JSON.stringify({passed:true,checks:['College reload','inventory and gold','saved preferences','Boneyard reload','atomic stale-tab rejection'],revisions:[hubSave.revision,runSave.revision,newer.revision],errors}));
-  } finally {await browser.close();}
+  } finally {
+    try {
+      fs.writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(await owned.close(),null,2));
+    } catch(error) {
+      fs.writeFileSync(path.join(output,'browser-cleanup-failure.json'),JSON.stringify(error.cleanup||{error:error.stack},null,2));
+      throw error;
+    }
+  }
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -13,6 +13,19 @@ async function reveal(page, id) {
   }
   throw new Error(`Settings control did not scroll into view: ${id}`);
 }
+
+async function focusedControl(page, id) {
+  await gpu.waitForUi(page, state => {
+    const control = gpu.findWidget(state, id);
+    const content = gpu.findWidget(state, 'settings-content');
+    if (!control?.focused || !content) return false;
+    const row = gpu.bounds(control, {paint: true});
+    const viewport = gpu.bounds(content);
+    return row.x >= viewport.x && row.y >= viewport.y
+      && row.x + row.width <= viewport.x + viewport.width
+      && row.y + row.height <= viewport.y + viewport.height;
+  }, `fully visible focused Settings control ${id}`);
+}
 (async () => {
   const owned = await launchOwnedBrowser(chromium,{headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -53,6 +66,36 @@ async function reveal(page, id) {
     await page.keyboard.press('Escape');
     await gpu.widget(page, 'settings-range:sound');
     await gpu.click(page, 'settings-page:controls');
+    await gpu.focused(page,'settings-toggle:reverse-hotbar');
+    const bindings=['move-up','move-down','move-left','move-right','menu','inventory','skills','chat','cheats',
+      ...Array.from({length:9},(_,index)=>`belt-${index}`)];
+    for(const binding of bindings){
+      await page.keyboard.press('Tab');
+      await focusedControl(page,`bind:${binding}`);
+    }
+    for(const id of [...bindings.slice(0,-1).reverse().map(binding=>`bind:${binding}`),'settings-toggle:reverse-hotbar']){
+      await page.keyboard.press('Shift+Tab');
+      await focusedControl(page,id);
+    }
+    checks.push('real forward and reverse Tab reveal every focused binding through the native scroll owner');
+    await gpu.installController(page);
+    await gpu.controller(page);
+    for(const binding of bindings){
+      await gpu.controller(page,[13]);
+      await focusedControl(page,`bind:${binding}`);
+      await gpu.controller(page);
+    }
+    await gpu.wheel(page,'settings-content',0,-300);
+    await gpu.noWidget(page,'bind:belt-8');
+    await gpu.nextFrame(page);
+    assert.equal(gpu.findWidget(await gpu.readUi(page),'bind:belt-8'),undefined,
+      'retained controller focus does not undo the user wheel');
+    for(const id of [...bindings.slice(0,-1).reverse().map(binding=>`bind:${binding}`),'settings-toggle:reverse-hotbar']){
+      await gpu.controller(page,[12]);
+      await focusedControl(page,id);
+      await gpu.controller(page);
+    }
+    checks.push('actual controller directions reveal every binding and retain wheel scrolling until focus moves');
     await gpu.click(page, 'bind:move-up');
     await page.keyboard.press('Escape');
     await gpu.value(page, 'bind:move-up', 'Escape');

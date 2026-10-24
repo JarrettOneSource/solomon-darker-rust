@@ -215,6 +215,21 @@ impl ModWorldOverlays {
         self.births.retain(|key, _| live.contains(key));
         Ok(())
     }
+    pub fn powerup_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Background, Id::unique("mod/powerups"))
+    }
+    pub fn shop_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Background, Id::unique("mod/shops"))
+    }
+    pub fn enemy_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Background, Id::unique("mod/enemies"))
+    }
+    pub fn effect_layer() -> egui::LayerId {
+        egui::LayerId::new(Order::Background, Id::unique("mod/effects"))
+    }
+    pub fn scene_layer(&self) -> egui::LayerId {
+        self.scene.layer_id()
+    }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let ctx = frame.ctx.clone();
         let now = ctx.input(|input| input.time);
@@ -225,9 +240,7 @@ impl ModWorldOverlays {
             .match_media("(prefers-reduced-motion: reduce)")
             .map_err(|_| "mod motion preference")?
             .is_some_and(|query| query.matches());
-        let painter = ctx
-            .layer_painter(egui::LayerId::new(Order::Background, Id::unique("mod/world")))
-            .with_clip_rect(ctx.content_rect());
+        let painter = ctx.layer_painter(Self::powerup_layer()).with_clip_rect(ctx.content_rect());
         for powerup in &self.powerups {
             let born = *self.births.entry((1, powerup.id, 0)).or_insert(now);
             let phase = alternate(now - born, 0.8);
@@ -257,34 +270,75 @@ impl ModWorldOverlays {
             let eased = css_bezier(progress, 0.0, 0.0, 0.58, 1.0);
             painter.circle_stroke(
                 event.center,
-                12.0 * (1.0 + 2.0 * eased),
+                10.5 * (1.0 + 2.0 * eased),
                 Stroke::new(
                     3.0 * (1.0 + 2.0 * eased),
                     Color32::from_rgba_unmultiplied(227, 201, 255, ((1.0 - eased) * 255.0) as u8),
                 ),
             );
         }
+        let painter = ctx.layer_painter(Self::shop_layer()).with_clip_rect(ctx.content_rect());
         for (index, shop) in self.shops.iter().enumerate() {
-            let image = Rect::from_min_size(shop.center - vec2(27.0, 68.0), vec2(54.0, 54.0));
+            let name = crate::gpu_ui::font_run(
+                frame.ctx,
+                FontId::new(11.0, FontFamily::Name("Alegreya Semibold".into())),
+                Color32::from_rgb(240, 228, 196),
+                &shop.name,
+                None,
+            )?;
+            let image = Rect::from_min_size(
+                shop.center - vec2(27.0, 54.0 + name.size().y),
+                vec2(54.0, 54.0),
+            );
             if let Some(path) = &shop.path {
-                frame.image(&painter, path, image, None, Color32::WHITE);
-            } else {
-                painter.circle_filled(image.center(), 27.0, Color32::from_rgb(37, 28, 48));
-                for i in (0..12).rev() {
-                    let ratio = i as f32 / 12.0;
-                    painter.circle_filled(
-                        image.center(),
-                        27.0 * ratio,
-                        Color32::from_rgb(
-                            (133.0 - 96.0 * ratio) as u8,
-                            (104.0 - 76.0 * ratio) as u8,
-                            (161.0 - 113.0 * ratio) as u8,
-                        ),
+                if let Some(size) = frame.image_size(path) {
+                    let fit = size * (54.0 / size.x).min(54.0 / size.y);
+                    let target = Rect::from_center_size(image.center(), fit);
+                    let polygon = crate::gpu_ui::clip_polygon_ellipse(
+                        vec![
+                            target.left_top(),
+                            target.right_top(),
+                            target.right_bottom(),
+                            target.left_bottom(),
+                        ],
+                        image,
                     );
+                    for index in 1..polygon.len().saturating_sub(1) {
+                        let positions = [polygon[0], polygon[index], polygon[index + 1]];
+                        let uv = positions.map(|p| ((p - target.min) / target.size()).to_pos2());
+                        frame.image_triangle(
+                            &painter,
+                            path,
+                            positions,
+                            uv,
+                            Color32::WHITE,
+                            solomon_graphics::BlendMode::Normal,
+                        );
+                    }
                 }
+            } else {
+                let mut gradient = egui::Mesh::default();
+                gradient.colored_vertex(image.center(), Color32::from_rgb(133, 104, 161));
+                let t = 27.0 / (25.0 * std::f32::consts::SQRT_2);
+                let edge = Color32::from_rgb(
+                    (133.0 - 96.0 * t).round() as u8,
+                    (104.0 - 76.0 * t).round() as u8,
+                    (161.0 - 113.0 * t).round() as u8,
+                );
+                for index in 0..=64 {
+                    let angle = std::f32::consts::TAU * index as f32 / 64.0;
+                    gradient.colored_vertex(
+                        image.center() + vec2(angle.cos(), angle.sin()) * 27.0,
+                        edge,
+                    );
+                    if index > 0 {
+                        gradient.add_triangle(0, index, index + 1);
+                    }
+                }
+                painter.add(egui::Shape::mesh(gradient));
                 painter.circle_stroke(
                     image.center(),
-                    27.0,
+                    26.0,
                     Stroke::new(2.0, Color32::from_rgb(213, 192, 142)),
                 );
             }
@@ -299,20 +353,17 @@ impl ModWorldOverlays {
                     ..Default::default()
                 },
                 |frame, painter| {
-                    crate::social::gpu::browser_text(
+                    name.paint(
                         frame,
                         painter,
-                        shop.center - vec2(0.0, 7.0),
-                        egui::Align2::CENTER_CENTER,
-                        &shop.name,
-                        FontId::new(11.0, FontFamily::Name("Alegreya Semibold".into())),
-                        Color32::from_rgb(240, 228, 196),
-                    )?;
-                    Ok(())
+                        shop.center - vec2(name.size().x / 2.0, name.size().y),
+                        1.0,
+                    )
                 },
             )?;
             frame.record_rect(&format!("mod/shop:{index}"), &shop.name, "img", image, true);
         }
+        let painter = ctx.layer_painter(Self::enemy_layer()).with_clip_rect(ctx.content_rect());
         for enemy in &self.enemies {
             frame.paint_group(
                 &painter,
@@ -394,6 +445,7 @@ impl ModWorldOverlays {
                 true,
             );
         }
+        let painter = ctx.layer_painter(Self::effect_layer()).with_clip_rect(ctx.content_rect());
         for effect in &self.effects {
             let center = effect.sprite.center;
             match effect.kind {
@@ -404,42 +456,61 @@ impl ModWorldOverlays {
                     let radius = effect.radius * pulse_scale;
                     let alpha = if reduced { 1.0 } else { 0.55 + 0.45 * phase };
                     let border_width = 2.0 * pulse_scale;
-                    // CSS's default circle gradient ends at the padding box's farthest corner.
-                    let fade_radius =
-                        (radius - border_width).max(0.0) * std::f32::consts::SQRT_2 * 0.68;
-                    let mut gradient = egui::Mesh::default();
-                    gradient.colored_vertex(
-                        center,
-                        Color32::from_rgba_unmultiplied(133, 78, 219, (56.0 * alpha) as u8),
-                    );
-                    for index in 0..=64 {
-                        let angle = std::f32::consts::TAU * index as f32 / 64.0;
-                        gradient.colored_vertex(
-                            center + vec2(angle.cos(), angle.sin()) * fade_radius,
-                            Color32::TRANSPARENT,
-                        );
-                        if index > 0 {
-                            gradient.add_triangle(0, index, index + 1);
-                        }
-                    }
-                    painter.add(egui::Shape::mesh(gradient));
-                    painter.circle_stroke(
-                        center,
-                        (radius - border_width / 2.0).max(0.0),
-                        Stroke::new(
-                            border_width,
-                            Color32::from_rgba_unmultiplied(176, 132, 255, (199.0 * alpha) as u8),
-                        ),
-                    );
+                    frame.paint_group(
+                        &painter,
+                        GroupEffect { opacity: alpha, ..Default::default() },
+                        |frame, painter| {
+                            frame.paint_outer_shadow(
+                                painter,
+                                ImageShadow {
+                                    offset: egui::Vec2::ZERO,
+                                    blur: 9.0 * pulse_scale,
+                                    color: Color32::from_rgba_unmultiplied(151, 96, 238, 166),
+                                },
+                                |caster| {
+                                    caster.circle_filled(center, radius, Color32::WHITE);
+                                    Ok(())
+                                },
+                            )?;
+                            // CSS's circle gradient ends at the padding box's farthest corner.
+                            let fade_radius =
+                                (radius - border_width).max(0.0) * std::f32::consts::SQRT_2 * 0.68;
+                            let mut gradient = egui::Mesh::default();
+                            gradient.colored_vertex(
+                                center,
+                                Color32::from_rgba_unmultiplied(133, 78, 219, 56),
+                            );
+                            for index in 0..=64 {
+                                let angle = std::f32::consts::TAU * index as f32 / 64.0;
+                                gradient.colored_vertex(
+                                    center + vec2(angle.cos(), angle.sin()) * fade_radius,
+                                    Color32::TRANSPARENT,
+                                );
+                                if index > 0 {
+                                    gradient.add_triangle(0, index, index + 1);
+                                }
+                            }
+                            painter.add(egui::Shape::mesh(gradient));
+                            painter.circle_stroke(
+                                center,
+                                (radius - border_width / 2.0).max(0.0),
+                                Stroke::new(
+                                    border_width,
+                                    Color32::from_rgba_unmultiplied(176, 132, 255, 199),
+                                ),
+                            );
+                            Ok(())
+                        },
+                    )?;
                 }
                 ModSpellEffectKind::Channel => {
-                    painter.line_segment(
-                        [center, effect.target],
-                        Stroke::new(
-                            (effect.radius * 2.0).max(4.0),
-                            Color32::from_rgba_unmultiplied(178, 144, 241, 150),
-                        ),
-                    );
+                    paint_channel(
+                        frame,
+                        &painter,
+                        center,
+                        effect.target,
+                        (effect.radius * 2.0).max(4.0),
+                    )?;
                 }
                 ModSpellEffectKind::Projectile => {}
             }
@@ -462,6 +533,91 @@ impl ModWorldOverlays {
         self.scene.paint(frame)
     }
 }
+fn paint_channel(
+    frame: &UiFrame<'_>,
+    painter: &egui::Painter,
+    start: Pos2,
+    end: Pos2,
+    height: f32,
+) -> Result<(), String> {
+    let delta = end - start;
+    let length = delta.length();
+    if length == 0.0 {
+        return Ok(());
+    }
+    let direction = delta / length;
+    let point =
+        |local: egui::Vec2| start + direction * local.x + vec2(-direction.y, direction.x) * local.y;
+    let radius = (length / 2.0).min(height / 2.0);
+    let mut outline = Vec::with_capacity(68);
+    for (corner, angle) in [
+        (vec2(radius, -height / 2.0 + radius), std::f32::consts::PI),
+        (vec2(length - radius, -height / 2.0 + radius), std::f32::consts::PI * 1.5),
+        (vec2(length - radius, height / 2.0 - radius), 0.0),
+        (vec2(radius, height / 2.0 - radius), std::f32::consts::FRAC_PI_2),
+    ] {
+        for step in 0..=16 {
+            let angle = angle + std::f32::consts::FRAC_PI_2 * step as f32 / 16.0;
+            let p = point(corner + vec2(angle.cos(), angle.sin()) * radius);
+            if outline.last().is_none_or(|previous: &Pos2| *previous != p) {
+                outline.push(p);
+            }
+        }
+    }
+    if outline.first().zip(outline.last()).is_some_and(|(first, last)| first == last) {
+        outline.pop();
+    }
+    if outline.len() < 3 {
+        return Ok(());
+    }
+    frame.paint_outer_shadow(
+        painter,
+        ImageShadow {
+            offset: egui::Vec2::ZERO,
+            blur: 6.0,
+            color: Color32::from_rgba_unmultiplied(166, 112, 255, 191),
+        },
+        |caster| {
+            caster.add(egui::Shape::convex_polygon(outline.clone(), Color32::WHITE, Stroke::NONE));
+            Ok(())
+        },
+    )?;
+    let first = Color32::from_rgba_unmultiplied(224, 211, 255, 204).to_array();
+    let last = Color32::from_rgba_unmultiplied(132, 77, 228, 97).to_array();
+    let color = |p: Pos2| {
+        let t = ((p - start).dot(direction) / length).clamp(0.0, 1.0);
+        let channels = std::array::from_fn::<_, 4, _>(|i| {
+            (first[i] as f32 + (last[i] as f32 - first[i] as f32) * t).round() as u8
+        });
+        Color32::from_rgba_premultiplied(channels[0], channels[1], channels[2], channels[3])
+    };
+    let mut mesh = egui::Mesh::default();
+    let center = point(vec2(length / 2.0, 0.0));
+    mesh.colored_vertex(center, color(center));
+    for (index, p) in outline.iter().enumerate() {
+        let previous = outline[(index + outline.len() - 1) % outline.len()];
+        let next = outline[(index + 1) % outline.len()];
+        let normal = |edge: egui::Vec2| {
+            let edge = edge.normalized();
+            vec2(edge.y, -edge.x)
+        };
+        let average = (normal(*p - previous) + normal(next - *p)) / 2.0;
+        let feather = average / average.length_sq() * 0.5;
+        let inner = *p - feather;
+        mesh.colored_vertex(inner, color(inner));
+        mesh.colored_vertex(*p + feather, Color32::TRANSPARENT);
+    }
+    for index in 0..outline.len() {
+        let current = 1 + 2 * index as u32;
+        let next = 1 + 2 * ((index + 1) % outline.len()) as u32;
+        mesh.add_triangle(0, current, next);
+        mesh.add_triangle(current, current + 1, next);
+        mesh.add_triangle(current + 1, next + 1, next);
+    }
+    painter.add(egui::Shape::mesh(mesh));
+    Ok(())
+}
+
 fn sprite(
     images: &ModPresentationAssets,
     image: &GameModAsset,

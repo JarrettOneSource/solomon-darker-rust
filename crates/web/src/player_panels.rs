@@ -1363,7 +1363,14 @@ impl PlayerPanels {
             }
         };
         if !self.input_suspended && self.rename_sack.is_none() && !self.skill_book_result_open() {
-            frame.input_scope(&scope);
+            frame.input_scope(
+                &scope,
+                if self.panel == Some(PlayerPanel::Dialogue) {
+                    self.notebox_layer_id()
+                } else {
+                    self.layer_id()
+                },
+            );
             self.navigation.focus(frame.ctx, &scope, preferred.as_deref());
         }
 

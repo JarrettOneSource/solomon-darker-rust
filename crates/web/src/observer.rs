@@ -2,7 +2,7 @@
 //! Camera selection leaves through the connection owner; this panel creates no participant.
 
 use crate::gpu_ui::UiFrame;
-use egui::{Color32, FontFamily, FontId, Id, Order, Stroke};
+use egui::{Color32, FontFamily, FontId, Id, Stroke};
 use solomon_sim::observer_activity::{
     ObserverSkillEvent, ObserverSkillOfferPresentation, ObserverSkillPlayer,
     derive_observer_skill_events, observer_skill_offers,
@@ -63,6 +63,10 @@ pub struct ObserverUi {
     actions: Vec<ObserverAction>,
 }
 impl ObserverUi {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("observer/panel"))
+    }
+
     pub fn attach(_document: &Document) -> Result<Self, String> {
         Ok(Self {
             previous: None,
@@ -137,7 +141,7 @@ impl ObserverUi {
         if !self.visible {
             return Ok(());
         }
-        frame.input_scope("observer");
+        frame.input_scope("observer", self.layer_id());
         let screen = frame.ctx.content_rect();
         let small = screen.width() <= 700.0;
         let inset = if small { 8.0 } else { 18.0 };
@@ -304,8 +308,9 @@ impl ObserverUi {
             egui::vec2(width, height),
         );
         let ctx = frame.ctx.clone();
-        egui::Area::new(Id::unique("observer/panel"))
-            .order(Order::Foreground)
+        egui::Area::new(self.layer_id().id)
+            .fade_in(false)
+            .order(self.layer_id().order)
             .fixed_pos(bounds.min)
             .constrain(false)
             .show(&ctx, |ui| -> Result<(), String> {

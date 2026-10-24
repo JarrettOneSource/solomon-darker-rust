@@ -65,7 +65,158 @@ fn frame_native(
     edit::finish_native_focus(ctx, codes);
     edit::set_focus(ctx, &editors.into_inner());
     assert!(editor_errors.into_inner().is_empty());
-    widgets.into_inner()
+    let mut widgets = widgets.into_inner();
+    rank_widgets(ctx, &mut widgets);
+    widgets
+}
+
+#[test]
+fn widget_ranks_keep_real_local_control_order_and_effective_layer_order() {
+    use egui::{Area, Id, LayerId, Order, Sense};
+    let ctx = Context::default();
+    let scene = LayerId::new(Order::Foreground, Id::unique("rank-scene"));
+    let social = LayerId::new(Order::Middle, Id::unique("rank-social"));
+    let ordinary = LayerId::new(Order::Middle, Id::unique("rank-ordinary"));
+    let popup = LayerId::new(Order::Foreground, Id::unique("rank-popup"));
+    ctx.set_fixed_layer_order(&[scene, social]);
+    let paint = |frame: &mut UiFrame<'_>| {
+        for (layer, controls) in [
+            (popup, vec![("popup", 220.0)]),
+            (social, vec![("social", 120.0)]),
+            (scene, vec![("scene-back", 20.0), ("scene-front", 20.0)]),
+            (ordinary, vec![("ordinary", 20.0)]),
+        ] {
+            Area::new(layer.id)
+                .order(layer.order)
+                .fixed_pos(Pos2::ZERO)
+                .fade_in(false)
+                .background_interactable(false)
+                .show(frame.ctx, |ui| {
+                    ui.set_min_size(vec2(400.0, 300.0));
+                    for (id, x) in controls {
+                        let response = ui.interact(
+                            Rect::from_min_size(pos2(x, 20.0), vec2(30.0, 30.0)),
+                            Id::unique(id),
+                            Sense::click(),
+                        );
+                        frame.record(id, id, "button", &response);
+                    }
+                });
+        }
+    };
+    frame(&ctx, Vec::new(), paint);
+    let widgets = frame(&ctx, Vec::new(), paint);
+    for (z, id) in
+        ["ordinary", "scene-back", "scene-front", "social", "popup"].into_iter().enumerate()
+    {
+        assert_eq!(widgets[id].z, z, "actual dense rank for {id}");
+    }
+    assert_eq!(
+        ctx.pointer_widget_at(pos2(30.0, 30.0)),
+        Some(Id::unique("scene-front")),
+        "the higher local rank agrees with the native hit target"
+    );
+}
+
+#[test]
+fn controller_scope_follows_the_actual_source_layer_in_both_callback_orders() {
+    let ctx = Context::default();
+    let menu = crate::menu::overlay_layer();
+    let social = crate::social::SocialUi::chat_layer(true);
+    ctx.set_fixed_layer_order(&[menu, social]);
+    for requests in [
+        [("social/chat", social), ("settings", menu)],
+        [("settings", menu), ("social/chat", social)],
+    ] {
+        frame(&ctx, Vec::new(), |frame| {
+            for (scope, layer) in requests {
+                frame.input_scope(scope, layer);
+            }
+            assert_eq!(frame.input_scope.borrow().as_ref().unwrap().1, "social/chat");
+        });
+    }
+    frame(&ctx, Vec::new(), |frame| {
+        assert!(
+            frame.input_scope.borrow().is_none(),
+            "no controller scope survives an absent owner"
+        );
+    });
+}
+
+#[test]
+fn native_gesture_geometry_keeps_its_actual_painter_layer_transform_and_clip() {
+    let ctx = Context::default();
+    let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::unique("native-gesture"));
+    ctx.set_transform_layer(
+        layer,
+        egui::emath::TSTransform { scaling: 2.0, translation: vec2(10.0, 20.0) },
+    );
+    let widgets = frame(&ctx, Vec::new(), |frame| {
+        let painter = ctx
+            .layer_painter(layer)
+            .with_clip_rect(Rect::from_min_size(Pos2::ZERO, vec2(20.0, 10.0)));
+        let control = Rect::from_min_size(pos2(5.0, 0.0), vec2(25.0, 20.0));
+        painter.rect_filled(control, 0.0, Color32::WHITE);
+        frame.record_painted_rect(&painter, "native-rotate", "Rotate", "button", control, true);
+    });
+    let geometry = &widgets["native-rotate"];
+    assert_eq!(geometry.layer_id, Some(layer));
+    assert_eq!(geometry.bounds.rect(), Rect::from_min_size(pos2(20.0, 20.0), vec2(30.0, 20.0)));
+    assert_eq!(
+        geometry.paint_bounds.rect(),
+        Rect::from_min_size(pos2(20.0, 20.0), vec2(50.0, 40.0))
+    );
+    assert!(geometry.is_interactive());
+    assert!(geometry.egui_id.is_none(), "read-only geometry adds no duplicate input widget");
+}
+
+#[test]
+fn native_text_prefocus_respects_actual_covering_controls_and_modal_admission() {
+    for modal in [false, true] {
+        let ctx = Context::default();
+        let field_id = egui::Id::unique("prefocus-field");
+        let mut text = String::new();
+        let mut paint = |frame: &mut UiFrame<'_>| {
+            egui::Area::new(egui::Id::unique("prefocus-area"))
+                .fixed_pos(Pos2::ZERO)
+                .fade_in(false)
+                .show(frame.ctx, |ui| {
+                    ui.set_min_size(vec2(320.0, 200.0));
+                    NativeTextEdit::singleline(&mut text, "prefocus-field", "Name")
+                        .native_name(Pos2::ZERO, 1.0)
+                        .show(frame, ui, Rect::from_min_size(pos2(20.0, 20.0), vec2(200.0, 44.0)));
+                    let cover = ui.interact(
+                        Rect::from_min_size(pos2(60.0, 20.0), vec2(70.0, 44.0)),
+                        egui::Id::unique("covering-control"),
+                        egui::Sense::click(),
+                    );
+                    frame.record("covering-control", "Covered", "button", &cover);
+                });
+            if modal {
+                egui::Area::new(egui::Id::unique("prefocus-modal"))
+                    .order(egui::Order::Foreground)
+                    .fixed_pos(pos2(260.0, 20.0))
+                    .fade_in(false)
+                    .show(frame.ctx, |ui| {
+                        ui.set_min_size(vec2(50.0, 50.0));
+                        ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
+                    });
+            }
+        };
+        frame(&ctx, Vec::new(), &mut paint);
+        let widgets = frame(&ctx, Vec::new(), &mut paint);
+        assert!(ctx.memory(|memory| memory.focused()).is_none());
+        let point = if modal { pos2(25.0, 40.0) } else { pos2(70.0, 40.0) };
+        focus_pointer_text(&ctx, &widgets, &pointer(true, point));
+        assert!(
+            ctx.memory(|memory| memory.focused()).is_none(),
+            "an occluded field cannot acquire native focus"
+        );
+        if !modal {
+            focus_pointer_text(&ctx, &widgets, &pointer(true, pos2(25.0, 40.0)));
+            assert_eq!(ctx.memory(|memory| memory.focused()), Some(field_id));
+        }
+    }
 }
 
 #[test]
@@ -186,6 +337,28 @@ fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_onc
                     },
                 )
                 .unwrap();
+            frame
+                .paint_outer_shadow_spread(
+                    &painter,
+                    ImageShadow { offset: Vec2::ZERO, blur: 12.0, color: Color32::BLACK },
+                    |caster| {
+                        caster.rect_filled(
+                            Rect::from_min_size(pos2(10.0, 10.0), vec2(50.0, 40.0)),
+                            0.0,
+                            Color32::WHITE,
+                        );
+                        Ok(())
+                    },
+                    |caster| {
+                        caster.rect_filled(
+                            Rect::from_min_size(pos2(18.0, 18.0), vec2(34.0, 24.0)),
+                            0.0,
+                            Color32::WHITE,
+                        );
+                        Ok(())
+                    },
+                )
+                .unwrap();
             painter.set_opacity(0.0);
             frame
                 .paint_group(&painter, GroupEffect::default(), |_, child| {
@@ -202,7 +375,7 @@ fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_onc
     let nodes =
         effects::parse(ctx.tessellate(output.shapes.clone(), output.pixels_per_point)).unwrap();
     output.drop_without_applying_deltas();
-    assert_eq!(nodes.len(), 4);
+    assert_eq!(nodes.len(), 5);
     let effects::Node::Group { style, children, .. } = &nodes[0] else { panic!("GPU group") };
     assert!((style.effect.opacity - 0.2).abs() < 0.00001);
     assert_eq!(style.filter.brightness, 1.2);
@@ -213,7 +386,16 @@ fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_onc
     assert!((style.effect.opacity - 0.4).abs() < 0.00001);
     let effects::Node::Group { style, .. } = &nodes[2] else { panic!("inner GPU shadow") };
     assert_eq!(style.output, solomon_graphics::ShadowOutput::Inner);
-    let effects::Node::Group { style, .. } = &nodes[3] else { panic!("zero-opacity GPU group") };
+    let effects::Node::Group { style, children, knockout, .. } = &nodes[3] else {
+        panic!("spread shadow keeps its independent caster and interior")
+    };
+    assert_eq!(style.output, solomon_graphics::ShadowOutput::Outer);
+    assert!((style.effect.opacity - 0.4).abs() < 0.00001);
+    let source = effects::content_bounds(children);
+    let interior = effects::content_bounds(knockout.as_ref().unwrap());
+    assert!(source.contains_rect(interior));
+    assert!((source.width() - interior.width() - 16.0).abs() < 0.01);
+    let effects::Node::Group { style, .. } = &nodes[4] else { panic!("zero-opacity GPU group") };
     assert_eq!(style.effect.opacity, 0.0);
 }
 

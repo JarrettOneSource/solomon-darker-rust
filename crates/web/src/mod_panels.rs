@@ -2,7 +2,7 @@
 
 use crate::gpu_ui::UiFrame;
 use crate::ui::javascript_string;
-use egui::{Color32, FontFamily, FontId, Id, Order, Stroke, vec2};
+use egui::{Color32, FontFamily, FontId, Stroke, vec2};
 use solomon_sim::Vec2;
 use solomon_sim::economy::{HubInventoryItem, HubItemKind};
 use solomon_sim::hub::regions::HubRegion;
@@ -54,6 +54,10 @@ pub struct ModPanelsView {
     actions: Vec<ModPanelAction>,
 }
 impl ModPanelsView {
+    pub fn layer_id(&self) -> egui::LayerId {
+        egui::LayerId::new(egui::Order::Middle, egui::Id::unique("mod/panels"))
+    }
+
     pub fn new(_document: &Document) -> Result<Self, String> {
         Ok(Self { rows: Vec::new(), actions: Vec::new() })
     }
@@ -76,8 +80,9 @@ impl ModPanelsView {
             return Ok(());
         }
         let ctx = frame.ctx.clone();
-        egui::Area::new(Id::unique("mod/panels"))
-            .order(Order::Middle)
+        egui::Area::new(self.layer_id().id)
+            .fade_in(false)
+            .order(self.layer_id().order)
             .anchor(egui::Align2::RIGHT_BOTTOM, vec2(-16.0, -80.0))
             .show(&ctx, |ui| -> Result<(), String> {
                 ui.set_width(256.0_f32.min(ctx.content_rect().width() * 0.42));

@@ -6,6 +6,7 @@ pub(crate) mod mod_icon;
 pub(crate) mod portraits;
 pub(crate) mod sack_name;
 pub(crate) mod skill_hover;
+pub(crate) mod trusted_gesture;
 
 use wasm_bindgen::prelude::*;
 

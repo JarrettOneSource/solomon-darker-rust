@@ -252,6 +252,9 @@ impl MobileUiEditor {
     pub fn take_save_request(&mut self) -> bool {
         std::mem::take(&mut self.save_request)
     }
+    pub fn layer_id(parent: egui::LayerId) -> egui::LayerId {
+        egui::LayerId::new(parent.order, Id::unique("mobile/editor"))
+    }
     pub fn paint_in(
         &mut self,
         frame: &mut UiFrame<'_>,
@@ -259,15 +262,14 @@ impl MobileUiEditor {
         parent: &egui::Ui,
     ) -> Result<(), String> {
         let ctx = frame.ctx.clone();
-        let layer = egui::LayerId::new(parent.layer_id().order, Id::unique("mobile/editor"));
+        let layer = Self::layer_id(parent.layer_id());
         ctx.set_sublayer(parent.layer_id(), layer);
         let enabled = parent.is_enabled() && ctx.memory(|memory| memory.allows_interaction(layer));
         if enabled {
-            frame.input_scope(if self.fullscreen {
-                "mobile/editor/fullscreen"
-            } else {
-                "mobile/editor/windowed"
-            });
+            frame.input_scope(
+                if self.fullscreen { "mobile/editor/fullscreen" } else { "mobile/editor/windowed" },
+                layer,
+            );
         }
         self.root_bounds = hud_rect(bounds);
         let toolbar_height = if self.fullscreen { 0.0 } else { 80.0 };
@@ -297,7 +299,7 @@ impl MobileUiEditor {
         self.refresh_page_bounds();
         self.hit_targets.clear();
         let mut error = None;
-        egui::Area::new(Id::unique("mobile/editor")).order(layer.order).fixed_pos(bounds.min).show(
+        egui::Area::new(layer.id).fade_in(false).order(layer.order).fixed_pos(bounds.min).show(
             &ctx,
             |ui| {
                 if !enabled {

@@ -13,7 +13,7 @@ Their SHA256 values are respectively
 `95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c` and
 `8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90`.
 
-Local changes are confined to seven implementation files:
+Local changes are confined to the following implementation files:
 
 - `context.rs`, `memory/mod.rs`, `layers.rs`: one opt-in fixed layer order shared by
   paint draining, pointer ownership and modal comparisons. Registering an ID creates
@@ -23,10 +23,20 @@ Local changes are confined to seven implementation files:
   backgrounds retain layout and genuine child widgets. Hover-only passive content does
   not occlude lower controls; disabled interactive children still block. Native pointer
   queries use actual clipped child regions and optional pure authored hit predicates.
+- `data/input/event.rs`, `input_state/mod.rs`, `interaction.rs`, plus the response
+  projection in `context.rs`: explicit native pointer cancellation retires its buttons,
+  potential click/drag owners and motion without a normal release or click. It preserves
+  the original raw Touch cancellation and leaves ordinary release/click behavior intact.
+- `input_state/mod.rs`, `input_state/wheel_state.rs`: opt-in
+  `InputOptions::raw_point_scroll` consumes browser/platform-paced pixel deltas once.
+  It preserves native wheel phase/source/modifiers, line/page handling and upstream
+  default smoothing. The game enables this option to match native browser scrolling
+  and prevent replayed wheel motion after a newly focused control has been revealed.
 
 Public integration methods are `Context::set_fixed_layer_order`,
-`Context::fixed_layer_order_index`, `Context::set_widget_hit_test`,
-`Context::pointer_widget_at`, and `Area::background_interactable`.
+`Context::fixed_layer_order_index`, `Context::compare_layer_order`, `Context::set_widget_hit_test`,
+`Context::pointer_widget_at`, `Area::background_interactable`, and
+`Event::PointerCancelled`.
 The application supplies its recovered fixed registry before input/layout. Hit predicates
 reuse its canonical ellipse/rotation geometry and cannot call Context while it is locked.
 The native textarea adapter resolves its target through the same real widget hit test.
@@ -40,3 +50,9 @@ Focused application regressions live in `crates/web/src/gpu_ui/layer_tests.rs`, 
 real paint/input/modal order, hidden registration, reappearance, default restoration,
 passive controls, disabled children and circular cutout ownership. Further upstream
 upgrades must retain these contracts or replace the patch with equivalent supported APIs.
+`crates/web/src/gpu_ui/input/cancel_tests.rs` drives the production native projection
+through real Context responses for cancellation, drag retirement, secondary touches,
+multiple mouse buttons and subsequent ordinary tap/double-click behavior.
+`crates/web/src/menu/widgets.rs` covers native point-delta pacing, unchanged line/page
+policy, held/released cardinal and Tab focus reveal, and retained user wheel scrolling
+at the actual input-commit/final-layout clock boundary.

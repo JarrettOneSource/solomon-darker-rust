@@ -797,7 +797,7 @@ impl PlayerPanels {
         let transform = egui::emath::TSTransform::new(origin.to_vec2(), scale);
         let mut result = Ok(());
         native_area(frame.ctx, layer, transform).show(frame.ctx, |ui| {
-            frame.input_scope(id);
+            frame.input_scope(id, layer);
             let c =
                 PanelCanvas::new(frame, ui, &hits, &events, 1.0, !self.input_suspended).direct();
             let size = frame.ctx.content_rect().size();

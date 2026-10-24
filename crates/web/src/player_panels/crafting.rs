@@ -271,7 +271,13 @@ impl PlayerPanels {
         c.fill(box_rect, 0x090908, 0.96);
         c.stroke(box_rect, 0xd8ba70, 3.0);
         c.stroke(HudRect::new(488.0, 88.0, 624.0, 344.0), 0xeadab3, 1.0);
-        c.semantic_value("panel:dye", "Fabric Dye", "dialog", box_rect, dye_phase(dye));
+        c.semantic_value(
+            "panel:dye",
+            "Fabric Dye",
+            "dialog",
+            box_rect,
+            &dye_presentation(dye, self.now),
+        );
         c.text(&NativeUiTextSpec {
             tint: 0xe4c56d,
             ..NativeUiTextSpec::new(NativeUiFontName::Menu, "FABRIC DYE", 800.0, 121.0)
@@ -398,7 +404,7 @@ impl PlayerPanels {
                     "Fabric Dye",
                     "dialog",
                     HudRect::new(0.0, 0.0, width, height),
-                    dye_phase(dye),
+                    &dye_presentation(dye, self.now),
                 );
                 sheet.text(&NativeUiTextSpec {
                     tint: 0xe4c56d,
@@ -485,14 +491,19 @@ impl PlayerPanels {
         result
     }
 }
-fn dye_phase(dye: &DyeSelection) -> &'static str {
-    if dye.target_item_id.is_some() {
+fn dye_presentation(dye: &DyeSelection, now: f64) -> String {
+    let phase = if dye.target_item_id.is_some() {
         "layer"
     } else if dye.swatch_rows.is_empty() {
         "mix"
     } else {
         "target"
-    }
+    };
+    serde_json::json!({
+        "phase": phase,
+        "opacity": native_dye_modal_opacity(dye.opened_at, dye.closing_at, now),
+    })
+    .to_string()
 }
 
 fn dye_instruction(dye: &DyeSelection) -> &'static str {
