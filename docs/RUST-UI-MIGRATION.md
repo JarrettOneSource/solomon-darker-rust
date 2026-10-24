@@ -1199,3 +1199,16 @@ read-only `source-loot-route.json` records both results. The driver must reuse t
 already-prepared Source geometry/navigation for loot, clubbing and offscreen approach
 waypoints, replanning from actual accepted positions. Only ordinary keyboard input
 reaches the game; its pickup, collision and progression remain authoritative.
+
+
+`world-notification-events.cjs` is the pending ordinary-input rare-event journey.
+It requires the existing QA3 developer capability in the isolated Website, uses the
+visible private SET GOLD/GRANT SKILL controls only for prerequisite funds and skills,
+then buys the real Hagatha5000-gold charm. Actual book drag bindings and the
+Firewalker/Mindstar reservation producer must emit Overload; actual enemy damage
+must consume the charm and emit PlayerCheatDeath. The shared read-only checker
+compares the owning accepted event key, painted clip/baseline/scale and one spoken
+notice. Final ordinary Leave must carry the actual matching signed checkpoint
+receipt; it does not invent another PUT when the save coordinator can reuse a
+committed checkpoint. Source flash decay is imported unchanged for the screenshot.
+No browser acceptance is claimed until this journey runs and closes cleanly.
