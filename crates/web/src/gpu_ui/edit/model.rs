@@ -422,6 +422,27 @@ mod tests {
     }
 
     #[test]
+    fn rejected_native_name_restore_resets_caret_and_native_undo_history() {
+        // c140 Create's input listener restores `.value = accepted`; the native
+        // browser oracle records caret-at-end and no prior undo/redo afterward.
+        let rules = Rules { validate: Some(create_rule), ..Default::default() };
+        let mut model = Model::new("Helvidius");
+        model.apply(&insert(1, "Helvidius", Selection::caret(9), "X"), rules, false);
+        assert_eq!(model.text(), "HelvidiusX");
+        model.select(Selection::caret(1));
+        let rejected =
+            model.apply(&insert(2, "HelvidiusX", Selection::caret(1), "-"), rules, false);
+        assert!(rejected.rejected.is_some());
+        assert_eq!(model.text(), "HelvidiusX");
+        assert_eq!(model.selection(), Selection::caret(10));
+        for (sequence, intent) in [(3, Intent::Undo), (4, Intent::Redo)] {
+            model.apply(&Receipt::unbound(sequence, intent), rules, false);
+            assert_eq!(model.text(), "HelvidiusX");
+            assert_eq!(model.selection(), Selection::caret(10));
+        }
+    }
+
+    #[test]
     fn rejected_name_then_valid_replacement_share_one_dispatch_time() {
         let before = "AAAAAAAAAAA";
         let rules = Rules { validate: Some(create_rule), ..Default::default() };
