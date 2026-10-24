@@ -15,9 +15,17 @@ fn copy(text: &str, size: f32, color: Color32) -> RichText {
 
 pub(super) fn paint(model: &mut Model, frame: &mut UiFrame<'_>) -> Result<(), String> {
     let ctx = frame.ctx.clone();
-    egui::CentralPanel::default().frame(egui::Frame::NONE.fill(Color32::from_rgb(12, 9, 16))).show(
-        &ctx,
-        |ui| {
+    egui::Area::new(egui::Id::unique("desktop-launcher"))
+        .order(egui::Order::Background)
+        .fixed_pos(egui::Pos2::ZERO)
+        .movable(false)
+        .fade_in(false)
+        .show(&ctx, |ui| {
+            ui.set_width(ctx.content_rect().width());
+            ui.set_height(ctx.content_rect().height());
+            egui::CentralPanel::default()
+                .frame(egui::Frame::NONE.fill(Color32::from_rgb(12, 9, 16)))
+                .show(ui, |ui| {
             frame.input_scope("desktop-launcher", ui.layer_id());
             let width = ui.available_width();
             let compact = width <= 1000.0;
@@ -33,8 +41,8 @@ pub(super) fn paint(model: &mut Model, frame: &mut UiFrame<'_>) -> Result<(), St
                     });
                 });
             });
-        },
-    );
+                });
+        });
     Ok(())
 }
 
