@@ -184,14 +184,18 @@ fn host_fields(model: &mut Model, frame: &UiFrame<'_>, ui: &mut Ui, width: f32) 
         width,
     );
     if port.has_focus() {
-        let step = ui.input(|input| {
-            i32::from(input.key_pressed(egui::Key::ArrowUp))
-                - i32::from(input.key_pressed(egui::Key::ArrowDown))
-        });
-        if step != 0
-            && let Ok(value) = model.port.parse::<u16>()
+        // Native editor arrows retain caret ownership and are not egui key events.
+        for key in
+            frame.key_codes().iter().filter(|key| key.pressed && !key.alt && !key.ctrl && !key.meta)
         {
-            model.port = (i32::from(value) + step).clamp(1, 65535).to_string();
+            let step = match key.code.as_str() {
+                "ArrowUp" => 1,
+                "ArrowDown" => -1,
+                _ => continue,
+            };
+            if let Ok(value) = model.port.parse::<u16>() {
+                model.port = (i32::from(value) + step).clamp(1, 65535).to_string();
+            }
         }
     }
     if port.submitted {
