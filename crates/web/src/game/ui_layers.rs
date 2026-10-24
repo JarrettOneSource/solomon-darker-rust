@@ -11,7 +11,7 @@ use crate::shared_gameplay::SharedGameplayUi;
 use crate::social::SocialUi;
 
 impl Game {
-    pub(super) fn configure_ui_layers(&self) -> Result<(), String> {
+    pub(super) fn configure_ui_layers(&mut self) -> Result<(), String> {
         let [world_notices, hub_notices] = self.notifications.layer_ids();
         let mut layers = vec![
             world_notices,
@@ -34,13 +34,13 @@ impl Game {
         ]);
 
         // Both menu subtrees stay inside body50 even when their local levels are large.
-        let scene = [
-            crate::menu::scene_layer(),
-            MobileUiEditor::layer_id(crate::menu::scene_layer()),
-            crate::menu::library_layer(),
-        ];
-        let overlay =
-            [crate::menu::overlay_layer(), MobileUiEditor::layer_id(crate::menu::overlay_layer())];
+        let mut scene = vec![crate::menu::scene_layer(), crate::menu::library_layer()];
+        let mut overlay = vec![crate::menu::overlay_layer()];
+        if let Some(parent) = self.menu.mobile_editor_parent_layer() {
+            let subtree =
+                if parent == crate::menu::scene_layer() { &mut scene } else { &mut overlay };
+            subtree.push(MobileUiEditor::layer_id(parent));
+        }
         if self
             .menu
             .overlay_stack_level()
@@ -84,10 +84,49 @@ impl Game {
         }
         layers.push(self.match_loading_view.layer_id()); // 200000
 
-        // Cloud owns the application's one actual NativeUiDialog/showModal instance.
-        // Its mounted top layer is above every numeric document context.
-        layers.push(crate::menu::cloud_dialog_layer());
+        // The Source native dialogs retain mount order independently of document z.
+        // A content update keeps its place; closing removes it; reopening appends it.
+        let active: Vec<_> = [
+            self.panels.skill_book_result_layer_id(),
+            self.menu.cloud_dialog_visible().then(crate::menu::cloud_dialog_layer),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        retain_dialog_mount_order(&mut self.ui_top_layers, &active);
+        layers.extend_from_slice(&self.ui_top_layers);
         self.gpu_ui.context().set_fixed_layer_order(&layers);
         Ok(())
+    }
+}
+
+fn retain_dialog_mount_order(order: &mut Vec<egui::LayerId>, active: &[egui::LayerId]) {
+    order.retain(|layer| active.contains(layer));
+    for layer in active {
+        if !order.contains(layer) {
+            order.push(*layer);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_dialogs_keep_mount_order_across_updates_and_reopen_above_existing_dialogs() {
+        let cloud = crate::menu::cloud_dialog_layer();
+        let book = egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("book-receipt"));
+        let mut order = Vec::new();
+        retain_dialog_mount_order(&mut order, &[cloud]);
+        retain_dialog_mount_order(&mut order, &[book, cloud]);
+        assert_eq!(order, [cloud, book]);
+        retain_dialog_mount_order(&mut order, &[book, cloud]);
+        assert_eq!(order, [cloud, book], "paint callback order does not remount either dialog");
+        retain_dialog_mount_order(&mut order, &[book]);
+        retain_dialog_mount_order(&mut order, &[book, cloud]);
+        assert_eq!(order, [book, cloud], "the reopened Cloud dialog is now in front");
+        retain_dialog_mount_order(&mut order, &[]);
+        assert!(order.is_empty());
     }
 }
