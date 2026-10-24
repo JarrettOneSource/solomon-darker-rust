@@ -302,8 +302,13 @@ async function observeAnnouncements(page, {forceFallback = false} = {}) {
           const element = record.target.nodeType === Node.ELEMENT_NODE
             ? record.target : record.target.parentElement;
           const announcer = element?.closest('[data-gpu-announcer]');
-          if (announcer?.textContent) announcements.push({source:'aria-live',text:announcer.textContent,
-            loaderActive:active()});
+          // textContent replaces text nodes. Added nodes retain each real write;
+          // the element already holds a later value when this callback is delivered.
+          const text=record.type==='childList'
+            ?Array.from(record.addedNodes,node=>node.textContent||'').join('')
+            :record.target.textContent;
+          if (announcer&&text) announcements.push({source:'aria-live',text,
+            currentText:announcer.textContent,loaderActive:active()});
         }
       });
       observer.observe(document.body, {subtree:true,childList:true,characterData:true});
