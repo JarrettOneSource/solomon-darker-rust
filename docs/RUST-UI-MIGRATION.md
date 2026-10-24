@@ -1026,3 +1026,25 @@ additional ordering bug or speculative font/button-width change is claimed. Thes
 individual passes do not accept the whole artifact: the separately reproduced shared
 clock failure still requires the next compiled candidate, as does its held-startup-input
 case. All common browsers are closed for that build.
+
+The first `57626c4` paid-Sack editor run proves the held-rAF transaction with trusted
+native Tab/ShiftTab and OS Copy/Paste: the complete published GPU snapshot stays
+unchanged and gamepad reads remain1927 while native text becomes `S`. Ordinary Tab
+selection, controller A/Down and Arabic/ZWJ undo/redo also pass. The later physical
+ArrowRight from column0 stays0, so two ShiftRight presses select0..2 instead of1..3.
+`native-editor-57626c4/receipt.json` retains that failure with errors[] and Chrome
+exit2; that cleanup failure keeps the overall run unaccepted.
+
+The isolated native textarea oracle in the same directory uses real keys and exits0:
+ArrowRight moves0→1 before keyup, while its native selectionchange follows keyup.
+Source inspection finds the shared drain replays queued key/layout passes before
+collecting that current native selection; `Session::sync` can therefore restore the
+old caret before the notification arrives. Observe the genuinely focused transport's
+accepted UTF-16 selection at the existing input-drain boundary, producing the same
+owner-tagged receipt and acknowledgement fence as native selectionchange. This must
+cover both native-only commits and rAF, without another controller sample or guessed
+field. The existing actual bidi case gains an immediate assertion after ArrowRight.
+Two auxiliary game traces remain separately red on College Escape→Pause before reaching
+the field, each with errors[]/Chrome exit0; they do not establish a measured caret trace.
+The shared Escape owner is under independent investigation. Browser capacity is held
+by root; rebuilt actual editor acceptance remains required.

@@ -156,6 +156,9 @@ async function paintedSelection(page,count){
 
     await ui.fill(page,field,'abאבcd');
     await page.keyboard.press('Home');await page.keyboard.press('ArrowRight');
+    const nativeArrow=await native(page);
+    assert.deepEqual([nativeArrow.start,nativeArrow.end],[1,1],
+      'physical ArrowRight keeps its native caret before the next UI commit');
     await page.keyboard.press('Shift+ArrowRight');await page.keyboard.press('Shift+ArrowRight');
     await selected(page,1,3);
     const bidi=await paintedSelection(page,2);
