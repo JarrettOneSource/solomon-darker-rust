@@ -117,6 +117,8 @@ impl PlayerPanels {
         let Some(result) = &self.skill_book_feedback.result else { return Ok(()) };
         let layout = result_layout(&result.text)?;
         let scope = result.scope();
+        let layer = self.skill_book_feedback.layer_id().expect("visible native book result");
+        frame.ctx.memory_mut(|memory| memory.set_modal_layer(layer));
         let value =
             serde_json::json!({"skillId":result.skill_id,"sequence":result.sequence}).to_string();
         if !self.input_suspended {
