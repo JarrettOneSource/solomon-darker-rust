@@ -59,6 +59,14 @@ async function settledCollege(page) {
     &&window.wasmBindings.wizard_state()[7]===-1,null,{timeout:30000});
 }
 
+async function accepted(page,name,element,discipline) {
+  const snapshot=await ui.waitForUi(page,snapshot=>{
+    const selected=snapshot.acceptedSelection;
+    return selected?.name===name&&selected.element===element&&selected.discipline===discipline;
+  },`actual admitted ${name}/${element}/${discipline}`);
+  return snapshot.acceptedSelection;
+}
+
 async function modalFocus(page) {
   const snapshot=await ui.readUi(page);
   const focused=snapshot.widgets.filter(widget=>widget.focused);
@@ -73,6 +81,7 @@ async function modalFocus(page) {
     args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
   const {browser}=owned;
   const errors=[];
+  const admissions=[];
   let current;
   try {
     const page=await browser.newPage({viewport:{width:1600,height:900}});
@@ -113,6 +122,7 @@ async function modalFocus(page) {
     await screen(page,'create');
     await pad(page);
     await ui.widget(page,'element:earth');
+    const controllerName=(await ui.widget(page,'create-name')).value||'Genericus';
     await pad(page,[0]);
     await ui.widget(page,'discipline:arcane');
     await pad(page);
@@ -120,6 +130,7 @@ async function modalFocus(page) {
     await screen(page,'hidden');
     await pad(page);
     await settledCollege(page);
+    admissions.push(await accepted(page,controllerName,'Earth','Arcane'));
     await pad(page,[9]);
     await screen(page,'pause');
     await pad(page);
@@ -166,6 +177,7 @@ async function modalFocus(page) {
     await ui.tap(touch,'discipline:body');
     await screen(touch,'hidden');
     await settledCollege(touch);
+    admissions.push(await accepted(touch,'Felix','Water','Body'));
     await ui.tap(touch,'hud:pause');
     await screen(touch,'pause');
     await touch.waitForTimeout(350);
@@ -177,10 +189,12 @@ async function modalFocus(page) {
     await ui.assertGpuOnly(touch);
     await ui.settleErrors(touch);
     assert.deepEqual(touchErrors.errors,[]);
-    console.log(JSON.stringify({checks:['controller College admission and sole loadout',
+    const receipt={passed:true,checks:['controller College admission and sole loadout',
       'locked loadout Back','neutral handoff','controller pause','spatial focus',
       'modal focus ownership','source portrait guidance','landscape phone title/admission/Create',
-      'phone pause targets','actual GPU UI'],errors:errors.flat()}));
+      'phone pause targets','actual GPU UI'],admissions,errors:errors.flat()};
+    fs.writeFileSync(path.join(output,'menu-input-receipt.json'),JSON.stringify(receipt,null,2));
+    console.log(JSON.stringify(receipt));
   } catch(error) {
     const failure={failure:error.stack,errors:errors.flat()};
     if(current&&!current.isClosed()){
