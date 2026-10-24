@@ -52,6 +52,10 @@ async function buy(stock){const gold=player().economy.gold,before=player().econo
   const purchased=player().economy.backpack.find(row=>!before.includes(row.id)&&row.native_type_id===stock.item.native_type_id);
   assert.ok(purchased,'the accepted purchase creates the owned item');return structuredClone(purchased);}
 async function buyClothing(recipes){
+  const owned=player().economy.backpack.find(row=>row.equipment_type==='Hat'
+    &&[0,1].every(layer=>Number.isInteger(row.icon_tints?.[layer]??recipes[row.recipe_index]?.iconTints[layer])));
+  if(owned){receipt.clothingSource='previously purchased owned Hat retained by the ordinary profile';return structuredClone(owned);}
+  receipt.clothingSource='ordinary paid reference offer';
   let offer;receipt.clothingRolls=[];
   for(let attempt=0;attempt<12;attempt++){
     await ui.click(page,(await ui.byLabel(page,'Shlorio',{role:'button',prefix:'hud:shortcut:'})).id);

@@ -70,7 +70,8 @@ const heldFile={name:'owned-delayed.json',mimeType:'application/json',buffer:Buf
     receipt.checks.push('the declared file read failure is visible and a genuine exported ZIP retries successfully');
 
     await choose(heldFile);await page.waitForFunction(()=>window.saveReadWitness.pending.length===1);
-    await ui.click(page,'settings-back');await ui.click(page,'settings-page:save-transfer');
+    await ui.click(page,'settings-back');await ui.click(page,'settings-page:cloud');
+    await ui.click(page,'settings-page:save-transfer');
     await ui.widget(page,'save-import',{enabled:true});
     await page.evaluate(()=>window.saveReadWitness.pending.shift()());
     await page.waitForFunction(()=>window.saveReadWitness.released===2);await ui.nextFrame(page);await ui.nextFrame(page);
