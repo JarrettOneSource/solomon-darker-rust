@@ -72,7 +72,16 @@ async function settledAuthority() {
   'unheld accepted College authority');
 }
 async function openBook(page) {
+  const boundary = snapshot => ({frame:snapshot.frame,surface:snapshot.surface,inputScope:snapshot.inputScope,
+    foreground:snapshot.widgets.filter(row=>row.id==='picker:offer'||row.id==='mod/skill-picker'||row.id==='cheats/dialog').map(row=>row.id)});
+  state.bookOpenAttempts ||= [];
+  const attempt = {before:boundary(await ui.readUi(page))}; state.bookOpenAttempts.push(attempt);
+  const admitted = await ui.waitForUi(page, snapshot => snapshot.surface==='hidden'&&!snapshot.inputScope
+    && !ui.findWidget(snapshot,'picker:offer')&&!ui.findWidget(snapshot,'mod/skill-picker')
+    && !ui.findWidget(snapshot,'cheats/dialog'), 'actual native picker and Cheats retirement before opening Skills');
+  attempt.beforeClick = boundary(admitted);
   await ui.click(page, 'hud:skills');
+  await ui.widget(page, 'panel:surface:skills');
   await ui.widget(page, 'mod/skill-book');
 }
 async function closeBook(page) {
@@ -422,7 +431,7 @@ async function geometry(page, id) {
       credentialBootstrap: 'actual separate local API account, scoped token; form acceptance is separate',
       checks, errors, requests, expectedNotFound, cancelledMedia, bundles: [...bundles],
       geometry: {picker: pickerGeometry, book: bookGeometry, quickbar: quickbarGeometry},
-      actions: state.actions, casts: state.casts, keys: await keySamples(page),
+      actions: state.actions, casts: state.casts, keys: await keySamples(page), bookOpenAttempts:state.bookOpenAttempts,
       effects: state.effects, statuses: state.statuses, accepted: snapshot(),
       lua: state.luaResults.map(({request_id, ok, error}) => ({request_id, ok, error}))};
     fs.writeFileSync(path.join(output, 'mod-skills.json'), JSON.stringify(receipt, null, 2));
@@ -433,7 +442,7 @@ async function geometry(page, id) {
     const gpu = await ui.readUi(page);
     fs.writeFileSync(path.join(output, 'mod-skills-failure.json'), JSON.stringify({passed: false,
       step, error: error.stack, checks, errors, requests, expectedNotFound, cancelledMedia,
-      bundles: [...bundles], accepted: snapshot(), actions: state.actions, casts: state.casts,
+      bundles: [...bundles], accepted: snapshot(), actions: state.actions, casts: state.casts, bookOpenAttempts:state.bookOpenAttempts,
       lua: state.luaResults.map(({request_id, ok, values, error}) => ({request_id, ok, values, error})),
       keys: await keySamples(page), gpu}, null, 2));
     throw error;
