@@ -8,10 +8,7 @@ pub mod transport;
 
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
-use std::net::{TcpListener, TcpStream};
 use std::path::{Component, Path, PathBuf};
-use std::thread;
-use std::time::Duration;
 
 const MAX_REQUEST_BYTES: u64 = 16 * 1024;
 
@@ -27,47 +24,6 @@ impl AssetServer {
             return Err(io::Error::new(io::ErrorKind::NotFound, "game/index.html is missing"));
         }
         Ok(Self { root })
-    }
-
-    /// Four readers can stream large atlases while the browser requests its other assets.
-    /// The caller supplies the selected listener; no filesystem path comes from configuration
-    /// after startup, and each connection serves exactly one request.
-    pub fn serve(&self, listener: &TcpListener) -> io::Result<()> {
-        thread::scope(|scope| {
-            let workers: Vec<_> = (0..4)
-                .map(|_| {
-                    scope.spawn(|| -> io::Result<()> {
-                        for connection in listener.incoming() {
-                            let connection = connection?;
-                            if let Err(error) = self.serve_connection(connection) {
-                                // A cancelled browser fetch is normal when entering another scene.
-                                if !matches!(
-                                    error.kind(),
-                                    io::ErrorKind::BrokenPipe
-                                        | io::ErrorKind::ConnectionReset
-                                        | io::ErrorKind::TimedOut
-                                        | io::ErrorKind::WouldBlock
-                                        | io::ErrorKind::UnexpectedEof
-                                ) {
-                                    eprintln!("Could not send a game asset: {error}");
-                                }
-                            }
-                        }
-                        Ok(())
-                    })
-                })
-                .collect();
-            for worker in workers {
-                worker.join().expect("the asset worker contains no panicking operations")?;
-            }
-            Ok(())
-        })
-    }
-
-    fn serve_connection(&self, mut stream: TcpStream) -> io::Result<()> {
-        stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-        stream.set_write_timeout(Some(Duration::from_secs(30)))?;
-        self.serve_stream(&mut stream)
     }
 
     /// The transport dispatcher replays its inspected headers through this same responder.
@@ -255,10 +211,10 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::path::PathBuf;
-    use std::thread;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::AssetServer;
+    use crate::transport::{NativeServer, TransportConfig};
 
     struct TestAssets(PathBuf);
 
@@ -270,19 +226,18 @@ mod tests {
 
     fn request(server: &AssetServer, request: &str) -> Vec<u8> {
         let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let address = listener.local_addr().unwrap();
-        thread::scope(|scope| {
-            let response = scope.spawn(|| {
-                let (stream, _) = listener.accept().unwrap();
-                server.serve_connection(stream).unwrap();
-            });
-            let mut stream = TcpStream::connect(address).unwrap();
-            stream.write_all(request.as_bytes()).unwrap();
-            let mut bytes = Vec::new();
-            stream.read_to_end(&mut bytes).unwrap();
-            response.join().unwrap();
-            bytes
-        })
+        let mut native = NativeServer::start(
+            listener,
+            AssetServer::new(&server.root).unwrap(),
+            TransportConfig::default(),
+        )
+        .unwrap();
+        let mut stream = TcpStream::connect(native.local_addr()).unwrap();
+        stream.write_all(request.as_bytes()).unwrap();
+        let mut bytes = Vec::new();
+        stream.read_to_end(&mut bytes).unwrap();
+        native.shutdown();
+        bytes
     }
 
     #[test]

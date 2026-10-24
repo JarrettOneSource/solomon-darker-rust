@@ -72,3 +72,21 @@ Python is already installed by the canonical CI/build workflow; this adds no Rus
 dependency, unsafe FFI, global socket setting or server-only test behavior. It restores
 the reported18,799,976-byte range with a bounded client receive window instead of
 expanding fixtures until an incidental socket-buffer configuration happens to fail.
+
+The bounded-window control on2ea592a also passed40s; framing starvation remained red
+(`job_20261024T045904Z_208095a06f`). No additional timeout-reproduction claim follows
+from these controls. The Python probe is removed from the maintained regression: the
+simple pure-Rust long-range pause/resume length/SHA control remains, alongside the
+genuine four-paused-body starvation/shutdown contract. The definitive timeout RED is
+the unchanged browser plus native-copy trace above; its original browser GREEN is
+still required after root admits the fixed native binary.
+
+## Implementation
+
+Static responses now share the immutable `AssetServer` through an Arc and leave the
+framing pool in a retained connection worker. The worker owns its existing lease and
+streams the file once without a consumption write deadline. Supervisor HTTP keeps its
+30s write deadline and all header/upgrade read deadlines remain unchanged. Shutdown
+closes the retained connection clones before joining these workers. The unused alternate
+`AssetServer::serve` accept pool and its private30s socket path are removed after the
+repository caller search; existing MIME/range/path tests now use public `NativeServer`.

@@ -483,7 +483,7 @@ agents work in worktrees.
 struct literals stay on one line each, so a row of a table reads like the row in the source.
 
 **Native WebSocket transport uses synchronous Tungstenite over standard TCP.** The launcher
-reuses its existing HTTP asset responder; upgrades to `/session` leave the four asset workers
+reuses its existing HTTP asset responder; upgrades to `/session` leave the four framing workers
 after the handshake. The browser uses its native WebSocket feature. One caller-owned
 authority loop consumes connection/message/disconnection events; transport workers never
 interpret JSON or run a simulation. Reliable output is bounded by count and bytes, while one
@@ -494,8 +494,17 @@ protocol dependency and explicit thread/queue ownership, without an async web fr
 another implementation of RFC 6455. Gameplay credentials, input sequencing, pause/readiness
 and session ownership remain in the host above this transport.
 
-Established WebSockets use nonblocking TCP; HTTP and the upgrade handshake retain their
-blocking deadlines. The real Windows package lost its College connection when a blocking
+Framed static responses also move into existing owned, connection-leased workers. A
+browser may pause media consumption after buffering; a30-second write timeout was
+observed truncating a declared206 with Unix WouldBlock. Static transfers therefore have
+no consumption deadline, while request/header parsing, supervisor HTTP and the upgrade
+handshake retain their blocking deadlines. Shutdown closes retained socket clones before
+joining transfer workers, and the existing connection bound limits their lifetime/count.
+MIME, ranges and path validation stay in one responder; its unused alternate accept pool
+is removed. [The causal ledger](NATIVE-HTTP-MEDIA.md) records actual trace and TCP evidence.
+
+Established WebSockets use nonblocking TCP. The real Windows package lost its College
+connection when a blocking
 send reached its 250 ms deadline while the native process stayed alive. Windows documents
 that a timed-out blocking send leaves the connection indeterminate, so extending or retrying
 that kernel deadline is not the transport contract. The standard library's nonblocking
