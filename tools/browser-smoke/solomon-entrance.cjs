@@ -1,46 +1,97 @@
-// Development-only path planning through the unchanged Source navigator. The
-// browser receives ordinary keyboard events; no simulation state or input packet
-// is installed/sent by this observer.
+// Development-only Source collision/navigation queries. Only ordinary keyboard
+// events reach the game; accepted snapshots remain the sole movement authority.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {pathToFileURL} = require('node:url');
 
-async function walkSolomonEntrance(page, {document, snapshot, playerId, output}) {
+async function prepareBoneyardNavigation(world) {
   const game = path.resolve(process.env.SOLOMON_WEBSITE_DIR
     || path.join(__dirname, '../../../website-rust-current'), 'frontend/src/game');
   const load = file => import(pathToFileURL(path.join(game, file)).href);
-  const [saves, entities, simulation, navigation] = await Promise.all([
-    load('save/game-save-document.ts'), load('core-server/player-entity-store.ts'),
-    load('core-server/game-simulation.ts'), load('host/boneyard-entrance-navigation.ts'),
+  const [generated, tutorial, collision, navigation, encounter, character, gates, camera] = await Promise.all([
+    load('host/native-generated-boneyards.ts'), load('host/stock-tutorial-boneyard.ts'),
+    load('core-server/boneyard-collision.ts'), load('core-server/boneyard-enemy-navigation.ts'),
+    load('core-kernels/boneyard-encounter.ts'), load('core-kernels/player-character.ts'),
+    load('core-kernels/boneyard-gate.ts'), load('renderer/boneyard-render-contract.ts'),
   ]);
-  const restored = saves.restoreGameSaveDocument(document);
-  let planning = restored.state;
-  assert.equal(planning.world.kind, 'boneyard');
-  assert.equal(planning.world.runId, snapshot().boneyard.run_id,
-    'the read-only Source route must use the actual accepted run geometry');
-  const navigator = new navigation.BoneyardEntranceNavigator();
+  const template = [...generated.NATIVE_GENERATED_BONEYARDS, tutorial.STOCK_TUTORIAL_BONEYARD]
+    .find(row => row.sourceSha256 === world.source_sha256);
+  assert.ok(template, 'the accepted Boneyard has its unchanged Source template');
+  assert.equal(template.geometrySha256, world.geometry_sha256,
+    'Source planning uses the actual accepted geometry');
+  const geometry = collision.createBoneyardCollisionWorld(template.scene);
+  const prepared = JSON.parse(fs.readFileSync(path.join(__dirname,
+    '../../web/assets/navigation', `${world.source_sha256}.json`), 'utf8'));
+  assert.equal(prepared.sourceSha256, world.source_sha256);
+  assert.equal(prepared.geometrySha256, world.geometry_sha256);
+  for (const row of prepared.meshes) navigation.installPreparedBoneyardNavigationMesh(geometry, {
+    key: [row.bounds.x, row.bounds.y, row.bounds.w, row.bounds.h, row.clearance].join(':'), mesh: row.mesh,
+  });
+  return {collision, navigation, encounter, camera, geometry, scene: template.scene,
+    sourceSha256: world.source_sha256, geometrySha256: world.geometry_sha256,
+    bodyRadius: character.PLAYER_CHARACTER_RADIUS, gateSway: gates.BONEYARD_GATE_INITIAL_SWAY};
+}
+
+async function walkSolomonEntrance(page, {snapshot, playerId, output, plan}) {
+  const initial = snapshot().boneyard;
+  plan ||= await prepareBoneyardNavigation(initial);
   const held = new Set(), frames = [];
+  let route = [], waypoint = 1, targetKey, plannedAtTick = -Infinity;
   const deadline = Date.now() + 120000;
+  const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const bounds = initial.arena_transition?.full_bounds;
+  const fullBounds = bounds
+    ? {x: bounds.x, y: bounds.y, w: bounds.width, h: bounds.height} : plan.scene.bounds;
+  // Source boneyard-entrance-navigation.ts chooses the entry from immutable
+  // spawn, not the current wizard, and crosses radius+35 beyond its midpoint.
+  const pairs = new Map();
+  for (const leaf of initial.gate_leaves) {
+    const pair = pairs.get(leaf.fence_eid) || [];
+    pair.push(leaf.hinge); pairs.set(leaf.fence_eid, pair);
+  }
+  const gate = [...pairs].filter(([, pair]) => pair.length === 2)
+    .map(([id, pair]) => ({id, x: (pair[0].x + pair[1].x) / 2, y: (pair[0].y + pair[1].y) / 2}))
+    .sort((a, b) => distance(a, plan.scene.spawn) - distance(b, plan.scene.spawn))[0];
+  const direction = initial.arena_transition?.entry_side === 'South' ? -1 : 1;
+  const approachMargin = plan.bodyRadius + plan.gateSway + 15;
+  const crossedMargin = plan.bodyRadius + 35;
   try {
     while (snapshot().boneyard.encounter?.run_event_id === 0 && Date.now() < deadline) {
-      const accepted = snapshot();
-      const wizard = accepted.participants[playerId()].wizard;
-      const encounter = accepted.boneyard.encounter;
-      assert.equal(accepted.boneyard.run_id, planning.world.runId);
-      assert.equal(accepted.participants[playerId()].player.combat.life_state, 'Alive');
-      // This disposable Source object only answers a route query at the real
-      // accepted position. Its state is never stepped or installed in the host.
-      const character = simulation.gameSimulationPlayerRecords(planning)[restored.playerId];
-      planning = {...planning, tick: accepted.ticks,
-        playerEntities: entities.replacePlayerCharacter(planning.playerEntities, restored.playerId,
-          {...character, position: wizard.position}),
-        world: {...planning.world, encounter: {...planning.world.encounter,
-          phase: encounter.phase.toLowerCase(), runEventId: encounter.run_event_id,
-          position: encounter.position}},
-      };
-      const input = navigator.input(planning, restored.playerId);
-      const movement = input?.movement || {x: 0, y: 0};
+      const accepted = snapshot(), world = accepted.boneyard;
+      assert.equal(world.run_id, initial.run_id, 'planning cannot cross a real run replacement');
+      assert.equal(world.source_sha256, plan.sourceSha256);
+      assert.equal(world.geometry_sha256, plan.geometrySha256);
+      const actor = accepted.participants[playerId()];
+      assert.equal(actor.player.combat.life_state, 'Alive');
+      const at = actor.wizard.position, encounter = world.encounter;
+      let target = null, movement = {x: 0, y: 0}, phase = encounter.phase;
+      if (phase === 'Digging') {
+        const crossed = !gate || (at.y - gate.y) * direction > crossedMargin;
+        if (!crossed && (gate.y - at.y) * direction <= approachMargin + 10
+          && Math.abs(gate.x - at.x) <= 40) {
+          target = {x: gate.x, y: gate.y + direction * crossedMargin};
+          phase = 'gate-crossing';
+        } else if (!plan.encounter.solomonContactContains(encounter.position, at)) {
+          const end = crossed ? encounter.position : {x: gate.x, y: gate.y - direction * approachMargin};
+          const key = crossed ? 'solomon' : `gate:${gate.id}`;
+          if (targetKey !== key || accepted.ticks - plannedAtTick >= 100 || route.length < 2) {
+            const collision = plan.collision.withBoneyardGateCollision(plan.geometry, world.gate_leaves);
+            route = plan.navigation.findBoneyardEnemyRoute({bodyRadius: plan.bodyRadius,
+              bounds: fullBounds, clearance: plan.bodyRadius, start: at, end, endBodyRadius: 0,
+              world: collision, ignoredSourceIds: crossed
+                ? new Set(plan.collision.boneyardBodyCollisionSourceIds(end, collision, 30)) : undefined});
+            assert.ok(route && route.length > 1, 'unchanged Source navigation reaches the real entrance target');
+            targetKey = key; plannedAtTick = accepted.ticks; waypoint = 1;
+          }
+          while (waypoint < route.length - 1 && distance(at, route[waypoint]) <= 20) waypoint++;
+          target = route[waypoint]; phase = key;
+        }
+        if (target) {
+          const length = distance(at, target);
+          if (length) movement = {x: (target.x - at.x) / length, y: (target.y - at.y) / length};
+        }
+      }
       const desired = new Set();
       // Keyboard's eight directions follow the actual navigator's current
       // bearing. Replanning continues from accepted collision-resolved positions.
@@ -57,10 +108,10 @@ async function walkSolomonEntrance(page, {document, snapshot, playerId, output})
         await page.keyboard.down(key);
         held.add(key);
       }
-      frames.push({tick: accepted.ticks, position: wizard.position,
+      frames.push({tick: accepted.ticks, position: at, phase, target,
         encounter: {phase: encounter.phase, runEventId: encounter.run_event_id},
         movement, keys: [...desired]});
-      await page.waitForTimeout(100);
+      await page.waitForTimeout(50);
     }
     assert.ok(snapshot().boneyard.encounter === null
       || snapshot().boneyard.encounter.run_event_id > 0,
@@ -72,4 +123,4 @@ async function walkSolomonEntrance(page, {document, snapshot, playerId, output})
   }
 }
 
-module.exports = {walkSolomonEntrance};
+module.exports = {prepareBoneyardNavigation, walkSolomonEntrance};

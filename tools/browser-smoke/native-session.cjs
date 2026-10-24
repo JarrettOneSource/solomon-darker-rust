@@ -9,6 +9,7 @@ const {createHash} = require('node:crypto');
 const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
 const {assertFullscreenToggle} = require('./fullscreen.cjs');
+const {walkSolomonEntrance} = require('./solomon-entrance.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
@@ -153,55 +154,6 @@ async function leaveGame(page, state) {
   await ui.click(page,'leave');
   await waitUntil(() => state.saves > previous, 'durable save acknowledgement');
   await ui.surface(page,'title');
-}
-
-async function approachSolomon(page, state) {
-  const held = new Set();
-  const route = [];
-  const world = state.frame.snapshot.boneyard;
-  const start = position(state);
-  const gates = new Map();
-  for (const leaf of world.gate_leaves) {
-    const pair = gates.get(leaf.fence_eid) || [];
-    pair.push(leaf.hinge);
-    gates.set(leaf.fence_eid, pair);
-  }
-  // Follow the actual entrance opening before aiming at Solomon across the arena.
-  // Walking straight toward him from the spawn can run into the solid fence.
-  const gate = [...gates.values()].filter(pair => pair.length === 2)
-    .map(pair => ({x: (pair[0].x + pair[1].x) / 2, y: (pair[0].y + pair[1].y) / 2}))
-    .sort((a, b) => Math.hypot(a.x - start.x, a.y - start.y) - Math.hypot(b.x - start.x, b.y - start.y))[0];
-  assert.ok(gate, 'the generated opening has its authored gate');
-  const entryDirection = world.arena_transition.entry_side === 'North' ? 1 : -1;
-  const waypoints = [{x: gate.x, y: gate.y - entryDirection * 75},
-    {x: gate.x, y: gate.y + entryDirection * 150}, world.encounter.position];
-  let waypoint = 0;
-  const deadline = Date.now() + 90000;
-  try {
-    while (state.frame.snapshot.boneyard.encounter.phase === 'Digging' && Date.now() < deadline) {
-      const at = position(state);
-      const target = waypoints[waypoint];
-      const dx = target.x - at.x;
-      const dy = target.y - at.y;
-      const close = Math.hypot(dx, dy) < (waypoint === waypoints.length - 1 ? 90 : 12);
-      const desired = new Set();
-      if (close && waypoint < waypoints.length - 1) waypoint++;
-      if (!close && Math.abs(dx) > 8) desired.add(dx < 0 ? 'KeyA' : 'KeyD');
-      if (!close && Math.abs(dy) > 8) desired.add(dy < 0 ? 'KeyW' : 'KeyS');
-      for (const key of held) {
-        if (!desired.has(key)) {await page.keyboard.up(key); held.delete(key);}
-      }
-      for (const key of desired) {
-        if (!held.has(key)) {await page.keyboard.down(key); held.add(key);}
-      }
-      route.push({tick: state.frame.snapshot.ticks, position: at, target, waypoint});
-      await page.waitForTimeout(100);
-    }
-    assert.notEqual(state.frame.snapshot.boneyard.encounter.phase, 'Digging', 'real proximity wakes Solomon');
-  } finally {
-    for (const key of held) await page.keyboard.up(key);
-    fs.writeFileSync(path.join(output, 'native-solomon-approach.json'), JSON.stringify(route, null, 2));
-  }
 }
 
 (async () => {
@@ -434,7 +386,8 @@ async function approachSolomon(page, state) {
     checks.push('native file save and launcher restart');
     if (process.env.GAMEOVER === '1') {
       await gameplayInputReady(first.page);
-      await approachSolomon(first.page, first.state);
+      await walkSolomonEntrance(first.page, {snapshot: () => first.state.frame.snapshot,
+        playerId: () => first.state.id, output});
       checks.push('real movement wakes Solomon and begins the opening encounter');
       await waitUntil(() => first.state.frame.snapshot.run.phase === 'GameOver', 'actual combat death', 180000);
       await ui.waitForUi(first.page,snapshot => ui.findWidget(snapshot,'game-over:continue')?.label.includes('Continue'),
