@@ -216,8 +216,7 @@ async function modal(kind) {
     await ui.click(page,'resume');
     await until(()=>!accepted.frame.host.pause&&!accepted.frame.host.resume_grace,
       'ordinary Tutorial resume');
-    await walkSolomonEntrance(page,{document:accepted.checkpoint,
-      snapshot:()=>accepted.frame.snapshot,playerId:()=>accepted.id,output});
+    await walkSolomonEntrance(page,{snapshot:()=>accepted.frame.snapshot,playerId:()=>accepted.id,output});
     checked('real Title YES, retained Tutorial geometry and ordinary Solomon confrontation');
     const deadline=Date.now()+480000;
     while(world()?.tutorial&&Date.now()<deadline){
