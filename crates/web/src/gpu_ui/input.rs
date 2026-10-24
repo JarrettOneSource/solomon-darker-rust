@@ -1,9 +1,12 @@
 //! Native canvas events and a nonvisual IME/clipboard adapter.
 
+#[cfg(test)]
+mod cancel_tests;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use egui::{Event as UiEvent, ImeEvent, Key, Modifiers, Pos2, Rect, TouchPhase, pos2, vec2};
+use egui::{Event as UiEvent, Key, Modifiers, Pos2, Rect, TouchPhase, pos2, vec2};
 use serde::Serialize;
 use wasm_bindgen::{JsCast, closure::Closure};
 use web_sys::{
@@ -12,6 +15,9 @@ use web_sys::{
 };
 
 use super::batches::{DispatchEnd, InputPass, into_passes};
+use super::edit::model::{EditGroup, Intent, Receipt};
+use super::edit::session::{Session, selection};
+use super::edit::{EditorDescriptor, TextSelection};
 use super::{HitRegion, UiCapture, WidgetGeometry};
 
 pub fn canvas_point(client: [f32; 2], bounds: [f32; 4], logical: [f32; 2]) -> Pos2 {
@@ -50,11 +56,15 @@ struct InputQueue {
     events: Vec<UiEvent>,
     codes: Vec<BrowserKey>,
     dispatches: Vec<DispatchEnd>,
+    edits: Vec<Receipt>,
+    edit_sequence: u64,
+    acknowledged_edit_sequence: u64,
+    editors: Vec<EditorDescriptor>,
+    session: Option<Session>,
     focused: bool,
     composing: bool,
     capture: UiCapture,
     logical: [f32; 2],
-    text_rects: Vec<Rect>,
     hit_regions: Vec<HitRegion>,
     owned_pointers: std::collections::HashSet<i32>,
     primary_touch: Option<i32>,
@@ -65,13 +75,106 @@ struct InputQueue {
     gamepad_active: bool,
     require_gamepad_neutral: bool,
     clipboard_error: Option<String>,
+    native_dispatch: Option<Rc<dyn Fn() -> Result<(), String>>>,
 }
 
 impl InputQueue {
+    fn has_native_input(&self) -> bool {
+        !self.events.is_empty()
+            || !self.codes.is_empty()
+            || !self.edits.is_empty()
+            || self.clipboard_error.is_some()
+    }
+
+    fn finish_pointer(
+        &mut self,
+        phase: TouchPhase,
+        pos: Pos2,
+        button: egui::PointerButton,
+        modifiers: Modifiers,
+        touch: bool,
+    ) {
+        if matches!(phase, TouchPhase::Cancel) {
+            self.events.push(UiEvent::PointerCancelled);
+            self.events.push(UiEvent::PointerGone);
+            if touch {
+                self.primary_touch = None;
+            }
+        } else {
+            let pressed = matches!(phase, TouchPhase::Start);
+            self.events.push(UiEvent::PointerButton { pos, button, pressed, modifiers });
+            if touch && !pressed {
+                self.primary_touch = None;
+                self.events.push(UiEvent::PointerGone);
+            }
+        }
+        self.finish_dispatch();
+    }
+
     fn finish_dispatch(&mut self) {
-        let end = DispatchEnd { events: self.events.len(), codes: self.codes.len() };
-        if self.dispatches.last().copied().unwrap_or_default() != end {
+        let end = DispatchEnd {
+            events: self.events.len(),
+            codes: self.codes.len(),
+            edits: self.edits.len(),
+            click_count: None,
+        };
+        if !self.dispatches.last().copied().unwrap_or_default().same_endpoint(end) {
             self.dispatches.push(end);
+        }
+    }
+
+    fn record_click(&mut self, pos: Pos2, count: i32) {
+        if count <= 0 {
+            return;
+        }
+        // Browser click follows pointerup synchronously. Retain its native series
+        // on that release, before the animation frame drains the queued dispatches.
+        for index in (0..self.dispatches.len()).rev() {
+            let start = if index == 0 { 0 } else { self.dispatches[index - 1].events };
+            let end = self.dispatches[index].events;
+            let release = self.events[start..end].iter().rev().find_map(|event| match event {
+                UiEvent::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    ..
+                } => Some(*pos),
+                _ => None,
+            });
+            if let Some(release) = release {
+                if release == pos && self.dispatches[index].click_count.is_none() {
+                    self.dispatches[index].click_count = Some(count as u32);
+                }
+                return;
+            }
+        }
+    }
+
+    fn edit(&mut self, intent: Intent, caret: Option<Rect>) {
+        self.edit_sequence += 1;
+        let sequence = self.edit_sequence;
+        let receipt = if let Some(session) = &mut self.session {
+            session.receipt(sequence, intent, None, caret)
+        } else {
+            Receipt::unbound(sequence, intent)
+        };
+        self.edits.push(receipt);
+    }
+
+    fn sync_selection(&mut self, textarea: &HtmlTextAreaElement) {
+        let selected = selection(textarea);
+        if self.session.as_ref().is_some_and(|session| {
+            session.model.text() == textarea.value() && session.model.selection() != selected
+        }) {
+            self.edit(Intent::Select(selected), None);
+        }
+    }
+
+    fn sync_editor(&mut self, textarea: &HtmlTextAreaElement) {
+        if let Some(session) = &self.session
+            && let Err(error) = session.sync(textarea)
+        {
+            self.clipboard_error = Some(error);
         }
     }
 
@@ -104,13 +207,16 @@ struct Listener {
     target: EventTarget,
     name: &'static str,
     callback: Closure<dyn FnMut(Event)>,
+    capture: bool,
 }
 
 impl Drop for Listener {
     fn drop(&mut self) {
-        let _ = self
-            .target
-            .remove_event_listener_with_callback(self.name, self.callback.as_ref().unchecked_ref());
+        let _ = self.target.remove_event_listener_with_callback_and_bool(
+            self.name,
+            self.callback.as_ref().unchecked_ref(),
+            self.capture,
+        );
     }
 }
 
@@ -134,11 +240,21 @@ fn listen(
     listeners: &mut Vec<Listener>,
     callback: impl FnMut(Event) + 'static,
 ) -> Result<(), String> {
+    listen_phase(target, name, listeners, false, callback)
+}
+
+fn listen_phase(
+    target: &EventTarget,
+    name: &'static str,
+    listeners: &mut Vec<Listener>,
+    capture: bool,
+    callback: impl FnMut(Event) + 'static,
+) -> Result<(), String> {
     let callback = Closure::<dyn FnMut(Event)>::new(callback);
     target
-        .add_event_listener_with_callback(name, callback.as_ref().unchecked_ref())
+        .add_event_listener_with_callback_and_bool(name, callback.as_ref().unchecked_ref(), capture)
         .map_err(|error| format!("GPU UI {name} listener: {error:?}"))?;
-    listeners.push(Listener { target: target.clone(), name, callback });
+    listeners.push(Listener { target: target.clone(), name, callback, capture });
     Ok(())
 }
 
@@ -152,7 +268,11 @@ fn point(canvas: &HtmlCanvasElement, queue: &InputQueue, x: i32, y: i32) -> Pos2
 }
 
 impl BrowserInput {
-    pub fn attach(document: &Document, canvas: &HtmlCanvasElement) -> Result<Self, String> {
+    pub fn attach(
+        document: &Document,
+        canvas: &HtmlCanvasElement,
+        ctx: &egui::Context,
+    ) -> Result<Self, String> {
         let textarea: HtmlTextAreaElement = document
             .create_element("textarea")
             .map_err(|error| format!("GPU UI composition adapter: {error:?}"))?
@@ -165,6 +285,7 @@ impl BrowserInput {
             ("autocomplete", "off"),
             ("autocapitalize", "off"),
             ("spellcheck", "false"),
+            ("wrap", "off"),
             (
                 "style",
                 "position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0;resize:none",
@@ -192,11 +313,46 @@ impl BrowserInput {
             ..Default::default()
         }));
         let mut listeners = Vec::new();
+        // A prior UI action must commit actual focus before the next native
+        // editor default/clipboard event. Keep the queue unborrowed while Game
+        // paints its genuine controls; selection notifications may reenter it.
+        let window = document.default_view().ok_or("no window for native UI dispatch")?;
+        for name in [
+            "keydown",
+            "keyup",
+            "copy",
+            "cut",
+            "paste",
+            "beforeinput",
+            "compositionstart",
+            "pointerdown",
+        ] {
+            let queue = queue.clone();
+            listen_phase(window.as_ref(), name, &mut listeners, true, move |event| {
+                let handler = {
+                    let queue = queue.borrow();
+                    queue.has_native_input().then(|| queue.native_dispatch.clone()).flatten()
+                };
+                if let Some(handler) = handler
+                    && let Err(error) = handler()
+                {
+                    queue.borrow_mut().clipboard_error = Some(error);
+                    event.prevent_default();
+                    event.stop_immediate_propagation();
+                }
+            })?;
+        }
         for (name, pressed) in [("keydown", true), ("keyup", false)] {
             let queue = queue.clone();
+            let textarea = textarea.clone();
             let adapter: EventTarget = textarea.clone().into();
             listen(document.as_ref(), name, &mut listeners, move |event| {
                 let Some(key) = event.dyn_ref::<KeyboardEvent>() else { return };
+                // A native capture owner (bindings, authored shortcuts, consent)
+                // has already handled this dispatch and its default editing.
+                if key.default_prevented() {
+                    return;
+                }
                 let mut queue = queue.borrow_mut();
                 if key.is_composing() || queue.composing {
                     return;
@@ -216,18 +372,24 @@ impl BrowserInput {
                     meta: key.meta_key(),
                 });
                 queue.events.push(UiEvent::ModifiersChanged(mods));
-                if pressed
-                    && mods.command
-                    && matches!(key.key().as_str(), "c" | "C" | "x" | "X")
-                    && queue.capture.text
-                {
-                    queue.events.push(if key.key().eq_ignore_ascii_case("c") {
-                        UiEvent::Copy
-                    } else {
-                        UiEvent::Cut
+                let mapped = key_from_browser(&key.key());
+                let active = queue.session.is_some();
+                let native_caret_arrow = active
+                    && matches!(
+                        mapped,
+                        Some(Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown)
+                    )
+                    && !queue.session.as_ref().is_some_and(|session| {
+                        session.descriptor.code_editor
+                            && mods.alt
+                            && matches!(mapped, Some(Key::ArrowUp | Key::ArrowDown))
                     });
-                    event.prevent_default();
-                } else if let Some(mapped) = key_from_browser(&key.key()) {
+                // Physical editor arrows own native caret receipts. Controller
+                // arrows are queued separately and retain Source spatial focus;
+                // Console Alt+Up/Down still reaches its actual history owner.
+                if let Some(mapped) = mapped
+                    && !native_caret_arrow
+                {
                     queue.events.push(UiEvent::Key {
                         key: mapped,
                         physical_key: key.code().strip_prefix("Key").and_then(key_from_browser),
@@ -235,26 +397,81 @@ impl BrowserInput {
                         repeat: key.repeat(),
                         modifiers: mods,
                     });
-                    let native_text =
-                        queue.capture.text && key.key().chars().count() == 1 && text_modifier;
-                    if queue.capture.keyboard
-                        && !native_text
-                        && !(mods.command && key.key().eq_ignore_ascii_case("v"))
-                    {
-                        event.prevent_default();
+                }
+                if active {
+                    queue.sync_selection(&textarea);
+                }
+                let mut handled = false;
+                if pressed && active {
+                    let shortcut = if mods.command {
+                        match key.key().to_ascii_lowercase().as_str() {
+                            "a" => Some(Intent::SelectAll),
+                            "z" if mods.shift => Some(Intent::Redo),
+                            "z" => Some(Intent::Undo),
+                            "y" => Some(Intent::Redo),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
+                    if let Some(intent) = shortcut {
+                        queue.edit(intent, None);
+                        handled = true;
+                    } else if mapped == Some(Key::Enter) {
+                        let single = queue
+                            .session
+                            .as_ref()
+                            .is_some_and(|session| !session.descriptor.multiline);
+                        if single {
+                            queue.edit(Intent::Submit, None);
+                            handled = true;
+                        } else if mods.command || mods.ctrl {
+                            handled = true;
+                        }
+                    } else if let Some(mapped) = mapped {
+                        match queue
+                            .session
+                            .as_mut()
+                            .expect("active editor")
+                            .navigation(mapped, mods)
+                        {
+                            Ok(Some(intent)) => {
+                                queue.edit(intent, None);
+                                handled = true;
+                            }
+                            Ok(None) => {}
+                            Err(error) => queue.clipboard_error = Some(error),
+                        }
                     }
                 }
-                // A click and the first character can arrive before the next game
-                // frame focuses the IME adapter. Queue real desktop key text here;
-                // suppress its textarea default so `input` cannot insert it twice.
-                // Virtual keyboards without keydown still use the input listener.
-                if pressed && key.key().chars().count() == 1 && text_modifier {
-                    queue.events.push(UiEvent::Text(key.key()));
-                    if queue.capture.text || key.target().is_some_and(|target| target == adapter) {
-                        event.prevent_default();
-                    }
+                // Native input owns normal typing in the sole textarea. A real
+                // character before a newly opened field's first RAF is retained
+                // as an unbound intent and admitted only by actual focused paint.
+                if pressed
+                    && key.key().chars().count() == 1
+                    && text_modifier
+                    && (!active || !key.target().is_some_and(|target| target == adapter))
+                {
+                    let range = queue
+                        .session
+                        .as_ref()
+                        .map_or(TextSelection::caret(0), |session| session.model.selection());
+                    queue.edit(
+                        Intent::Replace { range, text: key.key(), group: Some(EditGroup::Typing) },
+                        None,
+                    );
+                    handled = true;
                 }
-                if queue.capture.keyboard {
+                if handled
+                    || queue.capture.keyboard && !active
+                    || active && mapped == Some(Key::Tab)
+                {
+                    event.prevent_default();
+                }
+                if handled {
+                    queue.sync_editor(&textarea);
+                }
+                if queue.capture.keyboard || active {
                     event.stop_propagation();
                 }
                 queue.finish_dispatch();
@@ -269,6 +486,7 @@ impl BrowserInput {
             let queue = queue.clone();
             let canvas = canvas.clone();
             let textarea = textarea.clone();
+            let ctx = ctx.clone();
             let target: EventTarget = if matches!(phase, TouchPhase::Start) {
                 canvas.clone().into()
             } else {
@@ -319,8 +537,66 @@ impl BrowserInput {
                     }
                 }
                 queue.events.push(UiEvent::PointerMoved(pos));
+                if matches!(phase, TouchPhase::Start) && pointer.button() == 0 {
+                    let target = ctx.pointer_widget_at(pos);
+                    let descriptor = queue
+                        .editors
+                        .iter()
+                        .rev()
+                        .find(|editor| {
+                            editor.enabled
+                                && editor.bounds.contains(pos)
+                                && target == Some(editor.owner.id)
+                                && ctx.memory(|memory| memory.allows_interaction(editor.layer_id))
+                        })
+                        .cloned();
+                    if let Some(descriptor) = descriptor {
+                        if queue
+                            .session
+                            .as_ref()
+                            .is_none_or(|session| session.descriptor.owner != descriptor.owner)
+                        {
+                            queue.session = Some(Session::new(descriptor));
+                        }
+                        let session = queue.session.as_mut().expect("actual editor hit");
+                        session.pointer = Some(pointer.pointer_id());
+                        match session.pointer(pos, pointer.shift_key()) {
+                            Ok((intent, caret)) => queue.edit(intent, Some(caret)),
+                            Err(error) => queue.clipboard_error = Some(error),
+                        }
+                        queue.sync_editor(&textarea);
+                        if let Err(error) = textarea.focus() {
+                            queue.clipboard_error = Some(format!("GPU editor focus: {error:?}"));
+                        }
+                    } else {
+                        queue.session = None;
+                        if let Err(error) = textarea.blur() {
+                            queue.clipboard_error = Some(format!("GPU editor blur: {error:?}"));
+                        }
+                    }
+                } else if matches!(phase, TouchPhase::Move)
+                    && queue
+                        .session
+                        .as_ref()
+                        .is_some_and(|session| session.pointer == Some(pointer.pointer_id()))
+                {
+                    match queue
+                        .session
+                        .as_mut()
+                        .expect("owned selection pointer")
+                        .pointer(pos, true)
+                    {
+                        Ok((intent, caret)) => queue.edit(intent, Some(caret)),
+                        Err(error) => queue.clipboard_error = Some(error),
+                    }
+                    queue.sync_editor(&textarea);
+                    queue.finish_dispatch();
+                } else if matches!(phase, TouchPhase::End | TouchPhase::Cancel)
+                    && let Some(session) = &mut queue.session
+                {
+                    session.pointer = None;
+                }
                 if !matches!(phase, TouchPhase::Move) {
-                    let pressed = matches!(phase, TouchPhase::Start);
                     let button = match pointer.button() {
                         1 => egui::PointerButton::Middle,
                         2 => egui::PointerButton::Secondary,
@@ -332,21 +608,39 @@ impl BrowserInput {
                         pointer.shift_key(),
                         pointer.meta_key(),
                     );
-                    queue.events.push(UiEvent::PointerButton {
-                        pos,
-                        button,
-                        pressed,
-                        modifiers: mods,
-                    });
-                    if pressed && queue.text_rects.iter().any(|rect| rect.contains(pos)) {
-                        let _ = textarea.focus();
-                    }
-                    if touch && !pressed {
-                        queue.primary_touch = None;
-                        queue.events.push(UiEvent::PointerGone);
-                    }
-                    queue.finish_dispatch();
+                    queue.finish_pointer(phase, pos, button, mods, touch);
                 }
+            })?;
+        }
+        {
+            let queue = queue.clone();
+            let textarea = textarea.clone();
+            let canvas = canvas.clone();
+            listen(canvas.clone().as_ref(), "click", &mut listeners, move |event| {
+                let Some(click) = event.dyn_ref::<web_sys::MouseEvent>() else { return };
+                if click.button() != 0 {
+                    return;
+                }
+                let mut queue = queue.borrow_mut();
+                let pos = point(&canvas, &queue, click.client_x(), click.client_y());
+                queue.record_click(pos, click.detail());
+                if click.detail() < 2 {
+                    return;
+                }
+                let Some(session) = queue
+                    .session
+                    .as_ref()
+                    .filter(|session| session.descriptor.bounds.contains(pos))
+                else {
+                    return;
+                };
+                match session.click_selection(pos, click.detail()) {
+                    Ok(intent) => queue.edit(intent, None),
+                    Err(error) => queue.clipboard_error = Some(error),
+                }
+                queue.sync_editor(&textarea);
+                queue.finish_dispatch();
+                event.prevent_default();
             })?;
         }
         {
@@ -392,6 +686,9 @@ impl BrowserInput {
                 queue.focused = focused;
                 queue.events.push(UiEvent::WindowFocused(focused));
                 if !focused {
+                    if let Some(session) = &mut queue.session {
+                        session.pointer = None;
+                    }
                     queue.primary_touch = None;
                     queue.owned_pointers.clear();
                     queue.events.push(UiEvent::PointerGone);
@@ -399,32 +696,23 @@ impl BrowserInput {
                 queue.finish_dispatch();
             })?;
         }
-        for (name, phase) in
-            [("compositionstart", 0), ("compositionupdate", 1), ("compositionend", 2)]
-        {
+        for (name, start) in [("compositionstart", true), ("compositionend", false)] {
             let queue = queue.clone();
             let textarea = textarea.clone();
             let target: EventTarget = textarea.clone().into();
             listen(&target, name, &mut listeners, move |event| {
-                let Some(composition) = event.dyn_ref::<CompositionEvent>() else { return };
-                let mut queue = queue.borrow_mut();
-                match phase {
-                    0 => {
-                        queue.composing = true;
-                    }
-                    1 => queue.events.push(UiEvent::Ime(ImeEvent::Preedit {
-                        text: composition.data().unwrap_or_default(),
-                        active_range_chars: None,
-                    })),
-                    _ => {
-                        queue.composing = false;
-                        queue.events.push(UiEvent::Ime(ImeEvent::Commit(
-                            composition.data().unwrap_or_default(),
-                        )));
-                        textarea.set_value("");
-                    }
+                if event.dyn_ref::<CompositionEvent>().is_none() {
+                    return;
                 }
-                queue.finish_dispatch();
+                let mut queue = queue.borrow_mut();
+                queue.composing = start;
+                if queue.session.is_some() {
+                    queue.edit(
+                        if start { Intent::CompositionStart } else { Intent::CompositionEnd },
+                        None,
+                    );
+                    queue.finish_dispatch();
+                }
             })?;
         }
         {
@@ -434,28 +722,22 @@ impl BrowserInput {
             listen(&target, "beforeinput", &mut listeners, move |event| {
                 let Some(input) = event.dyn_ref::<InputEvent>() else { return };
                 let mut queue = queue.borrow_mut();
-                if queue.composing || input.is_composing() {
-                    return;
-                }
-                let key = match input.input_type().as_str() {
-                    "deleteContentBackward" => Some(Key::Backspace),
-                    "deleteContentForward" => Some(Key::Delete),
-                    "insertParagraph" | "insertLineBreak" => Some(Key::Enter),
+                queue.sync_selection(&textarea);
+                let Some(session) = &queue.session else { return };
+                let intent = match input.input_type().as_str() {
+                    "historyUndo" => Some(Intent::Undo),
+                    "historyRedo" => Some(Intent::Redo),
+                    "insertParagraph" | "insertLineBreak" if !session.descriptor.multiline => {
+                        Some(Intent::Submit)
+                    }
                     _ => None,
                 };
-                if let Some(key) = key {
-                    for pressed in [true, false] {
-                        queue.events.push(UiEvent::Key {
-                            key,
-                            physical_key: None,
-                            pressed,
-                            repeat: false,
-                            modifiers: Modifiers::NONE,
-                        });
-                    }
+                if let Some(intent) = intent {
                     event.prevent_default();
-                    queue.finish_dispatch();
+                    queue.edit(intent, None);
+                    queue.sync_editor(&textarea);
                 }
+                queue.finish_dispatch();
             })?;
         }
         {
@@ -463,34 +745,106 @@ impl BrowserInput {
             let textarea = textarea.clone();
             let target: EventTarget = textarea.clone().into();
             listen(&target, "input", &mut listeners, move |event| {
-                let Some(input) = event.dyn_ref::<InputEvent>() else { return };
+                if event.dyn_ref::<InputEvent>().is_none() {
+                    return;
+                }
                 let mut queue = queue.borrow_mut();
-                if !queue.composing
-                    && !input.is_composing()
-                    && input.input_type() != "insertFromComposition"
-                {
-                    if let Some(text) = input.data().filter(|text| !text.is_empty()) {
-                        queue.events.push(UiEvent::Text(text));
-                    }
-                    textarea.set_value("");
+                if queue.session.is_some() {
+                    queue.edit_sequence += 1;
+                    let sequence = queue.edit_sequence;
+                    let input = event.dyn_ref::<InputEvent>().expect("native input event");
+                    let receipt = queue.session.as_mut().expect("active editor").input(
+                        sequence,
+                        &input.input_type(),
+                        &textarea,
+                    );
+                    queue.edits.push(receipt);
+                    // Restore rejected edits immediately, before a later native
+                    // dispatch can build another edit against an invalid value.
+                    queue.sync_editor(&textarea);
                     queue.finish_dispatch();
                 }
             })?;
         }
+        for (target, name) in [
+            (EventTarget::from(textarea.clone()), "select"),
+            (EventTarget::from(textarea.clone()), "selectionchange"),
+            (EventTarget::from(document.clone()), "selectionchange"),
+        ] {
+            let queue = queue.clone();
+            let textarea = textarea.clone();
+            let document = document.clone();
+            listen(&target, name, &mut listeners, move |_| {
+                if !document.active_element().is_some_and(|element| element == **textarea) {
+                    return;
+                }
+                let mut queue = queue.borrow_mut();
+                let selected = selection(&textarea);
+                if queue
+                    .session
+                    .as_ref()
+                    .is_some_and(|session| session.model.selection() != selected)
+                {
+                    queue.edit(Intent::Select(selected), None);
+                    queue.finish_dispatch();
+                }
+            })?;
+        }
+        for (name, intent) in [("copy", Intent::Copy), ("cut", Intent::Cut)] {
+            let queue = queue.clone();
+            let textarea = textarea.clone();
+            listen(document.as_ref(), name, &mut listeners, move |event| {
+                let Some(clipboard) = event.dyn_ref::<ClipboardEvent>() else { return };
+                let mut queue = queue.borrow_mut();
+                if queue.session.is_none() {
+                    return;
+                }
+                queue.sync_selection(&textarea);
+                let session = queue.session.as_ref().expect("active editor");
+                let range = session.model.selection().range();
+                if range.is_empty() {
+                    return;
+                }
+                let copied = super::edit::model::slice_utf16(session.model.text(), range);
+                let result = clipboard
+                    .clipboard_data()
+                    .ok_or_else(|| "native copy has no clipboard data".to_owned())
+                    .and_then(|data| {
+                        data.set_data("text/plain", copied)
+                            .map_err(|error| format!("GPU editor native copy: {error:?}"))
+                    });
+                if let Err(error) = result {
+                    queue.clipboard_error = Some(error);
+                }
+                event.prevent_default();
+                queue.edit(intent.clone(), None);
+                if let Some(receipt) = queue.edits.last_mut() {
+                    receipt.clipboard_handled = true;
+                }
+                queue.sync_editor(&textarea);
+                queue.finish_dispatch();
+            })?;
+        }
         {
             let queue = queue.clone();
+            let textarea = textarea.clone();
             listen(document.as_ref(), "paste", &mut listeners, move |event| {
                 let Some(paste) = event.dyn_ref::<ClipboardEvent>() else { return };
                 let mut queue = queue.borrow_mut();
-                if !queue.capture.text {
+                if queue.session.is_none() {
                     return;
                 }
+                queue.sync_selection(&textarea);
                 if let Some(data) = paste.clipboard_data() {
                     match data.get_data("text/plain") {
-                        Ok(text) => {
-                            queue.events.push(UiEvent::Paste(text));
+                        Ok(text) if !text.is_empty() => {
+                            let range =
+                                queue.session.as_ref().expect("active editor").model.selection();
+                            queue.edit(Intent::Replace { range, text, group: None }, None);
+                            queue.sync_editor(&textarea);
                             event.prevent_default();
                         }
+                        Ok(_) => {}
                         Err(error) => {
                             queue.clipboard_error = Some(format!("GPU UI paste: {error:?}"))
                         }
@@ -508,7 +862,44 @@ impl BrowserInput {
         pixels_per_point: f32,
         time: f64,
     ) -> Result<Vec<InputPass>, String> {
+        self.take_input(viewport, pixels_per_point, time, true)
+    }
+
+    pub fn take_native(
+        &mut self,
+        viewport: [f32; 2],
+        pixels_per_point: f32,
+        time: f64,
+    ) -> Result<Option<Vec<InputPass>>, String> {
+        let pending = self.queue.borrow().has_native_input();
+        if pending {
+            self.take_input(viewport, pixels_per_point, time, false).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn set_native_dispatch_handler(
+        &mut self,
+        handler: impl Fn() -> Result<(), String> + 'static,
+    ) {
+        self.queue.borrow_mut().native_dispatch = Some(Rc::new(handler));
+    }
+
+    fn take_input(
+        &mut self,
+        viewport: [f32; 2],
+        pixels_per_point: f32,
+        time: f64,
+        sample_gamepad: bool,
+    ) -> Result<Vec<InputPass>, String> {
         let mut queue = self.queue.borrow_mut();
+        // Native caret defaults precede their asynchronous selectionchange.
+        // Retain that selection before an earlier queued layout can sync it back.
+        if self.document.active_element().is_some_and(|element| element == **self.textarea) {
+            queue.sync_selection(&self.textarea);
+            queue.finish_dispatch();
+        }
         queue.logical = viewport;
         let mut raw = egui::RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(viewport[0], viewport[1]))),
@@ -521,8 +912,12 @@ impl BrowserInput {
             Some(pixels_per_point);
         let mut dispatches = std::mem::take(&mut queue.dispatches);
         let codes = std::mem::take(&mut queue.codes);
+        let edits = std::mem::take(&mut queue.edits);
         if let Some(error) = queue.clipboard_error.take() {
             return Err(error);
+        }
+        if !sample_gamepad {
+            return Ok(into_passes(raw, codes, edits, dispatches));
         }
         let native_events = raw.events.len();
         let gamepads = if queue.scope.is_some() {
@@ -616,26 +1011,37 @@ impl BrowserInput {
         queue.gamepad_direction = current.direction;
         queue.next_gamepad_repeat_at = next_repeat;
         if raw.events.len() != native_events {
-            dispatches.push(DispatchEnd { events: raw.events.len(), codes: codes.len() });
+            dispatches.push(DispatchEnd {
+                events: raw.events.len(),
+                codes: codes.len(),
+                edits: edits.len(),
+                click_count: None,
+            });
         }
-        Ok(into_passes(raw, codes, dispatches))
+        Ok(into_passes(raw, codes, edits, dispatches))
+    }
+
+    pub fn set_editors(
+        &mut self,
+        editors: Vec<EditorDescriptor>,
+        acknowledged: Option<u64>,
+    ) -> Result<(), String> {
+        let mut queue = self.queue.borrow_mut();
+        if let Some(sequence) = acknowledged {
+            queue.acknowledged_edit_sequence = queue.acknowledged_edit_sequence.max(sequence);
+        }
+        let focused = editors.iter().find(|editor| editor.focused && editor.enabled).cloned();
+        let acknowledged = queue.acknowledged_edit_sequence;
+        if super::edit::session::reconcile_session(&mut queue.session, focused, acknowledged)
+            && let Some(session) = &queue.session
+        {
+            session.sync(&self.textarea)?;
+        }
+        queue.editors = editors;
+        Ok(())
     }
 
     pub fn set_widgets(&mut self, widgets: &std::collections::BTreeMap<String, WidgetGeometry>) {
-        self.queue.borrow_mut().text_rects = widgets
-            .values()
-            .filter(|widget| {
-                matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
-                    && widget.enabled
-                    && widget.is_interactive()
-            })
-            .map(|widget| {
-                Rect::from_min_size(
-                    pos2(widget.bounds.x, widget.bounds.y),
-                    vec2(widget.bounds.width, widget.bounds.height),
-                )
-            })
-            .collect();
         self.queue.borrow_mut().hit_regions = widgets
             .values()
             .filter(|widget| widget.is_interactive())
@@ -678,7 +1084,11 @@ impl BrowserInput {
                 )
                 .map_err(|error| format!("IME vertical placement: {error:?}"))?;
             self.textarea.focus().map_err(|error| format!("GPU UI text focus: {error:?}"))?;
-        } else if self.document.active_element().is_some_and(|element| element == **self.textarea) {
+        } else if self.document.active_element().is_some_and(|element| element == **self.textarea)
+            && !self.queue.borrow().session.as_ref().is_some_and(|session| {
+                session.model.sequence > self.queue.borrow().acknowledged_edit_sequence
+            })
+        {
             self.textarea.blur().map_err(|error| format!("GPU UI text blur: {error:?}"))?;
         }
         for command in &output.commands {
@@ -771,6 +1181,48 @@ impl Drop for BrowserInput {
 mod tests {
     use super::*;
     use solomon_sim::input::{MenuDirection, MenuGamepadState};
+
+    #[test]
+    fn browser_click_series_stays_on_its_real_release_and_never_replays_in_layout() {
+        let mut queue = InputQueue::default();
+        for (position, count) in
+            [(pos2(20.0, 20.0), 1), (pos2(90.0, 90.0), 1), (pos2(90.0, 90.0), 2)]
+        {
+            for pressed in [true, false] {
+                queue.events.push(UiEvent::PointerButton {
+                    pos: position,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Modifiers::NONE,
+                });
+                queue.finish_dispatch();
+            }
+            queue.record_click(position, count);
+            queue.finish_dispatch();
+        }
+        assert_eq!(queue.dispatches.len(), 6, "click metadata does not duplicate the release");
+        queue.record_click(pos2(20.0, 20.0), 2);
+        let passes = into_passes(
+            egui::RawInput { events: queue.events, ..Default::default() },
+            Vec::new(),
+            Vec::new(),
+            queue.dispatches,
+        );
+        assert_eq!(passes.len(), 12);
+        assert_eq!(
+            passes.iter().filter_map(|pass| pass.click_count).collect::<Vec<_>>(),
+            [1, 1, 2]
+        );
+        assert!(
+            passes
+                .iter()
+                .filter(|pass| pass.raw.events.is_empty())
+                .all(|pass| pass.click_count.is_none())
+        );
+        assert!(passes.iter().filter(|pass| pass.click_count.is_some()).all(|pass| {
+            matches!(pass.raw.events.last(), Some(UiEvent::PointerButton { pressed: false, .. }))
+        }));
+    }
 
     #[test]
     fn foreground_admission_requires_neutral_without_polling_the_gameplay_controller() {

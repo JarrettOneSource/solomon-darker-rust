@@ -6,9 +6,13 @@
 
 mod accessibility;
 mod batches;
+mod edit;
+mod effects;
 mod fonts;
 mod geometry;
 mod input;
+#[cfg(test)]
+mod layer_tests;
 mod material;
 mod painter;
 mod stock;
@@ -24,9 +28,16 @@ use web_sys::{Document, HtmlCanvasElement};
 
 use solomon_graphics::{BlendMode, ColorFilter, Renderer};
 
+pub use edit::{
+    EditorRules, FontRunOptions, NativeEditOutput, NativeFontRun, NativeFontStroke,
+    NativeLabelStyle, NativeTextEdit, TextSelection, font_run, font_run_with_options, shaped_label,
+    shaped_label_with_effect, text_edit_focused,
+};
+pub use effects::GroupEffect;
 pub use geometry::{clip_polygon_ellipse, css_bezier};
 pub use input::{BrowserKey, canvas_point, key_from_browser};
 pub use painter::clip_scissor;
+pub use solomon_graphics::TextureSampling;
 pub use stock::{StockAtlas, message_frame, message_frame_scaled, native_text, paint_text_layout};
 
 pub fn cooldown_sector_points(remaining: f64, capacity: f64) -> Vec<Pos2> {
@@ -184,30 +195,158 @@ pub struct UiFrame<'a> {
     key_codes: &'a [BrowserKey],
     blend: BlendMode,
     color_filter: ColorFilter,
-    announcements: &'a RefCell<Vec<String>>,
+    announcements: &'a RefCell<Vec<accessibility::Announcement>>,
     rotation: egui::emath::Rot2,
     translation: Vec2,
-    input_scope: &'a RefCell<Option<String>>,
+    input_scope: &'a RefCell<Option<(egui::LayerId, String)>>,
     retired_images: &'a RefCell<Vec<String>>,
     focus_from_keyboard: bool,
+    editor_receipts: &'a [edit::model::Receipt],
+    editors: &'a RefCell<Vec<edit::EditorDescriptor>>,
+    editor_errors: &'a RefCell<Vec<String>>,
+    native_click_count: Option<u32>,
 }
 
 impl UiFrame<'_> {
+    /// Native browser double-click count, gated by this real widget's pointer response.
+    pub fn double_clicked(&self, response: &Response) -> bool {
+        response.enabled()
+            && response.clicked_by(egui::PointerButton::Primary)
+            && self.native_click_count == Some(2)
+    }
+    pub(crate) fn fail(&self, error: String) {
+        self.editor_errors.borrow_mut().push(error);
+    }
+    /// Captures only this Rust GPU geometry, then applies filters/shadows/opacity.
+    pub fn paint_group(
+        &self,
+        painter: &Painter,
+        effect: GroupEffect,
+        paint: impl FnOnce(&UiFrame<'_>, &Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_group_output(painter, effect, solomon_graphics::ShadowOutput::Source, paint)
+    }
+
+    /// Source outer box-shadow: paint an opaque rounded GPU caster, never its pixels.
+    pub fn paint_outer_shadow(
+        &self,
+        painter: &Painter,
+        shadow: ImageShadow,
+        caster: impl FnOnce(&Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_box_shadow(painter, shadow, solomon_graphics::ShadowOutput::Outer, caster)
+    }
+
+    /// Positive CSS spread changes only the caster; its original interior stays clear.
+    pub fn paint_outer_shadow_spread(
+        &self,
+        painter: &Painter,
+        shadow: ImageShadow,
+        expanded_caster: impl FnOnce(&Painter) -> Result<(), String>,
+        original_caster: impl FnOnce(&Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_group_output(
+            painter,
+            GroupEffect { shadows: vec![shadow], ..Default::default() },
+            solomon_graphics::ShadowOutput::Outer,
+            |_, caster| {
+                expanded_caster(caster)?;
+                caster.add(egui::Shape::Callback(egui::epaint::PaintCallback {
+                    rect: caster.clip_rect(),
+                    callback: std::sync::Arc::new(effects::Boundary::Knockout),
+                }));
+                original_caster(caster)
+            },
+        )
+    }
+
+    /// Source inset box-shadow: the opaque caster is the rounded padding box.
+    pub fn paint_inner_shadow(
+        &self,
+        painter: &Painter,
+        shadow: ImageShadow,
+        caster: impl FnOnce(&Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_box_shadow(painter, shadow, solomon_graphics::ShadowOutput::Inner, caster)
+    }
+
+    fn paint_box_shadow(
+        &self,
+        painter: &Painter,
+        shadow: ImageShadow,
+        output: solomon_graphics::ShadowOutput,
+        caster: impl FnOnce(&Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.paint_group_output(
+            painter,
+            GroupEffect { shadows: vec![shadow], ..Default::default() },
+            output,
+            |_, painter| caster(painter),
+        )
+    }
+
+    fn paint_group_output(
+        &self,
+        painter: &Painter,
+        mut effect: GroupEffect,
+        output: solomon_graphics::ShadowOutput,
+        paint: impl FnOnce(&UiFrame<'_>, &Painter) -> Result<(), String>,
+    ) -> Result<(), String> {
+        assert!(effect.opacity.is_finite() && (0.0..=1.0).contains(&effect.opacity));
+        let layer = self.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
+        let scale = layer.scaling.abs() * (self.rotation * Vec2::X).length();
+        for shadow in &mut effect.shadows {
+            assert!(shadow.blur.is_finite() && shadow.blur >= 0.0 && shadow.offset.is_finite());
+            shadow.offset = layer.scaling * (self.rotation * shadow.offset);
+            shadow.blur *= scale;
+        }
+        effect.opacity *= painter.opacity();
+        let style = effects::Style { effect, filter: self.color_filter, blend: self.blend, output };
+        let marker = |boundary| {
+            egui::Shape::Callback(egui::epaint::PaintCallback {
+                rect: painter.clip_rect(),
+                callback: std::sync::Arc::new(boundary),
+            })
+        };
+        // Egui drops shapes at opacity0. Keep data markers so reset child opacity
+        // cannot release ungrouped geometry from a fully transparent parent.
+        let mut boundaries = painter.clone();
+        boundaries.set_opacity(1.0);
+        boundaries.add(marker(effects::Boundary::Begin(style)));
+        let mut group_painter = painter.clone();
+        group_painter.set_clip_rect(Rect::EVERYTHING);
+        group_painter.set_opacity(1.0);
+        let mut frame = self.with_blend(BlendMode::Normal);
+        frame.color_filter = ColorFilter::default();
+        let result = paint(&frame, &group_painter);
+        boundaries.add(marker(effects::Boundary::End));
+        result
+    }
+
     pub fn focus_visible(&self, response: &Response) -> bool {
-        response.has_focus() && (self.focus_from_keyboard || self.ctx.text_edit_focused())
+        response.has_focus() && (self.focus_from_keyboard || text_edit_focused(self.ctx))
     }
 
     /// Retires a dynamic image after every mesh from this frame has been submitted.
     pub fn forget_image(&self, path: &str) {
         self.retired_images.borrow_mut().push(path.to_owned());
     }
-    /// The last foreground owner painted this frame owns controller navigation.
-    /// Frames without an owner leave the gamepad with gameplay.
-    pub fn input_scope(&self, scope: &str) {
-        *self.input_scope.borrow_mut() = Some(scope.to_owned());
+    /// The highest real layer owns controller navigation, using the same ordering
+    /// as painting, hit testing and modals. No scope leaves the gamepad with gameplay.
+    pub fn input_scope(&self, scope: &str, layer: egui::LayerId) {
+        let mut current = self.input_scope.borrow_mut();
+        if current
+            .as_ref()
+            .is_none_or(|(previous, _)| !self.ctx.compare_layer_order(layer, *previous).is_lt())
+        {
+            *current = Some((layer, scope.to_owned()));
+        }
     }
-    pub fn announce(&self, text: &str) {
-        self.announcements.borrow_mut().push(text.to_owned());
+    /// Current Source status owner, or accepted receipt/event identity for distinct messages.
+    pub fn announce(&self, owner: &str, text: &str) {
+        self.announcements
+            .borrow_mut()
+            .push(accessibility::Announcement { owner: owner.to_owned(), text: text.to_owned() });
     }
     pub fn with_blend(&self, blend: BlendMode) -> UiFrame<'_> {
         UiFrame {
@@ -224,6 +363,10 @@ impl UiFrame<'_> {
             input_scope: self.input_scope,
             retired_images: self.retired_images,
             focus_from_keyboard: self.focus_from_keyboard,
+            editor_receipts: self.editor_receipts,
+            editors: self.editors,
+            editor_errors: self.editor_errors,
+            native_click_count: self.native_click_count,
         }
     }
     /// Sets the image RGB gain for this view; stock bitmap text inherits it.
@@ -285,9 +428,32 @@ impl UiFrame<'_> {
         uv: Option<Rect>,
         tint: Color32,
     ) -> bool {
-        self.image_quad(
-            painter,
+        self.image_sampled(painter, path, destination, uv, tint, TextureSampling::Texture)
+    }
+
+    /// Per-draw pixelated sampling leaves an admitted world texture unchanged.
+    pub fn image_sampled(
+        &self,
+        painter: &Painter,
+        path: &str,
+        destination: Rect,
+        uv: Option<Rect>,
+        tint: Color32,
+        sampling: TextureSampling,
+    ) -> bool {
+        let Some(texture) = self.images.sampled_texture_id(
             path,
+            self.blend,
+            false,
+            self.color_filter,
+            None,
+            sampling,
+        ) else {
+            return false;
+        };
+        self.paint_texture_quad(
+            painter,
+            texture,
             [
                 destination.left_top(),
                 destination.right_top(),
@@ -296,11 +462,38 @@ impl UiFrame<'_> {
             ],
             uv.unwrap_or(Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0))),
             tint,
-        )
+        );
+        true
     }
 
     pub fn image_size(&self, path: &str) -> Option<Vec2> {
         self.images.size(path)
+    }
+
+    pub fn managed_image(
+        &self,
+        painter: &Painter,
+        texture: egui::TextureId,
+        destination: Rect,
+        uv: Option<Rect>,
+        tint: Color32,
+    ) {
+        let egui::TextureId::Managed(id) = texture else {
+            panic!("managed image requires an egui TextureHandle")
+        };
+        let texture = self.images.managed_texture_id(id, self.blend, self.color_filter);
+        self.paint_texture_quad(
+            painter,
+            texture,
+            [
+                destination.left_top(),
+                destination.right_top(),
+                destination.right_bottom(),
+                destination.left_bottom(),
+            ],
+            uv.unwrap_or(Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0))),
+            tint,
+        );
     }
 
     pub fn image_error(&self, path: &str) -> Option<String> {
@@ -345,6 +538,35 @@ impl UiFrame<'_> {
         assert!(shadow.blur.is_finite() && shadow.blur >= 0.0);
         assert!(shadow.offset.is_finite());
         if !destination.is_positive() {
+            return true;
+        }
+        let layer = self.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
+        let physical_sigma = shadow.blur
+            * layer.scaling.abs()
+            * (self.rotation * Vec2::X).length()
+            * self.ctx.pixels_per_point();
+        if physical_sigma > 3.0 {
+            if !self.images.ready(path) {
+                self.images.request(path);
+                return false;
+            }
+            let [red, green, blue, alpha] = tint.to_srgba_unmultiplied();
+            self.with_blend(BlendMode::Normal)
+                .paint_group(
+                    painter,
+                    GroupEffect { opacity: f32::from(alpha) / 255.0, shadows: vec![shadow] },
+                    |frame, painter| {
+                        frame.atlas_image(
+                            painter,
+                            path,
+                            source,
+                            destination,
+                            Color32::from_rgb(red, green, blue),
+                        );
+                        Ok(())
+                    },
+                )
+                .expect("an image shadow capture only records GPU geometry");
             return true;
         }
         let Some(size) = self.image_size(path) else {
@@ -532,6 +754,11 @@ impl UiFrame<'_> {
         self.record(id, label, role, response);
         if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
             widget.hit_shape = HitShape::Ellipse;
+            let region = widget.hit_region();
+            self.ctx.set_widget_hit_test(
+                response.id,
+                std::sync::Arc::new(move |pos| region.contains(pos)),
+            );
         }
     }
 
@@ -548,11 +775,44 @@ impl UiFrame<'_> {
     ) {
         self.record(id, label, role, response);
         if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
+            let transform =
+                self.ctx.layer_transform_to_global(response.layer_id).unwrap_or_default();
+            let center = transform * center;
+            let size = size * transform.scaling.abs();
             widget.hit_shape = HitShape::RotatedRect {
                 center: [center.x, center.y],
                 size: [size.x, size.y],
                 radians,
             };
+            let region = widget.hit_region();
+            self.ctx.set_widget_hit_test(
+                response.id,
+                std::sync::Arc::new(move |pos| region.contains(pos)),
+            );
+        }
+    }
+
+    /// Geometry of a painted control whose real gestures are owned outside egui.
+    pub fn record_painted_rect(
+        &self,
+        painter: &Painter,
+        id: &str,
+        label: &str,
+        role: &str,
+        rect: Rect,
+        enabled: bool,
+    ) {
+        let transform = self.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
+        self.record_clipped_rect(
+            id,
+            label,
+            role,
+            transform * rect,
+            transform * painter.clip_rect(),
+            enabled,
+        );
+        if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
+            widget.layer_id = Some(painter.layer_id());
         }
     }
 
@@ -654,12 +914,16 @@ pub struct GpuUi {
     _fonts: fonts::BrowserFonts,
     accessibility: accessibility::Accessibility,
     widgets: BTreeMap<String, WidgetGeometry>,
-    diagnostics: UiDiagnostics,
+    input_diagnostics: UiDiagnostics,
+    drawn_diagnostics: UiDiagnostics,
+    deferred_textures: egui::TexturesDelta,
+    deferred_retired_images: Vec<String>,
+    deferred_keyboard_activations: BTreeSet<String>,
     focus_from_keyboard: bool,
 }
 
 /// An input transaction whose final shapes are submitted after the world draw.
-#[must_use = "finish_frame must apply the managed texture updates and retire images"]
+#[must_use = "finish_frame or finish_native_dispatch must retain managed texture updates and retirements"]
 pub struct UiRun {
     pending: VecDeque<batches::InputPass>,
     layout_input: egui::RawInput,
@@ -700,7 +964,7 @@ impl GpuUi {
         let fonts = fonts::load(document, &ctx).await?;
         let images = painter::Images::default();
         images.load_stock(renderer).await?;
-        let input = match input::BrowserInput::attach(document, canvas) {
+        let input = match input::BrowserInput::attach(document, canvas, &ctx) {
             Ok(input) => input,
             Err(error) => {
                 images.destroy(&renderer.graphics_context());
@@ -724,13 +988,55 @@ impl GpuUi {
             _fonts: fonts,
             accessibility,
             widgets: BTreeMap::new(),
-            diagnostics: UiDiagnostics::default(),
+            input_diagnostics: UiDiagnostics::default(),
+            drawn_diagnostics: UiDiagnostics::default(),
+            deferred_textures: egui::TexturesDelta::default(),
+            deferred_retired_images: Vec::new(),
+            deferred_keyboard_activations: BTreeSet::new(),
             focus_from_keyboard: true,
         })
     }
 
     pub fn context(&self) -> &Context {
         &self.ctx
+    }
+
+    pub fn set_native_dispatch_handler(
+        &mut self,
+        handler: impl Fn() -> Result<(), String> + 'static,
+    ) {
+        self.input.set_native_dispatch_handler(handler);
+    }
+
+    /// Commit prior native UI events before the next native editing/clipboard
+    /// dispatch. This performs no controller poll, simulation or GPU submission.
+    pub fn begin_native_dispatch(&mut self, time_seconds: f64) -> Result<Option<UiRun>, String> {
+        let viewport = self.input_diagnostics.viewport;
+        if viewport[0] <= 0.0 || viewport[1] <= 0.0 {
+            return Ok(None);
+        }
+        let pixels_per_point = self.input_diagnostics.pixels_per_point;
+        let Some(pending) = self.input.take_native(viewport, pixels_per_point, time_seconds)?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(self.input_run(viewport, pixels_per_point, pending)))
+    }
+
+    /// A native-only transaction owns the same managed texture lifecycle as a
+    /// drawn frame. Keep its deltas and real activations until the next submit.
+    pub fn finish_native_dispatch(
+        &mut self,
+        mut run: UiRun,
+        result: Result<(), String>,
+    ) -> Result<(), String> {
+        self.deferred_textures.append(run.textures);
+        self.deferred_retired_images.append(&mut run.retired_images);
+        self.deferred_keyboard_activations = run.keyboard_activations;
+        run.failure.map_or(result, Err).inspect_err(|error| {
+            self.input_diagnostics.error = Some(error.clone());
+            self.drawn_diagnostics.error = Some(error.clone());
+        })
     }
 
     pub fn run(
@@ -766,23 +1072,32 @@ impl GpuUi {
         let physical = [self.canvas.width() as i32, self.canvas.height() as i32];
         let pixels_per_point = physical[0] as f32 / viewport[0];
         let pending = self.input.take(viewport, pixels_per_point, time_seconds)?;
+        self.input_diagnostics.frame += 1;
+        Ok(self.input_run(viewport, pixels_per_point, pending))
+    }
+
+    fn input_run(
+        &mut self,
+        viewport: [f32; 2],
+        pixels_per_point: f32,
+        pending: Vec<batches::InputPass>,
+    ) -> UiRun {
         let mut layout_input =
             pending.first().expect("each frame has an input/layout pass").raw.clone();
         layout_input.events.clear();
-        self.diagnostics.frame += 1;
-        Ok(UiRun {
+        UiRun {
             pending: pending.into(),
             layout_input,
             viewport,
-            physical,
+            physical: [self.canvas.width() as i32, self.canvas.height() as i32],
             pixels_per_point,
             output: None,
-            textures: egui::TexturesDelta::default(),
-            retired_images: Vec::new(),
-            keyboard_activations: BTreeSet::new(),
+            textures: std::mem::take(&mut self.deferred_textures),
+            retired_images: std::mem::take(&mut self.deferred_retired_images),
+            keyboard_activations: std::mem::take(&mut self.deferred_keyboard_activations),
             failure: None,
             capture: UiCapture::default(),
-        })
+        }
     }
 
     /// Returns after one input/layout commit, releasing all controller borrows.
@@ -803,7 +1118,11 @@ impl GpuUi {
         mut paint: impl FnMut(&mut UiFrame<'_>) -> Result<(), String>,
     ) -> Result<(), String> {
         let raw = run.layout_input.clone();
-        self.paint_pass(run, batches::InputPass { raw, codes: Vec::new() }, &mut paint)
+        self.paint_pass(
+            run,
+            batches::InputPass { raw, codes: Vec::new(), edits: Vec::new(), click_count: None },
+            &mut paint,
+        )
     }
 
     fn paint_pass(
@@ -834,7 +1153,10 @@ impl GpuUi {
         let announcements = RefCell::new(Vec::new());
         let input_scope = RefCell::new(None);
         let retired_images = RefCell::new(Vec::new());
+        let editors = RefCell::new(Vec::new());
+        let editor_errors = RefCell::new(Vec::new());
         let mut result = Ok(());
+        edit::begin_native_focus(&self.ctx, &pass.codes);
         let mut output = self.ctx.run_pass(pass.raw, |ctx| {
             result = paint(&mut UiFrame {
                 ctx,
@@ -850,12 +1172,24 @@ impl GpuUi {
                 input_scope: &input_scope,
                 retired_images: &retired_images,
                 focus_from_keyboard: self.focus_from_keyboard,
+                editor_receipts: &pass.edits,
+                editors: &editors,
+                editor_errors: &editor_errors,
+                native_click_count: pass.click_count,
             });
         });
+        edit::finish_native_focus(&self.ctx, &pass.codes);
         run.textures.append(std::mem::take(&mut output.textures_delta));
         run.retired_images.extend(retired_images.into_inner());
         result?;
+        if let Some(error) = editor_errors.into_inner().into_iter().next() {
+            return Err(error);
+        }
+        let editors = editors.into_inner();
+        edit::set_focus(&self.ctx, &editors);
+        self.input.set_editors(editors, pass.edits.last().map(|receipt| receipt.sequence))?;
         self.widgets = widgets.into_inner();
+        rank_widgets(&self.ctx, &mut self.widgets);
         if let Some(widget) = self.widgets.values().find(|widget| widget.duplicate) {
             let error = format!("GPU UI widget id {} was painted more than once", widget.id);
             return Err(error);
@@ -868,7 +1202,7 @@ impl GpuUi {
             widget.keyboard_activated |= run.keyboard_activations.contains(&widget.id);
         }
         self.input.set_widgets(&self.widgets);
-        let input_scope = input_scope.into_inner();
+        let input_scope = input_scope.into_inner().map(|(_, scope)| scope);
         self.input.set_scope(input_scope.as_deref());
         let pointer = self.ctx.input(|input| input.pointer.interact_pos());
         let capture = UiCapture {
@@ -879,8 +1213,8 @@ impl GpuUi {
                         .values()
                         .any(|widget| widget.is_interactive() && widget.contains(point))
                 }),
-            keyboard: self.ctx.egui_wants_keyboard_input(),
-            text: output.platform_output.ime.is_some(),
+            keyboard: self.ctx.egui_wants_keyboard_input() || text_edit_focused(&self.ctx),
+            text: text_edit_focused(&self.ctx),
         };
         self.input.apply_output(&output.platform_output, capture)?;
         self.accessibility.update(
@@ -891,11 +1225,11 @@ impl GpuUi {
         if let Some(error) = fonts::take_error() {
             return Err(error);
         }
-        self.diagnostics.viewport = run.viewport;
-        self.diagnostics.pixels_per_point = run.pixels_per_point;
-        self.diagnostics.capture = capture;
-        self.diagnostics.input_scope = input_scope;
-        self.diagnostics.widgets = self.widgets.values().cloned().collect();
+        self.input_diagnostics.viewport = run.viewport;
+        self.input_diagnostics.pixels_per_point = run.pixels_per_point;
+        self.input_diagnostics.capture = capture;
+        self.input_diagnostics.input_scope = input_scope;
+        self.input_diagnostics.widgets = self.widgets.values().cloned().collect();
         run.capture = capture;
         run.output = Some(output);
         Ok(())
@@ -937,19 +1271,23 @@ impl GpuUi {
             } else {
                 error
             };
-            self.diagnostics.error = Some(error.clone());
+            self.input_diagnostics.error = Some(error.clone());
+            self.drawn_diagnostics.error = Some(error.clone());
             return Err(error);
         }
         let (meshes, triangles) = painted.inspect_err(|error| {
-            self.diagnostics.error = Some(error.clone());
+            self.input_diagnostics.error = Some(error.clone());
+            self.drawn_diagnostics.error = Some(error.clone());
         })?;
-        self.diagnostics.meshes = meshes;
-        self.diagnostics.triangles = triangles;
-        self.diagnostics.textures = self.painter.texture_count() + self.images.texture_count();
-        self.diagnostics.borrowed_images = self.images.borrowed_count();
-        self.diagnostics.static_images_ready = self.images.static_images_ready();
-        self.diagnostics.static_images_total = self.images.static_image_count();
-        self.diagnostics.error = None;
+        self.input_diagnostics.meshes = meshes;
+        self.input_diagnostics.triangles = triangles;
+        self.input_diagnostics.textures =
+            self.painter.texture_count() + self.images.texture_count();
+        self.input_diagnostics.borrowed_images = self.images.borrowed_count();
+        self.input_diagnostics.static_images_ready = self.images.static_images_ready();
+        self.input_diagnostics.static_images_total = self.images.static_image_count();
+        self.input_diagnostics.error = None;
+        self.drawn_diagnostics = self.input_diagnostics.clone();
         Ok(run.capture)
     }
 
@@ -967,7 +1305,26 @@ impl GpuUi {
         self.images.borrowed_paths()
     }
     pub fn diagnostics(&self) -> &UiDiagnostics {
-        &self.diagnostics
+        &self.drawn_diagnostics
+    }
+    /// Actual latest UI ownership for input admission, including native-only
+    /// commits. Public diagnostics remain the last completed GPU submission.
+    pub fn input_diagnostics(&self) -> &UiDiagnostics {
+        &self.input_diagnostics
+    }
+}
+
+fn rank_widgets(ctx: &Context, widgets: &mut BTreeMap<String, WidgetGeometry>) {
+    let mut ordered: Vec<_> = widgets.values_mut().collect();
+    ordered.sort_by(|a, b| {
+        ctx.compare_layer_order(
+            a.layer_id.unwrap_or_else(egui::LayerId::background),
+            b.layer_id.unwrap_or_else(egui::LayerId::background),
+        )
+        .then_with(|| a.z.cmp(&b.z))
+    });
+    for (z, widget) in ordered.into_iter().enumerate() {
+        widget.z = z;
     }
 }
 
@@ -998,27 +1355,17 @@ fn focus_pointer_text(
         else {
             continue;
         };
-        let layer = ctx.layer_id_at(*pos);
-        for widget in widgets.values().rev() {
-            if !widget.enabled
-                || !widget.is_interactive()
-                || !matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
-                || widget.layer_id != layer
-            {
-                continue;
-            }
-            let rect = Rect::from_min_size(
-                pos2(widget.bounds.x, widget.bounds.y),
-                vec2(widget.bounds.width, widget.bounds.height),
-            );
-            if rect.contains(*pos)
-                && let Some(id) = widget.egui_id
-            {
-                // egui0.37 lays out TextEdit content before its pointer response.
-                // Focus the actual hit target before its first queued text event.
-                ctx.memory_mut(|memory| memory.request_focus(id));
-                break;
-            }
+        let Some(id) = ctx.pointer_widget_at(*pos) else { continue };
+        if widgets.values().any(|widget| {
+            widget.egui_id == Some(id)
+                && widget.enabled
+                && widget.is_interactive()
+                && matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
+                && widget.contains(*pos)
+        }) {
+            // The canonical native query includes same-layer occlusion and modals.
+            // Focus only that actual editor before its first queued text receipt.
+            ctx.memory_mut(|memory| memory.request_focus(id));
         }
     }
 }
