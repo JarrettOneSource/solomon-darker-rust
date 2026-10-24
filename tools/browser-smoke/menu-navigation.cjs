@@ -36,11 +36,24 @@ fs.mkdirSync(output,{recursive:true});
   // Source MenuNavigation scopes controllers; physical Tab retains normal page order.
   const title=(await ui.readUi(page)).widgets.filter(widget=>widget.enabled&&['play','explore','settings','hall'].includes(widget.id))
    .sort((a,b)=>a.z-b.z).map(widget=>widget.id);
-  for(const id of [...title.slice(1),'fullscreen/toggle',title[0]]){
+  for(const id of [...title.slice(1),'fullscreen/toggle']){
    receipt.pending={keyboard:'Tab',id};
    await page.keyboard.press('Tab');await ui.focused(page,id);
   }
-  receipt.checks.push('ordinary physical Tab retains the real fullscreen root and native page wrap');
+  await step(12,'play');
+  receipt.checks.push('controller re-entry from the real fullscreen root uses the active menu preference');
+  for(const [key,id] of [['Shift+Tab','fullscreen/toggle'],['Tab',title[0]]]){
+   receipt.pending={keyboard:key,id};
+   await page.keyboard.press(key);await ui.focused(page,id);
+  }
+  receipt.checks.push('ordinary physical Tab and ShiftTab retain the real fullscreen root and native page wrap');
+  await page.keyboard.press('Shift+Tab');await ui.focused(page,'fullscreen/toggle');
+  receipt.pending={button:0,activation:'play',from:'fullscreen/toggle'};
+  await ui.controller(page,[0]);await ui.surface(page,'play');await ui.controller(page);
+  assert.equal(await page.evaluate(()=>document.fullscreenElement!==null),false);
+  await ui.controller(page,[1]);await ui.surface(page,'title');await ui.controller(page);
+  await ui.focused(page,'play');
+  receipt.checks.push('actual controller A clicks the real preferred menu control after keyboard focus leaves its root');
 
   await ui.click(page,'settings');await ui.focused(page,'settings-range:sound');
   await ui.controller(page);await ui.nextFrame(page);

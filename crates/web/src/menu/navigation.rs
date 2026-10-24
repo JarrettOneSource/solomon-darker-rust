@@ -31,6 +31,7 @@ impl MenuNavigation {
         preferred: Option<&str>,
         capture_initial_enter: bool,
     ) {
+        crate::gpu_ui::navigation::preferred(ctx, scope, preferred.map(Id::unique));
         let scope_changed = self.scope != scope;
         if scope_changed {
             self.scope = scope.to_owned();
@@ -151,9 +152,9 @@ mod tests {
                 crate::gpu_ui::navigation::finish(
                     ctx,
                     direction,
-                    Some(egui::LayerId::new(
-                        egui::Order::Middle,
-                        Id::unique("menu-navigation-test"),
+                    Some((
+                        egui::LayerId::new(egui::Order::Middle, Id::unique("menu-navigation-test")),
+                        scope,
                     )),
                 );
             },
