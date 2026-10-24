@@ -63,3 +63,12 @@ that control did not establish a blocked sender and is not a timeout reproductio
 Job `job_20261024T044655Z_f60a766645` retains both independent outcomes. The range is
 therefore strengthened to the64MiB fixture minus its17-byte offset, without changing
 production deadlines or adding a test-only transport knob.
+
+The second raw64MiB range control also passed on fec735b, while framing starvation
+remained red (`job_20261024T045120Z_39aec9338e`). It is likewise not claimed as a
+truncation reproduction. The range regression now uses Python's existing standard
+socket API to set the actual client's SO_RCVBUF before connect, then pauses reads40s.
+Python is already installed by the canonical CI/build workflow; this adds no Rust
+dependency, unsafe FFI, global socket setting or server-only test behavior. It restores
+the reported18,799,976-byte range with a bounded client receive window instead of
+expanding fixtures until an incidental socket-buffer configuration happens to fail.
