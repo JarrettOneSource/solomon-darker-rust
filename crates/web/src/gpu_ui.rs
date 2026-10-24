@@ -1351,27 +1351,17 @@ fn focus_pointer_text(
         else {
             continue;
         };
-        let layer = ctx.layer_id_at(*pos);
-        for widget in widgets.values().rev() {
-            if !widget.enabled
-                || !widget.is_interactive()
-                || !matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
-                || widget.layer_id != layer
-            {
-                continue;
-            }
-            let rect = Rect::from_min_size(
-                pos2(widget.bounds.x, widget.bounds.y),
-                vec2(widget.bounds.width, widget.bounds.height),
-            );
-            if rect.contains(*pos)
-                && let Some(id) = widget.egui_id
-            {
-                // egui0.37 lays out TextEdit content before its pointer response.
-                // Focus the actual hit target before its first queued text event.
-                ctx.memory_mut(|memory| memory.request_focus(id));
-                break;
-            }
+        let Some(id) = ctx.pointer_widget_at(*pos) else { continue };
+        if widgets.values().any(|widget| {
+            widget.egui_id == Some(id)
+                && widget.enabled
+                && widget.is_interactive()
+                && matches!(widget.role.as_str(), "textbox" | "password" | "input" | "text-entry")
+                && widget.contains(*pos)
+        }) {
+            // The canonical native query includes same-layer occlusion and modals.
+            // Focus only that actual editor before its first queued text receipt.
+            ctx.memory_mut(|memory| memory.request_focus(id));
         }
     }
 }
