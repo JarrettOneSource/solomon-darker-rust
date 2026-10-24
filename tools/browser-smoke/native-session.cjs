@@ -291,6 +291,28 @@ async function leaveGame(page, state) {
       await ui.noWidget(first.page,'social/chat-message');
       checks.push('actual Party roster, player card and whisper');
 
+      await first.page.keyboard.press('KeyT');
+      const draft='Draft survives channels and dismissal';
+      await ui.fill(first.page,'social/chat-message',draft);
+      await ui.click(first.page,'social/channel:party');
+      await ui.value(first.page,'social/chat-message',draft);
+      await first.page.keyboard.press('Escape');await ui.noWidget(first.page,'social/chat-message');
+      await first.page.keyboard.press('KeyT');await ui.value(first.page,'social/chat-message',draft);
+      const chatUi=await ui.readUi(first.page);
+      const channels=['party','global','whisper'].filter(channel=>ui.findWidget(chatUi,`social/channel:${channel}`));
+      assert.ok(channels.length>=2&&channels.includes('whisper'));
+      for(let i=0;i<channels.length+1;i++){
+        await ui.focused(first.page,'social/chat-message');await first.page.keyboard.press('Tab');
+        await ui.value(first.page,'social/chat-message',draft);
+      }
+      await first.page.keyboard.press('Enter');
+      const expectedChannel=channels[1][0].toUpperCase()+channels[1].slice(1);
+      await waitUntil(()=>second.state.messages.some(message=>message.text===draft&&message.channel===expectedChannel),
+        'real Tab channel cycle sends the retained draft through the host');
+      await ui.noWidget(first.page,'social/chat-message');await first.page.keyboard.press('KeyT');
+      await ui.value(first.page,'social/chat-message','');await first.page.keyboard.press('Escape');
+      checks.push('channel switches and Escape retain the draft; actual Tab wraps channels and accepted Send clears it');
+
       await pause(first.page);
       await first.page.keyboard.press('KeyT');
       await ui.fill(first.page,'social/chat-message','Pause menu greeting');
@@ -361,6 +383,15 @@ async function leaveGame(page, state) {
 
     const originalId = first.state.id;
     const originalToken = first.state.token;
+    if(process.env.SOCIAL!=='0'){
+      await first.page.keyboard.press('KeyT');await ui.click(first.page,'social/channel:boneyard');
+      await ui.fill(first.page,'social/chat-message','Actual Boneyard channel');await first.page.keyboard.press('Enter');
+      await waitUntil(()=>second.state.messages.some(message=>message.text==='Actual Boneyard channel'&&message.channel==='Boneyard'),
+        'native Boneyard channel delivers to the real peer');
+      await ui.noWidget(first.page,'social/chat-message');await first.page.keyboard.press('KeyT');
+      await ui.fill(first.page,'social/chat-message','Retire this draft on saved Leave');
+      await first.page.keyboard.press('Escape');await ui.noWidget(first.page,'social/chat-message');
+    }
     await leaveGame(first.page, first.state);
     await loaded(first.page, first.state);
     assert.equal(first.state.status.can_resume, true);
@@ -370,6 +401,11 @@ async function leaveGame(page, state) {
     assert.notEqual(first.state.token, originalToken, 'rejoin rotates the resume credential');
     assert.equal(participant(first.state).player.economy.gold, 350);
     checks.push('save-before-leave and same-wizard reconnect');
+    if(process.env.SOCIAL!=='0'){
+      await first.page.keyboard.press('KeyT');await ui.value(first.page,'social/chat-message','');
+      await first.page.keyboard.press('Escape');await ui.noWidget(first.page,'social/chat-message');
+      checks.push('actual Boneyard channel delivery and saved disconnect clear the prior chat draft');
+    }
 
     await leaveGame(first.page, first.state);
     await waitUntil(() => playing(second.state), 'remaining player ready after departure');
