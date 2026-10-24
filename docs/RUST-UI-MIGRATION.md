@@ -1260,3 +1260,15 @@ read-only `source-loot-route.json` records both results. The driver must reuse t
 already-prepared Source geometry/navigation for loot, clubbing and offscreen approach
 waypoints, replanning from actual accepted positions. Only ordinary keyboard input
 reaches the game; its pickup, collision and progression remain authoritative.
+
+Earned-offer acceptance separates natural progression from expensive service prerequisites.
+The natural phase starts at the stock500gold, uses ordinary movement/combat/pickups and
+an actual earned rank, retains the accepted local Gold event(s) behind its painted/speaking
+notice, then pays the first650gold Dowse fee. Source `hub-economy.ts:1871–1909` prices
+each rare offer at5000–5700gold; purchase draws the next roll fee from500–950 in steps
+of50. The separate reference/purchase phase uses the supported private Cheats **SET GOLD**
+control for10000gold, records that funding explicitly as controlled UI input, then uses
+the owned Hat drag/reference and an actually charged offer purchase. Those prerequisite
+funds are not labelled naturally earned. No save, seed, network command or world state
+is injected by the browser driver. Complete runtime acceptance awaits the fixed native
+asset server; retained500/698gold native candidates were decoded read-only and not used.
