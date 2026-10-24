@@ -140,6 +140,11 @@ async function pauseNotice(key,text,afterAnnouncement,name,{resume=true}={}) {
       feedback:await ui.widget(page,'cheats/action-receipt')};
     await page.keyboard.press('Backquote');await ready();
     await ui.click(page,(await ui.byLabel(page,'Hagatha',{role:'button',prefix:'hud:shortcut:'})).id);
+    if(player().economy.owned_perk_selectors.includes(7)) {
+      await ui.click(page,'panel:owned-perk:7');
+      await until(()=>!player().economy.owned_perk_selectors.includes(7),'ordinary College charm removal');
+      receipt.removedPreviousCharm=true;
+    }
     assert.equal(player().economy.owned_perk_selectors.includes(7),false,'this wizard must buy the charge');
     // Source individualPerkPrice: the initial mixed selectors keep base price;
     // every other individual charm costs three times its catalog base price.
