@@ -908,6 +908,26 @@ preserve those owners. Remove the copied obsolete `mod/world` sublayer parent af
 the four-root authored-overlay cutover; the fixed Context registry owns composition.
 Generic egui Order categories do not define this order.
 
+Final startup review finds `BrowserInput::attach` before the awaited resident audio
+and saved/account admission in `Game::load_resources`. Its document handlers can queue
+Tab/Enter while the separate loader still owns the screen, then replay those inputs
+against the first main Title/prompt. Source startup renders its main scene only after
+required readiness. Extend the existing held resident-theme case with those real
+trusted keys, retain normal native AudioContext/Title-music unlock from the existing
+post-handoff real Tab gesture, and observe
+the first actual main frames: fresh Title and its untouched Tutorial offer must remain.
+Root owns the shared main admission gate; this regression adds no state setter or
+proxy controls and preserves the existing held-resource/fallback ownership checks.
+The bounded f41 reproduction does **not** show hidden main actions:
+`startup-f41dc57-boot-admission-verified/startup-receipt.json` passes the held322/326,
+trusted Tab/Enter, all first8 untouched Title/prompt frames, normal post-ready focus/
+audio unlock, exact splash/fallback handoff and errors[]/Chrome88742 graceful0.
+Its initial AudioContext is suspended during the held load and runs after the ordinary
+post-handoff Tab; only solomondarktheme then plays. The source review still justifies
+an explicit gate for the new chronological input transaction, but f41 is a passing
+baseline, not its demonstrated failing implementation. Earlier harness-development
+receipts remain separately qualified and unchanged.
+
 `skill-book-24382f0-entered-notices/receipt.json` now qualifies the full imported-book
 journey in both worlds, including the shipped stock Boneyard fixture. Both OKAY and
 Escape release the independent modal/pause, and each actual accepted +1 reaches native
