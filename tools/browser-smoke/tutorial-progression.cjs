@@ -26,7 +26,7 @@ const accepted={id:null,frame:null,loaded:null,checkpoint:null,checkpointEvidenc
 const held=new Set();
 let primary=false;
 let page,observed;
-let navigation,route=[],routeTarget=null,routeTick=-Infinity,waypoint=1;
+let navigation,route=[],routeTarget=null,waypoint=1,previousWaypointVector=null;
 const world=()=>accepted.frame?.snapshot.boneyard;
 const player=()=>accepted.frame?.snapshot.participants[accepted.id];
 const stage=()=>world()?.tutorial?.stage;
@@ -89,19 +89,29 @@ async function release() {
 async function moveTo(target) {
   const position=player().wizard.position;
   if(distance(position,target)<14){await keys([]);return;}
-  if(!routeTarget||distance(routeTarget,target)>25||accepted.frame.snapshot.ticks-routeTick>=100
-    ||route.length<2||distance(position,route.at(-1))<14){
+  if(!routeTarget||distance(routeTarget,target)>navigation.bodyRadius){
+    route=[];previousWaypointVector=null;
+  }
+  if(route.length){
+    const current={x:route[waypoint].x-position.x,y:route[waypoint].y-position.y};
+    const passed=previousWaypointVector&&current.x*previousWaypointVector.x+current.y*previousWaypointVector.y<=0;
+    if(distance(position,route[waypoint])<=navigation.navigation.NATIVE_NAVMESH_PORTAL_INSET||passed){
+      waypoint++;previousWaypointVector=null;
+    }
+  }
+  if(route.length<2||waypoint>=route.length){
     // The unchanged Source query returns a short route prefix. Replan from
-    // accepted collision-resolved positions; only keyboard events move the game.
+    // accepted positions after consuming its portals, never midway through a
+    // triangle attachment. Only keyboard events move the game.
     route=navigation.navigation.findBoneyardEnemyRoute({bodyRadius:navigation.bodyRadius,
       bounds:navigation.scene.bounds,clearance:navigation.bodyRadius,start:position,end:target,
       endBodyRadius:0,world:navigation.geometry});
     assert.ok(route&&route.length>1,'Source navigation reaches the actual loot or enemy target');
-    routeTarget=point(target);routeTick=accepted.frame.snapshot.ticks;waypoint=1;
-    receipt.navigation.push({tick:routeTick,stage:stage(),position:point(position),target:point(target),route});
+    routeTarget=point(target);waypoint=1;previousWaypointVector=null;
+    receipt.navigation.push({tick:accepted.frame.snapshot.ticks,stage:stage(),position:point(position),target:point(target),route});
   }
-  while(waypoint<route.length-1&&distance(position,route[waypoint])<=20)waypoint++;
   const x=route[waypoint].x-position.x,y=route[waypoint].y-position.y;
+  previousWaypointVector={x,y};
   const desired=[];
   const diagonal=Math.tan(Math.PI/8);
   if(Math.abs(x)>Math.abs(y)*diagonal)desired.push(x<0?'KeyA':'KeyD');

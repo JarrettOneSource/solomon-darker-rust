@@ -1212,3 +1212,13 @@ notice. Final ordinary Leave must carry the actual matching signed checkpoint
 receipt; it does not invent another PUT when the save coordinator can reuse a
 committed checkpoint. Source flash decay is imported unchanged for the screenshot.
 No browser acceptance is claimed until this journey runs and closes cleanly.
+
+
+A pre-browser pure collision control caught that periodically restarting the
+Source's short route prefix can revisit the same attachment triangle. The Tutorial
+driver now consumes each returned portal before replanning, using the Source
+portal inset and the waypoint-passage dot-product from
+`native-enemy-pathfinding.ts::resolveActiveRoute`. It does not copy enemy steering
+into gameplay. The unchanged collision/query control reaches the actual amulet
+approach at movement samples of1,4,5 and10 native ticks; direct movement remains
+the preserved red. Actual browser qualification is still required.
