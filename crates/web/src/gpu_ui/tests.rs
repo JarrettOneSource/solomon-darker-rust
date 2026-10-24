@@ -143,6 +143,33 @@ fn controller_scope_follows_the_actual_source_layer_in_both_callback_orders() {
 }
 
 #[test]
+fn native_gesture_geometry_keeps_its_actual_painter_layer_transform_and_clip() {
+    let ctx = Context::default();
+    let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::unique("native-gesture"));
+    ctx.set_transform_layer(
+        layer,
+        egui::emath::TSTransform { scaling: 2.0, translation: vec2(10.0, 20.0) },
+    );
+    let widgets = frame(&ctx, Vec::new(), |frame| {
+        let painter = ctx
+            .layer_painter(layer)
+            .with_clip_rect(Rect::from_min_size(Pos2::ZERO, vec2(20.0, 10.0)));
+        let control = Rect::from_min_size(pos2(5.0, 0.0), vec2(25.0, 20.0));
+        painter.rect_filled(control, 0.0, Color32::WHITE);
+        frame.record_painted_rect(&painter, "native-rotate", "Rotate", "button", control, true);
+    });
+    let geometry = &widgets["native-rotate"];
+    assert_eq!(geometry.layer_id, Some(layer));
+    assert_eq!(geometry.bounds.rect(), Rect::from_min_size(pos2(20.0, 20.0), vec2(30.0, 20.0)));
+    assert_eq!(
+        geometry.paint_bounds.rect(),
+        Rect::from_min_size(pos2(20.0, 20.0), vec2(50.0, 40.0))
+    );
+    assert!(geometry.is_interactive());
+    assert!(geometry.egui_id.is_none(), "read-only geometry adds no duplicate input widget");
+}
+
+#[test]
 fn focus_ring_modality_tracks_actual_pointer_and_keyboard_dispatches() {
     let mouse = pointer(true, pos2(50.0, 50.0));
     assert!(!focus_modality(true, &mouse));

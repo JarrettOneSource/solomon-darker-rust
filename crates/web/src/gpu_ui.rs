@@ -789,6 +789,30 @@ impl UiFrame<'_> {
         }
     }
 
+    /// Geometry of a painted control whose real gestures are owned outside egui.
+    pub fn record_painted_rect(
+        &self,
+        painter: &Painter,
+        id: &str,
+        label: &str,
+        role: &str,
+        rect: Rect,
+        enabled: bool,
+    ) {
+        let transform = self.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
+        self.record_clipped_rect(
+            id,
+            label,
+            role,
+            transform * rect,
+            transform * painter.clip_rect(),
+            enabled,
+        );
+        if let Some(widget) = self.widgets.borrow_mut().get_mut(id) {
+            widget.layer_id = Some(painter.layer_id());
+        }
+    }
+
     pub fn record_rect(&self, id: &str, label: &str, role: &str, rect: Rect, enabled: bool) {
         self.record_clipped_rect(
             id,
