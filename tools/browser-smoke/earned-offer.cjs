@@ -5,16 +5,15 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {pathToFileURL} = require('node:url');
 const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
+const {prepareBoneyardNavigation, walkSolomonEntrance} = require('./solomon-entrance.cjs');
 const ui = require('./gpu-ui.cjs');
 
 const output = path.resolve(process.env.OUT || 'earned-offer');
 const url = process.env.URL || 'http://127.0.0.1:4190/?host=1';
-const source = path.resolve(process.env.SOLOMON_WEBSITE_DIR, 'frontend/src/game');
 const receipt = {passed:false, artifact:process.env.ARTIFACT, checks:[], runs:[],
   commands:[], results:[], errors:[], qualification:'ordinary earned inventory; no imported save or seed'};
 const held = new Set();
@@ -24,7 +23,6 @@ const participant = () => frame?.snapshot.participants[playerId];
 const player = () => participant()?.player;
 const world = () => frame?.snapshot.boneyard;
 const delay = milliseconds => page.waitForTimeout(milliseconds);
-const importSource = relative => import(pathToFileURL(path.join(source, relative)).href);
 
 async function until(predicate, label, timeout = 30000) {
   const deadline = Date.now() + timeout;
@@ -86,71 +84,6 @@ async function gameplayReady() {
     'the actual native participant is admitted', 120000);
   await ui.waitForUi(page, state => state.surface === 'hidden' && !state.inputScope
     && !state.capture.text && ui.findWidget(state, 'hud:health'), 'genuine gameplay input admission');
-}
-
-async function prepareNavigation() {
-  const [{NATIVE_GENERATED_BONEYARDS}, collision, navigation, camera] = await Promise.all([
-    importSource('host/native-generated-boneyards.ts'),
-    importSource('core-server/boneyard-collision.ts'),
-    importSource('core-server/boneyard-enemy-navigation.ts'),
-    importSource('renderer/boneyard-render-contract.ts'),
-  ]);
-  const template = NATIVE_GENERATED_BONEYARDS.find(row => row.sourceSha256 === world().source_sha256);
-  assert.ok(template, 'the real scene has an unchanged Source template');
-  assert.equal(template.geometrySha256, world().geometry_sha256);
-  const geometry = collision.createBoneyardCollisionWorld(template.scene);
-  const prepared = JSON.parse(fs.readFileSync(path.join(__dirname,
-    '../../web/assets/navigation', `${world().source_sha256}.json`), 'utf8'));
-  assert.equal(prepared.geometrySha256, world().geometry_sha256);
-  for (const row of prepared.meshes) navigation.installPreparedBoneyardNavigationMesh(geometry, {
-    key:[row.bounds.x,row.bounds.y,row.bounds.w,row.bounds.h,row.clearance].join(':'), mesh:row.mesh,
-  });
-  return {collision, navigation, geometry, scene:template.scene, camera};
-}
-
-async function approachSolomon(plan, run) {
-  const initial = world();
-  const start = participant().wizard.position;
-  const gates = new Map();
-  for (const leaf of initial.gate_leaves) {
-    const pair = gates.get(leaf.fence_eid) || [];
-    pair.push(leaf.hinge); gates.set(leaf.fence_eid, pair);
-  }
-  const gate = [...gates.values()].filter(pair => pair.length === 2)
-    .map(pair => ({x:(pair[0].x+pair[1].x)/2, y:(pair[0].y+pair[1].y)/2}))
-    .sort((a,b) => Math.hypot(a.x-start.x,a.y-start.y)-Math.hypot(b.x-start.x,b.y-start.y))[0];
-  assert.ok(gate, 'the ordinary entrance retains its actual gate');
-  const direction = initial.arena_transition.entry_side === 'North' ? 1 : -1;
-  const targets = [{x:gate.x,y:gate.y-direction*75}, {x:gate.x,y:gate.y+direction*150}];
-  let waypoint = 0, target, lastPlanTick = 0;
-  const deadline = Date.now() + 270000;
-  try {
-    while (world().encounter.phase === 'Digging' && Date.now() < deadline) {
-      assert.deepEqual(observed.errors, []);
-      const at = participant().wizard.position;
-      if (waypoint < targets.length) target = targets[waypoint];
-      else {
-        const end = initial.encounter.position;
-        if (Math.hypot(at.x-end.x,at.y-end.y) < 90) { await release(); await delay(50); continue; }
-        if (!target || Math.hypot(at.x-target.x,at.y-target.y) < 15
-          || frame.snapshot.ticks-lastPlanTick > 100) {
-          const route = plan.navigation.findBoneyardEnemyRoute({bodyRadius:25,
-            bounds:plan.scene.bounds, clearance:25, start:at, end, endBodyRadius:0,
-            world:plan.geometry, ignoredSourceIds:new Set(plan.collision.boneyardBodyCollisionSourceIds(end,plan.geometry,30))});
-          assert.ok(route && route.length > 1, 'unchanged Source navigation can reach Solomon');
-          target = route.find(point => Math.hypot(point.x-at.x,point.y-at.y) >= 12) || end;
-          lastPlanTick = frame.snapshot.ticks;
-        }
-      }
-      const dx = target.x-at.x, dy = target.y-at.y, close = Math.hypot(dx,dy) < 12;
-      if (close && waypoint < targets.length) { waypoint++; target = null; }
-      await movement(!close && Math.abs(dx)>2 ? Math.sign(dx) : 0,
-        !close && Math.abs(dy)>5 ? Math.sign(dy) : 0);
-      run.approach.push({tick:frame.snapshot.ticks, position:at, target, waypoint});
-      await delay(50);
-    }
-    assert.notEqual(world().encounter.phase, 'Digging', 'real movement wakes Solomon');
-  } finally { await release(); }
 }
 
 function screenPoint(position, plan) {
@@ -260,7 +193,12 @@ async function combat(plan, run) {
       const run = {runId:world().run_id, sourceSha256:world().source_sha256,
         geometrySha256:world().geometry_sha256, seed:world().seed, approach:[], samples:[]};
       receipt.runs.push(run);
-      const plan = await prepareNavigation(); await approachSolomon(plan,run); await combat(plan,run);
+      const plan = await prepareBoneyardNavigation(world());
+      const runOutput = path.join(output, `run-${attempt+1}`);
+      fs.mkdirSync(runOutput, {recursive:true});
+      run.approach = await walkSolomonEntrance(page, {snapshot:() => frame.snapshot,
+        playerId:() => playerId, output:runOutput, plan});
+      await combat(plan,run);
       await shot(`earned-run-${attempt}`);
       await until(async () => {
         if (player().progression.pending_offer) await chooseOffer(player().progression.pending_offer);
@@ -277,6 +215,7 @@ async function combat(plan, run) {
     const shlorio = await ui.byLabel(page, 'Shlorio', {role:'button',prefix:'hud:shortcut:'});
     await ui.click(page, shlorio.id); await ui.widget(page, 'panel:service');
     const before = player().economy.gold, fee = player().economy.dowsing_fee;
+    assert.equal(fee, 650, 'the first unpaid Source Dowse fee is exactly650gold');
     await ui.click(page, 'panel:dowse');
     await until(() => player().economy.dowsing_rolled, 'the genuinely earned paid Dowse is accepted');
     const offers = player().economy.dowsing_offers;
