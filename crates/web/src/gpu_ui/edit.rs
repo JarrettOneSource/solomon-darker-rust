@@ -12,7 +12,7 @@ use egui::{Color32, FontId, Pos2, Rect, Response, Sense, Vec2};
 use super::UiFrame;
 
 pub use font_run::{
-    FontRunOptions, NativeFontRun, NativeFontStroke, font_run, font_run_with_options,
+    FontRunOptions, NativeFontRun, NativeFontStroke, OverflowWrap, font_run, font_run_with_options,
 };
 pub use model::{Rules as EditorRules, Selection as TextSelection};
 pub use widget::{NativeEditOutput, NativeTextEdit};
@@ -88,6 +88,7 @@ fn label(
             tab_size: style.tab_size,
             letter_spacing: style.letter_spacing,
             stroke: style.stroke,
+            ..Default::default()
         },
     )?;
     let (_, rect) = ui.allocate_space(run.size());

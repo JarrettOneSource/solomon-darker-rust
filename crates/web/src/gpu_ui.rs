@@ -31,8 +31,8 @@ use solomon_graphics::{BlendMode, ColorFilter, Renderer};
 
 pub use edit::{
     EditorRules, FontRunOptions, NativeEditOutput, NativeFontRun, NativeFontStroke,
-    NativeLabelStyle, NativeTextEdit, TextSelection, font_run, font_run_with_options, shaped_label,
-    shaped_label_with_effect, text_edit_focused,
+    NativeLabelStyle, NativeTextEdit, OverflowWrap, TextSelection, font_run, font_run_with_options,
+    shaped_label, shaped_label_with_effect, text_edit_focused,
 };
 pub use effects::GroupEffect;
 pub use geometry::{clip_polygon_ellipse, css_bezier};

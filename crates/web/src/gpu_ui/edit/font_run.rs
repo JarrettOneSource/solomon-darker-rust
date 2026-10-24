@@ -24,9 +24,19 @@ pub struct NativeFontStroke {
 const TILE_WIDTH: u32 = 2048;
 const TILE_CONTENT: f32 = (TILE_WIDTH - 2) as f32;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OverflowWrap {
+    /// CSS normal wrapping permits an unbreakable word to overflow its line box.
+    Normal,
+    /// Native editors retain grapheme fallback and their full editable advances.
+    #[default]
+    BreakWord,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FontRunOptions {
     pub wrap_width: Option<f32>,
+    pub overflow_wrap: OverflowWrap,
     pub line_height: Option<f32>,
     pub tab_size: Option<f32>,
     pub letter_spacing: Option<f32>,
@@ -302,6 +312,7 @@ fn wrap_rows(
     width: Option<f32>,
     probe: &FontProbe,
     tab_size: f32,
+    overflow_wrap: OverflowWrap,
 ) -> Result<Vec<std::ops::Range<usize>>, String> {
     let Some(width) = width else { return Ok(std::iter::once(0..text.len()).collect()) };
     if text.is_empty() {
@@ -345,12 +356,20 @@ fn wrap_rows(
             fit = end;
         }
         if fit == start {
-            for (index, grapheme) in text[start..].grapheme_indices(true) {
-                let end = start + index + grapheme.len();
-                if fit > start && probe.width(&text[start..end], tab_size) > width {
-                    break;
+            if overflow_wrap == OverflowWrap::Normal {
+                fit = breaks
+                    .iter()
+                    .copied()
+                    .find(|&end| end > start)
+                    .expect("a nonempty run ends at a native line break");
+            } else {
+                for (index, grapheme) in text[start..].grapheme_indices(true) {
+                    let end = start + index + grapheme.len();
+                    if fit > start && probe.width(&text[start..end], tab_size) > width {
+                        break;
+                    }
+                    fit = end;
                 }
-                fit = end;
             }
         }
         rows.push(start..fit);
@@ -385,21 +404,32 @@ pub fn geometry(
         let mut top = 0.0;
         for paragraph in text.split_inclusive('\n') {
             let body = paragraph.strip_suffix('\n').unwrap_or(paragraph);
-            for span in wrap_rows(body, options.wrap_width, probe, options.tab_size.unwrap_or(8.0))?
-            {
+            for span in wrap_rows(
+                body,
+                options.wrap_width,
+                probe,
+                options.tab_size.unwrap_or(8.0),
+                options.overflow_wrap,
+            )? {
                 let offset = body[..span.start].encode_utf16().count();
                 // Empty SVG text nodes still need an explicit node for Range.
                 let mut line = if span.is_empty() {
                     empty_line(start + offset, top, reference)
                 } else {
                     probe.line(
-                        &body[span],
+                        &body[span.clone()],
                         start + offset,
                         top,
                         reference,
                         options.tab_size.unwrap_or(8.0),
                     )?
                 };
+                if options.overflow_wrap == OverflowWrap::Normal {
+                    line.width = probe.width(
+                        body[span].trim_end_matches([' ', '\t']),
+                        options.tab_size.unwrap_or(8.0),
+                    );
+                }
                 if let Some(height) = options.line_height {
                     let leading = (height - line.height) / 2.0;
                     line.baseline += leading;
@@ -459,6 +489,7 @@ struct RunKey {
     font: String,
     color: Color32,
     wrap: Option<u32>,
+    overflow_wrap: OverflowWrap,
     line_height: Option<u32>,
     tab_size: Option<u32>,
     letter_spacing: Option<u32>,
@@ -478,6 +509,7 @@ pub struct NativeFontRun {
     pub(crate) geometry: Arc<Geometry>,
     pixels: f32,
     letter_spacing: f32,
+    overflow_wrap: OverflowWrap,
     stroke: Option<NativeFontStroke>,
     raster: Vec<RasterLine>,
     tiles: Mutex<BTreeMap<(usize, i32), TextureHandle>>,
@@ -490,8 +522,20 @@ struct RasterLine {
     baseline: f32,
 }
 
-fn aligned_origin(line: &Line, bounds: Rect, align: egui::Align) -> Pos2 {
-    pos2(align.align_size_within_range(line.width, bounds.x_range()).min, bounds.top())
+fn aligned_origin(
+    line: &Line,
+    bounds: Rect,
+    align: egui::Align,
+    overflow_wrap: OverflowWrap,
+) -> Pos2 {
+    // Source CSS centers an inline row within its line box. An overlong row
+    // expands that box and starts at the clip's left edge.
+    let width = if overflow_wrap == OverflowWrap::Normal && align == egui::Align::Center {
+        line.width.min(bounds.width())
+    } else {
+        line.width
+    };
+    pos2(align.align_size_within_range(width, bounds.x_range()).min, bounds.top())
 }
 
 impl NativeFontRun {
@@ -512,7 +556,7 @@ impl NativeFontRun {
         self.geometry.lines.iter().zip(&self.raster).filter(|(line, _)| !line.text.is_empty()).fold(
             Rect::NOTHING,
             |all, (line, raster)| {
-                let origin = aligned_origin(line, bounds, align);
+                let origin = aligned_origin(line, bounds, align, self.overflow_wrap);
                 line.paint_spans.iter().fold(all, |all, span| {
                     let source = raster.bounds.intersect(Rect::from_x_y_ranges(
                         span.source.start..=span.source.end,
@@ -595,7 +639,7 @@ impl NativeFontRun {
     ) -> Result<(), String> {
         let pixels = self.pixels;
         for (index, line) in self.geometry.lines.iter().enumerate() {
-            let origin = aligned_origin(line, bounds, align);
+            let origin = aligned_origin(line, bounds, align, self.overflow_wrap);
             let clip = painter.clip_rect().translate(-origin.to_vec2());
             let bounds = self.raster[index].bounds;
             if line.text.is_empty() {
@@ -747,6 +791,7 @@ pub fn font_run_with_options(
         font: super::super::fonts::font_css(&font.family, font.size),
         color,
         wrap: options.wrap_width.map(f32::to_bits),
+        overflow_wrap: options.overflow_wrap,
         line_height: options.line_height.map(f32::to_bits),
         tab_size: options.tab_size.map(f32::to_bits),
         letter_spacing: options.letter_spacing.map(f32::to_bits),
@@ -812,6 +857,7 @@ pub fn font_run_with_options(
         geometry,
         pixels,
         letter_spacing: options.letter_spacing.unwrap_or(0.0),
+        overflow_wrap: options.overflow_wrap,
         stroke: options.stroke,
         raster,
         tiles: Mutex::new(BTreeMap::new()),
@@ -827,4 +873,33 @@ pub fn font_run_with_options(
         }
     });
     Ok(run)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn centered_rows_follow_native_inline_overflow_and_fit_alignment() {
+        // Native pinned Cloud h2: at701px, a445.375px inline row starts at148
+        // inside its405px clip. A fitting169.09375px phone row starts110.453125.
+        let mut line = empty_line(0, 0.0, Rect::from_min_size(Pos2::ZERO, vec2(0.0, 37.8)));
+        line.width = 445.375;
+        let bounds = Rect::from_min_size(pos2(148.0, 36.0), vec2(405.0, 37.8));
+        assert_eq!(
+            aligned_origin(&line, bounds, egui::Align::Center, OverflowWrap::Normal),
+            pos2(148.0, 36.0)
+        );
+        assert_eq!(
+            aligned_origin(&line, bounds, egui::Align::Center, OverflowWrap::BreakWord),
+            pos2(127.8125, 36.0),
+            "existing centered nowrap callers preserve their original placement"
+        );
+        line.width = 169.093_75;
+        let bounds = Rect::from_min_size(pos2(28.0, 80.0), vec2(334.0, 37.8));
+        assert_eq!(
+            aligned_origin(&line, bounds, egui::Align::Center, OverflowWrap::Normal),
+            pos2(110.453_125, 80.0)
+        );
+    }
 }

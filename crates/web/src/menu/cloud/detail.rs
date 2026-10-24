@@ -2,11 +2,58 @@
 //! ports `DarkCloudModDetail`, `DarkCloudGallery` and `DarkCloudComments` lifetimes.
 use super::rows::ink;
 use super::{super::widgets, art::CloudArt, format, images::CloudImages};
-use crate::gpu_ui::{FontRunOptions, NativeFontRun, UiFrame, font_run, font_run_with_options};
+use crate::gpu_ui::{
+    FontRunOptions, NativeFontRun, OverflowWrap, UiFrame, font_run, font_run_with_options,
+};
 use crate::hosted::{ModComments, ModDetail, ModSubscription, ModSummary};
 use crate::menu::{HostedMenuAction, ModSubscriptionAction};
 use egui::{Color32, Rect, Ui, Vec2};
 use solomon_sim::native_ui_text::{NativeUiFontName, measure_native_ui_text};
+
+struct DetailHeader {
+    title: Rect,
+    author: Rect,
+    height: f32,
+}
+
+fn detail_header(panel: Rect, viewport: Vec2, fallback_height: Option<f32>) -> DetailHeader {
+    let phone = viewport.x <= 700.0;
+    let short = viewport.y <= 620.0;
+    let minimum: f32 = if short {
+        70.0
+    } else if phone {
+        120.0
+    } else {
+        90.0
+    };
+    let padding_top = if short {
+        8.0
+    } else if phone {
+        56.0
+    } else {
+        12.0
+    };
+    let padding_bottom = if short || phone { 8.0 } else { 12.0 };
+    let padding_x = if phone { 4.0 } else { 124.0 };
+    let title_height = fallback_height.unwrap_or(34.0);
+    let gap = if fallback_height.is_some() { 6.0 } else { 0.0 };
+    let intrinsic = padding_top + title_height + gap + 23.2 + padding_bottom;
+    let height = if fallback_height.is_some() { minimum.max(intrinsic) } else { minimum };
+    let center = if fallback_height.is_some() { (height - intrinsic) / 2.0 } else { 0.0 };
+    let title = Rect::from_min_size(
+        panel.min + Vec2::new(padding_x, padding_top + center),
+        Vec2::new(panel.width() - padding_x * 2.0, title_height),
+    );
+    DetailHeader {
+        title,
+        author: Rect::from_min_size(
+            title.min + Vec2::new(0.0, title_height + gap),
+            Vec2::new(title.width(), 23.2),
+        ),
+        height,
+    }
+}
+
 pub(super) struct ModDetailView {
     pub summary: ModSummary,
     detail: Option<ModDetail>,
@@ -237,46 +284,69 @@ impl ModDetailView {
         art.panel(frame, ui, rect)?;
         let phone = view.width() <= 700.0;
         let short = view.height() <= 620.0;
-        let header_height = if short {
-            70.0
-        } else if phone {
-            120.0
-        } else {
-            90.0
-        };
-        let title_top = if short {
-            8.0
-        } else if phone {
-            56.0
-        } else {
-            12.0
-        };
         let summary = self.detail.as_ref().map_or(&self.summary, |d| &d.summary);
-        frame.record_rect(
-            "cloud-detail-title",
-            &summary.name,
-            "heading",
-            Rect::from_min_size(
-                rect.min + Vec2::new(0.0, title_top),
-                Vec2::new(rect.width(), 34.0),
-            ),
-            false,
+        let native = solomon_sim::native_ui_text::layout_native_ui_text(
+            &solomon_sim::native_ui_text::NativeUiTextSpec {
+                scale: 1.05,
+                ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
+                    NativeUiFontName::Menu,
+                    &summary.name,
+                    0.0,
+                    0.0,
+                )
+            },
         );
+        let fallback = if native.unsupported_code_points.is_empty() {
+            None
+        } else {
+            // The Source fallback is ordinary inline text; its CSS whitespace
+            // collapses before normal phone wrapping. Bitmap text stays authored.
+            let text = summary
+                .name
+                .split([' ', '\t', '\r', '\n', '\u{c}'])
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            let title_width = rect.width() - if phone { 8.0 } else { 248.0 };
+            let size = solomon_sim::native_ui_text::native_ui_font(NativeUiFontName::Menu).metrics
+                [0] as f32
+                * 1.05;
+            Some(font_run_with_options(
+                ui.ctx(),
+                egui::FontId::new(size, egui::FontFamily::Name("Cinzel".into())),
+                widgets::color(0xd9ba70),
+                &text,
+                FontRunOptions {
+                    wrap_width: phone.then_some(title_width),
+                    overflow_wrap: OverflowWrap::Normal,
+                    line_height: Some(size * 1.5),
+                    ..Default::default()
+                },
+            )?)
+        };
+        let header = detail_header(rect, view.size(), fallback.as_ref().map(|run| run.size().y));
+        frame.record_rect("cloud-detail-title", &summary.name, "heading", header.title, false);
         frame.record_value("cloud-detail-title", &summary.name, None);
-        let title_pad = if phone { 4.0 } else { 124.0 };
-        ink(
-            frame,
-            ui,
-            &summary.name,
-            NativeUiFontName::Menu,
-            1.05,
-            0xd9ba70,
-            Rect::from_min_size(
-                rect.min + Vec2::new(title_pad, title_top),
-                Vec2::new(rect.width() - title_pad * 2.0, 34.0),
-            ),
-            true,
-        )?;
+        if let Some(run) = fallback {
+            run.paint_aligned(
+                frame,
+                &ui.painter().with_clip_rect(header.title.intersect(ui.clip_rect())),
+                header.title,
+                egui::Align::Center,
+                1.0,
+            )?;
+        } else {
+            ink(
+                frame,
+                ui,
+                &summary.name,
+                NativeUiFontName::Menu,
+                1.05,
+                0xd9ba70,
+                header.title,
+                true,
+            )?;
+        }
         ink(
             frame,
             ui,
@@ -284,10 +354,7 @@ impl ModDetailView {
             NativeUiFontName::Medium,
             1.0,
             0xd9ba70,
-            Rect::from_min_size(
-                rect.min + Vec2::new(title_pad, title_top + 34.0),
-                Vec2::new(rect.width() - title_pad * 2.0, 23.2),
-            ),
+            header.author,
             true,
         )?;
         let back = Rect::from_min_size(
@@ -317,7 +384,7 @@ impl ModDetailView {
             74.0
         };
         let content = Rect::from_min_max(
-            rect.min + Vec2::new(if phone { 4.0 } else { 24.0 }, header_height + 12.0),
+            rect.min + Vec2::new(if phone { 4.0 } else { 24.0 }, header.height + 12.0),
             rect.max - Vec2::new(if phone { 4.0 } else { 24.0 }, footer_height),
         );
         let mut child =
@@ -1393,7 +1460,7 @@ pub(super) fn subscription_action(value: &str) -> Option<ModSubscriptionAction> 
 #[cfg(test)]
 mod tests {
     use super::gallery_swipe;
-    use egui::{Event, PointerButton, TouchPhase};
+    use egui::{Event, PointerButton, Rect, TouchPhase, Vec2};
 
     fn pass(
         ctx: &egui::Context,
@@ -1495,5 +1562,38 @@ mod tests {
         assert_eq!(swipe(40.0, true, false), Some("cloud-gallery-previous"));
         assert_eq!(swipe(-72.0, false, false), None);
         assert_eq!(swipe(-72.0, true, true), None);
+    }
+
+    #[test]
+    fn fallback_header_matches_native_wrapped_and_nowrap_flow() {
+        // Pinned fa08 dark-cloud-dialogs.css, native Chrome with the Website's
+        // imported faces: 25.2/37.8 title, 6px margin, 16/23.2 author.
+        for (width, height, title_height, header_height, title_x, title_y, author_y) in [
+            (390.0, 844.0, 75.6, 168.781_25, 28.0, 80.0, 161.593_75),
+            (700.0, 844.0, 37.8, 130.984_38, 28.0, 80.0, 123.796_875),
+            (701.0, 844.0, 37.8, 90.984_375, 148.0, 36.0, 79.796_875),
+            (896.0, 414.0, 37.8, 82.984_375, 148.0, 32.0, 75.796_875),
+            (390.0, 414.0, 75.6, 120.781_25, 28.0, 32.0, 113.593_75),
+        ] {
+            let viewport = Vec2::new(width, height);
+            let panel = Rect::from_center_size(
+                egui::pos2(width / 2.0, height / 2.0),
+                Vec2::new(1100.0_f32.min(width - 48.0), 820.0_f32.min(height - 48.0)),
+            );
+            let header = super::detail_header(panel, viewport, Some(title_height));
+            for (actual, expected) in [
+                (header.height, header_height),
+                (header.title.left(), title_x),
+                (header.title.top(), title_y),
+                (header.author.top(), author_y),
+            ] {
+                assert!(
+                    (actual - expected).abs() < 0.03,
+                    "{viewport:?}: {actual} vs native {expected}"
+                );
+            }
+            assert!((header.title.height() - title_height).abs() < 0.001);
+            assert!(header.author.bottom() <= panel.top() + header.height);
+        }
     }
 }
