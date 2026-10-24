@@ -16,13 +16,13 @@ fn the_fixed_native_context_keeps_notifications_above_gameplay_and_below_hud() {
     let rect = Rect::from_min_size(egui::Pos2::ZERO, vec2(40.0, 40.0));
     let mut colors = Vec::new();
     for _ in 0..2 {
+        ctx.set_fixed_layer_order(&[world, notification, hud]);
         let output = ctx.run_pass(
             egui::RawInput {
                 screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 300.0))),
                 ..Default::default()
             },
             |ctx| {
-                ctx.set_fixed_layer_order(&[world, notification, hud]);
                 // Deliberately paint in the opposite order. The actual layer
                 // queue, rather than call order, must preserve native z order.
                 egui::Area::new(egui::Id::unique("game-hud"))
