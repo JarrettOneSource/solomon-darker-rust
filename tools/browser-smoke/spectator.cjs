@@ -481,6 +481,7 @@ async function close(client) {
     }
     await ui.click(leader.page,'settings-back');
     await ui.click(leader.page,'settings-back');
+    await ui.surface(leader.page,'title');
     await startNewGame(leader.page,{name:'Severin',element:'fire',discipline:'arcane',continueLocal:true});
     await ui.click(leader.page,'social/party');await ui.click(leader.page,'social/party-settings');
     const code=(await ui.widget(leader.page,'social/copy')).value;assert.ok(code);

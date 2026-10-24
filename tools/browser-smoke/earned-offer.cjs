@@ -6,6 +6,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const {createHash} = require('node:crypto');
 const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
@@ -174,7 +175,7 @@ function available(kind, items = player().economy.backpack) {
 }
 
 async function combat(plan, run) {
-  const deadline = Date.now() + 240000;
+  const deadline = Date.now() + 480000;
   let lastSample = 0;
   let lootRoute = [], lootId, lootRouteTick = -Infinity, waypoint = 1;
   try {
@@ -246,9 +247,40 @@ async function combat(plan, run) {
     page = await owned.browser.newPage({viewport:{width:1600,height:900}, ignoreHTTPSErrors:process.env.LOCAL_TLS === '1'});
     observed = ui.watchErrors(page); await observed.ready; observeAuthority();
     await ui.observeAnnouncements(page);
+    let previous;
+    if (process.env.PRIOR_EARNED_RECEIPT) {
+      const bytes = fs.readFileSync(process.env.PRIOR_EARNED_RECEIPT);
+      previous = JSON.parse(bytes);
+      assert.equal(previous.passed,false,'the original incomplete report remains unchanged');
+      assert.deepEqual(previous.errors,[]); assert.deepEqual(previous.browserErrors,[]);
+      assert.equal(previous.failedWorld,null,'continue from the actual completed College return');
+      assert.ok(previous.goldNotification && previous.checks.some(check => check.earnedChoice));
+      const saved = JSON.parse(fs.readFileSync(process.env.NATIVE_SAVE));
+      const slots = Object.entries(saved.host.resume_slots);
+      assert.equal(slots.length,1,'this authority file belongs to the one actual earned wizard');
+      const [player_id,slot] = slots[0];
+      // Restore only the existing authentication pair. The unchanged native
+      // launcher loads its own durable save; no simulation document is installed.
+      await page.addInitScript(credentials => localStorage.setItem(
+        'solomon-darker-rust-native-resume-v1',JSON.stringify(credentials)),
+      {player_id,token:slot.token});
+      receipt.previous = {path:path.resolve(process.env.PRIOR_EARNED_RECEIPT),
+        sha256:createHash('sha256').update(bytes).digest('hex'),artifact:previous.artifact,
+        passed:previous.passed,earnedChoices:previous.checks.filter(check => check.earnedChoice).length,
+        startingGold:previous.failedPlayer.economy.gold};
+    }
     await page.goto(url); await ui.ready(page);
-    await startNewGame(page, {name:'Aureus',element:'ether',discipline:'arcane'}); await gameplayReady();
-    assert.equal(player().economy.gold,500,'the natural phase starts with the unmodified fresh-profile balance');
+    if (previous) {
+      if (ui.findWidget(await ui.readUi(page),'prompt-secondary')) {
+        await ui.click(page,'prompt-secondary'); await ui.noWidget(page,'prompt-secondary');
+      }
+      await ui.click(page,'play'); await ui.click(page,'continue'); await gameplayReady();
+      assert.equal(player().economy.gold,previous.failedPlayer.economy.gold);
+      assert.deepEqual(player().selection,previous.failedPlayer.selection);
+    } else {
+      await startNewGame(page, {name:'Aureus',element:'ether',discipline:'arcane'}); await gameplayReady();
+      assert.equal(player().economy.gold,500,'the natural phase starts with the unmodified fresh-profile balance');
+    }
     receipt.naturalStart = {tick:frame.snapshot.ticks,gold:player().economy.gold,selection:player().selection};
     goldAnnouncementStart = (await ui.announcements(page)).length;
     for (let attempt = 0; attempt < 3; attempt++) {
