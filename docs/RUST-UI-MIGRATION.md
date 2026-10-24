@@ -843,3 +843,12 @@ seeds both the modal and notification cursors without replay. The genuine choice
 still opens its offer. Both contexts settle errors[] and Chrome exits zero gracefully.
 This explicitly covers Source-produced inventory imported through the real File chooser,
 not a naturally earned rank-book drop.
+Book layer recovery also retains actual nesting. c140 `player-panels.css` places
+belt effects4, tooltip8, flybys9 and dragger10 inside the transformed stage;
+`viewport.rs:129–132` reparents compact tooltips to the book root, before fixed
+navigation10. Active flight/drag suppresses tooltip, but trailing afterimages can
+coexist with a tooltip or new drag. Separate actual passive GPU painters preserve
+those overlaps: wide tooltip is below afterimages, while a compact portaled tooltip
+is above the stage and below navigation. All remain in body book30. The native
+regression drains the real graphics layers in both layouts, independently of paint
+registration order; Source afterimage lifetime and interaction admission stay intact.

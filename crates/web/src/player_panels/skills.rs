@@ -395,7 +395,8 @@ impl PlayerPanels {
             let painter = c.frame.ctx.layer_painter(tooltip_layer_id());
             (egui::pos2(x as f32, y as f32), scale as f32, painter)
         } else {
-            (egui::pos2(r.x as f32, r.y as f32) + c.origin, 1.0, c.painter.clone())
+            let tooltip = c.on_layer(tooltip_layer_id());
+            (egui::pos2(r.x as f32, r.y as f32) + c.origin, 1.0, tooltip.painter)
         }
     }
 }

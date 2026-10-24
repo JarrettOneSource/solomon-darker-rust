@@ -86,6 +86,15 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
             namespace: self.namespace,
         }
     }
+    pub fn on_layer(&self, layer: egui::LayerId) -> Self {
+        let mut canvas = self.at(0.0, 0.0);
+        let transform =
+            self.frame.ctx.layer_transform_to_global(self.painter.layer_id()).unwrap_or_default();
+        self.frame.ctx.set_transform_layer(layer, transform);
+        canvas.painter =
+            self.frame.ctx.layer_painter(layer).with_clip_rect(self.painter.clip_rect());
+        canvas
+    }
     pub fn namespace(&self, namespace: &'static str) -> Self {
         let mut c = self.at(0.0, 0.0);
         c.namespace = namespace;
@@ -718,10 +727,11 @@ impl PlayerPanels {
             c.art(&self.ui, 75, [1562.0, 868.0], [1.0, 1.0], 0.0, 0xffffff)?;
             c.button("unforge", "Unforge selected item", HudRect::new(1500.0, 800.0, 100.0, 100.0));
         }
+        let effects = c.on_layer(belt_effects_layer_id());
         for (slot, burst) in self.bursts.borrow().iter() {
             burst.paint(
                 c.frame,
-                &c.painter,
+                &effects.painter,
                 &self.ui,
                 crate::ui::belt_pull_off::BeltPullOffDraw {
                     center: rect(hud.belt[slot % 8]).center() + c.origin,
@@ -812,6 +822,39 @@ pub(super) fn modal_layer_id(scope: &str) -> egui::LayerId {
     egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique(scope))
 }
 
+pub(super) fn belt_effects_layer_id() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("panel-belt-effects"))
+}
+
+pub(super) fn dragger_layer_id() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("panel-dragger"))
+}
+
+pub(super) fn book_layers(
+    body: egui::LayerId,
+    compact: bool,
+    book_result: Option<egui::LayerId>,
+) -> Vec<egui::LayerId> {
+    let mut layers = vec![body, belt_effects_layer_id()];
+    if !compact {
+        layers.push(super::skills::tooltip_layer_id());
+    }
+    layers.extend([super::flyby::layer_id(), dragger_layer_id()]);
+    // Compact tooltips are portaled out of the transformed stage in Source;
+    // the fixed navigation remains above both stage and tooltip.
+    if compact {
+        layers.push(super::skills::tooltip_layer_id());
+    }
+    layers.extend([
+        super::viewport::navigation_layer_id(),
+        modal_layer_id(super::crafting::DYE_MODAL_SCOPE),
+        modal_layer_id(super::notices::NOTICE_MODAL_SCOPE),
+        super::sack_rename::layer_id(),
+    ]);
+    layers.extend(book_result);
+    layers
+}
+
 /// Native Spell Welding divides its glow along the top-right/bottom-left diagonal.
 pub(crate) fn paint_split_art(
     frame: &UiFrame<'_>,
@@ -893,6 +936,52 @@ pub(crate) fn native_area_in(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_book_passive_layers_keep_the_source_tooltip_flyby_and_toolbar_contexts() {
+        for compact in [false, true] {
+            let ctx = egui::Context::default();
+            let body =
+                egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("player-panels"));
+            let actual = [
+                body,
+                belt_effects_layer_id(),
+                super::super::skills::tooltip_layer_id(),
+                super::super::flyby::layer_id(),
+                dragger_layer_id(),
+                super::super::viewport::navigation_layer_id(),
+            ];
+            ctx.set_fixed_layer_order(&book_layers(body, compact, None));
+            let output = ctx.run_pass(egui::RawInput::default(), |ctx| {
+                // Deliberately paint in reverse registration order. These are
+                // genuine passive GPU painters, just like trailing item images.
+                for index in (0..actual.len()).rev() {
+                    ctx.layer_painter(actual[index]).rect_filled(
+                        Rect::from_min_size(Pos2::ZERO, egui::vec2(100.0, 100.0)),
+                        0.0,
+                        Color32::from_rgb(index as u8 + 10, 0, 0),
+                    );
+                }
+            });
+            let painted: Vec<_> = output
+                .shapes
+                .iter()
+                .filter_map(|shape| {
+                    if let egui::Shape::Rect(rect) = &shape.shape {
+                        Some(usize::from(rect.fill.r() - 10))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            output.drop_without_applying_deltas();
+            assert_eq!(
+                painted,
+                if compact { vec![0, 1, 3, 4, 2, 5] } else { vec![0, 1, 2, 3, 4, 5] },
+                "Source stage/portal parentage is preserved at compact={compact}"
+            );
+        }
+    }
 
     #[test]
     fn compact_body_drag_preserves_the_first_toolbar_tap_and_body_clip() {
