@@ -1,5 +1,89 @@
 use super::*;
 
+fn browser_key(code: &str, key: &str, pressed: bool) -> BrowserKey {
+    BrowserKey {
+        code: code.to_owned(),
+        key: key.to_owned(),
+        pressed,
+        repeat: false,
+        alt: false,
+        ctrl: false,
+        shift: false,
+        meta: false,
+    }
+}
+
+#[test]
+fn consuming_a_native_escape_retires_its_code_projection_for_later_controllers() {
+    let ctx = Context::default();
+    let codes = [browser_key("Escape", "Escape", true)];
+    frame_codes(
+        &ctx,
+        vec![egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }],
+        &codes,
+        |frame| {
+            assert_eq!(frame.key_codes()[0].code, "Escape");
+            assert!(frame.ctx.input_mut(|input| {
+                input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
+            }));
+            assert_eq!(frame.key_codes.len(), 1, "the immutable native receipt remains intact");
+            assert!(
+                frame.key_codes().is_empty(),
+                "a later menu cannot replay the panel's consumed native Escape"
+            );
+        },
+    );
+}
+
+#[test]
+fn unconsumed_native_menu_keys_remain_available() {
+    for (code, key, mapped) in [
+        ("Escape", "Escape", egui::Key::Escape),
+        ("F2", "F2", egui::Key::F2),
+        ("KeyA", "a", egui::Key::A),
+    ] {
+        let ctx = Context::default();
+        let codes = [browser_key(code, key, true)];
+        frame_codes(
+            &ctx,
+            vec![egui::Event::Key {
+                key: mapped,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            &codes,
+            |frame| {
+                let available = frame.key_codes();
+                assert_eq!(available.len(), 1);
+                assert_eq!(available[0].code, code);
+            },
+        );
+    }
+}
+
+#[test]
+fn native_releases_and_unmapped_binding_codes_keep_their_original_metadata() {
+    let ctx = Context::default();
+    let codes = [browser_key("Escape", "Escape", false), browser_key("IntlYen", "Dead", true)];
+    frame_codes(&ctx, Vec::new(), &codes, |frame| {
+        let available = frame.key_codes();
+        assert_eq!(available.len(), 2);
+        assert_eq!(available[0].code, "Escape");
+        assert!(!available[0].pressed);
+        assert_eq!(available[1].code, "IntlYen");
+        assert_eq!(available[1].key, "Dead");
+        assert!(available[1].pressed);
+    });
+}
+
 fn frame(
     ctx: &Context,
     events: Vec<egui::Event>,
