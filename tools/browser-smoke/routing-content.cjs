@@ -87,6 +87,10 @@ async function newGameRoute() {
   if(ui.findWidget(next,'prompt-primary')) await ui.click(page,'prompt-primary');
   await ui.surface(page,'routing');
 }
+async function cancelRouteToTitle() {
+  await ui.click(page,'routing-back');await ui.surface(page,'play');
+  await page.keyboard.press('Escape');await ui.surface(page,'title');
+}
 async function finishCreate(name) {
   await ui.waitForUi(page,s=>s.surface==='create'||ui.findWidget(s,'college-intro')
     ||ui.findWidget(s,'panel:dialogue'),'Create or initial College');
@@ -169,7 +173,7 @@ function admittedMods() {return receipt.admissions.at(-1).mods.map(mod=>`${mod.i
     await until(()=>activeMods?.length===1&&activeMods[0].id===b.id,'failed package actually disabled');
     assert.equal((await ui.widget(page,'routing-back')).enabled,true);await shot('routing-download-error');
     receipt.checks.push('held real download seals all consent actions; exact503 exposes the Source error and disables only its owning package');
-    await ui.click(page,'routing-back');await ui.surface(page,'title');
+    await cancelRouteToTitle();
     await cloud();await ui.click(page,'cloud-tab:subscribed');
     await ui.click(page,`cloud-subscription:enable:${a.slug}`);
     await ui.widget(page,`cloud-subscription:disable:${a.slug}`,{enabled:true});
@@ -194,7 +198,7 @@ function admittedMods() {return receipt.admissions.at(-1).mods.map(mod=>`${mod.i
     for(const text of ['ADDED','MISSING','CHANGED',`${c.id} v1.0.0`,`${b.id} v1.0.0`,`${a.id} v1.0.0 → v2.0.0`])
       assert.ok(mismatch.value.includes(text),`actual mismatch includes ${text}`);
     receipt.mismatch=mismatch.value;await shot('routing-save-mismatch');
-    await ui.click(page,'routing-back');await ui.surface(page,'title');
+    await cancelRouteToTitle();
     assert.deepEqual((await request('api/game/saves/0')).save,baseline,'cancel preserves the entire saved document/revision');
     await ui.click(page,'play');await ui.click(page,'continue');await ui.widget(page,'routing/dialog');
     await ui.click(page,'routing-continue');
