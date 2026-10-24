@@ -521,6 +521,18 @@ async function close(client) {
       && guest.frame.host.connected_player_ids.length === 2, 'same actual two-player College');
     checked('actual private party code and consent admit two fresh wizard selections');
 
+    // Random waves can kill the unattended peer before the leader's dying pose
+    // finishes. Use the supported developer Console to keep a real living target
+    // for this bounded spectator check; no saved state or protocol is injected.
+    await consoleCommand(leader,
+      `sd.dev.grant_skill(64, 12, "${guest.id}"); sd.player.restore_health(10000000, "${guest.id}"); return true`);
+    await until(() => participant(guest).player.book.permanent_ranks[64] === 12,
+      'the actual Console grants the living peer Health Up');
+    assert.ok(participant(guest).player.combat.maximum_health >= 700);
+    leader.peerSurvival = {qualification: 'controlled developer Console prerequisite',
+      playerId: guest.id, skillId: 64, rank: 12,
+      maximumHealth: participant(guest).player.combat.maximum_health};
+
     step = 'Boneyard readiness';
     await ui.click(leader.page,(await ui.byLabel(leader.page,'Enter the Boneyard',{role:'button'})).id);
     await until(() => clients.every(client => client.frame?.snapshot.boneyard
@@ -638,7 +650,8 @@ async function close(client) {
     const artifact = build && {revision: build.revision, builtAt: build.builtAt,
       wasm: Object.fromEntries(Object.entries(build.files)
         .filter(([file]) => /^solomon-web-.*\.wasm$/.test(path.basename(file))))};
-    const receipt = {passed: !failure, step, artifact, checks, failure};
+    const receipt = {passed: !failure, step, artifact, checks, failure,
+      peerSurvival: clients[0]?.peerSurvival};
     receipt.browserClosed = (await Promise.all(clients.map(close))).every(Boolean);
     if (!receipt.browserClosed) receipt.passed = false;
     receipt.clients = clients.map(client => ({...summary(client), cleanup: client.cleanup}));
