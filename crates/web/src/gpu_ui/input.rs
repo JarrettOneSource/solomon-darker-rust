@@ -1,5 +1,8 @@
 //! Native canvas events and a nonvisual IME/clipboard adapter.
 
+#[cfg(test)]
+mod cancel_tests;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -81,6 +84,23 @@ impl InputQueue {
             || !self.codes.is_empty()
             || !self.edits.is_empty()
             || self.clipboard_error.is_some()
+    }
+
+    fn finish_pointer(
+        &mut self,
+        phase: TouchPhase,
+        pos: Pos2,
+        button: egui::PointerButton,
+        modifiers: Modifiers,
+        touch: bool,
+    ) {
+        let pressed = matches!(phase, TouchPhase::Start);
+        self.events.push(UiEvent::PointerButton { pos, button, pressed, modifiers });
+        if touch && !pressed {
+            self.primary_touch = None;
+            self.events.push(UiEvent::PointerGone);
+        }
+        self.finish_dispatch();
     }
 
     fn finish_dispatch(&mut self) {
@@ -569,7 +589,6 @@ impl BrowserInput {
                     session.pointer = None;
                 }
                 if !matches!(phase, TouchPhase::Move) {
-                    let pressed = matches!(phase, TouchPhase::Start);
                     let button = match pointer.button() {
                         1 => egui::PointerButton::Middle,
                         2 => egui::PointerButton::Secondary,
@@ -581,17 +600,7 @@ impl BrowserInput {
                         pointer.shift_key(),
                         pointer.meta_key(),
                     );
-                    queue.events.push(UiEvent::PointerButton {
-                        pos,
-                        button,
-                        pressed,
-                        modifiers: mods,
-                    });
-                    if touch && !pressed {
-                        queue.primary_touch = None;
-                        queue.events.push(UiEvent::PointerGone);
-                    }
-                    queue.finish_dispatch();
+                    queue.finish_pointer(phase, pos, button, mods, touch);
                 }
             })?;
         }
