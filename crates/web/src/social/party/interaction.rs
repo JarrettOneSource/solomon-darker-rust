@@ -27,7 +27,7 @@ impl PartyMenuInteraction {
 }
 
 use super::super::Intent;
-use egui::Rect;
+use egui::Response;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use wasm_bindgen::{JsCast, closure::Closure};
@@ -37,7 +37,7 @@ use web_sys::{Document, Event, MouseEvent};
 /// Its promise result retains the displayed code, so a later snapshot cannot report a stale copy.
 pub(in crate::social) struct PartyClipboard {
     document: Document,
-    bounds: Rc<Cell<Option<Rect>>>,
+    target: Rc<RefCell<Option<Response>>>,
     code: Rc<RefCell<Option<String>>>,
     handled: Rc<Cell<bool>>,
     pending: Rc<RefCell<Vec<Intent>>>,
@@ -45,17 +45,20 @@ pub(in crate::social) struct PartyClipboard {
 }
 impl PartyClipboard {
     pub fn new(document: &Document, pending: Rc<RefCell<Vec<Intent>>>) -> Result<Self, String> {
-        let bounds: Rc<Cell<Option<Rect>>> = Rc::new(Cell::new(None));
+        let target: Rc<RefCell<Option<Response>>> = Rc::new(RefCell::new(None));
         let code: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
         let handled = Rc::new(Cell::new(false));
-        let clicked_bounds = bounds.clone();
+        let clicked_target = target.clone();
         let clicked_code = code.clone();
         let clicked_handled = handled.clone();
         let clicked_pending = pending.clone();
         let click = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
             let Some(mouse) = event.dyn_ref::<MouseEvent>() else { return };
             let point = egui::pos2(mouse.client_x() as f32, mouse.client_y() as f32);
-            if clicked_bounds.get().is_some_and(|bounds| bounds.contains(point))
+            if clicked_target
+                .borrow()
+                .as_ref()
+                .is_some_and(|target| crate::ui::trusted_gesture::owns_point(target, point))
                 && let Some(code) = clicked_code.borrow().clone()
             {
                 event.prevent_default();
@@ -70,14 +73,14 @@ impl PartyClipboard {
                 true,
             )
             .map_err(|_| "Party clipboard trusted click")?;
-        Ok(Self { document: document.clone(), bounds, code, handled, pending, click })
+        Ok(Self { document: document.clone(), target, code, handled, pending, click })
     }
-    pub fn target(&self, bounds: Rect, code: String) {
-        self.bounds.set(Some(bounds));
+    pub fn target(&self, response: &Response, code: String) {
+        *self.target.borrow_mut() = Some(response.clone());
         *self.code.borrow_mut() = Some(code);
     }
     pub fn clear(&self) {
-        self.bounds.set(None);
+        self.target.borrow_mut().take();
         self.code.borrow_mut().take();
     }
     pub fn copy(&self, code: String) {

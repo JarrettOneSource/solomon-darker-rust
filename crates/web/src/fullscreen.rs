@@ -30,7 +30,7 @@ struct FullscreenState {
     active: bool,
     show_help: bool,
     error: Option<String>,
-    bounds: Option<Rect>,
+    target: Option<egui::Response>,
     gesture_handled: bool,
 }
 pub struct FullscreenControl {
@@ -47,7 +47,7 @@ impl FullscreenControl {
             active: fullscreen_active(document),
             show_help: false,
             error: None,
-            bounds: None,
+            target: None,
             gesture_handled: false,
         }));
         let clicked = state.clone();
@@ -55,7 +55,12 @@ impl FullscreenControl {
         let click = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
             let Some(mouse) = event.dyn_ref::<MouseEvent>() else { return };
             let point = pos2(mouse.client_x() as f32, mouse.client_y() as f32);
-            if !clicked.borrow().bounds.is_some_and(|bounds| bounds.contains(point)) {
+            if !clicked
+                .borrow()
+                .target
+                .as_ref()
+                .is_some_and(|target| crate::ui::trusted_gesture::owns_point(target, point))
+            {
                 return;
             }
             event.prevent_default();
@@ -94,7 +99,7 @@ impl FullscreenControl {
     pub fn update(&mut self, placement: FullscreenPlacement) -> Result<(), String> {
         self.placement = placement;
         if placement == FullscreenPlacement::Hidden {
-            self.state.borrow_mut().bounds = None;
+            self.state.borrow_mut().target = None;
         }
         Ok(())
     }
@@ -122,7 +127,7 @@ impl FullscreenControl {
             (state.mode, state.active, state.show_help, state.error.clone())
         };
         if self.placement == FullscreenPlacement::Hidden || mode == ControlMode::Hidden {
-            self.state.borrow_mut().bounds = None;
+            self.state.borrow_mut().target = None;
             return Ok(());
         }
         let ctx = frame.ctx.clone();
@@ -151,7 +156,7 @@ impl FullscreenControl {
             .fixed_pos(point)
             .show(&ctx, |ui| {
                 let (bounds, response) = ui.allocate_exact_size(size, egui::Sense::click());
-                self.state.borrow_mut().bounds = Some(bounds);
+                self.state.borrow_mut().target = Some(response.clone());
                 let painter = ui.painter();
                 painter.rect_filled(bounds, 3.0, Color32::from_black_alpha(178));
                 painter.rect_stroke(
