@@ -244,6 +244,12 @@ async function leavePlayer(owner) {
     const playing = await refresh(spectator,listing,'IN GAME');
     assert.equal(playing.enabled,false,'the actual playing party cannot be joined through its row');
     await spectator.page.screenshot({path:path.join(output,'owned-party-in-game.png')});
+    await spectator.page.setViewportSize({width:896,height:414});
+    await gpu.noWidget(spectator.page,'join-subtitle');
+    const compactHeading=gpu.bounds(await gpu.widget(spectator.page,'join-heading'));
+    assert.ok(compactHeading.height<35,'Source compact Join uses the actual20px heading');
+    assert.equal((await gpu.widget(spectator.page,`join-listing:${listing}`)).enabled,false);
+    await spectator.page.screenshot({path:path.join(output,'owned-party-in-game-compact.png')});
     checked('the actual running owned party is displayed IN GAME with its Join action disabled');
     for (const owner of [leader,visitor]) await leavePlayer(owner);
     checked('both admitted players leave through the real menu and persist their actual final checkpoint');
