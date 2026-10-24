@@ -3682,6 +3682,12 @@ impl Context {
         self.memory(|memory| memory.areas().fixed_layer_order_index(layer))
     }
 
+    /// Compare the effective back-to-front order used by paint, hits and modals.
+    /// This includes both registered fixed layers and ordinary unregistered layers.
+    pub fn compare_layer_order(&self, a: LayerId, b: LayerId) -> core::cmp::Ordering {
+        self.memory(|memory| memory.areas().compare_order(a, b))
+    }
+
     /// Restrict this pass's real widget to an authored hit shape in global coordinates.
     ///
     /// The predicate runs under the Context lock: it must be pure and must not call

@@ -90,6 +90,15 @@ fn fixed_source_order_agrees_for_real_paint_pointer_modal_and_reappearance() {
     let ctx = Context::default();
     let ids = layers();
     ctx.set_fixed_layer_order(&ids);
+    assert!(ctx.compare_layer_order(ids[2], ids[3]).is_lt());
+    assert!(
+        ctx.compare_layer_order(LayerId::new(Order::Middle, Id::unique("unregistered")), ids[0])
+            .is_lt()
+    );
+    assert!(
+        ctx.compare_layer_order(ids[4], LayerId::new(Order::Foreground, Id::unique("popup")))
+            .is_lt()
+    );
     let scrambled = [3, 2, 0];
     ordered_pass(&ctx, &scrambled, &[], Vec::new());
     let (_, painted) = ordered_pass(&ctx, &scrambled, &[], Vec::new());

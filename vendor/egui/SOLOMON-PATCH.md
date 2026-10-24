@@ -25,7 +25,7 @@ Local changes are confined to seven implementation files:
   queries use actual clipped child regions and optional pure authored hit predicates.
 
 Public integration methods are `Context::set_fixed_layer_order`,
-`Context::fixed_layer_order_index`, `Context::set_widget_hit_test`,
+`Context::fixed_layer_order_index`, `Context::compare_layer_order`, `Context::set_widget_hit_test`,
 `Context::pointer_widget_at`, and `Area::background_interactable`.
 The application supplies its recovered fixed registry before input/layout. Hit predicates
 reuse its canonical ellipse/rotation geometry and cannot call Context while it is locked.
