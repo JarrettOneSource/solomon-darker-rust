@@ -187,7 +187,13 @@ async function buyClothing(recipes){
     receipt.saved={belt:structuredClone(player().belt),clothing:structuredClone(item(clothingId))};
     await page.keyboard.press('Escape');await ready();await page.keyboard.press('Escape');await ui.surface(page,'pause');
     await ui.click(page,'leave');await ui.surface(page,'title');
-    await page.reload();await ui.ready(page);await ui.click(page,'continue');await ready();
+    frame=null;
+    await ui.observeDocumentReplacement(page,()=>page.reload({waitUntil:'load'}));
+    await ui.ready(page);await ui.click(page,'play');await ui.click(page,'continue');
+    const resumed=await ui.waitForUi(page,s=>s.surface==='hidden'||ui.findWidget(s,'routing-continue'),
+      'saved wizard admission or ordinary local-play consent',{timeout:120000});
+    if(ui.findWidget(resumed,'routing-continue'))await ui.click(page,'routing-continue');
+    await ready();
     assert.deepEqual(player().belt,receipt.saved.belt);assert.deepEqual(item(clothingId).icon_tints,receipt.saved.clothing.icon_tints);
     receipt.checks.push('owned potion drag into bank two and ordinary saved Leave/reload/Continue preserve all bindings and both colors');
     step='native skill activation from the second and third banks';
