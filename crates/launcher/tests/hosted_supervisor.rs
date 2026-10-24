@@ -634,6 +634,7 @@ impl Client {
         panic!("the real hosted authority did not reach the requested state")
     }
 
+    #[track_caller]
     fn finish_close(&mut self) {
         if self.closed {
             return;
