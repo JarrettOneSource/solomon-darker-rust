@@ -272,6 +272,28 @@ pub fn text_edit_focused(ctx: &egui::Context) -> bool {
     focus.is_some_and(|id| ctx.memory(|memory| memory.has_focus(id)))
 }
 
+#[derive(Clone, Copy)]
+struct NativeTabFocus(Option<egui::Id>);
+
+pub(super) fn selects_all_on_native_tab(ctx: &egui::Context, id: egui::Id) -> bool {
+    ctx.data(|data| {
+        data.get_temp::<NativeTabFocus>(egui::Id::unique("native-tab-focus"))
+            .is_some_and(|target| target.0 == Some(id))
+    })
+}
+
+/// Only a genuine native Tab selects a singleline input's value on entry.
+/// Controller bumpers call focus directly in Source and retain its selection.
+pub(super) fn finish_native_focus(ctx: &egui::Context, keys: &[super::BrowserKey]) {
+    let tab = keys
+        .iter()
+        .any(|key| key.pressed && key.code == "Tab" && !key.ctrl && !key.alt && !key.meta);
+    let target = if tab { ctx.memory(|memory| memory.focused()) } else { None };
+    ctx.data_mut(|data| {
+        data.insert_temp(egui::Id::unique("native-tab-focus"), NativeTabFocus(target));
+    });
+}
+
 pub(super) fn set_focus(ctx: &egui::Context, editors: &[EditorDescriptor]) {
     let id = editors
         .iter()

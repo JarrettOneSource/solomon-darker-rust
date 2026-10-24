@@ -194,7 +194,10 @@ impl<'a> NativeTextEdit<'a> {
             state.pointer_caret = None;
         }
         state.model.reconcile(self.text);
-        if self.select_all && enabled {
+        if enabled
+            && (self.select_all
+                || !self.multiline && has_focus && super::selects_all_on_native_tab(frame.ctx, id))
+        {
             let units = self.text.encode_utf16().count();
             state.model.select(TextSelection { anchor: 0, focus: units });
         }

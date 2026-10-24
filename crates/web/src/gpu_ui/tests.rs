@@ -61,6 +61,7 @@ fn frame_native(
         })
     })
     .drop_without_applying_deltas();
+    edit::finish_native_focus(ctx, codes);
     edit::set_focus(ctx, &editors.into_inner());
     assert!(editor_errors.into_inner().is_empty());
     widgets.into_inner()
@@ -521,6 +522,58 @@ fn controller_confirmation_clicks_a_text_field_and_directions_leave_it_spatially
         ctx.memory(|memory| memory.has_focus(next)),
         "controller direction leaves text spatially"
     );
+}
+
+#[test]
+fn native_tab_entry_selects_singleline_text_while_controller_linear_focus_retains_its_caret() {
+    for physical in [false, true] {
+        let ctx = Context::default();
+        let mut text = "A".to_owned();
+        let focus = std::cell::Cell::new(true);
+        let descriptor = std::cell::RefCell::new(None);
+        let mut paint = |frame: &mut UiFrame<'_>| {
+            frame.ctx.root_ui(|ui| {
+                NativeTextEdit::singleline(&mut text, "tab-field", "Name")
+                    .native_name(Pos2::ZERO, 1.0)
+                    .request_focus(focus.get())
+                    .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(200.0, 45.0)));
+                *descriptor.borrow_mut() = frame.editors.borrow().last().cloned();
+                ui.interact(
+                    Rect::from_min_size(pos2(260.0, 30.0), vec2(100.0, 45.0)),
+                    egui::Id::unique("tab-next"),
+                    egui::Sense::click(),
+                );
+            });
+        };
+        frame(&ctx, Vec::new(), &mut paint);
+        focus.set(false);
+        frame(&ctx, Vec::new(), &mut paint);
+        let mut key = browser_key("Tab", "Tab");
+        let keys = if physical { vec![key.clone()] } else { Vec::new() };
+        frame_codes(&ctx, vec![enter_key(egui::Key::Tab)], &keys, &mut paint);
+        frame(&ctx, Vec::new(), &mut paint);
+        assert!(ctx.memory(|memory| memory.has_focus(egui::Id::unique("tab-next"))));
+        key.shift = true;
+        let keys = if physical { vec![key] } else { Vec::new() };
+        let back = egui::Event::Key {
+            key: egui::Key::Tab,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::SHIFT,
+        };
+        frame_codes(&ctx, vec![back], &keys, &mut paint);
+        frame(&ctx, Vec::new(), &mut paint);
+        let descriptor = descriptor.borrow();
+        let descriptor = descriptor.as_ref().unwrap();
+        assert!(descriptor.focused);
+        let expected = if physical {
+            edit::TextSelection { anchor: 0, focus: 1 }
+        } else {
+            edit::TextSelection::caret(1)
+        };
+        assert_eq!(descriptor.model.selection(), expected, "native Tab provenance={physical}");
+    }
 }
 
 #[test]

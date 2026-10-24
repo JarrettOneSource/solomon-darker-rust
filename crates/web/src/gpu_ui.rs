@@ -1094,6 +1094,7 @@ impl GpuUi {
                 native_click_count: pass.click_count,
             });
         });
+        edit::finish_native_focus(&self.ctx, &pass.codes);
         run.textures.append(std::mem::take(&mut output.textures_delta));
         run.retired_images.extend(retired_images.into_inner());
         result?;
