@@ -141,7 +141,13 @@ async function pauseNotice(key,text,afterAnnouncement,name,{resume=true}={}) {
     await page.keyboard.press('Backquote');await ready();
     await ui.click(page,(await ui.byLabel(page,'Hagatha',{role:'button',prefix:'hud:shortcut:'})).id);
     if(player().economy.owned_perk_selectors.includes(7)) {
-      await ui.click(page,'panel:owned-perk:7');
+      // The desktop Party chip overlaps this stock panel cell. Exercise the
+      // ordinary keyboard route; do not force a pointer through the covering UI.
+      for(let count=0;count<100;count++) {
+        await page.keyboard.press('Tab');await ui.nextFrame(page);
+        if(ui.findWidget(await ui.readUi(page),'panel:owned-perk:7')?.focused)break;
+      }
+      await ui.focused(page,'panel:owned-perk:7');await page.keyboard.press('Enter');
       await until(()=>!player().economy.owned_perk_selectors.includes(7),'ordinary College charm removal');
       receipt.removedPreviousCharm=true;
     }
