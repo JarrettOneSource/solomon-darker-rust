@@ -50,13 +50,13 @@ fn body_hash(reader: &mut impl Read) -> (u64, Vec<u8>) {
 fn asset_http_paused_range_finishes_after_the_browser_resumes() {
     let assets = media_assets();
     let mut server = assets.start(TransportConfig::default());
-    let count = 18_799_976;
+    let count = 67_108_847;
     let (mut reader, headers) =
-        media_request(&server, "Range: bytes=17-18799992\r\n");
+        media_request(&server, "Range: bytes=17-67108863\r\n");
     assert!(headers.starts_with("HTTP/1.1 206 Partial Content\r\n"));
     assert!(headers.contains("Content-Type: audio/mpeg\r\n"));
     assert!(headers.contains(&format!("Content-Length: {count}\r\n")));
-    assert!(headers.contains("Content-Range: bytes 17-18799992/67108864\r\n"));
+    assert!(headers.contains("Content-Range: bytes 17-67108863/67108864\r\n"));
     // The real failure returned after35.224s from its30s write deadline. Keep
     // this reader paused beyond that existing deadline, not merely one poll.
     thread::sleep(Duration::from_secs(40));

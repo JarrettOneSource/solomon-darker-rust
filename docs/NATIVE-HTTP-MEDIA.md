@@ -55,3 +55,11 @@ readers remain paused. Existing framing/upgrade/API and asset semantics tests re
 required. Record the observed red before implementation, then native focused/full
 gates and immutable fixed-native identity. Root/QA owns the original browser rerun and
 paired artifact admission; a native regression alone does not claim that browser result.
+
+The initial public-TCP regression on source0e74d53 demonstrated framing starvation:
+four paused64MiB bodies made the small request hit its actual2s client read deadline
+(OS35/WouldBlock). Its18,799,976-byte single-range control still passed after40s, so
+that control did not establish a blocked sender and is not a timeout reproduction.
+Job `job_20261024T044655Z_f60a766645` retains both independent outcomes. The range is
+therefore strengthened to the64MiB fixture minus its17-byte offset, without changing
+production deadlines or adding a test-only transport knob.
