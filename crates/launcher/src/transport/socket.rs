@@ -104,7 +104,11 @@ impl Read for PrefixedStream {
 }
 impl Write for PrefixedStream {
     fn write(&mut self, input: &[u8]) -> io::Result<usize> {
-        self.stream.write(input)
+        let result = self.stream.write(input);
+        if input.starts_with(&[0x88, 0]) || input.ends_with(&[0x88, 0]) {
+            eprintln!("native-close-trace write len={} result={result:?}", input.len());
+        }
+        result
     }
     fn flush(&mut self) -> io::Result<()> {
         self.stream.flush()
@@ -434,6 +438,7 @@ fn drive_peer(
             }
             Ok(Message::Pong(_)) => missed_pongs = 0,
             Ok(Message::Close(frame)) => {
+                eprintln!("native-close-trace received peer={} frame={frame:?}", peer.id());
                 // Keep the queued reply through WouldBlock until it drains or the
                 // existing close deadline expires, preserving the accepted identity.
                 if let Some(close) = &mut closing {
