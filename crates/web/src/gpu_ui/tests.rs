@@ -64,7 +64,57 @@ fn frame_native(
     edit::finish_native_focus(ctx, codes);
     edit::set_focus(ctx, &editors.into_inner());
     assert!(editor_errors.into_inner().is_empty());
-    widgets.into_inner()
+    let mut widgets = widgets.into_inner();
+    rank_widgets(ctx, &mut widgets);
+    widgets
+}
+
+#[test]
+fn widget_ranks_keep_real_local_control_order_and_effective_layer_order() {
+    use egui::{Area, Id, LayerId, Order, Sense};
+    let ctx = Context::default();
+    let scene = LayerId::new(Order::Foreground, Id::unique("rank-scene"));
+    let social = LayerId::new(Order::Middle, Id::unique("rank-social"));
+    let ordinary = LayerId::new(Order::Middle, Id::unique("rank-ordinary"));
+    let popup = LayerId::new(Order::Foreground, Id::unique("rank-popup"));
+    ctx.set_fixed_layer_order(&[scene, social]);
+    let paint = |frame: &mut UiFrame<'_>| {
+        for (layer, controls) in [
+            (popup, vec![("popup", 220.0)]),
+            (social, vec![("social", 120.0)]),
+            (scene, vec![("scene-back", 20.0), ("scene-front", 20.0)]),
+            (ordinary, vec![("ordinary", 20.0)]),
+        ] {
+            Area::new(layer.id)
+                .order(layer.order)
+                .fixed_pos(Pos2::ZERO)
+                .fade_in(false)
+                .background_interactable(false)
+                .show(frame.ctx, |ui| {
+                    ui.set_min_size(vec2(400.0, 300.0));
+                    for (id, x) in controls {
+                        let response = ui.interact(
+                            Rect::from_min_size(pos2(x, 20.0), vec2(30.0, 30.0)),
+                            Id::unique(id),
+                            Sense::click(),
+                        );
+                        frame.record(id, id, "button", &response);
+                    }
+                });
+        }
+    };
+    frame(&ctx, Vec::new(), paint);
+    let widgets = frame(&ctx, Vec::new(), paint);
+    for (z, id) in
+        ["ordinary", "scene-back", "scene-front", "social", "popup"].into_iter().enumerate()
+    {
+        assert_eq!(widgets[id].z, z, "actual dense rank for {id}");
+    }
+    assert_eq!(
+        ctx.pointer_widget_at(pos2(30.0, 30.0)),
+        Some(Id::unique("scene-front")),
+        "the higher local rank agrees with the native hit target"
+    );
 }
 
 #[test]

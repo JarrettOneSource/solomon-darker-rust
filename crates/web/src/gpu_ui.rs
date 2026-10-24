@@ -686,9 +686,6 @@ impl UiFrame<'_> {
             widget.modal = self.ctx.memory(|memory| memory.top_modal_layer().is_some());
             widget.egui_id = Some(response.id);
             widget.layer_id = Some(response.layer_id);
-            if let Some(index) = self.ctx.fixed_layer_order_index(response.layer_id) {
-                widget.z = index;
-            }
             widget.activated = response.clicked();
             widget.interactive = response.sense.interactive();
             widget.keyboard_activated = response.clicked()
@@ -1111,6 +1108,7 @@ impl GpuUi {
         edit::set_focus(&self.ctx, &editors);
         self.input.set_editors(editors, pass.edits.last().map(|receipt| receipt.sequence))?;
         self.widgets = widgets.into_inner();
+        rank_widgets(&self.ctx, &mut self.widgets);
         if let Some(widget) = self.widgets.values().find(|widget| widget.duplicate) {
             let error = format!("GPU UI widget id {} was painted more than once", widget.id);
             return Err(error);
@@ -1231,6 +1229,20 @@ impl GpuUi {
     /// commits. Public diagnostics remain the last completed GPU submission.
     pub fn input_diagnostics(&self) -> &UiDiagnostics {
         &self.diagnostics
+    }
+}
+
+fn rank_widgets(ctx: &Context, widgets: &mut BTreeMap<String, WidgetGeometry>) {
+    let mut ordered: Vec<_> = widgets.values_mut().collect();
+    ordered.sort_by(|a, b| {
+        ctx.compare_layer_order(
+            a.layer_id.unwrap_or_else(egui::LayerId::background),
+            b.layer_id.unwrap_or_else(egui::LayerId::background),
+        )
+        .then_with(|| a.z.cmp(&b.z))
+    });
+    for (z, widget) in ordered.into_iter().enumerate() {
+        widget.z = z;
     }
 }
 
