@@ -531,7 +531,7 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Shared Pause/resume waiting; other-owner activity, dim/reveal, countdown/progress/rejoin; spectator rail/target/respawn | social | `shared_gameplay.rs`, `spectator.rs`; `hosted-session.cjs`, `spectator.cjs` | GPU source integrated; actual shared pause/respawn/target lifecycle pending composed browser proof |
 | Cheats/Console/developer observer; permissions, all resource/skill/world/dev controls, Lua submit/history/results/error/clear and bot targets | social | `cheats/**`, `observer.rs`; `authored-content.cjs`, `learned-bot.cjs`, `cheat-consent.cjs` | GPU source integrated; actual authorized Console/observer/bot journey pending composed browser proof |
 | Mobile editor; all six anchors/elements, drag/resize/rotate/snap, zoom/pan/pinch, multi-touch/cancel, undo/redo/reset/pages/dock/presets/save | social | `mobile_editor/**`, `sim/mobile_ui/**`; `mobile-editor.cjs`, `responsive.cjs` | 58df78d actual drag/Undo/Redo pass before the retained pointer-focus defect; its 24382f0 correction is integrated, full editor/resize/rotation/save/cancel rerun pending |
-| Authored mod surfaces; Cast/Shop/Reforge/Portal, skills/subskills/offers/quickbar, minimap actions, mounted HUD text/image/bar/button, party attributes | social | `mod_panels.rs`, `mod_skills.rs`, `mod_skill_quickbar.rs`, `mod_minimap.rs`, `mod_world_overlays/**`; `authored-content.cjs`, `mod-skills.cjs` | 58df78d authored-r3 admits the actual package and purchases; five borrowed textures each upload once, then old scaled-HUD clipping blocks progress; 24382f0 contains that repair, remaining widgets/filtering/sampling/reset proof pending |
+| Authored mod surfaces; Cast/Shop/Reforge/Portal, skills/subskills/offers/quickbar, minimap actions, mounted HUD text/image/bar/button, party attributes | social | `mod_panels.rs`, `mod_skills.rs`, `mod_skill_quickbar.rs`, `mod_minimap.rs`, `mod_world_overlays/**`; `authored-content.cjs`, `mod-skills.cjs` | 612acd0 authored-gpu-612acd0-onward-r2 passes nine groups/errors[]/Chrome5959 exit0, retaining prior actual purchase/drag receipts, custom icons, minimap Ping/audio, real Tonic use, signed saved Leave and same-run reload. All five borrowed images retain one upload/one world-owned delete and LINEAR/CLAMP sampling; no Console claim (consoleExecuted false). Other authored widgets remain in separate mod-skills routes |
 | Match loading; every recovered stage, progress/cancel/failure, host admission/world materialization | root | `match_loading.rs`; `boneyard.cjs`, `hosted-session.cjs`, `deployment-restart.cjs` | 88c3dfe complete two-seed ordinary Map/native-world/Leave/Continue/exact-save journey passes, including clean owned browser retirement; full stage/cancel/failure/host variants remain pending |
 | Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | GPU source integrated; real fullscreen/unsupported/standalone activation pending composed browser proof |
 | Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | GPU source integrated; actual update/close failure plus packaged journey pending composed browser proof |
@@ -1214,3 +1214,30 @@ Chrome88372 and native88361 exit0;4190 is released. Root owns one controlled rep
 with a separate native binary logging only canonical asset-copy errors, while client,
 inputs and driver stay unchanged. Complete Tutorial and earned-potion acceptance
 remain pending that investigation and the eventual full successful journey.
+
+
+The unchanged9fab client with diagnostic nativeef5d correlates the media failure
+without changing gameplay: canonical combat-file copy fails WouldBlock/OS35 after
+35.224308166s; the same real206 request later fails canceled:false with only
+6,291,456 of18,799,976 bytes. Its six functional checks reach Survive, including a
+genuinely earned scripted Health Potion (local LootPickup event4 at tick15812),
+visible text at offset0/baseline67/clip50/scale1, exactly one native announcement,
+and accepted Digit3 drink. Reviewed full screenshot and raw failure remain in
+`common-browser/9fab4e4/m5/tutorial-native-transport-trace-r2/`. The overall gate is
+still red; no terminal/full-Tutorial acceptance is inferred.
+
+Remaining notification producers and the existing oracle boundary are now explicit:
+
+| Notice | Accepted producer and recovered Source | Existing fixture/proof; missing browser work |
+| --- | --- | --- |
+| Gold and item text | `loot.rs::pickup` emits local LootPickup/actual text; coin sound selects gold tint. fa08 BoneyardScene403–429 consumes only the local player's accepted event. | `world-notifications-goldens.json` tests gold coalescing/format/clock; genuine scripted potion is observed above. HUD owns a natural earned Gold pickup and its matching visible/coalesced notice. |
+| Overloaded Mana | fa08 native-secondary-abilities emits overload when an active Firewalker/Mindstar/Regenerate reservation exceeds actual maximum mana, then clears toggles; BoneyardScene440–449 filters owner and current run. Rust secondary step/simulation emits the same event. | Retained `secondary-tick-goldens`23-overload and world-notification source-key fixtures cover the producer/projection separately. Missing GPU proof must activate actual learned toggles through real belt controls; a mana potion alone is not that producer. |
+| CHEAT DEATH | Actual lethal damage consumes purchased Hagatha selector7 charge, restores half maximum health and emits PlayerCheatDeath through player_feedback; fa08 BoneyardScene499–513 admits only local target text. | `current-player-damage-goldens` includes real damage receiver/charge precedence, rescue-session fixtures cover particles/clock, and notification fixtures cover source keys/visibility. Missing browser proof must buy the real charm and receive actual lethal enemy damage. |
+
+The browser rare-event setup may use existing private Cheats controls for funds and
+prerequisite skill grants, as separately authorized by root. It must retain those
+controlled prerequisites, genuine Hagatha purchase/toggle/damage receipts and
+local event IDs; it is not natural earned Gold. No generated/imported save, event
+injection or account-role change is permitted. `world-notifications.cjs` shares only
+read-only native geometry/scale/speech assertions; each caller owns the actual event
+witness. Historical loot-only fixtures remain unchanged.
