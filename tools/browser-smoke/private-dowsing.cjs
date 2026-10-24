@@ -154,9 +154,11 @@ async function referenceAndPurchase() {
     await ui.click(page, 'settings'); await ui.click(page, 'settings-page:cloud');
     if ((await ui.widget(page, 'settings-toggle:shared-hub')).selected)
       await ui.click(page, 'settings-toggle:shared-hub');
+    await ui.value(page, 'settings-toggle:shared-hub', 'false');
     await revealSettingsControl(page, 'settings-toggle:cheats');
     if (!(await ui.widget(page, 'settings-toggle:cheats')).selected)
       await ui.click(page, 'settings-toggle:cheats');
+    await ui.value(page, 'settings-toggle:cheats', 'true');
     assert.equal((await ui.widget(page, 'settings-toggle:cheats')).selected,true);
     await ui.click(page, 'settings-back'); await ui.click(page, 'settings-back');
     await ui.surface(page, 'title');
