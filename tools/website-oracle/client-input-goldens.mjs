@@ -84,7 +84,9 @@ scenario('normalization-aim-viewport-and-duplicate-suppression', [
   send({ ...input(), aim: { x: 20, y: 30 }, viewportWidth: 390, viewportHeight: 844 }),
   send({ ...input(), aim: { x: 20, y: 30 }, viewportWidth: 390, viewportHeight: 844 }),
   send({ ...input(), aim: { x: 21, y: 30 }, viewportWidth: 390, viewportHeight: 844 }),
-  send(input(false, 8)), send({ ...input(), viewportWidth: 0 }), send(input(true)),
+  // Slot 24 is invalid in both the historical Source and the current three-bank belt.
+  // The additional valid banks have separate client/host regression coverage.
+  send(input(false, 24)), send({ ...input(), viewportWidth: 0 }), send(input(true)),
 ])
 for (const blocker of ['pause', 'grace', 'barrier', 'offer', 'dead', 'gameOver']) {
   scenario(`stopped-${blocker}-and-authority-reset`, [

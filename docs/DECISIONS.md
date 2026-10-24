@@ -677,3 +677,21 @@ The browser input owner now captures Tab whenever an actual interactive GPU hit
 region or active editor exists. This admits the first native focus without
 requiring a previously focused widget. Other keys keep their existing capture
 rules, and no DOM control or forced focus call is introduced.
+
+### Three-bank input admission
+
+The existing player belt stores three eight-slot banks and the UI sends their
+absolute slot indices. Both input validators still imposed the historical
+eight-slot limit, so a correctly bound second or third bank could never cast.
+The client and native host now use `belt::PLAYER_BELT_SLOT_COUNT` as their common
+bound. Input sequencing, cast edges, acknowledgements and the wire shape remain
+unchanged; an invalid slot never advances a sequence.
+
+The client and host `all_three_hotbars` regressions fail on the old validators
+and cover the first/last slot of every bank, late press/release rebasing and
+invalid slots24/usize::MAX. The historical Website oracle remains unchanged:
+revision `bd93153c0aff32a656b2d37b9cfbcf070a5917d6` retains both recorded source
+hashes. Its regenerated fixtures use slot24 as their common invalid boundary,
+while the current additional valid banks are covered by those regressions and
+the actual `panel-variants.cjs` native casting journey. This does not claim the
+historical Source input validator accepted all three banks.

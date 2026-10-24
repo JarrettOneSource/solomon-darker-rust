@@ -4,6 +4,7 @@
 //! gets a later tick so a press and release between snapshots both reach the authority.
 //! `client-input-goldens.mjs` records the unchanged source method and its acknowledgements.
 
+use solomon_sim::belt::PLAYER_BELT_SLOT_COUNT;
 use solomon_sim::float::hypot;
 use solomon_sim::session::GameSessionInput;
 
@@ -38,7 +39,7 @@ impl ClientInputSequence {
         if input.aim.is_some_and(|aim| !aim.x.is_finite() || !aim.y.is_finite()) {
             return Err("game input must contain finite aim coordinates");
         }
-        if input.quickbar.is_some_and(|slot| slot > 7) {
+        if input.quickbar.is_some_and(|slot| slot >= PLAYER_BELT_SLOT_COUNT) {
             return Err("game input must contain a primary level and native skill quickbar slot");
         }
         if !input.viewport.x.is_finite() || input.viewport.x < 1.0 {

@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use solomon_sim::belt::PLAYER_BELT_SLOT_COUNT;
 use solomon_sim::float::hypot;
 use solomon_sim::session::GameSessionInput;
 
@@ -24,7 +25,7 @@ impl fmt::Display for InputRejection {
             Self::NonFiniteCoordinates => "input coordinates must be finite",
             Self::MovementMagnitude => "input movement magnitude exceeds one",
             Self::Viewport => "input viewport must be within 1 through 32768",
-            Self::Quickbar => "input quickbar must be null or a slot from 0 through 7",
+            Self::Quickbar => "input quickbar must be null or a slot from 0 through 23",
             Self::TargetTooFarAhead => "Input targets too far ahead of the server tick.",
             Self::QueueTooFarAhead => "Input queue extends too far ahead of the server tick.",
         })
@@ -51,7 +52,7 @@ pub fn validate_input(input: &GameSessionInput) -> Result<(), InputRejection> {
     {
         return Err(InputRejection::Viewport);
     }
-    if input.quickbar.is_some_and(|slot| slot > 7) {
+    if input.quickbar.is_some_and(|slot| slot >= PLAYER_BELT_SLOT_COUNT) {
         return Err(InputRejection::Quickbar);
     }
     Ok(())

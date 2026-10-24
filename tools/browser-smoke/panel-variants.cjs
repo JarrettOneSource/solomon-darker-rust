@@ -68,7 +68,7 @@ async function buy(stock){const gold=player().economy.gold,before=player().econo
       if((await ui.widget(page,`settings-toggle:${key}`)).selected)await ui.click(page,`settings-toggle:${key}`);
       await ui.value(page,`settings-toggle:${key}`,'false');}
     await ui.click(page,'settings-back');await ui.click(page,'settings-back');await ui.surface(page,'title');
-    await startNewGame(page,{name:'Lucian',element:'lightning',discipline:'arcane',continueLocal:true});await ready();
+    await startNewGame(page,{name:'Lucian',element:'air',discipline:'arcane',continueLocal:true});await ready();
     assert.equal(receipt.welcome.sessionKind,'PrivateCollege');assert.equal(receipt.welcome.developerAccess,true);
     await page.keyboard.press('Backquote');await ui.fill(page,'cheats/gold','20000');await ui.click(page,'cheats/submit:gold');
     await until(()=>player().economy.gold===20000,'declared SET GOLD prerequisite');

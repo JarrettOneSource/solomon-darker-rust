@@ -102,7 +102,9 @@ for (const value of [0, 1, 32768, 32768.001]) {
   validations.push({ ...input(), viewportWidth: value })
   validations.push({ ...input(), viewportHeight: value })
 }
-for (const slot of [0, 7, 8]) validations.push(input(false, slot))
+// Retain the unchanged Source validator over the common valid/invalid domain;
+// current three-bank acceptance is exercised through the native input interfaces.
+for (const slot of [0, 7, 24]) validations.push(input(false, slot))
 const validationRecords = validations.map(value => {
   let accepted = true
   try { decodePlayerCharacterInput(value, 'input') } catch { accepted = false }
