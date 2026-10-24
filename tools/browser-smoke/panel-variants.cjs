@@ -22,7 +22,9 @@ const player=()=>frame?.snapshot.participants[playerId]?.player;
 const item=id=>player().economy.backpack.find(row=>row.id===id);
 async function until(predicate,label,timeout=30000) {
   const end=Date.now()+timeout;
-  while(Date.now()<end){assert.deepEqual(observed.errors,[]);assert.deepEqual(receipt.errors,[]);
+  while(Date.now()<end){
+    if(observed.errors.length)await ui.settleErrors(page);
+    assert.deepEqual(observed.errors,[]);assert.deepEqual(receipt.errors,[]);
     if(await predicate())return;await page.waitForTimeout(25);}
   throw new Error(`Timed out: ${label}`);
 }
