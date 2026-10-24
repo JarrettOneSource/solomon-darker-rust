@@ -108,8 +108,12 @@ async function saved(page) {
     const initialJoystick = await transform(phone, 'leftJoystick');
     const box = ui.bounds(await ui.widget(phone, 'mobile/control:leftJoystick'));
     const {x,y} = ui.center(box); const client = await touch.newCDPSession(phone);
-    const input = (type, points) => client.send('Input.dispatchTouchEvent', {type,
-      touchPoints:points.map(([id,x,y]) => ({id,x,y}))});
+    let touchActive = false;
+    const input = async (type, points) => {
+      await client.send('Input.dispatchTouchEvent', {type,
+        touchPoints:points.map(([id,x,y]) => ({id,x,y}))});
+      touchActive = type !== 'touchEnd' && type !== 'touchCancel' && points.length > 0;
+    };
     try {
       await input('touchStart', [[1,x,y]]);
       await input('touchMove', [[1,x+80,y-55]]); await input('touchEnd', []);
@@ -122,7 +126,20 @@ async function saved(page) {
       await input('touchEnd', []);
       await changed(phone, 'leftJoystick', ([,,scale]) => scale !== beforePinch.scale,
         'two real touch pointers resize the same joystick');
-    } finally {await input('touchEnd', []); await client.detach();}
+      const cancelStart = ui.center(ui.bounds(await ui.widget(phone, 'mobile/control:leftJoystick')));
+      await input('touchStart', [[4,cancelStart.x,cancelStart.y]]);
+      await input('touchMove', [[4,cancelStart.x+20,cancelStart.y-10]]);
+      await input('touchCancel', []);
+      const afterCancel = await transform(phone,'leftJoystick');
+      const resume = ui.center(ui.bounds(await ui.widget(phone, 'mobile/control:leftJoystick')));
+      await input('touchStart', [[5,resume.x,resume.y]]);
+      await input('touchMove', [[5,resume.x-30,resume.y+20]]); await input('touchEnd', []);
+      await changed(phone,'leftJoystick',([x,y])=>x!==afterCancel.x||y!==afterCancel.y,
+        'a cancelled native touch releases ownership for the next real edit');
+    } finally {
+      try {if(touchActive)await input('touchEnd', []);}
+      finally {await client.detach();}
+    }
     await ui.tap(phone, 'mobile/tools'); await ui.tap(phone, 'mobile/rotate-right');
     await changed(phone, 'leftJoystick', ([,,,rotation]) => rotation === 15,
       'touch inspector rotation retains selected control');
@@ -142,7 +159,7 @@ async function saved(page) {
     assert.deepEqual(errors, []);
     const result = {checks:['18 real GPU controls','desktop drag/history/key rotation/resize',
       'draft isolated from storage','Save and Escape reset receipts',
-      'touch fullscreen/drag/pinch/rotation','saved touch layout restored'],errors};
+      'touch fullscreen/drag/pinch/cancel/rotation','saved touch layout restored'],errors};
     fs.writeFileSync(path.join(out, 'mobile-editor-results.json'), JSON.stringify(result,null,2));
     console.log(JSON.stringify(result));
   } catch (error) {
