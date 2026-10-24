@@ -174,7 +174,14 @@ impl ModSkillQuickbarView {
                                 let fit = size
                                     * (content.width() / size.x).min(content.height() / size.y);
                                 let image = egui::Rect::from_center_size(content.center(), fit);
-                                frame.image(ui.painter(), url, image, None, Color32::WHITE);
+                                frame.image_sampled(
+                                    ui.painter(),
+                                    url,
+                                    image,
+                                    None,
+                                    Color32::WHITE,
+                                    crate::gpu_ui::TextureSampling::Nearest,
+                                );
                                 let id = format!("mod/quickbar-icon:{}", row.slot);
                                 frame.record_rect(
                                     &id,
