@@ -1283,7 +1283,7 @@ impl PlayerPanels {
             && self.rename_sack.is_none()
             && frame.ctx.memory(|memory| memory.allows_interaction(keyboard_layer))
         {
-            for key in panel_keys(frame.ctx, frame.key_codes(), self.is_open()) {
+            for key in panel_keys(frame.ctx, &frame.key_codes(), self.is_open()) {
                 self.events.push(PanelEvent::Key(key));
             }
         }

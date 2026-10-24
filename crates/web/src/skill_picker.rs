@@ -330,7 +330,7 @@ impl SkillPicker {
                         "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"
                     )
                 {
-                    events.push(PickerEvent::Key(key.code.clone()));
+                    events.push(PickerEvent::Key(key.code));
                 }
             }
         }

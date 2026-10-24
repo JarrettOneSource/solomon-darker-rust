@@ -336,7 +336,7 @@ impl MenuUi {
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         self.cloud.retire_images(frame);
-        let keys = frame.key_codes().to_vec();
+        let keys = frame.key_codes();
         let editing = crate::gpu_ui::text_edit_focused(frame.ctx);
         let capturing_binding =
             self.screen == Screen::Settings && self.settings_view.awaiting_binding();
