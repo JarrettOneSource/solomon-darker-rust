@@ -614,6 +614,59 @@ mod focus_scroll_tests {
     use super::native_control_focus;
     use egui::{Context, Event, Id, Key, Modifiers, RawInput, Rect, Sense, Vec2};
 
+    fn native_context() -> Context {
+        let ctx = Context::default();
+        ctx.options_mut(|options| options.input_options.raw_point_scroll = true);
+        ctx
+    }
+
+    fn wheel_delta(ctx: &Context, time: f64, unit: Option<egui::MouseWheelUnit>) -> Vec2 {
+        let mut delta = Vec2::ZERO;
+        ctx.run_pass(
+            RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, Vec2::new(300.0, 160.0))),
+                time: Some(time),
+                events: unit
+                    .map(|unit| Event::MouseWheel {
+                        phase: egui::TouchPhase::Move,
+                        source: egui::MouseWheelSource::Unknown,
+                        unit,
+                        delta: Vec2::new(0.0, 100.0),
+                        modifiers: Modifiers::NONE,
+                    })
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            },
+            |ctx| delta = ctx.input(|input| input.smooth_scroll_delta()),
+        )
+        .drop_without_applying_deltas();
+        delta
+    }
+
+    #[test]
+    fn native_pixel_wheel_is_applied_once_without_changing_line_or_page_policy() {
+        for unit in
+            [egui::MouseWheelUnit::Point, egui::MouseWheelUnit::Line, egui::MouseWheelUnit::Page]
+        {
+            let native = native_context();
+            let default = Context::default();
+            let initial = wheel_delta(&native, 0.0, Some(unit));
+            let upstream = wheel_delta(&default, 0.0, Some(unit));
+            let later = wheel_delta(&native, 1.0 / 60.0, None);
+            let upstream_later = wheel_delta(&default, 1.0 / 60.0, None);
+            if unit == egui::MouseWheelUnit::Point {
+                assert_eq!(initial, Vec2::new(0.0, 100.0), "native pixels apply immediately");
+                assert_eq!(later, Vec2::ZERO, "no old pixels are replayed after native focus");
+                assert_ne!(initial, upstream, "upstream smoothing remains the default");
+                assert_ne!(upstream_later, Vec2::ZERO);
+            } else {
+                assert_eq!(initial, upstream, "unchanged {unit:?} input");
+                assert_eq!(later, upstream_later, "unchanged {unit:?} pacing");
+            }
+        }
+    }
+
     fn pass(ctx: &Context, events: Vec<Event>) -> (usize, Rect, Rect, f32) {
         pass_at(ctx, events, ctx.input(|input| input.time))
     }
@@ -684,7 +737,7 @@ mod focus_scroll_tests {
 
     #[test]
     fn real_tab_focus_reveals_controls_in_both_scroll_directions() {
-        let ctx = Context::default();
+        let ctx = native_context();
         ctx.memory_mut(|memory| memory.request_focus(Id::unique(("control", 0_usize))));
         let first = pass(&ctx, Vec::new());
         assert_eq!(first.0, 0);
@@ -716,7 +769,7 @@ mod focus_scroll_tests {
 
     #[test]
     fn real_cardinal_focus_reveals_controls_without_overriding_user_scroll() {
-        let ctx = Context::default();
+        let ctx = native_context();
         ctx.memory_mut(|memory| memory.request_focus(Id::unique(("control", 0_usize))));
         pass(&ctx, Vec::new());
         let arrow = |key, pressed| Event::Key {

@@ -59,6 +59,12 @@ pub struct InputOptions {
     /// Multiplier for the scroll speed when reported in [`crate::MouseWheelUnit::Line`]s.
     pub line_scroll_speed: f32,
 
+    /// Use platform-paced point deltas without additional wheel smoothing.
+    ///
+    /// Line/page deltas and the default smoothing policy remain unchanged.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub raw_point_scroll: bool,
+
     /// Controls the speed at which we zoom in when doing ctrl/cmd + scroll.
     pub scroll_zoom_speed: f32,
 
@@ -110,6 +116,7 @@ impl Default for InputOptions {
 
         Self {
             line_scroll_speed,
+            raw_point_scroll: false,
             scroll_zoom_speed: 1.0 / 200.0,
             max_click_dist: 6.0,
             max_click_duration: 0.8,
@@ -127,6 +134,7 @@ impl InputOptions {
     pub fn ui(&mut self, ui: &mut crate::Ui) {
         let Self {
             line_scroll_speed,
+            raw_point_scroll,
             scroll_zoom_speed,
             max_click_dist,
             max_click_duration,
@@ -145,6 +153,10 @@ impl InputOptions {
                     .on_hover_text(
                         "How many lines to scroll with each tick of the mouse wheel",
                     );
+                ui.end_row();
+
+                ui.label("Raw point scroll");
+                ui.checkbox(raw_point_scroll, "Use platform-paced deltas");
                 ui.end_row();
 
                 ui.label("Scroll zoom speed");
