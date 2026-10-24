@@ -808,11 +808,15 @@ pub struct GpuUi {
     accessibility: accessibility::Accessibility,
     widgets: BTreeMap<String, WidgetGeometry>,
     diagnostics: UiDiagnostics,
+    drawn_diagnostics: UiDiagnostics,
+    deferred_textures: egui::TexturesDelta,
+    deferred_retired_images: Vec<String>,
+    deferred_keyboard_activations: BTreeSet<String>,
     focus_from_keyboard: bool,
 }
 
 /// An input transaction whose final shapes are submitted after the world draw.
-#[must_use = "finish_frame must apply the managed texture updates and retire images"]
+#[must_use = "finish_frame or finish_native_dispatch must retain managed texture updates and retirements"]
 pub struct UiRun {
     pending: VecDeque<batches::InputPass>,
     layout_input: egui::RawInput,
@@ -877,12 +881,54 @@ impl GpuUi {
             accessibility,
             widgets: BTreeMap::new(),
             diagnostics: UiDiagnostics::default(),
+            drawn_diagnostics: UiDiagnostics::default(),
+            deferred_textures: egui::TexturesDelta::default(),
+            deferred_retired_images: Vec::new(),
+            deferred_keyboard_activations: BTreeSet::new(),
             focus_from_keyboard: true,
         })
     }
 
     pub fn context(&self) -> &Context {
         &self.ctx
+    }
+
+    pub fn set_native_dispatch_handler(
+        &mut self,
+        handler: impl Fn() -> Result<(), String> + 'static,
+    ) {
+        self.input.set_native_dispatch_handler(handler);
+    }
+
+    /// Commit prior native UI events before the next native editing/clipboard
+    /// dispatch. This performs no controller poll, simulation or GPU submission.
+    pub fn begin_native_dispatch(&mut self, time_seconds: f64) -> Result<Option<UiRun>, String> {
+        let viewport = self.diagnostics.viewport;
+        if viewport[0] <= 0.0 || viewport[1] <= 0.0 {
+            return Ok(None);
+        }
+        let pixels_per_point = self.diagnostics.pixels_per_point;
+        let Some(pending) = self.input.take_native(viewport, pixels_per_point, time_seconds)?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(self.input_run(viewport, pixels_per_point, pending)))
+    }
+
+    /// A native-only transaction owns the same managed texture lifecycle as a
+    /// drawn frame. Keep its deltas and real activations until the next submit.
+    pub fn finish_native_dispatch(
+        &mut self,
+        mut run: UiRun,
+        result: Result<(), String>,
+    ) -> Result<(), String> {
+        self.deferred_textures.append(run.textures);
+        self.deferred_retired_images.append(&mut run.retired_images);
+        self.deferred_keyboard_activations = run.keyboard_activations;
+        run.failure.map_or(result, Err).inspect_err(|error| {
+            self.diagnostics.error = Some(error.clone());
+            self.drawn_diagnostics.error = Some(error.clone());
+        })
     }
 
     pub fn run(
@@ -918,23 +964,32 @@ impl GpuUi {
         let physical = [self.canvas.width() as i32, self.canvas.height() as i32];
         let pixels_per_point = physical[0] as f32 / viewport[0];
         let pending = self.input.take(viewport, pixels_per_point, time_seconds)?;
+        self.diagnostics.frame += 1;
+        Ok(self.input_run(viewport, pixels_per_point, pending))
+    }
+
+    fn input_run(
+        &mut self,
+        viewport: [f32; 2],
+        pixels_per_point: f32,
+        pending: Vec<batches::InputPass>,
+    ) -> UiRun {
         let mut layout_input =
             pending.first().expect("each frame has an input/layout pass").raw.clone();
         layout_input.events.clear();
-        self.diagnostics.frame += 1;
-        Ok(UiRun {
+        UiRun {
             pending: pending.into(),
             layout_input,
             viewport,
-            physical,
+            physical: [self.canvas.width() as i32, self.canvas.height() as i32],
             pixels_per_point,
             output: None,
-            textures: egui::TexturesDelta::default(),
-            retired_images: Vec::new(),
-            keyboard_activations: BTreeSet::new(),
+            textures: std::mem::take(&mut self.deferred_textures),
+            retired_images: std::mem::take(&mut self.deferred_retired_images),
+            keyboard_activations: std::mem::take(&mut self.deferred_keyboard_activations),
             failure: None,
             capture: UiCapture::default(),
-        })
+        }
     }
 
     /// Returns after one input/layout commit, releasing all controller borrows.
@@ -1106,10 +1161,12 @@ impl GpuUi {
                 error
             };
             self.diagnostics.error = Some(error.clone());
+            self.drawn_diagnostics.error = Some(error.clone());
             return Err(error);
         }
         let (meshes, triangles) = painted.inspect_err(|error| {
             self.diagnostics.error = Some(error.clone());
+            self.drawn_diagnostics.error = Some(error.clone());
         })?;
         self.diagnostics.meshes = meshes;
         self.diagnostics.triangles = triangles;
@@ -1118,6 +1175,7 @@ impl GpuUi {
         self.diagnostics.static_images_ready = self.images.static_images_ready();
         self.diagnostics.static_images_total = self.images.static_image_count();
         self.diagnostics.error = None;
+        self.drawn_diagnostics = self.diagnostics.clone();
         Ok(run.capture)
     }
 
@@ -1135,6 +1193,11 @@ impl GpuUi {
         self.images.borrowed_paths()
     }
     pub fn diagnostics(&self) -> &UiDiagnostics {
+        &self.drawn_diagnostics
+    }
+    /// Actual latest UI ownership for input admission, including native-only
+    /// commits. Public diagnostics remain the last completed GPU submission.
+    pub fn input_diagnostics(&self) -> &UiDiagnostics {
         &self.diagnostics
     }
 }

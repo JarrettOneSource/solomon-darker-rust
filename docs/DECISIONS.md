@@ -277,6 +277,17 @@ reason for this boundary. Native selection is sampled before key/default-input/c
 work, so a coalesced selectionchange event cannot make an immediately following paste use
 an earlier caret.
 
+Focus-changing UI events also commit before the next native keyboard, clipboard or
+pointer-down dispatch. Egui resolves Tab through the actual interested widgets and
+layout; an editor-only target list cannot reproduce disabled controls, buttons or
+modal ownership. Game therefore reuses its genuine UI paint/action passes in a
+native-only transaction, without sampling controllers/gameplay or submitting pixels.
+Platform focus/selection updates happen during that transaction, so a following
+trusted clipboard event reads the new field synchronously. Managed texture deltas,
+image retirements and surviving keyboard activations carry into the next animation
+frame. Internal input ownership can advance, while public widget/mesh diagnostics
+remain the last actual GPU submission.
+
 Font rows preserve complete native shaping, disjoint bidi selection rectangles and
 pointer caret affinity. UAX#14 wrapping uses native `Intl.Segmenter` dictionary boundaries
 for complex-context scripts. Browser tabs keep their original accepted value; only font
