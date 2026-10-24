@@ -5,6 +5,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {pathToFileURL}=require('node:url');
+const {createHash}=require('node:crypto');
 const {chromium}=require(path.resolve(process.env.PW));
 const ui=require('./gpu-ui.cjs');
 const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
@@ -18,8 +19,10 @@ const url=new URL(process.env.URL||'https://127.0.0.1:9449/game-stg/');
 assert.ok(['127.0.0.1','localhost'].includes(url.hostname),'use the owned native admission host');
 const website=path.resolve(process.env.SOLOMON_WEBSITE_DIR||path.join(__dirname,'../../../Website'));
 const source=file=>import(pathToFileURL(path.join(website,'frontend/src/game',file)).href);
-const receipt={passed:false,url:url.href,checks:[],stages:[],lessons:[],commands:[],errors:[]};
-const accepted={id:null,frame:null,loaded:null,checkpoint:null};
+const receipt={passed:false,url:url.href,artifact:process.env.ARTIFACT||null,
+  scope:process.env.NATIVE_SAVE?'standalone-native-authority':'hosted-native-authority',
+  checks:[],stages:[],lessons:[],commands:[],welcomes:[],errors:[]};
+const accepted={id:null,frame:null,loaded:null,checkpoint:null,checkpointEvidence:null};
 const held=new Set();
 let primary=false;
 let page,observed;
@@ -41,6 +44,30 @@ async function until(predicate,label,timeout=30000) {
     await page.waitForTimeout(40);
   }while(Date.now()<deadline);
   throw new Error(`Timed out waiting for ${label}`);
+}
+async function actualCheckpoint() {
+  if(process.env.NATIVE_SAVE){
+    let host,document;
+    await until(()=>{
+      if(!fs.existsSync(process.env.NATIVE_SAVE))return false;
+      host=JSON.parse(fs.readFileSync(process.env.NATIVE_SAVE,'utf8'));
+      document=JSON.parse(host.game_document);
+      return document.checkpoint.boneyard?.run_id===world().run_id
+        &&document.checkpoint.participants[accepted.id];
+    },'the native authority durably checkpoints the actual Tutorial run');
+    assert.equal(host.version,1);assert.equal(document.schema_version,2);
+    const checkpoint=document.checkpoint;
+    assert.equal(checkpoint.participants[accepted.id].player.selection.name,'Sirmin');
+    assert.equal(checkpoint.boneyard.source_sha256,world().source_sha256);
+    receipt.checkpoint={kind:'standalone-durable-file',hostVersion:host.version,
+      schemaVersion:document.schema_version,revision:host.host.revision,
+      tick:checkpoint.ticks,playerId:accepted.id,runId:checkpoint.boneyard.run_id,
+      bytes:Buffer.byteLength(host.game_document),
+      sha256:createHash('sha256').update(host.game_document).digest('hex')};
+  }else{
+    await until(()=>accepted.checkpoint,'real paused Tutorial owner checkpoint');
+    receipt.checkpoint=accepted.checkpointEvidence;
+  }
 }
 function checked(label) {
   receipt.checks.push(label);
@@ -138,10 +165,16 @@ async function modal(kind) {
         if(!message)return;
         if(message.type==='welcome'){
           accepted.id=message.credentials.player_id;accepted.frame=message.frame;
+          receipt.welcomes.push({playerId:accepted.id,tick:message.frame.snapshot.ticks,
+            runId:message.frame.snapshot.boneyard?.run_id??null});
         }else if(message.type==='snapshot')accepted.frame=message.frame;
         else if(message.type==='boneyard_loaded')accepted.loaded=message.boneyard;
-        else if(message.type==='hosted'&&message.message.kind==='save_checkpoint')
+        else if(message.type==='hosted'&&message.message.kind==='save_checkpoint'){
           accepted.checkpoint=message.message.save;
+          accepted.checkpointEvidence={kind:'hosted-owner-message',sequence:message.message.sequence,
+            reason:message.message.reason,bytes:Buffer.byteLength(message.message.save),
+            sha256:createHash('sha256').update(message.message.save).digest('hex')};
+        }
         else if(message.type==='error')observed.errors.push({type:'native',message:message.reason});
       }catch(error){observed.errors.push({type:'native-observation',message:error.message});}
     });
@@ -172,10 +205,14 @@ async function modal(kind) {
     await until(()=>world()?.tutorial&&accepted.loaded,'real solo Tutorial native admission',120000);
     assert.equal(player().player.selection.name,'Sirmin');
     receipt.runId=world().run_id;receipt.seed=world().seed;
+    receipt.admission={playerId:accepted.id,tick:accepted.frame.snapshot.ticks,
+      runId:world().run_id,sourceSha256:world().source_sha256,
+      geometrySha256:world().geometry_sha256,selection:player().player.selection,stage:stage()};
     assert.equal(accepted.loaded.source_sha256,world().source_sha256);
     await lesson('USE YOUR KEYBOARD\nTO MOVE THE WIZARD');
     await page.keyboard.press('Escape');await ui.surface(page,'pause');
-    await until(()=>accepted.checkpoint,'real paused Tutorial checkpoint');
+    await until(()=>accepted.frame.host.pause,'accepted native Tutorial pause');
+    await actualCheckpoint();
     await ui.click(page,'resume');
     await until(()=>!accepted.frame.host.pause&&!accepted.frame.host.resume_grace,
       'ordinary Tutorial resume');
