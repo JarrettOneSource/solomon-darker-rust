@@ -10,7 +10,7 @@ const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
-const {prepareBoneyardNavigation, walkSolomonEntrance} = require('./solomon-entrance.cjs');
+const {prepareBoneyardNavigation, walkSolomonEntrance, boneyardKeyboardDirection} = require('./solomon-entrance.cjs');
 const {assertWorldNotification} = require('./world-notifications.cjs');
 const ui = require('./gpu-ui.cjs');
 
@@ -176,6 +176,7 @@ function available(kind, items = player().economy.backpack) {
 async function combat(plan, run) {
   const deadline = Date.now() + 240000;
   let lastSample = 0;
+  let lootRoute = [], lootId, lootRouteTick = -Infinity, waypoint = 1;
   try {
     while (Date.now() < deadline && frame.snapshot.run.phase !== 'GameOver') {
       assert.deepEqual(observed.errors, []);
@@ -197,12 +198,23 @@ async function combat(plan, run) {
           lastSecondaryTick = frame.snapshot.ticks;
         }
       } else await fire(false);
-      const loot = world().loot.actors.filter(actor => ['Gold','Orb','Sack','Bonus'].includes(actor.kind)
+      const loot = world().loot.actors.filter(actor => ['Gold','Orb'].includes(actor.kind)
         && actor.activation_delay_ticks < 1)
         .sort((a,b) => Math.hypot(a.position.x-at.x,a.position.y-at.y)-Math.hypot(b.position.x-at.x,b.position.y-at.y))[0];
       if (loot && (distance > 105 || !enemy)) {
-        const dx = loot.position.x-at.x, dy = loot.position.y-at.y, length = Math.hypot(dx,dy) || 1;
-        await movement(dx/length, dy/length);
+        const bounds = world().arena_transition.combat_bounds;
+        const area = {x:bounds.x,y:bounds.y,w:bounds.width,h:bounds.height};
+        if (lootId !== loot.id || frame.snapshot.ticks-lootRouteTick >= 100) {
+          lootRoute = plan.navigation.findBoneyardEnemyRoute({bodyRadius:plan.bodyRadius,
+            bounds:area,clearance:plan.bodyRadius,start:at,end:loot.position,endBodyRadius:0,
+            world:plan.geometry}) || [];
+          lootId = loot.id; lootRouteTick = frame.snapshot.ticks; waypoint = 1;
+        }
+        while (waypoint < lootRoute.length-1
+          && Math.hypot(at.x-lootRoute[waypoint].x,at.y-lootRoute[waypoint].y) <= 12) waypoint++;
+        const target = lootRoute[waypoint] || loot.position;
+        const direction = boneyardKeyboardDirection(plan,at,target,area);
+        await movement(direction.x,direction.y);
       } else if (enemy && distance < 160) {
         const dx = at.x-enemy.position.x, dy = at.y-enemy.position.y, length = Math.hypot(dx,dy) || 1;
         const bounds = world().arena_transition.combat_bounds;
@@ -235,7 +247,7 @@ async function combat(plan, run) {
     observed = ui.watchErrors(page); await observed.ready; observeAuthority();
     await ui.observeAnnouncements(page);
     await page.goto(url); await ui.ready(page);
-    await startNewGame(page, {name:'Aureus',element:'fire',discipline:'arcane'}); await gameplayReady();
+    await startNewGame(page, {name:'Aureus',element:'ether',discipline:'arcane'}); await gameplayReady();
     assert.equal(player().economy.gold,500,'the natural phase starts with the unmodified fresh-profile balance');
     receipt.naturalStart = {tick:frame.snapshot.ticks,gold:player().economy.gold,selection:player().selection};
     goldAnnouncementStart = (await ui.announcements(page)).length;
@@ -260,7 +272,7 @@ async function combat(plan, run) {
         return frame.snapshot.run.phase === 'GameOver';
       }, 'normal enemy-caused Game Over', 180000);
       await ui.click(page, 'game-over:continue'); await ui.surface(page, 'create');
-      await ui.click(page, 'element:fire'); await ui.click(page, 'discipline:arcane');
+      await ui.click(page, 'element:ether'); await ui.click(page, 'discipline:arcane');
       await until(() => !world() && frame.snapshot.run.phase === 'Hub', 'normal post-run College return', 120000);
       await gameplayReady();
       if (player().economy.gold >= 650 && receipt.checks.some(check => check.earnedChoice)) break;

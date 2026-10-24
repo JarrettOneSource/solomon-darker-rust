@@ -50,9 +50,17 @@ const receipt = {passed:false, checks:[]};
         ['requestFullscreen','exitFullscreen'],'each actual activation calls its browser capability once');
       receipt.checks.push({name,trace});
     }
+    receipt.keyboardFocus = {before:await page.evaluate(() => ({document:document.hasFocus(),
+      active:document.activeElement?.tagName}))};
+    await page.bringToFront();
+    receipt.keyboardFocus.after = await page.evaluate(() => ({document:document.hasFocus(),
+      active:document.activeElement?.tagName}));
+    receipt.keyboardFocus.samples = [];
     for (const [key, expected] of [['Enter',true],['Space',false]]) {
       for (let count=0; count<30 && !(await ui.widget(page,'fullscreen/toggle')).focused; count++) {
         await page.keyboard.press('Tab'); await ui.nextFrame(page);
+        receipt.keyboardFocus.samples.push({key,count,document:await page.evaluate(() => document.hasFocus()),
+          focused:(await ui.readUi(page)).widgets.filter(widget => widget.focused).map(widget => widget.id)});
       }
       assert.equal((await ui.widget(page,'fullscreen/toggle')).focused,true,
         'native Tab reaches the real fullscreen control');

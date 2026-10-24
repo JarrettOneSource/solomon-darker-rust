@@ -6,7 +6,7 @@ const path = require('node:path');
 const {chromium} = require(process.env.PW);
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const {walkSolomonEntrance} = require('./solomon-entrance.cjs');
-const {reachCollegeLoadout} = require('./menu-journey.cjs');
+const {reachCollegeLoadout,startNewGame} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
 const {revealSettingsControl} = require('./settings-journey.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
@@ -114,14 +114,12 @@ async function open(account, label) {
   page.on('pageerror', error => client.errors.push(error.message));
   page.on('console', message => {
     if (message.type() !== 'error') return;
-    if (message.text().includes('404') && /\/api\/game\/(rejoin|saves\/0)$/.test(message.location().url)) return;
     client.errors.push(message.text());
   });
   page.on('response', response => {
     const pathname = new URL(response.url()).pathname;
     if (pathname.endsWith('.wasm')) client.wasm.add(path.basename(pathname));
-    if (response.status() >= 400
-      && !(response.status() === 404 && /\/api\/game\/(rejoin|saves\/0)$/.test(pathname))) {
+    if (response.status() >= 400) {
       client.errors.push(`${response.status()} ${pathname}`);
     }
   });
@@ -472,15 +470,11 @@ async function close(client) {
       const toggle=`settings-toggle:${key}`;
       if (key === 'cheats') await revealSettingsControl(leader.page, toggle);
       if(String((await ui.widget(leader.page,toggle)).selected)!==value)await ui.click(leader.page,toggle);
+      await ui.value(leader.page,toggle,value);
     }
     await ui.click(leader.page,'settings-back');
     await ui.click(leader.page,'settings-back');
-    await ui.click(leader.page,'play');
-    await ui.click(leader.page,'new-game');
-    await ui.waitForUi(leader.page,snapshot=>['create','routing'].includes(snapshot.surface)||ui.findWidget(snapshot,'prompt-primary')||ui.findWidget(snapshot,'college-intro')||ui.findWidget(snapshot,'panel:dialogue'),'New Game admission',{timeout:120000});
-    if(ui.findWidget(await ui.readUi(leader.page),'prompt-primary'))await ui.click(leader.page,'prompt-primary');
-    if((await ui.readUi(leader.page)).surface==='routing')await ui.click(leader.page,'routing-continue');
-    await selection(leader, 'Severin');
+    await startNewGame(leader.page,{name:'Severin',element:'fire',discipline:'arcane',continueLocal:true});
     await ui.click(leader.page,'social/party');await ui.click(leader.page,'social/party-settings');
     const code=(await ui.widget(leader.page,'social/copy')).value;assert.ok(code);
     await leader.page.keyboard.press('Escape');await ui.noWidget(leader.page,'social/party-menu');

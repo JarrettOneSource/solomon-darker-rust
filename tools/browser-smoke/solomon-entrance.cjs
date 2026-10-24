@@ -33,6 +33,21 @@ async function prepareBoneyardNavigation(world) {
     bodyRadius: character.PLAYER_CHARACTER_RADIUS, gateSway: gates.BONEYARD_GATE_INITIAL_SWAY};
 }
 
+function boneyardKeyboardDirection(plan, at, target, bounds) {
+  // The nearest compass bearing can point straight into scenery beside a route
+  // waypoint. Compare the eight real key directions through Source collision;
+  // only keyboard events, never these predicted positions, reach the game.
+  let best = {x:0,y:0}, remaining = Math.hypot(target.x-at.x,target.y-at.y);
+  for (const [x,y] of [[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]]) {
+    const length = Math.hypot(x,y);
+    const next = plan.collision.resolveBoneyardMovement(at,
+      {x:at.x+x/length*6,y:at.y+y/length*6},bounds,plan.geometry,plan.bodyRadius);
+    const distance = Math.hypot(target.x-next.x,target.y-next.y);
+    if (distance < remaining) {best = {x,y}; remaining = distance;}
+  }
+  return best;
+}
+
 async function walkSolomonEntrance(page, {snapshot, playerId, output, plan}) {
   const initial = snapshot().boneyard;
   plan ||= await prepareBoneyardNavigation(initial);
@@ -94,8 +109,7 @@ async function walkSolomonEntrance(page, {snapshot, playerId, output, plan}) {
           target = route[waypoint]; phase = key;
         }
         if (target) {
-          const length = distance(at, target);
-          if (length) movement = {x: (target.x - at.x) / length, y: (target.y - at.y) / length};
+          movement = boneyardKeyboardDirection(plan, at, target, fullBounds);
         }
       }
       const desired = new Set();
@@ -129,4 +143,4 @@ async function walkSolomonEntrance(page, {snapshot, playerId, output, plan}) {
   }
 }
 
-module.exports = {prepareBoneyardNavigation, walkSolomonEntrance};
+module.exports = {prepareBoneyardNavigation, walkSolomonEntrance, boneyardKeyboardDirection};
