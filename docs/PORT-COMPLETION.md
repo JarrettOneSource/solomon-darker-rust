@@ -1,6 +1,13 @@
 # Rust game parity and release
 
-Current Website behavior is implemented and its complete local parity gates pass.
+The full Rust GPU UI cutover is still under acceptance. Its current requirements and
+scoped evidence are in [RUST-UI-MIGRATION.md](RUST-UI-MIGRATION.md). Production serves
+the retained PixiJS release `093aee99` following the October24 rollback request;
+the M5 automatic deployment scheduler remains held during private development.
+The release receipts below qualify the earlier parity release and do not certify
+the unfinished GPU cutover.
+
+The earlier Website parity implementation passed its complete local gates.
 The independent repository and Linux game artifact are public. All 44 public acceptance
 groups pass across their recorded revisions, including the actual `/game-stg` replacement
 from `ca728e90` to `d3903095`. Normal DNS access recovered after the separately recorded
