@@ -328,7 +328,8 @@ async function modal(kind) {
         const target=targets.toSorted((a,b)=>distance(a.position,player().wizard.position)
           -distance(b.position,player().wizard.position))[0];
         if(target)await moveTo(target.position);else await keys([]);
-      }else if(['ThrowMissiles','ClearSkeletons','ClearItemWave','ClearArcherWave'].includes(current)){
+      }else if(['ThrowMissiles','ClearSkeletons','ClearItemWave','ClearArcherWave',
+        'AwaitArcherWave','WaitForPotionDrop'].includes(current)){
         if(current==='ThrowMissiles'&&!receipt.primaryLesson){
           await lesson('POINT AND CLICK YOUR MOUSE\nTO THROW MAGIC MISSILES');receipt.primaryLesson=true;
         }

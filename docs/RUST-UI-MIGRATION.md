@@ -1111,3 +1111,21 @@ with the real lesson, and holds the corresponding real input only until the acce
 stage acknowledgement. It likewise replaces the ungrounded potion Q with the actual
 source binding3. Errors[] and graceful Chrome50431/native50425 exits0 remain in
 `common-browser/3660ab8/m5/tutorial-native-r3/`; later Tutorial UI is still unpassed.
+
+
+Tutorial native r4 passes genuine Acid Rain, Inventory and Skills with exact Source
+callouts/native pause and movement ownership, then the actual primary-selector
+acknowledgement. It captures fully faded native Game Over and automatic College
+return, but the complete journey remains red. Pinned fa08 native-tutorial stage14
+starts the potion carrier wave at stage16; stage16 waits for a real ground Sack. The
+driver had stopped attacking there and died before the drop. It now keeps ordinary
+primary combat active through AwaitArcherWave/WaitForPotionDrop, without changing
+world state, enemy health or progression. The original failed report is retained at
+`common-browser/3660ab8/m5/tutorial-native-r4/`.
+
+That report independently retains a fatal combat.mp3
+`net::ERR_CONTENT_LENGTH_MISMATCH` and native browser console error. The strict
+resident-media observer does not classify this as suspension. The channel had one
+load, ready4 and a trusted suspend at88.7s; AssetServer's30s socket write timeout is
+a transport hypothesis, not a proved cause. Root owns that source investigation.
+Chrome63643 and native63633 exit0; no complete Tutorial/earned-potion claim is made.
