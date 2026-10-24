@@ -1266,9 +1266,11 @@ The natural phase starts at the stock500gold, uses ordinary movement/combat/pick
 an actual earned rank, retains the accepted local Gold event(s) behind its painted/speaking
 notice, then pays the first650gold Dowse fee. Source `hub-economy.ts:1871–1909` prices
 each rare offer at5000–5700gold; purchase draws the next roll fee from500–950 in steps
-of50. The separate reference/purchase phase uses the supported private Cheats **SET GOLD**
-control for10000gold, records that funding explicitly as controlled UI input, then uses
-the owned Hat drag/reference and an actually charged offer purchase. Those prerequisite
+of50. The independent `private-dowsing.cjs` journey creates a fresh actual hosted private College,
+requires its accepted welcome to grant Cheats, and uses the supported **SET GOLD** control
+for10000gold. It records that funding explicitly as controlled UI input, then uses the
+owned Hat drag/reference and an actually charged offer purchase. Plain native authority
+rejects hosted commands, so `earned-offer.cjs` stays natural-only and never requests Cheats. Those prerequisite
 funds are not labelled naturally earned. No save, seed, network command or world state
 is injected by the browser driver. Complete runtime acceptance awaits the fixed native
 asset server; retained500/698gold native candidates were decoded read-only and not used.

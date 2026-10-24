@@ -1,12 +1,11 @@
-// Natural combat/loot/picker/first Dowse, followed by separately qualified private
-// Cheats UI funding for expensive reference/purchase. No save/seed is installed;
-// Source navigation plans real keys and every game action comes from visible UI.
+// Natural combat/loot/picker/first Dowse. No save/seed or prerequisite funds are
+// installed; Source navigation plans real keys and every game action comes from
+// visible UI. The separate private-dowsing driver covers controlled UI funding.
 // Run against an owned native host with its matched client assets. Set PW, URL,
 // OUT and SOLOMON_WEBSITE_DIR; Node needs --experimental-strip-types for Source.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {pathToFileURL} = require('node:url');
 const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
@@ -19,11 +18,11 @@ const output = path.resolve(process.env.OUT || 'earned-offer');
 const url = process.env.URL || 'http://127.0.0.1:4190/?host=1';
 const receipt = {passed:false, artifact:process.env.ARTIFACT, checks:[], runs:[],
   commands:[], results:[], errors:[], naturalGoldEvents:[],
-  qualification:'natural earned rank/Gold/first roll; separate controlled private-UI funding for expensive reference/purchase'};
+  qualification:'genuine combat-earned rank/Gold and first650gold Dowse roll; no controlled funding'};
 const held = new Set();
 const seenGold = new Set();
 let page, observed, frame, playerId, firing = false;
-let naturalPhase = true, goldAnnouncementStart = 0;
+let goldAnnouncementStart = 0;
 let lastPrimaryPulse = 0, lastSecondaryTick = -1000;
 const participant = () => frame?.snapshot.participants[playerId];
 const player = () => participant()?.player;
@@ -76,7 +75,7 @@ function observeAuthority() {
         } else if (message.type === 'snapshot') frame = message.frame;
         else if (message.type === 'command_result') receipt.results.push(message);
         else if (message.type === 'error') receipt.errors.push({code:message.code, reason:message.reason});
-        if (naturalPhase) for (const event of world()?.loot_events || []) {
+        for (const event of world()?.loot_events || []) {
           const key = `${world().run_id}:${event.event_id}`;
           if (!seenGold.has(key) && event.event_type === 'LootPickup' && event.player_id === playerId
             && event.sound === 'PickupCoin' && /^\d+ GOLD$/.test(event.text || '')) {
@@ -89,9 +88,9 @@ function observeAuthority() {
     socket.on('framesent', ({payload}) => {
       const message = JSON.parse(payload.toString());
       if (message.type === 'command') receipt.commands.push({kind:message.command.kind,
-        action:message.command.action, sequence:message.sequence, phase:naturalPhase?'natural':'controlled'});
+        action:message.command.action, sequence:message.sequence, phase:'natural'});
       if (message.type === 'hosted') receipt.commands.push({kind:`hosted:${message.command.kind}`,
-        requestId:message.command.request_id, phase:naturalPhase?'natural':'controlled'});
+        requestId:message.command.request_id, phase:'natural'});
     });
   });
 }
@@ -225,84 +224,6 @@ async function combat(plan, run) {
   } finally { await release(); }
 }
 
-async function fundThroughPrivateControls() {
-  naturalPhase = false;
-  receipt.naturalPhase = {endTick:frame.snapshot.ticks, gold:player().economy.gold,
-    earnedChoices:receipt.checks.filter(check => check.earnedChoice), firstRoll:receipt.checks.at(-1)};
-  await page.keyboard.press('Escape'); await ui.surface(page, 'pause');
-  await ui.click(page, 'pause-settings'); await ui.click(page, 'settings-page:cloud');
-  if (!(await ui.widget(page, 'settings-toggle:cheats')).selected) await ui.click(page, 'settings-toggle:cheats');
-  const result = await ui.waitForUi(page, state => ui.findWidget(state, 'routing/dialog')
-    || ui.findWidget(state, 'settings-toggle:cheats')?.selected, 'actual private-cheat preference/consent');
-  if (ui.findWidget(result, 'routing/dialog')) {
-    await ui.click(page, 'routing-continue'); await ui.surface(page, 'title');
-    await ui.click(page, 'play'); await ui.click(page, 'continue');
-  } else {
-    await ui.click(page, 'settings-back'); await ui.click(page, 'settings-back');
-    await ui.surface(page, 'pause'); await ui.click(page, 'resume');
-  }
-  await gameplayReady();
-  await page.keyboard.press('Backquote'); await ui.widget(page, 'cheats/dialog');
-  const before = player().economy.gold;
-  await ui.fill(page, 'cheats/gold', '10000'); await ui.click(page, 'cheats/submit:gold');
-  await until(() => player().economy.gold === 10000, 'the supported private Gold control is accepted');
-  await ui.widget(page, 'cheats/submit:gold', {enabled:true});
-  const action = await ui.widget(page, 'cheats/action-receipt');
-  assert.equal(action.role,'status'); assert.ok(action.label.includes('Gold set')&&!action.label.endsWith('…'));
-  receipt.funding = {qualification:'controlled private-UI funding; not naturally earned',
-    before, after:player().economy.gold, action};
-  await shot('controlled-private-gold-prerequisite');
-  await ui.click(page, 'cheats/close'); await ui.noWidget(page, 'cheats/dialog');
-  await gameplayReady();
-}
-
-async function referenceAndPurchase() {
-  const {DOWSING_EQUIPMENT_RECIPES:recipes} = await import(pathToFileURL(path.resolve(
-    process.env.SOLOMON_WEBSITE_DIR, 'frontend/src/game/core-kernels/hub-economy.ts')).href);
-  const shlorio = await ui.byLabel(page, 'Shlorio', {role:'button',prefix:'hud:shortcut:'});
-  await ui.click(page, shlorio.id);
-  const panel = ui.bounds(await ui.widget(page, 'panel:service'));
-  const reference = player().economy.equipment.hat;
-  assert.ok(reference, 'the actual owned Hat supplies a no-set reference');
-  assert.equal(reference.recipe_index, null);
-  const from = ui.center(ui.bounds(await ui.widget(page, 'panel:equipment:hat')));
-  // The painted service rectangle projects the Source mirror's native center.
-  const to = {x:panel.x+panel.width*302/604, y:panel.y+panel.height*175.5/420};
-  await page.mouse.move(from.x,from.y); await page.mouse.down();
-  await page.mouse.move(to.x,to.y,{steps:15}); await page.mouse.up(); await ui.nextFrame(page);
-  await shot('actual-owned-hat-reference');
-  const before = player().economy.gold, fee = player().economy.dowsing_fee;
-  assert.equal(fee,650,'Done without purchase retains the first650gold fee');
-  const commandsBefore = receipt.commands.length;
-  await ui.click(page,'panel:dowse'); await until(() => player().economy.dowsing_rolled, 'actual reference roll');
-  const request = receipt.commands.slice(commandsBefore).find(command => command.action?.Dowse);
-  assert.equal(request?.action.Dowse.reference_item_id,reference.id,'real drag supplies the owned reference to the typed command');
-  const offers = player().economy.dowsing_offers;
-  assert.ok(offers.length===3||offers.length===4,'a no-set Hat skips the two optional matching-set slots');
-  assert.ok(offers.every(offer => recipes[offer.recipe_index].nativeTypeId===reference.native_type_id));
-  assert.equal(player().economy.gold,before-fee);
-  assert.equal(player().economy.equipment.hat.id,reference.id,'reference use preserves the owned Hat');
-  await ui.waitForUi(page,state => state.widgets.filter(widget => widget.id.startsWith('panel:shop:')).length===offers.length,
-    'every accepted reference offer is painted');
-  await shot('controlled-reference-offers');
-  const offer = [...offers].sort((a,b) => a.price-b.price)[0];
-  const beforeGold = player().economy.gold, beforeIds = new Set(player().economy.backpack.map(item => item.id));
-  await ui.click(page,`panel:shop:${offer.id}`); await ui.click(page,`panel:shop:${offer.id}`);
-  await until(() => player().economy.backpack.some(item => !beforeIds.has(item.id)
-    &&item.recipe_index===offer.recipe_index), 'the real paid offer enters owned inventory');
-  const purchased = player().economy.backpack.find(item => !beforeIds.has(item.id)&&item.recipe_index===offer.recipe_index);
-  assert.equal(player().economy.gold,beforeGold-offer.price);
-  assert.equal(player().economy.dowsing_offers.length,0);
-  const nextFee = player().economy.dowsing_fee;
-  assert.ok(nextFee>=500&&nextFee<=950&&nextFee%50===0,'purchase draws the canonical next fee');
-  await ui.widget(page,`panel:item:${purchased.id}`); await ui.value(page,'panel:gold',String(beforeGold-offer.price));
-  await shot('controlled-paid-dowsing-purchase');
-  receipt.checks.push({controlledReferencePurchase:{qualification:receipt.funding.qualification,
-    reference,requested:request,fee,offers,purchased,price:offer.price,beforeGold,afterGold:player().economy.gold,nextFee}});
-  await ui.click(page,'panel:close'); await ui.noWidget(page,'panel:service');
-  await until(() => !player().economy.dowsing_rolled,'real Done retires the purchased roll');
-}
-
 (async () => {
   fs.mkdirSync(output, {recursive:true});
   const owned = await launchOwnedBrowser(chromium, {headless:true,
@@ -362,7 +283,6 @@ async function referenceAndPurchase() {
     receipt.checks.push({paidDowse:{before,fee,after:player().economy.gold,offers}});
     await ui.click(page, 'panel:close'); await ui.noWidget(page, 'panel:service');
     await until(() => !player().economy.dowsing_rolled, 'real Done retires the rolled lock');
-    await fundThroughPrivateControls(); await referenceAndPurchase();
     await page.keyboard.press('Escape'); await ui.surface(page, 'pause');
     await ui.click(page, 'leave'); await ui.surface(page, 'title');
     await ui.assertGpuOnly(page); await ui.settleErrors(page);
