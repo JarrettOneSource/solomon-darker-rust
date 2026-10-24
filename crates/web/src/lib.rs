@@ -141,6 +141,7 @@ async fn run() -> Result<(), String> {
     runtime_ui::completed(runtime_ui::RUNTIME)?;
     let window = web_sys::window().ok_or("no window")?;
     GAME.with(|slot| *slot.borrow_mut() = Some(game.clone()));
+    Game::attach_native_ui(&game, &window)?;
     Game::attach_desktop(&game, &window)?;
     if !game.borrow().is_editor_test() {
         install_save_events(&window, &game)?;

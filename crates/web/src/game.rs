@@ -627,6 +627,55 @@ impl Game {
         Ok(())
     }
 
+    pub(crate) fn attach_native_ui(
+        game: &Rc<RefCell<Self>>,
+        window: &web_sys::Window,
+    ) -> Result<(), String> {
+        let clock = window.performance().ok_or("The game clock is unavailable.")?;
+        let owner = Rc::downgrade(game);
+        game.borrow_mut().gpu_ui.set_native_dispatch_handler(move || {
+            let game = owner.upgrade().ok_or("The game is no longer available for input.")?;
+            game.borrow_mut().dispatch_native_ui(clock.now())
+        });
+        Ok(())
+    }
+
+    /// Native clipboard and editing defaults observe the preceding UI action's
+    /// committed focus. Simulation, transport polling and drawing remain on rAF.
+    fn dispatch_native_ui(&mut self, time: f64) -> Result<(), String> {
+        if self.editor_test_disposed()
+            || self.canvas.client_width() <= 0
+            || self.canvas.client_height() <= 0
+        {
+            return Ok(());
+        }
+        let Some(mut run) = self.gpu_ui.begin_native_dispatch(time / 1000.0)? else {
+            return Ok(());
+        };
+        let result = (|| {
+            loop {
+                let menu_was_open = self.menu.is_blocking();
+                let more = {
+                    let (gpu_ui, paint) = self.ui_painter();
+                    gpu_ui.paint_next(&mut run, paint)?
+                };
+                if !more {
+                    break;
+                }
+                self.commit_ui(time, menu_was_open)?;
+                if self.editor_test_disposed() {
+                    return Ok(());
+                }
+            }
+            let (gpu_ui, paint) = self.ui_painter();
+            gpu_ui.paint_layout(&mut run, paint)
+        })();
+        self.gpu_ui.finish_native_dispatch(run, result)?;
+        self.input
+            .set_ui_geometry(self.gpu_ui.input_diagnostics(), &self.hud.belt_input_geometry());
+        Ok(())
+    }
+
     pub fn frame(&mut self, time: f64) -> Result<(), String> {
         if self.editor_test_disposed() {
             return Ok(());
@@ -671,7 +720,8 @@ impl Game {
                     return Ok(());
                 }
             }
-            self.input.set_ui_geometry(self.gpu_ui.diagnostics(), &self.hud.belt_input_geometry());
+            self.input
+                .set_ui_geometry(self.gpu_ui.input_diagnostics(), &self.hud.belt_input_geometry());
             if !self.deployment_restarting() {
                 if self.is_hosted_observer() {
                     self.frame_hosted_observer(time)?;
@@ -690,7 +740,8 @@ impl Game {
         if self.editor_test_disposed() {
             return Ok(());
         }
-        self.input.set_ui_geometry(self.gpu_ui.diagnostics(), &self.hud.belt_input_geometry());
+        self.input
+            .set_ui_geometry(self.gpu_ui.input_diagnostics(), &self.hud.belt_input_geometry());
         self.finish_ready_frame()
     }
 
@@ -2399,13 +2450,13 @@ impl Game {
             mod_skill_quickbar.paint(frame)?;
             shared_gameplay.paint(frame)?;
             panels.paint(frame)?;
-            mod_skills.paint(frame, panels.layer_id(), skill_picker.layer_id())?;
+            mod_skills.paint(frame)?;
             mod_panels.paint(frame)?;
             tutorial_ui.paint(frame)?;
             college_overlay.paint(frame)?;
             game_over.paint(frame)?;
             skill_picker.paint(frame)?;
-            social.paint_above_hud(frame, hud.layer_id())?;
+            social.paint(frame)?;
             cheats.paint(frame)?;
             observer_ui.paint(frame)?;
             spectator_ui.paint(frame)?;
