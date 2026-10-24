@@ -171,6 +171,57 @@ fn native_gesture_geometry_keeps_its_actual_painter_layer_transform_and_clip() {
 }
 
 #[test]
+fn native_text_prefocus_respects_actual_covering_controls_and_modal_admission() {
+    for modal in [false, true] {
+        let ctx = Context::default();
+        let field_id = egui::Id::unique("prefocus-field");
+        let mut text = String::new();
+        let mut paint = |frame: &mut UiFrame<'_>| {
+            egui::Area::new(egui::Id::unique("prefocus-area"))
+                .fixed_pos(Pos2::ZERO)
+                .fade_in(false)
+                .show(frame.ctx, |ui| {
+                    ui.set_min_size(vec2(320.0, 200.0));
+                    NativeTextEdit::singleline(&mut text, "prefocus-field", "Name").show(
+                        frame,
+                        ui,
+                        Rect::from_min_size(pos2(20.0, 20.0), vec2(200.0, 44.0)),
+                    );
+                    let cover = ui.interact(
+                        Rect::from_min_size(pos2(60.0, 20.0), vec2(70.0, 44.0)),
+                        egui::Id::unique("covering-control"),
+                        egui::Sense::click(),
+                    );
+                    frame.record("covering-control", "Covered", "button", &cover);
+                });
+            if modal {
+                egui::Area::new(egui::Id::unique("prefocus-modal"))
+                    .order(egui::Order::Foreground)
+                    .fixed_pos(pos2(260.0, 20.0))
+                    .fade_in(false)
+                    .show(frame.ctx, |ui| {
+                        ui.set_min_size(vec2(50.0, 50.0));
+                        ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
+                    });
+            }
+        };
+        frame(&ctx, Vec::new(), &mut paint);
+        let widgets = frame(&ctx, Vec::new(), &mut paint);
+        assert!(ctx.memory(|memory| memory.focused()).is_none());
+        let point = if modal { pos2(25.0, 40.0) } else { pos2(70.0, 40.0) };
+        focus_pointer_text(&ctx, &widgets, &pointer(true, point));
+        assert!(
+            ctx.memory(|memory| memory.focused()).is_none(),
+            "an occluded field cannot acquire native focus"
+        );
+        if !modal {
+            focus_pointer_text(&ctx, &widgets, &pointer(true, pos2(25.0, 40.0)));
+            assert_eq!(ctx.memory(|memory| memory.focused()), Some(field_id));
+        }
+    }
+}
+
+#[test]
 fn focus_ring_modality_tracks_actual_pointer_and_keyboard_dispatches() {
     let mouse = pointer(true, pos2(50.0, 50.0));
     assert!(!focus_modality(true, &mouse));
