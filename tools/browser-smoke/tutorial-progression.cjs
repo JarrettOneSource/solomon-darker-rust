@@ -118,9 +118,9 @@ async function modal(kind) {
 
 (async()=>{
   fs.mkdirSync(output,{recursive:true});
-  const [tutorial,cameras,viewports]=await Promise.all([
+  const [tutorial,cameras,viewports,terminal]=await Promise.all([
     source('core-kernels/native-tutorial.ts'),source('renderer/boneyard-render-contract.ts'),
-    source('renderer/game-viewport.ts'),
+    source('renderer/game-viewport.ts'),source('game-over-presentation.ts'),
   ]);
   const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -241,9 +241,13 @@ async function modal(kind) {
       if(current==='Survive'||player().player.combat.life_state!=='Alive'){
         await release();
         const gameOver=ui.findWidget(snapshot,'game-over:continue');
-        if(gameOver&&!receipt.gameOver){
+        const run=accepted.frame.snapshot.run;
+        const presentation=terminal.gameOverPresentation(run.game_over_ticks,
+          run.game_over_exit_ticks,run.game_over_exit_kind?.toLowerCase()??null);
+        if(gameOver?.enabled&&presentation.titleAlpha===1&&presentation.promptAlpha===1
+          &&!receipt.gameOver){
           receipt.gameOver={tick:accepted.frame.snapshot.ticks,widget:gameOver,
-            phase:accepted.frame.snapshot.run.phase};
+            phase:run.phase,presentation};
           await page.screenshot({path:path.join(output,'game-over.png')});
         }
       }else if(['CollectAmulet','CollectPotion','ClubEnemies'].includes(current)){
