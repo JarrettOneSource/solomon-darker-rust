@@ -1278,14 +1278,13 @@ impl PlayerPanels {
         Ok(())
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
-        for key in frame.key_codes() {
-            if key.pressed && !self.input_suspended && self.rename_sack.is_none() {
-                self.events.push(PanelEvent::Key(PanelKey {
-                    code: key.code.clone(),
-                    key: key.key.clone(),
-                    repeat: key.repeat,
-                    modified: key.alt || key.ctrl || key.meta,
-                }));
+        let keyboard_layer = self.skill_book_result_layer_id().unwrap_or_else(|| self.layer_id());
+        if !self.input_suspended
+            && self.rename_sack.is_none()
+            && frame.ctx.memory(|memory| memory.allows_interaction(keyboard_layer))
+        {
+            for key in panel_keys(frame.ctx, frame.key_codes(), self.is_open()) {
+                self.events.push(PanelEvent::Key(key));
             }
         }
         self.npc_notebox.paint(frame, &self.ui, self.now, self.viewport_size)?;
@@ -1569,6 +1568,39 @@ impl PlayerPanels {
         Ok(())
     }
 }
+
+fn panel_keys(
+    ctx: &egui::Context,
+    native: &[crate::gpu_ui::BrowserKey],
+    open: bool,
+) -> Vec<PanelKey> {
+    let mut keys: Vec<_> = native
+        .iter()
+        .filter(|key| key.pressed)
+        .map(|key| PanelKey {
+            code: key.code.clone(),
+            key: key.key.clone(),
+            repeat: key.repeat,
+            modified: key.alt || key.ctrl || key.meta,
+        })
+        .collect();
+    // Gamepad Back is a genuine egui Escape, without a browser KeyboardEvent.
+    // Preserve the old MenuNavigation back result through the same typed owner,
+    // while a physical Escape remains exactly one event.
+    if open
+        && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+        && !keys.iter().any(|key| key.code == "Escape")
+    {
+        keys.push(PanelKey {
+            code: "Escape".into(),
+            key: "Escape".into(),
+            repeat: false,
+            modified: false,
+        });
+    }
+    keys
+}
+
 fn target_from_action(action: &str) -> Option<Target> {
     Some(match action {
         "close" => Target::Close,
@@ -1620,4 +1652,53 @@ fn target_from_action(action: &str) -> Option<Target> {
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn controller_back_and_native_escape_reach_the_panel_owner_once() {
+        for (physical, repeat) in [(false, false), (true, false), (true, true)] {
+            let ctx = egui::Context::default();
+            let native = if physical {
+                vec![crate::gpu_ui::BrowserKey {
+                    code: "Escape".into(),
+                    key: "Escape".into(),
+                    pressed: true,
+                    repeat,
+                    alt: false,
+                    ctrl: false,
+                    shift: false,
+                    meta: false,
+                }]
+            } else {
+                Vec::new()
+            };
+            ctx.run_pass(
+                egui::RawInput {
+                    events: vec![egui::Event::Key {
+                        key: egui::Key::Escape,
+                        physical_key: None,
+                        pressed: true,
+                        repeat,
+                        modifiers: egui::Modifiers::NONE,
+                    }],
+                    ..Default::default()
+                },
+                |ctx| {
+                    let keys = panel_keys(ctx, &native, true);
+                    assert_eq!(keys.len(), 1, "physical={physical}, repeat={repeat}");
+                    assert_eq!(keys[0].code, "Escape");
+                    assert_eq!(keys[0].repeat, repeat);
+                    assert!(
+                        panel_keys(ctx, &[], true).is_empty(),
+                        "the real back dispatch is consumed once"
+                    );
+                },
+            )
+            .drop_without_applying_deltas();
+        }
+    }
 }
