@@ -668,3 +668,12 @@ click belongs exclusively to the trusted DOM listener; only non-pointer clicks
 activate from the egui response. No timing window or duplicate-action suppression
 state is needed. Existing hit ownership still checks the topmost enabled widget,
 clipping, transforms and modal admission.
+
+The same actual browser check exposed a separate native Tab boundary: after touch
+cleared egui focus, the first Tab kept its browser default and moved focus to
+browser chrome before the queued GPU navigation ran. Document focus was true
+before Tab and false after it; bringing the page forward did not change that.
+The browser input owner now captures Tab whenever an actual interactive GPU hit
+region or active editor exists. This admits the first native focus without
+requiring a previously focused widget. Other keys keep their existing capture
+rules, and no DOM control or forced focus call is introduced.

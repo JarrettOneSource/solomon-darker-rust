@@ -463,16 +463,18 @@ impl BrowserInput {
                     );
                     handled = true;
                 }
-                if handled
-                    || queue.capture.keyboard && !active
-                    || active && mapped == Some(Key::Tab)
-                {
+                // Native Tab may acquire the first GPU focus after a pointer
+                // cleared it. Prevent browser chrome traversal while the actual
+                // drawn UI has a target, even before egui wants keyboard input.
+                let native_tab =
+                    mapped == Some(Key::Tab) && (active || !queue.hit_regions.is_empty());
+                if handled || queue.capture.keyboard && !active || native_tab {
                     event.prevent_default();
                 }
                 if handled {
                     queue.sync_editor(&textarea);
                 }
-                if queue.capture.keyboard || active {
+                if queue.capture.keyboard || active || native_tab {
                     event.stop_propagation();
                 }
                 queue.finish_dispatch();
