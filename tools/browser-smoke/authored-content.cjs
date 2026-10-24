@@ -22,7 +22,7 @@ const witnessConsole = process.env.CONSOLE === 'witness';
 const observeConsole = process.env.CONSOLE === 'observe' || witnessConsole;
 const continueAuthored = process.env.CONTINUE_AUTHORED === '1';
 const authoredPhase = process.env.AUTHORED_PHASE || 'complete';
-assert.ok(['complete', 'reforge', 'finalize', 'console'].includes(authoredPhase), 'known authored journey phase');
+assert.ok(['complete', 'reforge', 'onward', 'finalize', 'console'].includes(authoredPhase), 'known authored journey phase');
 const state = {id: null, frame: null, runtime: null, content: null, welcomes: [],
   lua: [], luaRequests: [], actions: [], checkpoints: 0, leaveReceipts: 0, lastSave: null,
   audioEvents: [], assets: [], loaded: null, iconProof: [], wireTypes: {}, beltBindings: [],
@@ -35,7 +35,7 @@ let priorPhase = null;
 let priorSackPhase = null;
 let priorOnwardPhase = null;
 let priorSavePhase = null;
-if (authoredPhase === 'reforge') {
+if (authoredPhase === 'reforge' || authoredPhase === 'onward') {
   assert.ok(continueAuthored, 'later authored phases continue the real retained profile');
   assert.ok(process.env.PRIOR_AUTHORED_RECEIPT, 'later phases name their accepted earlier receipt');
   const file = path.resolve(process.env.PRIOR_AUTHORED_RECEIPT);
@@ -43,9 +43,22 @@ if (authoredPhase === 'reforge') {
   const receipt = JSON.parse(bytes);
   const check = 'Source local drag admission restores the custom potion without a bind command or inventory change';
   assert.deepEqual(receipt.errors, [], 'the earlier matched-bundle phase has no runtime errors');
-  assert.ok(receipt.checks.includes(check), 'the earlier phase proved the actual rejected drag');
+  const purchasePhase = authoredPhase === 'onward' ? receipt.priorPhase : receipt;
+  assert.ok(purchasePhase.checks.includes(check), 'the earlier phase proved the actual rejected drag');
   assert.equal(receipt.accepted.tonic, 1, 'the earlier phase kept the real purchased Tonic');
+  if (authoredPhase === 'onward') {
+    assert.equal(sha256(fs.readFileSync(purchasePhase.file)), purchasePhase.sha256,
+      'the original purchase/drag receipt remains unchanged');
+    assert.equal(receipt.accepted.gold, purchasePhase.accepted.gold - 25,
+      'the actual later accepted frame already contains the paid reforge');
+    assert.ok(Number.isSafeInteger(receipt.spareRobeProof.robeId));
+  }
   priorPhase = {file, sha256: sha256(bytes), checks: receipt.checks, accepted: receipt.accepted};
+  if (authoredPhase === 'onward') priorPhase.reforge = {
+    itemId: receipt.spareRobeProof.robeId,
+    beforeGold: purchasePhase.accepted.gold, afterGold: receipt.accepted.gold,
+    originalPhase: purchasePhase,
+  };
 }
 if (process.env.PRIOR_SACK_RECEIPT) {
   const file = path.resolve(process.env.PRIOR_SACK_RECEIPT);
@@ -518,11 +531,24 @@ async function runLua(page, code) {
         await ui.noWidget(page,'panel:surface:inventory');
       }
       await approachApothecary(page);
-      const goldBeforeReforge = player().economy.gold;
-      await clickLabel(page,/Apprentice Apothecary · Reforge · 25 gold/,{prefix:'mod/panel:'});
-      await until(() => player().economy.backpack.some(item => item.id === robeId
-        && item.mod_affixes?.some(affix => affix.name === 'Clear Minded')), 'actual Clear Minded reforge');
-      assert.equal(player().economy.gold, goldBeforeReforge - 25);
+      if (priorPhase?.reforge) {
+        assert.equal(robeId, priorPhase.reforge.itemId);
+        assert.equal(player().economy.gold, priorPhase.reforge.afterGold);
+        assert.ok(player().economy.backpack.find(item => item.id === robeId)
+          .mod_affixes?.some(affix => affix.name === 'Clear Minded'),
+        'fresh accepted authority retains the exact already-paid robe affix');
+        state.reforgeProof = {kind:'retained actual transaction', ...priorPhase.reforge,
+          freshTick:state.frame.snapshot.ticks};
+      } else {
+        const beforeGold = player().economy.gold, beforeTick = state.frame.snapshot.ticks;
+        await clickLabel(page,/Apprentice Apothecary · Reforge · 25 gold/,{prefix:'mod/panel:'});
+        await until(() => player().economy.gold === beforeGold - 25
+          && player().economy.backpack.some(item => item.id === robeId
+            && item.mod_affixes?.some(affix => affix.name === 'Clear Minded')),
+        'the actual reforge atomically commits its charge and robe affix');
+        state.reforgeProof = {kind:'actual UI transaction', itemId:robeId, beforeGold,
+          afterGold:player().economy.gold, beforeTick, afterTick:state.frame.snapshot.ticks};
+      }
       await openInventory(page);
       if (priorPhase) {
         await assertAuthoredIcon(page,items('Ward Tonic')[0].id);
@@ -713,6 +739,7 @@ async function runLua(page, code) {
       textureProof: state.textureProof,
       rejectedBeltProof: state.rejectedBeltProof,
       robeDragProof: state.robeDragProof,
+      reforgeProof: state.reforgeProof,
       spareRobeProof: state.spareRobeProof,
       webAudioStarts: await page.evaluate(() => window.authoredAudioStarts)};
     fs.writeFileSync(path.join(output, 'authored-content.json'), JSON.stringify(receipt, null, 2));
@@ -724,6 +751,7 @@ async function runLua(page, code) {
       cheatProof: state.cheatProof,
       textureProof: state.textureProof,
       spareRobeProof: state.spareRobeProof,
+      reforgeProof: state.reforgeProof,
       robeDragProof: state.robeDragProof ? {...state.robeDragProof,
         pointers: state.robeDragProof.pointers ?? await page.evaluate(() =>
           window.stopAuthoredPanelObservation?.().pointers || [])} : undefined,
