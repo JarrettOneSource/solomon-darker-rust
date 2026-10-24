@@ -182,11 +182,9 @@ fn native_text_prefocus_respects_actual_covering_controls_and_modal_admission() 
                 .fade_in(false)
                 .show(frame.ctx, |ui| {
                     ui.set_min_size(vec2(320.0, 200.0));
-                    NativeTextEdit::singleline(&mut text, "prefocus-field", "Name").show(
-                        frame,
-                        ui,
-                        Rect::from_min_size(pos2(20.0, 20.0), vec2(200.0, 44.0)),
-                    );
+                    NativeTextEdit::singleline(&mut text, "prefocus-field", "Name")
+                        .native_name(Pos2::ZERO, 1.0)
+                        .show(frame, ui, Rect::from_min_size(pos2(20.0, 20.0), vec2(200.0, 44.0)));
                     let cover = ui.interact(
                         Rect::from_min_size(pos2(60.0, 20.0), vec2(70.0, 44.0)),
                         egui::Id::unique("covering-control"),
