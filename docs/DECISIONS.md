@@ -695,3 +695,23 @@ hashes. Its regenerated fixtures use slot24 as their common invalid boundary,
 while the current additional valid banks are covered by those regressions and
 the actual `panel-variants.cjs` native casting journey. This does not claim the
 historical Source input validator accepted all three banks.
+
+### Mobile layout sharing presentation
+
+`DarkCloudLayouts.tsx` and `dark-cloud-content.css` keep the share-code field
+editable while its already-captured request is pending. Only Load and Submit
+are disabled. The real `mobile-sharing.cjs` request hold reproduces the previous
+Rust field disabling after an ordinary editor Save, real publication and trusted
+clipboard copy. Its phone screenshot also shows the author obscured by Copy.
+
+The layout view now uses the Source control-panel actions, native text, centered
+980px sections and 800px receipt. The viewport's 700px breakpoint changes the
+receipt to four separate rows. Narrative text retains its Source line height;
+the native editor owns centered monospace text, selection, caret and placeholder
+geometry through one explicit alignment option. Existing fields keep left
+alignment. The shared Cloud control-panel action painter serves detail and
+layout screens; neither adds another button skin inside the native bevel.
+
+Actual API requests, device layout validation/storage and completion generations
+keep their current owners. No visual DOM control or test-installed layout is
+used by this repair or its browser journey.

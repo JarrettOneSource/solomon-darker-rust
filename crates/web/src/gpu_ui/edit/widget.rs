@@ -6,7 +6,7 @@ use egui::{Color32, FontId, Id, Pos2, Rect, Response, Sense, Stroke, Ui, Vec2, v
 
 use super::model::Model;
 use super::{
-    EditorDescriptor, EditorFont, EditorRules, FontRunOptions, TextSelection, font_run,
+    EditorDescriptor, EditorFont, EditorRules, FontRunOptions, TextSelection,
     font_run_with_options, native_name_geometry,
 };
 use crate::gpu_ui::UiFrame;
@@ -55,6 +55,7 @@ pub struct NativeTextEdit<'a> {
     line_height: Option<f32>,
     tab_size: Option<f32>,
     letter_spacing: Option<f32>,
+    horizontal_align: egui::Align,
 }
 
 impl<'a> NativeTextEdit<'a> {
@@ -78,6 +79,7 @@ impl<'a> NativeTextEdit<'a> {
             line_height: None,
             tab_size: None,
             letter_spacing: None,
+            horizontal_align: egui::Align::Min,
         }
     }
     pub fn multiline(text: &'a mut String, id: &'a str, label: &'a str) -> Self {
@@ -143,6 +145,11 @@ impl<'a> NativeTextEdit<'a> {
 
     pub fn letter_spacing(mut self, pixels: f32) -> Self {
         self.letter_spacing = Some(pixels);
+        self
+    }
+
+    pub fn horizontal_align(mut self, align: egui::Align) -> Self {
+        self.horizontal_align = align;
         self
     }
 
@@ -303,7 +310,12 @@ impl<'a> NativeTextEdit<'a> {
         }
         let vertical =
             if self.multiline { 0.0 } else { (content.height() - geometry.size.y).max(0.0) / 2.0 };
-        let origin = content.min + vec2(0.0, vertical) - state.offset;
+        let horizontal = if self.multiline {
+            0.0
+        } else {
+            (content.width() - geometry.size.x).max(0.0) * self.horizontal_align.to_factor()
+        };
+        let origin = content.min + vec2(horizontal, vertical) - state.offset;
         let painter = ui.painter().with_clip_rect(content.intersect(ui.clip_rect()));
         if let Some(background) = self.background {
             ui.painter().rect_filled(response.rect, 0.0, background);
@@ -332,14 +344,26 @@ impl<'a> NativeTextEdit<'a> {
                 run.paint(frame, &painter, origin, 1.0)?;
                 if self.text.is_empty() && !self.hint.is_empty() {
                     let EditorFont::Browser(font) = &font else { unreachable!() };
-                    font_run(
+                    let hint = font_run_with_options(
                         frame.ctx,
                         font.clone(),
                         self.color.gamma_multiply(0.5),
                         &self.hint,
-                        self.multiline.then_some(content.width()),
-                    )?
-                    .paint(frame, &painter, origin, 1.0)?;
+                        FontRunOptions {
+                            wrap_width: self.multiline.then_some(content.width()),
+                            line_height: self.line_height,
+                            tab_size: self.tab_size,
+                            letter_spacing: self.letter_spacing,
+                            ..Default::default()
+                        },
+                    )?;
+                    let hint_x = if self.multiline {
+                        0.0
+                    } else {
+                        (content.width() - hint.size().x).max(0.0)
+                            * self.horizontal_align.to_factor()
+                    };
+                    hint.paint(frame, &painter, content.min + vec2(hint_x, vertical), 1.0)?;
                 }
             } else if let EditorFont::NativeName { origin, scale, .. } = &font {
                 paint_native_name(frame, &painter, self.text, *origin, *scale);

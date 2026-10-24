@@ -61,6 +61,37 @@ pub(super) fn ink(
     Ok(())
 }
 
+/// `NativeUiControlPanelAction` is an unskinned action inside the shared bevel.
+pub(super) fn control_action(
+    frame: &UiFrame<'_>,
+    ui: &Ui,
+    id: &str,
+    label: &str,
+    rect: Rect,
+    enabled: bool,
+) -> Result<egui::Response, String> {
+    let response = widgets::interact_unstyled(frame, ui, id, label, "button", rect, enabled);
+    let tint = if !enabled {
+        0x8e7c4d
+    } else if response.is_pointer_button_down_on() {
+        0xbfffbf
+    } else {
+        0xd9ba70
+    };
+    ink(
+        frame,
+        ui,
+        label,
+        NativeUiFontName::Medium,
+        1.0,
+        tint,
+        rect.shrink2(Vec2::new(10.0, 0.0)),
+        false,
+    )?;
+    widgets::focus_outline(frame, ui, &response, 1.0, -3.0, widgets::GOLD);
+    Ok(response)
+}
+
 // The row paints borrowed catalog state and emits actions through the scene owner.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn mod_row(

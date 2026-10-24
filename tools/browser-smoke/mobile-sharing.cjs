@@ -11,14 +11,20 @@ const mount=website.pathname.replace(/\/$/,'');
 const account=JSON.parse(fs.readFileSync(path.join(process.env.PRIVATE_DIR,'private-accounts.json')))[0];
 const receipt={passed:false,checks:[],requests:[]};
 const observations=[];
+const pendingCatalogs=new WeakMap();
 let page,step='ordinary sign-in',releaseLoad;
 const stored=page=>page.evaluate(()=>Object.fromEntries(Object.entries(localStorage)
   .filter(([key])=>key.includes('mobile-ui-layout')).map(([key,value])=>[key,JSON.parse(value)])));
 async function title(page){await ui.ready(page);if(ui.findWidget(await ui.readUi(page),'prompt-secondary'))
   await ui.click(page,'prompt-secondary');}
 async function layouts(page){await ui.click(page,'explore');await ui.surface(page,'dark-cloud');
+  await ui.waitForUi(page,s=>ui.findWidget(s,'cloud-list-status')&&!ui.findWidget(s,'cloud-list-status').value?.includes('CONSULTING')
+    &&pendingCatalogs.get(page).size===0,'initial real catalog requests finish');
   await ui.click(page,'cloud-tab:layouts');await ui.widget(page,'dark-cloud-layout-code');}
 async function observe(page){const observed=ui.watchErrors(page);observations.push({page,observed});await observed.ready;
+  const pending=new Set();pendingCatalogs.set(page,pending);
+  page.on('request',request=>{if(new URL(request.url()).pathname.includes('/api/mods'))pending.add(request)});
+  page.on('requestfinished',request=>pending.delete(request));page.on('requestfailed',request=>pending.delete(request));
   page.on('response',response=>{const pathname=new URL(response.url()).pathname;
     if(pathname.includes('/api/game/layouts'))receipt.requests.push({path:pathname,status:response.status(),method:response.request().method()});});}
 async function shot(name){await page.screenshot({path:path.join(out,`${name}.png`)});}
@@ -64,6 +70,14 @@ async function shot(name){await page.screenshot({path:path.join(out,`${name}.png
     await page.setViewportSize({width:390,height:844});await ui.nextFrame(page);
     await page.mouse.move(195,500);await page.mouse.wheel(0,600);await ui.nextFrame(page);
     await shot('layout-published-phone');
+    const phoneReceipt=await ui.readUi(page);
+    let bottom=0;
+    for(const id of ['cloud-layout-status','cloud-layout-receipt-code','cloud-layout-author','cloud-copy-layout']){
+      const rect=ui.bounds(await ui.widget(page,id));assert.ok(rect.y>=bottom,`${id} follows the prior phone receipt row`);
+      assert.ok(rect.x>=0&&rect.x+rect.width<=390,`${id} stays inside the phone`);bottom=rect.y+rect.height;
+    }
+    receipt.phoneReceipt=phoneReceipt.widgets.filter(row=>row.id.startsWith('cloud-layout-')||row.id==='cloud-copy-layout');
+    receipt.checks.push('phone publication status, code, author and Copy use separate visible rows');
 
     step='guest real load, busy action admission and editable source field';
     const guest=await owner.browser.newContext({viewport:{width:1600,height:900},ignoreHTTPSErrors:true});
@@ -71,6 +85,10 @@ async function shot(name){await page.screenshot({path:path.join(out,`${name}.png
     assert.equal((await ui.widget(page,'cloud-layout-publish')).enabled,false);
     assert.deepEqual(await stored(page),{});
     await ui.fill(page,'dark-cloud-layout-code',`0I-${code.toLowerCase()}`);await ui.value(page,'dark-cloud-layout-code',code);
+    await page.keyboard.press('Meta+A');
+    const selection=ui.bounds(await ui.widget(page,'dark-cloud-layout-code/selection:0'));
+    const field=ui.bounds(await ui.widget(page,'dark-cloud-layout-code'));
+    assert.ok(Math.abs(ui.center(selection).x-ui.center(field).x)<1,'native selection shares the centered monospace text geometry');
     let captured;
     const gate=new Promise(resolve=>{releaseLoad=resolve});
     await guest.route('**/api/game/layouts/*',async route=>{captured=route.request();await gate;await route.continue();});

@@ -1,6 +1,6 @@
 //! GPU mod detail, screenshot gallery, versions and comments. The controller
 //! ports `DarkCloudModDetail`, `DarkCloudGallery` and `DarkCloudComments` lifetimes.
-use super::rows::ink;
+use super::rows::{control_action, ink};
 use super::{super::widgets, art::CloudArt, format, images::CloudImages};
 use crate::gpu_ui::{
     FontRunOptions, NativeFontRun, OverflowWrap, UiFrame, font_run, font_run_with_options,
@@ -1426,28 +1426,6 @@ fn control(
     )
 }
 
-fn control_action(
-    frame: &UiFrame<'_>,
-    ui: &Ui,
-    id: &str,
-    label: &str,
-    rect: Rect,
-    enabled: bool,
-) -> Result<egui::Response, String> {
-    let response = widgets::interact_unstyled(frame, ui, id, label, "button", rect, enabled);
-    ink(
-        frame,
-        ui,
-        label,
-        NativeUiFontName::Medium,
-        1.0,
-        if enabled { 0xd9ba70 } else { 0x8e7c4d },
-        rect.shrink2(Vec2::new(10.0, 0.0)),
-        false,
-    )?;
-    widgets::focus_outline(frame, ui, &response, 1.0, -3.0, widgets::GOLD);
-    Ok(response)
-}
 pub(super) fn subscription_action(value: &str) -> Option<ModSubscriptionAction> {
     match value {
         "subscribe" => Some(ModSubscriptionAction::Subscribe),
