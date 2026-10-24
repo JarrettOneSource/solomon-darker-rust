@@ -242,9 +242,10 @@ async function setEnhancedEffects(page, enabled) {
     if (state.frame.snapshot.boneyard.encounter?.run_event_id === 0) {
       const response = await context.request.get(new URL('api/game/saves/0', url).href,
         {headers: {Authorization: `Bearer ${account.token}`}});
-      assert.equal(response.status(), 200, 'the actual resumed Source document is available');
+      assert.equal(response.status(), 200, 'the actual resumed save document is available');
       const saved = await response.json();
-      await walkSolomonEntrance(page, {document: saved.save.document,
+      assert.equal(typeof saved.save.document, 'string', 'the actual entrance checkpoint remains persisted');
+      await walkSolomonEntrance(page, {
         snapshot: () => state.frame.snapshot, playerId: () => state.id, output});
     }
     checks.push('ordinary keyboard movement completes the real Solomon entrance before combat');

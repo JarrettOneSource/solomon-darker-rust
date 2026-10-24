@@ -5,6 +5,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {pathToFileURL}=require('node:url');
+const {createHash}=require('node:crypto');
 const {chromium}=require(path.resolve(process.env.PW));
 const ui=require('./gpu-ui.cjs');
 const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
@@ -18,8 +19,10 @@ const url=new URL(process.env.URL||'https://127.0.0.1:9449/game-stg/');
 assert.ok(['127.0.0.1','localhost'].includes(url.hostname),'use the owned native admission host');
 const website=path.resolve(process.env.SOLOMON_WEBSITE_DIR||path.join(__dirname,'../../../Website'));
 const source=file=>import(pathToFileURL(path.join(website,'frontend/src/game',file)).href);
-const receipt={passed:false,url:url.href,checks:[],stages:[],lessons:[],commands:[],errors:[]};
-const accepted={id:null,frame:null,loaded:null,checkpoint:null};
+const receipt={passed:false,url:url.href,artifact:process.env.ARTIFACT||null,
+  scope:process.env.NATIVE_SAVE?'standalone-native-authority':'hosted-native-authority',
+  checks:[],stages:[],lessons:[],commands:[],welcomes:[],mediaNetwork:[],errors:[]};
+const accepted={id:null,frame:null,loaded:null,checkpoint:null,checkpointEvidence:null};
 const held=new Set();
 let primary=false;
 let page,observed;
@@ -41,6 +44,30 @@ async function until(predicate,label,timeout=30000) {
     await page.waitForTimeout(40);
   }while(Date.now()<deadline);
   throw new Error(`Timed out waiting for ${label}`);
+}
+async function actualCheckpoint() {
+  if(process.env.NATIVE_SAVE){
+    let host,document;
+    await until(()=>{
+      if(!fs.existsSync(process.env.NATIVE_SAVE))return false;
+      host=JSON.parse(fs.readFileSync(process.env.NATIVE_SAVE,'utf8'));
+      document=JSON.parse(host.game_document);
+      return document.checkpoint.boneyard?.run_id===world().run_id
+        &&document.checkpoint.participants[accepted.id];
+    },'the native authority durably checkpoints the actual Tutorial run');
+    assert.equal(host.version,1);assert.equal(document.schema_version,2);
+    const checkpoint=document.checkpoint;
+    assert.equal(checkpoint.participants[accepted.id].player.selection.name,'Sirmin');
+    assert.equal(checkpoint.boneyard.source_sha256,world().source_sha256);
+    receipt.checkpoint={kind:'standalone-durable-file',hostVersion:host.version,
+      schemaVersion:document.schema_version,revision:host.host.revision,
+      tick:checkpoint.ticks,playerId:accepted.id,runId:checkpoint.boneyard.run_id,
+      bytes:Buffer.byteLength(host.game_document),
+      sha256:createHash('sha256').update(host.game_document).digest('hex')};
+  }else{
+    await until(()=>accepted.checkpoint,'real paused Tutorial owner checkpoint');
+    receipt.checkpoint=accepted.checkpointEvidence;
+  }
 }
 function checked(label) {
   receipt.checks.push(label);
@@ -118,10 +145,11 @@ async function modal(kind) {
 
 (async()=>{
   fs.mkdirSync(output,{recursive:true});
-  const [tutorial,cameras,viewports]=await Promise.all([
+  const [tutorial,cameras,viewports,terminal,settings]=await Promise.all([
     source('core-kernels/native-tutorial.ts'),source('renderer/boneyard-render-contract.ts'),
-    source('renderer/game-viewport.ts'),
+    source('renderer/game-viewport.ts'),source('game-over-presentation.ts'),source('game-settings.ts'),
   ]);
+  const controls=settings.DEFAULT_GAME_CONTROL_BINDINGS;
   const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=metal','--ignore-gpu-blocklist']});
@@ -130,6 +158,38 @@ async function modal(kind) {
     ignoreHTTPSErrors:process.env.LOCAL_TLS==='1'});
   page=await context.newPage();
   observed=ui.watchErrors(page);
+  const network=await context.newCDPSession(page),mediaRequests=new Map();
+  const header=(headers,name)=>Object.entries(headers)
+    .find(([key])=>key.toLowerCase()===name)?.[1]??null;
+  network.on('Network.requestWillBeSent',event=>{
+    if(event.type!=='Media')return;
+    const row={requestId:event.requestId,url:event.request.url,method:event.request.method,
+      range:header(event.request.headers,'range'),started:event.timestamp,
+      wallTime:event.wallTime,dataBytes:0,encodedBytes:0};
+    mediaRequests.set(event.requestId,row);receipt.mediaNetwork.push(row);
+  });
+  network.on('Network.responseReceived',event=>{
+    const row=mediaRequests.get(event.requestId);if(!row)return;
+    const response=event.response;
+    row.response={time:event.timestamp,status:response.status,connectionId:response.connectionId,
+      contentLength:header(response.headers,'content-length'),
+      contentRange:header(response.headers,'content-range'),
+      contentType:header(response.headers,'content-type'),fromDiskCache:response.fromDiskCache};
+  });
+  network.on('Network.dataReceived',event=>{
+    const row=mediaRequests.get(event.requestId);if(!row)return;
+    row.dataBytes+=event.dataLength;row.encodedBytes+=event.encodedDataLength;
+    row.lastData=event.timestamp;
+  });
+  network.on('Network.loadingFinished',event=>{
+    const row=mediaRequests.get(event.requestId);
+    if(row)row.finished={time:event.timestamp,encodedBytes:event.encodedDataLength};
+  });
+  network.on('Network.loadingFailed',event=>{
+    const row=mediaRequests.get(event.requestId);
+    if(row)row.failed={time:event.timestamp,error:event.errorText,canceled:event.canceled};
+  });
+  await network.send('Network.enable');
   page.on('websocket',socket=>{
     const read=createNativeMessageReader();
     socket.on('framereceived',({payload})=>{
@@ -138,10 +198,16 @@ async function modal(kind) {
         if(!message)return;
         if(message.type==='welcome'){
           accepted.id=message.credentials.player_id;accepted.frame=message.frame;
+          receipt.welcomes.push({playerId:accepted.id,tick:message.frame.snapshot.ticks,
+            runId:message.frame.snapshot.boneyard?.run_id??null});
         }else if(message.type==='snapshot')accepted.frame=message.frame;
         else if(message.type==='boneyard_loaded')accepted.loaded=message.boneyard;
-        else if(message.type==='hosted'&&message.message.kind==='save_checkpoint')
+        else if(message.type==='hosted'&&message.message.kind==='save_checkpoint'){
           accepted.checkpoint=message.message.save;
+          accepted.checkpointEvidence={kind:'hosted-owner-message',sequence:message.message.sequence,
+            reason:message.message.reason,bytes:Buffer.byteLength(message.message.save),
+            sha256:createHash('sha256').update(message.message.save).digest('hex')};
+        }
         else if(message.type==='error')observed.errors.push({type:'native',message:message.reason});
       }catch(error){observed.errors.push({type:'native-observation',message:error.message});}
     });
@@ -172,16 +238,22 @@ async function modal(kind) {
     await until(()=>world()?.tutorial&&accepted.loaded,'real solo Tutorial native admission',120000);
     assert.equal(player().player.selection.name,'Sirmin');
     receipt.runId=world().run_id;receipt.seed=world().seed;
+    receipt.admission={playerId:accepted.id,tick:accepted.frame.snapshot.ticks,
+      runId:world().run_id,sourceSha256:world().source_sha256,
+      geometrySha256:world().geometry_sha256,selection:player().player.selection,stage:stage()};
     assert.equal(accepted.loaded.source_sha256,world().source_sha256);
     await lesson('USE YOUR KEYBOARD\nTO MOVE THE WIZARD');
-    await page.keyboard.press('Escape');await ui.surface(page,'pause');
-    await until(()=>accepted.checkpoint,'real paused Tutorial checkpoint');
-    await ui.click(page,'resume');
-    await until(()=>!accepted.frame.host.pause&&!accepted.frame.host.resume_grace,
-      'ordinary Tutorial resume');
-    await walkSolomonEntrance(page,{document:accepted.checkpoint,
-      snapshot:()=>accepted.frame.snapshot,playerId:()=>accepted.id,output});
-    checked('real Title YES, retained Tutorial geometry and ordinary Solomon confrontation');
+    const beforeEscape=await ui.readUi(page);
+    await page.keyboard.press('Escape');
+    const afterEscape=await ui.waitForUi(page,snapshot=>snapshot.frame>beforeEscape.frame+1,
+      'the actual early Tutorial Escape frame');
+    assert.equal(afterEscape.surface,'hidden','Source seals Pause before combat access');
+    assert.ok(!accepted.frame.host.pause,'early Escape does not pause the native Tutorial');
+    receipt.earlyEscape={beforeFrame:beforeEscape.frame,afterFrame:afterEscape.frame,
+      surface:afterEscape.surface,stage:stage()};
+    await actualCheckpoint();
+    await walkSolomonEntrance(page,{snapshot:()=>accepted.frame.snapshot,playerId:()=>accepted.id,output});
+    checked('real Title YES, Source-gated early Escape, durable checkpoint and ordinary Solomon confrontation');
     const deadline=Date.now()+480000;
     while(world()?.tutorial&&Date.now()<deadline){
       const current=stage();
@@ -226,24 +298,60 @@ async function modal(kind) {
       }
       if(current==='CastAcidRain'){
         await release();await lesson('A SECONDARY SPELL IS READY');
-        await page.keyboard.press('Space');
-        await until(()=>stage()!=='CastAcidRain','accepted Tutorial Acid Rain');
-        checked('real secondary input acknowledges Acid Rain and starts the item wave');continue;
+        assert.equal(controls.belt1,'Mouse2');
+        const hint=await ui.widget(page,'tutorial:text:subheading');
+        assert.ok(hint.label.includes(settings.gameBindingLabel(controls.belt1)));
+        receipt.secondaryInput={binding:controls.belt1,hint:hint.label};
+        await page.mouse.move(800,450);
+        await page.mouse.down({button:'right'});
+        try{await until(()=>stage()!=='CastAcidRain','accepted Tutorial Acid Rain');}
+        finally{await page.mouse.up({button:'right'});}
+        checked('real Source secondary binding acknowledges Acid Rain and starts the item wave');continue;
       }
       if(current==='DrinkPotion'){
-        await release();await lesson('DRINK POTION');
-        assert.ok(player().player.economy.backpack.some(item=>item.native_type_id===7001
-          &&item.native_subtype===0),'the authored potion was genuinely collected');
-        await page.keyboard.press('KeyQ');
-        await until(()=>stage()!=='DrinkPotion','accepted Tutorial Health Potion drink');
-        checked('authored potion pickup, exact lesson and real Q acknowledgement');continue;
+        await release();
+        const potion=player().player.economy.backpack.find(item=>item.native_type_id===7001
+          &&item.native_subtype===0);
+        assert.ok(potion,'the authored potion was genuinely collected');
+        const pickup=world().loot_events.findLast(event=>event.event_type==='LootPickup'
+          &&event.player_id===accepted.id&&event.text===potion.name);
+        assert.ok(pickup,'the actual local pickup, rather than an imported item, owns the notice');
+        const id=`world-notification:loot:${pickup.event_id}`;
+        const visible=await ui.waitForUi(page,snapshot=>{
+          const notice=ui.findWidget(snapshot,id);
+          return notice&&JSON.parse(notice.value).offset===0;
+        },'the genuinely earned potion notice completes its native entrance');
+        const notice=ui.findWidget(visible,id),presentation=JSON.parse(notice.value);
+        assert.equal(notice.label,potion.name);
+        assert.equal(presentation.baseline,67);assert.equal(presentation.clipTop,50);
+        assert.equal(presentation.scale,1);
+        await page.waitForFunction(name=>window.__solomonAnnouncements.some(event=>
+          event.text.split('\n').includes(name)),potion.name);
+        const speech=(await ui.announcements(page)).filter(event=>event.text.split('\n').includes(potion.name));
+        assert.equal(speech.length,1,'one accepted earned loot event announces its actual item name once');
+        receipt.earnedLoot={qualification:'genuine scripted Tutorial drop after ordinary combat and pickup; not a random Gold/book drop',
+          pickup,item:{id:potion.id,name:potion.name,quantity:potion.quantity},notice,presentation,speech};
+        await page.screenshot({path:path.join(output,'earned-tutorial-potion-notice.png')});
+        await lesson('DRINK POTION');
+        assert.equal(controls.belt4,'Digit3');
+        const hint=await ui.widget(page,'tutorial:text:subheading');
+        assert.ok(hint.label.includes(settings.gameBindingLabel(controls.belt4)));
+        receipt.potionInput={binding:controls.belt4,hint:hint.label};
+        await page.keyboard.down(controls.belt4);
+        try{await until(()=>stage()!=='DrinkPotion','accepted Tutorial Health Potion drink');}
+        finally{await page.keyboard.up(controls.belt4);}
+        checked('authored potion pickup, exact lesson and real Source potion binding acknowledgement');continue;
       }
       if(current==='Survive'||player().player.combat.life_state!=='Alive'){
         await release();
         const gameOver=ui.findWidget(snapshot,'game-over:continue');
-        if(gameOver&&!receipt.gameOver){
+        const run=accepted.frame.snapshot.run;
+        const presentation=terminal.gameOverPresentation(run.game_over_ticks,
+          run.game_over_exit_ticks,run.game_over_exit_kind?.toLowerCase()??null);
+        if(gameOver?.enabled&&presentation.titleAlpha===1&&presentation.promptAlpha===1
+          &&!receipt.gameOver){
           receipt.gameOver={tick:accepted.frame.snapshot.ticks,widget:gameOver,
-            phase:accepted.frame.snapshot.run.phase};
+            phase:run.phase,presentation};
           await page.screenshot({path:path.join(output,'game-over.png')});
         }
       }else if(['CollectAmulet','CollectPotion','ClubEnemies'].includes(current)){
@@ -252,7 +360,8 @@ async function modal(kind) {
         const target=targets.toSorted((a,b)=>distance(a.position,player().wizard.position)
           -distance(b.position,player().wizard.position))[0];
         if(target)await moveTo(target.position);else await keys([]);
-      }else if(['ThrowMissiles','ClearSkeletons','ClearItemWave','ClearArcherWave'].includes(current)){
+      }else if(['ThrowMissiles','ClearSkeletons','ClearItemWave','ClearArcherWave',
+        'AwaitArcherWave','WaitForPotionDrop'].includes(current)){
         if(current==='ThrowMissiles'&&!receipt.primaryLesson){
           await lesson('POINT AND CLICK YOUR MOUSE\nTO THROW MAGIC MISSILES');receipt.primaryLesson=true;
         }

@@ -9,6 +9,7 @@ const {createHash} = require('node:crypto');
 const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
 const {assertFullscreenToggle} = require('./fullscreen.cjs');
+const {walkSolomonEntrance} = require('./solomon-entrance.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
@@ -23,6 +24,7 @@ const savePath = path.join(working, 'host.json');
 const checks = [];
 const errors = [];
 const speechEvidence = [];
+const partyEvidence = {};
 const shutdownResourceErrors = [];
 let intentionalHostShutdown = false;
 const requests = new Set();
@@ -154,55 +156,6 @@ async function leaveGame(page, state) {
   await ui.surface(page,'title');
 }
 
-async function approachSolomon(page, state) {
-  const held = new Set();
-  const route = [];
-  const world = state.frame.snapshot.boneyard;
-  const start = position(state);
-  const gates = new Map();
-  for (const leaf of world.gate_leaves) {
-    const pair = gates.get(leaf.fence_eid) || [];
-    pair.push(leaf.hinge);
-    gates.set(leaf.fence_eid, pair);
-  }
-  // Follow the actual entrance opening before aiming at Solomon across the arena.
-  // Walking straight toward him from the spawn can run into the solid fence.
-  const gate = [...gates.values()].filter(pair => pair.length === 2)
-    .map(pair => ({x: (pair[0].x + pair[1].x) / 2, y: (pair[0].y + pair[1].y) / 2}))
-    .sort((a, b) => Math.hypot(a.x - start.x, a.y - start.y) - Math.hypot(b.x - start.x, b.y - start.y))[0];
-  assert.ok(gate, 'the generated opening has its authored gate');
-  const entryDirection = world.arena_transition.entry_side === 'North' ? 1 : -1;
-  const waypoints = [{x: gate.x, y: gate.y - entryDirection * 75},
-    {x: gate.x, y: gate.y + entryDirection * 150}, world.encounter.position];
-  let waypoint = 0;
-  const deadline = Date.now() + 90000;
-  try {
-    while (state.frame.snapshot.boneyard.encounter.phase === 'Digging' && Date.now() < deadline) {
-      const at = position(state);
-      const target = waypoints[waypoint];
-      const dx = target.x - at.x;
-      const dy = target.y - at.y;
-      const close = Math.hypot(dx, dy) < (waypoint === waypoints.length - 1 ? 90 : 12);
-      const desired = new Set();
-      if (close && waypoint < waypoints.length - 1) waypoint++;
-      if (!close && Math.abs(dx) > 8) desired.add(dx < 0 ? 'KeyA' : 'KeyD');
-      if (!close && Math.abs(dy) > 8) desired.add(dy < 0 ? 'KeyW' : 'KeyS');
-      for (const key of held) {
-        if (!desired.has(key)) {await page.keyboard.up(key); held.delete(key);}
-      }
-      for (const key of desired) {
-        if (!held.has(key)) {await page.keyboard.down(key); held.add(key);}
-      }
-      route.push({tick: state.frame.snapshot.ticks, position: at, target, waypoint});
-      await page.waitForTimeout(100);
-    }
-    assert.notEqual(state.frame.snapshot.boneyard.encounter.phase, 'Digging', 'real proximity wakes Solomon');
-  } finally {
-    for (const key of held) await page.keyboard.up(key);
-    fs.writeFileSync(path.join(output, 'native-solomon-approach.json'), JSON.stringify(route, null, 2));
-  }
-}
-
 (async () => {
   let browser;
   let browserOwner;
@@ -313,11 +266,21 @@ async function approachSolomon(page, state) {
       await ui.noWidget(first.page,'panel:surface:inventory');
       checks.push('real chat delivery and keyboard focus above Inventory');
 
+      const beforeParty = await ui.readUi(first.page);
+      partyEvidence.afterInventoryClose = {surface:beforeParty.surface,inputScope:beforeParty.inputScope};
+      assert.equal(beforeParty.surface,'hidden',
+        'the actual Inventory close cannot also open Pause from the same Escape');
       await ui.click(first.page,'social/party');
       await ui.widget(first.page,'social/party-menu');
-      await ui.widget(first.page,`social/member:${first.state.id}`);
-      await ui.widget(first.page,`social/member:${second.state.id}`);
+      const roster = first.state.social?.party_state?.party?.member_player_ids;
+      assert.deepEqual(new Set(roster),new Set([first.state.id,second.state.id]),
+        'the actual Party dialog paints the accepted two-player roster');
+      partyEvidence.acceptedRoster = roster;
       await first.page.screenshot({path:path.join(output,'native-party.png')});
+      // Source Party dialog names are passive. Profiles open through the actual
+      // chip member after closing the dialog, never through its covered geometry.
+      await ui.click(first.page,'social/close');
+      await ui.noWidget(first.page,'social/party-menu');
       await ui.click(first.page,`social/member:${second.state.id}`);
       assert.equal((await ui.widget(first.page,'social/player-card')).label,'Caius');
       await ui.click(first.page,'social/card-message');
@@ -423,7 +386,8 @@ async function approachSolomon(page, state) {
     checks.push('native file save and launcher restart');
     if (process.env.GAMEOVER === '1') {
       await gameplayInputReady(first.page);
-      await approachSolomon(first.page, first.state);
+      await walkSolomonEntrance(first.page, {snapshot: () => first.state.frame.snapshot,
+        playerId: () => first.state.id, output});
       checks.push('real movement wakes Solomon and begins the opening encounter');
       await waitUntil(() => first.state.frame.snapshot.run.phase === 'GameOver', 'actual combat death', 180000);
       await ui.waitForUi(first.page,snapshot => ui.findWidget(snapshot,'game-over:continue')?.label.includes('Continue'),
@@ -453,7 +417,7 @@ async function approachSolomon(page, state) {
     const receipt = {passed: true, checks, renderer, socialChecked: process.env.SOCIAL !== '0', gameOverChecked: process.env.GAMEOVER === '1',
       clientRevision: process.env.CLIENT_REVISION || null, binarySha256: digest(binary),
       wasm: fs.readdirSync(assets).filter(file => file.endsWith('.wasm')).map(file => ({file, sha256: digest(path.join(assets, file))})),
-      origin, requests: requests.size, errors, shutdownResourceErrors, speechEvidence};
+      origin, requests: requests.size, errors, shutdownResourceErrors, speechEvidence, partyEvidence};
     fs.writeFileSync(path.join(output, 'native-session-receipt.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) {
@@ -468,7 +432,7 @@ async function approachSolomon(page, state) {
         ui: await ui.readUi(client.page).catch(() => null)};
       await client.page.screenshot({path: path.join(output, `native-failure-${name}.png`)}).catch(() => {});
     }
-    fs.writeFileSync(path.join(output, 'native-session-failure.json'), JSON.stringify({error: error.stack, checks, errors, shutdownResourceErrors, movementEvidence, speechEvidence, state, hostLog}, null, 2));
+    fs.writeFileSync(path.join(output, 'native-session-failure.json'), JSON.stringify({error: error.stack, checks, errors, shutdownResourceErrors, movementEvidence, speechEvidence, partyEvidence, state, hostLog}, null, 2));
     throw error;
   } finally {
     try {

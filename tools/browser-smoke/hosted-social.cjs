@@ -23,6 +23,7 @@ const privateConfig = path.resolve(process.env.PRIVATE_CONFIG);
 const accountFile = process.env.ACCOUNT_FILE || path.join(output, 'private-accounts.json');
 const checks = [];
 const clients = [];
+let observerEvidence;
 let step = 'registration';
 
 async function waitUntil(predicate, label) {
@@ -110,6 +111,7 @@ function observe(page, label) {
         state.id = message.credentials.player_id;
         state.frame = message.frame;
         state.welcomes.push({playerId: state.id, sessionKind: message.hosted?.session_kind,
+          observer: message.hosted?.observer, developerAccess: message.hosted?.developer_access,
           path: connection.path, receivedAt: Date.now()});
       } else if (message.type === 'snapshot') state.frame = message.frame;
       else if (message.type === 'social') state.social = message.snapshot;
@@ -236,6 +238,108 @@ function publicState(state) {
 
 async function closeClient(client) {
   return {...await client.browserOwner.close(), exited:true};
+}
+
+async function observeOwnedMatch(leader, guest) {
+  const account = JSON.parse(fs.readFileSync(process.env.OBSERVER_ACCOUNTS))[0];
+  assert.equal(account.user.id, 3, 'only the retained isolated developer account observes');
+  for (const client of [guest, leader]) {
+    for (const id of ['social/close', 'social/card-close', 'social/chat-close']) {
+      if (ui.findWidget(await ui.readUi(client.page), id)) await ui.click(client.page, id);
+    }
+  }
+  await ui.click(leader.page, 'hud:map');
+  await waitUntil(() => leader.state.frame?.snapshot.boneyard
+    && guest.state.frame?.snapshot.boneyard?.run_id === leader.state.frame.snapshot.boneyard.run_id
+    && [leader, guest].every(client => !client.state.frame.host.loading_run_id
+      && !client.state.frame.host.resume_grace && !client.state.frame.host.pause),
+  'the two owned wizards enter the same real Boneyard');
+  const runId = leader.state.frame.snapshot.boneyard.run_id;
+  const ids = [leader.state.id, guest.state.id].sort();
+  // A separate authenticated context shares one of the existing two Chrome
+  // processes. It never opens a participant connection for the developer.
+  const context = await leader.page.context().browser().newContext({
+    ignoreHTTPSErrors: process.env.LOCAL_TLS === '1', viewport: {width:1280,height:720}});
+  await context.addInitScript(({key, token}) => localStorage.setItem(key, token),
+    {key:tokenKey, token:account.token});
+  const page = await context.newPage();
+  const state = observe(page, 'observer');
+  let actualDeveloper = false, matches = [], inputFrames = 0, failure;
+  page.on('response', async response => {
+    const pathname = new URL(response.url()).pathname;
+    if (response.status() !== 200) return;
+    if (pathname.endsWith('/api/auth/me')) {
+      const body = await response.json(); actualDeveloper = (body.user || body).developerAccess === true;
+    }
+    if (pathname.endsWith('/api/game/matches')) matches = (await response.json()).items;
+  });
+  page.on('websocket', socket => socket.on('framesent', ({payload}) => {
+    if (JSON.parse(payload.toString()).type === 'input') inputFrames++;
+  }));
+  try {
+    await state.failureObserverReady;
+    await page.goto(url, {waitUntil:'load'}); await ui.ready(page, {timeout:coldStartTimeout});
+    await waitUntil(() => actualDeveloper, 'actual auth/me developer capability');
+    if (ui.findWidget(await ui.readUi(page), 'prompt-secondary')) await ui.click(page, 'prompt-secondary');
+    await ui.click(page, 'explore'); await ui.click(page, 'cloud-tab:parties');
+    const ownedMatch = () => matches.find(row => Buffer.from(row.id, 'base64url').toString().endsWith(`\0${runId}`));
+    await waitUntil(ownedMatch, 'Developer Sight lists this exact owned run');
+    const match = ownedMatch();
+    assert.equal(match.playerCount, 2);
+    assert.deepEqual([...match.players].sort(), ids.map(id => leader.state.frame.snapshot.participants[id].player.selection.name).sort());
+    await ui.click(page, `cloud-observe:${match.id}`);
+    await ui.widget(page, 'observer/panel', {timeout:120000});
+    await waitUntil(() => state.welcomes.at(-1)?.observer === true
+      && state.frame?.snapshot.boneyard?.run_id === runId, 'genuine read-only observer welcome');
+    assert.equal(state.welcomes.at(-1).developerAccess, true);
+    assert.deepEqual(Object.keys(state.frame.snapshot.participants).sort(), ids);
+    await ui.click(page, `observer/player:${guest.state.id}`);
+    await ui.waitForUi(page, snapshot => ui.findWidget(snapshot, `observer/player:${guest.state.id}`)?.selected === true,
+      'actual observer camera selects the second owned wizard');
+    await ui.click(page, `observer/player:${leader.state.id}`);
+    await ui.waitForUi(page, snapshot => ui.findWidget(snapshot, `observer/player:${leader.state.id}`)?.selected === true,
+      'actual observer camera returns to the owned leader');
+    const before = Object.fromEntries(ids.map(id => [id, {
+      position: leader.state.frame.snapshot.participants[id].wizard.position,
+      cast: leader.state.frame.snapshot.participants[id].wizard.primary_cast.cast_sequence,
+    }]));
+    const tick = state.frame.snapshot.ticks;
+    await page.keyboard.down('KeyD');
+    try { await waitUntil(() => state.frame.snapshot.ticks >= tick + 20, 'actual observer-only input interval'); }
+    finally { await page.keyboard.up('KeyD'); }
+    await page.mouse.click(640, 600); await page.keyboard.press('KeyI');
+    assert.equal(inputFrames, 0, 'observer controls never send gameplay input');
+    assert.ok(!state.commands.some(kind => ['bind_belt','set_pause','choose_skill'].includes(kind)));
+    assert.deepEqual(Object.keys(leader.state.frame.snapshot.participants).sort(), ids);
+    for (const id of ids) {
+      assert.deepEqual(leader.state.frame.snapshot.participants[id].wizard.position, before[id].position);
+      assert.equal(leader.state.frame.snapshot.participants[id].wizard.primary_cast.cast_sequence, before[id].cast);
+    }
+    await ui.noWidget(page, 'panel:surface:inventory');
+    await ui.assertGpuOnly(page);
+    await page.screenshot({path:path.join(output, 'developer-observer.png')});
+    await ui.click(page, 'observer/exit'); await ui.surface(page, 'title');
+    await ui.noWidget(page, 'observer/panel');
+    assert.ok(!state.requests.some(row => row.method === 'PUT' && row.path.includes('/api/game/saves/')),
+      'read-only observation creates no save');
+    assert.deepEqual(Object.keys(leader.state.frame.snapshot.participants).sort(), ids);
+    await ui.settleErrors(page); assert.deepEqual(state.errors, []);
+    observerEvidence = {runId, match, inputFrames, before, ...publicState(state)};
+    checked('actual Developer Sight opens only the owned match, switches cameras and exits without participant, save or gameplay input');
+  } catch (error) {
+    failure = error;
+    await ui.settleErrors(page);
+    observerEvidence = {runId, inputFrames, failure: error.stack, ...publicState(state),
+      ui: await ui.readUi(page).catch(() => null)};
+    await page.screenshot({path:path.join(output, 'developer-observer-failure.png')}).catch(() => {});
+    throw error;
+  } finally {
+    try { await context.close(); }
+    catch (error) {
+      observerEvidence.contextCleanupError = error.message;
+      if (!failure) throw error;
+    }
+  }
 }
 
 (async () => {
@@ -382,6 +486,10 @@ async function closeClient(client) {
     await ui.assertGpuOnly(guest.page);
     await guest.page.screenshot({path: path.join(output, 'joined-college-party.png')});
     checked('consent and actual character confirmation join the inviter authority with both connected party members');
+    if (process.env.OBSERVER_ACCOUNTS) {
+      step = 'actual Developer Sight and read-only observer';
+      await observeOwnedMatch(leader, guest);
+    }
     for (const client of clients) {
       await ui.settleErrors(client.page);
       assert.deepEqual(client.state.errors, []);
@@ -398,7 +506,7 @@ async function closeClient(client) {
     process.exitCode = 1;
   } finally {
     releaseCheckpointSave?.();
-    const receipt = {passed: !failure, url, checks, failure,
+    const receipt = {passed: !failure, url, checks, failure, observerEvidence,
       clients: clients.map(client => ({...publicState(client.state), failureUi: client.state.failureUi})),
       browsersClosed: false, servicesRestarted: false};
     // Preserve evidence before closing Chrome, including if the external bounded

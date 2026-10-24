@@ -517,6 +517,12 @@ pub(crate) struct Focus {
     /// The ID of a widget to give the focus to in the next frame.
     id_next_frame: Option<Id>,
 
+    /// An actual registered widget activated by the backend on the next pass.
+    activation_next_frame: Option<(LayerId, Id)>,
+
+    /// The backend activation delivered during this pass only.
+    activation_this_frame: Option<(LayerId, Id)>,
+
     /// If set, the next widget that is interested in focus will automatically get it.
     /// Probably because the user pressed Tab.
     give_to_next: bool,
@@ -567,6 +573,7 @@ impl Focus {
     }
 
     fn begin_pass(&mut self, new_input: &crate::data::input::RawInput) {
+        self.activation_this_frame = self.activation_next_frame.take();
         self.id_two_frames_ago = self.id_previous_frame;
         self.id_previous_frame = self.focused();
         if let Some(id) = self.id_next_frame.take() {
@@ -926,9 +933,17 @@ impl Memory {
     }
 
     /// Defer focus until the next pass so an already rendered widget sees `gained_focus`.
-    pub(crate) fn request_focus_next_frame(&mut self, id: Id) {
+    pub fn request_focus_next_frame(&mut self, id: Id) {
         self.focus_mut().id_next_frame = Some(id);
         self.interrupt_ime();
+    }
+
+    pub(crate) fn request_activation_next_frame(&mut self, layer: LayerId, id: Id) {
+        self.focus_mut().activation_next_frame = Some((layer, id));
+    }
+
+    pub(crate) fn activated_this_frame(&self, layer: LayerId, id: Id) -> bool {
+        self.focus().is_some_and(|focus| focus.activation_this_frame == Some((layer, id)))
     }
 
     /// Surrender keyboard focus for a specific widget.
@@ -1001,6 +1016,16 @@ impl Memory {
     pub(crate) fn focus_direction(&self) -> FocusDirection {
         self.focus()
             .map_or(FocusDirection::None, |focus| focus.focus_direction)
+    }
+
+    /// Hold this pass's navigation after applying the focused widget's event filter.
+    ///
+    /// The backend can resolve it after all widgets register in the actual active
+    /// layer. Input events remain available to their widget owners.
+    pub fn take_focus_direction(&mut self) -> FocusDirection {
+        let direction = self.focus_direction();
+        self.focus_mut().reset_focus();
+        direction
     }
 
     /// Limit focus to widgets on the given layer and above.

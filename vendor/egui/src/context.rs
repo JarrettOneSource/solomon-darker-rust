@@ -1784,6 +1784,22 @@ impl Context {
             }
 
             if enabled
+                && visible
+                && sense.senses_click()
+                && memory.activated_this_frame(layer_id, id)
+                && memory.allows_interaction(layer_id)
+                && viewport.this_pass.widgets.get(id).is_some_and(|widget| {
+                    widget.layer_id == layer_id
+                        && widget.enabled
+                        && widget.visible
+                        && widget.sense.senses_click()
+                        && widget.rect.is_positive()
+                })
+            {
+                res.flags.set(Flags::FAKE_PRIMARY_CLICKED, true);
+            }
+
+            if enabled
                 && sense.senses_click()
                 && input.has_accesskit_action_request(id, accesskit::Action::Click)
             {
@@ -3690,6 +3706,47 @@ impl Context {
     /// This includes both registered fixed layers and ordinary unregistered layers.
     pub fn compare_layer_order(&self, a: LayerId, b: LayerId) -> core::cmp::Ordering {
         self.memory(|memory| memory.areas().compare_order(a, b))
+    }
+
+    /// This pass's enabled, visible, focusable widgets in their real registration order.
+    ///
+    /// Rectangles retain local layer coordinates. Offscreen widgets keep their full
+    /// rectangles so native focus can reveal them. Passive container backgrounds
+    /// are excluded. Call after the layer's widgets have registered.
+    pub fn focusable_widgets_in_layer(&self, layer: LayerId) -> Vec<WidgetRect> {
+        if !self.memory(|memory| memory.allows_interaction(layer)) {
+            return Vec::new();
+        }
+        self.pass_state(|pass| {
+            pass.widgets
+                .focusable_widgets_in_layer(layer)
+                .filter_map(|id| pass.widgets.get(id))
+                .filter(|widget| widget.visible && widget.rect.is_positive())
+                .copied()
+                .collect()
+        })
+    }
+
+    /// Activate an actual enabled, visible click widget during the next pass.
+    ///
+    /// Backends can resolve a controller's target after layout without replaying
+    /// a key or pointer event. This creates no widget and does not move focus.
+    /// A removed or disabled widget cannot receive the queued activation.
+    pub fn request_activation_next_frame(&self, id: Id) -> bool {
+        self.write(|ctx| {
+            let widget = ctx.viewport().this_pass.widgets.get(id).copied();
+            let Some(widget) = widget else { return false };
+            if !widget.enabled
+                || !widget.visible
+                || !widget.rect.is_positive()
+                || !widget.sense.senses_click()
+                || !ctx.memory.allows_interaction(widget.layer_id)
+            {
+                return false;
+            }
+            ctx.memory.request_activation_next_frame(widget.layer_id, id);
+            true
+        })
     }
 
     /// Restrict this pass's real widget to an authored hit shape in global coordinates.

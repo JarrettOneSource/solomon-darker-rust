@@ -14,6 +14,7 @@ mod input;
 #[cfg(test)]
 mod layer_tests;
 mod material;
+pub(crate) mod navigation;
 mod painter;
 mod stock;
 #[cfg(test)]
@@ -1120,7 +1121,13 @@ impl GpuUi {
         let raw = run.layout_input.clone();
         self.paint_pass(
             run,
-            batches::InputPass { raw, codes: Vec::new(), edits: Vec::new(), click_count: None },
+            batches::InputPass {
+                raw,
+                codes: Vec::new(),
+                edits: Vec::new(),
+                click_count: None,
+                controller: false,
+            },
             &mut paint,
         )
     }
@@ -1158,6 +1165,7 @@ impl GpuUi {
         let mut result = Ok(());
         edit::begin_native_focus(&self.ctx, &pass.codes);
         let mut output = self.ctx.run_pass(pass.raw, |ctx| {
+            let direction = navigation::begin(ctx, pass.controller);
             result = paint(&mut UiFrame {
                 ctx,
                 images: &self.images,
@@ -1177,6 +1185,13 @@ impl GpuUi {
                 editor_errors: &editor_errors,
                 native_click_count: pass.click_count,
             });
+            if result.is_ok() {
+                navigation::finish(
+                    ctx,
+                    direction,
+                    input_scope.borrow().as_ref().map(|(layer, scope)| (*layer, scope.as_str())),
+                );
+            }
         });
         edit::finish_native_focus(&self.ctx, &pass.codes);
         run.textures.append(std::mem::take(&mut output.textures_delta));

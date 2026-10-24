@@ -17,6 +17,18 @@ native downloads, screen-reader announcements, audio, network and persistence; t
 paint game controls or mirror them as hidden DOM. Accessibility uses native `ariaNotify`
 where supported or one specifically marked, nonvisual, text-only live region.
 
+The ordinary hosted Save/Leave/Continue journey must follow the same pinned Source
+recovery contract. `game-host.ts:3505–3561` retires the last disconnected player's
+world as suspended, and `publishSaveCheckpointForClient` defaults its signed claim
+to the current recovery revision. `game-session-supervisor.ts:166–173,719–815`
+keeps suspended claims eligible to seed their saved run, returning201; terminal,
+old-revision and invalid legacy claims have separate rejection paths. The24382f0
+browser receipt already returned201 and continued the exact Felix Boneyard run,
+but its final assertion incorrectly demanded an inactive-party404. The canonical
+journey now requires exactly one successful signed rejoin and the same player/run,
+with every HTTP failure still fatal. No host or save behavior changes; the matched
+current-artifact rerun remains required.
+
 The migration begins at Rust `c14068b3c95aa40f0b1c85d11f73fe2622349aae`. An implementation
 or a passing kernel fixture does not establish composed visual/input acceptance. Every pending
 row below remains required; there are no accepted placeholders, dropped variants or required
@@ -490,22 +502,22 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 
 | Surface and required variants | Owner | Implementation/reference and acceptance route | Current blocker/evidence |
 | --- | --- | --- | --- |
-| Process startup; cold, warm, held image/font/wasm; failed required asset; no partial Title or HUD | foundation + root; acceptance tests | Startup evidence above; `startup.cjs`; loader geometry, monotonic work, immediate readiness transition, screenshots | All seven cases pass on 88c3dfe across retained receipts; exact held counts/path, splash, no partial menus, native/fallback announcements and failure ownership proved |
+| Process startup; cold, warm, held image/font/wasm; failed required asset; no partial Title or HUD | foundation + root; acceptance tests | Startup evidence above; `startup.cjs`; loader geometry, monotonic work, immediate readiness transition, screenshots | All seven cases pass on 88c3dfe across retained receipts; exact held counts/path, splash, no partial menus, native/fallback announcements and failure ownership proved; unchanged-loader proof is retained. Current57626c4 held-music guard passes exact322/326, real heldTab/Enter and first8Title frames with clean lifecycle; see startup-held-input-diagnostic; current3660ab8 required named/rapid smoke14 also passes on M5 with strict errors[]/Chrome0 |
 | GPU runtime; stock bundle crops/rotation/registered origins, glyph masks, browser fonts, dynamic images, blend/clips | foundation | `gpu_ui.rs`, shared `graphics/src/lib.rs`, stock manifest; read-only `gpu_ui_state`, GPU meshes/textures and final screenshots | Core probe15/15 and precise source audit4/4 pass; f41 real joystick group submission/reuse is proved by native GL observations with stable174textures/2FBO. Full composed surface/style proof remains pending |
-| Title/Play; clouds, moon, graves, Solomon animation, logo/art, Continue policy, account/desktop links | menus | `menu/title.rs`, pinned Main Menu; `smoke.cjs`, `menus.cjs`, `menu-input.cjs` | f41 common menus passes12 checks with reviewed Title/Create/Continue art; portrait/landscape Title paths also pass responsive. Remaining account/desktop and final Source-style variants stay in their family gates |
-| Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | 88c3dfe prompts-observed clean: real saved wizard, Escape decline preserves exact state, narrow viewport confirmation and explicit replacement; Tutorial Yes/focus route remains in common input coverage |
-| College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | 88c3dfe named Helvidius/Ether/Arcane smoke and default/random/blank variants clean; f41 menus verifies width/character rejection, empty accepted draft and actual Felix/Ether/Arcane admission; 243 audio priming/scene/mixer clean. ceb3a17 menu-input passes10 groups including the unchanged first neutral+B close, generated Macro/Earth/Arcane and touchFelix/Water/Body admission; additional choices/retry variants pending |
-| Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | 88c3dfe rapid inputs and two-seed Boneyard Pause/exact-save/Leave/Continue pass; f41 menus proves College clocks continue while movement is sealed, real Resume and same-world Continue; ceb3a17 controller/touch Pause, Settings Back and modal focus/neutral handoff pass; complete shared variants remain pending |
-| Settings root/cloud/performance; sliders/toggles, permissions, saved preferences, nested account policies, mobile sharing | menus | `menu/settings/**`; `settings-parity.cjs`, `menus.cjs`, `fullscreen.cjs` | 88c3dfe Settings five-group driver passes including pointer slider/reload; f41 common menus also proves actual UI-scale135/HUD sizing and native focus/value announcements; account/mobile permission variants remain in family routes |
-| Control bindings; every action, duplicate swaps, Escape, modified-key rejection, allowed mouse bindings, reverse hotbar | menus + root input | `menu/settings.rs`, canonical `GameControls`; `menus.cjs`, `gameplay-input.cjs`, `hud-input.cjs` | 58df78d gameplay-input passes exact8/8 reads; f41 menus proves Escape swap, modifier/mouse rejection, new key/arrow motion and released old binding. HUD10/controller stick/drift/cancel passes separately; common controller admission remains unpassed until the rebuilt first-B fix |
+| Title/Play; clouds, moon, graves, Solomon animation, logo/art, Continue policy, account/desktop links | menus | `menu/title.rs`, pinned Main Menu; `smoke.cjs`, `menus.cjs`, `menu-input.cjs` | 3660ab8 common menus passes12 groups/errors[]/Chrome89934 exit0 with reviewed full Title/Create/Ether/Pause/Settings art. A separate actual controller probe remains red: Up from Play stays Play instead of the c140 Hall wrap target; menus owns the shared navigation repair. Account/desktop variants stay in their family gates |
+| Tutorial prompt and saved-wizard retirement confirmation; Yes/No, reject/cancel and modal focus | menus | `menu/prompt.rs`; `title-prompts.cjs`, shared new-game journey | 3660ab8 title-prompts passes four groups/errors[]/Chrome92498 exit0: real saved wizard, decline preserves exact state, compact stock confirmation and explicit replacement intent. Tutorial Yes/focus route remains in common input coverage |
+| College introduction/admission then sole Create; native text validation/rejected draft, blank/random name, five elements/three disciplines, exact effects/clocks/randomization, locked Back and admission retry | menus + HUD | `menu/create.rs`, intro/dialogue; `menu-journey.cjs`, `menus.cjs`, `menu-input.cjs`, `solomon-entrance.cjs` | 3660ab8 named Helvidius/Ether/Arcane smoke14, Create variants3 and common menus12 are clean, including native width/character rejection and full settled five-element/Ether-three-discipline art. 243 audio priming/scene/mixer remains qualified separately. ceb3a17 menu-input passes10 groups including first neutral+B, generated Macro/Earth/Arcane and touchFelix/Water/Body admission; additional retry variants remain pending |
+| Pause opening/closing, Resume/Settings/Cheats/Leave, shared pause behavior, held-input neutral handoff | menus + social | `menu.rs`, `shared_gameplay.rs`; `menus.cjs`, `menu-input.cjs`, `hosted-session.cjs` | 3660ab8 smoke proves immediate Inventory-click→Escape releases to gameplay without opening Pause; common menus proves College actors continue while movement is sealed, real Resume and same-world Continue. 88c3dfe two-seed Boneyard Pause/exact-save/Leave/Continue and ceb3a17 controller/touch neutral handoff remain qualified; complete shared variants stay in social acceptance |
+| Settings root/cloud/performance; sliders/toggles, permissions, saved preferences, nested account policies, mobile sharing | menus | `menu/settings/**`; `settings-parity.cjs`, `menus.cjs`, `fullscreen.cjs` | 57626c4 settings-all18 passes seven groups/errors[]/Chrome0: all18 real bindings Tab/ShiftTab/controller focus with fullpaintRect containment, wheel-away reveal, rapid Escape/swap/F2/mouse, sliders/policies/performance, reload persistence and compact layout; account/mobile permission variants remain in family routes |
+| Control bindings; every action, duplicate swaps, Escape, modified-key rejection, allowed mouse bindings, reverse hotbar | menus + root input | `menu/settings.rs`, canonical `GameControls`; `menus.cjs`, `gameplay-input.cjs`, `hud-input.cjs` | 58df78d gameplay-input retains exact8/8 reads; 57626c4 settings-all18 proves all binding focus/swap/rejection/persistence paths. 3660ab8 common menus and HUD10 pass real rebinding, controller stick/dpad/drift and touch cancellation. ceb3a17 first neutral+B close is accepted; the separate current Title Up-wrap defect remains owned by menus |
 | Save Transfer; multiple native/JSON/CFG/SAV/ZIP imports, inspected warnings, replace/cancel/busy/error, real export ZIP/download | menus | `menu/settings/transfer.rs`; `save-transfer.cjs`, `save-tools.cjs` | 24382f0 save-transfer/native-save-transfer passes all five groups, including invalid chooser input, ZIP preview/Cancel/Replace, real download/re-import and full reload to the same credential-bound Felix Fire/Arcane run; errors[]/graceful exit0; additional busy/error variants remain pending |
-| Hall Local/Global × four boards; top100 and current row, portrait/orb, expand/scroll/pan, ranks/perks, loading/retry/stale result | menus | `menu/hall.rs`; `hall.cjs`, `hosted-score.cjs` | 88c3dfe Hall passes; 243 earned-score-canonical passes8 genuine account/gate/Solomon/death/signed POST201-once/Continue/new-wizard/saved-Leave/pointer groups. earned-score-real-tab-order adds3 fresh-sign-in/actual Tab-Enter expand-collapse/all4 API200 Global board groups for the same genuinely earned run. Both errors[]/graceful exit0; final Source-style and error variants pending |
+| Hall Local/Global × four boards; top100 and current row, portrait/orb, expand/scroll/pan, ranks/perks, loading/retry/stale result | menus | `menu/hall.rs`; `hall.cjs`, `hosted-score.cjs` | 57626c4 local Hall passes two desktop/compact pan/Back groups/errors[]/Chrome46271 exit0; 243 earned-score-canonical passes8 genuine account/gate/Solomon/death/signed POST201-once/Continue/new-wizard/saved-Leave/pointer groups. earned-score-real-tab-order adds3 fresh-sign-in/actual Tab-Enter expand-collapse/all4 API200 Global board groups for the same genuinely earned run. Both errors[]/graceful exit0; final Source-style and error variants pending |
 | Join directory; normalized code, refresh, request/admission/cancel, private/mod/cheat/location policy, list scroll | menus | `menu/join.rs`; `join-party.cjs`, `hosted-social.cjs` | 24382f0 directory-party-tabs passes seven groups: real Private/Public/InviteOnly, leader Deny, lowercase-code Enter/consent and admitted Visitor Ether/Arcane, shared Boneyard IN GAME guest policy and both saved Leave PUT200; all three clients errors[]/graceful exit0 |
 | Routing consent; vanilla/private/mod/cheat, added/missing/changed save mods, downloads/busy/error/retry and close invalidation | menus + root | `menu/routing.rs`, host routing; `cheat-consent.cjs`, `cloud-subscription.cjs`, `hosted-session.cjs` | 24382f0 cheat-consent-title passes four groups/errors[]; directory and subscription consent/native-admission witnesses pass separately; additional save-mod mismatch/download/retry variants remain pending |
 | Dark Cloud frame/tabs; Mods/Subscribed/Parties/Mobile UI/Boneyards, horizontal reveal, source-supported search/sort tools, empty/loading/error, account availability | menus; root Shelf | `menu/cloud/**`; `dark-cloud.cjs`, `cloud-subscription.cjs`, `authoring-shelf.cjs` | GPU source integrated; actual five-tab and portrait Cloud journey pending composed browser proof |
 | Cloud mods/detail; thumbnail lifecycle, subscription mutation/progress, screenshot contain/swipe/wrap, metadata/releases, comments/UTF16 limit/delete, preserved focus/scroll | menus | `menu/cloud/detail.rs`, real Website storage; `dark-cloud.cjs`, `cloud-subscription.cjs` | 24382f0 subscription-native-heading passes four groups: real Subscribe201/Disable/Enable under held transport and enabled mod seen by ordinary new-game routing before catalog completion; errors[]/graceful exit0 and owned subscription cleaned. Protected detail images/comment limits have partial58df proof; complete newline/editor and rebuilt detail-art rerun pending |
 | Boneyard Shelf; local/cloud content, New/Import/Edit/Test/Delete and Keep, Test/Return/editor handoff and disposal | root | `game/hosted/boneyards.rs`; `authoring-shelf.cjs`, `authored-content.cjs`; export belongs to the external editor | 24382f0 shelf-root-canonical passes all ten groups/errors[] with exact owned-frame retirement and graceful Chrome exit0: local/cloud New/Import/Edit/Test/Return/Delete/Keep, one-use handoff, full native/JSON round trips and independence; prior observer reds remain retained separately |
-| HUD resources/XP/concentrations, native/mod belt quantity/cooldown, three banks, portraits/map, tutorial gates, custom mobile positions | HUD | `hud/**`, `hotbar.rs`; `hud-input.cjs`, `hud-selector.cjs`, `belt-pull-off-check.cjs` | f41 HUD input passes10 checks/errors[]/Chrome0, including readable11px Cinzel label, active/cancel appearance and real non-square GPU target reuse with stable174textures/2FBO. ceb3a17 responsive passes the full phone Inventory/drag/first Equip/shop/18-swatch Dye/touchscroll/portrait/desktop journey with actual opacity1/target phase and reviewed Source-shaped stock toolbar labels; no additional K ordering defect is established |
+| HUD resources/XP/concentrations, native/mod belt quantity/cooldown, three banks, portraits/map, tutorial gates, custom mobile positions | HUD | `hud/**`, `hotbar.rs`; `hud-input.cjs`, `hud-selector.cjs`, `belt-pull-off-check.cjs` | 3660ab8 M5 HUD input passes10 checks/errors[]/Chrome0, including real touchcancel/tabblur/stick/dpad/drift, readable Source label/active appearance and actual64×16 GPU label-target reuse with stable174textures/2FBO. ceb3a17 responsive passes the full phone Inventory/drag/first Equip/shop/18-swatch Dye/touchscroll/portrait/desktop journey with actual opacity1/target phase and reviewed Source-shaped stock toolbar labels; no additional K ordering defect is established |
 | Inventory and native rank-book confirmation; result/OKAY/Escape, retained pause/audio, column-first cells, equipment/protected clothing/third ring, nested Sack pages/back/rename, animation lock, drag/drop/restoration flybys, stats/set/wizard preview | HUD | `player_panels/{inventory*,skill_book_feedback}`, `sack_*`; `player-panels.cjs`, `skill-book-result.cjs`, `responsive.cjs`, `save-resume.cjs` | 58df panel/equip/Unforge/Skills witnesses retained; 88c3dfe ordinary Unicode Sack reload/Continue passes behavior. f41 first phone Equip after real potion drag passes/errors[]/Chrome0. skill-book-24382f0-entered-notices passes both worlds: two rank reads each, OKAY/Escape, independent movement/native pause seal, readable native +1, normal reload/consumed absence/no retained modal or notification replay and choice picker; imported Source inventory, not earned loot; errors[]/graceful exit0. Remaining touch variants pending |
 | Skills/quickbar; learned/ranked/weld pages, stock hover, every bank binding, skill/item drag and belt pull-off | HUD | `player_panels/skills.rs`, `skill_selector.rs`; `player-panels.cjs`, `hud-selector.cjs`, `mod-skills.cjs` | GPU source integrated; real learned/drag/bank/pull-off journey pending composed browser proof |
 | College services; all shops/perks/prices, insufficient gold, storage, paid Dowse/ref/roll/Done, Unforge confirmation/results, dye admission/swatches/trim/cloth | HUD | `player_panels/{services,crafting,sack_rename}.rs`; `hub-services.cjs`, `player-panels.cjs`, `responsive.cjs` | 58df real purchase/storage/27 Hagatha offers/insufficient Dowse/Unforge pass before fatal media errors; ceb3a17 responsive cleanly purchases a real Dye kit, mixes among18 swatches, observes opacity1/target and touch-scrolls DONE. Actual cloth/trim commits and paid Dowse variants remain pending |
@@ -524,7 +536,7 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | GPU source integrated; real fullscreen/unsupported/standalone activation pending composed browser proof |
 | Desktop notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | GPU source integrated; actual update/close failure plus packaged journey pending composed browser proof |
 | Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | Three actual recovery branches pass/errors[]/graceful exit0: changed58→243 (deployment-changed-58-to-243-r2), same game243/Website6ad, and sleeping sequence4→5; checkpoint/ACK/retirement/negative publications/automatic replacement/Continue witnesses retained; packaged/update-notice variants remain separate pending gates |
-| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | 88c3dfe named/rapid smoke clean; 58df common input clean/exact8/8; 24382f0 audio clean; f41dc57 HUD touch/controller/blur/cancel/label/resource reuse and phone first-Equip clean. native-editor-f41dc57-qualified-r2 passes Arabic/ZWJ/bidi/weak caret, OS clipboard/undo, native browser IME and UTF16 Enter-save/errors[]/Chrome0, qualified as Chromium Input-domain IME emulation without hardware candidate-window proof. ceb3a17 menu-input10, native/fallback Tutorial entry and final-opacity responsive pass; the shared native/rAF clock red in other families requires rebuilt proof. Remaining common/family reruns pending |
+| Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | 3660ab8 smoke14, HUD10, menus12, prompts4 and native editor9 pass strict errors[]/Chrome0. Editor proves held-rAF public diagnostics/gamepad reads unchanged across Tab/ShiftTab and OS copy/paste, plus ArrowRight/bidi/Arabic/ZWJ/Undo/browser IME/UTF16 Enter-save; hardware candidate-window proof is excluded. 57626c4 settings-all18 and ceb3a17 native/fallback Tutorial entry/final-opacity responsive remain qualified. Current Title Up-wrap and remaining family journeys stay open |
 | No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Precise source producer contract4/4 passes, retaining only bounded native platform/font/a11y adapters; complete runtime surface/input proof remains pending |
 
 ## Saved-session startup allocation
@@ -912,6 +924,11 @@ and Skills callouts. The browser may observe accepted native snapshots and use t
 unchanged Source navigator/camera to choose genuine input, as the existing Solomon
 entrance journey does; it may not install those planning values or bypass a stage.
 Entry/layout proof alone does not accept these later surfaces or the terminal return.
+Pinned `core-server/boneyard-loot-store.ts:778–781` publishes the actual captured
+sack item's name with its accepted local pickup event. Tutorial combat is enabled
+for the potion lesson (`BoneyardScene.tsx:1150–1151`), so the genuine authored potion
+drop can also prove the earned local loot lane and its GPU/speech presentation.
+That remains qualified as a scripted Tutorial drop, not an ordinary random Gold/book drop.
 
 Fixed GPU application ordering follows actual c14068b3 append/context ownership;
 pinned fa08 supplies native inner behavior/styles. `source-ui-stack.md` in the task
@@ -1055,3 +1072,131 @@ bidi-selection and IME-preedit screenshots retain actual GPU glyph/selection geo
 errors[]/rawFailures[] and Chrome9760 graceful exit0 qualify the complete run. The
 Chromium Input-domain IME method retains the established untrusted composition-end
 qualification; it does not claim a hardware OS candidate-window test.
+
+The shared Escape failure is reproduced independently by the College dialogue and
+native-session journeys on57626c4, each with errors[] and graceful Chrome exit0.
+Source `HubInventoryUi.tsx:324–362` and `HubInventorySurface.tsx:519–535` stop owned
+panel keys before they reach menu navigation. The Rust central predicate already
+identifies panels, social input, cheats, skill choice and Tutorial ownership, but
+its one-shot discard is consumed by the mandatory empty layout. Native input
+between that layout and the next rAF can consequently close a dialogue and open
+Pause from the same Escape; a rebound menu key has the same admission defect.
+
+The native regression on e416160 fails after the real empty-layout/pointer-only
+sequence, with the existing key admission extracted unchanged into the private
+MenuKeyboard owner. The fix keeps gameplay admission separate from transient
+input-transition discard and refreshes the existing predicate immediately before
+each existing UI pass. It therefore observes committed close/open actions without
+adding a pass, delaying input or filtering the raw browser-key receipt. Visible
+menus retain their own keys. The proposed raw-key projection change was withdrawn;
+its duplicate-helper compile failure is retained separately from this behavioral
+red. The rebuilt3660 smoke and menu journeys now prove College, Inventory and the
+immediate subsequent Pause boundary with empty strict errors and clean browser exits.
+
+Current57626c4 startup guard passes in
+`common-browser/57626c4/startup-held-input-diagnostic/startup-receipt.json`: actual
+322/326 completions retain the held theme's exact pending path, trusted Tab/Enter
+remain under the loader, and the first eight main frames keep fresh Title/prompt with
+no accepted selection. Exact loader art, fallback ownership/NO announcement, audio
+activation and stopped loader draws also pass. Chrome31358 exits0 gracefully with no
+unexpected errors. The earlier same-artifact exit2 report stays unqualified and intact;
+a capacity-restored rerun does not establish its exact underlying process cause.
+Menus' `menu-runtime-57626c4/settings-all18/receipt.json` independently passes seven
+groups, all18 real binding rows, strict errors[] and graceful Chrome38791 exit0.
+
+Current immutable3660 core proof on M5 is retained under
+`common-browser/3660ab8/m5/{smoke,hud-input}` in the M2 task, with originals under
+M5 `build-transfer/browser-proof/common/3660ab8/`. Required smoke passes all14 checks:
+actual Helvidius/Ether/Arcane, settled Office, genuine two-axis movement and ambient
+actors, Rust GPU Title/HUD, and immediate Play-click→Escape / Inventory-click→Escape
+without inserted waits. HUD passes all10 checks, including trusted touchcancel, real
+tab-blur release and neutral accepted movement after cancellation. Its64×16 label
+target continues1466→1471→1515→1565 draws across neutral/idle/active/cancel, with
+174 created textures and2 framebuffers unchanged. Reviewed full current-art screenshots,
+strict errors[] and graceful Chrome85356/83196 exit0 accompany both accepted reports.
+These bounded passes do not accept unexecuted hosted/Tutorial or other family variants.
+
+
+Other current3660 reports remain independently qualified.
+`menu-runtime-3660ab8/menus/receipt.json` passes12 groups with reviewed full Title,
+settled five-element Create, selected Ether/three-discipline stones and effects, Pause
+and Settings screenshots; Chrome89934 exits0. `title-prompts/receipt.json` passes
+four real saved-wizard/decline/compact confirmation/replacement groups; Chrome92498
+exits0. Both strict error lists are empty. `controller-wrap/receipt.json` deliberately
+retains a separate red: actual Up from Play stays Play, while c140 requires Hall.
+That required navigation repair is owned by menus; these passes do not hide it.
+
+`native-editor-3660ab8/receipt.json` passes nine groups/errors[]/Chrome9760 exit0.
+Real held-rAF Tab/ShiftTab and OS Copy/Paste leave the complete public GPU snapshot
+and gamepad-read count1917 unchanged; actual ArrowRight/bidi weak caret, disjoint
+selection, Arabic/ZWJ Undo, browser IME and UTF16 Enter-save pass. IME qualification
+remains Chromium Input-domain emulation, without a hardware candidate-window claim.
+The later Tutorial driver also awaits the canonical read-only route-helper migration
+from legacy save reconstruction to the actual accepted world geometry; its genuine
+pause/checkpoint persistence assertion remains independent of path planning.
+
+
+The first later-Tutorial native run on3660 is retained as
+`common-browser/3660ab8/m5/tutorial-native-r1/receipt.json`. It admits real Sirmin
+Ether/Arcane with a genuine Welcome and shipped Tutorial SHA, but stops on a driver
+assumption that Escape during Movement opens Pause. Pinned fa08
+`BoneyardScene.tsx:308–314` and `native-tutorial.ts::nativeTutorialHudAccess` make
+Pause unavailable until combat access (stage14 or later); current `Game::can_pause`
+retains that rule. The revised driver checks that this real Escape leaves the world
+uncovered and unpaused, then independently observes the actual durable native
+checkpoint. It does not add a pause bypass or alter product timing. Original errors[]
+and graceful Chrome22848/native22826 exits0 stay attached to the failed attempt.
+
+
+Fresh native Tutorial r2 retains the actual schema2 checkpoint (tick258, matching
+run/player/Source SHA) and correct early Escape sealing, then stops in the shared
+route driver. Its2309 accepted samples oscillate between `solomon` and
+`gate-crossing`: the missing arena transition defaulted to north-entry direction+1,
+so near y1670 the helper steered south to1672.5. Pinned fa08
+`stock-tutorial-boneyard.ts` places the immutable spawn at y2070.0703125, south of
+the actual gate midpoint1612.5; `nativeTutorialForcedVelocity` likewise moves north.
+The helper must derive entry side from this unchanged spawn/gate geometry when no
+explicit arena transition exists, while retaining the Source transition side when
+present. This corrects only ordinary input selection. The runtime accepted real W
+movement and opened the gate; errors[] and graceful Chrome39258/native39250 exits0
+remain in `common-browser/3660ab8/m5/tutorial-native-r2/`. No product defect is claimed.
+
+
+Tutorial native r3 proves real gate crossing, Solomon's sequence and the ten-enemy
+Magic Missile wave. It then retains a driver-only wrong-binding failure at Acid Rain: the
+actual readable lesson says `Right Mouse`, while the script pressed Space. Pinned
+fa08 `game-settings.ts:65–84` binds belt1 to Mouse2 and belt4 to Digit3;
+`TutorialOverlay.tsx:94–95` uses those same slots for secondary/potion hints. The
+driver now reads those unchanged Source defaults, compares their displayed labels
+with the real lesson, and holds the corresponding real input only until the accepted
+stage acknowledgement. It likewise replaces the ungrounded potion Q with the actual
+source binding3. Errors[] and graceful Chrome50431/native50425 exits0 remain in
+`common-browser/3660ab8/m5/tutorial-native-r3/`; later Tutorial UI is still unpassed.
+
+
+Tutorial native r4 passes genuine Acid Rain, Inventory and Skills with exact Source
+callouts/native pause and movement ownership, then the actual primary-selector
+acknowledgement. It captures fully faded native Game Over and automatic College
+return, but the complete journey remains red. Pinned fa08 native-tutorial stage14
+starts the potion carrier wave at stage16; stage16 waits for a real ground Sack. The
+driver had stopped attacking there and died before the drop. It now keeps ordinary
+primary combat active through AwaitArcherWave/WaitForPotionDrop, without changing
+world state, enemy health or progression. The original failed report is retained at
+`common-browser/3660ab8/m5/tutorial-native-r4/`.
+
+That report independently retains a fatal combat.mp3
+`net::ERR_CONTENT_LENGTH_MISMATCH` and native browser console error. The strict
+resident-media observer does not classify this as suspension. The channel had one
+load, ready4 and a trusted suspend at88.7s; AssetServer's30s socket write timeout is
+a transport hypothesis, not a proved cause. Root owns that source investigation.
+Chrome63643 and native63633 exit0; no complete Tutorial/earned-potion claim is made.
+
+
+The bounded `slow-combat-get-r1` control on the preserved4181 server does not
+reproduce the transport failure: a real Range GET receives206, declared and actual
+18,799,976 bytes, and stock SHA8663d4fa after a40s zero-read hold with a requested
+4KiB receive buffer. Thus the timeout hypothesis remains unproved; this control
+does not qualify native4190/browser suspension. The next required Tutorial attempt
+retains read-only CDP media request Range, actual response status/length/range,
+received byte totals and native completion/failure timestamps. It neither intercepts
+requests nor changes the fatal observer policy.

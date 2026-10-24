@@ -31,6 +31,7 @@ impl MenuNavigation {
         preferred: Option<&str>,
         capture_initial_enter: bool,
     ) {
+        crate::gpu_ui::navigation::preferred(ctx, scope, preferred.map(Id::unique));
         let scope_changed = self.scope != scope;
         if scope_changed {
             self.scope = scope.to_owned();
@@ -85,6 +86,16 @@ mod tests {
         scope: &str,
         events: Vec<egui::Event>,
     ) -> (egui::Response, egui::Response) {
+        pass_kind(ctx, navigation, scope, events, false)
+    }
+
+    fn pass_kind(
+        ctx: &Context,
+        navigation: &mut MenuNavigation,
+        scope: &str,
+        events: Vec<egui::Event>,
+        controller: bool,
+    ) -> (egui::Response, egui::Response) {
         let mut responses = None;
         ctx.run_pass(
             egui::RawInput {
@@ -96,8 +107,11 @@ mod tests {
                 ..Default::default()
             },
             |ctx| {
+                let direction = crate::gpu_ui::navigation::begin(ctx, controller);
                 navigation.focus(ctx, scope, Some("menu-first"));
                 egui::Area::new(Id::unique("menu-navigation-test"))
+                    .background_interactable(false)
+                    .fade_in(false)
                     .fixed_pos(egui::Pos2::ZERO)
                     .show(ctx, |ui| {
                         let first = ui.interact(
@@ -118,6 +132,31 @@ mod tests {
                         );
                         responses = Some((first, second));
                     });
+                // Like the fullscreen control: a real focusable widget on a
+                // different root, outside this Source menu's controller scope.
+                egui::Area::new(Id::unique("outside-menu"))
+                    .background_interactable(false)
+                    .fade_in(false)
+                    .order(egui::Order::Foreground)
+                    .fixed_pos(egui::pos2(260.0, 240.0))
+                    .show(ctx, |ui| {
+                        ui.interact(
+                            egui::Rect::from_min_size(
+                                egui::pos2(260.0, 240.0),
+                                egui::vec2(100.0, 30.0),
+                            ),
+                            Id::unique("outside-menu-control"),
+                            egui::Sense::click(),
+                        );
+                    });
+                crate::gpu_ui::navigation::finish(
+                    ctx,
+                    direction,
+                    Some((
+                        egui::LayerId::new(egui::Order::Middle, Id::unique("menu-navigation-test")),
+                        scope,
+                    )),
+                );
             },
         )
         .drop_without_applying_deltas();
@@ -167,6 +206,72 @@ mod tests {
 
         let (first, second) = pass(&ctx, &mut navigation, "dialogue-choices", Vec::new());
         assert!(first.has_focus());
+        assert!(!second.has_focus());
+    }
+
+    #[test]
+    fn controller_edges_wrap_native_menu_order_without_leaving_its_scope() {
+        let ctx = Context::default();
+        let mut navigation = MenuNavigation::new();
+        pass(&ctx, &mut navigation, "menu", Vec::new());
+        let (first, _) = pass(&ctx, &mut navigation, "menu", Vec::new());
+        assert!(first.has_focus());
+        let mut dispatch = |key, shift, pressed| {
+            pass_kind(
+                &ctx,
+                &mut navigation,
+                "menu",
+                vec![egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed,
+                    repeat: false,
+                    modifiers: egui::Modifiers { shift, ..Default::default() },
+                }],
+                true,
+            );
+            pass(&ctx, &mut navigation, "menu", Vec::new());
+            pass(&ctx, &mut navigation, "menu", Vec::new())
+        };
+        for (key, shift, second_expected) in [
+            (egui::Key::ArrowUp, false, true),
+            (egui::Key::ArrowDown, false, false),
+            (egui::Key::ArrowRight, false, true),
+            (egui::Key::ArrowLeft, false, false),
+            (egui::Key::Tab, true, true),
+            (egui::Key::Tab, false, false),
+        ] {
+            let (first, second) = dispatch(key, shift, true);
+            assert_eq!(second.has_focus(), second_expected, "Source scoped wrap for {key:?}");
+            assert_eq!(first.has_focus(), !second_expected);
+            dispatch(key, shift, false);
+        }
+
+        // Ordinary keyboard Tab retains its native access to the separate root.
+        pass(&ctx, &mut navigation, "menu", vec![key(egui::Key::Tab)]);
+        pass(&ctx, &mut navigation, "menu", Vec::new());
+        pass(&ctx, &mut navigation, "menu", vec![key(egui::Key::Tab)]);
+        assert_eq!(ctx.memory(|memory| memory.focused()), Some(Id::unique("outside-menu-control")));
+
+        pass_kind(
+            &ctx,
+            &mut navigation,
+            "menu",
+            vec![egui::Event::Key {
+                key: egui::Key::ArrowRight,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            true,
+        );
+        pass(&ctx, &mut navigation, "menu", Vec::new());
+        let (first, second) = pass(&ctx, &mut navigation, "menu", Vec::new());
+        assert!(
+            first.has_focus(),
+            "a controller re-enters through the menu's real preferred control"
+        );
         assert!(!second.has_focus());
     }
 }

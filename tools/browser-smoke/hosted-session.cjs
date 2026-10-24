@@ -13,7 +13,7 @@ const output = path.resolve(process.env.OUT || '/tmp');
 const url = process.env.URL || 'http://127.0.0.1:4181/';
 const checks = [];
 const errors = [];
-const inactiveRejoin = [];
+const rejoinResponses = [];
 const requests = [];
 const state = {id: null, frame: null, welcome: null, loaded: null, pongs: 0, checkpoints: 0, leaveReceipts: 0};
 
@@ -43,15 +43,13 @@ async function waitUntil(predicate, label, timeout = 30000) {
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
     if (message.type() !== 'error') return;
-    // Source game-bootstrap deliberately falls back after an inactive-party 404.
-    if (message.location().url.endsWith('/api/game/rejoin') && message.text().includes('404')) return;
     errors.push(message.text());
   });
   page.on('response', response => {
     const pathname = new URL(response.url()).pathname;
     if (pathname.includes('/api/')) requests.push({path: pathname, status: response.status()});
-    if (response.status() === 404 && pathname.endsWith('/api/game/rejoin')) inactiveRejoin.push(pathname);
-    else if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
+    if (pathname.endsWith('/api/game/rejoin')) rejoinResponses.push({path:pathname,status:response.status()});
+    if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
   });
   const observed = gpu.watchRequestFailures(page, {errors});
   page.on('websocket', socket => {
@@ -78,6 +76,7 @@ async function waitUntil(predicate, label, timeout = 30000) {
     await gpu.assertGpuOnly(page);
     await startNewGame(page, {name:'Felix', element:'fire'});
     await waitUntil(() => state.id && state.welcome, 'real hosted admission');
+    const playerId = state.id;
     await gpu.surface(page, 'hidden');
     checks.push('tutorial decline, final character selection and real guest College admission');
     console.log(checks.at(-1));
@@ -158,13 +157,15 @@ async function waitUntil(predicate, label, timeout = 30000) {
       && !state.frame.host.loading_run_id && !state.frame.host.resume_grace, 'saved hosted Boneyard continuation', 120000);
     await gpu.surface(page, 'hidden');
     assert.equal(state.loaded.run_id, runId);
+    assert.equal(state.id, playerId, 'signed recovery preserves the saved player identity');
     assert.equal(state.frame.snapshot.participants[state.id].player.selection.name, 'Felix');
     checks.push('browser reload and real saved Boneyard continuation');
-    assert.equal(inactiveRejoin.length, 1, 'the ended party falls back through the source inactive-rejoin contract');
+    assert.deepEqual(rejoinResponses.map(response=>response.status),[201],
+      'Source suspends an empty saved run and accepts one signed recovery at its current revision');
     await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     const receipt = {passed: true, checks, requests, pingResponses: state.pongs,
-      checkpoints: state.checkpoints, leaveReceipts: state.leaveReceipts, inactiveRejoin, errors, gpu:await gpu.assertGpuOnly(page), submissions:await gpu.gpuDraws(page)};
+      checkpoints: state.checkpoints, leaveReceipts: state.leaveReceipts, rejoinResponses, errors, gpu:await gpu.assertGpuOnly(page), submissions:await gpu.gpuDraws(page)};
     fs.writeFileSync(path.join(output, 'hosted-session.json'), JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt));
   } catch (error) {

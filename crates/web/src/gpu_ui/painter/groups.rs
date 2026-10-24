@@ -151,34 +151,6 @@ impl Targets {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn parent_groups_preserve_the_nested_target_pool_between_siblings() {
-        let mut targets = Targets::default();
-        targets.depth(2);
-        targets.depth(0);
-        targets.depth(1);
-        assert_eq!(targets.slots.len(), 3);
-    }
-    #[test]
-    fn group_capture_alignment_uses_the_actual_framebuffer_scale() {
-        // The actual target formula is also exercised by the GPU composition probe.
-        let view = View {
-            physical: [128, 64],
-            logical: [64.0, 32.0],
-            origin: vec2(-10.0, 12.0),
-            clip: Rect::from_min_size(pos2(-10.0, 12.0), vec2(40.0, 20.0)),
-        };
-        assert_eq!(view.scale(), vec2(2.0, 2.0));
-        assert_eq!(
-            aligned(Rect::from_min_max(pos2(-1.2, 2.2), pos2(5.1, 8.7)), view.scale()),
-            Rect::from_min_max(pos2(-1.5, 2.0), pos2(5.5, 9.0))
-        );
-    }
-}
-
 fn aligned(bounds: Rect, scale: Vec2) -> Rect {
     Rect::from_min_max(
         ((bounds.min.to_vec2() * scale).floor() / scale).to_pos2(),
@@ -417,4 +389,32 @@ fn draw_texture(
         };
     });
     (1, 2)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn parent_groups_preserve_the_nested_target_pool_between_siblings() {
+        let mut targets = Targets::default();
+        targets.depth(2);
+        targets.depth(0);
+        targets.depth(1);
+        assert_eq!(targets.slots.len(), 3);
+    }
+    #[test]
+    fn group_capture_alignment_uses_the_actual_framebuffer_scale() {
+        // The actual target formula is also exercised by the GPU composition probe.
+        let view = View {
+            physical: [128, 64],
+            logical: [64.0, 32.0],
+            origin: vec2(-10.0, 12.0),
+            clip: Rect::from_min_size(pos2(-10.0, 12.0), vec2(40.0, 20.0)),
+        };
+        assert_eq!(view.scale(), vec2(2.0, 2.0));
+        assert_eq!(
+            aligned(Rect::from_min_max(pos2(-1.2, 2.2), pos2(5.1, 8.7)), view.scale()),
+            Rect::from_min_max(pos2(-1.5, 2.0), pos2(5.5, 9.0))
+        );
+    }
 }
