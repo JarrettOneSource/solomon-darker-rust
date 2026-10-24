@@ -85,6 +85,16 @@ mod tests {
         scope: &str,
         events: Vec<egui::Event>,
     ) -> (egui::Response, egui::Response) {
+        pass_kind(ctx, navigation, scope, events, false)
+    }
+
+    fn pass_kind(
+        ctx: &Context,
+        navigation: &mut MenuNavigation,
+        scope: &str,
+        events: Vec<egui::Event>,
+        controller: bool,
+    ) -> (egui::Response, egui::Response) {
         let mut responses = None;
         ctx.run_pass(
             egui::RawInput {
@@ -96,6 +106,7 @@ mod tests {
                 ..Default::default()
             },
             |ctx| {
+                let direction = crate::gpu_ui::navigation::begin(ctx, controller);
                 navigation.focus(ctx, scope, Some("menu-first"));
                 egui::Area::new(Id::unique("menu-navigation-test"))
                     .background_interactable(false)
@@ -137,6 +148,14 @@ mod tests {
                             egui::Sense::click(),
                         );
                     });
+                crate::gpu_ui::navigation::finish(
+                    ctx,
+                    direction,
+                    Some(egui::LayerId::new(
+                        egui::Order::Middle,
+                        Id::unique("menu-navigation-test"),
+                    )),
+                );
             },
         )
         .drop_without_applying_deltas();
@@ -196,8 +215,8 @@ mod tests {
         pass(&ctx, &mut navigation, "menu", Vec::new());
         let (first, _) = pass(&ctx, &mut navigation, "menu", Vec::new());
         assert!(first.has_focus());
-        let mut dispatch = |key, pressed| {
-            pass(
+        let mut dispatch = |key, shift, pressed| {
+            pass_kind(
                 &ctx,
                 &mut navigation,
                 "menu",
@@ -206,20 +225,26 @@ mod tests {
                     physical_key: None,
                     pressed,
                     repeat: false,
-                    modifiers: egui::Modifiers::NONE,
+                    modifiers: egui::Modifiers { shift, ..Default::default() },
                 }],
+                true,
             );
             pass(&ctx, &mut navigation, "menu", Vec::new());
             pass(&ctx, &mut navigation, "menu", Vec::new())
         };
-        let (first, second) = dispatch(egui::Key::ArrowUp, true);
-        assert!(!first.has_focus());
-        assert!(second.has_focus(), "Source previous fallback wraps to the menu's last widget");
-        dispatch(egui::Key::ArrowUp, false);
-        let (first, second) = dispatch(egui::Key::ArrowDown, true);
-        assert!(first.has_focus(), "Source next fallback wraps to the menu's first widget");
-        assert!(!second.has_focus());
-        dispatch(egui::Key::ArrowDown, false);
+        for (key, shift, second_expected) in [
+            (egui::Key::ArrowUp, false, true),
+            (egui::Key::ArrowDown, false, false),
+            (egui::Key::ArrowRight, false, true),
+            (egui::Key::ArrowLeft, false, false),
+            (egui::Key::Tab, true, true),
+            (egui::Key::Tab, false, false),
+        ] {
+            let (first, second) = dispatch(key, shift, true);
+            assert_eq!(second.has_focus(), second_expected, "Source scoped wrap for {key:?}");
+            assert_eq!(first.has_focus(), !second_expected);
+            dispatch(key, shift, false);
+        }
 
         // Ordinary keyboard Tab retains its native access to the separate root.
         pass(&ctx, &mut navigation, "menu", vec![key(egui::Key::Tab)]);
