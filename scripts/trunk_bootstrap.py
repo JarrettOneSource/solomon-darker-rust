@@ -89,7 +89,7 @@ def prepare_trunk_bootstrap(dist: Path, mount: str) -> tuple[str, str, str]:
     if re.search(r'<script\b[^>]*>\s*[^<\s]', document):
         raise ValueError("the game document must not contain inline JavaScript")
     bases=re.findall(r'<base\b[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>',document)
-    if bases != [prefix]:
+    if bases != [prefix] and not (prefix == "/" and not bases):
         raise ValueError(f"the game document must use the {prefix} public URL")
     hash_worker_outputs(dist)
     resources = {}

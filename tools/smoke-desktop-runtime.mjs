@@ -361,12 +361,14 @@ async function title(page) {
   await ui.assertGpuOnly(page);
   const instance = [...running].find(candidate => candidate.page === page);
   const bootstrap = await page.evaluate(() => ({
+    bases: document.querySelectorAll('base').length,
     scripts: [...document.querySelectorAll('script[type="module"][src]')]
       .map(script => script.getAttribute('src')),
     inlineModules: [...document.querySelectorAll('script[type="module"]')]
       .filter(script => !script.hasAttribute('src') && script.textContent.trim()).length,
   }));
   assert.equal(bootstrap.inlineModules, 0, 'the real client needs no inline-script CSP exception');
+  assert.equal(bootstrap.bases, 0, 'the packaged document honors its base-uri none policy');
   assert.equal(bootstrap.scripts.length, 1);
   assert.match(bootstrap.scripts[0], /^\/solomon-boot-[a-f0-9]{16}\.mjs$/);
   const resources = instance.state.clientResources;
@@ -499,10 +501,19 @@ async function proveFailedClose(instance) {
   assert.equal(instance.page.isClosed(), false);
   assert.equal(instance.app.process().exitCode, null);
   assert.equal((await hostProcess(instance.app)).pid, child.pid);
-  await ui.click(instance.page,'resume');
-  await readyHub(instance);
+  const paused = await ui.readUi(instance.page);
+  assert.equal(paused.error, storageConflict, 'the deliberately rejected write remains an ordinary runtime notice');
+  assert.equal(paused.surface, 'pause');
+  // This case deliberately owns that exact nonfatal storage notice. Use ordinary
+  // Escape and observe recovery directly; generic GPU helpers reject all errors.
+  await instance.page.keyboard.press('Escape');
   await waitFor(() => !instance.state.frame.host.pause && !instance.state.frame.host.resume_grace,
     'the accepted post-warning resume');
+  await waitFor(async () => {
+    const current = await ui.readUi(instance.page);
+    assert.equal(current.error, storageConflict);
+    return current.surface === 'hidden';
+  }, 'the visible pause menu closes while the exact storage conflict remains reported');
   const movement = await move(instance);
   assert.equal(instance.state.id, identity, 'Keep playing retains the admitted native participant');
   assert.equal(instance.state.disconnects, disconnects, 'a rejected durable write never acknowledges Disconnect');

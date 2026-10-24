@@ -13,9 +13,14 @@ def prepare_desktop_client(dist: Path) -> str:
     document = index.read_text(encoding="utf-8")
     if re.search(r'<meta\s+name=[\'"]solomon-(?:website-mount|game-mount|editor-test|build-revision)[\'"]', document):
         raise ValueError("Desktop requires a root Trunk build without Website/editor metadata")
-    if re.findall(r'<base\b[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>', document) != ["/"]:
+    bases = re.findall(r'<base\b[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>', document)
+    if bases not in ([], ["/"]):
         raise ValueError("Desktop requires a root Trunk public URL")
-    _, name, _ = prepare_trunk_bootstrap(dist, "/")
+    document, name, _ = prepare_trunk_bootstrap(dist, "/")
+    # /game is a root-origin document; its native base already resolves root assets.
+    # Remove Trunk's redundant base to honor the desktop's base-uri 'none' policy.
+    document = re.sub(r'<base\b[^>]*>', '', document)
+    index.write_text(document, encoding="utf-8")
     for lock in dist.rglob(".trunk-lock"):
         lock.unlink()
     return name

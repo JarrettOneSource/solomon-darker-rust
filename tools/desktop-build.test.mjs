@@ -40,6 +40,7 @@ test('desktop artifacts externalize the root initializer and retain prepared bui
   const document = await readFile(join(root, 'index.html'), 'utf8');
   assert.equal(document.includes('<script type="module">'), false);
   assert.equal(document.includes('solomon-game-mount'), false);
+  assert.doesNotMatch(document, /<base\b/i, 'the desktop document must honor base-uri none');
   const initializer = /<script type="module" src="\/(solomon-boot-[a-f0-9]{16}\.mjs)"><\/script>/.exec(document);
   assert.ok(initializer, 'the ordinary script policy can load the generated external initializer');
   const bootstrap = await readFile(join(root, initializer[1]), 'utf8');

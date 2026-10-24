@@ -37,6 +37,19 @@ TODOs. Final integration, publication, installed/live checks and task cleanup be
 
 ## Current candidate acceptance
 
+The first four-platform candidate `c96e72a` reached actual Linux packaged play,
+saved close/relaunch/Continue and the update notice. Its retained receipt then
+found two distinct desktop boundaries: the shared Trunk output kept a root base
+tag prohibited by the existing `base-uri 'none'` policy, and the journey's generic
+GPU helper rejected the exact storage conflict deliberately created by its
+failed-close case. Desktop preparation now omits the redundant base and remains
+idempotent; mounted Website builds still require their explicit base. The failed
+close journey uses ordinary Escape and independently requires the exact expected
+notice, resumed GPU surface and accepted native movement. The generic GPU error
+guards and strict resource collector remain unchanged. The regression is red
+before the base fix; all30 desktop contracts and44 browser-support tests pass
+after it. New four-platform packaged receipts remain required.
+
 Product revision `ce12d7cd993ae39d3ef3fcdf39d57ffbf75f94f0` passes all696 native tests,
 formatting, strict native/main-WASM Clippy and44 browser-support tests on the M5.
 Its static and hosted artifacts have complete verified hashes/membership. The final
