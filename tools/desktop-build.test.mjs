@@ -114,6 +114,22 @@ test('worker outputs hash WASM before rewriting and hashing the JavaScript bindi
   assert.deepEqual((await readdir(root)).sort(), files.sort(), 'preparation is idempotent');
 });
 
+test('desktop preparation removes retired launcher presentation from reused builds', async context => {
+  const root = await distribution(context, trunkDocument());
+  const directory = join(root, '__desktop');
+  await mkdir(directory);
+  for (const name of ['launcher.html', 'launcher.css', 'launcher.mjs']) {
+    await writeFile(join(directory, name), 'retired presentation');
+  }
+  await writeFile(join(directory, 'retained.json'), '{"keep":true}');
+  const bootstrap = execFileSync(process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3'),
+    [join(repositoryRoot, 'scripts/prepare-desktop-client.py'), root],
+    {encoding: 'utf8', env: {...process.env, PYTHONDONTWRITEBYTECODE: '1'}}).trim();
+  assert.match(bootstrap, /^solomon-boot-[a-f0-9]{16}\.mjs$/);
+  assert.deepEqual(await readdir(directory), ['retained.json']);
+  assert.equal(await readFile(join(directory, 'retained.json'), 'utf8'), '{"keep":true}');
+});
+
 test('desktop preparation rejects a hosted distribution without changing it', async context => {
   const hosted = trunkDocument('/game-stg');
   const root = await distribution(context, hosted);

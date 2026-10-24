@@ -21,6 +21,9 @@ def prepare_desktop_client(dist: Path) -> str:
     # Remove Trunk's redundant base to honor the desktop's base-uri 'none' policy.
     document = re.sub(r'<base\b[^>]*>', '', document)
     index.write_text(document, encoding="utf-8")
+    # These files belonged to the retired visual DOM launcher in development builds.
+    for retired_name in ("launcher.html", "launcher.css", "launcher.mjs"):
+        (dist / "__desktop" / retired_name).unlink(missing_ok=True)
     for lock in dist.rglob(".trunk-lock"):
         lock.unlink()
     return name

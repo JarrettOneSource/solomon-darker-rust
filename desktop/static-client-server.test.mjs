@@ -14,11 +14,9 @@ test('desktop static server is loopback-only, SPA-aware, and hardened', async (c
   const root = await mkdtemp(join(tmpdir(), 'solomon-desktop-static-'))
   context.after(() => rm(root, { force: true, recursive: true }))
   await mkdir(join(root, 'assets'))
-  await mkdir(join(root, '__desktop'))
   await writeFile(join(root, 'index.html'), '<!doctype html><title>Solomon Dark</title>')
   await writeFile(join(root, 'assets', 'game.wasm'), new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]))
   await writeFile(join(root, 'assets', 'game.js'), 'export const ready = true')
-  await writeFile(join(root, '__desktop', 'launcher.mjs'), 'export const launcher = true')
   const server = await startStaticClientServer({ root })
   context.after(() => server.close())
 
@@ -43,9 +41,10 @@ test('desktop static server is loopback-only, SPA-aware, and hardened', async (c
   assert.equal(wasm.headers.get('content-type'), 'application/wasm')
   await WebAssembly.compileStreaming(wasm)
 
-  const launcher = await fetch(`${server.origin}/__desktop/launcher.mjs`)
-  assert.equal(launcher.headers.get('content-type'), 'text/javascript; charset=utf-8')
+  const launcher = await fetch(`${server.origin}/launcher`)
+  assert.equal(launcher.headers.get('content-type'), 'text/html; charset=utf-8')
   assert.equal(launcher.headers.get('cache-control'), 'no-store')
+  assert.match(await launcher.text(), /Solomon Dark/)
 
   const missingAsset = await fetch(`${server.origin}/assets/missing.js`)
   assert.equal(missingAsset.status, 404)

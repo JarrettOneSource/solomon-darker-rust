@@ -9,9 +9,11 @@ Current Website behavior, ownership and verification are mapped in
 complete release/deployment acceptance record. Earlier ticket receipts below retain their
 actual revisions and bounded scope.
 
-The full Rust GPU UI implementation and browser/candidate qualification are complete
-at `b264cac5`. The [migration matrix](RUST-UI-MIGRATION.md) owns the accepted surface
-inventory and all four actual package journeys. Canonical main release, Website artifact
+The game GPU UI and its browser/candidate qualification are complete at `b264cac5`.
+The desktop launcher now moves its three HTML/CSS/JavaScript presentation files into
+`crates/web/src/desktop/launcher`; its native/WASM and four-platform package checks
+remain in progress. The [migration matrix](RUST-UI-MIGRATION.md) owns the accepted surface
+inventory and the earlier package journeys. Canonical main release, Website artifact
 admission, live recovery and task cleanup remain. Earlier DOM-era receipts below retain
 their original behavior scope and do not substitute for GPU acceptance.
 

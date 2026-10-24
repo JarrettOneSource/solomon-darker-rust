@@ -998,6 +998,33 @@ impl GpuUi {
         })
     }
 
+    /// Read-only submitted geometry shared by game and desktop launcher journeys.
+    pub fn snapshot(&self, surface: &str, ready: bool, error: Option<&str>) -> serde_json::Value {
+        let ui = self.diagnostics();
+        let widgets: Vec<_> = ui
+            .widgets
+            .iter()
+            .map(|widget| {
+                let rect = |bounds: WidgetBounds| [bounds.x, bounds.y, bounds.width, bounds.height];
+                serde_json::json!({
+                    "id":widget.id,"label":widget.label,"role":widget.role,
+                    "rect":rect(widget.bounds),"paintRect":rect(widget.paint_bounds),
+                    "enabled":widget.enabled,"focused":widget.focused,"value":widget.value,
+                    "selected":widget.selected,"modal":widget.modal,"z":widget.z,
+                })
+            })
+            .collect();
+        serde_json::json!({
+            "schemaVersion":1,"surface":surface,"ready":ready,"loading":null,
+            "error":error.or(ui.error.as_deref()),
+            "canvas":{"width":ui.viewport[0],"height":ui.viewport[1],"pixelsPerPoint":ui.pixels_per_point},
+            "capture":ui.capture,"inputScope":ui.input_scope,"frame":ui.frame,
+            "draw":{"meshes":ui.meshes,"triangles":ui.triangles,"textures":ui.textures,
+                "borrowedImages":ui.borrowed_images,"borrowedImagePaths":self.borrowed_image_paths()},
+            "widgets":widgets,
+        })
+    }
+
     pub fn context(&self) -> &Context {
         &self.ctx
     }
@@ -1107,7 +1134,9 @@ impl GpuUi {
         run: &mut UiRun,
         mut paint: impl FnMut(&mut UiFrame<'_>) -> Result<(), String>,
     ) -> Result<bool, String> {
-        let Some(pass) = run.pending.pop_front() else { return Ok(false) };
+        let Some(pass) = run.pending.pop_front() else {
+            return Ok(false);
+        };
         self.paint_pass(run, pass, &mut paint)?;
         Ok(true)
     }
@@ -1370,7 +1399,9 @@ fn focus_pointer_text(
         else {
             continue;
         };
-        let Some(id) = ctx.pointer_widget_at(*pos) else { continue };
+        let Some(id) = ctx.pointer_widget_at(*pos) else {
+            continue;
+        };
         if widgets.values().any(|widget| {
             widget.egui_id == Some(id)
                 && widget.enabled

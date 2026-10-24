@@ -111,6 +111,9 @@ pub fn gpu_ui_state() -> String {
     if let Some(loading) = runtime_ui::loading_snapshot() {
         return loading;
     }
+    if let Some(launcher) = desktop::launcher::snapshot() {
+        return launcher;
+    }
     GAME.with(|slot| {
         slot.borrow()
             .as_ref()
@@ -137,6 +140,10 @@ fn set_status(text: &str) {
 }
 
 async fn run() -> Result<(), String> {
+    let window = web_sys::window().ok_or("no window")?;
+    if desktop::launcher::requested(&window)? {
+        return desktop::launcher::boot(window).await;
+    }
     let game = Game::load().await?;
     runtime_ui::completed(runtime_ui::RUNTIME)?;
     let window = web_sys::window().ok_or("no window")?;
@@ -155,7 +162,9 @@ async fn run() -> Result<(), String> {
 pub fn editor_test_cleanup() -> bool {
     GAME.with(|slot| {
         let slot = slot.borrow();
-        let Some(game) = slot.as_ref() else { return false };
+        let Some(game) = slot.as_ref() else {
+            return false;
+        };
         let mut game = game.borrow_mut();
         match game.editor_test_cleanup() {
             Ok(disposed) => disposed,
@@ -205,7 +214,9 @@ fn schedule_frames(window: Window, game: Rc<RefCell<Game>>) {
 }
 
 fn load_pending_world(game: &Rc<RefCell<Game>>) {
-    let Some((generation, loaded)) = game.borrow_mut().take_world_load() else { return };
+    let Some((generation, loaded)) = game.borrow_mut().take_world_load() else {
+        return;
+    };
     let game = game.clone();
     wasm_bindgen_futures::spawn_local(async move {
         let result = async {

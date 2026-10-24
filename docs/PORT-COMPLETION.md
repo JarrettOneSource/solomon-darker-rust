@@ -1,10 +1,14 @@
 # Rust game parity and release
 
-The Rust GPU UI implementation and candidate qualification are complete at
+The game GPU UI implementation and earlier candidate qualification are complete at
 `b264cac5b8497a39d0455169e5322c375fd0b83a`. All 696 native tests, the four canonical
 desktop package journeys, 28 reviewed screenshots and Windows static runtime
 inspection pass. [RUST-UI-MIGRATION.md](RUST-UI-MIGRATION.md) owns the complete
-surface matrix, exact candidate run and retained evidence. Canonical main release,
+surface matrix, exact candidate run and retained evidence. The desktop launcher
+conversion now removes its remaining HTML/CSS presentation and requires new package
+acceptance. The c537 main workflow did not publish: Intel failed on cancelled music
+requests, and Windows failed during guest admission with additional music cancellations.
+Those raw failures remain open for diagnosis. Canonical main release,
 Website artifact admission, installed/live recovery and final cleanup remain pending.
 Production still serves the retained PixiJS release `093aee99` following the
 October 24 rollback request, with M5 automatic deployment held. The older release

@@ -5,9 +5,12 @@ the stock sprite bundles, and a WebGL2 browser client compiled to WebAssembly. T
 is [Website `fa08ae24`](https://github.com/JarrettOneSource/solomon-dark-website/tree/fa08ae249ff5563570bdb2a653e2ef9358ce7b83).
 This standalone repository owns the
 game, its native host, WASM client, save tools and desktop packages. Menus, HUD, loading,
-social controls and game overlays use the shared Rust GPU UI runtime. Browser adapters
+social controls, game overlays and the desktop launcher use the shared Rust GPU UI runtime. Browser adapters
 own text composition, accessibility, files, audio, network and storage. The Website owns
 accounts, content and editing, and embeds the built WASM artifact.
+The desktop launcher conversion is undergoing packaged acceptance; the earlier b264
+qualification covers the game UI and the previous launcher. The canvas document,
+generated WebAssembly bindings and native Electron capabilities remain platform adapters.
 
 [The source inventory](docs/SOURCE-PARITY.md) maps current behavior to its implementation
 and verification. [The acceptance record](docs/PORT-COMPLETION.md) records exact tested

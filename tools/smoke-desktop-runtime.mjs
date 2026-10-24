@@ -39,7 +39,7 @@ await writeFile(join(evidence, 'owned-profile.json'), JSON.stringify({profiles})
 const running = new Set();
 const errors = [];
 const resourceChecks = [];
-const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [], serviceStops: [] };
+const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [], serviceStops: [], resourceFailures: [], mediaObservations: [] };
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
 const playing = instance => instance.state.frame?.snapshot.boneyard && !instance.state.frame.host.loading_run_id && !instance.state.frame.host.resume_grace && !instance.state.frame.host.pause;
@@ -53,9 +53,8 @@ try {
   await solo.page.screenshot({
     path: join(evidence, 'launcher.png')
   });
-  await solo.page.getByRole('button', {
-    name: 'Play offline'
-  }).click();
+  receipts.launcher = await proveLauncher(solo);
+  await ui.click(solo.page, 'launcher/solo');
   await title(solo.page);
   await ui.click(solo.page,'settings');
   await ui.click(solo.page,'settings-range:music');await ui.focused(solo.page,'settings-range:music');
@@ -86,9 +85,7 @@ try {
   assert.ok(solo.state.leaveReceipts > 0, 'ordinary app close awaited the actual host save receipt');
   await waitForExit(child.pid);
   const resumed = await launch('resume', join(profiles, 'solo'));
-  await resumed.page.getByRole('button', {
-    name: 'Play offline'
-  }).click();
+  await ui.click(resumed.page, 'launcher/solo');
   await title(resumed.page);
   const preferences = await resumed.page.evaluate(() =>
     JSON.parse(localStorage.getItem('solomon-dark-game-settings-v1')));
@@ -128,12 +125,9 @@ try {
   receipts.returnToLauncher = await proveReturnToLauncher();
   const host = await launch('host', join(profiles, 'host'));
   const port = await freePort();
-  await host.page.getByLabel('Your reachable IP or hostname').fill('127.0.0.1');
-  await host.page.getByLabel('TCP port').fill(String(port));
-  await host.page.getByRole('button', {
-    name: 'Host game',
-    exact: true
-  }).click();
+  await ui.fill(host.page, 'launcher/host', '127.0.0.1');
+  await ui.fill(host.page, 'launcher/port', String(port));
+  await ui.click(host.page, 'launcher/start-host');
   await enterHub(host, 'PeerHost', 'fire');
   const hostChild = await hostProcess(host.app);
   const invitation = await host.app.evaluate(({
@@ -145,11 +139,8 @@ try {
   });
   if (process.platform === 'win32') await setWindowMinimized(host, true);
   const guest = await launch('guest', join(profiles, 'guest'));
-  await guest.page.getByLabel('Multiplayer invite').fill(invitation);
-  await guest.page.getByRole('button', {
-    name: 'Join game',
-    exact: true
-  }).click();
+  await ui.fill(guest.page, 'launcher/invite', invitation);
+  await ui.click(guest.page, 'launcher/join');
   await enterHub(guest, 'PeerGuest', 'air');
   await waitFor(() => [host, guest].every(instance => instance.state.frame?.snapshot.participant_order.length === 2), 'both admitted peers');
   assert.notEqual(host.state.id, guest.state.id);
@@ -310,6 +301,9 @@ async function launch(label, userData) {
     }
   };
   running.add(instance);
+  // Observe the actual media owner before the first game document. The strict
+  // request-failure assertion below remains unchanged while diagnosis is open.
+  await ui.watchRequestFailures(page).ready;
   page.on('pageerror', error => errors.push(redact(`${label}: ${error.message}`)));
   page.on('console', message => {
     if (message.type() === 'warning' && message.text() === storageConflict
@@ -328,6 +322,13 @@ async function launch(label, userData) {
   page.on('requestfailed', request => {
     if (request.url().startsWith('solomon-darker://app/')) {
       errors.push(redact(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
+      const failure = {label, at: new Date().toISOString(), url: redact(request.url()),
+        document: redact(page.url()), resourceType: request.resourceType(),
+        method: request.method(), failure: request.failure()};
+      receipts.resourceFailures.push(failure);
+      resourceChecks.push(page.evaluate(() => window.__solomonResidentMedia?.() ?? null)
+        .then(snapshot => { failure.media = snapshot; },
+          error => { failure.observationError = redact(error.message); }));
     }
   });
   page.on('websocket', socket => {
@@ -348,12 +349,62 @@ async function launch(label, userData) {
       } else if (message.type === 'snapshot') instance.state.frame = message.frame;else if (message.type === 'hosted' && message.message.kind === 'save_before_leave') instance.state.leaveReceipts++;else if (message.type === 'error') errors.push(redact(`${label} host: ${message.code}: ${message.reason}`));
     });
   });
-  await page.getByRole('button', {
-    name: 'Play offline'
-  }).waitFor({
-    timeout: 30000
-  });
+  await ui.ready(page);
+  await ui.surface(page, 'desktop-launcher');
+  await ui.assertGpuOnly(page);
   return instance;
+}
+async function proveLauncher(instance) {
+  const {page} = instance;
+  const initialHost = (await ui.widget(page, 'launcher/host')).value;
+  await ui.click(page, 'launcher/join');
+  await ui.value(page, 'launcher/status', "Paste your friend's multiplayer invite.");
+  await ui.fill(page, 'launcher/invite', 'not-an-invite');
+  await ui.click(page, 'launcher/join');
+  await ui.value(page, 'launcher/status', 'Invalid multiplayer invite.');
+  await ui.widget(page, 'launcher/solo', {enabled: true});
+  await ui.value(page, 'launcher/invite', 'not-an-invite');
+  assert.equal(await page.evaluate(() => window.solomonDarkRuntime.gameEndpoint), undefined);
+  await ui.fill(page, 'launcher/host', '');
+  await ui.click(page, 'launcher/start-host');
+  await ui.value(page, 'launcher/status', 'Enter your reachable IP or hostname.');
+  await ui.fill(page, 'launcher/host', '127.0.0.1');
+  await ui.fill(page, 'launcher/port', '0');
+  await ui.click(page, 'launcher/start-host');
+  await ui.value(page, 'launcher/status', 'Enter a TCP port from 1 to 65535.');
+  await ui.fill(page, 'launcher/port', '27843');
+  await page.keyboard.press('ArrowUp');
+  await ui.value(page, 'launcher/port', '27844');
+  await page.keyboard.press('ArrowDown');
+  await ui.value(page, 'launcher/port', '27843');
+  await ui.fill(page, 'launcher/host', initialHost);
+  await ui.fill(page, 'launcher/invite', '');
+  await page.mouse.move(100, 100);
+  await page.mouse.wheel(0, 700);
+  await ui.click(page, 'launcher/help');
+  await ui.value(page, 'launcher/help', 'open');
+  await page.keyboard.press('Space');
+  await ui.value(page, 'launcher/help', 'closed');
+  await ui.click(page, 'launcher/check');
+  await ui.waitForUi(page, state => {
+    const status = ui.findWidget(state, 'launcher/status')?.value;
+    return status && status !== 'Checking for updates…';
+  }, 'the real offline update result');
+  const state = await page.evaluate(() => window.solomonDarkRuntime.desktop.getState());
+  assert.ok(state.updateError);
+  await ui.value(page, 'launcher/status', state.updateError);
+  await ui.widget(page, 'launcher/website', {enabled: true});
+  await ui.assertGpuOnly(page);
+  await page.screenshot({path: join(evidence, 'launcher-validation.png')});
+  await page.mouse.move(100, 100);
+  await page.mouse.wheel(0, -1000);
+  return {gpuOnly: true, requiredInputs: true, nativeJoinError: true,
+    draftPreserved: true, portKeyboard: true, keyboardHelp: true, offlineUpdates: true};
+}
+
+async function captureMedia(instance, phase) {
+  receipts.mediaObservations.push({label: instance.label, phase,
+    at: new Date().toISOString(), report: await ui.settleErrors(instance.page)});
 }
 async function title(page) {
   await page.waitForURL('solomon-darker://app/game', {waitUntil: 'domcontentloaded'});
@@ -531,6 +582,7 @@ async function proveFailedClose(instance) {
   const closeWithoutSaving = await warning(2);
   assert.deepEqual(await readStoredSave(instance.page), concurrent);
   const exited = once(instance.app, 'close');
+  await captureMedia(instance, 'before-close-without-saving');
   await answer(1);
   let timer;
   try {
@@ -563,6 +615,7 @@ async function hostProcess(application) {
   return {pid: child.pid, command: child.arguments.join(' ')};
 }
 async function proveRepeatedClose(instance) {
+  await captureMedia(instance, 'before-repeated-close');
   // Hold only the final navigation, after the real save, to send real repeated
   // close/quit requests while the existing document and services remain alive.
   await instance.app.evaluate(({BrowserWindow}) => {
@@ -608,14 +661,18 @@ async function proveRepeatedClose(instance) {
 }
 async function proveReturnToLauncher() {
   const instance = await launch('return', join(profiles, 'return'));
-  await instance.page.getByRole('button', {name: 'Play offline'}).click();
+  await ui.click(instance.page, 'launcher/solo');
   await enterHub(instance, 'Return', 'fire');
   const child = await hostProcess(instance.app);
+  await captureMedia(instance, 'before-return-to-launcher');
   await instance.app.evaluate(({Menu}) => {
     Menu.getApplicationMenu().items.find(row => row.label === 'Game').submenu.items
       .find(row => row.label === 'Save and return to launcher').click();
   });
-  await instance.page.getByRole('button', {name: 'Play offline'}).waitFor();
+  await instance.page.waitForURL('solomon-darker://app/launcher', {waitUntil: 'domcontentloaded'});
+  await ui.ready(instance.page);
+  await ui.surface(instance.page, 'desktop-launcher');
+  await ui.assertGpuOnly(instance.page);
   await waitForExit(child.pid);
   assert.ok(instance.state.leaveReceipts > 0, 'returning to the launcher awaited the actual host save receipt');
   assert.equal(await instance.page.evaluate(() => window.solomonDarkRuntime.gameEndpoint), undefined,
@@ -696,6 +753,7 @@ async function cleanupApp(app, appPid) {
   finally { clearTimeout(timeout); }
 }
 async function close(instance) {
+  await captureMedia(instance, 'before-close');
   await bounded(instance.app.close(), 30000, `${instance.label} did not close after saving`);
   running.delete(instance);
   await verifyServiceStops(instance);

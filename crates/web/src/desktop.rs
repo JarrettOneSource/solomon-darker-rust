@@ -2,6 +2,8 @@
 //! The preload owns process/network capabilities. This module only borrows those
 //! functions and owns the update notice and subscription lifetimes.
 
+pub(crate) mod launcher;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -21,7 +23,9 @@ pub struct DesktopEndpoint {
 }
 
 pub fn configured(window: &Window) -> Result<Option<DesktopEndpoint>, String> {
-    let Some(runtime) = runtime(window)? else { return Ok(None) };
+    let Some(runtime) = runtime(window)? else {
+        return Ok(None);
+    };
     let endpoint = field(&runtime, "gameEndpoint")?;
     if endpoint.is_undefined() || endpoint.is_null() {
         return Ok(None);
@@ -89,7 +93,9 @@ pub struct DesktopBridge {
 }
 
 pub fn attach(window: &Window, before_close: &Function) -> Result<Option<DesktopBridge>, String> {
-    let Some(desktop) = desktop(window)? else { return Ok(None) };
+    let Some(desktop) = desktop(window)? else {
+        return Ok(None);
+    };
     let get_state = method(&desktop, "getState")?;
     let subscribe_state = method(&desktop, "onState")?;
     let subscribe_close = method(&desktop, "onBeforeClose")?;
@@ -129,7 +135,9 @@ pub fn attach(window: &Window, before_close: &Function) -> Result<Option<Desktop
     let initial_notice = Rc::downgrade(&bridge.notice);
     spawn_local(async move {
         let result = settle(pending).await;
-        let Some(notice) = initial_notice.upgrade() else { return };
+        let Some(notice) = initial_notice.upgrade() else {
+            return;
+        };
         let mut notice = notice.borrow_mut();
         if !notice.active {
             return;
@@ -263,7 +271,9 @@ fn runtime(window: &Window) -> Result<Option<JsValue>, String> {
 }
 
 fn desktop(window: &Window) -> Result<Option<JsValue>, String> {
-    let Some(runtime) = runtime(window)? else { return Ok(None) };
+    let Some(runtime) = runtime(window)? else {
+        return Ok(None);
+    };
     let value = field(&runtime, "desktop")?;
     if value.is_undefined() || value.is_null() {
         Ok(None)

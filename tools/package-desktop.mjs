@@ -42,7 +42,7 @@ await rm(stage, {
   force: true,
   recursive: true
 });
-await mkdir(join(stage, 'client', '__desktop'), {
+await mkdir(join(stage, 'client'), {
   recursive: true
 });
 await mkdir(join(stage, 'authority'), {
@@ -53,7 +53,6 @@ await Promise.all([...['main.mjs', 'preload.cjs', 'static-client-server.mjs', 'l
   recursive: true
 }), cp(artifacts.executable, join(stage, 'authority', authorityFile)), writeFile(join(stage, 'desktop-build.json'), `${JSON.stringify(build, null, 2)}\n`)]);
 if (platform !== 'win32') await chmod(join(stage, 'authority', authorityFile), 0o755);
-await Promise.all(['launcher.html', 'launcher.css', 'launcher.mjs'].map(file => cp(join(repositoryRoot, 'desktop', file), join(stage, 'client', '__desktop', file))));
 const runtime = await stagePinnedNodeRuntime({
   platform,
   arch,

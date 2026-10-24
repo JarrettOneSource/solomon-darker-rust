@@ -7,9 +7,11 @@ pub mod announcements;
 pub mod assets;
 
 use solomon_sim::float;
+use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{
-    HtmlImageElement, WebGl2RenderingContext as Gl, WebGlBuffer, WebGlFramebuffer, WebGlProgram,
-    WebGlSampler, WebGlShader, WebGlTexture, WebGlUniformLocation, WebGlVertexArrayObject,
+    HtmlCanvasElement, HtmlImageElement, WebGl2RenderingContext as Gl, WebGlBuffer,
+    WebGlFramebuffer, WebGlProgram, WebGlSampler, WebGlShader, WebGlTexture, WebGlUniformLocation,
+    WebGlVertexArrayObject,
 };
 
 const VERTEX_SHADER: &str = r"#version 300 es
@@ -329,6 +331,23 @@ impl Drop for Renderer {
 }
 
 impl Renderer {
+    /// Shared opaque, non-antialiased game and interface canvas.
+    pub fn for_canvas(canvas: &HtmlCanvasElement) -> Result<Self, String> {
+        let options = js_sys::Object::new();
+        for (key, value) in [("alpha", false), ("antialias", false), ("premultipliedAlpha", false)]
+        {
+            js_sys::Reflect::set(&options, &JsValue::from_str(key), &JsValue::from_bool(value))
+                .map_err(|_| "context options")?;
+        }
+        let context = canvas
+            .get_context_with_context_options("webgl2", &options)
+            .map_err(|error| format!("webgl2 context: {error:?}"))?
+            .ok_or("this browser has no WebGL2")?
+            .dyn_into::<Gl>()
+            .map_err(|_| "webgl2 context has the wrong type".to_string())?;
+        Self::new(context)
+    }
+
     pub fn new(gl: Gl) -> Result<Self, String> {
         let program = link_program(&gl, VERTEX_SHADER, FRAGMENT_SHADER)?;
         gl.use_program(Some(&program));

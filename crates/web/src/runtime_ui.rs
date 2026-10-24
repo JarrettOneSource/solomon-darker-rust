@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 
 mod startup;
-pub(crate) use startup::{ACCOUNT, FIRST_FRAME, RUNTIME, StartupResource};
+pub(crate) use startup::{ACCOUNT, DESKTOP, FIRST_FRAME, RUNTIME, StartupResource};
 use startup::{Snapshot, StartupProgress};
 
 #[wasm_bindgen]
@@ -42,6 +42,15 @@ pub(crate) fn begin(resources: impl IntoIterator<Item = StartupResource>) -> Res
     publish(snapshot)
 }
 
+pub(crate) fn begin_desktop(
+    resources: impl IntoIterator<Item = StartupResource>,
+) -> Result<(), String> {
+    let progress = StartupProgress::for_desktop(resources)?;
+    let snapshot = progress.snapshot();
+    STARTUP.with(|state| *state.borrow_mut() = Some(progress));
+    publish(snapshot)
+}
+
 pub(crate) fn enter_phase(stage: &'static str) -> Result<(), String> {
     update(|progress| progress.enter_phase(stage))
 }
@@ -53,7 +62,9 @@ pub(crate) fn completed(source: &str) -> Result<(), String> {
 fn update(change: impl FnOnce(&mut StartupProgress) -> Result<(), String>) -> Result<(), String> {
     let snapshot = STARTUP.with(|state| -> Result<Option<Snapshot>, String> {
         let mut state = state.borrow_mut();
-        let Some(progress) = state.as_mut() else { return Ok(None) };
+        let Some(progress) = state.as_mut() else {
+            return Ok(None);
+        };
         change(progress)?;
         Ok(Some(progress.snapshot()))
     })?;

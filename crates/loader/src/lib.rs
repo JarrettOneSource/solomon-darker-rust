@@ -9,7 +9,7 @@ use solomon_sim::native_ui_text::{
 use std::cell::{Cell, RefCell};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{HtmlCanvasElement, HtmlImageElement, KeyboardEvent, WebGl2RenderingContext, Window};
+use web_sys::{HtmlCanvasElement, HtmlImageElement, KeyboardEvent, Window};
 
 const ART: [(&str, [f32; 4]); 4] = [
     ("loader-logo.png", [41.0, 13.0, 388.0, 227.0]),
@@ -165,18 +165,7 @@ async fn boot() -> Result<(), String> {
         .ok_or("no loader body")?
         .append_child(&canvas)
         .map_err(|e| format!("loader attachment: {e:?}"))?;
-    let options = js_sys::Object::new();
-    for (key, value) in [("alpha", false), ("antialias", false), ("premultipliedAlpha", false)] {
-        js_sys::Reflect::set(&options, &key.into(), &value.into())
-            .map_err(|e| format!("loader context options: {e:?}"))?;
-    }
-    let gl: WebGl2RenderingContext = canvas
-        .get_context_with_context_options("webgl2", &options)
-        .map_err(|e| format!("loader WebGL2: {e:?}"))?
-        .ok_or("WebGL2 is required for Solomon Dark")?
-        .dyn_into()
-        .map_err(|_| "loader context is not WebGL2")?;
-    let renderer = Renderer::new(gl)?;
+    let renderer = Renderer::for_canvas(&canvas)?;
     let reader = solomon_graphics::announcements::ScreenReader::attach_loader(&document)?;
     let keyboard = Closure::<dyn FnMut(KeyboardEvent)>::new(|event: KeyboardEvent| {
         if !event.ctrl_key() && !event.meta_key() && !event.alt_key() {
@@ -454,7 +443,9 @@ impl Loader {
         spec.tint = tint;
         spec.max_width = max_width.map(f64::from);
         let layout = layout_native_ui_text(&spec);
-        let Some(texture) = self.font.as_ref() else { return };
+        let Some(texture) = self.font.as_ref() else {
+            return;
+        };
         let mut bounds = [f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY];
         for glyph in &layout.glyphs {
             let ink = native_ui_glyph_ink_bounds(glyph);

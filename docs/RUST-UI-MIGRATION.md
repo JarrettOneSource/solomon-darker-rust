@@ -37,6 +37,15 @@ TODOs. Final integration, publication, installed/live checks and task cleanup be
 
 ## Current candidate acceptance
 
+The active desktop launcher conversion extends the visual contract to the remaining
+standalone launch screen. The actual old package fails `assertGpuOnly` on its HTML
+controls (`desktop-launcher-gpu-red`). The replacement reuses the Rust GPU UI and native
+text editor; its build and packaged acceptance are pending. Earlier b264 evidence below
+remains valid for its exact source and game behavior, not this new launcher. The subsequent
+c537 main workflow failed Intel media checks and Windows guest admission/media checks;
+it published no release. These failures remain retained and must be resolved before the
+next release, Website admission or deployment.
+
 Candidate `b264cac5b8497a39d0455169e5322c375fd0b83a` passes the complete
 [canonical workflow 40129031748](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40129031748):
 the Linux game gates and all four packages built from that exact source. The game

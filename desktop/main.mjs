@@ -10,7 +10,7 @@ import { startLocalPeer } from './local-peer.mjs'
 import { checkForDesktopUpdate } from './updates.mjs'
 
 const APP_ORIGIN = 'solomon-darker://app'
-const LAUNCHER_URL = `${APP_ORIGIN}/__desktop/launcher.html`
+const LAUNCHER_URL = `${APP_ORIGIN}/launcher`
 let window
 let clientServer
 let gameHost

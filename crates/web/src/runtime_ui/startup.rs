@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 
 pub const RUNTIME: &str = "Game runtime";
+pub const DESKTOP: &str = "Desktop launch settings";
 pub const ACCOUNT: &str = "Account and saved game";
 pub const FIRST_FRAME: &str = "First game frame";
 
@@ -34,13 +35,23 @@ pub(super) struct Snapshot {
 
 impl StartupProgress {
     pub fn new(resources: impl IntoIterator<Item = StartupResource>) -> Result<Self, String> {
+        Self::with_admission(resources, StartupResource::new("account", ACCOUNT))
+    }
+
+    pub fn for_desktop(
+        resources: impl IntoIterator<Item = StartupResource>,
+    ) -> Result<Self, String> {
+        Self::with_admission(resources, StartupResource::new("desktop", DESKTOP))
+    }
+
+    fn with_admission(
+        resources: impl IntoIterator<Item = StartupResource>,
+        admission: StartupResource,
+    ) -> Result<Self, String> {
         let mut seen = BTreeSet::new();
         let pending: Vec<_> = std::iter::once(StartupResource::new("runtime", RUNTIME))
             .chain(resources)
-            .chain([
-                StartupResource::new("account", ACCOUNT),
-                StartupResource::new("ready", FIRST_FRAME),
-            ])
+            .chain([admission, StartupResource::new("ready", FIRST_FRAME)])
             .filter(|resource| seen.insert(resource.source.clone()))
             .collect();
         let total = u32::try_from(pending.len()).map_err(|_| "Too many startup resources")?;
@@ -90,6 +101,20 @@ impl StartupProgress {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn desktop_handoff_requires_loaded_settings_and_the_first_drawn_frame() {
+        let mut progress = StartupProgress::for_desktop([]).unwrap();
+        progress.complete(RUNTIME).unwrap();
+        progress.enter_phase("desktop").unwrap();
+        assert_eq!(progress.snapshot().source, DESKTOP);
+        assert!(progress.finish().is_err());
+        progress.complete(DESKTOP).unwrap();
+        assert_eq!(progress.snapshot().source, FIRST_FRAME);
+        assert!(progress.finish().is_err());
+        progress.complete(FIRST_FRAME).unwrap();
+        assert!(progress.finish().is_ok());
+    }
 
     #[test]
     fn reports_the_first_unfinished_source_after_out_of_order_completions() {

@@ -65,7 +65,7 @@ use solomon_sim::session::{
 };
 use solomon_sim::settings::GameSettings;
 use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
+use web_sys::HtmlCanvasElement;
 
 use crate::audio::GameAudio;
 use crate::boneyard::PreparedBoneyardView;
@@ -256,7 +256,7 @@ impl Game {
                 assets::load_image("assets/stock/player-character-unselected-robe-attachment.png")
                     .await?;
 
-            let renderer = Renderer::new(webgl2_context(&canvas)?)?;
+            let renderer = Renderer::for_canvas(&canvas)?;
             let gpu_ui = GpuUi::load(&document, &canvas, &renderer).await?;
             let teacher_view = TeacherView::load(&renderer).await?;
             let spell_view = SpellView::load(&renderer).await?;
@@ -644,7 +644,9 @@ impl Game {
             // Native events and rAF use one document animation clock. A performance
             // sample can be newer than the next rAF timestamp; inactive documents
             // have no animation time and leave input queued until they become active.
-            let Some(time) = clock.current_time() else { return Ok(()) };
+            let Some(time) = clock.current_time() else {
+                return Ok(());
+            };
             let game = owner.upgrade().ok_or("The game is no longer available for input.")?;
             game.borrow_mut().dispatch_native_ui(time)
         });
@@ -1304,7 +1306,9 @@ impl Game {
         if self.is_editor_test() {
             return;
         }
-        let Some(world) = &self.session.boneyard else { return };
+        let Some(world) = &self.session.boneyard else {
+            return;
+        };
         // MainMenuScene.recordHallSnapshot excludes the entire Tutorial run,
         // including its archived death portrait before the College return.
         if world.tutorial.is_some() {
@@ -2525,35 +2529,14 @@ impl Game {
     }
 
     pub(crate) fn gpu_ui_snapshot(&self) -> serde_json::Value {
-        let Some(snapshot) = &self.ui_snapshot else { return serde_json::Value::Null };
-        let ui = self.gpu_ui.diagnostics();
-        let widgets: Vec<_> = ui
-            .widgets
-            .iter()
-            .map(|widget| {
-                let rect = |bounds: crate::gpu_ui::WidgetBounds| {
-                    [bounds.x, bounds.y, bounds.width, bounds.height]
-                };
-                serde_json::json!({
-                    "id": widget.id, "label": widget.label, "role": widget.role,
-                    "rect": rect(widget.bounds), "paintRect": rect(widget.paint_bounds),
-                    "enabled": widget.enabled, "focused": widget.focused,
-                    "value": widget.value, "selected": widget.selected,
-                    "modal": widget.modal, "z": widget.z,
-                })
-            })
-            .collect();
-        serde_json::json!({
-            "schemaVersion": 1, "surface": snapshot.surface, "ready": snapshot.ready,
-            "acceptedSelection": snapshot.selection,
-            "loading": null, "error": snapshot.error,
-            "canvas": { "width": ui.viewport[0], "height": ui.viewport[1], "pixelsPerPoint": ui.pixels_per_point },
-            "capture": ui.capture,
-            "inputScope": ui.input_scope, "frame": ui.frame,
-            "draw": { "meshes": ui.meshes, "triangles": ui.triangles, "textures": ui.textures,
-                "borrowedImages": ui.borrowed_images, "borrowedImagePaths": snapshot.borrowed_image_paths },
-            "widgets": widgets,
-        })
+        let Some(snapshot) = &self.ui_snapshot else {
+            return serde_json::Value::Null;
+        };
+        let mut value =
+            self.gpu_ui.snapshot(snapshot.surface, snapshot.ready, snapshot.error.as_deref());
+        value["acceptedSelection"] = serde_json::json!(snapshot.selection);
+        value["draw"]["borrowedImagePaths"] = serde_json::json!(snapshot.borrowed_image_paths);
+        value
     }
 
     fn render_world(&mut self) -> Result<(), String> {
@@ -3149,20 +3132,6 @@ impl Game {
         }
         (width as i32, height as i32)
     }
-}
-
-fn webgl2_context(canvas: &HtmlCanvasElement) -> Result<WebGl2RenderingContext, String> {
-    let options = js_sys::Object::new();
-    for (key, value) in [("alpha", false), ("antialias", false), ("premultipliedAlpha", false)] {
-        js_sys::Reflect::set(&options, &JsValue::from_str(key), &JsValue::from_bool(value))
-            .map_err(|_| "context options")?;
-    }
-    canvas
-        .get_context_with_context_options("webgl2", &options)
-        .map_err(|error| format!("webgl2 context: {error:?}"))?
-        .ok_or("this browser has no WebGL2")?
-        .dyn_into()
-        .map_err(|_| "webgl2 context has the wrong type".to_string())
 }
 
 /// One shared view is prepared from each actual Hub participant immediately before drawing.

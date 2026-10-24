@@ -21,7 +21,6 @@ SHELL_FILES = (
     'runtime-service.mjs', 'local-peer.mjs', 'run-peer-service.mjs', 'peer-network.mjs',
     'updates.mjs', 'package.json',
 )
-LAUNCHER_FILES = ('launcher.html', 'launcher.css', 'launcher.mjs')
 
 
 def verify_archive(archive_path, source_root, revision):
@@ -104,7 +103,6 @@ def verify_archive(archive_path, source_root, revision):
                 raise ValueError(f'Stock hash differs: {name}')
 
         copied = [(name, name) for name in SHELL_FILES]
-        copied += [('client/__desktop/' + name, name) for name in LAUNCHER_FILES]
         for destination, source in copied:
             actual = archive.read(app + destination)
             expected = (source_root / 'desktop' / source).read_bytes()
@@ -122,6 +120,8 @@ def verify_archive(archive_path, source_root, revision):
         for name in hashes:
             if name.startswith(app):
                 relative = name.removeprefix(app)
+                if relative.startswith('client/__desktop/launcher.'):
+                    raise ValueError('Retired visual desktop launcher: ' + relative)
                 if '/' not in relative and relative not in allowed_root_files:
                     raise ValueError(f'Unexpected application file: {relative}')
     return {'revision': revision, 'target': target, 'entries': len(entries),

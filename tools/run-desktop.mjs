@@ -1,5 +1,4 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { cp, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import electron from 'electron';
 import { desktopArtifacts, repositoryRoot } from './desktop-build.mjs';
@@ -8,10 +7,6 @@ const artifacts = await desktopArtifacts({
   nativeHost: process.env.SDR_DESKTOP_GAME_HOST,
   clientRoot: process.env.SDR_DESKTOP_CLIENT_ROOT
 });
-await mkdir(join(artifacts.client, '__desktop'), {
-  recursive: true
-});
-await Promise.all(['launcher.html', 'launcher.css', 'launcher.mjs'].map(file => cp(join(repositoryRoot, 'desktop', file), join(artifacts.client, '__desktop', file))));
 const child = spawn(electron, [join(repositoryRoot, 'desktop')], {
   env: {
     ...process.env,

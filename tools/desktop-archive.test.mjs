@@ -12,7 +12,6 @@ const python = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 
 const revision = 'a'.repeat(40);
 const shellFiles = ['main.mjs', 'preload.cjs', 'static-client-server.mjs', 'local-game-host.mjs',
   'runtime-service.mjs', 'local-peer.mjs', 'run-peer-service.mjs', 'peer-network.mjs', 'updates.mjs', 'package.json'];
-const launcherFiles = ['launcher.html', 'launcher.css', 'launcher.mjs'];
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const zipWriter = `import json,sys,zipfile
 with zipfile.ZipFile(sys.argv[1], 'w', compression=zipfile.ZIP_STORED) as archive:
@@ -42,12 +41,12 @@ async function archiveFixture(context, platform = 'linux', arch = 'x64') {
   await mkdir(join(source, 'desktop'), { recursive: true });
   await mkdir(join(source, 'web', 'assets'), { recursive: true });
   add(root, '');
-  for (const name of [...shellFiles, ...launcherFiles]) {
+  for (const name of shellFiles) {
     const bytes = name === 'package.json'
       ? JSON.stringify({ name: 'fixture', private: true, main: 'main.mjs' }) + '\n'
       : `// reviewed ${name}\n`;
     await writeFile(join(source, 'desktop', name), bytes);
-    const destination = app + (launcherFiles.includes(name) ? 'client/__desktop/' : '') + name;
+    const destination = app + name;
     add(destination, name === 'package.json' ? JSON.stringify({ name: 'fixture', main: 'main.mjs' }) : bytes);
   }
   const stock = '{"title":"College"}\n';
@@ -117,7 +116,7 @@ test('the final archive contract accepts every desktop layout and npm package me
     fixture.write();
     const result = fixture.verify();
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).sourceFiles, 13);
+    assert.equal(JSON.parse(result.stdout).sourceFiles, 10);
     assert.equal(JSON.parse(result.stdout).stockFiles, 1);
   }
 });
@@ -191,4 +190,13 @@ test('extra stock, generated logs, default mods and stale revisions are rejected
   fixture.add(fixture.root + 'desktop-package-manifest.json', JSON.stringify({ ...fixture.manifest, revision: 'b'.repeat(40) }));
   fixture.write();
   assert.match(fixture.verify().stderr, /Package revision differs/);
+});
+
+test('a final package cannot retain the removed HTML launcher', async context => {
+  const fixture = await archiveFixture(context);
+  fixture.add(fixture.app + 'client/__desktop/launcher.html', '<button>Play offline</button>');
+  fixture.write();
+  const result = fixture.verify();
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Retired visual desktop launcher/);
 });

@@ -246,6 +246,18 @@ use the browser font adapter; Sack names preserve Source's complete font-run sha
 wrapping, including Arabic joins and emoji sequences, in bounded egui-owned GPU textures.
 The font adapter paints only text into an unattached canvas, never HTML or game controls.
 
+**The desktop launcher shares the same Rust/WASM presentation owner.** The October 24
+clarification extends the no-HTML-controls requirement to solo/host/join launch settings.
+`desktop/launcher.{html,css,mjs}` at c537dc9 is the behavioral reference; its replacement
+is `crates/web/src/desktop/launcher`, entered through the ordinary canvas bootstrap at
+`/launcher`. Drafts, validation, status, update presentation and interaction live in Rust.
+The Electron preload still owns native processes, networking, OS menus/dialogs and
+external links. No native process is started merely to display the launcher. The existing
+GPU editor, loader, renderer and read-only geometry diagnostics are reused. Package
+preparation removes the three retired presentation files, and archive validation rejects
+them. The actual packaged journey must reject DOM controls and exercise launch errors,
+keyboard editing, updates, saved return and all three game modes before qualification.
+
 **Native font geometry and Rust editing share one text layout.** The installed egui
 row/cursor model assumes increasing horizontal positions and cannot represent mixed
 bidirectional caret/selection geometry with its per-grapheme browser font hook. The shared
