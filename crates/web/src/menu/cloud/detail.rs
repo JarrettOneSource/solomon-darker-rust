@@ -150,7 +150,6 @@ impl ModDetailView {
             }
             "cloud-gallery-previous" => self.change_image(false)?,
             "cloud-gallery-next" => self.change_image(true)?,
-            "cloud-comment-edited" => self.limit_body(),
             "cloud-post-comment" => {
                 if self.comment_mutation.is_some() {
                     return Ok(true);
@@ -216,17 +215,6 @@ impl ModDetailView {
 
     pub fn take_actions(&mut self) -> Vec<HostedMenuAction> {
         std::mem::take(&mut self.actions)
-    }
-    fn limit_body(&mut self) {
-        let mut units = 0;
-        self.body = self
-            .body
-            .chars()
-            .take_while(|c| {
-                units += c.len_utf16();
-                units <= 1000
-            })
-            .collect();
     }
     // This painter borrows the scene art, image lifetime owner and subscription policy.
     #[allow(clippy::too_many_arguments)]
@@ -381,7 +369,7 @@ impl ModDetailView {
         {
             actions.push("cloud-dialog-close".to_owned());
         }
-        if !frame.ctx.text_edit_focused() {
+        if !crate::gpu_ui::text_edit_focused(frame.ctx) {
             if frame.ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowLeft)) {
                 actions.push("cloud-gallery-previous".to_owned());
             }
@@ -537,12 +525,11 @@ impl ModDetailView {
                 field,
                 "IM FELL English",
                 16.0,
-                self.comment_mutation.is_none(),
                 true,
+                true,
+                crate::gpu_ui::EditorRules { utf16_limit: Some(1000), ..Default::default() },
+                "Write a comment...",
             );
-            if response.changed() {
-                self.limit_body();
-            }
             frame.record_value("dark-cloud-comment", &self.body, None);
             let grip =
                 Rect::from_min_size(field.right_bottom() - Vec2::splat(16.0), Vec2::splat(16.0));
@@ -1321,7 +1308,7 @@ fn narrative_tinted(
         egui::FontId::new(16.0, egui::FontFamily::Name("IM FELL English".into())),
         color,
         text,
-        FontRunOptions { wrap_width: Some(width), line_height: Some(23.2), tab_size: None },
+        FontRunOptions { wrap_width: Some(width), line_height: Some(23.2), ..Default::default() },
     )
 }
 
