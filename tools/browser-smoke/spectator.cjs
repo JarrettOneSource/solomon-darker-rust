@@ -425,7 +425,8 @@ async function combatAdmission(client) {
     {headers: {Authorization: `Bearer ${leaderAccount.token}`}});
   assert.equal(saved.status(), 200, 'the actual saved entrance document is available');
   const source = await saved.json();
-  await walkSolomonEntrance(client.page, {document: source.save.document,
+  assert.equal(typeof source.save.document, 'string', 'the actual entrance checkpoint remains persisted');
+  await walkSolomonEntrance(client.page, {
     snapshot: () => client.frame.snapshot, playerId: () => client.id, output});
   await castReady(client);
   assert.ok(client.frame.snapshot.boneyard.encounter.run_event_id > 0,
