@@ -198,7 +198,7 @@ pub struct UiFrame<'a> {
     announcements: &'a RefCell<Vec<String>>,
     rotation: egui::emath::Rot2,
     translation: Vec2,
-    input_scope: &'a RefCell<Option<String>>,
+    input_scope: &'a RefCell<Option<(egui::LayerId, String)>>,
     retired_images: &'a RefCell<Vec<String>>,
     focus_from_keyboard: bool,
     editor_receipts: &'a [edit::model::Receipt],
@@ -308,10 +308,16 @@ impl UiFrame<'_> {
     pub fn forget_image(&self, path: &str) {
         self.retired_images.borrow_mut().push(path.to_owned());
     }
-    /// The last foreground owner painted this frame owns controller navigation.
-    /// Frames without an owner leave the gamepad with gameplay.
-    pub fn input_scope(&self, scope: &str) {
-        *self.input_scope.borrow_mut() = Some(scope.to_owned());
+    /// The highest real layer owns controller navigation, using the same ordering
+    /// as painting, hit testing and modals. No scope leaves the gamepad with gameplay.
+    pub fn input_scope(&self, scope: &str, layer: egui::LayerId) {
+        let mut current = self.input_scope.borrow_mut();
+        if current
+            .as_ref()
+            .is_none_or(|(previous, _)| !self.ctx.compare_layer_order(layer, *previous).is_lt())
+        {
+            *current = Some((layer, scope.to_owned()));
+        }
     }
     pub fn announce(&self, text: &str) {
         self.announcements.borrow_mut().push(text.to_owned());
@@ -1117,7 +1123,7 @@ impl GpuUi {
             widget.keyboard_activated |= run.keyboard_activations.contains(&widget.id);
         }
         self.input.set_widgets(&self.widgets);
-        let input_scope = input_scope.into_inner();
+        let input_scope = input_scope.into_inner().map(|(_, scope)| scope);
         self.input.set_scope(input_scope.as_deref());
         let pointer = self.ctx.input(|input| input.pointer.interact_pos());
         let capture = UiCapture {

@@ -266,11 +266,10 @@ impl MobileUiEditor {
         ctx.set_sublayer(parent.layer_id(), layer);
         let enabled = parent.is_enabled() && ctx.memory(|memory| memory.allows_interaction(layer));
         if enabled {
-            frame.input_scope(if self.fullscreen {
-                "mobile/editor/fullscreen"
-            } else {
-                "mobile/editor/windowed"
-            });
+            frame.input_scope(
+                if self.fullscreen { "mobile/editor/fullscreen" } else { "mobile/editor/windowed" },
+                layer,
+            );
         }
         self.root_bounds = hud_rect(bounds);
         let toolbar_height = if self.fullscreen { 0.0 } else { 80.0 };

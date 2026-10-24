@@ -313,7 +313,7 @@ impl CheatUi {
     pub fn paint(&mut self, gpu: &mut UiFrame<'_>) -> Result<(), String> {
         let layer = self.layer_id();
         let (Some(view), Some(frame)) = (&mut self.view, &self.frame) else { return Ok(()) };
-        gpu.input_scope(if view.console_tab { "cheats/console" } else { "cheats/controls" });
+        gpu.input_scope(if view.console_tab { "cheats/console" } else { "cheats/controls" }, layer);
         let ctx = gpu.ctx.clone();
         let screen = ctx.content_rect();
         let bounds = Rect::from_center_size(

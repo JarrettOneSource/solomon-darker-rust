@@ -364,8 +364,8 @@ impl MenuUi {
                 self.handle_event(UiEvent::Pointer(button))?;
             }
         }
-        if self.orientation_blocked {
-            frame.input_scope("landscape-guidance");
+        if self.orientation_visible() {
+            frame.input_scope("landscape-guidance", orientation_layer());
             let view = frame.ctx.input(|i| i.content_rect());
             let ctx = frame.ctx.clone();
             egui::Modal::new(orientation_layer().id)
@@ -395,7 +395,14 @@ impl MenuUi {
             return Ok(());
         }
         if !self.input_suspended && self.pending_start.is_none() && self.is_blocking() {
-            frame.input_scope(&self.navigation_scope());
+            let layer = if self.cloud_dialog_visible() {
+                cloud_dialog_layer()
+            } else if self.overlay_stack_level().is_some() {
+                overlay_layer()
+            } else {
+                scene_layer()
+            };
+            frame.input_scope(&self.navigation_scope(), layer);
         }
         if self.screen == Screen::Hidden && !self.routing.active() {
             return Ok(());

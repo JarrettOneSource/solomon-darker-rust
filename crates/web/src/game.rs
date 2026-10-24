@@ -13,6 +13,7 @@ mod hosted_save;
 mod native;
 mod social;
 mod spectator;
+mod ui_layers;
 use native::{CommandFeedback, NativeGame};
 use solomon_protocol::{ClientMessage, GameCommand};
 
@@ -656,7 +657,7 @@ impl Game {
             loop {
                 let menu_was_open = self.menu.is_blocking();
                 let more = {
-                    let (gpu_ui, paint) = self.ui_painter();
+                    let (gpu_ui, paint) = self.ui_painter()?;
                     gpu_ui.paint_next(&mut run, paint)?
                 };
                 if !more {
@@ -667,7 +668,7 @@ impl Game {
                     return Ok(());
                 }
             }
-            let (gpu_ui, paint) = self.ui_painter();
+            let (gpu_ui, paint) = self.ui_painter()?;
             gpu_ui.paint_layout(&mut run, paint)
         })();
         self.gpu_ui.finish_native_dispatch(run, result)?;
@@ -709,7 +710,7 @@ impl Game {
             loop {
                 let menu_was_open = self.menu.is_blocking();
                 let more = {
-                    let (gpu_ui, paint) = self.ui_painter();
+                    let (gpu_ui, paint) = self.ui_painter()?;
                     gpu_ui.paint_next(&mut run, paint)?
                 };
                 if !more {
@@ -731,7 +732,7 @@ impl Game {
                 self.update_audio()?;
             }
             self.render_world_and_notifications()?;
-            let (gpu_ui, paint) = self.ui_painter();
+            let (gpu_ui, paint) = self.ui_painter()?;
             gpu_ui.paint_layout(&mut run, paint)
         })();
         // Managed textures can be allocated before a later controller/action fails.
@@ -2410,7 +2411,8 @@ impl Game {
 
     fn ui_painter(
         &mut self,
-    ) -> (&mut GpuUi, impl FnMut(&mut UiFrame<'_>) -> Result<(), String> + '_) {
+    ) -> Result<(&mut GpuUi, impl FnMut(&mut UiFrame<'_>) -> Result<(), String> + '_), String> {
+        self.configure_ui_layers()?;
         let Self {
             gpu_ui,
             mod_overlays,
@@ -2439,7 +2441,7 @@ impl Game {
             match_loading_view,
             ..
         } = self;
-        (gpu_ui, move |frame| {
+        Ok((gpu_ui, move |frame| {
             mod_overlays.paint(frame)?;
             mod_minimap.paint(frame)?;
             hud.paint(frame)?;
@@ -2474,7 +2476,7 @@ impl Game {
             }
             crate::runtime_ui::paint(frame);
             Ok(())
-        })
+        }))
     }
 
     pub(crate) fn present_failure(&mut self, time: f64) -> Result<(), String> {

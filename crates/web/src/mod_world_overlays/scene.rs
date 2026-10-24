@@ -126,7 +126,8 @@ impl ModSceneOverlay {
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let Some(room) = &self.room else { return Ok(()) };
-        frame.input_scope(&format!("mod/scene:{}:{}", room.content_id, room.index));
+        frame
+            .input_scope(&format!("mod/scene:{}:{}", room.content_id, room.index), self.layer_id());
         let ctx = frame.ctx.clone();
         let screen = ctx.content_rect();
         let small = screen.width() <= 700.0;

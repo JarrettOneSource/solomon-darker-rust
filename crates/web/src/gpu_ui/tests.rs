@@ -68,6 +68,31 @@ fn frame_native(
 }
 
 #[test]
+fn controller_scope_follows_the_actual_source_layer_in_both_callback_orders() {
+    let ctx = Context::default();
+    let menu = crate::menu::overlay_layer();
+    let social = crate::social::SocialUi::chat_layer(true);
+    ctx.set_fixed_layer_order(&[menu, social]);
+    for requests in [
+        [("social/chat", social), ("settings", menu)],
+        [("settings", menu), ("social/chat", social)],
+    ] {
+        frame(&ctx, Vec::new(), |frame| {
+            for (scope, layer) in requests {
+                frame.input_scope(scope, layer);
+            }
+            assert_eq!(frame.input_scope.borrow().as_ref().unwrap().1, "social/chat");
+        });
+    }
+    frame(&ctx, Vec::new(), |frame| {
+        assert!(
+            frame.input_scope.borrow().is_none(),
+            "no controller scope survives an absent owner"
+        );
+    });
+}
+
+#[test]
 fn focus_ring_modality_tracks_actual_pointer_and_keyboard_dispatches() {
     let mouse = pointer(true, pos2(50.0, 50.0));
     assert!(!focus_modality(true, &mouse));

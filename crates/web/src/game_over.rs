@@ -71,7 +71,7 @@ impl GameOverOverlay {
 
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let Some((view, riff, anchor)) = self.view else { return Ok(()) };
-        frame.input_scope("game-over");
+        frame.input_scope("game-over", self.layer_id());
         let bounds = frame.ctx.content_rect();
         let scale = solomon_sim::viewport::game_viewport(Vec2::new(
             bounds.width() as f64,

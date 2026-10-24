@@ -141,7 +141,7 @@ impl ObserverUi {
         if !self.visible {
             return Ok(());
         }
-        frame.input_scope("observer");
+        frame.input_scope("observer", self.layer_id());
         let screen = frame.ctx.content_rect();
         let small = screen.width() <= 700.0;
         let inset = if small { 8.0 } else { 18.0 };

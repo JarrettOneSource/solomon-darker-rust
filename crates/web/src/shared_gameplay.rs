@@ -154,7 +154,7 @@ impl SharedGameplayUi {
         let ctx = frame.ctx.clone();
         let screen = ctx.content_rect();
         if let Some(pause) = &self.pause {
-            frame.input_scope("shared/pause");
+            frame.input_scope("shared/pause", Self::pause_layer());
             egui::Area::new(Self::pause_layer().id)
                 .fade_in(false)
                 .order(Self::pause_layer().order)
@@ -198,7 +198,7 @@ impl SharedGameplayUi {
                 });
         }
         if let Some(resume) = &self.resume {
-            frame.input_scope("shared/resume");
+            frame.input_scope("shared/resume", Self::resume_layer());
             let scale = fit_panel(self.size.0, self.size.1, 428.0, 240.0) as f32;
             let bounds = Rect::from_center_size(
                 screen.center(),

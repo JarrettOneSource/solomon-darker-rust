@@ -1,5 +1,14 @@
 # Rust GPU UI migration
 
+The application layer registry follows the actual c140 body append/context ownership,
+with native inner geometry retained from fa08. `match-loading-screen.css` gives the
+body-mounted transition z200000 and toggles child visibility directly after its owned
+delay; it has no additional Area fade. The original `#status` in `web/index.html` has
+auto z and is passive, below positive document contexts. Native Boneyard notices remain
+inside the world below the HUD; Hub book notices are their separate z45 body stage.
+Registered paint, pointer/modal comparison and controller scope must use the same native
+layer comparator. A late painter callback must not override a higher Source scope.
+
 Acceptance target: all visible game UI is authored by Rust and submitted as GPU geometry,
 textures and text. The behavioral reference remains Website `fa08ae249ff5563570bdb2a653e2ef9358ce7b83`
 and the recovered retail evidence it cites. Existing simulation fixtures keep their actual

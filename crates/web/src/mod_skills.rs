@@ -155,7 +155,7 @@ impl ModSkillsUi {
         let small = ctx.content_rect().width() <= 700.0;
         let mut paint_error = None;
         if !self.book.is_empty() {
-            frame.input_scope("mod/skill-book");
+            frame.input_scope("mod/skill-book", Self::book_layer());
             let anchor = if small { egui::Align2::RIGHT_BOTTOM } else { egui::Align2::RIGHT_TOP };
             let offset = if small {
                 vec2(-16.0, -128.0)
@@ -206,7 +206,7 @@ impl ModSkillsUi {
             );
         }
         if !self.choices.is_empty() {
-            frame.input_scope("mod/skill-picker");
+            frame.input_scope("mod/skill-picker", Self::picker_layer());
             let layer = Self::picker_layer();
             let area = egui::Area::new(layer.id)
                 .fade_in(false)

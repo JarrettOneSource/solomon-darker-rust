@@ -263,7 +263,10 @@ impl SkillPicker {
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let Some(offer) = self.displayed.clone() else { return Ok(()) };
-        frame.input_scope(&format!("skill-picker:{}:{:?}", offer.sequence, self.detail_index));
+        frame.input_scope(
+            &format!("skill-picker:{}:{:?}", offer.sequence, self.detail_index),
+            self.layer_id(),
+        );
         frame.ctx.input(|input| {
             if input
                 .events

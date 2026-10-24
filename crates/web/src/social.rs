@@ -312,18 +312,27 @@ impl SocialUi {
             return Ok(());
         }
         if self.chat_open {
-            frame.input_scope(&format!("social/chat:{}", channel_id(self.channel)));
+            frame.input_scope(
+                &format!("social/chat:{}", channel_id(self.channel)),
+                Self::chat_layer(true),
+            );
         }
         if self.college_visible() {
-            frame.input_scope(&format!("social/college:{}", self.college_invitations[0].id));
+            frame.input_scope(
+                &format!("social/college:{}", self.college_invitations[0].id),
+                Self::college_invitation_layer(),
+            );
         } else if self.party_invitation_visible() {
-            frame.input_scope("social/party-invitation");
+            frame.input_scope("social/party-invitation", Self::party_invitation_layer());
         } else if let Some(surface) = &self.surface {
-            frame.input_scope(&match surface {
-                Surface::Party(tab) => format!("social/party:{}", tab.id()),
-                Surface::Card(card) => format!("social/card:{}", card.player_reference),
-                Surface::HubPlayer(id) => format!("social/hub-player:{id}"),
-            });
+            frame.input_scope(
+                &match surface {
+                    Surface::Party(tab) => format!("social/party:{}", tab.id()),
+                    Surface::Card(card) => format!("social/card:{}", card.player_reference),
+                    Surface::HubPlayer(id) => format!("social/hub-player:{id}"),
+                },
+                Self::dialog_layer(),
+            );
         }
         let ctx = frame.ctx.clone();
         self.paint_allies(frame)?;

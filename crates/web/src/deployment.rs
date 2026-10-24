@@ -108,7 +108,7 @@ impl DeploymentUpdate {
             return Ok(());
         }
         let Some(message) = self.message else { return Ok(()) };
-        frame.input_scope("deployment/update");
+        frame.input_scope("deployment/update", self.layer_id());
         let ctx = frame.ctx.clone();
         let screen = ctx.content_rect();
         let area = egui::Area::new(self.layer_id().id)
