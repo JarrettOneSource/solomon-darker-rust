@@ -7,6 +7,7 @@ const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {revealSettingsControl} = require('./settings-journey.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 
 const output = path.resolve(process.env.OUT);
@@ -234,8 +235,9 @@ async function geometry(page, id) {
     mark('enable real private cheats and subscribe through Cloud');
     await ui.click(page, 'settings');
     await ui.click(page, 'settings-page:cloud');
-    if ((await ui.widget(page, 'settings-toggle:cheats')).selected === false) await ui.click(page, 'settings-toggle:cheats');
     if ((await ui.widget(page, 'settings-toggle:shared-hub')).selected === true) await ui.click(page, 'settings-toggle:shared-hub');
+    await revealSettingsControl(page, 'settings-toggle:cheats');
+    if ((await ui.widget(page, 'settings-toggle:cheats')).selected === false) await ui.click(page, 'settings-toggle:cheats');
     await ui.click(page, 'settings-back'); await ui.click(page, 'settings-back');
     await ui.click(page, 'explore');
     const subscribeId = `cloud-subscription:subscribe:${acceptedPackage.slug}`;
