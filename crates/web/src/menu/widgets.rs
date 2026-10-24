@@ -624,7 +624,8 @@ mod focus_scroll_tests {
                             }
                         });
                     let (index, rect) = focused.expect("a real control retains focus");
-                    observed = Some((index, rect, scroll.inner_rect, scroll.state.offset().y));
+                    observed =
+                        Some((index, rect, scroll.inner_rect, scroll.state.clamped_offset().y));
                 });
             },
         )

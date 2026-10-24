@@ -1252,7 +1252,8 @@ impl GpuUi {
         })?;
         self.input_diagnostics.meshes = meshes;
         self.input_diagnostics.triangles = triangles;
-        self.input_diagnostics.textures = self.painter.texture_count() + self.images.texture_count();
+        self.input_diagnostics.textures =
+            self.painter.texture_count() + self.images.texture_count();
         self.input_diagnostics.borrowed_images = self.images.borrowed_count();
         self.input_diagnostics.static_images_ready = self.images.static_images_ready();
         self.input_diagnostics.static_images_total = self.images.static_image_count();

@@ -39,7 +39,7 @@ mod browser {
         let source = renderer.create_render_target_size([width * 2, height * 2])?;
         let horizontal = renderer.create_render_target_size([width, height])?;
         let vertical = renderer.create_render_target_size([width, height])?;
-        renderer.begin_frame(width, height, logical);
+        renderer.begin_frame(width as i32, height as i32, logical);
         renderer.render_ui_group(&source, [logical[0] * 2.0, logical[1] * 2.0], |renderer| {
             renderer.draw_solid(
                 [40.0 * factor, 56.0 * factor, 176.0 * factor, 80.0 * factor],

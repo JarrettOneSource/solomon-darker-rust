@@ -125,7 +125,7 @@ impl GpuPainter {
         );
         let composite = self.groups.get(renderer, depth, TargetSlot::Composite, output, scale)?;
         let capture = View::target(&composite, output, scale);
-        let mut result = Ok((0, 0));
+        let mut result: Result<(usize, usize), String> = Ok((0, 0));
         renderer.render_ui_group(&composite, capture.logical, |renderer| {
             result = (|| {
                 let mut counts = (0, 0);
