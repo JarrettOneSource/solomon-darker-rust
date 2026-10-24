@@ -664,10 +664,15 @@ mod focus_scroll_tests {
     use egui::{Context, Event, Id, Key, Modifiers, RawInput, Rect, Sense, Vec2};
 
     fn pass(ctx: &Context, events: Vec<Event>) -> (usize, Rect, Rect, f32) {
+        pass_at(ctx, events, ctx.input(|input| input.time))
+    }
+
+    fn pass_at(ctx: &Context, events: Vec<Event>, time: f64) -> (usize, Rect, Rect, f32) {
         let mut observed = None;
         ctx.run_pass(
             RawInput {
                 screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, Vec2::new(300.0, 160.0))),
+                time: Some(time),
                 events,
                 ..Default::default()
             },
@@ -713,12 +718,17 @@ mod focus_scroll_tests {
     }
 
     fn dispatch(ctx: &Context, event: Event) -> (usize, Rect, Rect, f32) {
-        pass(ctx, vec![event]);
+        dispatch_events(ctx, vec![event])
+    }
+
+    fn dispatch_events(ctx: &Context, events: Vec<Event>) -> (usize, Rect, Rect, f32) {
+        let time = ctx.input(|input| input.time + f64::from(input.predicted_dt));
+        pass_at(ctx, events, time);
         // BrowserInput's into_passes materializes each dispatch's committed
-        // widgets/focus in an empty pass before the next native dispatch.
-        pass(ctx, Vec::new());
+        // widgets/focus in an empty pass with the same frame clock.
+        pass_at(ctx, Vec::new(), time);
         // Game then finishes the transaction with paint_layout before drawing.
-        pass(ctx, Vec::new())
+        pass_at(ctx, Vec::new(), time)
     }
 
     #[test]
@@ -779,7 +789,7 @@ mod focus_scroll_tests {
             }
         }
 
-        pass(
+        let (focused, _, _, scrolled_offset) = dispatch_events(
             &ctx,
             vec![
                 Event::PointerMoved(egui::pos2(150.0, 65.0)),
@@ -792,7 +802,6 @@ mod focus_scroll_tests {
                 },
             ],
         );
-        let (focused, _, _, scrolled_offset) = pass(&ctx, Vec::new());
         assert_eq!(focused, 8, "wheel scrolling keeps the actual focus owner");
         assert!(scrolled_offset < bottom_offset, "the user's wheel moves the scroll owner");
         let (focused, _, _, settled_offset) = pass(&ctx, Vec::new());
