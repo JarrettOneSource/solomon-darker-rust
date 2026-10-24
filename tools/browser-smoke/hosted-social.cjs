@@ -24,6 +24,7 @@ const accountFile = process.env.ACCOUNT_FILE || path.join(output, 'private-accou
 const checks = [];
 const clients = [];
 let observerEvidence;
+const partyControlEvidence = {};
 let step = 'registration';
 
 async function waitUntil(predicate, label) {
@@ -118,7 +119,13 @@ function observe(page, label) {
       else if (message.type === 'chat') {
         state.chats.push({sequence: message.message.sequence, channel: message.message.channel, text: message.message.text,
           sender: message.message.sender.display_name});
-      } else if (message.type === 'error') state.errors.push(`host ${message.code}: ${message.reason}`);
+      } else if (message.type === 'error') {
+        if (state.expectedKick && !state.expectedKick.received
+          && state.expectedKick.connection === connection
+          && message.code === 'command_rejected' && message.reason === 'The College leader removed you.') {
+          state.expectedKick.received = {code:message.code, reason:message.reason};
+        } else state.errors.push(`host ${message.code}: ${message.reason}`);
+      }
       else if (message.type === 'chat_rejected') state.errors.push(`chat rejected: ${message.rejection.reason}`);
       else if (message.type === 'hosted') {
         const event = message.message;
@@ -233,20 +240,133 @@ function publicState(state) {
     invitations: state.invitations, partyActions: state.partyActions,
     chats: state.chats, commands: state.commands, requests: state.requests,
     wasm: [...state.wasm], errors: state.errors,
-    sockets: state.sockets, trace: state.trace, heldCheckpointSave: state.heldCheckpointSave};
+    sockets: state.sockets, trace: state.trace, heldCheckpointSave: state.heldCheckpointSave,
+    expectedKick: state.expectedKick};
 }
 
 async function closeClient(client) {
   return {...await client.browserOwner.close(), exited:true};
 }
 
+async function closeSocialOverlays(client) {
+  for (const id of ['social/close', 'social/card-close', 'social/chat-close']) {
+    if (ui.findWidget(await ui.readUi(client.page), id)) await ui.click(client.page, id);
+  }
+}
+
+async function partyControls(leader, guest) {
+  await closeSocialOverlays(guest); await closeSocialOverlays(leader);
+  await leader.page.bringToFront();
+  await ui.click(leader.page, 'social/party-settings-shortcut');
+  const oldCode = (await ui.widget(leader.page, 'social/copy')).value;
+  await ui.click(leader.page, 'social/generate');
+  await ui.waitForUi(leader.page, snapshot => {
+    const code = ui.findWidget(snapshot, 'social/copy')?.value;
+    return code && code !== oldCode;
+  }, 'the real authority rotates the owned party code');
+  const newCode = (await ui.widget(leader.page, 'social/copy')).value;
+  await leader.page.context().grantPermissions(['clipboard-read','clipboard-write'], {origin:new URL(url).origin});
+  await ui.click(leader.page, 'social/copy');
+  await waitUntil(() => leader.page.evaluate(async expected =>
+    await navigator.clipboard.readText() === expected, newCode), 'trusted Party Copy reaches the actual browser clipboard');
+  partyControlEvidence.rotation = {changed:true, clipboardMatches:true,
+    oldSha256:crypto.createHash('sha256').update(oldCode).digest('hex'),
+    newSha256:crypto.createHash('sha256').update(newCode).digest('hex')};
+  await ui.click(leader.page, 'social/visibility:invite-only');
+  await waitUntil(() => leader.state.social.party_state.party.visibility === 'InviteOnly', 'owned Invite Only visibility');
+  await ui.click(leader.page, 'social/close');
+
+  const context = await leader.page.context().browser().newContext({
+    ignoreHTTPSErrors:process.env.LOCAL_TLS === '1', viewport:{width:1280,height:720}});
+  let requester, failure;
+  try {
+    const file = path.join(output, 'private-requester-account.json');
+    let account;
+    if (fs.existsSync(file)) account = JSON.parse(fs.readFileSync(file));
+    else {
+      const privateSettings = JSON.parse(fs.readFileSync(privateConfig));
+      const username = `Request${Date.now().toString(36)}`;
+      const response = await context.request.post(new URL('api/auth/register', url).href,
+        {data:{username,email:`${username.toLowerCase()}@example.invalid`,password:privateSettings.testPassword}});
+      assert.equal(response.status(), 201, 'the owned requester is a real registered account');
+      account = {username, token:(await response.json()).token};
+      fs.writeFileSync(file, JSON.stringify(account,null,2), {mode:0o600});
+    }
+    assert.equal(typeof account.token, 'string');
+    await context.addInitScript(({key,token}) => localStorage.setItem(key,token), {key:tokenKey,token:account.token});
+    const page = await context.newPage(), state = observe(page,'owned-requester');
+    requester = {page,state}; await state.failureObserverReady;
+    await page.goto(url,{waitUntil:'load'}); await ui.ready(page,{timeout:coldStartTimeout});
+    if(ui.findWidget(await ui.readUi(page),'prompt-secondary')) await ui.click(page,'prompt-secondary');
+    await ui.click(page,'play'); await ui.click(page,'join-party');
+    const listingId = leader.state.social.party_state.party.listing_id;
+    const row = await ui.widget(page, `join-listing:${listingId}`);
+    assert.equal(row.label,'REQUEST');
+    await ui.click(page, row.id);
+    await ui.waitForUi(page, snapshot => ui.findWidget(snapshot,row.id)?.label === 'REQUESTED', 'actual pending owned join request');
+    await waitUntil(() => leader.state.social.party_state.join_requests.some(request =>
+      request.requester.account_username === account.username), 'the leader receives only the owned requester');
+    const request = leader.state.social.party_state.join_requests.find(request =>
+      request.requester.account_username === account.username);
+    await leader.page.bringToFront(); await ui.click(leader.page,'social/party');
+    await ui.click(leader.page,'social/party-members');
+    await ui.click(leader.page,`social/accept:${request.id}`);
+    await ui.surface(page,'routing'); await ui.widget(page,'routing/dialog');
+    assert.equal(state.id,null,'the accepted request still requires actual character/consent admission');
+    await ui.click(page,'routing-back');
+    await waitUntil(() => !leader.state.social.party_state.join_requests.some(row => row.id === request.id),
+      'the actual accepted request leaves the pending roster');
+    assert.deepEqual([...leader.state.frame.host.connected_player_ids].sort(),[leader.state.id,guest.state.id].sort());
+    await ui.settleErrors(page); assert.deepEqual(state.errors,[]);
+    partyControlEvidence.request = {id:request.id,accepted:true,cancelledBeforeMembership:true,
+      requester:account.username,...publicState(state)};
+    await ui.click(leader.page,'social/close');
+  } catch(error) {
+    failure = error;
+    if(requester) {
+      await ui.settleErrors(requester.page);
+      partyControlEvidence.request = {failure:error.stack,...publicState(requester.state),
+        ui:await ui.readUi(requester.page).catch(()=>null)};
+    }
+    throw error;
+  } finally {
+    try { await context.close(); }
+    catch(error) {
+      partyControlEvidence.request ||= {};
+      partyControlEvidence.request.contextCleanupError = error.message;
+      if(!failure) throw error;
+    }
+  }
+  checked('the owned party rotates and copies its real code, and accepts a real request before cancellable consent');
+}
+
+async function kickOwnedGuest(leader, guest) {
+  await closeSocialOverlays(leader); await closeSocialOverlays(guest);
+  await leader.page.bringToFront(); await ui.click(leader.page,'social/party');
+  await ui.click(leader.page,'social/party-members');
+  const connectionPath = guest.state.welcomes.at(-1).path;
+  const connection = guest.state.sockets.findLast(row=>row.path===connectionPath&&!row.closed);
+  assert.ok(connection,'Kick owns the actual latest open guest transport');
+  guest.state.expectedKick = {targetPlayerId:guest.state.id,leaderPlayerId:leader.state.id,
+    connectionPath,connectionIndex:guest.state.sockets.indexOf(connection),connection};
+  const before = leader.state.partyActions.length;
+  await ui.click(leader.page,`social/kick:${guest.state.id}`);
+  await waitUntil(() => leader.state.partyActions.slice(before).some(row=>row.accepted)
+    && guest.state.expectedKick.received
+    && connection.closed
+    && !leader.state.frame.host.connected_player_ids.includes(guest.state.id),
+  'the actual private-College Kick retires only the owned guest connection');
+  await ui.surface(guest.page,'title');
+  partyControlEvidence.kick = {...guest.state.expectedKick,accepted:true,connectionClosed:true};
+  await ui.click(leader.page,'social/close');
+  checked('the real leader Kick disconnects only the owned guest with its exact Source business receipt');
+}
+
 async function observeOwnedMatch(leader, guest) {
   const account = JSON.parse(fs.readFileSync(process.env.OBSERVER_ACCOUNTS))[0];
   assert.equal(account.user.id, 3, 'only the retained isolated developer account observes');
   for (const client of [guest, leader]) {
-    for (const id of ['social/close', 'social/card-close', 'social/chat-close']) {
-      if (ui.findWidget(await ui.readUi(client.page), id)) await ui.click(client.page, id);
-    }
+    await closeSocialOverlays(client);
   }
   await ui.click(leader.page, 'hud:map');
   await waitUntil(() => leader.state.frame?.snapshot.boneyard
@@ -486,10 +606,14 @@ async function observeOwnedMatch(leader, guest) {
     await ui.assertGpuOnly(guest.page);
     await guest.page.screenshot({path: path.join(output, 'joined-college-party.png')});
     checked('consent and actual character confirmation join the inviter authority with both connected party members');
+    step = 'owned code rotation, Copy and request acceptance';
+    await partyControls(leader,guest);
     if (process.env.OBSERVER_ACCOUNTS) {
       step = 'actual Developer Sight and read-only observer';
       await observeOwnedMatch(leader, guest);
     }
+    step = 'actual owned member Kick';
+    await kickOwnedGuest(leader,guest);
     for (const client of clients) {
       await ui.settleErrors(client.page);
       assert.deepEqual(client.state.errors, []);
@@ -506,7 +630,7 @@ async function observeOwnedMatch(leader, guest) {
     process.exitCode = 1;
   } finally {
     releaseCheckpointSave?.();
-    const receipt = {passed: !failure, url, checks, failure, observerEvidence,
+    const receipt = {passed: !failure, url, checks, failure, observerEvidence, partyControlEvidence,
       clients: clients.map(client => ({...publicState(client.state), failureUi: client.state.failureUi})),
       browsersClosed: false, servicesRestarted: false};
     // Preserve evidence before closing Chrome, including if the external bounded
