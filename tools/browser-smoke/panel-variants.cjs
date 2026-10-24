@@ -52,9 +52,26 @@ async function buy(stock){const gold=player().economy.gold,before=player().econo
   const purchased=player().economy.backpack.find(row=>!before.includes(row.id)&&row.native_type_id===stock.item.native_type_id);
   assert.ok(purchased,'the accepted purchase creates the owned item');return structuredClone(purchased);}
 async function buyClothing(recipes){
-  const owned=player().economy.backpack.find(row=>row.equipment_type==='Hat'
-    &&[0,1].every(layer=>Number.isInteger(row.icon_tints?.[layer]??recipes[row.recipe_index]?.iconTints[layer])));
+  const dyeable=row=>row.equipment_type==='Hat'
+    &&[0,1].every(layer=>Number.isInteger(row.icon_tints?.[layer]??recipes[row.recipe_index]?.iconTints[layer]));
+  const owned=player().economy.backpack.find(dyeable);
   if(owned){receipt.clothingSource='previously purchased owned Hat retained by the ordinary profile';return structuredClone(owned);}
+  // New Game archives the retired wizard's belongings in an ordinary storage Sack.
+  const bag=player().economy.storage.find(row=>row.contents?.some(dyeable));
+  if(bag){
+    const clothing=bag.contents.find(dyeable);
+    receipt.clothingSource={kind:'retired wizard storage Sack, normal retrieval',bagId:bag.id,itemId:clothing.id};
+    await ui.click(page,(await ui.byLabel(page,'Luthacus',{role:'button',prefix:'hud:shortcut:'})).id);
+    await ui.click(page,`panel:storage:${bag.id}`,{clickCount:2});
+    await until(()=>item(bag.id),'actual stored Sack enters backpack');
+    await ui.click(page,'panel:close');await ready();await page.keyboard.press('KeyI');
+    await ui.click(page,`panel:item:${bag.id}`,{clickCount:2});
+    await ui.widget(page,`panel:item:${clothing.id}`,{enabled:true});await ui.noWidget(page,'panel:inventory-flyby');
+    await ui.drag(page,`panel:item:${clothing.id}`,'panel:back');await until(()=>item(clothing.id),'real Sack drag moves owned clothing to root');
+    await ui.noWidget(page,'panel:inventory-flyby');await ui.click(page,'panel:back');
+    await ui.waitForUi(page,s=>JSON.parse(ui.findWidget(s,'panel:sack-page')?.value||'{}').path?.length===0,'root backpack after Sack return');
+    await page.keyboard.press('Escape');await ready();return structuredClone(item(clothing.id));
+  }
   receipt.clothingSource='ordinary paid reference offer';
   let offer;receipt.clothingRolls=[];
   for(let attempt=0;attempt<12;attempt++){
@@ -129,7 +146,7 @@ async function buyClothing(recipes){
     receipt.dye={swatches,cloth,trim,afterCloth,afterTrim:structuredClone(item(clothingId))};
     await shot('actual-dyed-trim');await ui.click(page,'panel:dye-cancel');await ui.noWidget(page,'panel:dye');
     await page.keyboard.press('Escape');await ready();
-    receipt.checks.push('real clothing/kit purchases, Source-exact cloth and trim, one consumed kit and normal cancel');
+    receipt.checks.push('real owned clothing and purchased kit, Source-exact cloth and trim, one consumed kit and normal cancel');
 
     step='ranked and welded Skillbook, all three banks';
     receipt.skills=await consoleRun('sd.dev.grant_skill(23,2); sd.dev.grant_weld(1003); return true');
