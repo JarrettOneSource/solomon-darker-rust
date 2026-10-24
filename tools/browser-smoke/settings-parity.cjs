@@ -53,6 +53,18 @@ async function reveal(page, id) {
     await page.keyboard.press('Escape');
     await gpu.widget(page, 'settings-range:sound');
     await gpu.click(page, 'settings-page:controls');
+    await gpu.focused(page,'settings-toggle:reverse-hotbar');
+    const bindings=['move-up','move-down','move-left','move-right','menu','inventory','skills','chat','cheats',
+      ...Array.from({length:9},(_,index)=>`belt-${index}`)];
+    for(const binding of bindings){
+      await page.keyboard.press('Tab');
+      await gpu.focused(page,`bind:${binding}`);
+    }
+    for(const id of [...bindings.slice(0,-1).reverse().map(binding=>`bind:${binding}`),'settings-toggle:reverse-hotbar']){
+      await page.keyboard.press('Shift+Tab');
+      await gpu.focused(page,id);
+    }
+    checks.push('real forward and reverse Tab reveal every focused binding through the native scroll owner');
     await gpu.click(page, 'bind:move-up');
     await page.keyboard.press('Escape');
     await gpu.value(page, 'bind:move-up', 'Escape');
