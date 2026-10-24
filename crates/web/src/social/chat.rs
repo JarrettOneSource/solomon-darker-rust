@@ -1,6 +1,9 @@
 //! GPU chat transcript/composer from Website `GameChat.tsx`.
 //! Drafts stay local; sending queues a host command and never inserts a message.
 
+mod announcements;
+pub(super) use announcements::ChatAnnouncements;
+
 use egui::{Color32, FontFamily, FontId, Id, Rect, RichText, Stroke, pos2, vec2};
 use solomon_sim::settings::game_binding_label;
 use solomon_sim::social::{GameChatChannel, GameChatMessage};
@@ -88,6 +91,35 @@ fn channel_color(channel: GameChatChannel) -> Color32 {
 }
 fn text(value: impl Into<String>, size: f32, color: Color32) -> RichText {
     RichText::new(value).font(FontId::new(size, FontFamily::Name("Alegreya".into()))).color(color)
+}
+
+#[must_use]
+fn message_parts<'a>(message: &'a GameChatMessage, local_player_id: &str) -> (String, &'a str) {
+    let own = message.sender.player_id == local_player_id;
+    let label = if message.activity.is_some() {
+        message.sender.display_name.clone()
+    } else if message.channel == GameChatChannel::Whisper {
+        if own {
+            format!("To {}", message.recipient.as_ref().map_or("", |r| &r.display_name))
+        } else {
+            format!("From {}", message.sender.display_name)
+        }
+    } else if own {
+        "You".to_owned()
+    } else {
+        message.sender.display_name.clone()
+    };
+    let body = if message.activity.is_some() {
+        message.text.strip_prefix(&message.sender.display_name).unwrap_or(&message.text)
+    } else {
+        &message.text
+    };
+    (label, body)
+}
+
+#[must_use]
+fn message_description(label: &str, body: &str) -> String {
+    format!("{label} {}", body.trim_start())
 }
 
 impl SocialUi {
@@ -425,6 +457,17 @@ impl SocialUi {
                 Ok(())
             })
             .inner?;
+        let accepted = self.chat_announcements.take_visible(messages.iter().map(|m| m.sequence));
+        for message in messages.iter().filter(|message| accepted.contains(&message.sequence)) {
+            let (label, body) = message_parts(message, &snapshot.local_player_id);
+            frame.announce(
+                &self.chat_announcements.owner(&format!("message:{}", message.sequence)),
+                &message_description(&label, body),
+            );
+        }
+        if let Some(status) = &self.chat_status {
+            frame.announce(&self.chat_announcements.owner("status"), status);
+        }
         if let Some(intent) = intent {
             self.handle_intent(intent)?;
         }
@@ -613,19 +656,10 @@ impl SocialUi {
             .snapshot
             .as_ref()
             .is_some_and(|snapshot| message.sender.player_id == snapshot.local_player_id);
-        let label = if message.activity.is_some() {
-            message.sender.display_name.clone()
-        } else if message.channel == GameChatChannel::Whisper {
-            if own {
-                format!("To {}", message.recipient.as_ref().map_or("", |r| &r.display_name))
-            } else {
-                format!("From {}", message.sender.display_name)
-            }
-        } else if own {
-            "You".to_owned()
-        } else {
-            message.sender.display_name.clone()
-        };
+        let (label, suffix) = message_parts(
+            message,
+            self.snapshot.as_ref().map_or("", |snapshot| snapshot.local_player_id.as_str()),
+        );
         let target = if message.activity.is_some() {
             Some(&message.sender)
         } else if message.channel == GameChatChannel::Whisper && own {
@@ -634,11 +668,6 @@ impl SocialUi {
             None
         } else {
             Some(&message.sender)
-        };
-        let suffix = if message.activity.is_some() {
-            message.text.strip_prefix(&message.sender.display_name).unwrap_or(&message.text)
-        } else {
-            &message.text
         };
         let font_size = if self.coarse { 12.5 } else { 14.0 };
         let line_height = font_size * 1.35;
@@ -804,7 +833,7 @@ impl SocialUi {
             frame.record_rect(&author_id, &label, "text", name_rect, true);
         }
         let message_id = format!("social/chat-message:{}", message.sequence);
-        frame.record_rect(&message_id, &format!("{label} {suffix}"), "log", bounds, true);
+        frame.record_rect(&message_id, &message_description(&label, suffix), "log", bounds, true);
         frame.record_value(
             &message_id,
             &format!("{{\"opacity\":{entry},\"translateY\":{}}}", translation.y),
@@ -854,5 +883,50 @@ mod motion_tests {
         motion.sync(true, true, [1], 100.0, false);
         assert_eq!(motion.panel.value(100.0), 0.0);
         assert_eq!(motion.entry(1, 100.0), 0.0);
+    }
+}
+
+#[cfg(test)]
+mod announcement_text_tests {
+    use super::{message_description, message_parts};
+    use solomon_sim::social::{GameChatActivity, GameChatChannel, GameChatMessage, GameChatSender};
+
+    #[test]
+    fn narration_uses_the_actual_local_inbound_and_whisper_author_labels() {
+        let local = GameChatSender {
+            display_name: "Local wizard".to_owned(),
+            player_id: "local".to_owned(),
+            player_reference: "local-reference".to_owned(),
+        };
+        let peer = GameChatSender {
+            display_name: "سلمى".to_owned(),
+            player_id: "peer".to_owned(),
+            player_reference: "peer-reference".to_owned(),
+        };
+        let mut message = GameChatMessage {
+            activity: None,
+            channel: GameChatChannel::Party,
+            recipient: None,
+            sender: local.clone(),
+            sequence: 1,
+            text: "Hello 👩‍🚀".to_owned(),
+        };
+        let describe = |message: &GameChatMessage| {
+            let (label, body) = message_parts(message, "local");
+            message_description(&label, body)
+        };
+        assert_eq!(describe(&message), "You Hello 👩‍🚀");
+        message.sender = peer.clone();
+        assert_eq!(describe(&message), "سلمى Hello 👩‍🚀");
+        message.channel = GameChatChannel::Whisper;
+        message.recipient = Some(local.clone());
+        assert_eq!(describe(&message), "From سلمى Hello 👩‍🚀");
+        message.sender = local;
+        message.recipient = Some(peer.clone());
+        assert_eq!(describe(&message), "To سلمى Hello 👩‍🚀");
+        message.activity = Some(GameChatActivity::EnteredCollege);
+        message.sender = peer;
+        message.text = "سلمى has entered the college.".to_owned();
+        assert_eq!(describe(&message), "سلمى has entered the college.");
     }
 }
