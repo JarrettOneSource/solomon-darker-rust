@@ -360,7 +360,7 @@ impl NativeServer {
             hosted: assets.is_none(),
             routes: Mutex::new(BTreeMap::new()),
         });
-        let assets = Arc::new(assets);
+        let assets = assets.map(Arc::new);
         let (http_sender, requests) = mpsc::sync_channel::<AcceptedConnection>(HTTP_QUEUE_CAPACITY);
         let requests = Arc::new(Mutex::new(requests));
         let mut http_workers = Vec::new();
@@ -378,8 +378,7 @@ impl NativeServer {
                     if state.stopping.load(Ordering::Acquire) {
                         break;
                     }
-                    if let Err(error) =
-                        socket::serve_connection(connection, assets.as_ref().as_ref(), &state)
+                    if let Err(error) = socket::serve_connection(connection, assets.clone(), &state)
                         && !matches!(
                             error.kind(),
                             io::ErrorKind::BrokenPipe
@@ -539,7 +538,7 @@ impl NativeServer {
                 .expect("socket worker bookkeeping does not panic while locked"),
         );
         for worker in workers {
-            worker.join().expect("the WebSocket worker does not panic");
+            worker.join().expect("the connection worker does not panic");
         }
     }
 }

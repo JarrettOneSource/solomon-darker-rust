@@ -1,5 +1,5 @@
-//! HTTP upgrade dispatch and one peer's WebSocket lifecycle. Long-lived sockets leave
-//! the four asset workers immediately after their handshake.
+//! Bounded HTTP framing and owned connection lifetimes. Asset responses and long-lived
+//! WebSockets leave the four framing workers after their complete request headers.
 
 use std::io::{self, BufRead, BufReader, Cursor, Read, Write};
 use std::net::TcpStream;
@@ -113,7 +113,7 @@ impl Write for PrefixedStream {
 
 pub(super) fn serve_connection(
     connection: AcceptedConnection,
-    assets: Option<&AssetServer>,
+    assets: Option<Arc<AssetServer>>,
     server: &Arc<ServerState>,
 ) -> io::Result<()> {
     let AcceptedConnection { id, remote_addr, stream, lease } = connection;
@@ -144,10 +144,28 @@ pub(super) fn serve_connection(
     headers.extend_from_slice(reader.buffer());
     let mut stream = PrefixedStream { prefix: Cursor::new(headers), stream: reader.into_inner() };
     if !upgrade {
-        stream.stream.set_write_timeout(Some(std::time::Duration::from_secs(30)))?;
         if let Some(assets) = assets {
-            return assets.serve_stream(&mut stream);
+            // Media may stop consuming a response after buffering enough data.
+            // Its existing bounded lease owns this writer until completion or
+            // shutdown, which closes the retained TCP clone before joining it.
+            stream.stream.set_write_timeout(None)?;
+            let worker = thread::spawn(move || {
+                let _lease = lease;
+                if let Err(error) = assets.serve_stream(&mut stream)
+                    && !matches!(
+                        error.kind(),
+                        io::ErrorKind::BrokenPipe
+                            | io::ErrorKind::ConnectionReset
+                            | io::ErrorKind::UnexpectedEof
+                    )
+                {
+                    eprintln!("Could not send a game asset: {error}");
+                }
+            });
+            retain_socket_worker(server, worker);
+            return Ok(());
         }
+        stream.stream.set_write_timeout(Some(std::time::Duration::from_secs(30)))?;
         // An admission can wait for package execution or another recovering player.
         // Its bounded, leased connection must not occupy a framing worker needed by
         // the first player's WebSocket handshake.
