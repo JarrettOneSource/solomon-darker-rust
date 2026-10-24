@@ -17,7 +17,7 @@ const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
 const account = JSON.parse(fs.readFileSync(process.env.ACCOUNT));
 const receipt = {passed:false, artifact:process.env.ARTIFACT, checks:[], errors:[],
   qualification:'controlled private developer Console skill/funding prerequisites; actual purchases, belt input and enemy damage',
-  commands:[], results:[], secondaryEvents:[], combatEvents:[], health:[]};
+  commands:[], results:[], commandResults:[], secondaryEvents:[], combatEvents:[], health:[]};
 let page, observed, frame, playerId, step = 'private developer admission';
 const actor = () => frame?.snapshot.participants[playerId];
 const player = () => actor()?.player;
@@ -55,6 +55,7 @@ function observe() {
         receipt.welcome={playerId,sessionKind:row.hosted?.session_kind,
           developerAccess:row.hosted?.developer_access,cheatsEnabled:row.hosted?.cheats_enabled};
       } else if(row.type==='snapshot')frame=row.frame;
+      else if(row.type==='command_result')receipt.commandResults.push(row);
       else if(row.type==='error')receipt.errors.push({code:row.code,reason:row.reason});
       else if(row.type==='hosted'&&row.message.kind==='lua_result')receipt.results.push(row.message);
       if(row.type!=='snapshot'&&row.type!=='welcome')return;
@@ -128,8 +129,8 @@ async function pauseNotice(key,text,afterAnnouncement,name,{resume=true}={}) {
     step='paid Hagatha prerequisite';
     const beforeGold=player().economy.gold;
     await page.keyboard.press('Backquote');await ui.widget(page,'cheats/dialog');
-    await ui.fill(page,'cheats/gold','10000');await ui.click(page,'cheats/submit:gold');
-    await until(()=>player().economy.gold===10000,'real SET GOLD accepts the declared prerequisite');
+    await ui.fill(page,'cheats/gold','20000');await ui.click(page,'cheats/submit:gold');
+    await until(()=>player().economy.gold===20000,'real SET GOLD accepts the declared prerequisite');
     await ui.widget(page,'cheats/submit:gold',{enabled:true});
     // Developer-only controls extend this real ScrollArea below the viewport.
     // Its action receipt is painted at the end of the same content.
@@ -139,10 +140,14 @@ async function pauseNotice(key,text,afterAnnouncement,name,{resume=true}={}) {
     await page.keyboard.press('Backquote');await ready();
     await ui.click(page,(await ui.byLabel(page,'Hagatha',{role:'button',prefix:'hud:shortcut:'})).id);
     assert.equal(player().economy.owned_perk_selectors.includes(7),false,'this wizard must buy the charge');
+    // Source individualPerkPrice: the initial mixed selectors keep base price;
+    // every other individual charm costs three times its catalog base price.
+    const charmPrice=5000*(player().economy.first_mixed_selectors.includes(7)?1:3);
+    assert.equal((await ui.widget(page,'panel:hagatha:7')).label,`Buy CHEAT DEATH CHARM for ${charmPrice} gold`);
     await ui.click(page,'panel:hagatha:7');await ui.click(page,'panel:hagatha:7');
     await until(()=>player().economy.owned_perk_selectors.includes(7),'the real Hagatha purchase is accepted');
-    assert.equal(player().economy.gold,5000);assert.equal(player().progression.hagatha_runtime.cheat_death_charges,1);
-    receipt.charm={selector:7,price:5000,gold:player().economy.gold,runtime:structuredClone(player().progression.hagatha_runtime)};
+    assert.equal(player().economy.gold,20000-charmPrice);assert.equal(player().progression.hagatha_runtime.cheat_death_charges,1);
+    receipt.charm={selector:7,price:charmPrice,gold:player().economy.gold,runtime:structuredClone(player().progression.hagatha_runtime)};
     await shot('paid-cheat-death-charm');await ui.click(page,'panel:close');await ready();
     receipt.checks.push('actual SET GOLD prerequisite, paid Hagatha charm and one native charge');
 
