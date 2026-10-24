@@ -17,7 +17,7 @@ const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
 const account = JSON.parse(fs.readFileSync(process.env.ACCOUNT));
 const receipt = {passed:false, artifact:process.env.ARTIFACT, checks:[], errors:[],
   qualification:'controlled private developer Console skill/funding prerequisites; actual purchases, belt input and enemy damage',
-  commands:[], results:[], commandResults:[], secondaryEvents:[], combatEvents:[], health:[]};
+  commands:[], results:[], commandResults:[], inputs:[], secondaryEvents:[], combatEvents:[], health:[]};
 let page, observed, frame, playerId, step = 'private developer admission';
 const actor = () => frame?.snapshot.participants[playerId];
 const player = () => actor()?.player;
@@ -47,6 +47,7 @@ function observe() {
       const row=JSON.parse(payload.toString());
       if(row.type==='hosted'&&row.command.kind==='lua_execute')receipt.commands.push(row.command);
       else if(row.type==='command')receipt.commands.push(row.command);
+      else if(row.type==='input')receipt.inputs.push(row);
     });
     socket.on('framereceived',({payload})=>{
       const row=read(JSON.parse(payload.toString())); if(!row)return;
@@ -172,7 +173,10 @@ async function pauseNotice(key,text,afterAnnouncement,name,{resume=true}={}) {
     receipt.toggles=[];
     for(const [slot,name] of ['firewalker','mindstar','regenerate'].entries()) {
       await until(()=>!secondary()||secondary().global_cooldown_ticks<=0,'actual secondary cooldown completes');
+      receipt.pendingToggle={slot,name,before:await page.evaluate(()=>Array.from(window.wasmBindings.gameplay_input_state()))};
       await ui.click(page,`hud:belt:${slot}`);
+      await ui.nextFrame(page);
+      receipt.pendingToggle.after=await page.evaluate(()=>Array.from(window.wasmBindings.gameplay_input_state()));
       if(slot<2)await until(()=>secondary()?.[name]===true,`real ${name} activates`);
       else await until(()=>receipt.secondaryEvents.some(event=>event.kind==='Overload'),'native mana reservation emits overload');
       receipt.toggles.push({slot,name,tick:frame.snapshot.ticks,maximumMana:player().combat.maximum_mana,
@@ -205,6 +209,7 @@ async function pauseNotice(key,text,afterAnnouncement,name,{resume=true}={}) {
   } catch(error) {
     failure=error;receipt.failure=error.stack;receipt.step=step;
     receipt.failedPlayer=player();receipt.failedSecondary=secondary();
+    receipt.failedHost=frame?.host;receipt.failedRun=frame?.snapshot.run;
     if(page){receipt.failedUi=await ui.readUi(page).catch(error=>({error:error.message}));await shot('failure').catch(()=>{});}
   } finally {
     if(page)try{await ui.settleErrors(page);assert.deepEqual(observed.errors,[]);assert.deepEqual(receipt.errors,[]);}
