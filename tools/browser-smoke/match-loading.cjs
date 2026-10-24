@@ -1,10 +1,9 @@
-// Hold an actual host admission, then close that transport and retry through Title.
+// Hold an actual host admission, then close that transport and retry the same draft.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(process.env.PW);
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
-const {startNewGame} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
 const output = path.resolve(process.env.OUT);
@@ -57,8 +56,12 @@ let armed = false, held, page, step = 'ordinary startup';
     await ui.ready(page);
     if (ui.findWidget(await ui.readUi(page), 'prompt-secondary')) await ui.click(page, 'prompt-secondary');
     await ui.click(page, 'play');
-    armed = true;
     await ui.click(page, 'new-game');
+    await ui.surface(page, 'create');
+    await ui.fill(page, 'create-name', 'Lucian');
+    await ui.click(page, 'element:air');
+    armed = true;
+    await ui.click(page, 'discipline:arcane');
     step = 'held actual native Welcome';
     await ui.waitForUi(page, state => held?.welcome && state.inputScope === 'match-loading'
       && ui.findWidget(state, 'match-loading:label'), 'real host Welcome held behind the visible loading screen');
@@ -93,20 +96,23 @@ let armed = false, held, page, step = 'ordinary startup';
     await ui.assertGpuOnly(page);
     step = 'declared transport failure and ordinary retry';
     await closeHeld();
-    await ui.surface(page, 'title');
+    await ui.surface(page, 'create');
     await ui.noWidget(page, 'match-loading:label');
     await ui.value(page, 'runtime:status', faultReason);
+    await ui.value(page, 'create-name', 'Lucian');
     await page.setViewportSize({width:1600,height:900});
     await page.screenshot({path:path.join(output, 'loading-connection-error.png')});
-    receipt.checks.push('the declared real transport interruption retires loading and restores Title with its actual reason');
-    await startNewGame(page, {name:'Lucian', element:'air', discipline:'arcane'});
+    receipt.checks.push('the declared real transport interruption retires loading and restores the same Create draft with its actual reason');
+    await ui.click(page, 'discipline:arcane');
+    await ui.waitForUi(page, state => state.surface==='hidden'&&!state.inputScope
+      &&state.acceptedSelection?.name==='Lucian', 'ordinary retry accepts the actual wizard');
     assert.equal(receipt.admissions.length, 1);
     await ui.noWidget(page, 'match-loading:label');
     await ui.noWidget(page, 'runtime:status');
     await page.keyboard.press('Escape');
     await ui.click(page, 'leave');
     await ui.surface(page, 'title');
-    receipt.checks.push('ordinary retry completes College admission, Create and a saved Leave');
+    receipt.checks.push('ordinary retry completes the same Create draft, College admission and a saved Leave');
     assert.deepEqual(receipt.styleErrors, [], 'loading label and progress follow the pinned Source geometry');
     receipt.checks.push('desktop, phone and wide loading label line boxes and tracks match Source geometry');
     receipt.passed = true;
