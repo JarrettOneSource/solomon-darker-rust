@@ -251,5 +251,26 @@ mod tests {
         pass(&ctx, &mut navigation, "menu", Vec::new());
         pass(&ctx, &mut navigation, "menu", vec![key(egui::Key::Tab)]);
         assert_eq!(ctx.memory(|memory| memory.focused()), Some(Id::unique("outside-menu-control")));
+
+        pass_kind(
+            &ctx,
+            &mut navigation,
+            "menu",
+            vec![egui::Event::Key {
+                key: egui::Key::ArrowRight,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            true,
+        );
+        pass(&ctx, &mut navigation, "menu", Vec::new());
+        let (first, second) = pass(&ctx, &mut navigation, "menu", Vec::new());
+        assert!(
+            first.has_focus(),
+            "a controller re-enters through the menu's real preferred control"
+        );
+        assert!(!second.has_focus());
     }
 }
