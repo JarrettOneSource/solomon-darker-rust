@@ -237,10 +237,8 @@ impl MenuUi {
         // Retained Settings paint in the scene behind routing; active Settings use the modal.
         Some(if self.routing.active() { scene_layer() } else { overlay_layer() })
     }
-    pub fn discard_gameplay_keys(&mut self) {
-        if self.screen == Screen::Hidden {
-            self.keyboard.set_gameplay_enabled(false);
-        }
+    pub fn set_gameplay_keys_enabled(&mut self, enabled: bool) {
+        self.keyboard.set_gameplay_enabled(enabled);
     }
     pub fn settings_open(&self) -> bool {
         self.screen == Screen::Settings
