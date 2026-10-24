@@ -114,6 +114,12 @@ pub(crate) fn interact_unstyled(
     response
 }
 
+#[derive(Clone, Copy)]
+struct FocusObservation {
+    pass: u64,
+    focused: bool,
+}
+
 /// Native controls take pointer focus and reveal a newly focused control in its scroller.
 pub(crate) fn native_control_focus(response: &Response) {
     if response.enabled()
@@ -123,7 +129,21 @@ pub(crate) fn native_control_focus(response: &Response) {
     {
         response.request_focus();
     }
-    if response.enabled() && response.gained_focus() {
+    let focused = response.enabled() && response.has_focus();
+    let pass = response.ctx.cumulative_pass_nr();
+    let newly_focused = response.ctx.data_mut(|data| {
+        let id = response.id.with("native-control-focus");
+        let previous = data.get_temp::<FocusObservation>(id);
+        data.insert_temp(id, FocusObservation { pass, focused });
+        // Cardinal navigation assigns focus at end_pass, so gained_focus never
+        // reaches its next Response. Observe the actual owner across paints.
+        focused
+            && !previous.is_some_and(|previous| {
+                previous.focused
+                    && (previous.pass == pass || previous.pass.checked_add(1) == Some(pass))
+            })
+    });
+    if newly_focused {
         response.scroll_to_me_animation(None, egui::style::ScrollAnimation::none());
     }
 }
