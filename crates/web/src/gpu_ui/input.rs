@@ -94,11 +94,19 @@ impl InputQueue {
         modifiers: Modifiers,
         touch: bool,
     ) {
-        let pressed = matches!(phase, TouchPhase::Start);
-        self.events.push(UiEvent::PointerButton { pos, button, pressed, modifiers });
-        if touch && !pressed {
-            self.primary_touch = None;
+        if matches!(phase, TouchPhase::Cancel) {
+            self.events.push(UiEvent::PointerCancelled);
             self.events.push(UiEvent::PointerGone);
+            if touch {
+                self.primary_touch = None;
+            }
+        } else {
+            let pressed = matches!(phase, TouchPhase::Start);
+            self.events.push(UiEvent::PointerButton { pos, button, pressed, modifiers });
+            if touch && !pressed {
+                self.primary_touch = None;
+                self.events.push(UiEvent::PointerGone);
+            }
         }
         self.finish_dispatch();
     }

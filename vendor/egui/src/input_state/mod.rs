@@ -969,6 +969,7 @@ impl Click {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) enum PointerEvent {
     Moved(Pos2),
+    Cancelled,
     Pressed {
         position: Pos2,
         button: PointerButton,
@@ -1215,6 +1216,17 @@ impl PointerState {
                     }
 
                     self.down[button as usize] = pressed; // must be done after the above call to `could_any_button_be_click`
+                }
+                Event::PointerCancelled => {
+                    self.down.fill(false);
+                    self.press_origin = None;
+                    self.press_start_time = None;
+                    self.press_click_count = 0;
+                    self.latest_pos = None;
+                    self.interact_pos = None;
+                    self.pos_history.clear();
+                    self.pointer_events.push(PointerEvent::Cancelled);
+                    clear_history_after_velocity_calculation = true;
                 }
                 Event::PointerGone => {
                     self.latest_pos = None;

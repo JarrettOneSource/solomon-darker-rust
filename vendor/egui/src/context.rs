@@ -1828,6 +1828,10 @@ impl Context {
             for pointer_event in &input.pointer.pointer_events {
                 match pointer_event {
                     PointerEvent::Moved(_) => {}
+                    PointerEvent::Cancelled => {
+                        res.flags.set(Flags::IS_POINTER_BUTTON_DOWN_ON, false);
+                        res.flags.set(Flags::DRAGGED, false);
+                    }
                     PointerEvent::Pressed { .. } => {
                         any_press = true;
                     }

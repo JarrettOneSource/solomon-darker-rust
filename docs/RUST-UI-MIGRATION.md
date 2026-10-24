@@ -261,6 +261,23 @@ these results with errors[]; its artifact record pins the compiled JS/WASM and s
 The owned probe browser/server are closed. This is renderer acceptance, separate from
 the composed authored/session-reset journeys and final publication gates.
 
+## Native pointer cancellation
+
+The integration read-through found `BrowserInput` mapping native `pointercancel` to
+`PointerButton { pressed:false }`. In egui0.37 that ordinary release creates a click
+when the preceding press is short and stationary; the following PointerGone removes
+hover but does not cancel that click. This can activate an actual GPU button on a
+cancelled touch. [Pointer Events3 suppression](https://www.w3.org/TR/pointerevents3/#suppressing-a-pointer-event-stream)
+ends the native pointer stream and capture; it is distinct from a successful release.
+
+The production native boundary projection now emits explicit `Event::PointerCancelled`
+and the real pointer disappearance. Egui clears its button state, potential click/drag
+owners, coordinates and velocity without a release/click; raw TouchPhase::Cancel remains
+available to actual touch owners. Secondary touches retain their existing primary-touch
+admission. Native Context regressions cover a short cancellation, active drag retirement,
+multi-button mouse cancellation and subsequent genuine tap/double-click behavior. The
+root owns the original short-touch red and final canonical checks.
+
 ## World notifications recovered before repair
 
 The visual-producer inventory found `crates/web/src/loot/messages.rs` still constructing
