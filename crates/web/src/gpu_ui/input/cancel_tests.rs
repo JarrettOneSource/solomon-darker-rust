@@ -117,7 +117,13 @@ fn cancelled_native_touch_never_activates_a_real_button() {
 fn cancelled_native_drag_retires_its_real_context_owner() {
     let ctx = controls();
     native(&ctx, TouchPhase::Start, pos2(30.0, 115.0));
-    assert!(native(&ctx, TouchPhase::Move, pos2(75.0, 115.0)).dragging);
+    for x in [45.0, 60.0, 75.0] {
+        assert!(native(&ctx, TouchPhase::Move, pos2(x, 115.0)).dragging);
+    }
+    assert!(
+        ctx.input(|input| input.pointer.velocity().length()) > 0.0,
+        "the actual drag has motion to retire, rather than an already-zero velocity"
+    );
     assert_eq!(ctx.dragged_id(), Some(Id::unique("cancel-drag")));
     let ended = native(&ctx, TouchPhase::Cancel, pos2(75.0, 115.0));
     assert!(!ended.clicked && !ended.dragging);
