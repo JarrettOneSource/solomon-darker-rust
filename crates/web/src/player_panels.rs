@@ -478,7 +478,12 @@ impl PlayerPanels {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("player-panels"))
     }
     pub fn layer_ids(&self) -> Vec<egui::LayerId> {
-        chrome::book_layers(self.layer_id(), self.compact, self.skill_book_feedback.layer_id())
+        chrome::book_layers(self.layer_id(), self.compact)
+    }
+    /// The restored Source NativeUiDialog occupies the native top-layer plane.
+    /// Its receipt-scoped identity records each actual opening independently.
+    pub fn skill_book_result_layer_id(&self) -> Option<egui::LayerId> {
+        self.skill_book_feedback.layer_id()
     }
     /// Source attaches the NPC notebox directly to the viewport, outside the book.
     pub fn notebox_layer_id(&self) -> egui::LayerId {

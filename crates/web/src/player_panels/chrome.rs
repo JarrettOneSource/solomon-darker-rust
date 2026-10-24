@@ -830,11 +830,7 @@ pub(super) fn dragger_layer_id() -> egui::LayerId {
     egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("panel-dragger"))
 }
 
-pub(super) fn book_layers(
-    body: egui::LayerId,
-    compact: bool,
-    book_result: Option<egui::LayerId>,
-) -> Vec<egui::LayerId> {
+pub(super) fn book_layers(body: egui::LayerId, compact: bool) -> Vec<egui::LayerId> {
     let mut layers = vec![body, belt_effects_layer_id()];
     if !compact {
         layers.push(super::skills::tooltip_layer_id());
@@ -851,7 +847,6 @@ pub(super) fn book_layers(
         modal_layer_id(super::notices::NOTICE_MODAL_SCOPE),
         super::sack_rename::layer_id(),
     ]);
-    layers.extend(book_result);
     layers
 }
 
@@ -951,7 +946,7 @@ mod tests {
                 dragger_layer_id(),
                 super::super::viewport::navigation_layer_id(),
             ];
-            ctx.set_fixed_layer_order(&book_layers(body, compact, None));
+            ctx.set_fixed_layer_order(&book_layers(body, compact));
             let output = ctx.run_pass(egui::RawInput::default(), |ctx| {
                 // Deliberately paint in reverse registration order. These are
                 // genuine passive GPU painters, just like trailing item images.
