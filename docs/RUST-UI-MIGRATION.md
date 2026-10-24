@@ -1,5 +1,14 @@
 # Rust GPU UI migration
 
+The application layer registry follows the actual c140 body append/context ownership,
+with native inner geometry retained from fa08. `match-loading-screen.css` gives the
+body-mounted transition z200000 and toggles child visibility directly after its owned
+delay; it has no additional Area fade. The original `#status` in `web/index.html` has
+auto z and is passive, below positive document contexts. Native Boneyard notices remain
+inside the world below the HUD; Hub book notices are their separate z45 body stage.
+Registered paint, pointer/modal comparison and controller scope must use the same native
+layer comparator. A late painter callback must not override a higher Source scope.
+
 Acceptance target: all visible game UI is authored by Rust and submitted as GPU geometry,
 textures and text. The behavioral reference remains Website `fa08ae249ff5563570bdb2a653e2ef9358ce7b83`
 and the recovered retail evidence it cites. Existing simulation fixtures keep their actual
@@ -119,6 +128,156 @@ function and matches the retained Hub-region fixture. Actual `58df78d` observes 
 Office target with transition `-1`. Acceptance must assert that completed arrival exactly,
 without broadening a tolerance or adding a fixed settling delay.
 
+## GPU color-filter contract
+
+Pinned Website `fa08ae24` uses image filters as interaction state, including
+`main-menu.css` skull `brightness(1.28)` and name-die `brightness(1.25)`,
+`hall-of-fame.css` row-toggle `brightness(1.35)` with 120ms ease-out, and
+`native-ui/native-ui-settings.css` row hover/focus `brightness(1.16)` and disabled
+`saturate(0.35) brightness(0.62)`. The pre-migration Rust CSS additionally retains
+native-button focus `brightness(1.2)` and Create glyph hover/focus `brightness(1.3)`.
+These values belong to their feature controllers; the shared material supplies the
+filter operation. The existing byte vertex tint cannot express RGB gain above 1, and
+the Arena's separate arithmetic-average saturation is a different operation.
+
+The [Filter Effects 1 specification](https://drafts.csswg.org/filter-effects/)
+defines these CSS functions in sRGB, on non-premultiplied color, with each result
+clamped. The GPU material applies saturation using the specified .213/.715/.072
+matrix, then brightness, before the renderer's blend premultiplication. Alpha is
+preserved. Direct GPU text/outline colors use the same operation through
+`UiFrame::filtered_color`; bitmap text and stock images inherit the scoped material.
+Descriptors are shared through one UI frame's ordered passes and retired at its next
+begin, so animated gains allocate no additional textures or persistent descriptors.
+
+`tools/browser-smoke/gpu-color-filter.cjs` compiles the canonical Rust shader unchanged
+and compares its pixels to native Canvas color filtering. Six cases pass, including
+gain above 1 on translucent pixels, disabled-row saturation/brightness, CSS luminance,
+black/identity alpha and restoration of the ordinary world shader path. The previous
+shader fails the first case by 31 channel bytes. These focused shader results do not
+establish feature-controller wiring or composed hover/focus appearance; those remain
+part of the menu owner's actual browser acceptance.
+
+The Create name die also retains Source `drop-shadow(0 1px 1px #000)` with outer
+opacity 0.78, changing to `brightness(1.25)` and a gold `drop-shadow(0 0 3px .../0.55)`
+on hover. Its offsets and Gaussian sigma are design-stage units, independent of the
+art's 0.525 scale. `StockAtlas::paint_shadowed` submits one padded quad: the shader
+convolves only the selected record's alpha, composites the filtered source over that
+shadow, then applies group opacity. Sampling clamps to the record's texel centers and
+returns transparent outside its bounds, preventing neighboring atlas records from
+entering the blur. It creates no additional texture or persistent effect cache.
+The canonical-shader probe now passes sixteen cases, including an asymmetric mirrored crop.
+Native idle/hover shadow comparisons differ by at most 5/2 channel bytes; the exact
+group-opacity case differs by at most 1 and the mirrored-offset case by at most 6.
+These Gaussian cases allow the specification's finite-kernel implementation variance;
+the original source without a shadow material fails the atlas-isolation case by 199.
+
+The retained authored-enemy producer applies its filter and outer opacity to the whole
+root: the background sprite, name span and health rail. Rust `c14068b3`
+`mod_world_overlays.rs:183–188,205` and `mod-world.css` establish that boundary. Its
+original sources are pinned `mod-ui/ModEnemies.tsx:58,73–74` and `mod-enemies.css`.
+blur is `max(light_radius/10,4)`; the name also has two black text shadows. CSS filter
+drop-shadow takes Gaussian sigma directly; text-shadow uses half its blur radius,
+so the name's 2/3px text shadows use sigma1/1.5. A sprite-only filter does not reproduce
+that source group.
+
+`UiFrame::paint_group` captures the submitted GPU geometry, including managed font tiles,
+into a bounded reusable target. Nested name shadows compose before the parent enemy
+shadow and outer opacity. The depth-indexed pool reuses source/composite targets across
+frames and destroys them with the painter. It clips after the filter while preserving
+outside source pixels that contribute to the visible blur. Graphics uses standard
+SourceOver alpha only within these captures, unpremultiplies target samples once, and
+restores the enclosing framebuffer, projection and native canvas blend factors. No
+HTML/control rasterization is involved. The small graphics `composition_probe` example
+and `gpu-composition.cjs` exercise the actual renderer's nesting and hand-derived pixels;
+the original composition probe passes all framebuffer/projection and pixel checks.
+The authored producer proof remains pending its matched runtime artifact.
+
+Enemy names and authored shop labels request Alegreya600. Pinned `main.tsx` imports
+only its400/500/700 faces, so `Alegreya Semibold` keeps that native CSS600 request
+against the same loaded faces. A browser font-only probe confirms its glyph pixels
+and width exactly match700 and differ from500. No new face or startup resource is added.
+
+Pinned `ModSpellEffects.tsx` and `mod-spell-effects.css` also distinguish rounded
+border-box shadows from sprite alpha shadows. The area uses an opaque circular caster,
+18px blur radius and #9760ee/0.65; the channel uses its rotated rounded capsule,
+12px blur radius and #a670ff/0.75. Gaussian sigma is9/6 respectively. Outer box-shadow
+clips its blurred caster from the original border-box interior, even when that box's
+own gradient is transparent. The existing group capture can supply these opaque GPU
+casters; its shadow-only output needs that interior knockout before the pulse's outer
+opacity. Epaint's filled, linearly feathered `Shadow` does not implement this contract.
+`UiFrame::paint_outer_shadow` captures that opaque GPU geometry in the same target pool
+and emits only blurred alpha times inverse original alpha. The native circle/capsule
+comparisons pass with maximum channel differences3/2 and exact zero interior alpha;
+the prior shader paints unwanted interior alpha10 in the circle case. The actual Rust
+renderer probe passes typed outer/inset modes and normal-draw restoration. Group markers
+retain their opacity0 parent even when
+egui would discard an ordinary shape at that opacity, preventing child geometry escape.
+
+The observer's pinned `developer-observer.css` adds outer0/8/30px and inset0/0/24px
+black box shadows. `paint_inner_shadow` uses the same opaque caster capture and Gaussian,
+emitting caster alpha times inverse blurred caster alpha. Its padding-box caster and
+clip exclude the1px border; outer shadows precede the background, inner shadows follow
+it and precede border/content, as specified by [CSS Backgrounds3](https://www.w3.org/TR/css-backgrounds-3/#shadow-shape).
+The offset outer rectangle and inset comparison differ by at most7/2 channel bytes,
+with exact zero unwanted interior/exterior alpha. The prior shader differs by223 in
+the inset case. There is one blur kernel, target pool and texture owner for these effects.
+
+Pinned `c14068b3:web/shared-gameplay.css` adds positive spread to the pause and resume
+shadows: `0 0 24px 8px #000` and `0 0 28px 10px #000`, beneath a separate
+`0 0 0 2px #57451f` ring. Their backgrounds remain translucent. The expanded border-box
+casts the blur, but the original unexpanded border-box clips its interior. A single
+expanded caster used for both cannot preserve that contract. The shared GPU operation
+captures expanded opaque geometry, reuses the existing Gaussian, then destination-out
+erases the independent original opaque geometry before final group opacity. Native
+caster/knockout layout and actual Renderer pixel/lifetime checks qualify this path;
+the composed shared-pause/resume producer remains Social-owned.
+
+The same pinned `web/mod-skill-quickbar.css` requires `image-rendering: pixelated` for
+its contain-fitted icons. Verified authored world textures remain LINEAR and borrowed
+by the UI, so changing those texture parameters would alter their world rendering.
+A renderer-owned WebGL2 sampler supplies NEAREST for the individual UI draw and restores
+the previous sampler afterward. The texture identity, upload count, owner and original
+filter/wrap parameters stay unchanged. Material keys include the draw sampler choice.
+
+A native long-edge probe additionally exposed under-sampling in the earlier19×19
+sigma-spaced Gaussian: the pause-scale160px edge at sigma12 produced four-pixel
+plateaus and a maximum19-byte alpha difference from native Canvas blur. The original
+receipt is retained in `gpu-large-shadow-red/`. Large UI shadows now use horizontal and
+vertical dense Gaussian alpha passes through the same canonical shader, then the same
+Source/outer/inset/spread composition. The two additional targets are allocated lazily,
+reused by group depth and destroyed with the existing pool. Large atlas shadows enter
+that shared group path; small physical sigmas retain their qualified fast path.
+
+The unchanged native-shader reference drops this long-edge difference to4 bytes, with
+smooth single-pixel progression and glError0 (`gpu-large-shadow-shader-green/`). All16
+prior shader/material/crop cases still pass. The actual Rust Renderer probe also checks
+scale1/2, inverted target UVs and an oversized reused target containing opaque pixels
+outside the admitted crop. That compiled probe passes on62f835b with maximum4-byte alpha
+differences at sigma12/24. The same run proves per-draw NEAREST versus restored LINEAR,
+unchanged world texture filter/wrap parameters and sampler deletion; spread interior
+alpha0, retained halo, antialias premultiplication, nested capture/blend restoration and
+visible underlying pixels are exact. `gpu-final-composition-native/receipt.json` records
+these results with errors[]; its artifact record pins the compiled JS/WASM and source.
+The owned probe browser/server are closed. This is renderer acceptance, separate from
+the composed authored/session-reset journeys and final publication gates.
+
+## Native pointer cancellation
+
+The integration read-through found `BrowserInput` mapping native `pointercancel` to
+`PointerButton { pressed:false }`. In egui0.37 that ordinary release creates a click
+when the preceding press is short and stationary; the following PointerGone removes
+hover but does not cancel that click. This can activate an actual GPU button on a
+cancelled touch. [Pointer Events3 suppression](https://www.w3.org/TR/pointerevents3/#suppressing-a-pointer-event-stream)
+ends the native pointer stream and capture; it is distinct from a successful release.
+
+The production native boundary projection now emits explicit `Event::PointerCancelled`
+and the real pointer disappearance. Egui clears its button state, potential click/drag
+owners, coordinates and velocity without a release/click; raw TouchPhase::Cancel remains
+available to actual touch owners. Secondary touches retain their existing primary-touch
+admission. Native Context regressions cover a short cancellation, active drag retirement,
+multi-button mouse cancellation and subsequent genuine tap/double-click behavior. The
+root owns the original short-touch red and final canonical checks.
+
 ## World notifications recovered before repair
 
 The visual-producer inventory found `crates/web/src/loot/messages.rs` still constructing
@@ -186,6 +345,42 @@ Confidence is high for this complete pinned-source contract and the cited recove
 geometry/lifecycle. Unknown until measured: composed GPU glyph clipping/blending, actual
 earned-event browser visibility and live hosted event delivery. The source fixture and
 renderer/controller checks pass; integrated production-event browser proof remains required.
+
+## Scaled GPU hit geometry
+
+Pinned `GameHud.tsx:249–258` places the HUD under its viewport/UI scale;
+`hub.css:1097–1114,1298` gives the phone Inventory and Skills controls their
+130px local bounds and custom transforms. The actual pointer target follows
+that painted transform. On24382f0, the ordinary844×390 touch journey completes
+College and Create, then its first visible Inventory tap never opens the book.
+`record_rotated_rect` records globally transformed rectangular bounds but retains
+local center/size in the exact rotated shape. Touch ownership tests a global
+point against that local shape and drops the event; mouse dispatch does not
+have that ownership admission requirement. The shape must use the same layer
+translation and uniform scale as its bounds, while preserving local rotation
+and rejecting points outside the rotated rectangle. The native regression
+covers the visible center, an interior edge and an exterior point under both
+zero and45-degree rotation. Actual tap and responsive family proof remain
+required; no larger rectangular hit fallback is permitted.
+
+## HUD and Social layer lifetime
+
+Established Rust `c14068b3` places `.game-hud` at z-index10 and `.game-social`
+at60, with only their children accepting pointer input. On5f87eb2 a fresh
+College Party click works, but opening Inventory, closing it with Escape and
+waiting for the actual book surface to disappear permanently blocks that
+same Party control. The native `native-party-book-only-5f` receipt isolates
+the failure without Chat and without browser errors. Holding pointer down
+across frames still fails. The initially suspected same-dispatch Social
+mutation was not the demonstrated cause and its candidate change was removed.
+
+HUD disappears while the book covers it; egui raises its full-viewport Area
+when it reappears. Paint-call order alone therefore lets it cover Social.
+The real HUD layer owner supplies its identity to Social, which explicitly
+orders its ally, Party and collapsed-chat layers above it. The Context
+regression repeats the actual hide/reappear and pointer sequence, preserving
+the unlinked negative control. Browser acceptance must repeat the original
+book/Chat/Party journey on the combined build.
 
 ## Acceptance matrix
 
@@ -276,15 +471,6 @@ weaker checkpoint assertion substitutes for it. The actual save and GPU snapshot
 preserved, and the three independent media aborts remain fatal. A second seed was not
 attempted after this bounded failure.
 
-The repaired exact-save edge and browser close owner are now verified together by the
-complete `common-browser/88c3dfe/boneyard-stdio-fixed` rerun: two independently generated
-named worlds, native source/geometry, textured scenery, inward movement, Pause freeze,
-Leave/Continue, exact subsequent paused checkpoint and the same wizard/run/seed all pass.
-Both current-art world/HUD screenshots were reviewed. The process gate also passes:
-Playwright disconnects, owned Chrome exits zero gracefully, cleanup errors are empty and
-the driver exits zero without forced termination. Earlier 58df save failure and both 88
-teardown failures remain unchanged as the retained red evidence.
-
 Family evidence is likewise qualified. `menu-runtime-58df78d/hall` passes its actual
 journey with no browser errors; reviewed native/compact screenshots prompted a header
 gradient/border source correction awaiting rebuild. Settings bindings pass, while real
@@ -340,6 +526,55 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | Three actual recovery branches pass/errors[]/graceful exit0: changed58→243 (deployment-changed-58-to-243-r2), same game243/Website6ad, and sleeping sequence4→5; checkpoint/ACK/retirement/negative publications/automatic replacement/Continue witnesses retained; packaged/update-notice variants remain separate pending gates |
 | Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | 88c3dfe named/rapid smoke clean; 58df common input clean/exact8/8; 24382f0 audio clean; f41dc57 HUD touch/controller/blur/cancel/label/resource reuse and phone first-Equip clean. native-editor-f41dc57-qualified-r2 passes Arabic/ZWJ/bidi/weak caret, OS clipboard/undo, native browser IME and UTF16 Enter-save/errors[]/Chrome0, qualified as Chromium Input-domain IME emulation without hardware candidate-window proof. Remaining common/family reruns pending |
 | No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Precise source producer contract4/4 passes, retaining only bounded native platform/font/a11y adapters; complete runtime surface/input proof remains pending |
+
+## Saved-session startup allocation
+
+Ordinary saved Sack and College reloads on58df78d trap first inside the generated
+`PlayerState` JSON deserializer, before later loader diagnostics encounter the damaged stack.
+The natural save, browser IndexedDB state and first stack are retained under
+`reload-58df78d/` and `hud-browser-58df78d/sack-reload-witness/` in the task evidence.
+The actual WASM prologues reserve525,760 bytes for `Game::load` and311,248 for `run`
+before decoding; player deserialization adds66,992 bytes and its map visitor another100,368,
+plus the containing save/participant frames. These overlap the unchanged1 MiB stack.
+
+Resource construction and saved-session admission must be sequential lifecycle phases.
+The constructor returns the permanent shared Game owner; saved-state parsing runs after
+resource-constructor temporaries retire. Simulation/save structures, validation, defaults
+and the WASM stack configuration retain their existing contracts. Real reload/Continue
+with the naturally generated save is the regression witness; a compile alone is insufficient.
+
+## Ordered UI dispatch
+
+The actual rapid Cloud Sort→row double-click journey exposed a separate installed
+egui0.37 count mismatch. Its click counter checks distance only to the latest click,
+then classifies a triple from two prior timestamps even when the first click was far
+away. The native Context regression confirms row counts1,3 instead of browser1,2.
+The browser already supplies the correct click series in the canvas `click.detail`
+event used by native editor selection. That receipt belongs to the preceding actual
+pointer-release dispatch; preserving it beside that dispatch lets row double activation
+retain the real Response hit/enabled result without accepting genuine triples as doubles.
+
+The actual Settings binding journey reproduced a binding click followed by Escape being
+interpreted in reverse order. The shared GPU batch previously handled every queued key before
+resolving pointer clicks, and `Game::frame` consumed typed HUD/panel actions before the GPU
+pass produced them. This also delayed opening Inventory until after a following Escape.
+The Source's browser callbacks commit each event before dispatching the next event.
+
+`GpuUi` now separates ordered input/layout commits from the final GPU submission. The Game
+owner commits controller actions and refreshes accepted-state models between those batches;
+transport polling, physical gameplay sampling and fixed simulation advancement retain one
+owner per browser frame. World rendering precedes the final UI draw. Texture upload/retirement
+is finalized even when a controller fails. Returning to the editor stops later queued input
+and gameplay work in the same frame while still retiring pending textures. Observer and
+deployment barriers retain their read-only/held semantics. The binding/text-focus batch regressions and actual rapid
+Settings/HUD journeys qualify this seam; the latter remain pending the combined rebuild.
+
+The ordinary58df78d Boneyard journey preserved world entry, movement, Pause/Leave and
+Continue, then exposed a local durability regression on its second Escape: live tick2923
+but saved tick2910. `MenuUi::paint` can open Pause before its typed-action commit, so sampling
+the old blocking state inside that commit misses the edge. The Game owner now captures
+that state before each input pass, preserving the existing local pause-save contract.
+The exact completed-save assertion remains the acceptance check; no timing tolerance is added.
 
 ## Test ownership and stopping checks
 
@@ -557,6 +792,20 @@ art covers the prior label's final glyph. Established `web/menu.css:108–110` a
 native labels z-index 1, above the sibling button chrome. Preserve that by painting the
 bar's stock art first, then its real native labels; keep the existing interaction owners.
 
+The ordinary paid Sack journey in `native-editor-f41dc57-qualified-r2` passes on
+f41dc57 with no unexpected browser errors and an owned Chrome exit of zero. The
+reviewed GPU screenshots show joined Arabic, a ZWJ emoji and combining mark, two
+disjoint mixed-direction selection rectangles, and the complete native IME preedit
+underline while its caret is inside the preedit. Real pointer/keyboard input also
+proves weak bidi caret placement, native arrow selection changes, synchronous OS
+copy/cut/paste, separate undo transactions, the UTF-16 boundary and one Enter rename.
+IME input uses Chromium's native Input protocol, rather than an application event;
+an unchanged native textarea oracle produces the same untrusted composition-end
+event for protocol commit. This proves browser IME integration, not an OS hardware
+candidate window. The earlier failed trust assertion and stale-frame caret assertion
+remain in their original receipts; the final driver waits for the actual painted
+caret without repeating input or changing product behavior.
+
 The following f41dc57 phone continuation passes the hat warning and Skills but misses
 Fomentius with its ordinary world tap. `responsive-source-warning/phone-world-entry-failure.json`
 retains wizard position (1358.58,728.51), requested canvas point (455.11,202.8), no dialogue,
@@ -616,6 +865,14 @@ ordinary Title YES admission in fresh contexts, preserve the actual intro/save/r
 check the full painted glyph bounds at native and phone landscape sizes, then send real
 keyboard/joystick movement and require the lesson to disappear with accepted displacement.
 Later combat, Inventory/Skills and potion-stage callouts remain separate required gates.
+The retained 58df teacher census failure is a driver ordering error: it stops at
+Regenerate (79), the fifth Source row, and then requires eight observed rows.
+Unchanged fa08 `native-hub-npc.ts::NATIVE_TEACHER_SPELLS` returns the authored order
+72,73,74,75,79,78,77,76, matching the Rust catalog exactly. The driver now traverses
+through Call Comet (76), the actual eighth row, before requiring all eight. It
+keeps real Tab scrolling, full-row visibility, purchase rejection, reopening and
+all 26 librarian rows/one-shot Lace removal. No product catalog or focus behavior
+changes to accommodate the stale target; the original five-row failure remains.
 
 The actual f41dc57 Tutorial entry passes both input contexts, retained intro/Sirmin/run,
 four native/phone lesson layouts and real movement acknowledgement, with errors[] and
@@ -702,3 +959,44 @@ seeds both the modal and notification cursors without replay. The genuine choice
 still opens its offer. Both contexts settle errors[] and Chrome exits zero gracefully.
 This explicitly covers Source-produced inventory imported through the real File chooser,
 not a naturally earned rank-book drop.
+Book layer recovery also retains actual nesting. c140 `player-panels.css` places
+belt effects4, tooltip8, flybys9 and dragger10 inside the transformed stage;
+`viewport.rs:129–132` reparents compact tooltips to the book root, before fixed
+navigation10. Active flight/drag suppresses tooltip, but trailing afterimages can
+coexist with a tooltip or new drag. Separate actual passive GPU painters preserve
+those overlaps: wide tooltip is below afterimages, while a compact portaled tooltip
+is above the stage and below navigation. All remain in body book30. The native
+regression drains the real graphics layers in both layouts, independently of paint
+registration order; Source afterimage lifetime and interaction admission stay intact.
+
+The retained f41 first-controller-B failure at `ARCH_Q1_0` loses focus but leaves
+the dialogue open. Its producer projects browser key codes only; controller Back
+is a genuine egui Escape without a browser KeyboardEvent. c140
+`PlayerPanels::update:909–910` explicitly routes the old navigation back result
+into `self.back`. The GPU adapter now consumes that genuine Escape through the
+same typed panel-key owner once, deduplicates physical Escape and retains repeat,
+suspension, modal and rename admission. QA keeps the original first-B journey;
+no second press or timing replacement establishes acceptance.
+
+Create rejection retains native value-restoration semantics as well as its text.
+c140 `menu/create.rs:216` restores the accepted input value after a rejected edit.
+The trusted native-input oracle in `native-name-rejection-oracle.json` inserts an
+unsupported hyphen at UTF-16 position1 after accepted `HelvidiusX`: restoration
+moves the caret to10, and subsequent native Undo/Redo retain that accepted value.
+The Rust editor now restores end selection and retires editing/composition history
+on the same rejecting validator boundary. Readonly and ordinary UTF-16 capacity
+admission keep their distinct existing contracts. A focused model regression pins
+accepted text, caret and undo/redo together; no renderer or validation policy changes.
+
+Native input and drawing share the browser's default document timeline. The ceb3a17
+paid-Sack, Settings and native-session journeys independently reproduced an egui
+history panic when a native dispatch used `performance.now()` immediately before a
+requestAnimationFrame callback with an earlier animation timestamp (17.7676 versus
+17.7644 seconds in the Sack receipt). Their original errors and browser cleanup are
+retained under `native-editor-ceb3a17`, `menu-runtime-ceb3a17/settings` and
+`native-session-gpu-ceb3a17`. The [Web Animations timing model](https://www.w3.org/TR/web-animations-1/#document-timelines)
+keeps the active document timeline monotonic, and its default timeline equals the rAF
+callback timestamp. Native UI dispatch therefore reads `document.timeline.currentTime`;
+an inactive document has no UI time to commit. Game simulation retains its existing
+rAF clock. This repairs the shared clock source without clamping time or hiding failures.
+The composed red journeys and held-rAF clipboard proof must pass on the rebuilt artifact.
