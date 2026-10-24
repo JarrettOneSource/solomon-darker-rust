@@ -616,6 +616,23 @@ HUD handed the bounded Tutorial announcement edit to acceptance; foundation hand
 the disjoint canonical accessibility batching seam to acceptance. Actual lesson
 announcements and unchanged-batch silence must pass on the rebuilt artifact.
 
+Fixed GPU application ordering follows actual c14068b3 append/context ownership;
+pinned fa08 supplies native inner behavior/styles. `source-ui-stack.md` in the task
+records the accepted registry. Tutorial's current bodyz40 root appends prelude,
+instructions, callouts and pointers in that order (`tutorial.rs:112–118`), so its one
+canonical painter/getter preserves that whole subtree. Do not import fa08's overlay
+z31000 or sibling modal-callout z31001 as new global application roots. Newly wired
+notifications do have distinct owners: fa08 `BoneyardScene.tsx:1139–1152` mounts its
+z45 notice inside the transformed/isolated native frame, below that frame's HUD10000;
+Hub `MainMenuScene.tsx:2357` / `SkillBookFeedback.tsx:25–30` mounts a separate
+`.skill-book-hub-messages-stage` bodyz45 containing the notice z45. Root's accepted
+registry places Boneyard notices below HUD and Hub notices45 after Tutorial40/before
+menu50. Source numbers are in `loot-message-presentation.css:1–8`,
+`skill-book-feedback.css:9–17` and `hub.css:30–32`. Distinct actual notice IDs/getters
+preserve those owners. Remove the copied obsolete `mod/world` sublayer parent after
+the four-root authored-overlay cutover; the fixed Context registry owns composition.
+Generic egui Order categories do not define this order.
+
 `skill-book-24382f0-entered-notices/receipt.json` now qualifies the full imported-book
 journey in both worlds, including the shipped stock Boneyard fixture. Both OKAY and
 Escape release the independent modal/pause, and each actual accepted +1 reaches native

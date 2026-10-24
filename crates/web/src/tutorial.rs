@@ -131,6 +131,11 @@ pub struct TutorialUi {
     now: f64,
 }
 impl TutorialUi {
+    pub fn layer_id(&self) -> egui::LayerId {
+        // Existing application body z40; all native Tutorial descendants stay here.
+        egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("tutorial-overlay"))
+    }
+
     pub async fn attach(_document: &Document) -> Result<Self, String> {
         Ok(Self { atlas: StockAtlas::load("UI").await?, model: None, viewport: (0, 0), now: 0.0 })
     }
@@ -281,10 +286,7 @@ impl TutorialUi {
         }
         let (callouts, modal_pointers) = modal_plans(view, &targets, view.coarse_pointer);
         pointers.extend(modal_pointers);
-        let painter = frame.ctx.layer_painter(egui::LayerId::new(
-            egui::Order::Tooltip,
-            egui::Id::unique("tutorial-overlay"),
-        ));
+        let painter = frame.ctx.layer_painter(self.layer_id());
         if let Some(intro) = view.intro {
             painter.rect_filled(
                 egui::Rect::from_min_size(

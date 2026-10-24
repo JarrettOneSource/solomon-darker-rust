@@ -40,6 +40,15 @@ struct NotificationState {
 }
 
 impl WorldNotifications {
+    /// Boneyard native-frame z45, then the separate Hub book-message stage z45/45.
+    pub fn layer_ids(&self) -> [LayerId; 2] {
+        [world_notification_layer_id(false), world_notification_layer_id(true)]
+    }
+
+    pub fn layer_id(&self) -> LayerId {
+        world_notification_layer_id(self.state.as_ref().is_none_or(|state| state.run_id.is_none()))
+    }
+
     /// Call with the accepted authority session, once before composing its GPU frame.
     /// Repeated snapshots do not replay events or advance the source clock twice.
     pub fn update(
@@ -155,6 +164,7 @@ impl WorldNotifications {
 
     /// Native full-gameplay coordinates, independent of Inventory/modal stage transforms.
     pub fn paint(&mut self, frame: &mut UiFrame<'_>, ui_scale: f64) -> Result<(), String> {
+        let layer = self.layer_id();
         let Some(state) = self.state.as_mut().filter(|state| state.visible) else {
             return Ok(());
         };
@@ -169,7 +179,7 @@ impl WorldNotifications {
             pos2(viewport.left(), viewport.top() + (50.0 * scale) as f32),
             viewport.right_bottom(),
         );
-        let painter = frame.ctx.layer_painter(notification_layer(frame.ctx)).with_clip_rect(clip);
+        let painter = frame.ctx.layer_painter(layer).with_clip_rect(clip);
         for visual in state.visuals.iter().filter(|visual| visual.alpha > 0.0 && visual.scale > 0.0)
         {
             let baseline =
@@ -230,12 +240,11 @@ impl WorldNotifications {
     }
 }
 
-fn notification_layer(ctx: &egui::Context) -> LayerId {
-    let layer = LayerId::new(Order::Background, egui::Id::unique("world-notifications"));
-    // Source world effects < z45 notices < z10000 HUD. Registering both layers
-    // avoids egui's unordered fallback for non-Area painters of the same order.
-    ctx.set_sublayer(LayerId::new(Order::Background, egui::Id::unique("mod/world")), layer);
-    layer
+fn world_notification_layer_id(hub: bool) -> LayerId {
+    LayerId::new(
+        Order::Background,
+        egui::Id::unique(if hub { "hub-world-notifications" } else { "world-notifications" }),
+    )
 }
 
 #[cfg(test)]
