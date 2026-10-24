@@ -104,11 +104,7 @@ impl Read for PrefixedStream {
 }
 impl Write for PrefixedStream {
     fn write(&mut self, input: &[u8]) -> io::Result<usize> {
-        let result = self.stream.write(input);
-        if input.starts_with(&[0x88, 0]) || input.ends_with(&[0x88, 0]) {
-            eprintln!("native-close-trace write len={} result={result:?}", input.len());
-        }
-        result
+        self.stream.write(input)
     }
     fn flush(&mut self) -> io::Result<()> {
         self.stream.flush()
@@ -255,7 +251,6 @@ pub(super) fn serve_connection(
             return;
         }
         let close = drive_peer(socket, &worker_server, &peer);
-        eprintln!("native-close-trace finish peer={id} detail={close:?}");
         finish_peer(&worker_server, &peer);
         // The bounded channel may block this socket worker, never the authority. Shutdown
         // drops its receiver first, guaranteeing this critical send can finish or fail.
@@ -342,13 +337,6 @@ fn drive_peer(
         if let Some(close) = &closing
             && close.started.elapsed() >= server.config.close_timeout
         {
-            eprintln!(
-                "native-close-trace deadline peer={} queued={} write_pending={} detail={:?}",
-                peer.id(),
-                close.queued,
-                write_pending,
-                close.detail
-            );
             return close.detail.clone();
         }
         if closing.as_ref().is_none_or(|close| !close.queued) {
@@ -403,11 +391,15 @@ fn drive_peer(
                 last_ping = Instant::now();
             }
         }
-        let received = socket.read();
-        let idle =
-            matches!(&received, Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock);
+        // After receiving Close, only flush the started frame and queued reply.
+        // A further read may report ConnectionClosed while that flush still has
+        // WouldBlock bytes; it cannot establish that the output drained.
+        let received = socket.can_read().then(|| socket.read());
+        let idle = received.as_ref().is_none_or(|result| {
+            matches!(result, Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock)
+        });
         match received {
-            Ok(Message::Text(payload)) if closing.is_none() => {
+            Some(Ok(Message::Text(payload))) if closing.is_none() => {
                 if server
                     .events
                     .send(TransportEvent::Message {
@@ -422,7 +414,7 @@ fn drive_peer(
                     };
                 }
             }
-            Ok(Message::Binary(_)) if closing.is_none() => {
+            Some(Ok(Message::Binary(_))) if closing.is_none() => {
                 peer.0.closed.store(true, Ordering::Release);
                 let close = TransportClose {
                     code: Some(1003),
@@ -436,9 +428,8 @@ fn drive_peer(
                 closing =
                     Some(SocketClose { started: Instant::now(), detail: close, queued: true });
             }
-            Ok(Message::Pong(_)) => missed_pongs = 0,
-            Ok(Message::Close(frame)) => {
-                eprintln!("native-close-trace received peer={} frame={frame:?}", peer.id());
+            Some(Ok(Message::Pong(_))) => missed_pongs = 0,
+            Some(Ok(Message::Close(frame))) => {
                 // Keep the queued reply through WouldBlock until it drains or the
                 // existing close deadline expires, preserving the accepted identity.
                 if let Some(close) = &mut closing {
@@ -451,24 +442,24 @@ fn drive_peer(
                     closing = Some(SocketClose { started: Instant::now(), detail, queued: true });
                 }
             }
-            Ok(_) => {}
-            Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
-            Err(Error::ConnectionClosed) => {
+            None | Some(Ok(_)) => {}
+            Some(Err(Error::Io(error))) if error.kind() == io::ErrorKind::WouldBlock => {}
+            Some(Err(Error::ConnectionClosed)) => {
                 return closing.map_or_else(
                     || TransportClose { code: None, reason: "connection closed".to_owned() },
                     |close| close.detail,
                 );
             }
-            Err(Error::Capacity(_)) => {
+            Some(Err(Error::Capacity(_))) => {
                 return reject_frame(&mut socket, 1009, "game message exceeds the payload bound");
             }
-            Err(Error::Utf8(_)) => {
+            Some(Err(Error::Utf8(_))) => {
                 return reject_frame(&mut socket, 1007, "game text must be valid UTF-8");
             }
-            Err(Error::Protocol(_)) => {
+            Some(Err(Error::Protocol(_))) => {
                 return reject_frame(&mut socket, 1002, "invalid WebSocket frame");
             }
-            Err(error) => return failed_connection(error),
+            Some(Err(error)) => return failed_connection(error),
         }
         // read queues automatic pong and close replies; do not replace them manually.
         write_pending = match socket.flush() {

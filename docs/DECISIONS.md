@@ -521,6 +521,12 @@ remains replaceable. Idle polls keep the existing 10 ms cadence, and the existin
 and close deadlines still retire stalled readers. No async runtime or new dependency is
 needed. An explicit close starts its deadline when observed, allowing preceding reliable
 bytes to drain within that same deadline even when its close frame cannot yet be queued.
+After receiving a peer Close, the worker stops reading and drives only the codec's
+flush until the reply drains or that same deadline expires. The restored-session
+deployment test exposed a queued close reply behind a partially written large frame:
+after flush returned WouldBlock, another read could report ConnectionClosed before
+the output finished. The real TCP peer-close regression holds reads, sends Close,
+then requires an intact started frame and the exact close reply when reading resumes.
 The actual TCP slow-reader tests require an intact 16 MiB frame exactly once,
 ordered subsequent control, the latest snapshot and resumed input, plus heartbeat expiry
 and explicit-close identity/deadlines when reading never resumes. See the
