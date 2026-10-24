@@ -226,6 +226,16 @@ impl MenuUi {
     pub(crate) fn cloud_dialog_visible(&self) -> bool {
         !self.orientation_blocked && self.cloud_visible(self.screen) && self.cloud.modal_open()
     }
+    pub(crate) fn mobile_editor_parent_layer(&self) -> Option<egui::LayerId> {
+        if self.screen != Screen::Settings
+            || self.orientation_blocked
+            || !self.settings_view.mobile_editor_active()
+        {
+            return None;
+        }
+        // Retained Settings paint in the scene behind routing; active Settings use the modal.
+        Some(if self.routing.active() { scene_layer() } else { overlay_layer() })
+    }
     pub fn discard_gameplay_keys(&mut self) {
         if self.screen == Screen::Hidden {
             self.discard_keys = true;
