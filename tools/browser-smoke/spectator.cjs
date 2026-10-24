@@ -617,11 +617,15 @@ async function close(client) {
     step = 'actual saved Leave and reset';
     await leave(leader);
     await ui.noWidget(leader.page,'spectator/status');
-    // The authority's Leave ends this private run. Its surviving participant
-    // returns to College, where a second Boneyard Pause is no longer available.
-    await until(() => !guest.frame.snapshot.boneyard
-      && guest.frame.snapshot.run.phase === 'Hub', 'the surviving peer returns to College');
-    checked('saved leader Leave resets spectator presentation and returns the peer to College');
+    // Source game-host.ts removes the departing actor; its private world remains
+    // while another participant is present. Only the last actor retires the run.
+    await until(() => guest.frame.host.connected_player_ids.length === 1
+      && !guest.frame.snapshot.participants[leader.id], 'the saved departing actor leaves the shared world');
+    assert.equal(guest.frame.snapshot.run.run_id,runId);
+    assert.equal(life(guest),'alive');
+    await castReady(guest);
+    await leave(guest);
+    checked('saved leader Leave clears spectator UI, preserves the living peer run, and both participants save Leave');
     for (const client of clients) await ui.settleErrors(client.page);
     assert.deepEqual(clients.flatMap(client => client.errors), []);
     if (build) {
