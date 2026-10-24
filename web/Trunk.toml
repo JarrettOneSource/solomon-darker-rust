@@ -11,8 +11,9 @@ command = "sh"
 command_arguments = ["-c", 'exec python3 "$TRUNK_SOURCE_DIR/../scripts/prepare-trunk-client.py"']
 
 [hooks.windows]
-command = "cmd"
-command_arguments = ["/C", 'python "%TRUNK_SOURCE_DIR%\..\scripts\prepare-trunk-client.py"']
+# Trunk runs hooks beside this config; keep the script path out of cmd quoting.
+command = "python"
+command_arguments = ["../scripts/prepare-trunk-client.py"]
 
 [serve]
 addresses = ["127.0.0.1"]

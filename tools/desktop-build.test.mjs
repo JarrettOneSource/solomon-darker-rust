@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, toNamespacedPath } from 'node:path';
 import test from 'node:test';
 
 import { desktopArtifacts, repositoryRoot } from './desktop-build.mjs';
@@ -28,6 +28,36 @@ async function distribution(context, document) {
   for (const name of generatedResources) await writeFile(join(root, name), 'fixture generated resource');
   return root;
 }
+
+test('the configured Trunk hook prepares a checkout whose path contains spaces', async context => {
+  const root = await distribution(context, trunkDocument());
+  const checkout = join(root, 'checkout with spaces');
+  const web = join(checkout, 'web');
+  await mkdir(web, {recursive: true});
+  await mkdir(join(checkout, 'scripts'));
+  for (const name of ['web/Trunk.toml', 'web/bootstrap.mjs', 'scripts/trunk_bootstrap.py',
+    'scripts/prepare-trunk-client.py']) {
+    await copyFile(join(repositoryRoot, name), join(checkout, name));
+  }
+  execFileSync(process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3'), ['-c', `
+import os, subprocess, sys, tomllib
+from pathlib import Path
+hook = tomllib.loads(Path('Trunk.toml').read_text())['hooks'][0]
+platform = {'win32': 'windows', 'darwin': 'macos', 'linux': 'linux'}[sys.platform]
+command = hook.get(platform, hook)
+subprocess.run([command['command'], *command['command_arguments']], check=True)
+`], {
+    cwd: web,
+    env: {...process.env, PYTHONDONTWRITEBYTECODE: '1', TRUNK_PUBLIC_URL: '/',
+      TRUNK_SOURCE_DIR: toNamespacedPath(web), TRUNK_STAGING_DIR: toNamespacedPath(root)},
+  });
+  const document = await readFile(join(root, 'index.html'), 'utf8');
+  const initializer = /src="\/(solomon-boot-[a-f0-9]{16}\.mjs)"/.exec(document);
+  assert.ok(initializer, 'the configured hook emits the external GPU loader');
+  const bootstrap = await readFile(join(root, initializer[1]), 'utf8');
+  assert.match(bootstrap, /"loaderModule": "solomon-loader-[a-f0-9]+\.js"/);
+  assert.match(bootstrap, /"mainWasm": "solomon-web-[a-f0-9]+_bg\.wasm"/);
+});
 
 test('desktop artifacts externalize the root initializer and retain prepared builds', async context => {
   const root = await distribution(context, trunkDocument());

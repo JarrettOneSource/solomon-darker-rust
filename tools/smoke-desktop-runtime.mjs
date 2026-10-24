@@ -502,9 +502,11 @@ async function proveFailedClose(instance) {
   assert.equal(instance.page.isClosed(), false);
   assert.equal(instance.app.process().exitCode, null);
   assert.equal((await hostProcess(instance.app)).pid, child.pid);
-  const paused = await ui.readUi(instance.page);
-  assert.equal(paused.error, storageConflict, 'the deliberately rejected write remains an ordinary runtime notice');
-  assert.equal(paused.surface, 'pause');
+  await waitFor(async () => {
+    const paused = await ui.readUi(instance.page);
+    if (paused?.error) assert.equal(paused.error, storageConflict);
+    return paused?.error === storageConflict && paused.surface === 'pause';
+  }, 'the GPU frame reports the deliberately rejected write and paused game');
   // This case deliberately owns that exact nonfatal storage notice. Use ordinary
   // Escape and observe recovery directly; generic GPU helpers reject all errors.
   await instance.page.keyboard.press('Escape');

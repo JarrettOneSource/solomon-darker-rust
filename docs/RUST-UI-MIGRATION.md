@@ -61,6 +61,19 @@ with no application errors. The desktop journey now waits for its actual
 navigation errors in shared GPU helpers. Canonical platform qualification remains
 required for this driver repair.
 
+The next Linux c0d0c3c receipt catches the failed-close observer reading the prior
+GPU frame immediately after the Electron warning response. Its error is still null;
+the subsequent retained frame and screenshot show the exact conflict on Pause.
+The driver now waits for that submitted error/Pause state before sending Escape,
+still rejecting any different error and preserving all save, host and movement checks.
+The b34e419 Windows build separately fails before packaging: cmd passes literal
+quotes as part of the Python hook path. The Windows hook now invokes Python with
+one relative script argument. [Trunk0.22 runs hooks from the configuration directory](https://github.com/trunk-rs/trunk/blob/v0.22.0/src/hooks.rs),
+including an explicit config path. An added native-platform contract executes the
+configured hook from a checkout with spaces and Windows extended path environment
+values; all31 desktop contracts pass on M2. Windows execution and the corrected
+four-platform journeys remain required.
+
 Product revision `ce12d7cd993ae39d3ef3fcdf39d57ffbf75f94f0` passes all696 native tests,
 formatting, strict native/main-WASM Clippy and44 browser-support tests on the M5.
 Its static and hosted artifacts have complete verified hashes/membership. The final
