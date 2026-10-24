@@ -40,6 +40,32 @@ pub struct Line {
     pub clusters: Vec<Cluster>,
 }
 
+impl Line {
+    /// CSS inline-end elision keeps complete visual grapheme clusters. Logical
+    /// UTF-16 order is insufficient for mixed-direction font runs.
+    pub fn elision_edge(&self, width: f32) -> f32 {
+        let mut edge = self
+            .clusters
+            .iter()
+            .filter(|cluster| cluster.rects.iter().all(|rect| rect.right() <= width))
+            .flat_map(|cluster| cluster.rects.iter().map(Rect::right))
+            .fold(0.0, f32::max);
+        loop {
+            let next = self
+                .clusters
+                .iter()
+                .flat_map(|cluster| &cluster.rects)
+                .filter(|rect| rect.left() < edge && rect.right() > edge)
+                .map(Rect::left)
+                .fold(edge, f32::min);
+            if next == edge {
+                return edge;
+            }
+            edge = next;
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Geometry {
     pub lines: Vec<Line>,
@@ -194,5 +220,10 @@ mod tests {
         assert_eq!(geometry.caret(4).min.x, 20.0);
         assert_eq!(geometry.hit(pos2(39.0, 10.0)), 2);
         assert_eq!(geometry.hit(pos2(21.0, 10.0)), 4);
+        // Elision follows visual cluster edges even though their UTF-16 order
+        // crosses right-to-left; a partial grapheme never becomes a new run.
+        assert_eq!(geometry.lines[0].elision_edge(25.0), 20.0);
+        assert_eq!(geometry.lines[0].elision_edge(35.0), 30.0);
+        assert_eq!(geometry.lines[0].elision_edge(5.0), 0.0);
     }
 }
