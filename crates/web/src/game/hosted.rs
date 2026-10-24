@@ -42,7 +42,6 @@ pub(super) struct HostedGame {
     pub(super) generation: u64,
     pending: Vec<HostedRequest>,
     pub(super) connecting: bool,
-    creating: bool,
     retire_then_start: Option<(NewGameSelection, SaveReceipt)>,
     tutorial_declined: bool,
     leave_checkpoint: Option<SaveReceipt>,
@@ -473,7 +472,6 @@ impl Game {
             generation: 0,
             pending: Vec::new(),
             connecting: false,
-            creating: false,
             retire_then_start: None,
             tutorial_declined: storage::tutorial_declined().unwrap_or(true),
             leave_checkpoint: None,
@@ -524,7 +522,6 @@ impl Game {
         let Some(hosted) = &mut self.hosted else { return Ok(false) };
         match action {
             MenuAction::CancelCreate => {
-                hosted.creating = false;
                 hosted.admission_override = None;
                 hosted.transfer_save_document = None;
                 hosted.allow_mod_mismatch = false;
@@ -534,7 +531,7 @@ impl Game {
                     return Ok(true);
                 }
                 if hosted.profile.as_ref().is_some_and(|profile| profile.continuation.is_some())
-                    && !hosted.creating
+                    && !self.menu.is_create_pending()
                 {
                     let document = &hosted
                         .saves
@@ -660,11 +657,9 @@ impl Game {
                 }
                 _ => true,
             };
-        if !intro && !hosted.creating {
-            hosted.creating = true;
+        if !intro && !self.menu.is_create_pending() {
             return self.menu.show_create();
         }
-        hosted.creating = false;
         self.queue_hosted_connection(selection, false, false, intro)
     }
 

@@ -1,7 +1,7 @@
 //! Source `MatchLoadingScreen.tsx`: the accepted transition owns progress and delay.
 //! Stock artwork, status and its progress track are painted in the same GPU frame.
 
-use crate::gpu_ui::UiFrame;
+use crate::gpu_ui::{FontRunOptions, GroupEffect, ImageShadow, UiFrame, font_run_with_options};
 use egui::{Align2, Color32, FontFamily, FontId, Id, Order, Rect, Stroke, pos2, vec2};
 use solomon_sim::menu::loading::MatchLoadingState;
 use web_sys::Document;
@@ -39,7 +39,7 @@ impl MatchLoadingView {
             .order(self.layer_id().order)
             .fade_in(false)
             .fixed_pos(screen.min)
-            .show(&ctx, |ui| {
+            .show(&ctx, |ui| -> Result<(), String> {
                 ui.set_min_size(screen.size());
                 ui.interact(
                     screen,
@@ -47,7 +47,7 @@ impl MatchLoadingView {
                     egui::Sense::click_and_drag(),
                 );
                 if !self.delay_elapsed || frame.image_size(ART).is_none() {
-                    return;
+                    return Ok(());
                 }
                 let painter = ui.painter();
                 frame.image(painter, ART, screen, None, Color32::WHITE);
@@ -74,21 +74,30 @@ impl MatchLoadingView {
                         - (screen.height() * 0.012_962_96).max(12.0)
                         - 0.5,
                 );
-                let font = FontId::new(font_size, FontFamily::Name("Alegreya Bold".into()));
-                painter.text(
-                    baseline + vec2(0.0, 1.0),
-                    Align2::CENTER_BOTTOM,
-                    loading.label(),
-                    font.clone(),
-                    Color32::BLACK,
-                );
-                let label = painter.text(
-                    baseline,
-                    Align2::CENTER_BOTTOM,
-                    loading.label(),
-                    font,
+                let run = font_run_with_options(
+                    frame.ctx,
+                    FontId::new(font_size, FontFamily::Name("Alegreya Semibold".into())),
                     Color32::from_rgb(242, 229, 199),
-                );
+                    loading.label(),
+                    FontRunOptions {
+                        line_height: Some((screen.height() * 0.029_629_63).clamp(22.4, 48.0)),
+                        ..Default::default()
+                    },
+                )?;
+                let label = Align2::CENTER_BOTTOM
+                    .anchor_size(baseline, vec2(run.size().x.min(screen.width()), run.size().y));
+                frame.paint_group(
+                    painter,
+                    GroupEffect {
+                        shadows: vec![ImageShadow {
+                            offset: vec2(0.0, 1.0),
+                            blur: 1.0,
+                            color: Color32::BLACK,
+                        }],
+                        ..Default::default()
+                    },
+                    |frame, painter| run.paint_elided(frame, painter, label, 1.0).map(|_| ()),
+                )?;
                 frame.record_rect("match-loading:label", loading.label(), "status", label, true);
                 frame.announce("match-loading:label", loading.label());
                 let track = Rect::from_min_size(
@@ -122,7 +131,9 @@ impl MatchLoadingView {
                     &(loading.progress * 100.0).to_string(),
                     None,
                 );
-            });
+                Ok(())
+            })
+            .inner?;
         Ok(())
     }
 }

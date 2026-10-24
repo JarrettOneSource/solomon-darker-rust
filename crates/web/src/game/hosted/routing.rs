@@ -134,7 +134,7 @@ impl Game {
         selection: NewGameSelection,
     ) -> Result<(), String> {
         let hosted = self.hosted.as_mut().unwrap();
-        if hosted.creating {
+        if self.menu.is_create_pending() {
             return self.start_hosted_new_game(selection);
         }
         let cheats = self.menu.settings().enable_cheats

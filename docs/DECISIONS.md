@@ -715,3 +715,25 @@ layout screens; neither adds another button skin inside the native bevel.
 Actual API requests, device layout validation/storage and completion generations
 keep their current owners. No visual DOM control or test-installed layout is
 used by this repair or its browser journey.
+
+### Create retry and match-loading presentation
+
+The pinned `create-loadout-finalization.ts` releases a failed manual or randomized
+commit without replacing its draft. `CreateMenuScene.tsx` retains the selection;
+`MainMenuScene.tsx::startHub` retries that selection after a failed connection.
+The actual219f990 loading journey holds a real Welcome, closes only that owned
+transport, and observes the restored Lucian draft. Its next ordinary submission
+never opens another connection: the separate `HostedGame::creating` flag had
+already reset, so admission reopened Create beneath its still-pending commit.
+
+The menu's pending commit now distinguishes Title's initial New Game request from
+the final loadout submission. Removing the duplicate hosted flag preserves the
+same admission, save-retirement and consent paths while making a released draft
+retryable. No new retry timer, transport fallback or synthetic state is involved.
+
+The same browser witness measures the old loading label at23/22/28px for
+900/844/1100px-high viewports instead of Source26.6667/25.0074/32.5926px line boxes.
+`match-loading-screen.css` specifies Alegreya600, an explicit clamped line height
+and a0/1/2px text shadow. The painter now uses the canonical native font run and
+Gaussian text shadow (sigma1), with native ellipsis for a constrained line. Its
+delay, progress, artwork, input scope and lifecycle remain unchanged.
