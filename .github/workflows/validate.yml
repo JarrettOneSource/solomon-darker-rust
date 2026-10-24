@@ -33,7 +33,7 @@ jobs:
           cd candidate
           sha256sum --check Solomon-Darker-win32-x64.zip.sha256
           mkdir ../dist-desktop
-          tar -xf Solomon-Darker-win32-x64.zip -C ../dist-desktop
+          python -c "import zipfile; zipfile.ZipFile('Solomon-Darker-win32-x64.zip').extractall('../dist-desktop')"
           cd ..
           python - <<'VERIFY'
           import json, pathlib, hashlib
