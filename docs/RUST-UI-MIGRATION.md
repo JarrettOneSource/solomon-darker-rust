@@ -1085,3 +1085,17 @@ retains that rule. The revised driver checks that this real Escape leaves the wo
 uncovered and unpaused, then independently observes the actual durable native
 checkpoint. It does not add a pause bypass or alter product timing. Original errors[]
 and graceful Chrome22848/native22826 exits0 stay attached to the failed attempt.
+
+
+Fresh native Tutorial r2 retains the actual schema2 checkpoint (tick258, matching
+run/player/Source SHA) and correct early Escape sealing, then stops in the shared
+route driver. Its2309 accepted samples oscillate between `solomon` and
+`gate-crossing`: the missing arena transition defaulted to north-entry direction+1,
+so near y1670 the helper steered south to1672.5. Pinned fa08
+`stock-tutorial-boneyard.ts` places the immutable spawn at y2070.0703125, south of
+the actual gate midpoint1612.5; `nativeTutorialForcedVelocity` likewise moves north.
+The helper must derive entry side from this unchanged spawn/gate geometry when no
+explicit arena transition exists, while retaining the Source transition side when
+present. This corrects only ordinary input selection. The runtime accepted real W
+movement and opened the gate; errors[] and graceful Chrome39258/native39250 exits0
+remain in `common-browser/3660ab8/m5/tutorial-native-r2/`. No product defect is claimed.

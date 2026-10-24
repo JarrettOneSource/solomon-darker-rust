@@ -53,7 +53,11 @@ async function walkSolomonEntrance(page, {snapshot, playerId, output, plan}) {
   const gate = [...pairs].filter(([, pair]) => pair.length === 2)
     .map(([id, pair]) => ({id, x: (pair[0].x + pair[1].x) / 2, y: (pair[0].y + pair[1].y) / 2}))
     .sort((a, b) => distance(a, plan.scene.spawn) - distance(b, plan.scene.spawn))[0];
-  const direction = initial.arena_transition?.entry_side === 'South' ? -1 : 1;
+  // Stock Tutorial has no arena transition and spawns south of its gate.
+  // Keep an explicit Source transition side; otherwise use the immutable spawn.
+  const direction = initial.arena_transition
+    ? initial.arena_transition.entry_side === 'South' ? -1 : 1
+    : gate && plan.scene.spawn.y > gate.y ? -1 : 1;
   const approachMargin = plan.bodyRadius + plan.gateSway + 15;
   const crossedMargin = plan.bodyRadius + 35;
   try {
