@@ -26,8 +26,8 @@ fn receipt(
 
 #[test]
 fn retained_rejected_and_unrelated_book_receipts_never_replay() {
-    let rank = Some(NativeSkillBookOutcome::Rank { skill_id: Some(8) });
-    let initial = receipt(3, true, HubActionFeedbackAction::ReadSkillBook, rank);
+    let rank = NativeSkillBookOutcome::Rank { skill_id: Some(8) };
+    let initial = receipt(3, true, HubActionFeedbackAction::ReadSkillBook, Some(rank));
     let mut cursor = NativeSkillBookFeedbackCursor::new(Some(&initial));
     assert_eq!(cursor.consume(Some(&initial)), None);
     assert_eq!(cursor.consume(None), None);
@@ -35,13 +35,13 @@ fn retained_rejected_and_unrelated_book_receipts_never_replay() {
         (4, HubActionFeedbackAction::ReadSkillBook, false),
         (5, HubActionFeedbackAction::Consume, true),
     ] {
-        assert_eq!(cursor.consume(Some(&receipt(sequence, accepted, action, rank))), None);
+        assert_eq!(cursor.consume(Some(&receipt(sequence, accepted, action, Some(rank)))), None);
         assert_eq!(
             cursor.consume(Some(&receipt(
                 sequence,
                 true,
                 HubActionFeedbackAction::ReadSkillBook,
-                rank
+                Some(rank)
             ))),
             None
         );
@@ -65,8 +65,8 @@ fn retained_rejected_and_unrelated_book_receipts_never_replay() {
         )))
         .unwrap();
     assert_eq!(no_rank.outcome, NativeSkillBookOutcome::Rank { skill_id: None });
-    let accepted = receipt(8, true, HubActionFeedbackAction::ReadSkillBook, rank);
-    assert_eq!(cursor.consume(Some(&accepted)).unwrap().outcome, rank.unwrap());
+    let accepted = receipt(8, true, HubActionFeedbackAction::ReadSkillBook, Some(rank));
+    assert_eq!(cursor.consume(Some(&accepted)).unwrap().outcome, rank);
     assert_eq!(cursor.consume(Some(&accepted)), None);
 }
 
