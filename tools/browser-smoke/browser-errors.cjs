@@ -220,7 +220,7 @@ async function observeDocumentReplacement(page,action,{frame=page.mainFrame(),ti
 
 function watchErrors(page,{errors=[],warnings=[]}={}) {
   const observed=watchRequestFailures(page,{errors,warnings});
-  page.on('pageerror',error=>errors.push({type:'pageerror',message:error.message}));
+  page.on('pageerror',error=>errors.push({type:'pageerror',message:error.message,stack:error.stack}));
   page.on('console',message=>{
     if(message.type()==='error')errors.push({type:'console',message:message.text(),location:message.location()});
     else if(message.type()==='warning')warnings.push(message.text());
