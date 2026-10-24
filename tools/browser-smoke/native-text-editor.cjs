@@ -36,6 +36,7 @@ async function paintedSelection(page,count){
   const page=await context.newPage();
   const observed=ui.watchErrors(page);
   const input=await context.newCDPSession(page);
+  let runFailure;
   try{
     await observed.ready;
     await page.addInitScript(()=>{
@@ -231,15 +232,23 @@ async function paintedSelection(page,count){
       oracle:'native-ime-commit-oracle.json',hardwareCandidateWindow:false};
     receipt.passed=true;
   }catch(error){
+    runFailure=error;
     receipt.failure=error.stack;receipt.native=await native(page).catch(failure=>({error:failure.message}));
     receipt.ui=await ui.readUi(page).catch(failure=>({error:failure.message}));
     receipt.nativeEvents=await page.evaluate(()=>window.__nativeEditorEvents||[]).catch(()=>[]);
-    await page.screenshot({path:path.join(output,'failure.png')}).catch(()=>{});throw error;
+    await page.screenshot({path:path.join(output,'failure.png')}).catch(()=>{});
   }finally{
-    await ui.settleErrors(page);receipt.errors=observed.errors;
+    try{await ui.settleErrors(page);assert.deepEqual(observed.errors,[])}catch(error){
+      runFailure??=error;receipt.passed=false;
+      receipt.observerFailure=error.stack||String(error);
+    }
+    receipt.errors=observed.errors;
     await input.detach().catch(()=>{});
-    try{receipt.cleanup=await owned.close()}catch(error){receipt.cleanup=error.cleanup;throw error}
+    try{receipt.cleanup=await owned.close()}catch(error){
+      receipt.cleanup=error.cleanup;receipt.passed=false;runFailure??=error;
+    }
     finally{fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify(receipt,null,2));}
   }
+  if(runFailure)throw runFailure;
   console.log(JSON.stringify(receipt));
 })().catch(error=>{console.error(error);process.exitCode=1});
