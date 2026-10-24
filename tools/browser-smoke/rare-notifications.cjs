@@ -131,6 +131,9 @@ async function pauseNotice(key,text,afterAnnouncement,name,{resume=true}={}) {
     await ui.fill(page,'cheats/gold','10000');await ui.click(page,'cheats/submit:gold');
     await until(()=>player().economy.gold===10000,'real SET GOLD accepts the declared prerequisite');
     await ui.widget(page,'cheats/submit:gold',{enabled:true});
+    // Developer-only controls extend this real ScrollArea below the viewport.
+    // Its action receipt is painted at the end of the same content.
+    await ui.wheel(page,'cheats/dialog',0,10000);
     receipt.funding={before:beforeGold,after:player().economy.gold,qualification:receipt.qualification,
       feedback:await ui.widget(page,'cheats/action-receipt')};
     await page.keyboard.press('Backquote');await ready();
