@@ -96,11 +96,22 @@ const MAX_CATCH_UP_MILLISECONDS: f64 = 250.0;
 /// The source host publishes an autosave every thirty seconds of active simulation.
 const AUTOSAVE_TICKS: u64 = 3000;
 
+/// Game-owned metadata from the last submitted UI frame. Input dispatch can advance
+/// the live menu between draws without changing the browser's rendered observation.
+struct GameUiSnapshot {
+    surface: &'static str,
+    ready: bool,
+    selection: Option<NewGameSelection>,
+    error: Option<String>,
+    borrowed_image_paths: Vec<String>,
+}
+
 pub struct Game {
     canvas: HtmlCanvasElement,
     renderer: Renderer,
     gpu_ui: GpuUi,
     ui_ready: bool,
+    ui_snapshot: Option<GameUiSnapshot>,
     scene: CourtyardScene,
     rooms: PrivateRoomScenes,
     wizard_view: WizardView,
@@ -310,6 +321,7 @@ impl Game {
                 renderer,
                 gpu_ui,
                 ui_ready: false,
+                ui_snapshot: None,
                 scene,
                 rooms,
                 wizard_view,
@@ -2341,6 +2353,7 @@ impl Game {
                 self.ui_ready = true;
             }
         }
+        self.capture_ui_snapshot();
         Ok(())
     }
 
@@ -2427,10 +2440,30 @@ impl Game {
                 crate::runtime_ui::error().as_deref().unwrap_or("Game initialization failed"),
             );
         }
+        self.capture_ui_snapshot();
         Ok(())
     }
 
+    fn capture_ui_snapshot(&mut self) {
+        self.ui_snapshot = Some(GameUiSnapshot {
+            surface: self.menu.surface_name(),
+            ready: self.ui_ready,
+            selection: self
+                .has_game
+                .then(|| {
+                    self.session
+                        .participants
+                        .get(&self.local_player_id)
+                        .map(|participant| participant.player.selection.clone())
+                })
+                .flatten(),
+            error: self.gpu_ui.diagnostics().error.clone().or_else(crate::runtime_ui::error),
+            borrowed_image_paths: self.gpu_ui.borrowed_image_paths(),
+        });
+    }
+
     pub(crate) fn gpu_ui_snapshot(&self) -> serde_json::Value {
+        let Some(snapshot) = &self.ui_snapshot else { return serde_json::Value::Null };
         let ui = self.gpu_ui.diagnostics();
         let widgets: Vec<_> = ui
             .widgets
@@ -2449,17 +2482,14 @@ impl Game {
             })
             .collect();
         serde_json::json!({
-            "schemaVersion": 1, "surface": self.menu.surface_name(), "ready": self.ui_ready,
-            "acceptedSelection": self.has_game.then(|| {
-                self.session.participants.get(&self.local_player_id)
-                    .map(|participant| &participant.player.selection)
-            }).flatten(),
-            "loading": null, "error": ui.error.clone().or_else(crate::runtime_ui::error),
+            "schemaVersion": 1, "surface": snapshot.surface, "ready": snapshot.ready,
+            "acceptedSelection": snapshot.selection,
+            "loading": null, "error": snapshot.error,
             "canvas": { "width": ui.viewport[0], "height": ui.viewport[1], "pixelsPerPoint": ui.pixels_per_point },
             "capture": ui.capture,
             "inputScope": ui.input_scope, "frame": ui.frame,
             "draw": { "meshes": ui.meshes, "triangles": ui.triangles, "textures": ui.textures,
-                "borrowedImages": ui.borrowed_images, "borrowedImagePaths": self.gpu_ui.borrowed_image_paths() },
+                "borrowedImages": ui.borrowed_images, "borrowedImagePaths": snapshot.borrowed_image_paths },
             "widgets": widgets,
         })
     }
