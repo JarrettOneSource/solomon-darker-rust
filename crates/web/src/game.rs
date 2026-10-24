@@ -2411,6 +2411,7 @@ impl Game {
         Ok(())
     }
 
+    #[allow(clippy::type_complexity)] // The closure borrows the actual UI owners without allocation.
     fn ui_painter(
         &mut self,
     ) -> Result<(&mut GpuUi, impl FnMut(&mut UiFrame<'_>) -> Result<(), String> + '_), String> {

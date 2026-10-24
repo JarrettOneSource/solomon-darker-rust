@@ -858,7 +858,7 @@ pub struct GpuUi {
     _fonts: fonts::BrowserFonts,
     accessibility: accessibility::Accessibility,
     widgets: BTreeMap<String, WidgetGeometry>,
-    diagnostics: UiDiagnostics,
+    input_diagnostics: UiDiagnostics,
     drawn_diagnostics: UiDiagnostics,
     deferred_textures: egui::TexturesDelta,
     deferred_retired_images: Vec<String>,
@@ -931,7 +931,7 @@ impl GpuUi {
             _fonts: fonts,
             accessibility,
             widgets: BTreeMap::new(),
-            diagnostics: UiDiagnostics::default(),
+            input_diagnostics: UiDiagnostics::default(),
             drawn_diagnostics: UiDiagnostics::default(),
             deferred_textures: egui::TexturesDelta::default(),
             deferred_retired_images: Vec::new(),
@@ -954,11 +954,11 @@ impl GpuUi {
     /// Commit prior native UI events before the next native editing/clipboard
     /// dispatch. This performs no controller poll, simulation or GPU submission.
     pub fn begin_native_dispatch(&mut self, time_seconds: f64) -> Result<Option<UiRun>, String> {
-        let viewport = self.diagnostics.viewport;
+        let viewport = self.input_diagnostics.viewport;
         if viewport[0] <= 0.0 || viewport[1] <= 0.0 {
             return Ok(None);
         }
-        let pixels_per_point = self.diagnostics.pixels_per_point;
+        let pixels_per_point = self.input_diagnostics.pixels_per_point;
         let Some(pending) = self.input.take_native(viewport, pixels_per_point, time_seconds)?
         else {
             return Ok(None);
@@ -977,7 +977,7 @@ impl GpuUi {
         self.deferred_retired_images.append(&mut run.retired_images);
         self.deferred_keyboard_activations = run.keyboard_activations;
         run.failure.map_or(result, Err).inspect_err(|error| {
-            self.diagnostics.error = Some(error.clone());
+            self.input_diagnostics.error = Some(error.clone());
             self.drawn_diagnostics.error = Some(error.clone());
         })
     }
@@ -1015,7 +1015,7 @@ impl GpuUi {
         let physical = [self.canvas.width() as i32, self.canvas.height() as i32];
         let pixels_per_point = physical[0] as f32 / viewport[0];
         let pending = self.input.take(viewport, pixels_per_point, time_seconds)?;
-        self.diagnostics.frame += 1;
+        self.input_diagnostics.frame += 1;
         Ok(self.input_run(viewport, pixels_per_point, pending))
     }
 
@@ -1167,11 +1167,11 @@ impl GpuUi {
         if let Some(error) = fonts::take_error() {
             return Err(error);
         }
-        self.diagnostics.viewport = run.viewport;
-        self.diagnostics.pixels_per_point = run.pixels_per_point;
-        self.diagnostics.capture = capture;
-        self.diagnostics.input_scope = input_scope;
-        self.diagnostics.widgets = self.widgets.values().cloned().collect();
+        self.input_diagnostics.viewport = run.viewport;
+        self.input_diagnostics.pixels_per_point = run.pixels_per_point;
+        self.input_diagnostics.capture = capture;
+        self.input_diagnostics.input_scope = input_scope;
+        self.input_diagnostics.widgets = self.widgets.values().cloned().collect();
         run.capture = capture;
         run.output = Some(output);
         Ok(())
@@ -1213,22 +1213,22 @@ impl GpuUi {
             } else {
                 error
             };
-            self.diagnostics.error = Some(error.clone());
+            self.input_diagnostics.error = Some(error.clone());
             self.drawn_diagnostics.error = Some(error.clone());
             return Err(error);
         }
         let (meshes, triangles) = painted.inspect_err(|error| {
-            self.diagnostics.error = Some(error.clone());
+            self.input_diagnostics.error = Some(error.clone());
             self.drawn_diagnostics.error = Some(error.clone());
         })?;
-        self.diagnostics.meshes = meshes;
-        self.diagnostics.triangles = triangles;
-        self.diagnostics.textures = self.painter.texture_count() + self.images.texture_count();
-        self.diagnostics.borrowed_images = self.images.borrowed_count();
-        self.diagnostics.static_images_ready = self.images.static_images_ready();
-        self.diagnostics.static_images_total = self.images.static_image_count();
-        self.diagnostics.error = None;
-        self.drawn_diagnostics = self.diagnostics.clone();
+        self.input_diagnostics.meshes = meshes;
+        self.input_diagnostics.triangles = triangles;
+        self.input_diagnostics.textures = self.painter.texture_count() + self.images.texture_count();
+        self.input_diagnostics.borrowed_images = self.images.borrowed_count();
+        self.input_diagnostics.static_images_ready = self.images.static_images_ready();
+        self.input_diagnostics.static_images_total = self.images.static_image_count();
+        self.input_diagnostics.error = None;
+        self.drawn_diagnostics = self.input_diagnostics.clone();
         Ok(run.capture)
     }
 
@@ -1251,7 +1251,7 @@ impl GpuUi {
     /// Actual latest UI ownership for input admission, including native-only
     /// commits. Public diagnostics remain the last completed GPU submission.
     pub fn input_diagnostics(&self) -> &UiDiagnostics {
-        &self.diagnostics
+        &self.input_diagnostics
     }
 }
 
