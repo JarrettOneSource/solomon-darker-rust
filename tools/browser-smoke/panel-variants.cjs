@@ -57,19 +57,30 @@ async function buyClothing(recipes){
   const owned=player().economy.backpack.find(dyeable);
   if(owned){receipt.clothingSource='previously purchased owned Hat retained by the ordinary profile';return structuredClone(owned);}
   // New Game archives the retired wizard's belongings in an ordinary storage Sack.
-  const bag=player().economy.storage.find(row=>row.contents?.some(dyeable));
-  if(bag){
-    const clothing=bag.contents.find(dyeable);
-    receipt.clothingSource={kind:'retired wizard storage Sack, normal retrieval',bagId:bag.id,itemId:clothing.id};
+  function findClothing(items,path=[]){
+    for(const row of items){
+      if(dyeable(row))return {clothing:row,path};
+      if(row.contents){const found=findClothing(row.contents,[...path,row.id]);if(found)return found;}
+    }
+  }
+  const stored=findClothing(player().economy.storage);
+  if(stored){
+    const {clothing,path:storedPath}=stored,bagId=storedPath[0]??clothing.id;
+    receipt.clothingSource={kind:'retired wizard storage Sack, normal retrieval',path:storedPath,itemId:clothing.id};
     await ui.click(page,(await ui.byLabel(page,'Luthacus',{role:'button',prefix:'hud:shortcut:'})).id);
-    await ui.click(page,`panel:storage:${bag.id}`,{clickCount:2});
-    await until(()=>item(bag.id),'actual stored Sack enters backpack');
+    await ui.click(page,`panel:storage:${bagId}`,{clickCount:2});
+    await until(()=>item(bagId),'actual stored Sack enters backpack');
     await ui.click(page,'panel:close');await ready();await page.keyboard.press('KeyI');
-    await ui.click(page,`panel:item:${bag.id}`,{clickCount:2});
-    await ui.widget(page,`panel:item:${clothing.id}`,{enabled:true});await ui.noWidget(page,'panel:inventory-flyby');
-    await ui.drag(page,`panel:item:${clothing.id}`,'panel:back');await until(()=>item(clothing.id),'real Sack drag moves owned clothing to root');
-    await ui.noWidget(page,'panel:inventory-flyby');await ui.click(page,'panel:back');
-    await ui.waitForUi(page,s=>JSON.parse(ui.findWidget(s,'panel:sack-page')?.value||'{}').path?.length===0,'root backpack after Sack return');
+    for(const id of storedPath){await ui.click(page,`panel:item:${id}`,{clickCount:2});
+      await ui.waitForUi(page,s=>JSON.parse(ui.findWidget(s,'panel:sack-page')?.value||'{}').path?.at(-1)===id,'settled real nested Sack page');}
+    for(let depth=storedPath.length;depth>0;depth--){
+      await ui.widget(page,`panel:item:${clothing.id}`,{enabled:true});await ui.noWidget(page,'panel:inventory-flyby');
+      await ui.drag(page,`panel:item:${clothing.id}`,'panel:back');
+      await until(()=>{let items=player().economy.backpack;for(const id of storedPath.slice(0,depth-1))items=items.find(row=>row.id===id)?.contents||[];
+        return items.some(row=>row.id===clothing.id);},'real Sack drag moves owned clothing to its parent');
+      await ui.noWidget(page,'panel:inventory-flyby');await ui.click(page,'panel:back');
+      await ui.waitForUi(page,s=>JSON.parse(ui.findWidget(s,'panel:sack-page')?.value||'{}').path?.length===depth-1,'settled parent Sack page');
+    }
     await page.keyboard.press('Escape');await ready();return structuredClone(item(clothing.id));
   }
   receipt.clothingSource='ordinary paid reference offer';
