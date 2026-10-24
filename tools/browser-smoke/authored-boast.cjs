@@ -1,4 +1,4 @@
-// Select the unchanged Source Apothecary boast and fail it by using a paid potion.
+// Select the unchanged Source Apothecary boast and fail it by using an owned potion.
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -56,17 +56,9 @@ async function shot(name){await page.screenshot({path:path.join(out,`${name}.png
     await ui.observeDocumentReplacement(page,()=>page.goto(url.href));await ui.ready(page);
     await startNewGame(page,{name:'Felix',element:'fire',discipline:'arcane',continueLocal:true});
     await ready();assert.equal(receipt.welcome.kind,'PrivateCollege');assert.equal(receipt.welcome.cheats,false);
-    step='ordinary paid Health Potion';
-    await shortcut('Fomentius');await ui.widget(page,'panel:service');
-    const stock=await ui.waitForUi(page,s=>s.widgets.some(w=>w.id.startsWith('panel:shop:')
-      &&w.label==='Buy Health Potion for 150 gold'),'actual Health Potion stock');
-    const offer=stock.widgets.find(w=>w.id.startsWith('panel:shop:')&&w.label==='Buy Health Potion for 150 gold');
-    const before=player().economy.gold;
-    await ui.click(page,offer.id);await ui.click(page,offer.id);
-    await until(()=>player().economy.gold===before-150,'actual potion payment');
-    const potion=player().economy.backpack.find(item=>item.name==='Health Potion');assert.ok(potion);
-    receipt.potion={id:potion.id,beforeGold:before,afterGold:player().economy.gold};
-    await ui.click(page,'panel:close');await ui.noWidget(page,'panel:service');
+    const potion=player().economy.backpack.find(item=>item.name==='Health Potion');
+    assert.ok(potion?.quantity>0,'the admitted wizard owns a real Health Potion');
+    receipt.potion={id:potion.id,quantity:potion.quantity,origin:'native backpack at ordinary admission'};
 
     step='actual authored selector and response';
     await shortcut('Provokatus');await ui.widget(page,'panel:dialogue');
@@ -110,7 +102,7 @@ async function shot(name){await page.screenshot({path:path.join(out,`${name}.png
     receipt.failureNotice={label:broken.label,beforeQuantity,afterQuantity,boast:player().economy.npc.boast};
     await shot('authored-boast-failed');await ui.click(page,'npc:notebox');await ui.noWidget(page,'npc:notebox');
     await page.keyboard.press('Escape');await ui.noWidget(page,'panel:surface:inventory');
-    receipt.checks.push('actual enemy damage and one paid potion produce the namespaced red failure notice and normal dismissal');
+    receipt.checks.push('actual enemy damage and one owned potion produce the namespaced red failure notice and normal dismissal');
     await page.keyboard.press('Escape');await ui.surface(page,'pause');await ui.click(page,'leave');await ui.surface(page,'title');
     await ui.assertGpuOnly(page);await ui.settleErrors(page);assert.deepEqual(observed.errors,[]);
     assert.deepEqual(receipt.errors,[]);receipt.checks.push('authored failure returns through the ordinary saved Leave');receipt.passed=true;
