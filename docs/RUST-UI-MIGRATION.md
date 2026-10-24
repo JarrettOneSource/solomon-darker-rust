@@ -1099,3 +1099,15 @@ explicit arena transition exists, while retaining the Source transition side whe
 present. This corrects only ordinary input selection. The runtime accepted real W
 movement and opened the gate; errors[] and graceful Chrome39258/native39250 exits0
 remain in `common-browser/3660ab8/m5/tutorial-native-r2/`. No product defect is claimed.
+
+
+Tutorial native r3 proves real gate crossing, Solomon's sequence and the ten-enemy
+Magic Missile wave. It then retains a driver-only wrong-binding failure at Acid Rain: the
+actual readable lesson says `Right Mouse`, while the script pressed Space. Pinned
+fa08 `game-settings.ts:65–84` binds belt1 to Mouse2 and belt4 to Digit3;
+`TutorialOverlay.tsx:94–95` uses those same slots for secondary/potion hints. The
+driver now reads those unchanged Source defaults, compares their displayed labels
+with the real lesson, and holds the corresponding real input only until the accepted
+stage acknowledgement. It likewise replaces the ungrounded potion Q with the actual
+source binding3. Errors[] and graceful Chrome50431/native50425 exits0 remain in
+`common-browser/3660ab8/m5/tutorial-native-r3/`; later Tutorial UI is still unpassed.

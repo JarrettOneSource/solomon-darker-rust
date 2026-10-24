@@ -145,10 +145,11 @@ async function modal(kind) {
 
 (async()=>{
   fs.mkdirSync(output,{recursive:true});
-  const [tutorial,cameras,viewports,terminal]=await Promise.all([
+  const [tutorial,cameras,viewports,terminal,settings]=await Promise.all([
     source('core-kernels/native-tutorial.ts'),source('renderer/boneyard-render-contract.ts'),
-    source('renderer/game-viewport.ts'),source('game-over-presentation.ts'),
+    source('renderer/game-viewport.ts'),source('game-over-presentation.ts'),source('game-settings.ts'),
   ]);
+  const controls=settings.DEFAULT_GAME_CONTROL_BINDINGS;
   const owned=await launchOwnedBrowser(chromium,{headless:true,
     executablePath:process.env.CHROME||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args:['--use-angle=metal','--ignore-gpu-blocklist']});
@@ -265,9 +266,15 @@ async function modal(kind) {
       }
       if(current==='CastAcidRain'){
         await release();await lesson('A SECONDARY SPELL IS READY');
-        await page.keyboard.press('Space');
-        await until(()=>stage()!=='CastAcidRain','accepted Tutorial Acid Rain');
-        checked('real secondary input acknowledges Acid Rain and starts the item wave');continue;
+        assert.equal(controls.belt1,'Mouse2');
+        const hint=await ui.widget(page,'tutorial:text:subheading');
+        assert.ok(hint.label.includes(settings.gameBindingLabel(controls.belt1)));
+        receipt.secondaryInput={binding:controls.belt1,hint:hint.label};
+        await page.mouse.move(800,450);
+        await page.mouse.down({button:'right'});
+        try{await until(()=>stage()!=='CastAcidRain','accepted Tutorial Acid Rain');}
+        finally{await page.mouse.up({button:'right'});}
+        checked('real Source secondary binding acknowledges Acid Rain and starts the item wave');continue;
       }
       if(current==='DrinkPotion'){
         await release();
@@ -294,9 +301,14 @@ async function modal(kind) {
           pickup,item:{id:potion.id,name:potion.name,quantity:potion.quantity},notice,presentation,speech};
         await page.screenshot({path:path.join(output,'earned-tutorial-potion-notice.png')});
         await lesson('DRINK POTION');
-        await page.keyboard.press('KeyQ');
-        await until(()=>stage()!=='DrinkPotion','accepted Tutorial Health Potion drink');
-        checked('authored potion pickup, exact lesson and real Q acknowledgement');continue;
+        assert.equal(controls.belt4,'Digit3');
+        const hint=await ui.widget(page,'tutorial:text:subheading');
+        assert.ok(hint.label.includes(settings.gameBindingLabel(controls.belt4)));
+        receipt.potionInput={binding:controls.belt4,hint:hint.label};
+        await page.keyboard.down(controls.belt4);
+        try{await until(()=>stage()!=='DrinkPotion','accepted Tutorial Health Potion drink');}
+        finally{await page.keyboard.up(controls.belt4);}
+        checked('authored potion pickup, exact lesson and real Source potion binding acknowledgement');continue;
       }
       if(current==='Survive'||player().player.combat.life_state!=='Alive'){
         await release();
