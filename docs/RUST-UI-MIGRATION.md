@@ -987,3 +987,16 @@ The Rust editor now restores end selection and retires editing/composition histo
 on the same rejecting validator boundary. Readonly and ordinary UTF-16 capacity
 admission keep their distinct existing contracts. A focused model regression pins
 accepted text, caret and undo/redo together; no renderer or validation policy changes.
+
+Native input and drawing share the browser's default document timeline. The ceb3a17
+paid-Sack, Settings and native-session journeys independently reproduced an egui
+history panic when a native dispatch used `performance.now()` immediately before a
+requestAnimationFrame callback with an earlier animation timestamp (17.7676 versus
+17.7644 seconds in the Sack receipt). Their original errors and browser cleanup are
+retained under `native-editor-ceb3a17`, `menu-runtime-ceb3a17/settings` and
+`native-session-gpu-ceb3a17`. The [Web Animations timing model](https://www.w3.org/TR/web-animations-1/#document-timelines)
+keeps the active document timeline monotonic, and its default timeline equals the rAF
+callback timestamp. Native UI dispatch therefore reads `document.timeline.currentTime`;
+an inactive document has no UI time to commit. Game simulation retains its existing
+rAF clock. This repairs the shared clock source without clamping time or hiding failures.
+The composed red journeys and held-rAF clipboard proof must pass on the rebuilt artifact.

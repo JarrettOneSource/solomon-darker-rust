@@ -634,11 +634,15 @@ impl Game {
         game: &Rc<RefCell<Self>>,
         window: &web_sys::Window,
     ) -> Result<(), String> {
-        let clock = window.performance().ok_or("The game clock is unavailable.")?;
+        let clock = window.document().ok_or("The game document is unavailable.")?.timeline();
         let owner = Rc::downgrade(game);
         game.borrow_mut().gpu_ui.set_native_dispatch_handler(move || {
+            // Native events and rAF use one document animation clock. A performance
+            // sample can be newer than the next rAF timestamp; inactive documents
+            // have no animation time and leave input queued until they become active.
+            let Some(time) = clock.current_time() else { return Ok(()) };
             let game = owner.upgrade().ok_or("The game is no longer available for input.")?;
-            game.borrow_mut().dispatch_native_ui(clock.now())
+            game.borrow_mut().dispatch_native_ui(time)
         });
         Ok(())
     }
