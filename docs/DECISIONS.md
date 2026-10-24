@@ -257,6 +257,19 @@ GPU editor, loader, renderer and read-only geometry diagnostics are reused. Pack
 preparation removes the three retired presentation files, and archive validation rejects
 them. The actual packaged journey must reject DOM controls and exercise launch errors,
 keyboard editing, updates, saved return and all three game modes before qualification.
+The packaged port-field regression showed that native editor arrows intentionally do not
+enter egui's key queue. The numeric launcher field reads the existing native key receipts;
+the shared text editor keeps its caret behavior. Keyboard button acceptance uses real Tab
+traversal before Space, rather than assuming a pointer click also grants keyboard focus.
+
+**Desktop media acceptance uses the existing resident-channel evidence.** Pacing only
+the original main-process music response bytes at 256 KiB/s reproduced three actual
+`ERR_ABORTED` requests at 96d99b3. Each unchanged connected stock channel had one source,
+one load, trusted loaded-data and suspend events, ready data, idle networking and no media
+abort/error event. The shared `browser-errors.cjs` classifier accepts only that observed
+lifecycle; the desktop journey now uses it and retains every raw failure and classification.
+Unclassified cancellations and actual media errors still fail. This experiment does not
+retroactively qualify the earlier Intel/Windows jobs, which lacked those observations.
 
 **Native font geometry and Rust editing share one text layout.** The installed egui
 row/cursor model assumes increasing horizontal positions and cannot represent mixed

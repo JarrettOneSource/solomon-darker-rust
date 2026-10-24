@@ -306,9 +306,9 @@ async function launch(label, userData) {
     }
   };
   running.add(instance);
-  // Observe the actual media owner before the first game document. The strict
-  // request-failure assertion below remains unchanged while diagnosis is open.
-  await ui.watchRequestFailures(page).ready;
+  // The shared observer retains every raw failure and only retires one when
+  // the actual resident media channel proves the browser suspended preloading.
+  await ui.watchRequestFailures(page, {errors}).ready;
   page.on('pageerror', error => errors.push(redact(`${label}: ${error.message}`)));
   page.on('console', message => {
     if (message.type() === 'warning' && message.text() === storageConflict
@@ -326,7 +326,6 @@ async function launch(label, userData) {
   });
   page.on('requestfailed', request => {
     if (request.url().startsWith('solomon-darker://app/')) {
-      errors.push(redact(`${label}: ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
       const failure = {label, at: new Date().toISOString(), url: redact(request.url()),
         document: redact(page.url()), resourceType: request.resourceType(),
         method: request.method(), failure: request.failure()};
@@ -388,6 +387,12 @@ async function proveLauncher(instance) {
   await page.mouse.wheel(0, 700);
   await ui.click(page, 'launcher/help');
   await ui.value(page, 'launcher/help', 'open');
+  for (let step = 0; step < 12
+    && !ui.findWidget(await ui.readUi(page), 'launcher/help')?.focused; step++) {
+    await page.keyboard.press('Tab');
+    await ui.nextFrame(page);
+  }
+  await ui.focused(page, 'launcher/help');
   await page.keyboard.press('Space');
   await ui.value(page, 'launcher/help', 'closed');
   await ui.click(page, 'launcher/check');
@@ -408,8 +413,15 @@ async function proveLauncher(instance) {
 }
 
 async function captureMedia(instance, phase) {
+  const report = await ui.settleErrors(instance.page);
   receipts.mediaObservations.push({label: instance.label, phase,
-    at: new Date().toISOString(), report: await ui.settleErrors(instance.page)});
+    at: new Date().toISOString(), report});
+  for (const suspension of report.expectedSuspensions) {
+    if (!receipts.cancelledMusic.some(previous => previous.label === instance.label
+      && previous.failure.requestId === suspension.failure.requestId)) {
+      receipts.cancelledMusic.push({label: instance.label, ...suspension});
+    }
+  }
 }
 async function title(page) {
   await page.waitForURL('solomon-darker://app/game', {waitUntil: 'domcontentloaded'});
