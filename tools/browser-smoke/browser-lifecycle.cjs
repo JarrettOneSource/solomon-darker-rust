@@ -28,6 +28,8 @@ async function launchOwnedBrowser(chromium,options) {
     throw error;
   }
   const process=server.process();
+  let stderrTail='';
+  process.stderr?.on('data',chunk=>{stderrTail=(stderrTail+chunk.toString()).slice(-16384)});
   async function close() {
     const report={pid:process.pid,connectedBefore:browser.isConnected(),errors:[]};
     try {await bounded(browser.close(),'Playwright connection close',5000)}
@@ -44,6 +46,7 @@ async function launchOwnedBrowser(chromium,options) {
     if(report.exitCode===null&&report.signalCode===null)report.errors.push('owned Chrome remains running');
     else if(report.exitCode!==0||report.signalCode!==null)report.errors.push('owned Chrome did not exit successfully');
     if(report.errors.length) {
+      report.stderrTail=stderrTail;
       const error=new Error(`Browser cleanup failed: ${report.errors.join('; ')}`);
       error.cleanup=report;throw error;
     }
