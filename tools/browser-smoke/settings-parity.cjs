@@ -1,9 +1,12 @@
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 // Real GPU Settings pages, stored preferences and native keyboard/mouse capture.
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
 const gpu = require('./gpu-ui.cjs');
+const output = process.env.OUT || '/tmp';
+fs.mkdirSync(output, {recursive: true});
 
 async function reveal(page, id) {
   for (let index = 0; index < 14; index += 1) {
@@ -32,10 +35,12 @@ async function focusedControl(page, id) {
     args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
   const browser = owned.browser;
   const checks = [];
+  const receipt = {checks, errors: [], pass: false};
   let page;
   try {
     page = await browser.newPage({viewport: {width: 1600, height: 900}, ignoreHTTPSErrors: process.env.LOCAL_TLS === '1'});
     const {errors, ready: errorsReady} = gpu.watchErrors(page);
+    receipt.errors = errors;
     await errorsReady;
     await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
     await gpu.ready(page);
@@ -146,9 +151,29 @@ async function focusedControl(page, id) {
     await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
     checks.push('accepted preferences survive actual reload; compact GPU panel');
+    receipt.behaviorPassed = true;
     console.log(JSON.stringify({checks, errors}));
+  } catch (error) {
+    receipt.failure = String(error.stack || error);
+    if (page && !page.isClosed()) {
+      try { await page.screenshot({path: path.join(output, 'settings-failure.png')}); }
+      catch (screenshotError) { receipt.screenshotFailure = String(screenshotError); }
+    }
+    throw error;
   } finally {
     try { if (page && !page.isClosed()) await gpu.settleErrors(page); }
-    finally { console.log(JSON.stringify({browserCleanup:await owned.close()})); }
+    catch (error) { receipt.settleFailure = String(error); throw error; }
+    finally {
+      try {
+        receipt.browserCleanup = await owned.close();
+        receipt.pass = receipt.behaviorPassed === true && receipt.errors.length === 0 && !receipt.settleFailure;
+        console.log(JSON.stringify({browserCleanup: receipt.browserCleanup}));
+      } catch (error) {
+        receipt.browserCleanup = error.cleanup || {failure: String(error)};
+        throw error;
+      } finally {
+        fs.writeFileSync(path.join(output, 'receipt.json'), `${JSON.stringify(receipt, null, 2)}\n`);
+      }
+    }
   }
 })().catch(error => {console.error(error); process.exitCode = 1;});
