@@ -2,7 +2,7 @@
 //! Platform requests run inside the original trusted canvas click.
 
 use crate::gpu_ui::UiFrame;
-use egui::{Color32, Id, Order, Rect, Stroke, pos2, vec2};
+use egui::{Color32, Id, Order, Stroke, pos2, vec2};
 use js_sys::{Function, Object, Promise, Reflect};
 use std::cell::RefCell;
 use std::rc::Rc;
