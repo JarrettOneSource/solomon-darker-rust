@@ -411,7 +411,10 @@ async function observeOwnedMatch(leader, guest) {
     await ui.widget(page, 'observer/panel', {timeout:120000});
     await waitUntil(() => state.welcomes.at(-1)?.observer === true
       && state.frame?.snapshot.boneyard?.run_id === runId, 'genuine read-only observer welcome');
-    assert.equal(state.welcomes.at(-1).developerAccess, true);
+    assert.equal(state.welcomes.at(-1).developerAccess, false,
+      'Source observer welcome grants observation without player developer controls');
+    assert.ok(!state.commands.includes('ready_boneyard'),
+      'loading the observed world never claims participant readiness');
     assert.deepEqual(Object.keys(state.frame.snapshot.participants).sort(), ids);
     await ui.click(page, `observer/player:${guest.state.id}`);
     await ui.waitForUi(page, snapshot => ui.findWidget(snapshot, `observer/player:${guest.state.id}`)?.selected === true,
@@ -429,7 +432,7 @@ async function observeOwnedMatch(leader, guest) {
     finally { await page.keyboard.up('KeyD'); }
     await page.mouse.click(640, 600); await page.keyboard.press('KeyI');
     assert.equal(inputFrames, 0, 'observer controls never send gameplay input');
-    assert.ok(!state.commands.some(kind => ['bind_belt','set_pause','choose_skill'].includes(kind)));
+    assert.ok(!state.commands.some(kind => ['ready_boneyard','bind_belt','set_pause','choose_skill'].includes(kind)));
     assert.deepEqual(Object.keys(leader.state.frame.snapshot.participants).sort(), ids);
     for (const id of ids) {
       assert.deepEqual(leader.state.frame.snapshot.participants[id].wizard.position, before[id].position);

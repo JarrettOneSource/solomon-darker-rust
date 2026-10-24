@@ -577,7 +577,11 @@ impl Game {
             });
             self.world_loading = false;
             self.apply_native_frame(frame, Some(loaded))?;
-            self.send_native_message(&ClientMessage::ReadyBoneyard { run_id })?;
+            // Source game-observer-session.ts loads the world without claiming
+            // participant readiness or changing that participant's pause barrier.
+            if !self.is_hosted_observer() {
+                self.send_native_message(&ClientMessage::ReadyBoneyard { run_id })?;
+            }
             return Ok(());
         }
         self.session.install_boneyard(loaded)?;

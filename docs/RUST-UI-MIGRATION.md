@@ -396,6 +396,19 @@ book/Chat/Party journey on the combined build.
 
 ## Acceptance matrix
 
+The hosted612 Social/Observer run retained a real observer admission failure in
+`hosted-acceptance/receipts/social-gpu-612acd0/receipt.json`: after the genuine
+observer welcome and world load, the client sent `ready_boneyard` and received
+`Observer connections are read-only.` The pinned fa08
+`client/game-observer-session.ts` sends welcome/snapshot acknowledgements, Ping
+and Disconnect; loading does not claim player readiness. Its
+`host/game-host.ts:979–1005` explicitly grants `observer: true` with
+`developerAccess: false`. The shared world installer must skip ReadyBoneyard for
+the already-admitted observer while preserving player loading. The browser
+journey requires that wire omission and the Source capability values, actual
+camera switching, no participant mutation and no save. Its first eight Social
+groups passed before this failure; full Observer/Kick acceptance remains required.
+
 `Pending` means current composed behavior has not been accepted. Owner names match the
 implementation lanes; scripts are under `tools/browser-smoke/`. The GPU families, canonical
 notification composition and old visual-factory retirement are integrated. The joined
