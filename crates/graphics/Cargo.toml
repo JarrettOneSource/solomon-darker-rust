@@ -16,6 +16,6 @@ wasm-bindgen-futures = { workspace = true }
 js-sys = { workspace = true }
 web-sys = { workspace = true, features = [
   "Window", "Document", "HtmlElement", "Element", "Node", "Response", "HtmlImageElement", "WebGl2RenderingContext", "WebGlBuffer",
-  "WebGlFramebuffer", "WebGlProgram", "WebGlShader", "WebGlTexture",
+  "WebGlFramebuffer", "WebGlProgram", "WebGlShader", "WebGlTexture", "WebGlSampler",
   "WebGlUniformLocation", "WebGlVertexArrayObject",
 ] }

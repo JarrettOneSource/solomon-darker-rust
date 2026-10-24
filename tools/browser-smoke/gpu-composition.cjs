@@ -39,7 +39,7 @@ const files = new Map([
       canvas.width = 5; canvas.height = 4;
       const gl = canvas.getContext('webgl2', {premultipliedAlpha:false, preserveDrawingBuffer:true});
       if (!gl) throw Error('WebGL2 is unavailable');
-      return JSON.parse(module.composition_probe(gl));
+      return {...JSON.parse(module.composition_probe(gl)), sampling:JSON.parse(module.sampling_probe(gl))};
     });
     const expected = {
       overlap:[64,128,0,192], border:[128,0,0,128], screen:[64,128,0,208],
@@ -58,6 +58,13 @@ const files = new Map([
       assert.ok(rgba.every((channel, index) => Math.abs(channel - actual[name][index]) <= 1),
         `${name}: hand-derived SourceOver/group result ${JSON.stringify(receipt)}`);
     }
+    const sampling = actual.sampling;
+    for (const name of ['linear','nested','restored']) {
+      assert.ok([230,0,26,255].every((channel, i) => Math.abs(channel-sampling[name][i])<=1), name);
+    }
+    assert.deepEqual(sampling.nearest, [255,0,0,255]);
+    assert.deepEqual(sampling.parameters, [9729,9729,33071,33071]);
+    for (const name of ['nestedRestored','unbound','deleted']) assert.equal(sampling[name], true, name);
     console.log('Actual Rust nested GPU composition, projection and group opacity passed');
   } finally {
     if (browser) await browser.close();

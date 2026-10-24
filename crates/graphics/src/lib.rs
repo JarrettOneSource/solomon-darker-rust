@@ -9,7 +9,7 @@ pub mod assets;
 use solomon_sim::float;
 use web_sys::{
     HtmlImageElement, WebGl2RenderingContext as Gl, WebGlBuffer, WebGlFramebuffer, WebGlProgram,
-    WebGlShader, WebGlTexture, WebGlUniformLocation, WebGlVertexArrayObject,
+    WebGlSampler, WebGlShader, WebGlTexture, WebGlUniformLocation, WebGlVertexArrayObject,
 };
 
 const VERTEX_SHADER: &str = r"#version 300 es
@@ -169,6 +169,14 @@ pub enum TextureColorMode {
     Premultiplied,
 }
 
+/// Per-draw sampling without changing the shared texture's own parameters.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TextureSampling {
+    #[default]
+    Texture,
+    Nearest,
+}
+
 /// Source CSS `saturate(...) brightness(...)` in sRGB, with alpha preserved.
 /// Filter Effects 1 requires non-premultiplied colour and clamps each operation:
 /// https://drafts.csswg.org/filter-effects/#ShorthandEquivalents
@@ -267,6 +275,8 @@ pub struct Renderer {
     native_world_pixel_centers: bool,
     vertices: Vec<f32>,
     bound_texture: Option<u32>,
+    sampling: TextureSampling,
+    nearest_sampler: WebGlSampler,
     blend: BlendMode,
     next_texture_id: std::cell::Cell<u32>,
     white_texture: Texture,
@@ -279,6 +289,7 @@ pub struct Renderer {
 impl Drop for Renderer {
     fn drop(&mut self) {
         self.gl.delete_texture(Some(&self.white_texture.handle));
+        self.gl.delete_sampler(Some(&self.nearest_sampler));
         self.gl.delete_buffer(Some(&self._vertex_buffer));
         self.gl.delete_vertex_array(Some(&self._vertex_array));
         self.gl.delete_program(Some(&self._program));
@@ -358,6 +369,16 @@ impl Renderer {
         gl.uniform1f(Some(&u_shadow_only), 0.0);
         gl.uniform1f(Some(&u_texture_premultiplied), 0.0);
         gl.active_texture(Gl::TEXTURE0);
+        let nearest_sampler = gl.create_sampler().ok_or("cannot create the UI texture sampler")?;
+        for (parameter, value) in [
+            (Gl::TEXTURE_MIN_FILTER, Gl::NEAREST),
+            (Gl::TEXTURE_MAG_FILTER, Gl::NEAREST),
+            (Gl::TEXTURE_WRAP_S, Gl::CLAMP_TO_EDGE),
+            (Gl::TEXTURE_WRAP_T, Gl::CLAMP_TO_EDGE),
+        ] {
+            gl.sampler_parameteri(&nearest_sampler, parameter, value as i32);
+        }
+        gl.bind_sampler(0, None);
         gl.enable(Gl::BLEND);
         let (source, destination, source_alpha, destination_alpha) = BlendMode::Normal.factors();
         gl.blend_func_separate(source, destination, source_alpha, destination_alpha);
@@ -409,6 +430,8 @@ impl Renderer {
             native_world_pixel_centers: false,
             vertices: Vec::new(),
             bound_texture: None,
+            sampling: TextureSampling::Texture,
+            nearest_sampler,
             blend: BlendMode::Normal,
             next_texture_id: std::cell::Cell::new(1),
             white_texture: Texture { id: 0, handle: white, width: 1.0, height: 1.0 },
@@ -813,6 +836,33 @@ impl Renderer {
         let filter = if nearest { Gl::NEAREST } else { Gl::LINEAR };
         for parameter in [Gl::TEXTURE_MIN_FILTER, Gl::TEXTURE_MAG_FILTER] {
             self.gl.tex_parameteri(Gl::TEXTURE_2D, parameter, filter as i32);
+        }
+    }
+
+    /// A pixelated UI draw may borrow a linearly filtered world texture unchanged.
+    pub fn draw_sampled<R>(
+        &mut self,
+        sampling: TextureSampling,
+        draw: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let previous = self.sampling;
+        self.set_sampling(sampling);
+        let result = draw(self);
+        self.set_sampling(previous);
+        result
+    }
+
+    fn set_sampling(&mut self, sampling: TextureSampling) {
+        if self.sampling != sampling {
+            self.flush();
+            self.gl.bind_sampler(
+                0,
+                match sampling {
+                    TextureSampling::Texture => None,
+                    TextureSampling::Nearest => Some(&self.nearest_sampler),
+                },
+            );
+            self.sampling = sampling;
         }
     }
 

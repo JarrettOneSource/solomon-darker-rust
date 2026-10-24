@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use egui::TextureId;
-use solomon_graphics::{AlphaShadow, BlendMode, ColorFilter, ShadowOutput};
+use solomon_graphics::{AlphaShadow, BlendMode, ColorFilter, ShadowOutput, TextureSampling};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct ShadowKey {
@@ -25,6 +25,7 @@ pub(super) struct Material {
     pub source: TextureSource,
     blend: u8,
     pub mask: bool,
+    pub sampling: TextureSampling,
     brightness: u32,
     saturation: u32,
     shadow: Option<ShadowKey>,
@@ -40,10 +41,16 @@ impl Material {
                 BlendMode::Multiply => 2,
             },
             mask,
+            sampling: TextureSampling::Texture,
             brightness: filter.brightness.to_bits(),
             saturation: filter.saturation.to_bits(),
             shadow: None,
         }
+    }
+
+    pub fn with_sampling(mut self, sampling: TextureSampling) -> Self {
+        self.sampling = sampling;
+        self
     }
 
     pub fn with_shadow(mut self, shadow: AlphaShadow) -> Self {
@@ -112,6 +119,23 @@ impl Materials {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn per_draw_sampler_does_not_alias_the_same_borrowed_image_material() {
+        let mut materials = Materials::default();
+        let base = Material::new(
+            TextureSource::Image(3),
+            BlendMode::Normal,
+            false,
+            ColorFilter::default(),
+        );
+        let pixelated = base.with_sampling(TextureSampling::Nearest);
+        assert_ne!(materials.texture_id(base), materials.texture_id(pixelated));
+        assert_eq!(materials.texture_id(pixelated), materials.texture_id(pixelated));
+        assert_eq!(pixelated.source, base.source);
+        assert_eq!(pixelated.sampling, TextureSampling::Nearest);
+        assert_eq!(base.sampling, TextureSampling::Texture);
+    }
 
     #[test]
     fn managed_text_and_asset_images_keep_distinct_material_ownership() {

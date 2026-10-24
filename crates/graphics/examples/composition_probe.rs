@@ -4,14 +4,77 @@
 #[cfg(target_arch = "wasm32")]
 mod browser {
     use solomon_graphics::{
-        AlphaShadow, BlendMode, Renderer, ShadowOutput, Texture, TextureColorMode,
+        AlphaShadow, BlendMode, Renderer, ShadowOutput, Texture, TextureColorMode, TextureSampling,
     };
+    use wasm_bindgen::JsCast;
     use wasm_bindgen::prelude::*;
     use web_sys::WebGl2RenderingContext as Gl;
 
     #[wasm_bindgen]
     pub fn composition_probe(gl: Gl) -> Result<String, JsValue> {
         probe(gl).map_err(|error| JsValue::from_str(&error))
+    }
+
+    #[wasm_bindgen]
+    pub fn sampling_probe(gl: Gl) -> Result<String, JsValue> {
+        sampling(gl).map_err(|error| JsValue::from_str(&error))
+    }
+
+    fn sampling(gl: Gl) -> Result<String, String> {
+        let mut renderer = Renderer::new(gl.clone())?;
+        let texture = renderer.upload_rgba(2, 1, &[255, 0, 0, 255, 0, 0, 255, 255])?;
+        renderer.begin_frame(5, 4, [5.0, 4.0]);
+        let sample = |renderer: &mut Renderer| -> Result<_, String> {
+            quad(
+                renderer,
+                &texture,
+                [0.0, 0.0, 2.0, 1.0],
+                [0.0, 0.0, 5.0, 1.0],
+                TextureColorMode::Texture,
+                1.0,
+            );
+            renderer.flush();
+            pixel(&gl, 1, 3)
+        };
+        let linear = sample(&mut renderer)?;
+        let (nearest, nested, nested_restored, sampler) =
+            renderer.draw_sampled(TextureSampling::Nearest, |renderer| -> Result<_, String> {
+                let nearest = sample(renderer)?;
+                let sampler = gl
+                    .get_parameter(Gl::SAMPLER_BINDING)
+                    .map_err(|error| format!("nearest sampler: {error:?}"))?;
+                let nested = renderer.draw_sampled(TextureSampling::Texture, sample)?;
+                let nested_restored = gl
+                    .get_parameter(Gl::SAMPLER_BINDING)
+                    .map_err(|error| format!("restored nearest sampler: {error:?}"))?
+                    == sampler;
+                Ok((nearest, nested, nested_restored, sampler))
+            })?;
+        let restored = sample(&mut renderer)?;
+        let unbound = gl
+            .get_parameter(Gl::SAMPLER_BINDING)
+            .map_err(|error| format!("restored texture sampler: {error:?}"))?
+            .is_null();
+        let mut parameters = Vec::new();
+        for parameter in
+            [Gl::TEXTURE_MIN_FILTER, Gl::TEXTURE_MAG_FILTER, Gl::TEXTURE_WRAP_S, Gl::TEXTURE_WRAP_T]
+        {
+            let value = gl
+                .get_tex_parameter(Gl::TEXTURE_2D, parameter)
+                .map_err(|error| format!("borrowed texture parameter: {error:?}"))?
+                .as_f64()
+                .ok_or("borrowed texture parameter is not numeric")?;
+            parameters.push(value as u32);
+        }
+        renderer.destroy_texture(&texture);
+        drop(renderer);
+        let deleted = !gl.is_sampler(Some(sampler.unchecked_ref()));
+        if gl.get_error() != Gl::NO_ERROR {
+            return Err("sampler proof produced a WebGL error".to_owned());
+        }
+        Ok(format!(
+            "{{\"linear\":{linear:?},\"nearest\":{nearest:?},\"nested\":{nested:?},\"restored\":{restored:?},\"nestedRestored\":{nested_restored},\"unbound\":{unbound},\"parameters\":{parameters:?},\"deleted\":{deleted}}}"
+        ))
     }
 
     fn pixel(gl: &Gl, x: i32, y: i32) -> Result<[u8; 4], String> {

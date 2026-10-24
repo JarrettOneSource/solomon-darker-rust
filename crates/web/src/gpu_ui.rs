@@ -37,6 +37,7 @@ pub use effects::GroupEffect;
 pub use geometry::{clip_polygon_ellipse, css_bezier};
 pub use input::{BrowserKey, canvas_point, key_from_browser};
 pub use painter::clip_scissor;
+pub use solomon_graphics::TextureSampling;
 pub use stock::{StockAtlas, message_frame, message_frame_scaled, native_text, paint_text_layout};
 
 pub fn cooldown_sector_points(remaining: f64, capacity: f64) -> Vec<Pos2> {
@@ -395,9 +396,32 @@ impl UiFrame<'_> {
         uv: Option<Rect>,
         tint: Color32,
     ) -> bool {
-        self.image_quad(
-            painter,
+        self.image_sampled(painter, path, destination, uv, tint, TextureSampling::Texture)
+    }
+
+    /// Per-draw pixelated sampling leaves an admitted world texture unchanged.
+    pub fn image_sampled(
+        &self,
+        painter: &Painter,
+        path: &str,
+        destination: Rect,
+        uv: Option<Rect>,
+        tint: Color32,
+        sampling: TextureSampling,
+    ) -> bool {
+        let Some(texture) = self.images.sampled_texture_id(
             path,
+            self.blend,
+            false,
+            self.color_filter,
+            None,
+            sampling,
+        ) else {
+            return false;
+        };
+        self.paint_texture_quad(
+            painter,
+            texture,
             [
                 destination.left_top(),
                 destination.right_top(),
@@ -406,7 +430,8 @@ impl UiFrame<'_> {
             ],
             uv.unwrap_or(Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0))),
             tint,
-        )
+        );
+        true
     }
 
     pub fn image_size(&self, path: &str) -> Option<Vec2> {
