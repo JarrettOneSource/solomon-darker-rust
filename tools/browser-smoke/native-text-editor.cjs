@@ -75,7 +75,13 @@ async function paintedSelection(page,count){
     await startNewGame(page,{name:'Editor'});
     const fomentius=await ui.byLabel(page,'Fomentius',{role:'button',prefix:'hud:shortcut:'});
     await ui.click(page,fomentius.id);await ui.widget(page,'panel:service');
-    const offer=await ui.byLabel(page,/^Buy Sack for \d+ gold$/,{role:'button',prefix:'panel:shop:'});
+    const sackOffer=widget=>widget.role==='button'&&widget.id.startsWith('panel:shop:')
+      &&/^Buy Sack for \d+ gold$/.test(widget.label);
+    const stock=await ui.waitForUi(page,state=>state.widgets.some(sackOffer),'an actual Sack shop offer');
+    // A native shop can roll more than one Sack. Buy its cheapest real offer;
+    // equal product names do not make the independently owned item IDs ambiguous.
+    const offer=stock.widgets.filter(sackOffer)
+      .sort((a,b)=>Number(a.label.match(/\d+/)[0])-Number(b.label.match(/\d+/)[0]))[0];
     await ui.click(page,offer.id);await ui.click(page,offer.id);
     const sack=await ui.byLabel(page,/^Sack, quantity 1$/,{role:'button',prefix:'panel:item:'});
     await ui.click(page,'panel:close');await ui.noWidget(page,'panel:service');
