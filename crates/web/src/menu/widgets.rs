@@ -9,7 +9,6 @@ use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiT
 use unicode_segmentation::UnicodeSegmentation;
 
 pub(super) const GOLD: Color32 = Color32::from_rgb(217, 186, 112);
-pub(super) const PALE: Color32 = Color32::from_rgb(191, 255, 191);
 pub(super) const ERROR: Color32 = Color32::from_rgb(228, 163, 154);
 
 #[derive(Clone, Copy)]
