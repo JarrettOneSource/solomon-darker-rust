@@ -25,6 +25,98 @@ mod browser {
         spread_shadow(gl).map_err(|error| JsValue::from_str(&error))
     }
 
+    #[wasm_bindgen]
+    pub fn large_shadow_probe(gl: Gl, scale: u32) -> Result<js_sys::Uint8Array, JsValue> {
+        large_shadow(gl, scale).map_err(|error| JsValue::from_str(&error))
+    }
+
+    fn large_shadow(gl: Gl, scale: u32) -> Result<js_sys::Uint8Array, String> {
+        let mut renderer = Renderer::new(gl.clone())?;
+        let [width, height] = [256 * scale, 192 * scale];
+        let factor = scale as f32;
+        let sigma = 12.0 * factor;
+        let logical = [width as f32, height as f32];
+        let source = renderer.create_render_target_size([width * 2, height * 2])?;
+        let horizontal = renderer.create_render_target_size([width, height])?;
+        let vertical = renderer.create_render_target_size([width, height])?;
+        renderer.begin_frame(width, height, logical);
+        renderer.render_ui_group(&source, [logical[0] * 2.0, logical[1] * 2.0], |renderer| {
+            renderer.draw_solid(
+                [40.0 * factor, 56.0 * factor, 176.0 * factor, 80.0 * factor],
+                [1.0; 4],
+            );
+            // Unused regions of an oversized pooled target must not contaminate its crop.
+            renderer.draw_solid([logical[0], 0.0, logical[0], logical[1] * 2.0], [1.0; 4]);
+            renderer.draw_solid([0.0, logical[1], logical[0], logical[1]], [1.0; 4]);
+        });
+        renderer.render_ui_group(&horizontal, logical, |renderer| {
+            renderer.draw_alpha_blurred(
+                [0.0, 0.5, 0.5, 1.0],
+                [sigma / source.texture.width, 0.0],
+                |renderer| {
+                    quad(
+                        renderer,
+                        &source.texture,
+                        [0.0, source.texture.height, logical[0], -logical[1]],
+                        [0.0, 0.0, logical[0], logical[1]],
+                        TextureColorMode::Premultiplied,
+                        1.0,
+                    );
+                },
+            );
+        });
+        renderer.render_ui_group(&vertical, logical, |renderer| {
+            renderer.draw_alpha_blurred(
+                [0.0, 0.0, 1.0, 1.0],
+                [0.0, sigma / horizontal.texture.height],
+                |renderer| {
+                    quad(
+                        renderer,
+                        &horizontal.texture,
+                        [0.0, logical[1], logical[0], -logical[1]],
+                        [0.0, 0.0, logical[0], logical[1]],
+                        TextureColorMode::Premultiplied,
+                        1.0,
+                    );
+                },
+            );
+            renderer.draw_erased(|renderer| {
+                renderer.draw_solid(
+                    [48.0 * factor, 64.0 * factor, 160.0 * factor, 64.0 * factor],
+                    [1.0; 4],
+                );
+            });
+        });
+        let mut pixels = vec![0; width as usize * height as usize * 4];
+        let mut read = Ok(());
+        renderer.render_onto(&vertical, logical, |_| {
+            read = gl
+                .read_pixels_with_opt_u8_array(
+                    0,
+                    0,
+                    width as i32,
+                    height as i32,
+                    Gl::RGBA,
+                    Gl::UNSIGNED_BYTE,
+                    Some(&mut pixels),
+                )
+                .map_err(|error| format!("dense shadow read: {error:?}"));
+        });
+        read?;
+        renderer.destroy_render_target(&vertical);
+        renderer.destroy_render_target(&horizontal);
+        renderer.destroy_render_target(&source);
+        if gl.get_error() != Gl::NO_ERROR {
+            return Err("dense shadow proof produced a WebGL error".to_owned());
+        }
+        let alpha: Vec<_> = pixels
+            .chunks_exact(width as usize * 4)
+            .rev()
+            .flat_map(|row| row.chunks_exact(4).map(|pixel| pixel[3]))
+            .collect();
+        Ok(js_sys::Uint8Array::from(alpha.as_slice()))
+    }
+
     fn spread_shadow(gl: Gl) -> Result<String, String> {
         let mut renderer = Renderer::new(gl.clone())?;
         let caster = renderer.upload_rgba(3, 1, &[255; 12])?;

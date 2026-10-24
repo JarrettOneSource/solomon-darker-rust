@@ -12,6 +12,16 @@ use crate::gpu_ui::{
     geometry::shadow_geometry,
 };
 
+mod blur;
+
+#[derive(Clone, Copy)]
+enum TargetSlot {
+    Source,
+    Composite,
+    Horizontal,
+    Vertical,
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct View {
     pub physical: [i32; 2],
@@ -46,6 +56,8 @@ impl View {
 struct Slot {
     source: Option<RenderTarget>,
     composite: Option<RenderTarget>,
+    horizontal: Option<RenderTarget>,
+    vertical: Option<RenderTarget>,
 }
 
 #[derive(Default)]
@@ -64,12 +76,19 @@ impl Targets {
     pub fn texture_count(&self) -> usize {
         self.slots
             .iter()
-            .map(|slot| usize::from(slot.source.is_some()) + usize::from(slot.composite.is_some()))
+            .map(|slot| {
+                usize::from(slot.source.is_some())
+                    + usize::from(slot.composite.is_some())
+                    + usize::from(slot.horizontal.is_some())
+                    + usize::from(slot.vertical.is_some())
+            })
             .sum()
     }
     pub fn destroy(&mut self, gl: &WebGl2RenderingContext) {
         for slot in self.slots.drain(..) {
-            for target in [slot.source, slot.composite].into_iter().flatten() {
+            for target in
+                [slot.source, slot.composite, slot.horizontal, slot.vertical].into_iter().flatten()
+            {
                 Renderer::delete_render_target(gl, &target)
             }
         }
@@ -78,7 +97,7 @@ impl Targets {
         &mut self,
         renderer: &mut Renderer,
         depth: usize,
-        composite: bool,
+        kind: TargetSlot,
         bounds: Rect,
         scale: Vec2,
     ) -> Result<RenderTarget, String> {
@@ -104,7 +123,12 @@ impl Targets {
             ));
         }
         let depth = self.depth(depth);
-        let slot = if composite { &mut depth.composite } else { &mut depth.source };
+        let slot = match kind {
+            TargetSlot::Source => &mut depth.source,
+            TargetSlot::Composite => &mut depth.composite,
+            TargetSlot::Horizontal => &mut depth.horizontal,
+            TargetSlot::Vertical => &mut depth.vertical,
+        };
         if let Some(target) = slot
             && target.texture.width >= required.x
             && target.texture.height >= required.y
@@ -221,13 +245,26 @@ impl GpuPainter {
         }
         let scale = view.scale();
         let source = aligned(source, scale);
-        let target = self.groups.get(renderer, depth, false, source, scale)?;
+        let target = self.groups.get(renderer, depth, TargetSlot::Source, source, scale)?;
         let capture = View::target(&target, source, scale);
         let mut rendered = Ok((0, 0));
         renderer.render_ui_group(&target, capture.logical, |renderer| {
             rendered = self.draw_nodes(renderer, images, children, capture, depth + 1);
         });
         let mut counts = rendered?;
+        if style.effect.shadows.iter().any(|shadow| shadow.blur * scale.x.max(scale.y) > 3.0) {
+            let added = self.draw_blurred_group(
+                renderer,
+                images,
+                &target,
+                source,
+                style,
+                knockout,
+                View { clip, ..view },
+                depth,
+            )?;
+            return Ok((counts.0 + added.0, counts.1 + added.1));
+        }
         let source_uv = target_uv(&target.texture, source, scale);
         if style.effect.shadows.len() <= 1 && knockout.is_none() {
             let added = draw_texture(
@@ -248,7 +285,8 @@ impl GpuPainter {
         } else {
             let output =
                 aligned(effects::effect_bounds(source, &style.effect).intersect(clip), scale);
-            let composite = self.groups.get(renderer, depth, true, output, scale)?;
+            let composite =
+                self.groups.get(renderer, depth, TargetSlot::Composite, output, scale)?;
             let capture = View::target(&composite, output, scale);
             let mut erased = Ok((0, 0));
             renderer.render_ui_group(&composite, capture.logical, |renderer| {

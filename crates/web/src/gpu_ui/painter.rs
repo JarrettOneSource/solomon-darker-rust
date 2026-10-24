@@ -195,6 +195,14 @@ impl Images {
         self.0.borrow().images.get(&path_key(path)).and_then(|entry| entry.size)
     }
 
+    pub fn ready(&self, path: &str) -> bool {
+        self.0
+            .borrow()
+            .images
+            .get(&path_key(path))
+            .is_some_and(|entry| matches!(entry.state, ImageState::Ready(_)))
+    }
+
     pub fn error(&self, path: &str) -> Option<String> {
         match &self.0.borrow().images.get(&path_key(path))?.state {
             ImageState::Failed(error) => Some(error.clone()),

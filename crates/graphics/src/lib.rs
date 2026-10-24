@@ -48,13 +48,18 @@ uniform vec2 u_shadow_offset;
 uniform vec2 u_shadow_sigma;
 uniform float u_shadow_only;
 uniform float u_texture_premultiplied;
+uniform vec4 u_blur_bounds;
+uniform vec2 u_blur_sigma;
 out vec4 o_color;
-vec4 cropped_texture(vec2 uv) {
-    if (any(lessThan(uv, u_shadow_bounds.xy)) || any(greaterThanEqual(uv, u_shadow_bounds.zw))) {
+vec4 bounded_texture(vec2 uv, vec4 bounds) {
+    if (any(lessThan(uv, bounds.xy)) || any(greaterThanEqual(uv, bounds.zw))) {
         return vec4(0.0);
     }
     vec2 halfTexel = 0.5 / vec2(textureSize(u_texture, 0));
-    return textureLod(u_texture, clamp(uv, u_shadow_bounds.xy + halfTexel, u_shadow_bounds.zw - halfTexel), 0.0);
+    return textureLod(u_texture, clamp(uv, bounds.xy + halfTexel, bounds.zw - halfTexel), 0.0);
+}
+vec4 cropped_texture(vec2 uv) {
+    return bounded_texture(uv, u_shadow_bounds);
 }
 float shadow_alpha(vec2 uv) {
     if (u_shadow_sigma.x == 0.0 || u_shadow_sigma.y == 0.0) {
@@ -75,6 +80,23 @@ float shadow_alpha(vec2 uv) {
     return alpha;
 }
 void main() {
+    if (any(greaterThan(u_blur_sigma, vec2(0.0)))) {
+        vec2 size = vec2(textureSize(u_texture, 0));
+        vec2 stepSize = sign(u_blur_sigma) / size;
+        float sigma = dot(u_blur_sigma, size);
+        int radius = int(ceil(3.0 * sigma));
+        float alpha = 0.0;
+        float total = 0.0;
+        for (int i = -radius; i <= radius; ++i) {
+            float distance = float(i) / sigma;
+            float weight = exp(-0.5 * distance * distance);
+            alpha += bounded_texture(v_uv + stepSize * float(i), u_blur_bounds).a * weight;
+            total += weight;
+        }
+        alpha /= total;
+        o_color = vec4(vec3(alpha), alpha);
+        return;
+    }
     bool shadow = u_shadow_sigma.x >= 0.0;
     vec4 texel = shadow ? cropped_texture(v_uv) : texture(u_texture, v_uv);
     if (u_texture_premultiplied > 0.5 && texel.a > 0.0) {
@@ -225,6 +247,12 @@ pub struct AlphaShadow {
     pub output: ShadowOutput,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+struct AlphaBlur {
+    bounds: [f32; 4],
+    sigma: [f32; 2],
+}
+
 /// Where a quad's texels come from and where they land.
 #[derive(Clone, Copy, Debug)]
 pub struct Quad {
@@ -263,6 +291,9 @@ pub struct Renderer {
     shadow: Option<AlphaShadow>,
     u_shadow_only: WebGlUniformLocation,
     u_texture_premultiplied: WebGlUniformLocation,
+    u_blur_bounds: WebGlUniformLocation,
+    u_blur_sigma: WebGlUniformLocation,
+    blur: Option<AlphaBlur>,
     framebuffer: Option<WebGlFramebuffer>,
     standard_alpha: bool,
     erasing: bool,
@@ -359,6 +390,10 @@ impl Renderer {
         let u_texture_premultiplied = gl
             .get_uniform_location(&program, "u_texture_premultiplied")
             .ok_or("u_texture_premultiplied is missing")?;
+        let u_blur_bounds =
+            gl.get_uniform_location(&program, "u_blur_bounds").ok_or("u_blur_bounds is missing")?;
+        let u_blur_sigma =
+            gl.get_uniform_location(&program, "u_blur_sigma").ok_or("u_blur_sigma is missing")?;
         gl.uniform1i(Some(&u_texture), 0);
         gl.uniform2f(Some(&u_pixel_center_offset), 0.0, 0.0);
         gl.uniform1f(Some(&u_saturation), 1.0);
@@ -369,6 +404,7 @@ impl Renderer {
         gl.uniform2f(Some(&u_shadow_sigma), -1.0, -1.0);
         gl.uniform1f(Some(&u_shadow_only), 0.0);
         gl.uniform1f(Some(&u_texture_premultiplied), 0.0);
+        gl.uniform2f(Some(&u_blur_sigma), 0.0, 0.0);
         gl.active_texture(Gl::TEXTURE0);
         let nearest_sampler = gl.create_sampler().ok_or("cannot create the UI texture sampler")?;
         for (parameter, value) in [
@@ -419,6 +455,9 @@ impl Renderer {
             shadow: None,
             u_shadow_only,
             u_texture_premultiplied,
+            u_blur_bounds,
+            u_blur_sigma,
+            blur: None,
             framebuffer: None,
             standard_alpha: false,
             erasing: false,
@@ -700,6 +739,35 @@ impl Renderer {
         self.set_shadow(Some(shadow));
         draw(self);
         self.set_shadow(previous);
+    }
+
+    /// One dense Gaussian alpha pass; exactly one normalized sigma axis is positive.
+    /// Two orthogonal passes avoid undersampling wide opaque edges at large radii.
+    pub fn draw_alpha_blurred(
+        &mut self,
+        bounds: [f32; 4],
+        sigma: [f32; 2],
+        draw: impl FnOnce(&mut Self),
+    ) {
+        assert!(sigma.iter().all(|value| value.is_finite() && *value >= 0.0));
+        assert!((sigma[0] > 0.0) != (sigma[1] > 0.0));
+        let previous = self.blur;
+        self.set_alpha_blur(Some(AlphaBlur { bounds, sigma }));
+        draw(self);
+        self.set_alpha_blur(previous);
+    }
+
+    fn set_alpha_blur(&mut self, blur: Option<AlphaBlur>) {
+        if self.blur != blur {
+            self.flush();
+            if let Some(blur) = blur {
+                self.gl.uniform4fv_with_f32_array(Some(&self.u_blur_bounds), &blur.bounds);
+                self.gl.uniform2fv_with_f32_array(Some(&self.u_blur_sigma), &blur.sigma);
+            } else {
+                self.gl.uniform2f(Some(&self.u_blur_sigma), 0.0, 0.0);
+            }
+            self.blur = blur;
+        }
     }
 
     fn set_shadow(&mut self, shadow: Option<AlphaShadow>) {

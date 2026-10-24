@@ -537,6 +537,35 @@ impl UiFrame<'_> {
         if !destination.is_positive() {
             return true;
         }
+        let layer = self.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
+        let physical_sigma = shadow.blur
+            * layer.scaling.abs()
+            * (self.rotation * Vec2::X).length()
+            * self.ctx.pixels_per_point();
+        if physical_sigma > 3.0 {
+            if !self.images.ready(path) {
+                self.images.request(path);
+                return false;
+            }
+            let [red, green, blue, alpha] = tint.to_srgba_unmultiplied();
+            self.with_blend(BlendMode::Normal)
+                .paint_group(
+                    painter,
+                    GroupEffect { opacity: f32::from(alpha) / 255.0, shadows: vec![shadow] },
+                    |frame, painter| {
+                        frame.atlas_image(
+                            painter,
+                            path,
+                            source,
+                            destination,
+                            Color32::from_rgb(red, green, blue),
+                        );
+                        Ok(())
+                    },
+                )
+                .expect("an image shadow capture only records GPU geometry");
+            return true;
+        }
         let Some(size) = self.image_size(path) else {
             self.images.request(path);
             return false;

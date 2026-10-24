@@ -39,8 +39,27 @@ const files = new Map([
       canvas.width = 5; canvas.height = 4;
       const gl = canvas.getContext('webgl2', {premultipliedAlpha:false, preserveDrawingBuffer:true});
       if (!gl) throw Error('WebGL2 is unavailable');
-      return {...JSON.parse(module.composition_probe(gl)), sampling:JSON.parse(module.sampling_probe(gl)),
+      const actual = {...JSON.parse(module.composition_probe(gl)), sampling:JSON.parse(module.sampling_probe(gl)),
         spread:JSON.parse(module.spread_shadow_probe(gl))};
+      actual.largeShadows = [];
+      for (const scale of [1,2]) {
+        const width=256*scale,height=192*scale,sigma=12*scale;
+        canvas.width=width; canvas.height=height;
+        const alpha=module.large_shadow_probe(gl,scale);
+        const mask=document.createElement('canvas');mask.width=width;mask.height=height;
+        const m=mask.getContext('2d');m.fillStyle='#fff';m.fillRect(40*scale,56*scale,176*scale,80*scale);
+        const reference=document.createElement('canvas');reference.width=width;reference.height=height;
+        const r=reference.getContext('2d');r.filter=`blur(${sigma}px)`;r.drawImage(mask,0,0);
+        r.filter='none';r.globalCompositeOperation='destination-out';r.fillRect(48*scale,64*scale,160*scale,64*scale);
+        const expected=r.getImageData(0,0,width,height).data;
+        let delta=0,worst=null;
+        for(let i=0;i<alpha.length;i++) {
+          const difference=Math.abs(alpha[i]-expected[i*4+3]);
+          if(difference>delta){delta=difference;worst={x:i%width,y:Math.floor(i/width),actual:alpha[i],expected:expected[i*4+3]};}
+        }
+        actual.largeShadows.push({scale,width,height,sigma,delta,worst});
+      }
+      return actual;
     });
     const expected = {
       overlap:[64,128,0,192], border:[128,0,0,128], screen:[64,128,0,208],
@@ -72,6 +91,8 @@ const files = new Map([
       assert.ok(expected.every((channel,i)=>Math.abs(channel-spread[name][i])<=1),
         `spread ${name}: ${JSON.stringify(spread)}`);
     }
+    for (const row of actual.largeShadows) assert.ok(row.delta<=9,
+      `dense native Gaussian at scale${row.scale}: ${JSON.stringify(row)}`);
     console.log('Actual Rust nested GPU composition, projection and group opacity passed');
   } finally {
     if (browser) await browser.close();

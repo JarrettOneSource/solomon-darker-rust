@@ -239,6 +239,21 @@ A renderer-owned WebGL2 sampler supplies NEAREST for the individual UI draw and 
 the previous sampler afterward. The texture identity, upload count, owner and original
 filter/wrap parameters stay unchanged. Material keys include the draw sampler choice.
 
+A native long-edge probe additionally exposed under-sampling in the earlier19×19
+sigma-spaced Gaussian: the pause-scale160px edge at sigma12 produced four-pixel
+plateaus and a maximum19-byte alpha difference from native Canvas blur. The original
+receipt is retained in `gpu-large-shadow-red/`. Large UI shadows now use horizontal and
+vertical dense Gaussian alpha passes through the same canonical shader, then the same
+Source/outer/inset/spread composition. The two additional targets are allocated lazily,
+reused by group depth and destroyed with the existing pool. Large atlas shadows enter
+that shared group path; small physical sigmas retain their qualified fast path.
+
+The unchanged native-shader reference drops this long-edge difference to4 bytes, with
+smooth single-pixel progression and glError0 (`gpu-large-shadow-shader-green/`). All16
+prior shader/material/crop cases still pass. The actual Rust Renderer probe also checks
+scale1/2, inverted target UVs and an oversized reused target containing opaque pixels
+outside the admitted crop. Its compiled/native result remains a separate required gate.
+
 ## World notifications recovered before repair
 
 The visual-producer inventory found `crates/web/src/loot/messages.rs` still constructing
