@@ -410,6 +410,10 @@ impl BoneyardLibrary {
         let mut actions = Vec::new();
         let layer = crate::menu::library_layer();
         ctx.set_sublayer(crate::menu::scene_layer(), layer);
+        let new_id = Id::unique("boneyards/new");
+        if self.focus_new && interactive && !self.opening {
+            ctx.memory_mut(|memory| memory.request_focus(new_id));
+        }
         egui::Area::new(layer.id)
             .fade_in(false)
             .fixed_pos(bounds.min)
@@ -434,8 +438,13 @@ impl BoneyardLibrary {
                     .inner
             })
             .inner?;
-        if self.focus_new && interactive {
-            ctx.memory_mut(|memory| memory.request_focus(Id::unique("boneyards/new")));
+        if self.focus_new
+            && interactive
+            && ctx.memory(|memory| memory.has_focus(new_id))
+            && ctx
+                .read_response(new_id)
+                .is_some_and(|response| response.enabled() && response.visible())
+        {
             self.focus_new = false;
         }
         for action in actions {
