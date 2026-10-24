@@ -16,22 +16,12 @@ pub(super) struct AllyMotion {
 }
 struct AllyRowMotion {
     model: AllyHudRow,
-    from: f64,
-    target: f64,
-    changed_at: f64,
+    health: super::motion::EaseTransition,
     appeared_at: f64,
 }
 impl AllyRowMotion {
     fn health(&self, now: f64) -> f64 {
-        let elapsed = now - self.changed_at;
-        if elapsed <= 0.0 {
-            return self.from;
-        }
-        if elapsed >= 220.0 {
-            return self.target;
-        }
-        let eased = crate::gpu_ui::css_bezier((elapsed / 220.0) as f32, 0.25, 0.1, 0.25, 1.0);
-        self.from + (self.target - self.from) * f64::from(eased)
+        self.health.value(now)
     }
     fn stripe_offset(&self, now: f64, reduced_motion: bool) -> f32 {
         if reduced_motion {
@@ -73,9 +63,7 @@ impl AllyMotion {
                     let health = clamp_ally_hud_health_ratio(model.health_ratio);
                     AllyRowMotion {
                         model: model.clone(),
-                        from: health,
-                        target: health,
-                        changed_at: now,
+                        health: super::motion::EaseTransition::new(health, 220.0),
                         appeared_at: now,
                     }
                 })
@@ -83,11 +71,7 @@ impl AllyMotion {
         } else {
             for (row, model) in self.rows.iter_mut().zip(models) {
                 let health = clamp_ally_hud_health_ratio(model.health_ratio);
-                if health != row.target {
-                    row.from = row.health(now);
-                    row.target = health;
-                    row.changed_at = now;
-                }
+                row.health.set(health, now);
                 row.model = model.clone();
             }
         }

@@ -8,6 +8,7 @@ mod chat;
 pub(crate) mod gpu;
 mod hosted;
 mod hub_players;
+mod motion;
 mod party;
 
 use std::cell::RefCell;
@@ -84,6 +85,7 @@ pub struct SocialUi {
     clipboard: party::PartyClipboard,
     shown_party_invitation: Option<String>,
     chat_open: bool,
+    chat_motion: chat::ChatMotion,
     chat_draft: String,
     channel: GameChatChannel,
     whisper: Option<GameChatSender>,
@@ -135,6 +137,7 @@ impl SocialUi {
             party_ui: party::PartyMenuInteraction::default(),
             shown_party_invitation: None,
             chat_open: false,
+            chat_motion: chat::ChatMotion::default(),
             chat_draft: String::new(),
             channel: GameChatChannel::Party,
             whisper: None,
@@ -232,6 +235,7 @@ impl SocialUi {
         self.context = context;
         if !context.visible {
             self.ally_motion.hide();
+            self.chat_motion.hide();
         }
         self.size = (width, height);
         self.party_ui.expire_copy(now_ms);
