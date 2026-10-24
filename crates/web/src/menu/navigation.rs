@@ -98,6 +98,8 @@ mod tests {
             |ctx| {
                 navigation.focus(ctx, scope, Some("menu-first"));
                 egui::Area::new(Id::unique("menu-navigation-test"))
+                    .background_interactable(false)
+                    .fade_in(false)
                     .fixed_pos(egui::Pos2::ZERO)
                     .show(ctx, |ui| {
                         let first = ui.interact(
@@ -117,6 +119,23 @@ mod tests {
                             egui::Sense::click(),
                         );
                         responses = Some((first, second));
+                    });
+                // Like the fullscreen control: a real focusable widget on a
+                // different root, outside this Source menu's controller scope.
+                egui::Area::new(Id::unique("outside-menu"))
+                    .background_interactable(false)
+                    .fade_in(false)
+                    .order(egui::Order::Foreground)
+                    .fixed_pos(egui::pos2(260.0, 240.0))
+                    .show(ctx, |ui| {
+                        ui.interact(
+                            egui::Rect::from_min_size(
+                                egui::pos2(260.0, 240.0),
+                                egui::vec2(100.0, 30.0),
+                            ),
+                            Id::unique("outside-menu-control"),
+                            egui::Sense::click(),
+                        );
                     });
             },
         )
@@ -168,5 +187,44 @@ mod tests {
         let (first, second) = pass(&ctx, &mut navigation, "dialogue-choices", Vec::new());
         assert!(first.has_focus());
         assert!(!second.has_focus());
+    }
+
+    #[test]
+    fn controller_edges_wrap_native_menu_order_without_leaving_its_scope() {
+        let ctx = Context::default();
+        let mut navigation = MenuNavigation::new();
+        pass(&ctx, &mut navigation, "menu", Vec::new());
+        let (first, _) = pass(&ctx, &mut navigation, "menu", Vec::new());
+        assert!(first.has_focus());
+        let mut dispatch = |key, pressed| {
+            pass(
+                &ctx,
+                &mut navigation,
+                "menu",
+                vec![egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+            );
+            pass(&ctx, &mut navigation, "menu", Vec::new());
+            pass(&ctx, &mut navigation, "menu", Vec::new())
+        };
+        let (first, second) = dispatch(egui::Key::ArrowUp, true);
+        assert!(!first.has_focus());
+        assert!(second.has_focus(), "Source previous fallback wraps to the menu's last widget");
+        dispatch(egui::Key::ArrowUp, false);
+        let (first, second) = dispatch(egui::Key::ArrowDown, true);
+        assert!(first.has_focus(), "Source next fallback wraps to the menu's first widget");
+        assert!(!second.has_focus());
+        dispatch(egui::Key::ArrowDown, false);
+
+        // Ordinary keyboard Tab retains its native access to the separate root.
+        pass(&ctx, &mut navigation, "menu", vec![key(egui::Key::Tab)]);
+        pass(&ctx, &mut navigation, "menu", Vec::new());
+        pass(&ctx, &mut navigation, "menu", vec![key(egui::Key::Tab)]);
+        assert_eq!(ctx.memory(|memory| memory.focused()), Some(Id::unique("outside-menu-control")));
     }
 }
