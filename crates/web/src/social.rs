@@ -67,6 +67,7 @@ pub struct SocialUi {
     portraits: StockPortraits,
     snapshot: Option<SocialSnapshot>,
     ally_rows: Vec<AllyHudRow>,
+    ally_motion: allies::AllyMotion,
     surface: Option<Surface>,
     hub_players: Vec<hub_players::HubPlayerCard>,
     requested_card: Option<(bool, String)>,
@@ -118,6 +119,7 @@ impl SocialUi {
             portraits: StockPortraits::load().await?,
             snapshot: None,
             ally_rows: Vec::new(),
+            ally_motion: allies::AllyMotion::default(),
             surface: None,
             hub_players: Vec::new(),
             requested_card: None,
@@ -228,6 +230,9 @@ impl SocialUi {
     ) -> Result<(), String> {
         self.now = now_ms;
         self.context = context;
+        if !context.visible {
+            self.ally_motion.hide();
+        }
         self.size = (width, height);
         self.party_ui.expire_copy(now_ms);
         self.coarse = self
