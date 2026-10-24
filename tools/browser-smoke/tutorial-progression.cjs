@@ -10,7 +10,7 @@ const {chromium}=require(path.resolve(process.env.PW));
 const ui=require('./gpu-ui.cjs');
 const {launchOwnedBrowser}=require('./browser-lifecycle.cjs');
 const {createNativeMessageReader}=require('./native-wire.cjs');
-const {walkSolomonEntrance}=require('./solomon-entrance.cjs');
+const {prepareBoneyardNavigation,walkSolomonEntrance}=require('./solomon-entrance.cjs');
 const {reachCollegeLoadout}=require('./menu-journey.cjs');
 const {assertTutorialTextBounds}=require('./tutorial-text-bounds.cjs');
 
@@ -21,11 +21,12 @@ const website=path.resolve(process.env.SOLOMON_WEBSITE_DIR||path.join(__dirname,
 const source=file=>import(pathToFileURL(path.join(website,'frontend/src/game',file)).href);
 const receipt={passed:false,url:url.href,artifact:process.env.ARTIFACT||null,
   scope:process.env.NATIVE_SAVE?'standalone-native-authority':'hosted-native-authority',
-  checks:[],stages:[],lessons:[],commands:[],welcomes:[],mediaNetwork:[],errors:[]};
+  checks:[],stages:[],lessons:[],commands:[],welcomes:[],mediaNetwork:[],navigation:[],errors:[]};
 const accepted={id:null,frame:null,loaded:null,checkpoint:null,checkpointEvidence:null};
 const held=new Set();
 let primary=false;
 let page,observed;
+let navigation,route=[],routeTarget=null,routeTick=-Infinity,waypoint=1;
 const world=()=>accepted.frame?.snapshot.boneyard;
 const player=()=>accepted.frame?.snapshot.participants[accepted.id];
 const stage=()=>world()?.tutorial?.stage;
@@ -87,8 +88,20 @@ async function release() {
 }
 async function moveTo(target) {
   const position=player().wizard.position;
-  const x=target.x-position.x,y=target.y-position.y;
-  if(Math.hypot(x,y)<14){await keys([]);return;}
+  if(distance(position,target)<14){await keys([]);return;}
+  if(!routeTarget||distance(routeTarget,target)>25||accepted.frame.snapshot.ticks-routeTick>=100
+    ||route.length<2||distance(position,route.at(-1))<14){
+    // The unchanged Source query returns a short route prefix. Replan from
+    // accepted collision-resolved positions; only keyboard events move the game.
+    route=navigation.navigation.findBoneyardEnemyRoute({bodyRadius:navigation.bodyRadius,
+      bounds:navigation.scene.bounds,clearance:navigation.bodyRadius,start:position,end:target,
+      endBodyRadius:0,world:navigation.geometry});
+    assert.ok(route&&route.length>1,'Source navigation reaches the actual loot or enemy target');
+    routeTarget=point(target);routeTick=accepted.frame.snapshot.ticks;waypoint=1;
+    receipt.navigation.push({tick:routeTick,stage:stage(),position:point(position),target:point(target),route});
+  }
+  while(waypoint<route.length-1&&distance(position,route[waypoint])<=20)waypoint++;
+  const x=route[waypoint].x-position.x,y=route[waypoint].y-position.y;
   const desired=[];
   const diagonal=Math.tan(Math.PI/8);
   if(Math.abs(x)>Math.abs(y)*diagonal)desired.push(x<0?'KeyA':'KeyD');
@@ -252,7 +265,8 @@ async function modal(kind) {
     receipt.earlyEscape={beforeFrame:beforeEscape.frame,afterFrame:afterEscape.frame,
       surface:afterEscape.surface,stage:stage()};
     await actualCheckpoint();
-    await walkSolomonEntrance(page,{snapshot:()=>accepted.frame.snapshot,playerId:()=>accepted.id,output});
+    navigation=await prepareBoneyardNavigation(world());
+    await walkSolomonEntrance(page,{snapshot:()=>accepted.frame.snapshot,playerId:()=>accepted.id,output,plan:navigation});
     checked('real Title YES, Source-gated early Escape, durable checkpoint and ordinary Solomon confrontation');
     const deadline=Date.now()+480000;
     while(world()?.tutorial&&Date.now()<deadline){

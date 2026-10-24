@@ -1241,3 +1241,22 @@ local event IDs; it is not natural earned Gold. No generated/imported save, even
 injection or account-role change is permitted. `world-notifications.cjs` shares only
 read-only native geometry/scale/speech assertions; each caller owns the actual event
 witness. Historical loot-only fixtures remain unchanged.
+
+
+The unchanged9fab client and fixed native79346b44 run beyond the original media
+failure boundary with strict errors[]: combat206 continues to15,728,640 buffered
+bytes at521 seconds, rather than ending short at170 seconds. Chrome20720 and
+native20708 both exit0. Full Tutorial still fails at its original480-second
+progression deadline because the driver heads directly into a grave while collecting
+the actual amulet. Evidence remains in
+`common-browser/9fab4e4/m5/tutorial-native-media-fixed-r1/`. No complete-transfer or
+full-Tutorial claim follows from an intentionally still-buffering media request.
+
+Pinned fa08 `boneyard-enemy-navigation.ts::findBoneyardEnemyRoute` returns a Source
+route prefix around the scenery from the accepted failing position (985.2451,1227.0072)
+toward the real Sack (1053.3206,1051.4253). The unchanged collision solver leaves the
+old straight keyboard bearing189.59 units from that Sack after1000 steps. The
+read-only `source-loot-route.json` records both results. The driver must reuse the
+already-prepared Source geometry/navigation for loot, clubbing and offscreen approach
+waypoints, replanning from actual accepted positions. Only ordinary keyboard input
+reaches the game; its pickup, collision and progression remain authoritative.
