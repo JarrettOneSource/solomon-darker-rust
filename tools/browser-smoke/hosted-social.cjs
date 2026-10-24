@@ -615,9 +615,12 @@ async function observeOwnedMatch(leader, guest) {
     if (process.env.OBSERVER_ACCOUNTS) {
       step = 'actual Developer Sight and read-only observer';
       await observeOwnedMatch(leader, guest);
+    } else {
+      // Source HubScene owns Party/Kick; the observer case enters a Boneyard.
+      // Run each terminal journey with its own pair of ordinary participants.
+      step = 'actual owned member Kick';
+      await kickOwnedGuest(leader,guest);
     }
-    step = 'actual owned member Kick';
-    await kickOwnedGuest(leader,guest);
     for (const client of clients) {
       await ui.settleErrors(client.page);
       assert.deepEqual(client.state.errors, []);

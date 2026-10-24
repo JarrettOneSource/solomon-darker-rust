@@ -75,6 +75,7 @@ async function reachCollegeLoadout(page, {touch = false} = {}) {
 
 async function startNewGame(page, {
   element = 'ether', discipline = 'arcane', name = 'Helvidius', introOnly = false, touch = false,
+  continueLocal = false,
 } = {}) {
   const activate = touch ? ui.tap : ui.click;
   const initial = await ui.readUi(page);
@@ -87,11 +88,21 @@ async function startNewGame(page, {
   await activate(page, 'new-game');
   // A saved wizard's old tick remains available during retirement. Observe the
   // actual GPU surface rather than treating that old state as a fresh admission.
-  const next = await ui.waitForUi(page, snapshot => snapshot.surface === 'create'
+  const admission = snapshot => snapshot.surface === 'create'
     || ui.findWidget(snapshot, 'prompt-primary')
+    || ui.findWidget(snapshot, 'routing-continue')
     || ui.findWidget(snapshot, 'college-intro')
-    || ui.findWidget(snapshot, 'panel:dialogue'), 'new-game admission', {timeout:120000});
-  if (ui.findWidget(next, 'prompt-primary')) await activate(page, 'prompt-primary');
+    || ui.findWidget(snapshot, 'panel:dialogue');
+  let next = await ui.waitForUi(page, admission, 'new-game admission', {timeout:120000});
+  if (ui.findWidget(next, 'prompt-primary')) {
+    await activate(page, 'prompt-primary');
+    next = await ui.waitForUi(page, snapshot => admission(snapshot)
+      && !ui.findWidget(snapshot, 'prompt-primary'), 'confirmed new-game admission', {timeout:120000});
+  }
+  if (ui.findWidget(next, 'routing-continue')) {
+    if (!continueLocal) throw new Error('This journey did not request private local-play consent');
+    await activate(page, 'routing-continue');
+  }
   await ui.waitForUi(page, snapshot => snapshot.surface === 'create'
     || ui.findWidget(snapshot, 'college-intro')
     || ui.findWidget(snapshot, 'panel:dialogue'), 'Create or College admission', {timeout:120000});

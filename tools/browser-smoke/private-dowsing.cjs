@@ -162,7 +162,8 @@ async function referenceAndPurchase() {
     assert.equal((await ui.widget(page, 'settings-toggle:cheats')).selected,true);
     await ui.click(page, 'settings-back'); await ui.click(page, 'settings-back');
     await ui.surface(page, 'title');
-    await startNewGame(page, {name:'Aureus',element:'fire',discipline:'arcane'}); await gameplayReady();
+    await startNewGame(page, {name:'Aureus',element:'fire',discipline:'arcane',continueLocal:true});
+    await gameplayReady();
     receipt.initial = {tick:frame.snapshot.ticks, gold:player().economy.gold, selection:player().selection};
     await fundThroughPrivateControls(); await referenceAndPurchase();
     await page.keyboard.press('Escape'); await ui.surface(page, 'pause');

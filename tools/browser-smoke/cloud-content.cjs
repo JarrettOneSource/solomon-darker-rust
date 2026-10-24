@@ -10,6 +10,11 @@ const gpu = require('./gpu-ui.cjs');
 const game = new URL(process.env.URL);
 const mount = game.pathname.replace(/\/$/, '');
 const output = path.resolve(process.env.OUT);
+const screenshotInputs = [process.env.SHOT_A, process.env.SHOT_B];
+for (const file of screenshotInputs) {
+  assert.ok(file, 'SHOT_A and SHOT_B must name actual game screenshots');
+  fs.accessSync(file, fs.constants.R_OK);
+}
 fs.mkdirSync(output, {recursive:true});
 const suffix = `${Date.now().toString(36)}${crypto.randomBytes(2).toString('hex')}`;
 const account = {username:`Gallery${suffix}`, email:`gallery-${suffix}@example.invalid`,
@@ -141,7 +146,7 @@ async function swipe(page,distance) {
     await page.getByLabel('Mod name',{exact:true}).fill(modName);
     await page.getByLabel(/^Summary/).fill('Ordinary gallery and comments acceptance content.');
     await page.getByLabel(/^Description/).fill('Two actual game screenshots and two real uploaded releases.\nThis package is removed after menu acceptance.');
-    await page.locator('input[type=file][multiple]').setInputFiles([process.env.SHOT_A,process.env.SHOT_B]);
+    await page.locator('input[type=file][multiple]').setInputFiles(screenshotInputs);
     const publication=page.waitForResponse(response=>new URL(response.url()).pathname===`${mount}/api/mods`
       &&response.request().method()==='POST');
     await page.getByRole('button',{name:'Publish mod',exact:true}).click();
