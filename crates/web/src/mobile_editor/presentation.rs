@@ -163,12 +163,13 @@ impl MobileUiEditor {
                         size: rect.size(),
                         rotation: 0.0,
                     });
-                    frame.record_rect(
+                    frame.record_painted_rect(
+                        &clipped,
                         &format!("mobile/resize:{}:{}", id.as_str(), handle.as_str()),
                         &format!("Resize {} from {}", id.label(), handle.as_str()),
                         "button",
-                        rect.intersect(viewport),
-                        !self.busy,
+                        rect,
+                        !self.busy && ui.is_enabled(),
                     );
                 }
                 let point = paint.point(pos2(paint.natural.x / 2.0, -34.0));
@@ -186,12 +187,13 @@ impl MobileUiEditor {
                     size: rect.size(),
                     rotation: 0.0,
                 });
-                frame.record_rect(
+                frame.record_painted_rect(
+                    &clipped,
                     &format!("mobile/rotate:{}", id.as_str()),
                     &format!("Rotate {}", id.label()),
                     "button",
-                    rect.intersect(viewport),
-                    !self.busy,
+                    rect,
+                    !self.busy && ui.is_enabled(),
                 );
             }
         }
@@ -273,12 +275,13 @@ impl MobileUiEditor {
             FontId::new(24.0, FontFamily::Name("Georgia".into())),
             GOLD,
         );
-        frame.record_rect(
+        frame.record_painted_rect(
+            ui.painter(),
             "mobile/dock-handle",
             "Move editor actions",
             "button",
             handle,
-            !self.busy,
+            !self.busy && ui.is_enabled(),
         );
         ui.painter().text(
             dock.min + vec2(50.0, 22.0),
