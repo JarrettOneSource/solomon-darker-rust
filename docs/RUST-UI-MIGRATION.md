@@ -1061,6 +1061,25 @@ the field, each with errors[]/Chrome exit0; they do not establish a measured car
 The shared Escape owner is under independent investigation. Browser capacity is held
 by root; rebuilt actual editor acceptance remains required.
 
+The shared Escape failure is reproduced independently by the College dialogue and
+native-session journeys on57626c4, each with errors[] and graceful Chrome exit0.
+Source `HubInventoryUi.tsx:324–362` and `HubInventorySurface.tsx:519–535` stop owned
+panel keys before they reach menu navigation. The Rust central predicate already
+identifies panels, social input, cheats, skill choice and Tutorial ownership, but
+its one-shot discard is consumed by the mandatory empty layout. Native input
+between that layout and the next rAF can consequently close a dialogue and open
+Pause from the same Escape; a rebound menu key has the same admission defect.
+
+The native regression on e416160 fails after the real empty-layout/pointer-only
+sequence, with the existing key admission extracted unchanged into the private
+MenuKeyboard owner. The fix keeps gameplay admission separate from transient
+input-transition discard and refreshes the existing predicate immediately before
+each existing UI pass. It therefore observes committed close/open actions without
+adding a pass, delaying input or filtering the raw browser-key receipt. Visible
+menus retain their own keys. The proposed raw-key projection change was withdrawn;
+its duplicate-helper compile failure is retained separately from this behavioral
+red. Rebuilt College, Inventory and immediate subsequent Pause checks remain required.
+
 Current57626c4 startup guard passes in
 `common-browser/57626c4/startup-held-input-diagnostic/startup-receipt.json`: actual
 322/326 completions retain the held theme's exact pending path, trusted Tab/Enter
