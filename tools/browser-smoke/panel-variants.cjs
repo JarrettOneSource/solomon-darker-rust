@@ -51,6 +51,23 @@ async function buy(stock){const gold=player().economy.gold,before=player().econo
   await until(()=>player().economy.gold===gold-stock.price,'actual shop payment');
   const purchased=player().economy.backpack.find(row=>!before.includes(row.id)&&row.native_type_id===stock.item.native_type_id);
   assert.ok(purchased,'the accepted purchase creates the owned item');return structuredClone(purchased);}
+async function buyClothing(){
+  await ui.click(page,(await ui.byLabel(page,'Shlorio',{role:'button',prefix:'hud:shortcut:'})).id);
+  const panel=ui.bounds(await ui.widget(page,'panel:service'));
+  const from=ui.center(ui.bounds(await ui.widget(page,'panel:equipment:hat')));
+  // The native mirror center is the same real reference drop used by private-dowsing.cjs.
+  const to={x:panel.x+panel.width*302/604,y:panel.y+panel.height*175.5/420};
+  await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:15});await page.mouse.up();
+  await ui.nextFrame(page);await ui.click(page,'panel:dowse');
+  await until(()=>player().economy.dowsing_rolled,'actual owned-Hat reference roll');
+  const offer=player().economy.dowsing_offers[0],gold=player().economy.gold;
+  const before=new Set(player().economy.backpack.map(row=>row.id));assert.ok(offer);
+  await ui.click(page,`panel:shop:${offer.id}`);await ui.click(page,`panel:shop:${offer.id}`);
+  await until(()=>player().economy.gold===gold-offer.price,'actual clothing payment');
+  const clothing=player().economy.backpack.find(row=>!before.has(row.id)&&row.recipe_index===offer.recipe_index);
+  assert.equal(clothing?.equipment_type,'Hat');
+  await ui.click(page,'panel:close');await ready();return structuredClone(clothing);
+}
 
 (async()=>{
   fs.mkdirSync(output,{recursive:true});
@@ -75,12 +92,12 @@ async function buy(stock){const gold=player().economy.gold,before=player().econo
     await page.keyboard.press('Backquote');await ready();
 
     step='paid clothing and actual cloth/trim dye';
+    const clothing=await buyClothing();
     await ui.click(page,(await ui.byLabel(page,'Fomentius',{role:'button',prefix:'hud:shortcut:'})).id);
     const stock=player().economy.fomentius_stock;
-    const clothing=stock.find(row=>['Hat','Robe'].includes(row.item.equipment_type));
     const kit=stock.find(row=>row.item.kind==='Dye');
-    assert.ok(clothing&&kit,'actual stock includes clothing and a dye kit');
-    receipt.purchases={clothing:await buy(clothing),dye:await buy(kit)};
+    assert.ok(kit,'Fomentius stocks the actual dye kit');
+    receipt.purchases={clothing,dye:await buy(kit)};
     await ui.click(page,'panel:close');await ready();await page.keyboard.press('KeyI');
     const clothingId=receipt.purchases.clothing.id,dyeId=receipt.purchases.dye.id;
     await ui.click(page,`panel:item:${dyeId}`,{clickCount:2});await ui.widget(page,'panel:dye');
