@@ -208,9 +208,9 @@ opacity. Epaint's filled, linearly feathered `Shadow` does not implement this co
 `UiFrame::paint_outer_shadow` captures that opaque GPU geometry in the same target pool
 and emits only blurred alpha times inverse original alpha. The native circle/capsule
 comparisons pass with maximum channel differences3/2 and exact zero interior alpha;
-the prior shader paints unwanted interior alpha10 in the circle case. The actual
-renderer probe also covers the typed outer mode and normal-draw restoration, pending
-the next canonical probe build. Group markers retain their opacity0 parent even when
+the prior shader paints unwanted interior alpha10 in the circle case. The actual Rust
+renderer probe passes typed outer/inset modes and normal-draw restoration. Group markers
+retain their opacity0 parent even when
 egui would discard an ordinary shape at that opacity, preventing child geometry escape.
 
 The observer's pinned `developer-observer.css` adds outer0/8/30px and inset0/0/24px
@@ -252,7 +252,14 @@ The unchanged native-shader reference drops this long-edge difference to4 bytes,
 smooth single-pixel progression and glError0 (`gpu-large-shadow-shader-green/`). All16
 prior shader/material/crop cases still pass. The actual Rust Renderer probe also checks
 scale1/2, inverted target UVs and an oversized reused target containing opaque pixels
-outside the admitted crop. Its compiled/native result remains a separate required gate.
+outside the admitted crop. That compiled probe passes on62f835b with maximum4-byte alpha
+differences at sigma12/24. The same run proves per-draw NEAREST versus restored LINEAR,
+unchanged world texture filter/wrap parameters and sampler deletion; spread interior
+alpha0, retained halo, antialias premultiplication, nested capture/blend restoration and
+visible underlying pixels are exact. `gpu-final-composition-native/receipt.json` records
+these results with errors[]; its artifact record pins the compiled JS/WASM and source.
+The owned probe browser/server are closed. This is renderer acceptance, separate from
+the composed authored/session-reset journeys and final publication gates.
 
 ## World notifications recovered before repair
 
