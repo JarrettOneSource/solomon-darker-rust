@@ -231,9 +231,30 @@ async function modal(kind) {
         checked('real secondary input acknowledges Acid Rain and starts the item wave');continue;
       }
       if(current==='DrinkPotion'){
-        await release();await lesson('DRINK POTION');
-        assert.ok(player().player.economy.backpack.some(item=>item.native_type_id===7001
-          &&item.native_subtype===0),'the authored potion was genuinely collected');
+        await release();
+        const potion=player().player.economy.backpack.find(item=>item.native_type_id===7001
+          &&item.native_subtype===0);
+        assert.ok(potion,'the authored potion was genuinely collected');
+        const pickup=world().loot_events.findLast(event=>event.event_type==='LootPickup'
+          &&event.player_id===accepted.id&&event.text===potion.name);
+        assert.ok(pickup,'the actual local pickup, rather than an imported item, owns the notice');
+        const id=`world-notification:loot:${pickup.event_id}`;
+        const visible=await ui.waitForUi(page,snapshot=>{
+          const notice=ui.findWidget(snapshot,id);
+          return notice&&JSON.parse(notice.value).offset===0;
+        },'the genuinely earned potion notice completes its native entrance');
+        const notice=ui.findWidget(visible,id),presentation=JSON.parse(notice.value);
+        assert.equal(notice.label,potion.name);
+        assert.equal(presentation.baseline,67);assert.equal(presentation.clipTop,50);
+        assert.equal(presentation.scale,1);
+        await page.waitForFunction(name=>window.__solomonAnnouncements.some(event=>
+          event.text.split('\n').includes(name)),potion.name);
+        const speech=(await ui.announcements(page)).filter(event=>event.text.split('\n').includes(potion.name));
+        assert.equal(speech.length,1,'one accepted earned loot event announces its actual item name once');
+        receipt.earnedLoot={qualification:'genuine scripted Tutorial drop after ordinary combat and pickup; not a random Gold/book drop',
+          pickup,item:{id:potion.id,name:potion.name,quantity:potion.quantity},notice,presentation,speech};
+        await page.screenshot({path:path.join(output,'earned-tutorial-potion-notice.png')});
+        await lesson('DRINK POTION');
         await page.keyboard.press('KeyQ');
         await until(()=>stage()!=='DrinkPotion','accepted Tutorial Health Potion drink');
         checked('authored potion pickup, exact lesson and real Q acknowledgement');continue;

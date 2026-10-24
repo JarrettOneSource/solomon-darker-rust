@@ -924,6 +924,11 @@ and Skills callouts. The browser may observe accepted native snapshots and use t
 unchanged Source navigator/camera to choose genuine input, as the existing Solomon
 entrance journey does; it may not install those planning values or bypass a stage.
 Entry/layout proof alone does not accept these later surfaces or the terminal return.
+Pinned `core-server/boneyard-loot-store.ts:778–781` publishes the actual captured
+sack item's name with its accepted local pickup event. Tutorial combat is enabled
+for the potion lesson (`BoneyardScene.tsx:1150–1151`), so the genuine authored potion
+drop can also prove the earned local loot lane and its GPU/speech presentation.
+That remains qualified as a scripted Tutorial drop, not an ordinary random Gold/book drop.
 
 Fixed GPU application ordering follows actual c14068b3 append/context ownership;
 pinned fa08 supplies native inner behavior/styles. `source-ui-stack.md` in the task
