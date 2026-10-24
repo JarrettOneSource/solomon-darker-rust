@@ -270,6 +270,7 @@ pub(super) fn paint(
     child.spacing_mut().scroll.bar_inner_margin = 0.0;
     child.spacing_mut().scroll.bar_outer_margin = 0.0;
     egui::ScrollArea::vertical()
+        .animated(false)
         .id_salt("join-party-list")
         .auto_shrink([false, false])
         .show(&mut child, |ui| {

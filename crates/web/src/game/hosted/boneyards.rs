@@ -429,6 +429,7 @@ impl BoneyardLibrary {
                     ui.set_opacity(1.0);
                 }
                 egui::ScrollArea::vertical()
+                    .animated(false)
                     .id_salt("boneyard-shelf-scroll")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {

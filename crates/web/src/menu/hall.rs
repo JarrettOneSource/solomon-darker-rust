@@ -295,6 +295,7 @@ impl HallView {
         child.set_clip_rect(box_rect);
         widgets::scrollbar_style(&mut child, 0x8e7950, 0x151311, true);
         let mut scroll = egui::ScrollArea::both()
+            .animated(false)
             .id_salt("hall-records")
             .scroll_bar_visibility(if compact {
                 egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded

@@ -124,6 +124,7 @@ impl Block {
                 child.spacing_mut().scroll.bar_inner_margin = 0.0;
                 child.spacing_mut().scroll.bar_outer_margin = 0.0;
                 egui::ScrollArea::vertical()
+                    .animated(false)
                     .id_salt(("routing-list-scroll", index))
                     .max_height(*maximum)
                     .auto_shrink([false, true])
@@ -628,6 +629,7 @@ pub(super) fn paint(
     child.spacing_mut().scroll.bar_outer_margin = 0.0;
     let mut visible = Vec::new();
     egui::ScrollArea::vertical()
+        .animated(false)
         .id_salt("routing-scroll")
         .auto_shrink([false, false])
         .show(&mut child, |ui| {

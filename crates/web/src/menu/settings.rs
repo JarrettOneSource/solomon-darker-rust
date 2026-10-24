@@ -502,6 +502,7 @@ impl SettingsView {
             child.set_clip_rect(content);
             child.spacing_mut().item_spacing = Vec2::ZERO;
             let mut scroll = egui::ScrollArea::vertical()
+                .animated(false)
                 .id_salt(self.navigation_scope())
                 .auto_shrink([false, false]);
             if self.scroll_reset {
