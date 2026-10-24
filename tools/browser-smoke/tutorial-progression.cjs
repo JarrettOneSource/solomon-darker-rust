@@ -193,7 +193,8 @@ async function modal(kind) {
       const snapshot=await ui.readUi(page);
       if(snapshot.error)throw new Error(snapshot.error);
       if(ui.findWidget(snapshot,'picker:choice:0')){
-        await release();await ui.click(page,'picker:choice:0');continue;
+        await release();await ui.click(page,'picker:choice:0');
+        await ui.noWidget(page,'picker:choice:0');continue;
       }
       if(accepted.frame.host.pause||accepted.frame.host.resume_grace||accepted.frame.host.loading_run_id){
         await release();await page.waitForTimeout(40);continue;
