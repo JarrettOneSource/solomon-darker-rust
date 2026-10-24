@@ -7,6 +7,10 @@ const ui = require('./gpu-ui.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const output = path.resolve(process.env.OUT);
 const url = new URL(process.env.URL);
+// These Title-only capability checks use the ordinary static client. A fulfilled
+// document has no network address space in Chrome; it must not open a local host
+// socket while the test supplies its real Permissions Policy response header.
+url.searchParams.delete('host');
 const receipt = {passed:false, checks:[], errors:[]};
 
 (async () => {
