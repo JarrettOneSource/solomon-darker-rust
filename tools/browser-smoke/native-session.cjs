@@ -316,6 +316,8 @@ async function approachSolomon(page, state) {
 
       const beforeParty = await ui.readUi(first.page);
       partyEvidence.afterInventoryClose = {surface:beforeParty.surface,inputScope:beforeParty.inputScope};
+      assert.equal(beforeParty.surface,'hidden',
+        'the actual Inventory close cannot also open Pause from the same Escape');
       await ui.click(first.page,'social/party');
       await ui.widget(first.page,'social/party-menu');
       const roster = first.state.social?.party_state?.party?.member_player_ids;
