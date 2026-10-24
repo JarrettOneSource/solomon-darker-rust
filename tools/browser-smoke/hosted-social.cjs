@@ -441,7 +441,8 @@ async function observeOwnedMatch(leader, guest) {
     await ui.noWidget(page, 'panel:surface:inventory');
     await ui.assertGpuOnly(page);
     await page.screenshot({path:path.join(output, 'developer-observer.png')});
-    await ui.click(page, 'observer/exit'); await ui.surface(page, 'title');
+    // Source MainMenuScene.exitObserver returns to the originating Dark Cloud.
+    await ui.click(page, 'observer/exit'); await ui.surface(page, 'dark-cloud');
     await ui.noWidget(page, 'observer/panel');
     assert.ok(!state.requests.some(row => row.method === 'PUT' && row.path.includes('/api/game/saves/')),
       'read-only observation creates no save');

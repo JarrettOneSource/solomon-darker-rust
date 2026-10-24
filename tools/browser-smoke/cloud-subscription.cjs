@@ -108,6 +108,10 @@ async function waitUntil(predicate, label, timeout = 30000) {
     await gpu.surface(page, 'title');
     await gpu.click(page, 'play');
     await gpu.click(page, 'new-game');
+    const admission = await gpu.waitForUi(page, snapshot =>
+      gpu.findWidget(snapshot, 'routing/dialog') || gpu.findWidget(snapshot, 'prompt-primary'),
+    'actual New Game admission or retained-save confirmation');
+    if (gpu.findWidget(admission, 'prompt-primary')) await gpu.click(page, 'prompt-primary');
     await gpu.surface(page, 'routing');
     const prompt = await gpu.widget(page, 'routing/dialog');
     const actualName = activeMods.find(mod => mod.slug === subscribedSlug).name;
