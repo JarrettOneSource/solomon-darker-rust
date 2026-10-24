@@ -220,6 +220,12 @@ use the browser font adapter; Sack names preserve Source's complete font-run sha
 wrapping, including Arabic joins and emoji sequences, in bounded egui-owned GPU textures.
 The font adapter paints only text into an unattached canvas, never HTML or game controls.
 
+Readonly content can explicitly request normal inline wrapping: overlong words remain
+whole, trailing spaces hang outside the alignment advance, and an overflowing centered
+line starts at its clip. The default keeps the native editor's existing word-breaking
+and centering. Cloud's unsupported-glyph title uses this mode and measured native line
+boxes to grow its phone header before the author and scroll content.
+
 **Superseded: the HUD used browser DOM with stock atlas sprites and repeated strips.** The world stays
 in WebGL; the screen-space HUD uses the browser's existing layout, hit testing and accessible
 buttons. `web/ui.rs` reads the same stock bundles as the renderer and projects the sprites,

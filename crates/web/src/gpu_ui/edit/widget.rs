@@ -264,6 +264,7 @@ impl<'a> NativeTextEdit<'a> {
                         tab_size: self.tab_size,
                         letter_spacing: self.letter_spacing,
                         stroke: None,
+                        ..Default::default()
                     },
                 )?;
                 (run.geometry.clone(), Some(run))
@@ -420,6 +421,7 @@ impl<'a> NativeTextEdit<'a> {
                     tab_size: self.tab_size,
                     letter_spacing: self.letter_spacing,
                     stroke: None,
+                    ..Default::default()
                 },
             });
         }
