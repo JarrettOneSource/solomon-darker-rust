@@ -141,13 +141,15 @@ async function pauseNotice(key,text,afterAnnouncement,name,{resume=true}={}) {
     await page.keyboard.press('Backquote');await ready();
     await ui.click(page,(await ui.byLabel(page,'Hagatha',{role:'button',prefix:'hud:shortcut:'})).id);
     if(player().economy.owned_perk_selectors.includes(7)) {
-      // The desktop Party chip overlaps this stock panel cell. Exercise the
-      // ordinary keyboard route; do not force a pointer through the covering UI.
-      for(let count=0;count<100;count++) {
-        await page.keyboard.press('Tab');await ui.nextFrame(page);
-        if(ui.findWidget(await ui.readUi(page),'panel:owned-perk:7')?.focused)break;
-      }
-      await ui.focused(page,'panel:owned-perk:7');await page.keyboard.press('Enter');
+      // Source's desktop Party chip overlaps the center of this stock cell.
+      // Its visible top edge remains a real, unobstructed pointer target.
+      const target=await ui.widget(page,'panel:owned-perk:7');
+      const point={x:target.rect[0]+target.rect[2]/2,y:target.rect[1]+2};
+      const covers=(await ui.readUi(page)).widgets.filter(row=>row.enabled&&row.z>target.z
+        &&point.x>=row.rect[0]&&point.x<row.rect[0]+row.rect[2]
+        &&point.y>=row.rect[1]&&point.y<row.rect[1]+row.rect[3]);
+      assert.deepEqual(covers,[],'the visible charm edge is not covered by Party');
+      await page.mouse.click(point.x,point.y);
       await until(()=>!player().economy.owned_perk_selectors.includes(7),'ordinary College charm removal');
       receipt.removedPreviousCharm=true;
     }
