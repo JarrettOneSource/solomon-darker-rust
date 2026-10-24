@@ -361,7 +361,11 @@ fn paint_signal_loss(painter: &egui::Painter, bounds: Rect, offset: f32) {
                 }
                 let a = clip[edge];
                 let b = clip[(edge + 1) % clip.len()];
-                let side = |point: egui::Pos2| (b - a).cross(point - a);
+                let side = |point: egui::Pos2| {
+                    let edge = b - a;
+                    let relative = point - a;
+                    edge.x * relative.y - edge.y * relative.x
+                };
                 let input = std::mem::take(&mut polygon);
                 let mut previous = *input.last().expect("nonempty clipped stripe");
                 let mut previous_side = side(previous);

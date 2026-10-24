@@ -1,8 +1,8 @@
 //! GPU shared pause/resume presentation from GameplayPauseMenu/GameplayResumeProgress.
 //! Native authority owns the hold clock; this view only extrapolates its displayed progress.
 
-use crate::gpu_ui::UiFrame;
-use egui::{Color32, FontFamily, FontId, Id, Order, Rect, Stroke, vec2};
+use crate::gpu_ui::{FontRunOptions, GroupEffect, ImageShadow, UiFrame, font_run_with_options};
+use egui::{Color32, FontFamily, FontId, Id, Order, Rect, Stroke, pos2, vec2};
 use solomon_sim::menu::native_pause_menu_reveal;
 use solomon_sim::menu::shared::{
     GameplayPausePresentation, gameplay_pause_presentation, gameplay_resume_grace_progress,
@@ -159,7 +159,7 @@ impl SharedGameplayUi {
                 .fade_in(false)
                 .order(Self::pause_layer().order)
                 .fixed_pos(egui::Pos2::ZERO)
-                .show(&ctx, |ui| {
+                .show(&ctx, |ui| -> Result<(), String> {
                     ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
                     ui.set_min_size(screen.size());
                     ui.interact(screen, Id::unique("shared/pause-hold"), egui::Sense::CLICK);
@@ -171,23 +171,73 @@ impl SharedGameplayUi {
                         Color32::from_black_alpha((alpha * 0.85 * 255.0) as u8),
                     );
                     let scale = fit_panel(self.size.0, self.size.1, 620.0, 300.0) as f32;
-                    let bounds =
-                        Rect::from_center_size(screen.center(), vec2(620.0, 190.0) * scale);
-                    panel(painter, bounds, alpha);
-                    painter.text(
-                        bounds.center() - vec2(0.0, 22.0 * scale),
-                        egui::Align2::CENTER_CENTER,
-                        &pause.label,
+                    let heading = font_run_with_options(
+                        frame.ctx,
                         FontId::new(30.0 * scale, FontFamily::Name("Cinzel Bold".into())),
-                        Color32::from_rgb(223, 199, 130).gamma_multiply(alpha),
-                    );
-                    painter.text(
-                        bounds.center() + vec2(0.0, 28.0 * scale),
-                        egui::Align2::CENTER_CENTER,
-                        &pause.detail,
+                        Color32::from_rgb(223, 199, 130),
+                        &pause.label,
+                        FontRunOptions {
+                            wrap_width: Some(508.0 * scale),
+                            line_height: Some(45.0 * scale),
+                            ..Default::default()
+                        },
+                    )?;
+                    let detail = font_run_with_options(
+                        frame.ctx,
                         FontId::new(19.0 * scale, FontFamily::Name("Cinzel".into())),
-                        Color32::from_rgb(201, 185, 138).gamma_multiply(alpha),
-                    );
+                        Color32::from_rgb(201, 185, 138),
+                        &pause.detail,
+                        FontRunOptions {
+                            wrap_width: Some(508.0 * scale),
+                            line_height: Some(28.5 * scale),
+                            ..Default::default()
+                        },
+                    )?;
+                    let height =
+                        (112.0 * scale + heading.size().y + detail.size().y).max(190.0 * scale);
+                    let bounds =
+                        Rect::from_center_size(screen.center(), vec2(620.0 * scale, height));
+                    frame.paint_group(
+                        painter,
+                        GroupEffect { opacity: alpha, ..Default::default() },
+                        |frame, painter| {
+                            panel(frame, painter, bounds, scale, PanelKind::Pause)?;
+                            frame.paint_group(
+                                painter,
+                                GroupEffect {
+                                    shadows: vec![ImageShadow {
+                                        offset: vec2(0.0, 2.0 * scale),
+                                        blur: scale,
+                                        color: Color32::BLACK,
+                                    }],
+                                    ..Default::default()
+                                },
+                                |frame, painter| {
+                                    let origin = bounds.min + vec2(56.0, 46.0) * scale;
+                                    heading.paint_aligned(
+                                        frame,
+                                        painter,
+                                        Rect::from_min_size(
+                                            origin,
+                                            vec2(508.0 * scale, heading.size().y),
+                                        ),
+                                        egui::Align::Center,
+                                        1.0,
+                                    )?;
+                                    detail.paint_aligned(
+                                        frame,
+                                        painter,
+                                        Rect::from_min_size(
+                                            origin + vec2(0.0, heading.size().y + 20.0 * scale),
+                                            vec2(508.0 * scale, detail.size().y),
+                                        ),
+                                        egui::Align::Center,
+                                        1.0,
+                                    )
+                                },
+                            )
+                        },
+                    )?;
                     frame.record_rect(
                         "shared/pause",
                         &format!("{} {}", pause.label, pause.detail),
@@ -195,35 +245,97 @@ impl SharedGameplayUi {
                         bounds,
                         true,
                     );
-                });
+                    Ok(())
+                })
+                .inner?;
         }
         if let Some(resume) = &self.resume {
             frame.input_scope("shared/resume");
             let scale = fit_panel(self.size.0, self.size.1, 428.0, 240.0) as f32;
-            let bounds = Rect::from_center_size(
-                screen.center(),
-                vec2(428.0, if resume.progress.is_some() { 142.0 } else { 104.0 }) * scale,
-            );
-            let painter = ctx.layer_painter(Self::resume_layer());
-            panel(&painter, bounds, 1.0);
-            painter.text(
-                bounds.center()
-                    - vec2(0.0, if resume.progress.is_some() { 19.0 } else { 0.0 }) * scale,
-                egui::Align2::CENTER_CENTER,
-                resume.label,
-                FontId::new(28.0 * scale, FontFamily::Name("Georgia".into())),
+            let options = FontRunOptions {
+                line_height: Some(42.0 * scale),
+                letter_spacing: Some(2.24 * scale),
+                ..Default::default()
+            };
+            let font = FontId::new(28.0 * scale, FontFamily::Name("Georgia Bold".into()));
+            let full_label = font_run_with_options(
+                frame.ctx,
+                font.clone(),
                 Color32::from_rgb(223, 199, 130),
-            );
+                resume.label,
+                options,
+            )?;
+            // Absolute left50%/width:auto uses Source shrink-to-fit before its display scale.
+            let intrinsic_width = (full_label.size().x / scale).max(if resume.progress.is_some() {
+                336.0
+            } else {
+                0.0
+            }) + 92.0;
+            let minimum_width = if resume.progress.is_some() { 428.0 } else { 420.0 };
+            let width = intrinsic_width.min(screen.width() / 2.0).max(minimum_width);
+            let label = font_run_with_options(
+                frame.ctx,
+                font,
+                Color32::from_rgb(223, 199, 130),
+                resume.label,
+                FontRunOptions { wrap_width: Some((width - 92.0) * scale), ..options },
+            )?;
+            let height = 64.0 * scale
+                + label.size().y
+                + if resume.progress.is_some() { 38.0 * scale } else { 0.0 };
+            let bounds = Rect::from_center_size(screen.center(), vec2(width * scale, height));
+            let painter = ctx.layer_painter(Self::resume_layer());
+            panel(frame, &painter, bounds, scale, PanelKind::Resume)?;
+            let text_origin = bounds.min + vec2(46.0, 30.0) * scale;
+            frame.paint_group(
+                &painter,
+                GroupEffect {
+                    shadows: vec![ImageShadow {
+                        offset: vec2(0.0, 3.0 * scale),
+                        blur: 2.0 * scale,
+                        color: Color32::BLACK,
+                    }],
+                    ..Default::default()
+                },
+                |frame, painter| {
+                    label.paint_aligned(
+                        frame,
+                        painter,
+                        Rect::from_min_size(
+                            text_origin,
+                            vec2((width - 92.0) * scale, label.size().y),
+                        ),
+                        egui::Align::Center,
+                        1.0,
+                    )
+                },
+            )?;
             if let Some(progress) = resume.progress {
-                let track = Rect::from_center_size(
-                    bounds.center() + vec2(0.0, 32.0 * scale),
+                let track = Rect::from_min_size(
+                    pos2(
+                        screen.center().x - 168.0 * scale,
+                        text_origin.y + label.size().y + 20.0 * scale,
+                    ),
                     vec2(336.0, 18.0) * scale,
                 );
-                painter.rect_filled(track, 0.0, Color32::from_rgb(20, 17, 13));
+                painter.rect_filled(track, 0.0, Color32::from_rgba_unmultiplied(20, 17, 13, 235));
+                let inner = track.shrink(2.0 * scale);
+                frame.paint_inner_shadow(
+                    &painter,
+                    ImageShadow {
+                        offset: egui::Vec2::ZERO,
+                        blur: 2.5 * scale,
+                        color: Color32::BLACK,
+                    },
+                    |caster| {
+                        caster.rect_filled(inner, 0.0, Color32::WHITE);
+                        Ok(())
+                    },
+                )?;
                 painter.rect_filled(
                     Rect::from_min_size(
-                        track.min,
-                        vec2(track.width() * progress as f32, track.height()),
+                        inner.min,
+                        vec2(inner.width() * progress as f32, inner.height()),
                     ),
                     0.0,
                     Color32::from_rgb(223, 199, 130),
@@ -250,20 +362,48 @@ impl SharedGameplayUi {
         Ok(())
     }
 }
-fn panel(painter: &egui::Painter, bounds: Rect, alpha: f32) {
-    painter.rect_filled(bounds, 0.0, Color32::from_black_alpha((209.0 * alpha) as u8));
-    painter.rect_stroke(
-        bounds,
-        0.0,
-        Stroke::new(4.0, Color32::from_rgb(216, 188, 114).gamma_multiply(alpha)),
-        egui::StrokeKind::Inside,
-    );
-    painter.rect_stroke(
-        bounds.shrink(2.0),
-        0.0,
-        Stroke::new(1.0, Color32::BLACK),
-        egui::StrokeKind::Inside,
-    );
+#[derive(Clone, Copy)]
+enum PanelKind {
+    Pause,
+    Resume,
+}
+fn panel(
+    frame: &UiFrame<'_>,
+    painter: &egui::Painter,
+    bounds: Rect,
+    scale: f32,
+    kind: PanelKind,
+) -> Result<(), String> {
+    let (blur, spread, alpha) = match kind {
+        PanelKind::Pause => (12.0, 8.0, 199),
+        PanelKind::Resume => (14.0, 10.0, 209),
+    };
+    for (blur, spread, color) in
+        [(blur, spread, Color32::BLACK), (0.0, 2.0, Color32::from_rgb(87, 69, 31))]
+    {
+        frame.paint_outer_shadow_spread(
+            painter,
+            ImageShadow { offset: egui::Vec2::ZERO, blur: blur * scale, color },
+            |caster| {
+                caster.rect_filled(bounds.expand(spread * scale), 0.0, Color32::WHITE);
+                Ok(())
+            },
+            |caster| {
+                caster.rect_filled(bounds, 0.0, Color32::WHITE);
+                Ok(())
+            },
+        )?;
+    }
+    painter.rect_filled(bounds, 0.0, Color32::from_rgba_unmultiplied(8, 8, 8, alpha));
+    for bounds in [bounds, bounds.shrink(3.0 * scale)] {
+        painter.rect_stroke(
+            bounds,
+            0.0,
+            Stroke::new(scale, Color32::from_rgb(216, 188, 114)),
+            egui::StrokeKind::Inside,
+        );
+    }
+    Ok(())
 }
 fn fit_panel(width: i32, height: i32, panel_width: f64, panel_height: f64) -> f64 {
     ((f64::from(width) - 24.0) / panel_width)
