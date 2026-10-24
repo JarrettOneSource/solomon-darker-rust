@@ -339,13 +339,13 @@ impl SaveTransferView {
             let rect = super::flow(ui, error, width, 13.0, widgets::ERROR);
             frame.record_rect("save-error", error, "alert", rect, false);
             frame.record_value("save-error", error, None);
-            frame.announce(error);
+            frame.announce("save-error", error);
         }
         if let Some(status) = &self.status {
             let rect = super::flow(ui, status, width, 13.0, widgets::color(0xb9d6ab));
             frame.record_rect("save-status", status, "status", rect, false);
             frame.record_value("save-status", status, None);
-            frame.announce(status);
+            frame.announce("save-status", status);
         }
         Ok(())
     }

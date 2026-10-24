@@ -38,7 +38,7 @@ impl PlayerPanels {
                 (title.as_str(), body.as_str(), summary.as_str())
             }
         };
-        c.frame.announce(&format!("{title}. {summary} {body}"));
+        c.frame.announce("panel:notice", &format!("{title}. {summary} {body}"));
         match notice {
             PlayerPanelNotice::Standard { .. } => {
                 let mut lines = vec![NativeUiMessageDataLineSpec {

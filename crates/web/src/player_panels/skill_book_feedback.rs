@@ -124,7 +124,7 @@ impl PlayerPanels {
         if !self.input_suspended {
             self.navigation.focus(frame.ctx, &scope, Some("panel:skill-book-result-okay"));
         }
-        frame.announce(&format!("Skill improved. {}. OKAY.", result.text));
+        frame.announce(&scope, &format!("Skill improved. {}. OKAY.", result.text));
         let scale = (self.viewport_size.0 as f32 / 1600.0).min(self.viewport_size.1 as f32 / 900.0);
         self.modal_canvas(
             frame,

@@ -90,7 +90,7 @@ impl MatchLoadingView {
                     Color32::from_rgb(242, 229, 199),
                 );
                 frame.record_rect("match-loading:label", loading.label(), "status", label, true);
-                frame.announce(loading.label());
+                frame.announce("match-loading:label", loading.label());
                 let track = Rect::from_min_size(
                     screen.min + vec2(screen.width() * 0.2 - 0.5, screen.height() * 0.925 - 0.5),
                     vec2(screen.width() * 0.6, (screen.height() * 0.0083).clamp(8.0, 10.0)),
