@@ -716,14 +716,16 @@ mod focus_scroll_tests {
         };
         let mut bottom_offset = 0.0;
         for index in 1..=8 {
-            dispatch(&ctx, arrow(Key::ArrowDown, true));
-            let (focused, rect, viewport, offset) = dispatch(&ctx, arrow(Key::ArrowDown, false));
-            assert_eq!(focused, index);
-            assert!(
-                viewport.contains_rect(rect),
-                "focused={focused} expected={index} rect={rect:?} viewport={viewport:?} offset={offset}: cardinal focus reveals the next control"
-            );
-            bottom_offset = offset;
+            for pressed in [true, false] {
+                let (focused, rect, viewport, offset) =
+                    dispatch(&ctx, arrow(Key::ArrowDown, pressed));
+                assert_eq!(focused, index);
+                assert!(
+                    viewport.contains_rect(rect),
+                    "pressed={pressed} focused={focused} expected={index} rect={rect:?} viewport={viewport:?} offset={offset}: cardinal focus reveals the next control before drawing"
+                );
+                bottom_offset = offset;
+            }
         }
 
         pass(
@@ -750,13 +752,15 @@ mod focus_scroll_tests {
         );
 
         for index in (0..8).rev() {
-            dispatch(&ctx, arrow(Key::ArrowUp, true));
-            let (focused, rect, viewport, offset) = dispatch(&ctx, arrow(Key::ArrowUp, false));
-            assert_eq!(focused, index);
-            assert!(
-                viewport.contains_rect(rect),
-                "focused={focused} expected={index} rect={rect:?} viewport={viewport:?} offset={offset}: cardinal focus reveals the previous control"
-            );
+            for pressed in [true, false] {
+                let (focused, rect, viewport, offset) =
+                    dispatch(&ctx, arrow(Key::ArrowUp, pressed));
+                assert_eq!(focused, index);
+                assert!(
+                    viewport.contains_rect(rect),
+                    "pressed={pressed} focused={focused} expected={index} rect={rect:?} viewport={viewport:?} offset={offset}: cardinal focus reveals the previous control before drawing"
+                );
+            }
         }
     }
 }
