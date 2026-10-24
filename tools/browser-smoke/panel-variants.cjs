@@ -51,16 +51,25 @@ async function buy(stock){const gold=player().economy.gold,before=player().econo
   await until(()=>player().economy.gold===gold-stock.price,'actual shop payment');
   const purchased=player().economy.backpack.find(row=>!before.includes(row.id)&&row.native_type_id===stock.item.native_type_id);
   assert.ok(purchased,'the accepted purchase creates the owned item');return structuredClone(purchased);}
-async function buyClothing(){
-  await ui.click(page,(await ui.byLabel(page,'Shlorio',{role:'button',prefix:'hud:shortcut:'})).id);
-  const panel=ui.bounds(await ui.widget(page,'panel:service'));
-  const from=ui.center(ui.bounds(await ui.widget(page,'panel:equipment:hat')));
-  // The native mirror center is the same real reference drop used by private-dowsing.cjs.
-  const to={x:panel.x+panel.width*302/604,y:panel.y+panel.height*175.5/420};
-  await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:15});await page.mouse.up();
-  await ui.nextFrame(page);await ui.click(page,'panel:dowse');
-  await until(()=>player().economy.dowsing_rolled,'actual owned-Hat reference roll');
-  const offer=player().economy.dowsing_offers[0],gold=player().economy.gold;
+async function buyClothing(recipes){
+  let offer;receipt.clothingRolls=[];
+  for(let attempt=0;attempt<12;attempt++){
+    await ui.click(page,(await ui.byLabel(page,'Shlorio',{role:'button',prefix:'hud:shortcut:'})).id);
+    const panel=ui.bounds(await ui.widget(page,'panel:service'));
+    const from=ui.center(ui.bounds(await ui.widget(page,'panel:equipment:hat')));
+    // The native mirror center is the same real reference drop used by private-dowsing.cjs.
+    const to={x:panel.x+panel.width*302/604,y:panel.y+panel.height*175.5/420};
+    await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:15});await page.mouse.up();
+    await ui.nextFrame(page);await ui.click(page,'panel:dowse');
+    await until(()=>player().economy.dowsing_rolled,'actual owned-Hat reference roll');
+    receipt.clothingRolls.push(structuredClone(player().economy.dowsing_offers));
+    // Source clothingTints rejects recipes with an uncolored/texture-owned layer.
+    offer=player().economy.dowsing_offers.find(row=>recipes[row.recipe_index].iconTints.every(Number.isInteger));
+    if(offer)break;
+    await ui.click(page,'panel:close');await until(()=>!player().economy.dowsing_rolled,'actual Done clears the roll');await ready();
+  }
+  assert.ok(offer,'ordinary paid rolls must offer a Hat with two dyeable color layers');
+  const gold=player().economy.gold;
   const before=new Set(player().economy.backpack.map(row=>row.id));assert.ok(offer);
   await ui.click(page,`panel:shop:${offer.id}`);await ui.click(page,`panel:shop:${offer.id}`);
   await until(()=>player().economy.gold===gold-offer.price,'actual clothing payment');
@@ -92,7 +101,7 @@ async function buyClothing(){
     await page.keyboard.press('Backquote');await ready();
 
     step='paid clothing and actual cloth/trim dye';
-    const clothing=await buyClothing();
+    const clothing=await buyClothing(source.DOWSING_EQUIPMENT_RECIPES);
     await ui.click(page,(await ui.byLabel(page,'Fomentius',{role:'button',prefix:'hud:shortcut:'})).id);
     const stock=player().economy.fomentius_stock;
     const kit=stock.find(row=>row.item.kind==='Dye');
