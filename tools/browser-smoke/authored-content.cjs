@@ -9,6 +9,7 @@ const {chromium} = require(path.resolve(process.env.PW));
 const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const ui = require('./gpu-ui.cjs');
+const {revealSettingsControl} = require('./settings-journey.cjs');
 const textures = require('./gpu-texture-lifetime.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const output = path.resolve(process.env.OUT);
@@ -601,6 +602,7 @@ async function runLua(page, code) {
       await ui.click(page,'pause-settings');
       await ui.click(page,'settings-page:cloud');
       const cheats='settings-toggle:cheats';
+      await revealSettingsControl(page, cheats);
       state.cheatProof = {before: String((await ui.widget(page,cheats)).selected)};
       if (String((await ui.widget(page,cheats)).selected) === 'false') await ui.click(page,cheats);
       await pause(1000);

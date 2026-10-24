@@ -8,6 +8,7 @@ const {createNativeMessageReader} = require('./native-wire.cjs');
 const {walkSolomonEntrance} = require('./solomon-entrance.cjs');
 const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
+const {revealSettingsControl} = require('./settings-journey.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 
 const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
@@ -469,6 +470,7 @@ async function close(client) {
     await ui.click(leader.page,'settings-page:cloud');
     for (const [key, value] of [['shared-hub', 'false'], ['cheats', 'true']]) {
       const toggle=`settings-toggle:${key}`;
+      if (key === 'cheats') await revealSettingsControl(leader.page, toggle);
       if(String((await ui.widget(leader.page,toggle)).selected)!==value)await ui.click(leader.page,toggle);
     }
     await ui.click(leader.page,'settings-back');
