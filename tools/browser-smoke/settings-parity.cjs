@@ -73,7 +73,7 @@ async function focusedControl(page, id) {
     await gpu.click(page, 'settings-page:controls');
     await gpu.focused(page,'settings-toggle:reverse-hotbar');
     const bindings=['move-up','move-down','move-left','move-right','menu','inventory','skills','chat','cheats',
-      ...Array.from({length:9},(_,index)=>`belt-${index}`)];
+      ...Array.from({length:8},(_,index)=>`belt-${index}`),'cycle-hotbar'];
     for(const binding of bindings){
       await page.keyboard.press('Tab');
       await focusedControl(page,`bind:${binding}`);
@@ -91,9 +91,9 @@ async function focusedControl(page, id) {
       await gpu.controller(page);
     }
     await gpu.wheel(page,'settings-content',0,-300);
-    await gpu.noWidget(page,'bind:belt-8');
+    await gpu.noWidget(page,'bind:cycle-hotbar');
     await gpu.nextFrame(page);
-    assert.equal(gpu.findWidget(await gpu.readUi(page),'bind:belt-8'),undefined,
+    assert.equal(gpu.findWidget(await gpu.readUi(page),'bind:cycle-hotbar'),undefined,
       'retained controller focus does not undo the user wheel');
     for(const id of [...bindings.slice(0,-1).reverse().map(binding=>`bind:${binding}`),'settings-toggle:reverse-hotbar']){
       await gpu.controller(page,[12]);
