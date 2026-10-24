@@ -39,6 +39,7 @@ fn frame_native(
         events,
         ..Default::default()
     };
+    edit::begin_native_focus(ctx, codes);
     ctx.run_pass(raw, |ctx| {
         paint(&mut UiFrame {
             ctx,
@@ -664,12 +665,16 @@ fn native_tab_focus_provenance_distinguishes_actual_field_entry_from_controller_
         let mut text = String::new();
         let focus = std::cell::Cell::new(true);
         let descriptor = std::cell::RefCell::new(None);
+        let native_entry = std::cell::Cell::new(false);
         let mut paint = |frame: &mut UiFrame<'_>| {
             frame.ctx.root_ui(|ui| {
-                NativeTextEdit::singleline(&mut text, "tab-field", "Name")
+                let response = NativeTextEdit::singleline(&mut text, "tab-field", "Name")
                     .native_name(Pos2::ZERO, 1.0)
                     .request_focus(focus.get())
                     .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(200.0, 45.0)));
+                if response.has_focus() {
+                    native_entry.set(edit::selects_all_on_native_tab(frame.ctx, response.id));
+                }
                 *descriptor.borrow_mut() = frame.editors.borrow().last().cloned();
                 ui.interact(
                     Rect::from_min_size(pos2(260.0, 30.0), vec2(100.0, 45.0)),
@@ -696,15 +701,15 @@ fn native_tab_focus_provenance_distinguishes_actual_field_entry_from_controller_
             modifiers: egui::Modifiers::SHIFT,
         };
         frame_codes(&ctx, vec![back], &keys, &mut paint);
-        assert_eq!(
-            edit::selects_all_on_native_tab(&ctx, egui::Id::unique("tab-field")),
-            physical,
-            "actual resolved field entry retains native Tab provenance={physical}"
-        );
         frame(&ctx, Vec::new(), &mut paint);
         let descriptor = descriptor.borrow();
         let descriptor = descriptor.as_ref().unwrap();
         assert!(descriptor.focused);
+        assert_eq!(
+            native_entry.get(),
+            physical,
+            "actual field paint applies native Tab entry={physical}"
+        );
     }
 }
 

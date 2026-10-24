@@ -278,20 +278,31 @@ struct NativeTabFocus(Option<egui::Id>);
 pub(super) fn selects_all_on_native_tab(ctx: &egui::Context, id: egui::Id) -> bool {
     ctx.data(|data| {
         data.get_temp::<NativeTabFocus>(egui::Id::unique("native-tab-focus"))
-            .is_some_and(|target| target.0 == Some(id))
+            .is_some_and(|origin| origin.0 != Some(id))
     })
+}
+
+fn native_tab(keys: &[super::BrowserKey]) -> bool {
+    keys.iter().any(|key| key.pressed && key.code == "Tab" && !key.ctrl && !key.alt && !key.meta)
+}
+
+pub(super) fn begin_native_focus(ctx: &egui::Context, keys: &[super::BrowserKey]) {
+    if native_tab(keys) {
+        let origin = ctx.memory(|memory| memory.focused());
+        ctx.data_mut(|data| {
+            data.insert_temp(egui::Id::unique("native-tab-focus"), NativeTabFocus(origin));
+        });
+    }
 }
 
 /// Only a genuine native Tab selects a singleline input's value on entry.
 /// Controller bumpers call focus directly in Source and retain its selection.
 pub(super) fn finish_native_focus(ctx: &egui::Context, keys: &[super::BrowserKey]) {
-    let tab = keys
-        .iter()
-        .any(|key| key.pressed && key.code == "Tab" && !key.ctrl && !key.alt && !key.meta);
-    let target = if tab { ctx.memory(|memory| memory.focused()) } else { None };
-    ctx.data_mut(|data| {
-        data.insert_temp(egui::Id::unique("native-tab-focus"), NativeTabFocus(target));
-    });
+    // Egui intentionally applies Shift+Tab at the next pass's begin. Keep the
+    // actual dispatch origin through that existing layout, then retire it.
+    if !native_tab(keys) {
+        ctx.data_mut(|data| data.remove::<NativeTabFocus>(egui::Id::unique("native-tab-focus")));
+    }
 }
 
 pub(super) fn set_focus(ctx: &egui::Context, editors: &[EditorDescriptor]) {
