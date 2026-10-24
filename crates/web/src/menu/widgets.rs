@@ -665,8 +665,10 @@ mod focus_scroll_tests {
 
     fn dispatch(ctx: &Context, event: Event) -> (usize, Rect, Rect, f32) {
         pass(ctx, vec![event]);
-        // Game's native dispatch and drawn frame both finish their input commits
-        // with paint_layout. Assert the resulting geometry, not the input pass.
+        // BrowserInput's into_passes materializes each dispatch's committed
+        // widgets/focus in an empty pass before the next native dispatch.
+        pass(ctx, Vec::new());
+        // Game then finishes the transaction with paint_layout before drawing.
         pass(ctx, Vec::new())
     }
 
