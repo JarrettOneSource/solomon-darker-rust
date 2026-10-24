@@ -1,5 +1,7 @@
 //! Real TCP/HTTP/WebSocket journeys through the same public transport used by the host.
 
+mod media;
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::io::{Read, Write};
