@@ -47,8 +47,14 @@ async function shot(name){await page.screenshot({path:path.join(out,`${name}.png
     await page.goto(new URL(`${mount}/login`,website).href);
     await page.locator('input[autocomplete="username"]').fill(account.username);
     await page.locator('input[autocomplete="current-password"]').fill(account.password);
+    const accountData=Promise.all([
+      page.waitForResponse(response=>new URL(response.url()).pathname===`${mount}/api/game/saves/0`&&response.ok()),
+      page.waitForResponse(response=>{const target=new URL(response.url());
+        return target.pathname===`${mount}/api/mods`&&target.searchParams.get('mine')==='true'&&response.ok();}),
+    ]);
     await page.getByRole('button',{name:'Sign in',exact:true}).click();
     await page.waitForURL(target=>target.pathname===`${mount}/account`);
+    for(const response of await accountData)assert.equal(await response.finished(),null);
     await ui.observeDocumentReplacement(page,()=>page.goto(url));await title(page);
     step='real editor customization and Save';
     await ui.click(page,'settings');await revealSettingsControl(page,'settings-page:mobile-ui');
