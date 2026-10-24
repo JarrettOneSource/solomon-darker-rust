@@ -76,7 +76,9 @@ async function walkSolomonEntrance(page, {snapshot, playerId, output, plan}) {
           const end = crossed ? encounter.position : {x: gate.x, y: gate.y - direction * approachMargin};
           const key = crossed ? 'solomon' : `gate:${gate.id}`;
           if (targetKey !== key || accepted.ticks - plannedAtTick >= 100 || route.length < 2) {
-            const collision = plan.collision.withBoneyardGateCollision(plan.geometry, world.gate_leaves);
+            // Source plans against immutable scenery; real movement pushes the
+            // current swinging leaves in the authoritative simulation.
+            const collision = plan.geometry;
             route = plan.navigation.findBoneyardEnemyRoute({bodyRadius: plan.bodyRadius,
               bounds: fullBounds, clearance: plan.bodyRadius, start: at, end, endBodyRadius: 0,
               world: collision, ignoredSourceIds: crossed
