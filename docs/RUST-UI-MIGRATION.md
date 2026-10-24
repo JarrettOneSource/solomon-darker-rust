@@ -1200,3 +1200,15 @@ does not qualify native4190/browser suspension. The next required Tutorial attem
 retains read-only CDP media request Range, actual response status/length/range,
 received byte totals and native completion/failure timestamps. It neither intercepts
 requests nor changes the fatal observer policy.
+
+Earned-offer acceptance separates natural progression from expensive service prerequisites.
+The natural phase starts at the stock500gold, uses ordinary movement/combat/pickups and
+an actual earned rank, retains the accepted local Gold event(s) behind its painted/speaking
+notice, then pays the first650gold Dowse fee. Source `hub-economy.ts:1871–1909` prices
+each rare offer at5000–5700gold; purchase draws the next roll fee from500–950 in steps
+of50. The separate reference/purchase phase uses the supported private Cheats **SET GOLD**
+control for10000gold, records that funding explicitly as controlled UI input, then uses
+the owned Hat drag/reference and an actually charged offer purchase. Those prerequisite
+funds are not labelled naturally earned. No save, seed, network command or world state
+is injected by the browser driver. Complete runtime acceptance awaits the fixed native
+asset server; retained500/698gold native candidates were decoded read-only and not used.
