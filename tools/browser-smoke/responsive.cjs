@@ -163,7 +163,12 @@ async function walkToFomentius(page) {
     assert.equal(swatches.length,18);
     await action(page,'dye-swatch:0');await action(page,'dye-swatch:7');
     assert.ok(ui.bounds(await ui.widget(page,'panel:dye-swatch:7')).width>=44);
-    await settle(page);
+    const dyePaint=await ui.waitForUi(page,snapshot=>{
+      const value=ui.findWidget(snapshot,'panel:dye')?.value;
+      return value&&JSON.parse(value).opacity===1;
+    },'fully painted native Fabric Dye opening');
+    const dyePresentation=JSON.parse(ui.findWidget(dyePaint,'panel:dye').value);
+    assert.equal(dyePresentation.phase,'target','the actual selected colors expose the clothing step');
     await shot(page,'phone-dye-rust.png');
     const dyeViewport=ui.bounds(await ui.widget(page,'panel:dye'));
     const scroll=await page.context().newCDPSession(page);
@@ -200,7 +205,7 @@ async function walkToFomentius(page) {
     fs.writeFileSync(path.join(output,'responsive-browser-receipt.json'),JSON.stringify({passed:true,
       errors:observed.errors,viewports:[[390,844],[844,390],[1600,900]],
       portraitNativeStage:'source landscape guidance',touchWorldEntry:'Fomentius',touchDrag:true,
-      submissions:await ui.gpuDraws(page)},null,2));
+      dyePresentation,submissions:await ui.gpuDraws(page)},null,2));
     console.log(JSON.stringify({passed:true,errors:observed.errors}));
   } catch(error) {
     const failure={error:error.stack};

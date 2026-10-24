@@ -49,9 +49,6 @@ async function controllerCollegeLoadout(page) {
   await ui.value(page,'panel:dialogue-key','ARCH_Q1_0');
   await pad(page);
   await pad(page,[1]);
-  await ui.value(page,'panel:dialogue-key','ARCH_DISMISS_0');
-  await pad(page);
-  await pad(page,[1]);
   await ui.noWidget(page,'panel:dialogue');
   await pad(page);
   await leaveCollegeOffice(page,(x,y)=>pad(page,[],x,y));

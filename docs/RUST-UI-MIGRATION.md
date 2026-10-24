@@ -588,6 +588,16 @@ screenshot must observe the full opening, without delaying or repeating activati
 HUD's owner agreed that the existing passive `panel:dye` value records JSON
 `{phase,opacity}` from the same native clock used by its actual paint. It adds no action
 or state setter; read-only consumers can wait for the submitted opacity1 frame.
+The complete f41dc57 continuation `responsive-source-scroll` passes all original
+touch/resize behavior, including first Equip after drag, exact hat warning, Skills,
+single world touch to Fomentius, real Dye purchase/mixing, upward native touch scroll
+to DONE, portrait guidance and desktop return; errors[]/Chrome71236 graceful0.
+Reviewed final screenshots retain the queued sibling-chrome label correction and
+the still-unobserved full Dye opacity. The rebuilt driver requires the actual JSON
+opacity1/phase target frame before its final Dye screenshot. The controller College
+helper likewise removes its stale second-B/ARCH_DISMISS expectation: pinned fa08
+`HubInventorySurface.tsx:514–534,855` closes the Q1 dialogue on the first Back/Done,
+matching the already-qualified touch source recovery; real B must prove that closure.
 
 The Tutorial text-bounds helper currently has no executable caller, so its syntax check
 does not qualify Tutorial layout. Pinned fa08 `core-kernels/native-tutorial.ts`
