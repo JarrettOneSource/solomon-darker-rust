@@ -1,4 +1,4 @@
-name: Diagnose exact Windows package input
+name: Diagnose exact Windows window transitions
 on:
   push:
     branches: [diagnostic/windows-input-dc9a103]
@@ -60,6 +60,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: windows-input-dc9a103
+          name: windows-window-dc9a103
           path: reports/windows-input
           if-no-files-found: error

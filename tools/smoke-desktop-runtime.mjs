@@ -282,6 +282,15 @@ async function launch(label, userData) {
     nativeChildren = await app.evaluateHandle(observeNativeChildren, stopJournal);
     appPid = await nativeChildren.evaluate(observer => observer.parentPid);
     page = await app.firstWindow({timeout: 30000});
+    await app.evaluate(({BrowserWindow}) => {
+      const window = BrowserWindow.getAllWindows()[0];
+      const trace = globalThis.__sdrWindowTrace = [];
+      const record = event => trace.push({at:Date.now(),event,visible:window.isVisible(),
+        focused:window.isFocused(),minimized:window.isMinimized(),bounds:window.getBounds(),
+        webFocused:window.webContents.isFocused(),backgroundThrottling:window.webContents.getBackgroundThrottling()});
+      for(const event of ['show','hide','focus','blur','minimize','restore','resize']) window.on(event,()=>record(event));
+      record('initial');
+    });
   } catch (error) {
     console.error(redact(error.stack));
     await cleanupApp(app, appPid);
@@ -358,6 +367,7 @@ async function launch(label, userData) {
       } else if (message.type === 'snapshot') instance.state.frame = message.frame;else if (message.type === 'hosted' && message.message.kind === 'save_before_leave') instance.state.leaveReceipts++;else if (message.type === 'error') errors.push(redact(`${label} host: ${message.code}: ${message.reason}`));
     });
   });
+  await setWindowMinimized(instance, false);
   await ui.ready(page);
   await ui.surface(page, 'desktop-launcher');
   await ui.assertGpuOnly(page);
@@ -798,11 +808,26 @@ async function bounded(operation, timeout, message) {
   }
 }
 async function setWindowMinimized(instance, minimized) {
+  console.log(JSON.stringify({windowTransition:instance.label,minimized,phase:'before',native:await instance.app.evaluate(({BrowserWindow})=>globalThis.__sdrWindowTrace)}));
   await instance.app.evaluate(({BrowserWindow}, minimized) => {
     const window = BrowserWindow.getAllWindows()[0];
     if (minimized) window.minimize();
     else { window.restore(); window.show(); window.focus(); }
   }, minimized);
+  await waitFor(() => instance.app.evaluate(({BrowserWindow}, minimized) => {
+    const window=BrowserWindow.getAllWindows()[0];
+    return minimized ? window.isMinimized()
+      : !window.isMinimized() && window.isVisible() && window.isFocused();
+  }, minimized), `the actual ${instance.label} window ${minimized ? 'minimized' : 'visible and focused'}`);
+  if (!minimized) {
+    const before=(await ui.readUi(instance.page))?.frame;
+    await instance.page.waitForFunction(before=> {
+      if(!document.hasFocus() || document.visibilityState!=='visible')return false;
+      const read=window.wasmBindings?.gpu_ui_state;
+      return !read || before===undefined || JSON.parse(read()).frame!==before;
+    },before);
+  }
+  console.log(JSON.stringify({windowTransition:instance.label,minimized,phase:'after',native:await instance.app.evaluate(()=>globalThis.__sdrWindowTrace)}));
 }
 async function waitForExit(pid) {
   await waitFor(() => {
