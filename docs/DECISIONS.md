@@ -680,6 +680,15 @@ assertions, source inputs and expected numeric values are unchanged by packaging
 
 ### Fullscreen activation ownership
 
+The shared GPU context disables egui's default 0.8-second click expiry through
+`InputOptions::max_click_duration`. Source `NativeUiButton` delegates to ordinary
+browser click activation, which accepts a stationary release after a longer hold.
+The actual c2a64e0 package received a trusted browser click after a 1.1-second hold
+but stayed on Title. The native context regression fails at 0bab38d4 and also checks
+that cancellation and movement outside the button never activate it. The canonical
+packaged journey retains the held Settings click after saved resume. Existing
+pointer ownership, drag distance, cancellation and keyboard behavior stay native.
+
 The fullscreen capability runs synchronously in its trusted browser click, while
 native egui responses handle keyboard/controller activation. A mutable
 `gesture_handled` flag cleared by every paint could be consumed by an intermediate

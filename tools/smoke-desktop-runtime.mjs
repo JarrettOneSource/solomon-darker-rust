@@ -91,7 +91,8 @@ try {
     JSON.parse(localStorage.getItem('solomon-dark-game-settings-v1')));
   assert.equal(preferences.musicVolumePercent, 1);
   assert.equal(preferences.reverseHotbarCycle, true);
-  await ui.click(resumed.page,'settings');
+  // Source buttons still activate when the pointer is held before release.
+  await ui.click(resumed.page,'settings',{delay:1100});
   await ui.value(resumed.page,'settings-range:music','1');
   await ui.click(resumed.page,'settings-page:controls');
   assert.equal((await ui.widget(resumed.page,'settings-toggle:reverse-hotbar')).selected,true);
