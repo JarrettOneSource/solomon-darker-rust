@@ -1,29 +1,65 @@
 # Rust game parity and release
 
-The game and desktop launcher GPU UI are qualified at
-`023c5ebfd06ffaad6fc04d911b2d6f0823909c51` in
-[workflow 40166046505](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40166046505).
-The complete game gate passes 701 native tests, formatting, strict native/main-WASM/loader
-checks, 45 browser-support tests and seven sdmod tests. All four canonical platform
-packages pass their complete journeys and 33 desktop contracts each. All 32 screenshots,
-four archive inspections and 28 safe child stops are reviewed. Windows also passes 47
-native launcher tests and static CRT inspection. Exact saved continuation, held Settings
-input, update actions, both save-conflict choices, saved Return and two actual peers in
-one Boneyard pass on every platform. Intel's three music cancellations have actual
-ready-channel suspension evidence; no unclassified resource or media errors remain.
+The complete Rust/WASM GPU game and desktop launcher are published at
+`4aa3a7b733a46788e7cb27b601f6bceb5e4f08b9`; the game is installed in production. The
+[release](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/desktop-4aa3a7b733a46788e7cb27b601f6bceb5e4f08b9)
+contains all 11 expected assets. Its
+[main workflow](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40170772878)
+passes every job: 701 native tests, formatting, strict native/main-WASM/loader checks,
+45 browser-support tests, seven sdmod tests and all four complete packaged journeys.
+Each platform passes 33 desktop contracts. Windows also passes 47 native launcher tests
+and static CRT inspection. All 32 final screenshots, archive inspections and 28 safe child
+stops are reviewed, with zero raw resource or media failures in these final packages.
+Software-renderer qualification establishes functionality, not GPU performance.
 
-[RUST-UI-MIGRATION.md](RUST-UI-MIGRATION.md) owns the full surface matrix and exact
-receipts. The launcher shares the Rust/WASM GPU runtime and native text editor; its
-three HTML/CSS/JavaScript presentation files are removed. Windows automation now uses
-Node's standard priority API after a controlled comparison established starvation behind
-the software GPU processes. The canonical Windows receipt records priority -7. These
-software-renderer checks establish functionality, not graphics performance. Earlier
-failed receipts remain failed and retain their causal limits.
+[RUST-UI-MIGRATION.md](RUST-UI-MIGRATION.md) owns the complete surface matrix, platform
+adapter boundary and earlier receipts. The launcher shares the Rust GPU runtime and
+native text editor; its three HTML/CSS/JavaScript presentation files are removed.
+All required game-browser families retain acceptance at their recorded revisions.
+The final release qualification and anonymous asset verification are in
+`main-release-4aa3a7b/qualification.json` and `public-verification.json` under the M2/M5
+task `solomon-full-rust-ui-20261023T165939Z`.
 
-Canonical main release, Website artifact admission, installed/live recovery and final
-cleanup remain pending. Production still serves the retained PixiJS release `093aee99`
-following the October 24 rollback request, with M5 automatic deployment held. The older
-release receipts below retain their original scope.
+Website `db9a9c98434aa5df56e3f9c402719209001f061b` consumes that exact Linux artifact,
+SHA256 `1f193ff9fbe82d357dbb30583955b5d578ae876aa576b6e94a607226ba9f9a64`.
+Its complete M5 gate and
+[Linux CI](https://github.com/JarrettOneSource/solomon-dark-website/actions/runs/40176502878)
+pass, covering all 78 backend/deployment contracts across both platforms and all 64
+frontend tests on each. The normal installer admits the complete four-component worker
+`7199590964dcb2f9f0a6467c0a6fea1d8cee8c28a8369cbfe2e908ce92559ff4`.
+Its ordinary scheduled invocation deploys the release at 08:40 UTC on October 25,
+draining one player with one acknowledged save and zero unacknowledged saves.
+The installed Linux runtime passes every one of its 5,710 payload hashes and complete
+membership checks. All 12 ordinary HTTPS identity/document/CSP/publication checks pass;
+independent staging, notifier and Caddy retain their processes.
+
+The live browser records the exact final PixiJS checkpoint, cloud persistence before its
+matching readiness ACK, and automatic loading of the exact GPU client. A fresh account
+read matches that entire checkpoint. Native Continue preserves Felix's loadout; ordinary
+Leave persists, and a fresh document continues the same player and saves again. The final
+four-group journey passes with no unexpected browser/API errors, reviewed title/College
+images and graceful browser exit. Four raw music cancellations have complete ready-channel
+suspension evidence recorded before Continue resumes playback.
+
+The initial cutover observer remains failed: Playwright lost the final successful revision
+poll body during navigation, after the exact-revision/title checks passed. It also records
+five transient 502 polls during service exchange and two legacy media cancellations during
+document retirement. The first continuation observer used the wrong save-response envelope;
+the next observed audio too late, after playback resumed. All original receipts retain their
+outcomes. `live-acceptance-review.json` records the independent save/reload witnesses,
+these limits and the passing final `live-continuation-4aa-r3/` journey.
+
+The scheduler is enabled, with no task operator hold or compute lease. Original pre-Rust
+archives, later rollback generations and current persistent data are retained. The fresh
+pre-deployment runtime is `/opt/solomon-dark-revived.rollback-pre-db9a9c98434a-20261025T084009Z`;
+state/configuration backup is `/var/backups/solomon-dark-revived/pre-db9a9c98434a-20261025T084009Z/`.
+`release-admission-4aa/` owns installation, deployment, backup and postflight receipts.
+Task worktree/cache retirement is recorded in `final-cleanup-m2.json` and
+`final-cleanup-m5.json`; durable artifacts, receipts and rollback material stay outside
+removed source trees. The documentation-only completion commit retains this qualified
+product revision and does not republish unchanged binaries.
+
+The older release receipts below retain their original scope.
 
 The earlier Website parity implementation passed its complete local gates.
 The independent repository and Linux game artifact are public. All 44 public acceptance
@@ -32,7 +68,7 @@ from `ca728e90` to `d3903095`. Normal DNS access recovered after the separately 
 authoritative serving failure; both M2 and NFO ordinary HTTPS checks pass. The desktop
 packages pass final archive inspection and actual Windows, Linux, Intel Mac and Apple
 silicon Mac journeys. The [standalone apps are public](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/desktop-1a4f7063cd3f4b9cb23651bdbe7cfffa7620cf76),
-and the Website extraction PR is ready for review. Production cutover remains separate.
+and the Website extraction was subsequently merged. Current production acceptance is recorded above.
 The target is the current Website's behavior and existing user data. The requested result is a separately published Rust game repository, removal of
 the replaced game implementation from the Website repository, a WASM embed in that Website,
 and a verified `/game-stg` deployment. The behavioral reference is
@@ -377,8 +413,8 @@ resources, including all 233 audio files. The Source also preloads resident audi
 journey startup bounds allow 240 seconds; subsequent behavior retains its separate deadlines.
 This observation is not a general startup-performance claim.
 
-The Website extraction is ready for review in [PR8](https://github.com/JarrettOneSource/solomon-dark-website/pull/8),
-source `2a7b40a0`, and is not merged. Retained Linux CI receipts pass all 63 backend/deployment contracts and
+The Website extraction [PR8](https://github.com/JarrettOneSource/solomon-dark-website/pull/8),
+source `2a7b40a0`, was merged as `7a787823`. Retained Linux CI receipts pass all 63 backend/deployment contracts and
 frontend checks. Both `d3903095`-pinned reruns (`39789137765` and `39789127353`, attempt 2)
 pass and their logs verify the actual artifact revision. Production migration requires manual admission of the accepted
 Rust-aware M5 worker, its configured production artifact and a passing full gate; the

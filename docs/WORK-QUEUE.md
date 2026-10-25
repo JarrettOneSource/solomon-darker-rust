@@ -9,19 +9,22 @@ Current Website behavior, ownership and verification are mapped in
 complete release/deployment acceptance record. Earlier ticket receipts below retain their
 actual revisions and bounded scope.
 
-The game and desktop launcher GPU UI are qualified at `023c5ebf` in canonical
-[workflow 40166046505](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40166046505).
-All 701 native tests, strict native/main-WASM/loader checks, 45 browser-support tests,
-seven sdmod tests and four complete packaged journeys pass. Each platform passes 33
+The complete game and launcher GPU migration is released at `4aa3a7b7` and live through
+Website `db9a9c98`. The [main workflow](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40170772878)
+passes 701 native tests, 45 browser-support tests, seven sdmod tests, strict formatting/
+native/WASM checks and all four complete packaged journeys. Each platform passes 33
 desktop contracts; Windows also passes 47 native launcher tests and static CRT inspection.
-All 32 screenshots, final archive inspections and 28 safe child stops are reviewed.
-Three Intel music cancellations have actual ready-channel suspension evidence; all
-other raw resource lists and every media-error list are empty. The launcher replaces
-its three HTML/CSS/JavaScript presentation files with `crates/web/src/desktop/launcher`.
-The [migration matrix](RUST-UI-MIGRATION.md) owns the accepted surface inventory and
-retained earlier evidence. Canonical main release, Website artifact admission, live
-recovery and task cleanup remain. Earlier DOM-era receipts below retain their original
-behavior scope and do not substitute for GPU acceptance.
+All 32 final package screenshots, archive inspections and 28 safe child stops are reviewed,
+with zero raw resource/media failures. The launcher replaces its three HTML/CSS/JavaScript
+presentation files with `crates/web/src/desktop/launcher`.
+
+The normal M5 worker deployed the exact release after both complete Website gates passed.
+Installed artifact/HTTP checks and live checkpoint persistence, automatic GPU reload,
+same-player Continue, saved Leave and fresh-document continuation are accepted. The
+[completion record](PORT-COMPLETION.md) identifies all receipts, retained observer failures,
+backup generations and cleanup records. The [migration matrix](RUST-UI-MIGRATION.md)
+owns every required surface and its exact accepted variants. Earlier DOM-era receipts
+below retain their original scope.
 
 Scenery Puppet hits, Earthquake pivots, repaint/retirement metadata, dynamic scenes, trusted
 mod content, custom frame/wearable geometry and current shadow behavior are integrated.

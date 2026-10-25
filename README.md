@@ -8,9 +8,9 @@ game, its native host, WASM client, save tools and desktop packages. Menus, HUD,
 social controls, game overlays and the desktop launcher use the shared Rust GPU UI runtime. Browser adapters
 own text composition, accessibility, files, audio, network and storage. The Website owns
 accounts, content and editing, and embeds the built WASM artifact.
-The desktop launcher conversion is undergoing packaged acceptance; the earlier b264
-qualification covers the game UI and the previous launcher. The canvas document,
-generated WebAssembly bindings and native Electron capabilities remain platform adapters.
+The complete GPU game and launcher are [released for all four desktop platforms](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/desktop-4aa3a7b733a46788e7cb27b601f6bceb5e4f08b9).
+The game is also [live on the Website](https://solomondarker.com/game/). The canvas document, generated
+WebAssembly bindings and native Electron capabilities remain platform adapters.
 
 [The source inventory](docs/SOURCE-PARITY.md) maps current behavior to its implementation
 and verification. [The acceptance record](docs/PORT-COMPLETION.md) records exact tested
@@ -30,7 +30,7 @@ revisions, release artifacts and deployment status.
 - [docs/SOURCE-PARITY.md](docs/SOURCE-PARITY.md): current Website behavior, implementation
   ownership and verification boundaries.
 - [docs/RUST-UI-MIGRATION.md](docs/RUST-UI-MIGRATION.md): GPU UI ownership, complete surface
-  matrix, candidate qualification and remaining release checks.
+  matrix, release qualification and live acceptance.
 
 ## Layout
 
@@ -492,7 +492,7 @@ and prop layers and the separate head pass. The player and students share the st
 push response and segment collision; trader clocks and Hagatha's particles tick at 100 Hz.
 
 Download the standalone app for Windows, Linux, or macOS on Intel or Apple silicon from
-[the desktop release](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/desktop-1a4f7063cd3f4b9cb23651bdbe7cfffa7620cf76).
+[the desktop release](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/desktop-4aa3a7b733a46788e7cb27b601f6bceb5e4f08b9).
 Extract the ZIP and run the app, keeping its folder together. Each platform passes final
 archive inspection, offline save/Continue, direct peer play, update notices and safe close
 and return-to-launcher checks. Saves remain in the app's user-data folder when replacing
