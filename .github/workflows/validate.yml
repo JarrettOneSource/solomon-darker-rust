@@ -1,70 +1,14 @@
-name: Validate and publish game
-
+name: Diagnose exact Windows College renderer
 on:
-  pull_request:
   push:
-
+    branches: [diagnostic/windows-courtyard-33f64b2]
 permissions:
   contents: read
-
-env:
-  CARGO_INCREMENTAL: '0'
-  CARGO_PROFILE_DEV_DEBUG: '0'
-  CARGO_PROFILE_TEST_DEBUG: '0'
-
+  actions: read
 jobs:
-  game:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-      - name: Install the pinned Rust and WASM toolchain
-        run: rustup show
-      - run: cargo install trunk --locked --version 0.22.0
-      - run: npm ci --no-audit --no-fund
-      - run: npm run test:browser-support
-      - run: python3 scripts/verify-client-assets.py
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-      - run: cargo clippy -p solomon-web --target wasm32-unknown-unknown -- -D warnings
-      - run: cargo clippy -p solomon-loader --target wasm32-unknown-unknown -- -D warnings
-      - run: cargo test --workspace --all-features
-      - run: cargo build -p solomon-modding --bin solomon-sdmod
-      - run: npm run test:sdmod
-        env:
-          SOLOMON_SDMOD_BINARY: ${{ github.workspace }}/target/debug/solomon-sdmod
-      - name: Build the complete Website artifact
-        run: python3 scripts/package-hosted-game.py --output artifacts/solomon-game-linux --mount /game
-      - name: Record the immutable archive checksum
-        working-directory: artifacts
-        run: sha256sum solomon-game-linux.tar.gz > solomon-game-linux.tar.gz.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: hosted-game-linux
-          path: |
-            artifacts/solomon-game-linux.tar.gz
-            artifacts/solomon-game-linux.tar.gz.sha256
-          if-no-files-found: error
-
-  desktop:
-    name: Desktop (${{ matrix.platform }}-${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { runner: windows-latest, platform: win32, arch: x64 }
-          - { runner: macos-15, platform: darwin, arch: arm64 }
-          - { runner: macos-15-intel, platform: darwin, arch: x64 }
-          - { runner: ubuntu-latest, platform: linux, arch: x64 }
+  windows-input:
+    runs-on: windows-latest
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
@@ -77,118 +21,45 @@ jobs:
         with:
           node-version-file: .node-version
           cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm install --global npm@10.9.2
       - run: npm ci --no-audit --no-fund
-      - name: Install the pinned Rust and WASM toolchain
-        run: rustup show
-      - name: Install the client builder
-        run: cargo install trunk --locked --version 0.22.0
-      - run: python scripts/verify-client-assets.py
-      - run: npm run test:desktop
-      - name: Build standalone app from this revision
-        run: npm run package:desktop -- --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --release-repository "$GITHUB_REPOSITORY"
-      - name: Archive and inspect the final standalone app
-        run: node tools/archive-desktop.mjs
-      - name: Verify the Windows native launcher contracts
-        if: ${{ runner.os == 'Windows' }}
-        run: cargo test --release -p solomon-launcher --all-features
-      - name: Verify the Windows native host needs no external VC++ runtime
-        if: ${{ runner.os == 'Windows' }}
-        run: python tools/inspect-windows-crt.py 'dist-desktop/Solomon Darker-win32-x64/resources/app/authority/solomon-darker.exe' reports/desktop-smoke/native-imports.json static
-      - name: Verify packaged offline save and peer gameplay
+      - uses: actions/download-artifact@v4
+        with:
+          name: unqualified-desktop-win32-x64-40155018342-1
+          run-id: 40155018342
+          github-token: ${{ github.token }}
+          path: candidate
+      - name: Verify and extract the exact failed candidate
         run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            xvfb-run -a npm run smoke:desktop
-          else
-            npm run smoke:desktop
-          fi
+          cd candidate
+          sha256sum --check Solomon-Darker-win32-x64.zip.sha256
+          mkdir ../dist-desktop
+          python -c "import zipfile; zipfile.ZipFile('Solomon-Darker-win32-x64.zip').extractall('../dist-desktop')"
+          cd ..
+          python - <<'VERIFY'
+          import json, pathlib, hashlib
+          root=pathlib.Path('dist-desktop/Solomon Darker-win32-x64')
+          m=json.loads((root/'desktop-package-manifest.json').read_text())
+          assert m['revision']=='33f64b23123763fe47fa8f1ecf8bee0dca696b7b'
+          native=root/'resources/app'/m['nativeAuthority']['executable']
+          assert hashlib.file_digest(native.open('rb'),'sha256').hexdigest()==m['nativeAuthority']['sha256']=='7b5f48787bb925de3dc45626be77bf268c31bfa03f7ec0e081b294545cf41ac2'
+          VERIFY
+      - name: Observe three unchanged packaged journeys
+        run: |
+          python - <<'RUN'
+          import subprocess, os, pathlib, json
+          results=[]
+          for attempt in range(1,4):
+              out=pathlib.Path(f'reports/windows-input/attempt-{attempt}')
+              out.mkdir(parents=True)
+              with (out/'driver.log').open('w') as log:
+                  result=subprocess.run(['node','tools/smoke-desktop-runtime.mjs'],env=dict(os.environ,SDR_DESKTOP_EVIDENCE=str(out.resolve())),stdout=log,stderr=subprocess.STDOUT)
+              results.append({'attempt':attempt,'exitCode':result.returncode})
+              pathlib.Path('reports/windows-input/results.json').write_text(json.dumps(results,indent=2)+'\n')
+          print(json.dumps(results))
+          RUN
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
-          path: |
-            dist-desktop/*.zip
-            dist-desktop/*.sha256
-            dist-desktop/desktop-release.json
+          name: windows-courtyard-33f64b2
+          path: reports/windows-input
           if-no-files-found: error
-      - name: Retain desktop acceptance evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-evidence-${{ matrix.platform }}-${{ matrix.arch }}
-          path: reports/desktop-smoke
-          if-no-files-found: ignore
-      - name: Retain the unqualified Windows candidate on failure
-        if: failure() && matrix.platform == 'win32'
-        uses: actions/upload-artifact@v4
-        with:
-          name: unqualified-desktop-win32-x64-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            dist-desktop/*.zip
-            dist-desktop/*.sha256
-            dist-desktop/desktop-release.json
-          if-no-files-found: ignore
-
-  desktop-release:
-    name: Publish standalone apps
-    needs: [game, desktop]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    concurrency:
-      group: desktop-release
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: desktop-*
-          path: desktop-artifacts
-      - uses: actions/download-artifact@v4
-        with:
-          name: hosted-game-linux
-          path: game-artifact
-      - name: Publish the validated revision
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Older workflow runs must not replace the update feed after main advances.
-          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
-          [[ "$current_main" == "$GITHUB_SHA" ]] || exit 0
-          mkdir release
-          for target in win32-x64 darwin-arm64 darwin-x64 linux-x64; do
-            cp "desktop-artifacts/desktop-$target/Solomon-Darker-$target.zip" release/
-            cp "desktop-artifacts/desktop-$target/Solomon-Darker-$target.zip.sha256" release/
-            cmp desktop-artifacts/desktop-win32-x64/desktop-release.json "desktop-artifacts/desktop-$target/desktop-release.json"
-          done
-          cp desktop-artifacts/desktop-win32-x64/desktop-release.json release/
-          (cd release && sha256sum --check ./*.sha256)
-          python3 - <<'PY'
-          import json, os
-          with open('release/desktop-release.json') as source:
-              assert json.load(source)['revision'] == os.environ['GITHUB_SHA']
-          PY
-          cp game-artifact/solomon-game-linux.tar.gz release/
-          cp game-artifact/solomon-game-linux.tar.gz.sha256 release/
-          (cd release && sha256sum --check solomon-game-linux.tar.gz.sha256)
-          tag="desktop-$GITHUB_SHA"
-          cat > release-notes.md <<'NOTES'
-          Solomon Darker standalone app: offline solo play, local saves, encrypted direct peer hosting and update notifications.
-
-          Extract the ZIP and run the app. Keep the entire extracted folder together. Your saves live in the app's user-data folder, separate from the download. To update, save and close the game, then replace the extracted application with the new version.
-
-          For multiplayer, choose Host game, start a game, and use Game > Copy multiplayer invite. Friends choose Join a friend and paste it. Internet hosts need a reachable IP or VPN address and an allowed/forwarded TCP port (default 27843). Everyone must use the same build. Keep the host running.
-
-          These builds are not publisher-signed or notarized. Windows or macOS may require an explicit first-launch confirmation. Cloud accounts and Dark Cloud content remain available in the web app.
-          NOTES
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" release/* --clobber
-            gh release edit "$tag" --draft=false --latest --notes-file release-notes.md
-          else
-            gh release create "$tag" release/* --target "$GITHUB_SHA" --latest \
-              --title "Solomon Darker ${GITHUB_SHA:0:8}" --notes-file release-notes.md
-          fi

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { createReadStream } from 'node:fs';
+import { appendFileSync, createReadStream } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
@@ -216,6 +216,7 @@ try {
   }));
 } catch (error) {
   const sanitized = sanitizeError(error);
+  stage("driver", `failure: ${sanitized.message}`);
   const failure = {status: 'failed', ...receipts, error: sanitized.stack, errors,
     instances: [...running].map(({label, state}) => ({label, playerId: state.id,
       sequence: state.frame?.sequence, tick: state.frame?.snapshot.ticks,
@@ -281,6 +282,7 @@ async function launch(label, userData) {
     nativeChildren = await app.evaluateHandle(observeNativeChildren, stopJournal);
     appPid = await nativeChildren.evaluate(observer => observer.parentPid);
     page = await app.firstWindow({timeout: 30000});
+    await app.evaluate(observeNativeWindow, join(evidence, `native-${label}.jsonl`));
   } catch (error) {
     console.error(redact(error.stack));
     await cleanupApp(app, appPid);
@@ -307,6 +309,8 @@ async function launch(label, userData) {
     }
   };
   running.add(instance);
+  await page.context().addInitScript(observeAdmission);
+  await page.evaluate(observeAdmission);
   // The shared observer retains every raw failure and only retires one when
   // the actual resident media channel proves the browser suspended preloading.
   await ui.watchRequestFailures(page, {errors}).ready;
@@ -462,9 +466,12 @@ async function enterHub(instance, name, element) {
   assert.equal(instance.state.frame.snapshot.participants[instance.state.id].player.selection.name, name);
 }
 async function readyHub(instance) {
+  stage(instance.label, "readyHub-before-native");
   await waitFor(() => instance.state.id && !instance.state.frame?.snapshot.boneyard, 'accepted College');
   await ui.surface(instance.page,'hidden');
+  stage(instance.label, 'readyHub-before-renderer');
   await instance.page.waitForFunction(()=>window.wasmBindings.wizard_state()[6]===0&&window.wasmBindings.wizard_state()[7]===-1);
+  stage(instance.label, 'readyHub-complete');
 }
 async function move(instance) {
   await instance.page.bringToFront();
@@ -840,4 +847,44 @@ async function freePort() {
   const port = server.address().port;
   await new Promise(resolveClose => server.close(resolveClose));
   return port;
+}
+
+function stage(label, phase) {
+  appendFileSync(join(evidence, 'stages.jsonl'), JSON.stringify({at:Date.now(),label,phase})+'\n');
+}
+function observeNativeWindow({app, BrowserWindow}, path) {
+  const fs=process.getBuiltinModule('node:fs');
+  const window=BrowserWindow.getAllWindows()[0];
+  const record=(event, detail={})=>fs.appendFileSync(path,JSON.stringify({at:Date.now(),event,...detail})+'\n');
+  const sample=event=>record(event,{visible:window.isVisible(),focused:window.isFocused(),
+    minimized:window.isMinimized(),webFocused:window.webContents.isFocused(),
+    backgroundThrottling:window.webContents.getBackgroundThrottling(),metrics:app.getAppMetrics()});
+  for(const event of ['show','hide','focus','blur','minimize','restore','resize','unresponsive','responsive'])window.on(event,()=>sample(event));
+  window.webContents.on('console-message',detail=>{
+    if(detail.message.startsWith('__SDR_ADMISSION__'))record('renderer',JSON.parse(detail.message.slice('__SDR_ADMISSION__'.length)));
+  });
+  window.webContents.on('render-process-gone',(_,detail)=>record('render-process-gone',detail));
+  app.getGPUInfo('basic').then(info=>record('gpu',{info,features:app.getGPUFeatureStatus()}));
+  const timer=setInterval(()=>sample('process-sample'),1000);
+  window.once('closed',()=>clearInterval(timer));
+  sample('initial');
+}
+function observeAdmission() {
+  if(window.__sdrAdmissionObserved)return;
+  window.__sdrAdmissionObserved=true;
+  let frames=0,lastFrame=0;
+  const record=event=>{
+    const raw=window.wasmBindings?.gpu_ui_state?.();
+    const ui=raw?JSON.parse(raw):null;
+    console.log('__SDR_ADMISSION__'+JSON.stringify({event,now:performance.now(),
+      documentId:performance.timeOrigin,url:location.href,focused:document.hasFocus(),
+      visibility:document.visibilityState,frames,gpuFrame:ui?.frame,surface:ui?.surface,
+      scope:ui?.inputScope,ready:ui?.ready,selection:ui?.acceptedSelection,
+      wizard:Array.from(window.wasmBindings?.wizard_state?.()??[])}));
+  };
+  for(const event of ['focus','blur','visibilitychange','pointerdown','pointerup','click'])
+    window.addEventListener(event,()=>record(event),true);
+  function frame(now){frames++;if(now-lastFrame>=1000){lastFrame=now;record('frame');}requestAnimationFrame(frame);}
+  requestAnimationFrame(frame);
+  setInterval(()=>record('timer'),1000);
 }
