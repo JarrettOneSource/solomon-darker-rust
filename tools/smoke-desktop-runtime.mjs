@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { createReadStream } from 'node:fs';
+import { appendFileSync, createReadStream } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
@@ -37,6 +37,17 @@ await mkdir(evidence, {
 const profiles = await mkdtemp(join(tmpdir(), 'solomon-darker-smoke-'));
 await writeFile(join(evidence, 'owned-profile.json'), JSON.stringify({profiles}));
 const running = new Set();
+let lastCpu=process.cpuUsage(), lastSample=Date.now();
+const driverTimer=setInterval(()=>{
+  const now=Date.now(), cpu=process.cpuUsage(), elapsed=now-lastSample;
+  appendFileSync(join(evidence,'driver-progress.jsonl'),JSON.stringify({at:now,elapsed,
+    cpuPercent:100*(cpu.user-lastCpu.user+cpu.system-lastCpu.system)/(elapsed*1000),
+    memory:process.memoryUsage(),instances:[...running].map(instance=>({label:instance.label,
+      sequence:instance.state.frame?.sequence,tick:instance.state.frame?.snapshot.ticks,
+      wire:instance.wireStats}))})+'\n');
+  lastCpu=cpu;lastSample=now;
+},1000);
+driverTimer.unref();
 const errors = [];
 const resourceChecks = [];
 const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [], serviceStops: [], resourceFailures: [], mediaObservations: [] };
@@ -216,6 +227,7 @@ try {
   }));
 } catch (error) {
   const sanitized = sanitizeError(error);
+  stage("driver", `failure: ${sanitized.message}`);
   const failure = {status: 'failed', ...receipts, error: sanitized.stack, errors,
     instances: [...running].map(({label, state}) => ({label, playerId: state.id,
       sequence: state.frame?.sequence, tick: state.frame?.snapshot.ticks,
@@ -283,6 +295,7 @@ async function launch(label, userData) {
     nativeChildren = await app.evaluateHandle(observeNativeChildren, stopJournal);
     appPid = await nativeChildren.evaluate(observer => observer.parentPid);
     page = await app.firstWindow({timeout: 30000});
+    await app.evaluate(observeNativeWindow, join(evidence, `native-${label}.jsonl`));
   } catch (error) {
     console.error(redact(error.stack));
     await cleanupApp(app, appPid);
@@ -309,6 +322,10 @@ async function launch(label, userData) {
     }
   };
   running.add(instance);
+  instance.wireStats={frames:0,bytes:0,parseMs:0,maxBytes:0};
+  observeCalls(instance);
+  await page.context().addInitScript(observeAdmission);
+  await page.evaluate(observeAdmission);
   // The shared observer retains every raw failure and only retires one when
   // the actual resident media channel proves the browser suspended preloading.
   await ui.watchRequestFailures(page, {errors}).ready;
@@ -348,7 +365,12 @@ async function launch(label, userData) {
     });
     socket.on('close', () => instance.state.closedSockets++);
     socket.on('framereceived', ({payload}) => {
+      const bytes=Buffer.byteLength(payload), started=performance.now();
+      instance.wireStats.frames++;
+      instance.wireStats.bytes+=bytes;
+      instance.wireStats.maxBytes=Math.max(instance.wireStats.maxBytes,bytes);
       const message = readMessage(JSON.parse(payload.toString()));
+      instance.wireStats.parseMs+=performance.now()-started;
       if (message === null) return;
       if (message.type === 'welcome') {
         instance.state.id = message.credentials.player_id;
@@ -464,9 +486,12 @@ async function enterHub(instance, name, element) {
   assert.equal(instance.state.frame.snapshot.participants[instance.state.id].player.selection.name, name);
 }
 async function readyHub(instance) {
+  stage(instance.label, "readyHub-before-native");
   await waitFor(() => instance.state.id && !instance.state.frame?.snapshot.boneyard, 'accepted College');
   await ui.surface(instance.page,'hidden');
+  stage(instance.label, 'readyHub-before-renderer');
   await instance.page.waitForFunction(()=>window.wasmBindings.wizard_state()[6]===0&&window.wasmBindings.wizard_state()[7]===-1);
+  stage(instance.label, 'readyHub-complete');
 }
 async function move(instance) {
   await instance.page.bringToFront();
@@ -811,9 +836,13 @@ async function setWindowMinimized(instance, minimized) {
   if (!minimized) {
     const previousFrame = (await ui.readUi(instance.page))?.frame;
     await instance.page.waitForFunction(previousFrame => {
-      if (!document.hasFocus() || document.visibilityState !== 'visible') return false;
-      const read = window.wasmBindings?.gpu_ui_state;
-      return !read || previousFrame === undefined || JSON.parse(read()).frame !== previousFrame;
+      const read=window.wasmBindings?.gpu_ui_state;
+      const frame=read?JSON.parse(read()).frame:undefined;
+      const focused=document.hasFocus(), visibility=document.visibilityState;
+      const ready=focused&&visibility==='visible'&&(!read||previousFrame===undefined||frame!==previousFrame);
+      console.log('__SDR_ADMISSION__'+JSON.stringify({event:'restore-predicate',
+        now:performance.now(),previousFrame,gpuFrame:frame,focused,visibility,ready}));
+      return ready;
     }, previousFrame);
   }
 }
@@ -842,4 +871,63 @@ async function freePort() {
   const port = server.address().port;
   await new Promise(resolveClose => server.close(resolveClose));
   return port;
+}
+
+function stage(label, phase, detail={}) {
+  appendFileSync(join(evidence, 'stages.jsonl'), JSON.stringify({at:Date.now(),label,phase,...detail})+'\n');
+}
+function observeNativeWindow({app, BrowserWindow}, path) {
+  const fs=process.getBuiltinModule('node:fs');
+  const window=BrowserWindow.getAllWindows()[0];
+  const record=(event, detail={})=>fs.appendFileSync(path,JSON.stringify({at:Date.now(),event,...detail})+'\n');
+  const sample=event=>record(event,{visible:window.isVisible(),focused:window.isFocused(),
+    minimized:window.isMinimized(),webFocused:window.webContents.isFocused(),
+    backgroundThrottling:window.webContents.getBackgroundThrottling(),metrics:app.getAppMetrics()});
+  for(const event of ['show','hide','focus','blur','minimize','restore','resize','unresponsive','responsive'])window.on(event,()=>sample(event));
+  window.webContents.on('console-message',detail=>{
+    if(detail.message.startsWith('__SDR_ADMISSION__'))record('renderer',JSON.parse(detail.message.slice('__SDR_ADMISSION__'.length)));
+  });
+  window.webContents.on('render-process-gone',(_,detail)=>record('render-process-gone',detail));
+  app.getGPUInfo('basic').then(info=>record('gpu',{info,features:app.getGPUFeatureStatus()}));
+  const timer=setInterval(()=>sample('process-sample'),1000);
+  window.once('closed',()=>clearInterval(timer));
+  sample('initial');
+}
+function observeAdmission() {
+  if(window.__sdrAdmissionObserved)return;
+  window.__sdrAdmissionObserved=true;
+  let frames=0,lastFrame=0,microtasks=0;
+  const record=event=>{
+    const raw=window.wasmBindings?.gpu_ui_state?.();
+    const ui=raw?JSON.parse(raw):null;
+    console.log('__SDR_ADMISSION__'+JSON.stringify({event,now:performance.now(),
+      documentId:performance.timeOrigin,url:location.href,focused:document.hasFocus(),
+      visibility:document.visibilityState,frames,microtasks,fontStatus:document.fonts.status,
+      fontStates:[...document.fonts].map(face=>face.status),gpuFrame:ui?.frame,surface:ui?.surface,
+      scope:ui?.inputScope,ready:ui?.ready,selection:ui?.acceptedSelection,
+      wizard:Array.from(window.wasmBindings?.wizard_state?.()??[])}));
+  };
+  for(const event of ['focus','blur','visibilitychange','pointerdown','pointerup','click'])
+    window.addEventListener(event,()=>record(event),true);
+  function frame(now){frames++;Promise.resolve().then(()=>microtasks++);if(now-lastFrame>=1000){lastFrame=now;record('frame');}requestAnimationFrame(frame);}
+  requestAnimationFrame(frame);
+  setInterval(()=>record('timer'),1000);
+}
+
+function observeCalls(instance) {
+  let nextCall=0;
+  for(const method of ['evaluate','waitForFunction','screenshot']) {
+    const original=instance.page[method].bind(instance.page);
+    instance.page[method]=(...args)=>{
+      const call=++nextCall,started=Date.now();
+      stage(instance.label,'call-begin',{call,method});
+      return original(...args).then(result=>{
+        stage(instance.label,'call-end',{call,method,elapsed:Date.now()-started});
+        return result;
+      },error=>{
+        stage(instance.label,'call-error',{call,method,elapsed:Date.now()-started,error:redact(error.message)});
+        throw error;
+      });
+    };
+  }
 }
