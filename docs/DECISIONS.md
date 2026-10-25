@@ -270,6 +270,11 @@ abort/error event. The shared `browser-errors.cjs` classifier accepts only that 
 lifecycle; the desktop journey now uses it and retains every raw failure and classification.
 Unclassified cancellations and actual media errors still fail. This experiment does not
 retroactively qualify the earlier Intel/Windows jobs, which lacked those observations.
+Each completed error report is a snapshot. The failed Windows 33f64b23 receipt showed
+later peer failures appearing in earlier closed-page phases because their reports shared
+the live error array. `settleErrors` now copies its plain report data with the standard
+`structuredClone`; the live observer still retains every unexpected failure. A regression
+first fails with three errors in a phase that originally had one, then passes after the copy.
 
 **Native font geometry and Rust editing share one text layout.** The installed egui
 row/cursor model assumes increasing horizontal positions and cannot represent mixed

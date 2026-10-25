@@ -8,14 +8,17 @@ surface matrix, exact candidate run and retained evidence. The desktop launcher
 conversion removes its remaining HTML/CSS presentation. The 1dce46ad implementation
 passes 701 native tests, the required strict native/WASM checks, complete browser smoke
 and actual Mac package journey, including a held Settings click after saved resume.
-All eight fresh package screenshots are reviewed. The dc9a103 canonical game/Linux/Apple Silicon/Intel
-checks pass with 24 reviewed screenshots; Windows passes its launcher and first save
-but misses Settings activation after reopening. A later exact-package trace proves a separate held-click expiry on the Tutorial
-prompt, covered by the shared repair. Current Windows qualification remains required.
+All eight fresh package screenshots are reviewed. Candidate 33f64b23 passes the canonical
+game/Linux/Apple Silicon/Intel checks, with 24 reviewed screenshots and 21 safe child stops.
+Windows passes held-pointer release, saved continuation, updates, both save-conflict
+choices and saved Return, then times out waiting for its guest College client after
+native admission. Later renderer reads also take more than a minute. The exact-package
+diagnostic records renderer, native-window and process progress without changing the
+package or gameplay timeouts. Current Windows qualification remains required.
 The c537 main workflow did not publish: Intel failed on cancelled music requests,
 and Windows failed during guest admission with additional music cancellations.
 Paced actual responses now prove the narrowly classified media lifecycle; the Windows
-admission observation remains pending. Earlier failed receipts retain their status. Canonical main release,
+admission diagnosis remains pending. Earlier failed receipts retain their status. Canonical main release,
 Website artifact admission, installed/live recovery and final cleanup remain pending.
 Production still serves the retained PixiJS release `093aee99` following the
 October 24 rollback request, with M5 automatic deployment held. The older release

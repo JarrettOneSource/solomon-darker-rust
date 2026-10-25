@@ -1,6 +1,36 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {residentSuspension,documentRetirement}=require('./browser-errors.cjs');
+const {EventEmitter}=require('node:events');
+const {residentSuspension,documentRetirement,watchErrors,settleErrors}=require('./browser-errors.cjs');
+
+test('a completed phase keeps its errors while later failures remain in the live observer',async()=>{
+  const page=new EventEmitter();
+  page.addInitScript=async()=>{};
+  page.frames=()=>[];
+  page.mainFrame=()=>null;
+  page.url=()=> 'http://127.0.0.1:4181/';
+  const observed=watchErrors(page);
+  page.emit('requestfailed',{
+    url:()=> 'http://127.0.0.1:4181/missing.png',method:()=> 'GET',
+    resourceType:()=> 'image',failure:()=>({errorText:'net::ERR_CONNECTION_RESET'}),
+  });
+  const first=await settleErrors(page);
+  assert.equal(first.errors.length,1);
+  assert.equal(first.rawFailures.length,1);
+
+  page.emit('pageerror',new Error('a later phase failed'));
+  page.emit('requestfailed',{
+    url:()=> 'http://127.0.0.1:4181/later.png',method:()=> 'GET',
+    resourceType:()=> 'image',failure:()=>({errorText:'net::ERR_CONNECTION_RESET'}),
+  });
+  const second=await settleErrors(page);
+  assert.equal(first.errors.length,1);
+  assert.equal(first.rawFailures.length,1);
+  assert.equal(second.errors.length,3);
+  assert.equal(second.rawFailures.length,2);
+  assert.deepEqual(second.errors,observed.errors);
+  assert.deepEqual(second.rawFailures,observed.rawFailures);
+});
 
 function evidence() {
   const url='http://127.0.0.1:4181/assets/stock/audio/music/death.mp3';

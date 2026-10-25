@@ -13,10 +13,11 @@ The game GPU UI and its browser/candidate qualification are complete at `b264cac
 The desktop launcher replaces its three HTML/CSS/JavaScript presentation files with
 `crates/web/src/desktop/launcher`. Its 1dce46ad implementation passes 701 native tests,
 the strict native/WASM checks, complete browser smoke and reviewed Mac package journey,
-including held-pointer release after saved resume;
-candidate dc9a103 passes game/Linux/Apple Silicon/Intel qualification; Windows saved-resume
-Settings input failed, and the later Windows trace reproduces the repaired held-click
-expiry on the Tutorial prompt. Current four-platform qualification remains required. The [migration matrix](RUST-UI-MIGRATION.md) owns the accepted surface
+including held-pointer release after saved resume. Candidate 33f64b23 passes the canonical
+game/Linux/Apple Silicon/Intel checks, with 24 reviewed package screenshots and 21 safe child
+stops. Windows passes held input, save/resume, updates, conflicts and Return, then stalls
+waiting for its guest College client; exact-package renderer/process diagnosis is active.
+Current four-platform qualification remains required. The [migration matrix](RUST-UI-MIGRATION.md) owns the accepted surface
 inventory and the earlier package journeys. Canonical main release, Website artifact
 admission, live recovery and task cleanup remain. Earlier DOM-era receipts below retain
 their original behavior scope and do not substitute for GPU acceptance.

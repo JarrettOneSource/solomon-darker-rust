@@ -266,11 +266,12 @@ async function settleErrors(page) {
         captured:row.captured,settled,retirement:retired});
     }
   }
-  const report={url:page.url(),rawFailures:observed.rawFailures,
+  // A saved phase must not acquire failures or classifications from later work.
+  const report=structuredClone({url:page.url(),rawFailures:observed.rawFailures,
     expectedSuspensions:observed.expectedSuspensions,mediaFailures:observed.mediaFailures,
     replacements:observed.replacements,
     media:snapshots.get(page.mainFrame()),frames:[...snapshots.values()].filter(Boolean),
-    errors:observed.errors,warnings:observed.warnings};
+    errors:observed.errors,warnings:observed.warnings});
   if(process.env.OUT) {
     fs.mkdirSync(process.env.OUT,{recursive:true});
     fs.writeFileSync(path.join(process.env.OUT,`browser-errors-${observed.id}.json`),
