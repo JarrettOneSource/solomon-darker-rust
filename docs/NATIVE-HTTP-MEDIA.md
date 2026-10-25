@@ -37,14 +37,16 @@ their socket clones for shutdown, and owns/reaps/join its long-lived workers. St
 responses belong to that lifetime after header framing: share the immutable asset
 responder, keep the lease in an owned transfer worker, and remove the asset consumption
 write deadline. No asset may occupy a framing worker while waiting for a reader.
-Shutdown closes the owned TCP connections before joining workers; the standard
-[TCP shutdown contract](https://doc.rust-lang.org/std/net/enum.Shutdown.html) wakes blocked
-writes. Connection count remains bounded by the existing admission limit.
+Shutdown closes the owned TCP connections before joining workers. Asset writes also check
+the shutdown flag between nonblocking attempts: closing a cloned socket alone did not
+reliably release an already blocked Windows send. Connection count remains bounded by the
+existing admission limit.
 
 Request read/header limits, upgrade deadlines, supervisor HTTP deadlines, WebSocket
 heartbeat/close behavior, MIME, path validation and byte-range semantics stay with their
-existing owners. The asset file streams directly to TCP without a new body buffer,
-retry loop, polling protocol, async runtime or frontend error allowance.
+existing owners. The asset file streams directly to TCP. `WouldBlock` retains the exact
+pending offset and waits for the existing 10 ms I/O poll interval; a real write error
+terminates the response. No consumption deadline or frontend error allowance is added.
 
 ## Verification boundary
 
@@ -90,3 +92,15 @@ streams the file once without a consumption write deadline. Supervisor HTTP keep
 closes the retained connection clones before joining these workers. The unused alternate
 `AssetServer::serve` accept pool and its private30s socket path are removed after the
 repository caller search; existing MIME/range/path tests now use public `NativeServer`.
+
+PR CI `40209085729` passed the game and three non-Windows packages, but Windows timed
+out in `asset_http_paused_readers_leave_framing_available_and_shutdown_is_prompt`. Its already
+blocked send survived shutdown long enough to violate the join deadline. Windows documents
+that [shutdown disables future sends](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-shutdown);
+that does not establish cancellation of every pending blocking write.
+
+The asset worker now uses nonblocking TCP after the complete request headers have been
+buffered. `AssetStream` waits only on `WouldBlock` and checks the existing stop flag on
+every attempt. The acceptor checks that flag while holding the connection bookkeeping
+lock, preventing a newly admitted connection from escaping the shutdown sweep. The same
+paused-range integrity and shutdown tests remain the acceptance contract on each platform.

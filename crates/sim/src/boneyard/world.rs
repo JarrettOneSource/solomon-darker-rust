@@ -24,6 +24,7 @@ pub use tick::{
 pub use tutorial::BoneyardTutorialPlayer;
 
 use std::collections::{BTreeMap, HashSet};
+use std::sync::Arc;
 
 use crate::actor_physics::{ActorPhysicsBody, resolve_actor_motion};
 use crate::enemies::EnemySpawnIntent;
@@ -126,7 +127,7 @@ pub struct BoneyardWorld {
     pub scenery_retained_bounds: Option<BoneyardBounds>,
     /// Website saves retain the actual three target tables, including legacy subsets
     /// that cannot be reconstructed from one cleanup rectangle. `None` keeps all targets.
-    pub scenery_target_retention: Option<targets::BoneyardSceneryTargetRetention>,
+    pub scenery_target_retention: Option<Arc<targets::BoneyardSceneryTargetRetention>>,
     pub enemies: EnemyWorld,
     pub death_weapons: Vec<crate::death_animations::NativeDeathWeaponActor>,
     pub next_death_weapon_id: u64,
@@ -163,7 +164,7 @@ pub struct BoneyardCheckpoint {
     pub tutorial: Option<NativeTutorialState>,
     pub scenery_retained_bounds: Option<BoneyardBounds>,
     #[cfg_attr(feature = "persistence", serde(default, skip_serializing_if = "Option::is_none"))]
-    pub scenery_target_retention: Option<targets::BoneyardSceneryTargetRetention>,
+    pub scenery_target_retention: Option<Arc<targets::BoneyardSceneryTargetRetention>>,
     pub enemies: EnemyWorld,
     pub death_weapons: Vec<crate::death_animations::NativeDeathWeaponActor>,
     pub next_death_weapon_id: u64,
@@ -523,8 +524,15 @@ impl BoneyardWorld {
                     if targets::inside_bounds(object.position, bounds) {
                         continue;
                     }
-                    retained.earthquake_ids.remove(&index);
                     let id = format!("scenery:{}", object.eid);
+                    if !retained.earthquake_ids.contains(&index)
+                        && !retained.primary_ids.contains(&id)
+                        && !retained.spell_ids.contains(&id)
+                    {
+                        continue;
+                    }
+                    let retained = Arc::make_mut(retained);
+                    retained.earthquake_ids.remove(&index);
                     retained.primary_ids.remove(&id);
                     retained.spell_ids.remove(&id);
                 }

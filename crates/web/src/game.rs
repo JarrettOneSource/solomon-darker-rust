@@ -718,6 +718,9 @@ impl Game {
         self.fit_canvas();
         let viewport = [self.canvas.client_width() as f32, self.canvas.client_height() as f32];
         let mut run = self.gpu_ui.begin_frame(&mut self.renderer, viewport, time / 1000.0)?;
+        if self.menu.is_blocking() || !self.has_game {
+            run.defer_idle_layout();
+        }
         let result = (|| {
             loop {
                 let menu_was_open = self.menu.is_blocking();

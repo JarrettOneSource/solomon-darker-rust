@@ -1,7 +1,6 @@
 //! Completed source frames and listener one-shots over borrowed canonical worlds.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use solomon_protocol::hosted::HostedWelcome;
 use solomon_protocol::{
@@ -50,7 +49,16 @@ impl HostedGameHost {
         };
         let sequence = self.next_snapshot_sequence;
         self.next_snapshot_sequence += 1;
-        let payload = self.encode_frame(id, sequence, now_ms, Some((credentials, hosted)), None)?;
+        let payload = self.prepare_frame(id, sequence, now_ms, None, |frame| {
+            encode(&ServerMessage::Welcome {
+                version: PROTOCOL_VERSION,
+                credentials,
+                tick_rate: GAME_TICK_RATE,
+                snapshot_rate: SNAPSHOT_RATE,
+                hosted: Some(hosted),
+                frame,
+            })
+        })?;
         send_welcome(&connection.peer, payload)?;
         connection.ensure_boneyard_loaded(loaded)?;
         connection.welcomed(id.into(), sequence);
@@ -63,14 +71,14 @@ impl HostedGameHost {
         Ok(())
     }
 
-    pub(in crate::host) fn encode_frame(
+    pub(in crate::host) fn prepare_frame<T>(
         &self,
         id: &str,
         sequence: u64,
         now_ms: f64,
-        welcome: Option<(ResumeCredentials, HostedWelcome)>,
         flame_baseline: Option<solomon_protocol::flame_presentation::FlamePresentationBaseline>,
-    ) -> Result<Arc<str>, String> {
+        prepare: impl FnOnce(SnapshotFrame<solomon_sim::session::GameSnapshot<'_>>) -> Result<T, String>,
+    ) -> Result<T, String> {
         let staged = self
             .rejoin_slots
             .iter()
@@ -103,17 +111,7 @@ impl HostedGameHost {
             host: self.host_snapshot(id, state, now_ms),
             snapshot,
         };
-        match welcome {
-            Some((credentials, hosted)) => encode(&ServerMessage::Welcome {
-                version: PROTOCOL_VERSION,
-                credentials,
-                tick_rate: GAME_TICK_RATE,
-                snapshot_rate: SNAPSHOT_RATE,
-                hosted: Some(hosted),
-                frame,
-            }),
-            None => encode(&ServerMessage::Snapshot { frame }),
-        }
+        prepare(frame)
     }
 
     pub fn publish_snapshot(&mut self, now_ms: f64) -> Result<(), String> {
@@ -154,7 +152,11 @@ impl HostedGameHost {
             });
             let shared = representative
                 .as_ref()
-                .map(|id| self.encode_frame(id, sequence, now_ms, None, baseline))
+                .map(|id| {
+                    self.prepare_frame(id, sequence, now_ms, baseline, |frame| {
+                        solomon_protocol::snapshot::PreparedSnapshot::new(&frame)
+                    })
+                })
                 .transpose()?;
             for peer_id in peer_ids {
                 let connection = &self.connections[&peer_id];
@@ -163,7 +165,9 @@ impl HostedGameHost {
                     if self.rejoin_slots.iter().any(|slot| {
                         slot.player_id == id && slot.connected && slot.detached.is_some()
                     }) {
-                        self.encode_frame(&id, sequence, now_ms, None, baseline)?
+                        self.prepare_frame(&id, sequence, now_ms, baseline, |frame| {
+                            solomon_protocol::snapshot::PreparedSnapshot::new(&frame)
+                        })?
                     } else {
                         shared.as_ref().expect("ordinary viewer has an ordinary projection").clone()
                     };

@@ -51,6 +51,11 @@ fractional clocks and gameplay RNG retain their existing contracts. The simulati
 uses contiguous typed actor collections; this change does not introduce an ECS dependency
 or reorder a system to improve a benchmark.
 
+Imported scenery's three target-membership tables also use shared immutable storage.
+Cleanup first checks for removed items, then uses `Arc::make_mut` only when membership
+actually changes. Repeated sealed-world cleanup therefore keeps the shared allocation,
+while an older display/checkpoint copy retains its original target membership.
+
 Cost: shared definitions retain an allocation until their final owner drops, and authored
 mutation copies the definition table when another snapshot still references it. The clone
 and mutation regressions verify resource sharing and unchanged source state together.
@@ -143,7 +148,7 @@ a wall clock or this dependency. Compact previous-score facts detect completion;
 the current authoritative participant supplies the actual Hall entry.
 
 **One shared Rust protocol crate carries canonical simulation values.** The native host and
-WebAssembly client use `solomon-protocol` version 1 for direct join. It intentionally does
+WebAssembly client use `solomon-protocol` version 2 for direct join. It intentionally does
 not claim compatibility with the Website's version 129 protocol. The host serializes a
 borrowed `GameSnapshot`; the client decodes its identical `GameCheckpoint` shape. Snapshot
 ACKs are keyed by participant, so all peers share one serialized complete world rather than
@@ -151,6 +156,37 @@ personalized copies. Reliable commands, accepted audio cues and save receipts re
 separate from replaceable snapshots. Connection credentials, readiness, pause deadlines
 and input queues stay in the launcher; the sole `GameSession` owns gameplay. Cost: protocol
 changes require the native host and bundled client to advance together.
+
+**Snapshot compaction belongs to the ordered connection, after outbox selection.** One
+`PreparedSnapshot` shares the complete canonical JSON value and full message across peers
+with the same publication. Each socket writer retains its last selected document, emits
+the next document's recursive field/array changes, and reuses the existing `miniz_oxide`
+and `base64` dependencies for zlib/base64 encoding. A complete message is used on first
+publication or whenever it is smaller. Replaced unsent publications never become a
+baseline. The next encoding waits until Tungstenite has flushed the previous frame.
+
+The shared Rust `SnapshotReader` reconstructs every received document before render-time
+coalescing and decodes the unchanged `GameCheckpoint`. It validates sequence continuity,
+array edits, compressed and reconstructed size bounds; a malformed update retires the
+connection's baseline. A new socket starts with a complete document. Reliable controls,
+Welcome transfers, snapshot ACKs and flame history retain their separate contracts. No
+gameplay field, number precision, authored definition or saved state is omitted.
+The reader retains the complete document's encoded byte count and updates it from the
+changed fragments, including escaped keys and JSON punctuation. Re-serializing the entire
+document for every size check produced a measured decode regression. An independent
+full-serialization oracle verifies the incremental count across nested changes.
+The four change shapes use a direct serde visitor. A recursive untagged derive cloned
+buffered subtrees while trying variants; the visitor reads each shape once without changing
+the wire representation or its validation.
+
+Cost: one previous JSON document per connection at each endpoint, a shared prepared
+document per publication, and compression/reconstruction CPU. These costs require actual
+browser measurement alongside byte counts. The existing JSON, compression and base64
+libraries own parsing and encoding; the small change representation is private to the
+protocol crate. Native and JavaScript observers cover exact reconstruction, dropped
+publications, controls, reconnects and real socket backpressure.
+Diagnostic run archives accept the unchanged checkpoint schema from protocols 1 and 2;
+their recorded protocol version describes provenance, not a live connection handshake.
 
 The native launcher uses `getrandom` (already present through Tungstenite) for host
 credentials and run seeds, keeping OS entropy out of every gameplay RNG stream. The small
@@ -567,8 +603,9 @@ struct literals stay on one line each, so a row of a table reads like the row in
 reuses its existing HTTP asset responder; upgrades to `/session` leave the four framing workers
 after the handshake. The browser uses its native WebSocket feature. One caller-owned
 authority loop consumes connection/message/disconnection events; transport workers never
-interpret JSON or run a simulation. Reliable output is bounded by count and bytes, while one
-replaceable `Arc<str>` snapshot can share a serialized world across peers. Event pressure
+interpret gameplay or run a simulation. Reliable output is bounded by count and bytes,
+while one replaceable `Arc<PreparedSnapshot>` shares a completed world across peers and
+is compacted only after the socket selects it. Event pressure
 blocks socket workers instead of losing critical participant lifecycle events; shutdown
 drops the receiver and closes owned sockets before joining workers. Cost: one native-only
 protocol dependency and explicit thread/queue ownership, without an async web framework or
@@ -579,8 +616,12 @@ Framed static responses also move into existing owned, connection-leased workers
 browser may pause media consumption after buffering; a30-second write timeout was
 observed truncating a declared206 with Unix WouldBlock. Static transfers therefore have
 no consumption deadline, while request/header parsing, supervisor HTTP and the upgrade
-handshake retain their blocking deadlines. Shutdown closes retained socket clones before
-joining transfer workers, and the existing connection bound limits their lifetime/count.
+handshake retain their blocking deadlines. Static writes use nonblocking TCP and retain
+their byte offset on `WouldBlock`, checking the existing shutdown flag at the existing
+10 ms poll interval. Windows CI established that closing retained socket clones alone did
+not reliably release an already blocked asset send. Shutdown also closes those clones
+before joining workers, and admission checks the stop flag under the same connection lock
+as the shutdown sweep. The existing connection bound limits worker lifetime/count.
 MIME, ranges and path validation stay in one responder; its unused alternate accept pool
 is removed. [The causal ledger](NATIVE-HTTP-MEDIA.md) records actual trace and TCP evidence.
 

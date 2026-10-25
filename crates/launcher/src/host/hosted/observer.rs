@@ -200,12 +200,12 @@ impl HostedGameHost {
                 .filter(|id| state.participant(id).is_some())
                 .unwrap_or(preferred)
                 .to_owned();
-            let payload = self.encode_frame(
+            let payload = self.prepare_frame(
                 &current,
                 sequence,
                 now_ms,
-                None,
                 connection.acknowledged_flame_baseline(),
+                |frame| solomon_protocol::snapshot::PreparedSnapshot::new(&frame),
             )?;
             let flame_baseline = self.flame_baseline(state)?;
             let loaded = self.worlds.loaded_for_run(&observer.run_id);

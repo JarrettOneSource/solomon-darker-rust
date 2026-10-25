@@ -196,6 +196,7 @@ fn drive_client(
     observations: &Sender<ClientObservation>,
 ) -> Result<(), String> {
     use solomon_protocol::transfer::{GameStringChunk, GameStringReceiver};
+    let mut snapshots = solomon_protocol::snapshot::SnapshotReader::default();
     let mut welcome = GameStringReceiver::new(
         solomon_protocol::GAME_WEBSOCKET_MAX_PAYLOAD_BYTES,
         "welcome".into(),
@@ -238,8 +239,7 @@ fn drive_client(
         }
         match socket.read() {
             Ok(Message::Text(text)) => {
-                let mut message = serde_json::from_str::<ServerMessage<Value>>(&text)
-                    .map_err(|error| error.to_string())?;
+                let mut message = snapshots.decode::<Value>(&text)?;
                 // The Source browser detaches its session message listener before
                 // closing. Drain in-flight observations without ACKing a closed writer.
                 if let ServerMessage::WelcomeChunk { data, offset, total_length } = message {

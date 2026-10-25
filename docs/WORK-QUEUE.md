@@ -33,18 +33,25 @@ record for their evidence.
 
 ## Working on a follow-up
 
-The post-release performance audit and measured snapshot/GPU fixes are on
-`perf/runtime-20261025`. [PERFORMANCE.md](PERFORMANCE.md) records the pinned PixiJS
-comparison, local gates and exact limitations. Static scene/collision and skill definitions
-are shared, display projection avoids duplicate input copies, and UI batches retain
-submission storage and compatible GPU state. The 702 native tests, 45 browser-support
-tests, ordinary browser smoke and GPU composition regressions pass locally. Production
-continues to use the qualified release above.
+The post-release performance fixes are locally qualified on `perf/runtime-20261025`.
+[PERFORMANCE.md](PERFORMANCE.md) records the pinned PixiJS comparisons and their limits.
+Immutable scene/collision/skill/target tables share storage; display projection and GPU
+submission avoid redundant copies. Ordered protocol-2 updates preserve complete state
+while reducing repeated bytes; idle menus use one final layout and title graves share the
+existing atlas. Cancellable asset writes address the Windows paused-media shutdown failure.
 
-Performance follow-up priorities are decoded snapshot payload volume, title layout/draw
-cost, and remaining small-scene display copies. A blanket no-regression claim is not yet
-supported. Transport changes need exact state, ACK/backpressure and reconnect coverage;
-entity layout changes must retain manager/RNG order and show a measured improvement.
+All 709 native tests, strict native/main-WASM linting, formatting, 54 browser-support,
+33 desktop and seven sdmod contracts, asset validation and required browser smoke pass
+locally. All 36 final Metal performance samples hold 60 FPS with no interval over 20 ms.
+Boneyard renderer plus host CPU and encoded traffic are lower than Pixi. Title/College
+browser CPU, College payload volume and the two smallest display microbenchmarks retain
+explicit parity limits. Windows/platform CI is recorded on the draft PR; production remains
+on the separately qualified release above.
+
+Follow-up performance work should profile the remaining title/College costs, small-scene
+display copies and College transport volume. Four-player, constrained-network, mobile and
+long-session workloads remain unmeasured. Preserve manager/RNG order and require measured
+benefit before changing entity storage. The current work does not require a general ECS.
 
 - Use this standalone repository's current main as the base. The earlier fleet commits
   below describe historical acceptance; their temporary integration worktrees are removed.

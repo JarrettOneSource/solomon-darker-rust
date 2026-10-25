@@ -269,7 +269,8 @@ allow 240 seconds for resident stock assets, followed by the normal behavior dea
 ### Native authoritative host
 
 The packaged launcher serves its bundled client and owns one shared `GameSession` at
-100 Hz, publishing complete borrowed snapshots at at most 20 Hz. It opens
+100 Hz, publishing borrowed canonical snapshots at at most 20 Hz. Ordered compact updates
+omit unchanged bytes and reconstruct the complete checkpoint in the bundled client. It opens
 `http://127.0.0.1:4188/?host=1`; the marker selects the same-origin `/session` WebSocket.
 An ordinary static preview continues to run the standalone browser simulation.
 

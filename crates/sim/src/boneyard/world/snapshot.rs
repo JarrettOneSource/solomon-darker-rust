@@ -23,7 +23,7 @@ pub struct BoneyardSnapshot<'a> {
     pub tutorial: &'a Option<NativeTutorialState>,
     pub scenery_retained_bounds: &'a Option<BoneyardBounds>,
     #[cfg_attr(feature = "persistence", serde(skip_serializing_if = "Option::is_none"))]
-    pub scenery_target_retention: &'a Option<targets::BoneyardSceneryTargetRetention>,
+    pub scenery_target_retention: &'a Option<Arc<targets::BoneyardSceneryTargetRetention>>,
     pub enemies: &'a EnemyWorld,
     pub death_weapons: &'a Vec<crate::death_animations::NativeDeathWeaponActor>,
     pub next_death_weapon_id: &'a u64,

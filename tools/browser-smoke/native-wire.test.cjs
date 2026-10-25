@@ -1,6 +1,36 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { createNativeMessageReader } = require('./native-wire.cjs');
+const {deflateSync} = require('node:zlib');
+
+function delta(baseSequence, sequence, changes) {
+  return {type:'snapshot_delta', base_sequence:baseSequence, sequence,
+    changes:deflateSync(JSON.stringify(changes)).toString('base64')};
+}
+
+test('compact observations reconstruct the written baseline without mutating earlier frames', () => {
+  const read=createNativeMessageReader();
+  const first={type:'snapshot',frame:{sequence:1,snapshot:{actors:[{x:1},{x:2}],name:'W🧙'}}};
+  assert.equal(read(first),first);
+  const next=read(delta(1,3,{sequence:[3],snapshot:{actors:[2,[[0,{x:[4]}],[1,[{x:5}]]]],name:[null]}}));
+  assert.deepEqual(next,{type:'snapshot',frame:{sequence:3,snapshot:{actors:[{x:4},{x:5}],name:null}}});
+  assert.equal(first.frame.snapshot.actors[0].x,1);
+  assert.equal(first.frame.snapshot.name,'W🧙');
+  const last=read(delta(3,4,{sequence:[4],snapshot:{actors:[0,[]],name:null,added:[{value:'new'}]}}));
+  assert.deepEqual(last.frame.snapshot,{actors:[],added:{value:'new'}});
+  assert.throws(()=>createNativeMessageReader()(delta(1,2,{sequence:[2]})),/baseline/);
+  assert.throws(()=>read(delta(3,5,{sequence:[5]})),/baseline/);
+});
+
+test('compact observation bounds reject missing array entries and malformed compressed data', () => {
+  for(const packet of [delta(1,2,{sequence:[2],snapshot:{actors:[1e9,[]]}}),
+    delta(1,2,{sequence:[2],snapshot:{actors:[2,[[1,[7]]]]}}),
+    {...delta(1,2,{sequence:[2]}),changes:'invalid'}]) {
+    const read=createNativeMessageReader();
+    read({type:'snapshot',frame:{sequence:1,snapshot:{actors:[]}}});
+    assert.throws(()=>read(packet));
+  }
+});
 
 test('the read-only observer admits ordinary and streamed native welcomes identically', () => {
   const message = {type: 'welcome', credentials: {player_id: 'player-2'},

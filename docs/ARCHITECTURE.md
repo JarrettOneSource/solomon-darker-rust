@@ -29,7 +29,8 @@ solomon-web ──▶ solomon-sim     kernels: rules, tables, stepped state
   licensed browser font rasterization and GPU resources. `web/` is the Trunk root.
 - **`solomon-protocol`** (`crates/protocol`): the native host and browser's versioned messages.
   Inputs, commands and snapshots reuse canonical simulation types. A borrowed host snapshot
-  and an owned browser checkpoint have the same serialized shape.
+  and an owned browser checkpoint have the same serialized shape. Its ordered snapshot
+  codec compacts selected publications and reconstructs them before browser coalescing.
 - **`solomon-launcher`** (`crates/launcher`): the native package entry point, bundled asset
   server and bounded WebSocket transport. Connection workers deliver messages to one host
   owner; they do not interpret game rules.
@@ -70,6 +71,12 @@ also use shared immutable entries, with the stock table initialized once and aut
 changes using copy-on-write. The player projector updates the selected endpoint copy in
 place, and enemy interpolation borrows the two endpoint lists. These choices reduce copies
 without sharing mutable actor state or advancing authoritative clocks during rendering.
+Imported scenery target tables share storage until cleanup changes their membership.
+Idle menus need only their final layout pass; real input dispatches still commit in order
+before painting, and running gameplay keeps its early input-admission layout.
+Title gravestones sample their original `Title.bundle` crops from the already loaded title
+atlas. Adjacent graves can share a GPU batch; row gradients retain their painter boundaries,
+and the nine duplicate cropped PNGs no longer need separate startup textures.
 
 Enemies and effect families use contiguous typed `Vec` storage. Explicit participant and
 manager order still controls gameplay, painter allocation and RNG consumption. A general
@@ -370,7 +377,12 @@ requires that shared run to finish before replacing a participant; it cannot res
 The launcher consumes transport events on one 100 Hz authority thread. `GameSession`
 owns every gameplay participant and shared actor; the host owns connection generations,
 input-edge queues, snapshot ACKs, renderer readiness and wall-clock pause/resume holds.
-Normal 20 Hz snapshots serialize one borrowed `GameSnapshot` into a shared `Arc<str>`.
+Normal 20 Hz snapshots prepare one borrowed `GameSnapshot` into a shared canonical JSON
+document. After selecting the latest pending publication, each socket compares it with
+the previous document actually selected for that connection and sends compressed changes
+when smaller than a complete message. The browser reconstructs every ordered packet before
+coalescing completed checkpoints. Both endpoints retain one baseline; snapshot ACKs and
+flame history remain independent. Full state and numeric precision are preserved.
 Pending rejoins use the canonical detached projection of one participant, borrowing the
 same running world. Reliable command feedback names its completed publication boundary.
 

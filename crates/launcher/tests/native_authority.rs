@@ -70,7 +70,7 @@ impl Drop for HostThread {
     }
 }
 
-struct Client(WebSocket<TcpStream>);
+struct Client(WebSocket<TcpStream>, solomon_protocol::snapshot::SnapshotReader);
 
 impl Client {
     fn connect(host: &HostThread) -> Self {
@@ -80,7 +80,7 @@ impl Client {
         let stream = TcpStream::connect(host.address).unwrap();
         stream.set_read_timeout(Some(Duration::from_millis(250))).unwrap();
         stream.set_write_timeout(Some(Duration::from_secs(2))).unwrap();
-        Self(tungstenite::client(request, stream).unwrap().0)
+        Self(tungstenite::client(request, stream).unwrap().0, Default::default())
     }
 
     fn send(&mut self, message: ClientMessage) {
@@ -95,9 +95,7 @@ impl Client {
         let deadline = Instant::now() + Duration::from_secs(8);
         while Instant::now() < deadline {
             let mut message = match self.0.read() {
-                Ok(Message::Text(text)) => {
-                    serde_json::from_str::<ServerMessage<Value>>(&text).unwrap()
-                }
+                Ok(Message::Text(text)) => self.1.decode::<Value>(&text).unwrap(),
                 Ok(Message::Ping(_)) => {
                     self.0.flush().unwrap();
                     continue;

@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
+const {createNativeMessageReader} = require('./native-wire.cjs');
 
 const url = process.env.URL || 'https://127.0.0.1:9449/game-stg/';
 const output = path.resolve(process.env.OUT);
@@ -63,6 +64,7 @@ async function readUi(page) {
 async function installFailureRoute(page) {
   await page.routeWebSocket(() => true, route => {
     const server = route.connectToServer();
+    const read=createNativeMessageReader();
     const connection = {path: new URL(route.url()).pathname};
     connections.push(connection);
     route.onMessage(payload => {
@@ -73,7 +75,8 @@ async function installFailureRoute(page) {
       server.send(payload);
     });
     server.onMessage(payload => {
-      const message = JSON.parse(payload.toString());
+      const message = read(JSON.parse(payload.toString()));
+      if(!message){route.send(payload);return;}
       if (message.type === 'welcome') {
         welcomes.push({playerId: message.credentials.player_id,
           sessionKind: message.hosted?.session_kind});
