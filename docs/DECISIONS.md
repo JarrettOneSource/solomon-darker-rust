@@ -279,6 +279,21 @@ Failure-only UI reads also use the existing five-second bound. The third Windows
 renderer diagnostic kept drawing after its original timeout but remained in that read
 until the 45-minute job limit; bounded observation lets the existing cleanup run.
 
+**Windows package automation shares the software GPU's scheduling priority.** The
+unchanged 33f64b23 package in diagnostic40164904579 times out with the Node driver at
+normal priority. Win32 process observations show both software GPU processes at
+above-normal priority while more than 10 GiB of physical memory remains available.
+The renderer keeps drawing and a restored-window predicate returns true before its
+automation call times out. Raising only the Node driver to above-normal priority makes
+both controlled full journeys pass with no resource errors or surviving owned processes;
+the one-second driver timer's largest gaps fall to 1.031 and 1.025 seconds. The canonical
+driver uses Node's existing `os.setPriority` and records its actual priority. Application
+process priorities, package bytes, browser focus policy, inputs and gameplay deadlines
+are unchanged. The rejected focus-emulation experiment is absent from the implementation.
+`windows-courtyard-diagnostic/scheduling/analysis.json` retains the control and both
+successful runs, including all 16 reviewed screenshots and 14 safe child stops. These
+software-renderer journeys establish functionality, not graphics performance.
+
 **Native font geometry and Rust editing share one text layout.** The installed egui
 row/cursor model assumes increasing horizontal positions and cannot represent mixed
 bidirectional caret/selection geometry with its per-grapheme browser font hook. The shared

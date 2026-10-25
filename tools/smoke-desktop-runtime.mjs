@@ -9,10 +9,15 @@ import { createReadStream } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
-import { tmpdir } from 'node:os';
+import { constants as osConstants, getPriority, setPriority, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { _electron as electron } from 'playwright-core';
+
+// Windows CI's software GPU processes run above normal priority. The input and
+// observation driver needs the same priority to avoid starving behind them.
+if (process.platform === 'win32') setPriority(process.pid, osConstants.priority.PRIORITY_ABOVE_NORMAL);
+
 const require = createRequire(import.meta.url);
 const {
   startNewGame
@@ -39,7 +44,7 @@ await writeFile(join(evidence, 'owned-profile.json'), JSON.stringify({profiles})
 const running = new Set();
 const errors = [];
 const resourceChecks = [];
-const receipts = { platform: process.platform, revision: manifest.revision, clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [], serviceStops: [], resourceFailures: [], mediaObservations: [] };
+const receipts = { platform: process.platform, revision: manifest.revision, driverPriority: getPriority(), clientStartups: [], cancelledMusic: [], cancelledMenuImages: [], storageWarnings: [], serviceStops: [], resourceFailures: [], mediaObservations: [] };
 const storageConflict = 'The saved game changed in another tab. Reload to continue that save.';
 const position = instance => instance.state.frame?.snapshot.participants[instance.state.id]?.wizard.position;
 const playing = instance => instance.state.frame?.snapshot.boneyard && !instance.state.frame.host.loading_run_id && !instance.state.frame.host.resume_grace && !instance.state.frame.host.pause;

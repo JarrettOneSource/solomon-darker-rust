@@ -12,13 +12,15 @@ All eight fresh package screenshots are reviewed. Candidate 33f64b23 passes the 
 game/Linux/Apple Silicon/Intel checks, with 24 reviewed screenshots and 21 safe child stops.
 Windows passes held-pointer release, saved continuation, updates, both save-conflict
 choices and saved Return, then times out waiting for its guest College client after
-native admission. Later renderer reads also take more than a minute. The exact-package
-diagnostic records renderer, native-window and process progress without changing the
-package or gameplay timeouts. Current Windows qualification remains required.
+native admission. The exact-package comparison identifies higher-priority software GPU
+processes starving the automation driver. Both complete Windows journeys pass when only
+the driver shares that priority, with 16 reviewed screenshots, 14 safe child stops and no
+resource errors or surviving processes. The canonical driver now uses Node's existing
+priority API; fresh four-platform qualification remains required.
 The c537 main workflow did not publish: Intel failed on cancelled music requests,
 and Windows failed during guest admission with additional music cancellations.
-Paced actual responses now prove the narrowly classified media lifecycle; the Windows
-admission diagnosis remains pending. Earlier failed receipts retain their status. Canonical main release,
+Paced actual responses now prove the narrowly classified media lifecycle. Earlier failed
+receipts retain their status. Canonical main release,
 Website artifact admission, installed/live recovery and final cleanup remain pending.
 Production still serves the retained PixiJS release `093aee99` following the
 October 24 rollback request, with M5 automatic deployment held. The older release

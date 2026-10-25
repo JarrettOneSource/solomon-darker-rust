@@ -16,8 +16,11 @@ the strict native/WASM checks, complete browser smoke and reviewed Mac package j
 including held-pointer release after saved resume. Candidate 33f64b23 passes the canonical
 game/Linux/Apple Silicon/Intel checks, with 24 reviewed package screenshots and 21 safe child
 stops. Windows passes held input, save/resume, updates, conflicts and Return, then stalls
-waiting for its guest College client; exact-package renderer/process diagnosis is active.
-Current four-platform qualification remains required. The [migration matrix](RUST-UI-MIGRATION.md) owns the accepted surface
+waiting for its guest College client. Controlled process observations identify the driver
+starving behind higher-priority software GPU processes. Both exact-package journeys with
+equal driver priority pass, with 16 reviewed screenshots, 14 safe child stops and no
+resource errors or surviving processes. The canonical driver adopts the existing Node
+priority API; fresh four-platform qualification remains required. The [migration matrix](RUST-UI-MIGRATION.md) owns the accepted surface
 inventory and the earlier package journeys. Canonical main release, Website artifact
 admission, live recovery and task cleanup remain. Earlier DOM-era receipts below retain
 their original behavior scope and do not substitute for GPU acceptance.
