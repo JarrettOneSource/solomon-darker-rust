@@ -940,6 +940,16 @@ pub struct UiRun {
 }
 
 impl GpuUi {
+    fn new_context() -> Context {
+        let ctx = Context::default();
+        // A controller emits actions once per game frame, including egui sizing frames.
+        ctx.options_mut(|options| {
+            options.max_passes = std::num::NonZeroUsize::new(1).expect("one UI pass");
+            options.input_options.raw_point_scroll = true;
+        });
+        ctx
+    }
+
     pub(crate) fn startup_resources() -> Vec<crate::runtime_ui::StartupResource> {
         let mut resources = fonts::startup_resources();
         resources.extend(
@@ -956,12 +966,7 @@ impl GpuUi {
         canvas: &HtmlCanvasElement,
         renderer: &Renderer,
     ) -> Result<Self, String> {
-        let ctx = Context::default();
-        // A controller emits actions once per game frame, including egui sizing frames.
-        ctx.options_mut(|options| {
-            options.max_passes = std::num::NonZeroUsize::new(1).expect("one UI pass");
-            options.input_options.raw_point_scroll = true;
-        });
+        let ctx = Self::new_context();
         let fonts = fonts::load(document, &ctx).await?;
         let images = painter::Images::default();
         images.load_stock(renderer).await?;

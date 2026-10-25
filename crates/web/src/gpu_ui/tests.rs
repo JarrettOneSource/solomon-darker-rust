@@ -843,6 +843,48 @@ fn actual_pointer_response_activates_once_and_reports_the_same_visible_bounds() 
 }
 
 #[test]
+fn a_held_native_button_activates_on_release_but_not_after_cancellation_or_drag() {
+    // Source NativeUiButton delegates activation to the browser's ordinary click:
+    // holding a stationary pointer does not expire the eventual release.
+    for (end, expected) in [
+        (pointer(false, pos2(50.0, 50.0)), 1),
+        (vec![egui::Event::PointerCancelled], 0),
+        (pointer(false, pos2(200.0, 50.0)), 0),
+    ] {
+        let ctx = GpuUi::new_context();
+        let mut clicks = 0;
+        let mut pass = |time, events| {
+            ctx.run_pass(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))),
+                    time: Some(time),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    ctx.root_ui(|ui| {
+                        let response = ui.interact(
+                            Rect::from_min_size(pos2(20.0, 30.0), vec2(100.0, 45.0)),
+                            egui::Id::unique("held-button"),
+                            egui::Sense::click(),
+                        );
+                        clicks += usize::from(response.clicked());
+                    });
+                },
+            )
+            .drop_without_applying_deltas();
+        };
+        pass(0.0, Vec::new());
+        pass(0.1, Vec::new());
+        pass(0.2, pointer(true, pos2(50.0, 50.0)));
+        pass(1.3, Vec::new());
+        pass(2.0, end);
+        pass(2.1, Vec::new());
+        assert_eq!(clicks, expected);
+    }
+}
+
+#[test]
 fn text_edit_consumes_unicode_composition_and_keyboard_deletion() {
     let ctx = Context::default();
     let mut text = String::new();
