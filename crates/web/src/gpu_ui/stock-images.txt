@@ -38,15 +38,6 @@ assets/stock/menu/main-menu-cloud-detail.png
 assets/stock/menu/main-menu-cloud-shadow.png
 assets/stock/menu/main-menu-flourish.png
 assets/stock/menu/main-menu-grass.png
-assets/stock/menu/main-menu-grave-0.png
-assets/stock/menu/main-menu-grave-1.png
-assets/stock/menu/main-menu-grave-2.png
-assets/stock/menu/main-menu-grave-3.png
-assets/stock/menu/main-menu-grave-4.png
-assets/stock/menu/main-menu-grave-5.png
-assets/stock/menu/main-menu-grave-6.png
-assets/stock/menu/main-menu-grave-7.png
-assets/stock/menu/main-menu-grave-8.png
 assets/stock/menu/main-menu-horizon.png
 assets/stock/menu/main-menu-logo.png
 assets/stock/menu/main-menu-moon.png

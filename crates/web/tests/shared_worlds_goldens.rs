@@ -152,7 +152,7 @@ fn independent_parties_keep_the_shared_college_and_other_runs_live() {
         seed: text(source, "seed").into(),
         source_sha256: text(source, "sourceSha256").into(),
         geometry_sha256: text(source, "geometrySha256").into(),
-        scene: decode_scene(&source["scene"].to_string()).unwrap(),
+        scene: decode_scene(&source["scene"].to_string()).unwrap().into(),
     };
     let mut worlds = SharedGameWorlds::new(0);
     let mut detached: Option<DetachedSessionParticipant> = None;

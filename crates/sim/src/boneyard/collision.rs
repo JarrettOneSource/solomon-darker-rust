@@ -5,6 +5,7 @@
 //! broadphase is an optimization of that same solver, so it is not needed for correctness.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::Vec2;
 use crate::float::hypot;
@@ -129,21 +130,21 @@ pub struct CollisionSegment {
 /// Static scenery primitives followed by the current dynamic gate leaves.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoneyardCollisionWorld {
-    pub circles: Vec<CollisionCircle>,
-    pub polygons: Vec<CollisionPolygon>,
-    pub segments: Vec<CollisionSegment>,
-    static_segment_count: usize,
+    scenery: Arc<CollisionScenery>,
+    gate_segments: Vec<CollisionSegment>,
+}
+
+#[derive(Debug, Default, PartialEq)]
+struct CollisionScenery {
+    circles: Vec<CollisionCircle>,
+    polygons: Vec<CollisionPolygon>,
+    segments: Vec<CollisionSegment>,
 }
 
 impl BoneyardCollisionWorld {
     #[must_use]
     pub fn from_scene(scene: &BoneyardScene) -> Self {
-        let mut world = Self {
-            circles: Vec::new(),
-            polygons: Vec::new(),
-            segments: Vec::new(),
-            static_segment_count: 0,
-        };
+        let mut world = CollisionScenery::default();
         for object in &scene.objects {
             world.append_object(object);
         }
@@ -174,18 +175,50 @@ impl BoneyardCollisionWorld {
                 _ => world.append_segment(*start, *end, 0.0, 0x100),
             }
         }
-        world.static_segment_count = world.segments.len();
-        world
+        Self { scenery: Arc::new(world), gate_segments: Vec::new() }
+    }
+
+    /// Prepared navigation and imported collision fixtures retain primitive order.
+    #[must_use]
+    pub fn from_primitives(
+        circles: Vec<CollisionCircle>,
+        polygons: Vec<CollisionPolygon>,
+        segments: Vec<CollisionSegment>,
+    ) -> Self {
+        Self {
+            scenery: Arc::new(CollisionScenery { circles, polygons, segments }),
+            gate_segments: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn circles(&self) -> &[CollisionCircle] {
+        &self.scenery.circles
+    }
+
+    #[must_use]
+    pub fn polygons(&self) -> &[CollisionPolygon] {
+        &self.scenery.polygons
+    }
+
+    pub fn segments(&self) -> impl DoubleEndedIterator<Item = &CollisionSegment> {
+        self.scenery.segments.iter().chain(&self.gate_segments)
     }
 
     /// Gate collision is replaced in place so a 100 Hz tick never copies static scenery.
     pub fn set_gate_leaves(&mut self, leaves: &[GateLeaf]) {
-        self.segments.truncate(self.static_segment_count);
-        for leaf in leaves {
-            self.append_segment(leaf.hinge, leaf.tip, 0.0, 0x100);
-        }
+        self.gate_segments.clear();
+        self.gate_segments.extend(leaves.iter().map(|leaf| CollisionSegment {
+            start: leaf.hinge,
+            end: leaf.tip,
+            radius: 0.0,
+            native_line_mask: 0x100,
+            source_id: None,
+        }));
     }
+}
 
+impl CollisionScenery {
     fn append_segment(&mut self, start: Vec2, end: Vec2, radius: f64, mask: u32) {
         self.segments.push(CollisionSegment {
             start,
@@ -303,7 +336,7 @@ pub fn first_boneyard_line_obstruction(
             || mask & native_exclusion_mask != 0
     };
     let mut nearest = line_bounds_exit_obstruction(start, end, bounds);
-    for polygon in &world.polygons {
+    for polygon in world.polygons() {
         if excluded(&polygon.source_id, polygon.native_line_mask) {
             continue;
         }
@@ -319,7 +352,7 @@ pub fn first_boneyard_line_obstruction(
             );
         }
     }
-    for circle in &world.circles {
+    for circle in world.circles() {
         if !excluded(&circle.source_id, circle.native_line_mask) {
             nearest = nearer_line_obstruction(
                 nearest,
@@ -327,7 +360,7 @@ pub fn first_boneyard_line_obstruction(
             );
         }
     }
-    for segment in &world.segments {
+    for segment in world.segments() {
         if !excluded(&segment.source_id, segment.native_line_mask) {
             nearest = nearer_line_obstruction(
                 nearest,
@@ -401,13 +434,13 @@ pub fn boneyard_body_collision_source_ids(
     radius: f64,
 ) -> Vec<String> {
     let mut ids = Vec::new();
-    for polygon in &world.polygons {
+    for polygon in world.polygons() {
         let Some(id) = &polygon.source_id else { continue };
         if polygon_contact(position, radius, &polygon.points, position).is_some() {
             ids.push(id.clone());
         }
     }
-    for segment in &world.segments {
+    for segment in world.segments() {
         let Some(id) = &segment.source_id else { continue };
         if segment_contact(position, radius + segment.radius, segment.start, segment.end, position)
             .is_some()
@@ -415,7 +448,7 @@ pub fn boneyard_body_collision_source_ids(
             ids.push(id.clone());
         }
     }
-    for circle in &world.circles {
+    for circle in world.circles() {
         let Some(id) = &circle.source_id else { continue };
         let dx = position.x - circle.center.x;
         let dy = position.y - circle.center.y;
@@ -484,7 +517,7 @@ fn first_contact(
     let ignored = |source_id: &Option<String>| {
         source_id.as_ref().is_some_and(|id| ignored_source_ids.contains(&id.as_str()))
     };
-    for polygon in &world.polygons {
+    for polygon in world.polygons() {
         if ignored(&polygon.source_id) {
             continue;
         }
@@ -492,7 +525,7 @@ fn first_contact(
             return Some(normal);
         }
     }
-    for segment in &world.segments {
+    for segment in world.segments() {
         if ignored(&segment.source_id) {
             continue;
         }
@@ -502,7 +535,7 @@ fn first_contact(
             return Some(normal);
         }
     }
-    for circle in &world.circles {
+    for circle in world.circles() {
         if ignored(&circle.source_id) {
             continue;
         }

@@ -64,7 +64,8 @@ fn loaded() -> LoadedBoneyard {
             fences: Vec::new(),
             terrain: Vec::new(),
             solomon_dig: None,
-        },
+        }
+        .into(),
     }
 }
 

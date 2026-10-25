@@ -397,14 +397,18 @@ impl NativeAuthority {
         let mut shared = BTreeMap::new();
         for (peer_id, staged_id, baseline) in recipients {
             let payload = if let Some(id) = staged_id {
-                self.encode_completed_frame(Some(&id), sequence, now_ms, None, baseline)?
+                self.prepare_completed_frame(Some(&id), sequence, now_ms, baseline, |frame| {
+                    solomon_protocol::snapshot::PreparedSnapshot::new(&frame)
+                })?
             } else {
                 let key = baseline.map(|row| (row.epoch, row.world_tick));
                 if let Some(payload) = shared.get(&key) {
                     Arc::clone(payload)
                 } else {
                     let payload =
-                        self.encode_completed_frame(None, sequence, now_ms, None, baseline)?;
+                        self.prepare_completed_frame(None, sequence, now_ms, baseline, |frame| {
+                            solomon_protocol::snapshot::PreparedSnapshot::new(&frame)
+                        })?;
                     shared.insert(key, Arc::clone(&payload));
                     payload
                 }
@@ -432,14 +436,14 @@ impl NativeAuthority {
         Ok(())
     }
 
-    fn encode_completed_frame(
+    fn prepare_completed_frame<T>(
         &self,
         viewer: Option<&str>,
         sequence: u64,
         now_ms: f64,
-        welcome: Option<ResumeCredentials>,
         flame_baseline: Option<solomon_protocol::flame_presentation::FlamePresentationBaseline>,
-    ) -> Result<Arc<str>, String> {
+        prepare: impl FnOnce(SnapshotFrame<solomon_sim::session::GameSnapshot<'_>>) -> Result<T, String>,
+    ) -> Result<T, String> {
         let session = self.session.as_ref().expect("the native host owns its shared session");
         let projected = viewer
             .and_then(|id| self.staged_detached(id))
@@ -456,17 +460,7 @@ impl NativeAuthority {
             host: self.host_snapshot(viewer, now_ms),
             snapshot,
         };
-        match welcome {
-            Some(credentials) => encode(&ServerMessage::Welcome {
-                version: PROTOCOL_VERSION,
-                credentials,
-                tick_rate: GAME_TICK_RATE,
-                snapshot_rate: SNAPSHOT_RATE,
-                hosted: None,
-                frame,
-            }),
-            None => encode(&ServerMessage::Snapshot { frame }),
-        }
+        prepare(frame)
     }
 
     fn input_acknowledgements(&self) -> BTreeMap<String, u64> {
@@ -619,13 +613,20 @@ impl NativeAuthority {
             }
             let sequence = self.next_snapshot_sequence;
             self.next_snapshot_sequence += 1;
-            let payload = self.encode_completed_frame(
-                Some(id),
-                sequence,
-                now_ms,
-                Some(ResumeCredentials { player_id: id.clone(), token: slot.token.clone() }),
-                None,
-            )?;
+            let payload =
+                self.prepare_completed_frame(Some(id), sequence, now_ms, None, |frame| {
+                    encode(&ServerMessage::Welcome {
+                        version: PROTOCOL_VERSION,
+                        credentials: ResumeCredentials {
+                            player_id: id.clone(),
+                            token: slot.token.clone(),
+                        },
+                        tick_rate: GAME_TICK_RATE,
+                        snapshot_rate: SNAPSHOT_RATE,
+                        hosted: None,
+                        frame,
+                    })
+                })?;
             let id = id.clone();
             let connection =
                 self.connections.get_mut(&peer_id).expect("the welcome connection is retained");

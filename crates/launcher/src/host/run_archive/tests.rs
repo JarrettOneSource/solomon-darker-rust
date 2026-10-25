@@ -36,7 +36,8 @@ fn loaded(id: &str) -> LoadedBoneyard {
             fences: Vec::new(),
             terrain: Vec::new(),
             solomon_dig: None,
-        },
+        }
+        .into(),
     }
 }
 fn base_state() -> GameSession {
@@ -198,6 +199,24 @@ fn sample_archive() -> RunArchive {
     let mut recorder = recorder();
     recorder.checkpoint(&state, &loaded("first"));
     recorder.close(RunArchiveEndReason::HostClosed).remove(0)
+}
+#[test]
+fn archives_from_before_snapshot_compaction_keep_their_complete_checkpoint() {
+    let archive = sample_archive();
+    let (bytes, _) = super::encoding::serialize_archive(&archive, "historical-run").unwrap();
+    let mut document: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let checkpoint = document["states"][0]["checkpoint"].clone();
+    for version in [1, 2] {
+        document["archive"]["protocolVersion"] = json!(version);
+        let decoded = super::encoding::decode_archive(&serde_json::to_vec(&document).unwrap())
+            .expect("wire-only compaction does not change archived gameplay state");
+        assert_eq!(decoded.archive.protocol_version, version);
+        assert_eq!(serde_json::to_value(&decoded.states[0].checkpoint).unwrap(), checkpoint);
+    }
+    for version in [0, 3] {
+        document["archive"]["protocolVersion"] = json!(version);
+        assert!(super::encoding::decode_archive(&serde_json::to_vec(&document).unwrap()).is_err());
+    }
 }
 #[test]
 fn native_archives_roundtrip_shared_checkpoints_publish_privately_and_never_overwrite() {

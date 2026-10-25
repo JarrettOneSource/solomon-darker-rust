@@ -92,9 +92,9 @@ pub(super) fn boneyard(world: &BoneyardWorld) -> Result<Value, String> {
     );
     let collision = &world.collision;
     fields.insert("collision".into(),json!({
-        "circles":collision.circles.iter().map(|circle| collision_shape(json!({"center":circle.center,"radius":circle.radius}), circle.native_line_mask, circle.source_id.as_deref())).collect::<Vec<_>>(),
-        "polygons":collision.polygons.iter().map(|polygon| collision_shape(json!({"points":polygon.points}), polygon.native_line_mask, polygon.source_id.as_deref())).collect::<Vec<_>>(),
-        "segments":collision.segments.iter().map(|segment| collision_shape(json!({"start":segment.start,"end":segment.end,"radius":segment.radius}), segment.native_line_mask, segment.source_id.as_deref())).collect::<Vec<_>>()
+        "circles":collision.circles().iter().map(|circle| collision_shape(json!({"center":circle.center,"radius":circle.radius}), circle.native_line_mask, circle.source_id.as_deref())).collect::<Vec<_>>(),
+        "polygons":collision.polygons().iter().map(|polygon| collision_shape(json!({"points":polygon.points}), polygon.native_line_mask, polygon.source_id.as_deref())).collect::<Vec<_>>(),
+        "segments":collision.segments().map(|segment| collision_shape(json!({"start":segment.start,"end":segment.end,"radius":segment.radius}), segment.native_line_mask, segment.source_id.as_deref())).collect::<Vec<_>>()
     }));
     let inside = |position: solomon_sim::Vec2| {
         world.cleanup_bounds().is_none_or(|bounds| {

@@ -939,6 +939,24 @@ pub struct UiRun {
     capture: UiCapture,
 }
 
+impl UiRun {
+    /// A blocked world needs no early layout to admit gameplay input. Real UI
+    /// dispatches still commit in order; an idle frame uses its final layout once.
+    pub fn defer_idle_layout(&mut self) {
+        if self.pending.len() == 1
+            && self.pending.front().is_some_and(|pass| {
+                pass.raw.events.is_empty()
+                    && pass.codes.is_empty()
+                    && pass.edits.is_empty()
+                    && pass.click_count.is_none()
+                    && !pass.controller
+            })
+        {
+            self.pending.clear();
+        }
+    }
+}
+
 impl GpuUi {
     fn new_context() -> Context {
         let ctx = Context::default();

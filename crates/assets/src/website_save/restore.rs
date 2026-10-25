@@ -226,7 +226,7 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
             checkpoint.arena_transition = decode(world["arenaTransition"].clone())?;
             checkpoint.encounter = decode(world["encounter"].clone())?;
             checkpoint.tutorial = decode(world["tutorial"].clone())?;
-            checkpoint.scenery_target_retention = Some(scenery_target_retention(world)?);
+            checkpoint.scenery_target_retention = Some(scenery_target_retention(world)?.into());
             checkpoint.enemies = decode(world["enemies"].clone())?;
             checkpoint.loot = decode(world["loot"].clone())?;
             checkpoint.enemy_world_feedback = decode(world["enemyWorldFeedback"].clone())?;
@@ -457,6 +457,6 @@ pub(super) fn loaded_boneyard(value: &Value) -> Result<LoadedBoneyard, String> {
         seed: string(&loaded["seed"])?,
         source_sha256: string(&loaded["sourceSha256"])?,
         geometry_sha256: string(&loaded["geometrySha256"])?,
-        scene,
+        scene: scene.into(),
     })
 }

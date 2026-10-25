@@ -290,7 +290,7 @@ pub fn path_is_clear(
     if !point_inside_bounds(start, bounds, radius) || !point_inside_bounds(end, bounds, radius) {
         return false;
     }
-    for polygon in &world.polygons {
+    for polygon in world.polygons() {
         if ignored(polygon.source_id.as_deref(), ignored_source_ids) {
             continue;
         }
@@ -311,7 +311,7 @@ pub fn path_is_clear(
             }
         }
     }
-    for circle in &world.circles {
+    for circle in world.circles() {
         if ignored(circle.source_id.as_deref(), ignored_source_ids) {
             continue;
         }
@@ -322,7 +322,7 @@ pub fn path_is_clear(
             return false;
         }
     }
-    for segment in &world.segments {
+    for segment in world.segments() {
         if ignored(segment.source_id.as_deref(), ignored_source_ids) {
             continue;
         }

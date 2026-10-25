@@ -2,7 +2,8 @@
 //!
 //! `host/game-host.ts`, `client/game-transport.ts` and `websocket-heartbeat.ts` own the
 //! reference transport contracts. Gameplay admission and the one authoritative session
-//! remain with the caller; socket workers never interpret JSON or step a game.
+//! remain with the caller. The socket writer compacts selected snapshots without
+//! interpreting gameplay state or stepping a game.
 
 mod http;
 mod socket;
@@ -21,6 +22,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use crate::AssetServer;
+use solomon_protocol::snapshot::PreparedSnapshot;
 
 pub use http::{HostedHttpRequest, HostedHttpResponse};
 
@@ -150,7 +152,7 @@ impl std::error::Error for PeerSendError {}
 struct PeerOutbox {
     reliable: VecDeque<Arc<str>>,
     reliable_bytes: usize,
-    snapshot: Option<Arc<str>>,
+    snapshot: Option<Arc<PreparedSnapshot>>,
     close: Option<TransportClose>,
 }
 
@@ -163,7 +165,7 @@ struct PeerState {
 }
 
 /// A nonblocking producer for one peer. Large published snapshots can share the same
-/// `Arc<str>` across peers; replacing one never queues an obsolete snapshot behind it.
+/// prepared document across peers; replacing one never queues an obsolete snapshot behind it.
 #[derive(Clone)]
 pub struct PeerSender(Arc<PeerState>);
 
@@ -210,8 +212,8 @@ impl PeerSender {
         Ok(())
     }
 
-    pub fn replace_snapshot(&self, payload: Arc<str>) -> Result<(), PeerSendError> {
-        self.validate_payload(&payload)?;
+    pub fn replace_snapshot(&self, payload: Arc<PreparedSnapshot>) -> Result<(), PeerSendError> {
+        self.validate_payload(payload.full_message())?;
         let transfers =
             self.0.transfers.lock().expect("transfer producers never panic while locked");
         if transfers.welcome.is_some() {
@@ -417,6 +419,10 @@ impl NativeServer {
                         .connections
                         .lock()
                         .expect("connection bookkeeping does not panic while locked");
+                    // Serialize admission with shutdown's retained-socket sweep.
+                    if listener_state.stopping.load(Ordering::Acquire) {
+                        break;
+                    }
                     if connections.len()
                         >= listener_state.config.max_peers + HTTP_QUEUE_CAPACITY + HTTP_WORKERS
                     {

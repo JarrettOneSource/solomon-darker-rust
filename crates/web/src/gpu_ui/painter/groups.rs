@@ -173,25 +173,36 @@ impl GpuPainter {
         view: View,
         depth: usize,
     ) -> Result<(usize, usize), String> {
-        let mut counts = (0, 0);
-        for node in nodes {
-            let rendered = match node {
-                Node::Mesh { mesh, clip } => self.draw_mesh(renderer, images, mesh, *clip, view)?,
-                Node::Group { style, clip, children, knockout } => self.draw_group(
-                    renderer,
-                    images,
-                    children,
-                    knockout.as_deref(),
-                    style,
-                    *clip,
-                    view,
-                    depth,
-                )?,
-            };
-            counts.0 += rendered.0;
-            counts.1 += rendered.1;
-        }
-        Ok(counts)
+        let result = (|| {
+            let mut counts = (0, 0);
+            for node in nodes {
+                let rendered = match node {
+                    Node::Mesh { mesh, clip } => {
+                        self.draw_mesh(renderer, images, mesh, *clip, view)?
+                    }
+                    Node::Group { style, clip, children, knockout } => {
+                        renderer.set_clip(None);
+                        renderer.set_sampling(solomon_graphics::TextureSampling::Texture);
+                        self.draw_group(
+                            renderer,
+                            images,
+                            children,
+                            knockout.as_deref(),
+                            style,
+                            *clip,
+                            view,
+                            depth,
+                        )?
+                    }
+                };
+                counts.0 += rendered.0;
+                counts.1 += rendered.1;
+            }
+            Ok(counts)
+        })();
+        renderer.set_clip(None);
+        renderer.set_sampling(solomon_graphics::TextureSampling::Texture);
+        result
     }
 
     #[allow(clippy::too_many_arguments)]

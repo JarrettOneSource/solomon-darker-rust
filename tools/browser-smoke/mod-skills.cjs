@@ -9,6 +9,7 @@ const {reachCollegeLoadout} = require('./menu-journey.cjs');
 const ui = require('./gpu-ui.cjs');
 const {revealSettingsControl} = require('./settings-journey.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
+const {createNativeMessageReader} = require('./native-wire.cjs');
 
 const output = path.resolve(process.env.OUT);
 const contentDirectory = path.resolve(process.env.CONTENT_DIR);
@@ -195,6 +196,7 @@ async function geometry(page, id) {
     else if (response.status() >= 400) errors.push(`${response.status()} ${pathname}`);
   });
   page.on('websocket', socket => {
+    const read=createNativeMessageReader();
     socket.on('framesent', ({payload}) => {
       const message = JSON.parse(payload.toString());
       if (message.type !== 'hosted') return;
@@ -208,7 +210,8 @@ async function geometry(page, id) {
         code: command.code});
     });
     socket.on('framereceived', ({payload}) => {
-      const message = JSON.parse(payload.toString());
+      const message = read(JSON.parse(payload.toString()));
+      if(!message)return;
       if (message.type === 'welcome') {
         state.id = message.credentials.player_id;
         state.frame = message.frame;

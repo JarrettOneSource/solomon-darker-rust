@@ -79,7 +79,9 @@ fn console_catalogs_and_queued_commands_preserve_source_game_components_and_rng(
             seed: loaded["seed"].as_str().unwrap().into(),
             source_sha256: loaded["sourceSha256"].as_str().unwrap().into(),
             geometry_sha256: loaded["geometrySha256"].as_str().unwrap().into(),
-            scene: solomon_assets::boneyard::decode_scene(&loaded["scene"].to_string()).unwrap(),
+            scene: solomon_assets::boneyard::decode_scene(&loaded["scene"].to_string())
+                .unwrap()
+                .into(),
         })
         .unwrap();
     common::assert_json_values(
@@ -132,7 +134,8 @@ fn console_catalogs_and_queued_commands_preserve_source_game_components_and_rng(
                     source_sha256: loaded["sourceSha256"].as_str().unwrap().into(),
                     geometry_sha256: loaded["geometrySha256"].as_str().unwrap().into(),
                     scene: solomon_assets::boneyard::decode_scene(&loaded["scene"].to_string())
-                        .unwrap(),
+                        .unwrap()
+                        .into(),
                 })
                 .unwrap();
                 Value::Null

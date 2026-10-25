@@ -48,6 +48,7 @@ struct Inbox {
     poll: NetworkPoll,
     failed: bool,
     receiver: transfer::MessageReceiver,
+    snapshots: solomon_protocol::snapshot::SnapshotReader,
 }
 
 pub struct NativeConnection {
@@ -347,9 +348,11 @@ impl NativeConnection {
                 );
                 return;
             }
-            let reception = serde_json::from_str::<Box<NativeServerMessage>>(&text)
+            let reception = inbox
+                .snapshots
+                .decode::<Box<GameCheckpoint>>(&text)
                 .map_err(|error| format!("The game host sent an invalid message: {error}"))
-                .and_then(|message| inbox.receiver.receive(*message));
+                .and_then(|message| inbox.receiver.receive(message));
             match reception {
                 Ok(reception) => {
                     if let Some(acknowledgement) = reception.acknowledgement {
@@ -408,6 +411,7 @@ impl NativeConnection {
         let callback = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
             closing_deadline.clear();
             closed.borrow_mut().receiver.close();
+            closed.borrow_mut().snapshots.clear();
             if let Some(event) = event.dyn_ref::<CloseEvent>() {
                 closed
                     .borrow_mut()
@@ -425,6 +429,7 @@ impl NativeConnection {
             failing_deadline.clear();
             let mut inbox = failed.borrow_mut();
             inbox.receiver.close();
+            inbox.snapshots.clear();
             if !inbox.failed {
                 inbox.failed = true;
                 inbox
@@ -485,6 +490,7 @@ fn fail(socket: &WebSocket, inbox: &mut Inbox, reason: String) {
     }
     inbox.failed = true;
     inbox.receiver.close();
+    inbox.snapshots.clear();
     inbox.poll.snapshot = None;
     inbox.poll.events.push(NetworkEvent::Failed(reason));
     if let Err(error) = socket.close_with_code_and_reason(4003, "invalid host delivery") {

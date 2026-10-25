@@ -49,13 +49,12 @@ fn mesh_json(mesh: &NavigationMesh) -> Value {
 }
 
 fn collision_world(scene: &BoneyardScene, value: &Value) -> BoneyardCollisionWorld {
-    let mut world = BoneyardCollisionWorld::from_scene(scene);
     if value.is_null() {
-        return world;
+        return BoneyardCollisionWorld::from_scene(scene);
     }
     let mask = |row: &Value| row["nativeLineMask"].as_u64().unwrap_or(0) as u32;
     let source_id = |row: &Value| row["sourceId"].as_str().map(str::to_owned);
-    world.circles = value["circles"]
+    let circles = value["circles"]
         .as_array()
         .unwrap()
         .iter()
@@ -66,7 +65,7 @@ fn collision_world(scene: &BoneyardScene, value: &Value) -> BoneyardCollisionWor
             source_id: source_id(row),
         })
         .collect();
-    world.polygons = value["polygons"]
+    let polygons = value["polygons"]
         .as_array()
         .unwrap()
         .iter()
@@ -76,7 +75,7 @@ fn collision_world(scene: &BoneyardScene, value: &Value) -> BoneyardCollisionWor
             source_id: source_id(row),
         })
         .collect();
-    world.segments = value["segments"]
+    let segments = value["segments"]
         .as_array()
         .unwrap()
         .iter()
@@ -88,7 +87,7 @@ fn collision_world(scene: &BoneyardScene, value: &Value) -> BoneyardCollisionWor
             source_id: source_id(row),
         })
         .collect();
-    world
+    BoneyardCollisionWorld::from_primitives(circles, polygons, segments)
 }
 
 fn find_route(
@@ -138,7 +137,7 @@ fn accepted_scene_meshes_and_routes_match_the_complete_source_graphs() {
                 seed: "00112233445566778899aabbccddeeff".into(),
                 source_sha256: format!("accepted scene {index}"),
                 geometry_sha256: format!("accepted geometry {index}"),
-                scene,
+                scene: scene.into(),
             })
         } else {
             let navigation = empty_navigation();

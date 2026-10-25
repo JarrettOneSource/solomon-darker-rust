@@ -61,7 +61,7 @@ fn real_scene_entrance_inputs_and_navigation_lifetimes_match_source() {
             seed: case["seed"].as_str().unwrap().into(),
             source_sha256: template.source_sha256.clone(),
             geometry_sha256: template.geometry_sha256.clone(),
-            scene: template.scene.clone(),
+            scene: template.scene.clone().into(),
         };
         let mut session = GameSession::new(
             "local".into(),

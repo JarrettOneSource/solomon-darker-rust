@@ -5,6 +5,7 @@ use std::io::Read;
 
 use serde_json::Value;
 use solomon_assets::website_save;
+use solomon_protocol::snapshot::{PreparedSnapshot, SnapshotReader, SnapshotWriter};
 use solomon_protocol::{
     GAME_TICK_RATE, HostSnapshot, PROTOCOL_VERSION, ResumeCredentials, SNAPSHOT_RATE,
     ServerMessage, SnapshotFrame,
@@ -79,7 +80,7 @@ fn restored_current_and_historical_scenery_roundtrips_through_welcome_and_snapsh
                 .collect();
         assert_eq!(variants, &Value::Object(source_variants), "{name} restored variants");
         nonempty_variant_maps += usize::from(!variants.as_object().unwrap().is_empty());
-        let messages = [
+        let mut messages = vec![
             (
                 "welcome",
                 ServerMessage::Welcome {
@@ -95,10 +96,27 @@ fn restored_current_and_historical_scenery_roundtrips_through_welcome_and_snapsh
                 },
             ),
             ("snapshot", ServerMessage::Snapshot { frame: frame(session) }),
-        ];
-        for (kind, message) in messages {
-            let bytes = serde_json::to_vec(&message).unwrap();
-            let decoded = match serde_json::from_slice::<ServerMessage<GameCheckpoint>>(&bytes) {
+        ]
+        .into_iter()
+        .map(|(kind, message)| (kind, serde_json::to_string(&message).unwrap()))
+        .collect::<Vec<_>>();
+        let mut writer = SnapshotWriter::default();
+        messages.push((
+            "full stream frame",
+            writer.encode(PreparedSnapshot::new(&frame(session)).unwrap()).unwrap().to_string(),
+        ));
+        let mut next = frame(session);
+        next.sequence = 2;
+        messages.push((
+            "compact stream frame",
+            writer.encode(PreparedSnapshot::new(&next).unwrap()).unwrap().to_string(),
+        ));
+        let mut reader = SnapshotReader::default();
+        for (kind, text) in messages {
+            if kind == "full stream frame" {
+                reader.clear();
+            }
+            let decoded = match reader.decode::<GameCheckpoint>(&text) {
                 Ok(message) => message,
                 Err(error) => {
                     failures.push(format!("{name} {kind}: {error}"));

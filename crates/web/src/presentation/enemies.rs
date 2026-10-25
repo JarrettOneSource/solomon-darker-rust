@@ -125,12 +125,9 @@ pub(super) fn interpolate(
     blend: f64,
     presentation_tick: f64,
 ) -> EnemyPresentationMetadata {
-    let first: Vec<_> = older.actors.iter().filter(|actor| visible_actor(actor)).cloned().collect();
-    let second: Vec<_> =
-        newer.actors.iter().filter(|actor| visible_actor(actor)).cloned().collect();
     output.actors = interpolate_members(
-        &first,
-        &second,
+        older.actors.iter().filter(|actor| visible_actor(actor)),
+        newer.actors.iter().filter(|actor| visible_actor(actor)),
         blend,
         |actor| actor.id,
         |first, second, blend| {

@@ -46,7 +46,8 @@ fn loaded() -> LoadedBoneyard {
             fences: vec![],
             terrain: vec![],
             solomon_dig: None,
-        },
+        }
+        .into(),
     }
 }
 fn snapshot(state: &GameSession) -> Value {

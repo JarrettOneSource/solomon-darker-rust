@@ -15,7 +15,7 @@ use super::input::InputQueue;
 use crate::transport::PeerSender;
 
 // Source `host/game-host.ts:73,7674`: suspend at eight pending frames and recover
-// at two. Complete native snapshots need no baseline tree or delta recovery machinery.
+// at two. These render ACKs are independent of the socket's ordered compaction baseline.
 const SNAPSHOT_HIGH_WATER_MARK: usize = 8;
 const SNAPSHOT_LOW_WATER_MARK: usize = 2;
 

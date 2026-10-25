@@ -9,6 +9,7 @@ use solomon_sim::{
 };
 
 pub(super) struct TitleView {
+    atlas: StockAtlas,
     state: TitleState,
     grave_frames: [[f64; 4]; 9],
     widths: [f64; 9],
@@ -36,6 +37,7 @@ impl TitleView {
             ];
         }
         Ok(Self {
+            atlas,
             state: TitleState::new(widths),
             grave_frames,
             widths,
@@ -132,9 +134,18 @@ impl TitleView {
             shadow,
         );
         repeat(frame, ui, "main-menu-horizon", cover, [0.0, 522.0, 1600.0, 31.0], 1024.0, horizon);
+        let atlas_size = frame.image_size(self.atlas.path()).ok_or("Title.png is not ready")?;
         for (index, row) in self.state.rows.iter().enumerate() {
             for grave in &row.graves {
                 let [w, h, cx, cy] = self.grave_frames[grave.image_index];
+                let record = self.atlas.record(grave.image_index + 16)?;
+                let uv = Rect::from_min_max(
+                    Pos2::new(record.x as f32 / atlas_size.x, record.y as f32 / atlas_size.y),
+                    Pos2::new(
+                        (record.x + record.width) as f32 / atlas_size.x,
+                        (record.y + record.height) as f32 / atlas_size.y,
+                    ),
+                );
                 let center = cover.at(grave.x, row.baseline);
                 let rect = cover.rect(
                     grave.x + (-w / 2.0 + cx) * row.scale,
@@ -144,9 +155,9 @@ impl TitleView {
                 );
                 frame.image_rotated(
                     ui.painter(),
-                    &format!("assets/stock/menu/main-menu-grave-{}.png", grave.image_index),
+                    self.atlas.path(),
                     rect,
-                    None,
+                    Some(uv),
                     grave.rotation.to_radians() as f32,
                     center,
                     widgets::color({

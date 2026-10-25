@@ -33,6 +33,26 @@ record for their evidence.
 
 ## Working on a follow-up
 
+The post-release performance fixes are locally qualified on `perf/runtime-20261025`.
+[PERFORMANCE.md](PERFORMANCE.md) records the pinned PixiJS comparisons and their limits.
+Immutable scene/collision/skill/target tables share storage; display projection and GPU
+submission avoid redundant copies. Ordered protocol-2 updates preserve complete state
+while reducing repeated bytes; idle menus use one final layout and title graves share the
+existing atlas. Cancellable asset writes address the Windows paused-media shutdown failure.
+
+All 709 native tests, strict native/main-WASM linting, formatting, 54 browser-support,
+33 desktop and seven sdmod contracts, asset validation and required browser smoke pass
+locally. All 36 final Metal performance samples hold 60 FPS with no interval over 20 ms.
+Boneyard renderer plus host CPU and encoded traffic are lower than Pixi. Title/College
+browser CPU, College payload volume and the two smallest display microbenchmarks retain
+explicit parity limits. Windows/platform CI is recorded on the draft PR; production remains
+on the separately qualified release above.
+
+Follow-up performance work should profile the remaining title/College costs, small-scene
+display copies and College transport volume. Four-player, constrained-network, mobile and
+long-session workloads remain unmeasured. Preserve manager/RNG order and require measured
+benefit before changing entity storage. The current work does not require a general ECS.
+
 - Use this standalone repository's current main as the base. The earlier fleet commits
   below describe historical acceptance; their temporary integration worktrees are removed.
 - **Work in a worktree**, one per task (`git worktree add ../rust-game-<task> -b

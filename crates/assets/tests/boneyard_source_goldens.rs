@@ -60,3 +60,69 @@ fn admitted_source_kind_controls_encounters_and_survives_world_checkpoints() {
         assert!(BoneyardWorld::restore(changed, checkpoint).is_err());
     }
 }
+
+#[test]
+fn display_copies_share_imported_scenery_tables_until_cleanup_changes_membership() {
+    use solomon_sim::boneyard::arena::ArenaPhase;
+    use solomon_sim::boneyard::world::BoneyardSceneryTargetRetention;
+
+    let mut world =
+        BoneyardWorld::new(BoneyardCatalog::load_embedded().unwrap().materialize([0; 16]));
+    let bounds = world.arena_transition.as_ref().unwrap().combat_bounds;
+    let outside = world
+        .loaded
+        .scene
+        .objects
+        .iter()
+        .position(|object| {
+            object.position.x < bounds.x
+                || object.position.x > bounds.x + bounds.width
+                || object.position.y < bounds.y
+                || object.position.y > bounds.y + bounds.height
+        })
+        .expect("the entrance contains scenery outside the sealed arena");
+    let id = format!("scenery:{}", world.loaded.scene.objects[outside].eid);
+    world.scenery_target_retention = Some(
+        BoneyardSceneryTargetRetention {
+            earthquake_ids: [outside].into(),
+            earthquake_variants: [(outside, 3)].into(),
+            primary_ids: [id.clone()].into(),
+            spell_ids: [id.clone()].into(),
+        }
+        .into(),
+    );
+    let original = serde_json::to_value(world.snapshot()).unwrap();
+    let mut displayed = world.clone();
+    assert!(
+        std::ptr::eq(
+            &world.scenery_target_retention.as_ref().unwrap().primary_ids,
+            &displayed.scenery_target_retention.as_ref().unwrap().primary_ids,
+        ),
+        "display sampling must reuse unchanged imported target tables"
+    );
+    displayed.arena_transition.as_mut().unwrap().phase = ArenaPhase::Sealed;
+    displayed.retire_goodies_after_sealing();
+    assert!(!displayed.retains_primary_scenery_target(&id));
+    assert!(!displayed.retains_scenery_spell_target(&id));
+    assert!(!displayed.retains_earthquake_scenery_target(outside));
+    assert!(world.retains_primary_scenery_target(&id));
+    assert!(world.retains_scenery_spell_target(&id));
+    assert!(world.retains_earthquake_scenery_target(outside));
+    assert_eq!(serde_json::to_value(world.snapshot()).unwrap(), original);
+    let retained_display = displayed.clone();
+    displayed.retire_goodies_after_sealing();
+    assert!(
+        std::ptr::eq(
+            &retained_display.scenery_target_retention.as_ref().unwrap().primary_ids,
+            &displayed.scenery_target_retention.as_ref().unwrap().primary_ids,
+        ),
+        "repeating completed cleanup must not detach unchanged cached tables"
+    );
+    let checkpoint =
+        serde_json::from_value(serde_json::to_value(displayed.snapshot()).unwrap()).unwrap();
+    let restored = BoneyardWorld::restore(displayed.loaded.clone(), checkpoint).unwrap();
+    assert_eq!(
+        serde_json::to_value(restored.snapshot()).unwrap(),
+        serde_json::to_value(displayed.snapshot()).unwrap()
+    );
+}

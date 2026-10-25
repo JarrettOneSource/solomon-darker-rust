@@ -19,6 +19,17 @@ use solomon_protocol::WEBSOCKET_PATH;
 
 static NEXT_TEST_DIRECTORY: AtomicU64 = AtomicU64::new(1);
 
+fn snapshot(sequence: u64, value: &str) -> Arc<PreparedSnapshot> {
+    PreparedSnapshot::new(&solomon_protocol::SnapshotFrame {
+        sequence,
+        snapshot: value,
+        flame_presentation: None,
+        input_acknowledgements: Default::default(),
+        host: Default::default(),
+    })
+    .unwrap()
+}
+
 struct TestAssets(PathBuf);
 impl TestAssets {
     fn new() -> Self {
@@ -133,8 +144,9 @@ fn game_sockets_bypass_asset_workers_and_keep_text_order_and_close_identity() {
     peer.send_reliable(Arc::from("control-two")).unwrap();
     assert_eq!(next_message(client), Message::Text("control-one".into()));
     assert_eq!(next_message(client), Message::Text("control-two".into()));
-    peer.replace_snapshot(Arc::from("shared world 🧙")).unwrap();
-    assert_eq!(next_message(client), Message::Text("shared world 🧙".into()));
+    let world = snapshot(1, "shared world 🧙");
+    peer.replace_snapshot(world.clone()).unwrap();
+    assert_eq!(next_message(client), Message::Text(world.full_message().as_ref().into()));
     client.send(Message::Ping(b"live".to_vec().into())).unwrap();
     assert_eq!(next_message(client), Message::Pong(b"live".to_vec().into()));
     peer.send_reliable(Arc::from("replacement notice")).unwrap();
@@ -158,6 +170,10 @@ fn a_slow_reader_keeps_ordered_messages_and_receives_the_current_snapshot_after_
     let origin = format!("http://{}", server.local_addr());
     let mut client = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
     let peer = connected(&server);
+    let mut snapshots = solomon_protocol::snapshot::SnapshotReader::default();
+    peer.replace_snapshot(snapshot(1, "initial snapshot")).unwrap();
+    let Message::Text(first) = next_message(&mut client) else { panic!("initial full snapshot") };
+    snapshots.decode::<String>(&first).unwrap();
     // Windows can accept one whole large frame despite a stopped reader. Keep
     // additional reliable frames queued so the snapshot is demonstrably unsent.
     let large: Arc<str> = Arc::from("0123456789abcdef".repeat(1024 * 1024));
@@ -172,7 +188,8 @@ fn a_slow_reader_keeps_ordered_messages_and_receives_the_current_snapshot_after_
     for payload in &backlog {
         peer.send_reliable(Arc::clone(payload)).unwrap();
     }
-    peer.replace_snapshot(Arc::from("obsolete snapshot")).unwrap();
+    let obsolete = snapshot(2, "obsolete snapshot");
+    peer.replace_snapshot(obsolete.clone()).unwrap();
     assert!(
         matches!(server.recv_timeout(Duration::from_millis(300)), Err(RecvTimeoutError::Timeout)),
         "a temporary slow reader must not disconnect before the heartbeat deadline"
@@ -180,13 +197,13 @@ fn a_slow_reader_keeps_ordered_messages_and_receives_the_current_snapshot_after_
     {
         let outbox = peer.0.outbox.lock().unwrap();
         assert!(!outbox.reliable.is_empty(), "the stopped reader leaves reliable output queued");
-        assert_eq!(
-            outbox.snapshot.as_deref(),
-            Some("obsolete snapshot"),
+        assert!(
+            Arc::ptr_eq(outbox.snapshot.as_ref().unwrap(), &obsolete),
             "the snapshot remains in its replaceable slot until reliable output drains"
         );
     }
-    peer.replace_snapshot(Arc::from("current snapshot")).unwrap();
+    let current = snapshot(3, "current snapshot");
+    peer.replace_snapshot(current.clone()).unwrap();
 
     let Message::Text(received) = next_message(&mut client) else {
         panic!("the reliable large frame arrives intact after reading resumes");
@@ -199,7 +216,17 @@ fn a_slow_reader_keeps_ordered_messages_and_receives_the_current_snapshot_after_
         };
         assert_eq!(received.as_str(), payload.as_ref());
     }
-    assert_eq!(next_message(&mut client), Message::Text("current snapshot".into()));
+    let Message::Text(packet) = next_message(&mut client) else { panic!("current snapshot") };
+    let envelope: serde_json::Value = serde_json::from_str(&packet).unwrap();
+    assert_eq!(envelope["type"], "snapshot_delta");
+    assert_eq!(envelope["base_sequence"], 1, "the unwritten replacement cannot become a baseline");
+    let solomon_protocol::ServerMessage::Snapshot { frame } =
+        snapshots.decode::<String>(&packet).unwrap()
+    else {
+        panic!("the replacement reconstructs a complete snapshot")
+    };
+    assert_eq!(frame.sequence, 3);
+    assert_eq!(frame.snapshot, "current snapshot");
     client.send(Message::Text("input after resuming".into())).unwrap();
     let TransportEvent::Message { peer_id, payload } = next_event(&server) else {
         panic!("the same connection still delivers input after output resumes");
@@ -424,13 +451,15 @@ fn reliable_backpressure_and_shared_snapshot_replacement_are_bounded() {
     // Exercise the producer while its consumer is stalled. These are public queue
     // contracts: accepted reliable messages remain ordered, obsolete snapshots release
     // their shared owner, and overload returns a concrete error without blocking.
+    let obsolete = snapshot(1, "old frame");
+    let current = snapshot(2, "new frame");
     let peer = PeerSender(Arc::new(PeerState {
         transfers: Default::default(),
         id: 7,
         closed: false.into(),
         outbox: Default::default(),
         config: Arc::new(TransportConfig {
-            max_message_bytes: 16,
+            max_message_bytes: current.full_message().len(),
             reliable_message_capacity: 2,
             reliable_byte_capacity: 8,
             ..TransportConfig::default()
@@ -440,11 +469,9 @@ fn reliable_backpressure_and_shared_snapshot_replacement_are_bounded() {
     peer.send_reliable(Arc::from("two")).unwrap();
     assert_eq!(peer.send_reliable(Arc::from("3")), Err(PeerSendError::ReliableQueueFull));
     assert_eq!(
-        peer.replace_snapshot(Arc::from("seventeen bytes!!")),
+        peer.replace_snapshot(snapshot(3, "a frame larger than its bound")),
         Err(PeerSendError::PayloadTooLarge)
     );
-    let obsolete: Arc<str> = Arc::from("old frame");
-    let current: Arc<str> = Arc::from("new frame");
     peer.replace_snapshot(obsolete.clone()).unwrap();
     peer.replace_snapshot(current.clone()).unwrap();
     assert_eq!(Arc::strong_count(&obsolete), 1);

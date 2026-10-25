@@ -105,7 +105,7 @@ fn scene_owner(catalog: &BoneyardCatalog, loaded: &LoadedBoneyard) -> Result<Sce
         };
         if entry.source_sha256 != loaded.source_sha256
             || entry.geometry_sha256 != loaded.geometry_sha256
-            || entry.scene != loaded.scene
+            || entry.scene != *loaded.scene
         {
             return Err("Boneyard navigation does not match its retained Mod scene".into());
         }
@@ -123,7 +123,7 @@ fn scene_owner(catalog: &BoneyardCatalog, loaded: &LoadedBoneyard) -> Result<Sce
     };
     if template.source_sha256 != loaded.source_sha256
         || template.geometry_sha256 != loaded.geometry_sha256
-        || template.scene != loaded.scene
+        || template.scene != *loaded.scene
     {
         return Err("Boneyard navigation does not match its retained stock scene".into());
     }

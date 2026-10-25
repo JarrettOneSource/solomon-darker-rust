@@ -148,7 +148,8 @@ pub fn decode_archive(bytes: &[u8]) -> Result<RunArchiveFile, String> {
     if file.encoding != "solomon-rust-checkpoint-table"
         || file.encoding_version != 1
         || metadata.schema_version != 1
-        || metadata.protocol_version != solomon_protocol::PROTOCOL_VERSION
+        // Protocol 2 changes live snapshot encoding, not the archived checkpoint schema.
+        || !matches!(metadata.protocol_version, 1 | 2)
         || metadata.revision.len() != 40
         || !metadata
             .revision

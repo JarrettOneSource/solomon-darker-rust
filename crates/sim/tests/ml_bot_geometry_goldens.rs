@@ -2,10 +2,10 @@
 
 use serde_json::Value;
 use solomon_sim::Vec2;
+use solomon_sim::boneyard::BoneyardBounds;
 use solomon_sim::boneyard::collision::{
     BoneyardCollisionWorld, CollisionCircle, CollisionPolygon, CollisionSegment,
 };
-use solomon_sim::boneyard::{BoneyardBounds, BoneyardScene, BoneyardSpawn};
 use solomon_sim::ml_bot::observe_ml_bot_policy_geometry;
 
 fn point(value: &Value) -> Vec2 {
@@ -25,22 +25,12 @@ fn placement_rays_and_nearest_obstacle_rows_match_source() {
             bounds["w"].as_f64().unwrap(),
             bounds["h"].as_f64().unwrap(),
         );
-        let scene = BoneyardScene {
-            name: String::new(),
-            environment_mode: 0,
-            bounds,
-            spawn: BoneyardSpawn { position: Vec2::ZERO, facing_degrees: 0.0 },
-            objects: Vec::new(),
-            sprites: Vec::new(),
-            roads: Vec::new(),
-            fences: Vec::new(),
-            terrain: Vec::new(),
-            solomon_dig: None,
-        };
-        let mut collision = BoneyardCollisionWorld::from_scene(&scene);
+        let mut circles = Vec::new();
+        let mut polygons = Vec::new();
+        let mut segments = Vec::new();
         let source_id = |value: &Value| value["sourceId"].as_str().map(str::to_owned);
         for row in case["collision"]["circles"].as_array().unwrap() {
-            collision.circles.push(CollisionCircle {
+            circles.push(CollisionCircle {
                 center: point(&row["center"]),
                 radius: row["radius"].as_f64().unwrap(),
                 native_line_mask: 0,
@@ -48,7 +38,7 @@ fn placement_rays_and_nearest_obstacle_rows_match_source() {
             });
         }
         for row in case["collision"]["segments"].as_array().unwrap() {
-            collision.segments.push(CollisionSegment {
+            segments.push(CollisionSegment {
                 start: point(&row["start"]),
                 end: point(&row["end"]),
                 radius: row["radius"].as_f64().unwrap(),
@@ -57,12 +47,13 @@ fn placement_rays_and_nearest_obstacle_rows_match_source() {
             });
         }
         for row in case["collision"]["polygons"].as_array().unwrap() {
-            collision.polygons.push(CollisionPolygon {
+            polygons.push(CollisionPolygon {
                 points: row["points"].as_array().unwrap().iter().map(point).collect(),
                 native_line_mask: 0,
                 source_id: source_id(row),
             });
         }
+        let collision = BoneyardCollisionWorld::from_primitives(circles, polygons, segments);
         let destructible_ids = case["destructibleIds"]
             .as_array()
             .unwrap()

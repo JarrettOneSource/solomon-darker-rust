@@ -42,7 +42,8 @@ fn loaded() -> LoadedBoneyard {
             sprites: Vec::new(),
             terrain: Vec::new(),
             solomon_dig: None,
-        },
+        }
+        .into(),
     }
 }
 

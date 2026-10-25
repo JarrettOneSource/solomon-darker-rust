@@ -129,7 +129,8 @@ fn world() -> BoneyardWorld {
             fences: Vec::new(),
             terrain: Vec::new(),
             solomon_dig: None,
-        },
+        }
+        .into(),
     })
 }
 

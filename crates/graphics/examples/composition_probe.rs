@@ -5,6 +5,7 @@
 mod browser {
     use solomon_graphics::{
         AlphaShadow, BlendMode, Renderer, ShadowOutput, Texture, TextureColorMode, TextureSampling,
+        Vertex,
     };
     use wasm_bindgen::JsCast;
     use wasm_bindgen::prelude::*;
@@ -18,6 +19,68 @@ mod browser {
     #[wasm_bindgen]
     pub fn sampling_probe(gl: Gl) -> Result<String, JsValue> {
         sampling(gl).map_err(|error| JsValue::from_str(&error))
+    }
+
+    #[wasm_bindgen]
+    pub fn indexed_batch_probe(gl: Gl) -> Result<String, JsValue> {
+        indexed_batch(gl).map_err(|error| JsValue::from_str(&error))
+    }
+
+    fn indexed_batch(gl: Gl) -> Result<String, String> {
+        let mut renderer = Renderer::new(gl.clone())?;
+        let white = renderer.upload_rgba(1, 1, &[255; 4])?;
+        let target = renderer.create_render_target_size([2, 2])?;
+        renderer.begin_frame(5, 4, [5.0, 4.0]);
+        let vertices = |left, tint| {
+            [[left, 0.0], [5.0, 0.0], [5.0, 4.0], [left, 4.0]].map(|position| Vertex {
+                position,
+                texel: [0.5; 2],
+                tint,
+            })
+        };
+        let mut observed = Err("indexed batch did not render".to_owned());
+        renderer.draw_screen_space([5, 4], [5.0, 4.0], |renderer| {
+            renderer.set_clip(Some([0, 0, 2, 4]));
+            for (left, tint) in [(0.0, [1.0, 0.0, 0.0, 1.0]), (1.0, [0.0, 1.0, 0.0, 1.0])] {
+                renderer.draw_indexed_with_color_mode(
+                    &white,
+                    &vertices(left, tint),
+                    &[0, 1, 2, 0, 2, 3],
+                    BlendMode::Normal,
+                    TextureColorMode::Texture,
+                );
+            }
+            renderer.flush();
+            let red = pixel(&gl, 0, 1)?;
+            let green = pixel(&gl, 1, 1)?;
+            let outside = pixel(&gl, 3, 1)?;
+            renderer.set_clip(Some([4, 0, 1, 4]));
+            let mut capture = Err("nested clipped capture did not render".to_owned());
+            renderer.render_ui_group(&target, [2.0; 2], |renderer| {
+                renderer.draw_solid([0.0, 0.0, 2.0, 2.0], [0.0, 1.0, 1.0, 1.0]);
+                renderer.flush();
+                capture = pixel(&gl, 0, 0);
+            });
+            let scissor = gl
+                .get_parameter(Gl::SCISSOR_BOX)
+                .map_err(|error| format!("restored batch scissor: {error:?}"))?;
+            observed = Ok((
+                red,
+                green,
+                outside,
+                capture?,
+                gl.is_enabled(Gl::SCISSOR_TEST)
+                    && js_sys::Int32Array::new(&scissor).to_vec() == [4, 0, 1, 4],
+            ));
+            Ok(())
+        })?;
+        let (red, green, outside, capture, clip_restored) = observed?;
+        let clip_disabled = !gl.is_enabled(Gl::SCISSOR_TEST);
+        renderer.destroy_render_target(&target);
+        renderer.destroy_texture(&white);
+        Ok(format!(
+            "{{\"red\":{red:?},\"green\":{green:?},\"outside\":{outside:?},\"capture\":{capture:?},\"clipRestored\":{clip_restored},\"clipDisabled\":{clip_disabled}}}"
+        ))
     }
 
     #[wasm_bindgen]
@@ -112,7 +175,7 @@ mod browser {
         let alpha: Vec<_> = pixels
             .chunks_exact(width as usize * 4)
             .rev()
-            .flat_map(|row| row.chunks_exact(4).map(|pixel| pixel[3]))
+            .flat_map(|row| row.as_chunks::<4>().0.iter().map(|pixel| pixel[3]))
             .collect();
         Ok(js_sys::Uint8Array::from(alpha.as_slice()))
     }

@@ -111,6 +111,43 @@ impl Write for PrefixedStream {
     }
 }
 
+/// A paused media reader may retain its response indefinitely. Nonblocking writes
+/// keep shutdown cancellable on Windows, where shutdown of a cloned socket does
+/// not guarantee that an already blocked send has returned.
+struct AssetStream<'a> {
+    stream: PrefixedStream,
+    server: &'a ServerState,
+}
+
+impl Read for AssetStream<'_> {
+    fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+        self.stream.read(output)
+    }
+}
+
+impl Write for AssetStream<'_> {
+    fn write(&mut self, input: &[u8]) -> io::Result<usize> {
+        loop {
+            if self.server.stopping.load(Ordering::Acquire) {
+                return Err(io::Error::new(
+                    io::ErrorKind::ConnectionAborted,
+                    "asset server stopped",
+                ));
+            }
+            match self.stream.write(input) {
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    thread::sleep(self.server.config.io_poll_interval);
+                }
+                result => return result,
+            }
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.stream.flush()
+    }
+}
+
 pub(super) fn serve_connection(
     connection: AcceptedConnection,
     assets: Option<Arc<AssetServer>>,
@@ -145,17 +182,19 @@ pub(super) fn serve_connection(
     let mut stream = PrefixedStream { prefix: Cursor::new(headers), stream: reader.into_inner() };
     if !upgrade {
         if let Some(assets) = assets {
-            // Media may stop consuming a response after buffering enough data.
-            // Its existing bounded lease owns this writer until completion or
-            // shutdown, which closes the retained TCP clone before joining it.
-            stream.stream.set_write_timeout(None)?;
+            // The complete request headers are already buffered. Only response
+            // writes can wait here; they retain their byte offset while paused.
+            stream.stream.set_nonblocking(true)?;
+            let worker_server = server.clone();
             let worker = thread::spawn(move || {
                 let _lease = lease;
+                let mut stream = AssetStream { stream, server: &worker_server };
                 if let Err(error) = assets.serve_stream(&mut stream)
                     && !matches!(
                         error.kind(),
                         io::ErrorKind::BrokenPipe
                             | io::ErrorKind::ConnectionReset
+                            | io::ErrorKind::ConnectionAborted
                             | io::ErrorKind::UnexpectedEof
                     )
                 {
@@ -299,6 +338,12 @@ fn drive_peer(
     server: &ServerState,
     peer: &PeerSender,
 ) -> TransportClose {
+    enum Publication {
+        Reliable(Arc<str>),
+        Snapshot(Arc<solomon_protocol::snapshot::PreparedSnapshot>),
+    }
+
+    let mut snapshots = solomon_protocol::snapshot::SnapshotWriter::default();
     let mut last_ping = Instant::now();
     let mut missed_pongs = 0;
     let mut closing: Option<SocketClose> = None;
@@ -349,12 +394,19 @@ fn drive_peer(
                         peer.0.outbox.lock().expect("the peer outbox does not panic while locked");
                     if let Some(payload) = outbox.reliable.pop_front() {
                         outbox.reliable_bytes -= payload.len();
-                        Some(payload)
+                        Some(Publication::Reliable(payload))
                     } else {
-                        outbox.snapshot.take()
+                        outbox.snapshot.take().map(Publication::Snapshot)
                     }
                 };
                 let Some(payload) = payload else { break };
+                let payload = match payload {
+                    Publication::Reliable(payload) => payload,
+                    Publication::Snapshot(document) => match snapshots.encode(document) {
+                        Ok(payload) => payload,
+                        Err(reason) => return TransportClose { code: Some(1011), reason },
+                    },
+                };
                 match socket.send(shared_text(payload)) {
                     Ok(()) => {}
                     Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {

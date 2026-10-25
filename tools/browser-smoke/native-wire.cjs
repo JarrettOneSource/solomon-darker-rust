@@ -1,8 +1,50 @@
 // Read-only native Welcome/checkpoint observation. The real browser owns ACKs,
 // validation and persistence. Transfer bounds/sequence rules follow network/transfer.rs.
+const {inflateSync} = require('node:zlib');
 const MAX_SAVE_BYTES = 96 * 1024 * 1024;
 const MAX_FRAME_BYTES = MAX_SAVE_BYTES * 2 + 64 * 1024;
 const CHUNK_CHARACTERS = 8 * 1024;
+
+function applySnapshotChange(value, change) {
+  if(Array.isArray(change)) {
+    if(change.length===1)return change[0];
+    const [length,items]=change;
+    if(change.length!==2||!Array.isArray(value)||!Number.isSafeInteger(length)||length<0
+      ||!Array.isArray(items)||length>value.length+items.length) {
+      throw new Error('The observed snapshot array update is out of bounds');
+    }
+    const next=value.slice(0,length);
+    let previous=-1;
+    for(const item of items) {
+      if(!Array.isArray(item)||item.length!==2)throw new Error('The observed snapshot item is invalid');
+      const [index,entry]=item;
+      if(!Number.isSafeInteger(index)||index<=previous||index>=length||index>next.length) {
+        throw new Error('The observed snapshot array update has missing or unordered entries');
+      }
+      if(index===next.length&&(!Array.isArray(entry)||entry.length!==1)) {
+        throw new Error('The observed snapshot array append is not a complete item');
+      }
+      next[index]=applySnapshotChange(next[index],entry);
+      previous=index;
+    }
+    if(next.length!==length)throw new Error('The observed snapshot array is incomplete');
+    return next;
+  }
+  if(!change||typeof change!=='object'||!value||typeof value!=='object'||Array.isArray(value)) {
+    throw new Error('The observed snapshot field update has no object');
+  }
+  const next={...value};
+  for(const [key,entry] of Object.entries(change)) {
+    if(entry===null) {
+      if(!Object.hasOwn(next,key))throw new Error('The observed snapshot removes an absent field');
+      delete next[key];
+    } else {
+      const updated=applySnapshotChange(Object.hasOwn(next,key)?next[key]:undefined,entry);
+      Object.defineProperty(next,key,{value:updated,enumerable:true,writable:true,configurable:true});
+    }
+  }
+  return next;
+}
 
 function createStringReader(label, maximumBytes) {
   let chunks = [];
@@ -49,7 +91,28 @@ function createNativeMessageReader() {
   const saves = createStringReader('checkpoint', MAX_SAVE_BYTES);
   let completedSequence = 0;
   let pendingSave = null;
+  let previousFrame = null;
   return function read(message) {
+    if(message.type==='snapshot') {
+      previousFrame=message.frame;
+      return message;
+    }
+    if(message.type==='snapshot_delta') {
+      if(!previousFrame||!Number.isSafeInteger(message.sequence)||!Number.isSafeInteger(message.base_sequence)
+        ||message.base_sequence!==previousFrame.sequence||message.sequence<=message.base_sequence) {
+        throw new Error('The observed snapshot update does not follow its baseline');
+      }
+      const compressed=Buffer.from(message.changes,'base64');
+      if(compressed.toString('base64')!==message.changes)throw new Error('The observed snapshot compression is malformed');
+      const bytes=inflateSync(compressed,{maxOutputLength:MAX_FRAME_BYTES});
+      const change=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
+      const frame=applySnapshotChange(previousFrame,change);
+      if(frame.sequence!==message.sequence||Buffer.byteLength(JSON.stringify(frame))>MAX_FRAME_BYTES) {
+        throw new Error('The observed snapshot update changed its sequence or exceeds its byte limit');
+      }
+      previousFrame=frame;
+      return {type:'snapshot',frame};
+    }
     if (message.type === 'welcome_chunk') {
       const text = welcome.accept(message);
       if (text === null) return null;

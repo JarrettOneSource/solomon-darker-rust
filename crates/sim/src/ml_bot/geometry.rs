@@ -59,7 +59,7 @@ pub fn observe_ml_bot_policy_geometry(
     }
 
     let mut features = Vec::new();
-    for circle in &collision.circles {
+    for circle in collision.circles() {
         let normal = normalized(position.x - circle.center.x, position.y - circle.center.y);
         let closest = Vec2::new(
             circle.center.x + normal.x * circle.radius,
@@ -77,7 +77,7 @@ pub fn observe_ml_bot_policy_geometry(
             radius: circle.radius,
         });
     }
-    for segment in &collision.segments {
+    for segment in collision.segments() {
         let closest = closest_point_on_segment(position, segment.start, segment.end);
         let delta = Vec2::new(closest.x - position.x, closest.y - position.y);
         features.push(PrimitiveFeature {
@@ -95,7 +95,7 @@ pub fn observe_ml_bot_policy_geometry(
             radius: segment.radius,
         });
     }
-    for polygon in &collision.polygons {
+    for polygon in collision.polygons() {
         let mut closest = position;
         let mut closest_distance = f64::INFINITY;
         let mut minimum = Vec2::new(f64::INFINITY, f64::INFINITY);

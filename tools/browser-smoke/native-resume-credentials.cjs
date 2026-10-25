@@ -11,6 +11,7 @@ const helperPath = process.env.MENU_HELPER
   ? path.resolve(process.env.MENU_HELPER)
   : path.join(__dirname, 'menu-journey.cjs');
 const {startNewGame} = require(helperPath);
+const {createNativeMessageReader} = require('./native-wire.cjs');
 
 const output = path.resolve(process.env.OUT || os.tmpdir());
 const binary = path.resolve(process.env.BINARY);
@@ -77,8 +78,10 @@ function observe(page) {
     if (response.status() >= 400) browserErrors.push(`${response.status()} ${response.url()}`);
   });
   page.on('websocket', socket => {
+    const read=createNativeMessageReader();
     socket.on('framereceived', ({payload}) => {
-      const message = JSON.parse(payload.toString());
+      const message = read(JSON.parse(payload.toString()));
+      if(!message)return;
       if (message.type === 'welcome') {
         state.id = message.credentials.player_id;
         state.token = message.credentials.token;

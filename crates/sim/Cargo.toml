@@ -10,7 +10,7 @@ persistence = ["dep:serde"]
 
 [dependencies]
 ryu-js = "1.0.3"
-serde = { workspace = true, optional = true }
+serde = { workspace = true, optional = true, features = ["rc"] }
 
 [dev-dependencies]
 miniz_oxide = "0.8.9"
