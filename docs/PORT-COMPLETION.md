@@ -1,30 +1,29 @@
 # Rust game parity and release
 
-The game GPU UI implementation and earlier candidate qualification are complete at
-`b264cac5b8497a39d0455169e5322c375fd0b83a`. All 696 native tests, the four canonical
-desktop package journeys, 28 reviewed screenshots and Windows static runtime
-inspection pass. [RUST-UI-MIGRATION.md](RUST-UI-MIGRATION.md) owns the complete
-surface matrix, exact candidate run and retained evidence. The desktop launcher
-conversion removes its remaining HTML/CSS presentation. The 1dce46ad implementation
-passes 701 native tests, the required strict native/WASM checks, complete browser smoke
-and actual Mac package journey, including a held Settings click after saved resume.
-All eight fresh package screenshots are reviewed. Candidate 33f64b23 passes the canonical
-game/Linux/Apple Silicon/Intel checks, with 24 reviewed screenshots and 21 safe child stops.
-Windows passes held-pointer release, saved continuation, updates, both save-conflict
-choices and saved Return, then times out waiting for its guest College client after
-native admission. The exact-package comparison identifies higher-priority software GPU
-processes starving the automation driver. Both complete Windows journeys pass when only
-the driver shares that priority, with 16 reviewed screenshots, 14 safe child stops and no
-resource errors or surviving processes. The canonical driver now uses Node's existing
-priority API; fresh four-platform qualification remains required.
-The c537 main workflow did not publish: Intel failed on cancelled music requests,
-and Windows failed during guest admission with additional music cancellations.
-Paced actual responses now prove the narrowly classified media lifecycle. Earlier failed
-receipts retain their status. Canonical main release,
-Website artifact admission, installed/live recovery and final cleanup remain pending.
-Production still serves the retained PixiJS release `093aee99` following the
-October 24 rollback request, with M5 automatic deployment held. The older release
-receipts below retain their original scope.
+The game and desktop launcher GPU UI are qualified at
+`023c5ebfd06ffaad6fc04d911b2d6f0823909c51` in
+[workflow 40166046505](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40166046505).
+The complete game gate passes 701 native tests, formatting, strict native/main-WASM/loader
+checks, 45 browser-support tests and seven sdmod tests. All four canonical platform
+packages pass their complete journeys and 33 desktop contracts each. All 32 screenshots,
+four archive inspections and 28 safe child stops are reviewed. Windows also passes 47
+native launcher tests and static CRT inspection. Exact saved continuation, held Settings
+input, update actions, both save-conflict choices, saved Return and two actual peers in
+one Boneyard pass on every platform. Intel's three music cancellations have actual
+ready-channel suspension evidence; no unclassified resource or media errors remain.
+
+[RUST-UI-MIGRATION.md](RUST-UI-MIGRATION.md) owns the full surface matrix and exact
+receipts. The launcher shares the Rust/WASM GPU runtime and native text editor; its
+three HTML/CSS/JavaScript presentation files are removed. Windows automation now uses
+Node's standard priority API after a controlled comparison established starvation behind
+the software GPU processes. The canonical Windows receipt records priority -7. These
+software-renderer checks establish functionality, not graphics performance. Earlier
+failed receipts remain failed and retain their causal limits.
+
+Canonical main release, Website artifact admission, installed/live recovery and final
+cleanup remain pending. Production still serves the retained PixiJS release `093aee99`
+following the October 24 rollback request, with M5 automatic deployment held. The older
+release receipts below retain their original scope.
 
 The earlier Website parity implementation passed its complete local gates.
 The independent repository and Linux game artifact are public. All 44 public acceptance

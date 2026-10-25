@@ -293,6 +293,8 @@ are unchanged. The rejected focus-emulation experiment is absent from the implem
 `windows-courtyard-diagnostic/scheduling/analysis.json` retains the control and both
 successful runs, including all 16 reviewed screenshots and 14 safe child stops. These
 software-renderer journeys establish functionality, not graphics performance.
+The canonical 023c5ebf run40166046505 then passes all four complete package journeys;
+its Windows receipt records priority -7 and no resource or media failures.
 
 **Native font geometry and Rust editing share one text layout.** The installed egui
 row/cursor model assumes increasing horizontal positions and cannot represent mixed

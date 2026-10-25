@@ -37,6 +37,27 @@ TODOs. Final integration, publication, installed/live checks and task cleanup be
 
 ## Current candidate acceptance
 
+Candidate `023c5ebfd06ffaad6fc04d911b2d6f0823909c51` passes the complete game gate
+and all four canonical packaged journeys in
+[workflow 40166046505](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40166046505).
+The actual logs contain 701 native tests across 267 groups, zero failures or ignored,
+formatting and strict native/main-WASM/loader checks, 45 browser-support tests and seven
+sdmod tests. Each platform passes 33 desktop contracts. Windows also passes 47 native
+launcher tests, static CRT inspection and its complete journey at recorded driver priority
+-7. Every final archive contains the expected 5,679 stock and 10 source files.
+
+All 32 package screenshots and 28 safe child stops are reviewed. Each journey passes
+GPU-only launcher validation/editing, native join failure and retained draft, keyboard/help,
+offline update error, held Settings release, exact saved continuation, both update actions,
+both real concurrent-save choices, saved Return and two actual peers in one Boneyard.
+Linux, Windows and Apple Silicon have no raw resource failures. Intel's three music
+cancellations each retain a matching trusted suspension event on a ready unchanged channel;
+all six media observation phases per platform have no errors. Evidence and exact receipt,
+image and native hashes are in `desktop-candidate-023c5eb/qualification.json` and its four
+platform reviews. These software-renderer results establish functionality, not performance.
+Canonical main publication, Website admission, installed/live recovery and cleanup remain.
+The following earlier receipts retain their original revisions and outcomes.
+
 The desktop launcher now uses the same Rust GPU runtime and native text editor as the
 game. Its three HTML/CSS/JavaScript presentation files are removed, including package
 and development copies; archive validation rejects them. The actual old package fails
@@ -68,7 +89,7 @@ frames. Two other complete journeys pass. This establishes the shared click expi
 on Windows, while the earlier uninstrumented Settings failure remains unproven.
 The canonical driver adopts actual native-window state and fresh GPU-frame waits
 from that diagnostic, preserving background policy and all gameplay timeouts.
-Current four-platform qualification remains required.
+The current candidate above qualifies the combined input and harness repairs.
 
 Candidate `33f64b23123763fe47fa8f1ecf8bee0dca696b7b` passes the full game gate and
 Linux, Apple Silicon and Intel Mac packages in
@@ -98,7 +119,7 @@ Their one-second driver timers have maximum gaps of 1.031 and 1.025 seconds. The
 driver uses the existing Node priority API and reports the actual value. The failed
 focus-emulation experiment is discarded; product policy and gameplay timeouts remain
 unchanged. `windows-courtyard-diagnostic/scheduling/analysis.json` owns the exact control
-and passing variants. Fresh canonical four-platform qualification remains required.
+and passing variants. The current canonical candidate above passes with this repair.
 
 Candidate `dc9a103428a9960f162bf60acfdfce19ffa2a2de` passes the complete game gate
 and Linux, Apple Silicon and Intel Mac packages in
@@ -108,7 +129,7 @@ there are no raw resource failures. Windows passes its launcher validation and f
 save, 33 desktop contracts, 47 native tests and static CRT inspection, but the reopened
 game remains on Title after the Settings pointer click. Stored preferences remain
 correct. Exact-package native observations now establish a separate held-click failure
-covered by the shared repair above; Windows qualification remains pending. Earlier b264 evidence below retains its
+covered by the shared repair above; this original receipt remains failed. Earlier b264 evidence below retains its
 original source and game behavior. The c537 main workflow failed Intel media checks
 and Windows guest admission/media checks and published no release. The paced-response
 experiment now reproduces three music cancellations with trusted suspension events and
@@ -681,10 +702,10 @@ both require a clean rerun. These partial proofs do not accept every variant in 
 | Authored mod surfaces; Cast/Shop/Reforge/Portal, skills/subskills/offers/quickbar, minimap markers/bindings/actions, party attributes | social | `mod_panels.rs`, `mod_skills.rs`, `mod_skill_quickbar.rs`, `mod_minimap.rs`, `mod_world_overlays/**`; `authored-content.cjs`, `mod-skills.cjs` | 612acd0 authored-gpu-612acd0-onward-r2 passes nine groups/errors[]/Chrome5959 exit0, retaining prior actual purchase/drag receipts, custom icons, minimap Ping/audio, real Tonic use, signed saved Leave and same-run reload. All five borrowed images retain one upload/one world-owned delete and LINEAR/CLAMP sampling; no Console claim (consoleExecuted false). The pinned Source supports only prefab.minimap as a mounted authored HUD view; ModMinimap.tsx owns its markers, output bindings and action buttons. mod-content-catalog.ts rejects other mounted view operations. World spell prefabs remain separate overlays; no general HUD widget family exists to port. Custom skills/quickbar retain their separate mod-skills9 acceptance |
 | Match loading; recovered stages, delayed artwork/progress, failure, host admission/world materialization | root | `match_loading.rs`; `boneyard.cjs`, `hosted-session.cjs`, `deployment-restart.cjs` | 88c3dfe complete two-seed ordinary Map/native-world/Leave/Continue/exact-save journey passes, including clean owned browser retirement; the18 Source stage/delay fixtures remain exact, and native-session89 qualifies actual shared loading/readiness. The Source MatchLoadingScreen has no Cancel control; routing owns its separate consent cancellation. aeb5768 match-loading-r3 passes all four groups: actual Welcome hold/input seal, exact transport failure with retained Create draft, ordinary successful retry/saved Leave, and Source line-box/track geometry at 1600x900, 390x844 and 2200x1100. Errors and style errors are empty; Chrome exits0 |
 | Fullscreen/install guidance; request/exit/change/error, unsupported/standalone/per-screen placement | social | `fullscreen.rs`; `fullscreen.cjs`, real browser capability | 2449f07 fullscreen-runtime4 passes actual pointer/touch/Enter/Space request/exit, exact one capability call per action, GPU labels and initial Tab document focus; Chrome/native0 and errors[]. Native759 session14 qualifies gameplay placement/activation. 2449 fullscreen-capabilities-r2 passes actual Permissions-Policy denial with GPU install guidance, an explicitly emulated navigator.standalone branch with controls absent, and a genuine browser request rejection followed by a successful activation/error clear. errors[] and Chrome/native0. The emulated branch is not a physical installed-device result. |
-| Desktop launcher/notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop/launcher`, `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | The c2a64e0 actual Mac package with dc9a103 driver passes GPU-only launcher, required/error validation, native editing, port arrows, Tab/Space help, offline update error, save/Continue, update notice, both save-conflict choices, saved Return and two actual peers in one Boneyard. Eight screenshots and all seven service stops are reviewed: six follow document retirement; the rejected-invite peer stops while the launcher remains live. The update/resize fixture also passes. The canonical 33f64b23 Linux/Apple Silicon/Intel packages pass with 24 reviewed screenshots and 21 safe child stops. Windows passes held input and saved continuation, then stalls during guest College admission. The controlled scheduling repair passes two complete exact-package Windows journeys with 16 reviewed screenshots, 14 safe child stops and no resource errors or surviving processes; fresh canonical qualification remains required. |
+| Desktop launcher/notice/conflict/close lifecycle; offline/peer/update/Keep Playing/failure/save | root | `desktop/launcher`, `desktop.rs`, `desktop/`; `smoke-desktop-runtime.mjs`, desktop failure tests | The c2a64e0 actual Mac package with dc9a103 driver passes GPU-only launcher, required/error validation, native editing, port arrows, Tab/Space help, offline update error, save/Continue, update notice, both save-conflict choices, saved Return and two actual peers in one Boneyard. Eight screenshots and all seven service stops are reviewed: six follow document retirement; the rejected-invite peer stops while the launcher remains live. The update/resize fixture also passes. The canonical 023c5ebf packages pass on Windows, Linux, Apple Silicon and Intel Mac, with 32 reviewed screenshots, four archive inspections and 28 safe child stops. All seven launcher checks, held Settings input, exact saved continuation, updates, both conflict choices, saved Return and two-peer Boneyard readiness pass on every platform. Intel has three classified ready-channel suspensions; there are no unclassified resource or media errors. Windows records driver priority -7 and passes static CRT inspection plus 47 native tests. |
 | Deployment update/checkpoint/recovery; same revision identity and error ownership | root | `deployment.rs`, actual host lifecycle; `deployment-restart.cjs` | Three actual recovery branches pass/errors[]/graceful exit0: changed58→243 (deployment-changed-58-to-243-r2), same game243/Website6ad, and sleeping sequence4→5; checkpoint/ACK/retirement/negative publications/automatic replacement/Continue witnesses retained. Current c2a64e0 Mac package/update-notice checks pass; canonical release and installed/live acceptance remain separate gates. |
 | Cross-cutting inputs; pointer/keyboard/touch/controller, focus/text/scroll/modal sealing, real screen-reader focus/value announcements, blur/cancel, resize/portrait/wide/fullscreen | all; acceptance common tests | `gpu-ui.cjs`, `menus.cjs`, `menu-input.cjs`, `responsive.cjs`; final current-art screenshots | 3660ab8 smoke14/HUD10/menus12/prompts4 and native editor9,576settings-all18,9fabnavigation5/native-editor9 and612mobile-editor6 retain exact scoped acceptance. 2449fullscreen4 closes duplicate pointer activation and initial Tab escape. The affected219f990 native-editor9 passes actual held-rAF Tab/ShiftTab/OS clipboard, focus, bidi/Arabic/ZWJ, Undo/IME and UTF16 persistence. The final producer audit passes4/4 with no visual DOM facade; ce12d7c routing4 and native smoke14 are clean. Current platform packages retain their separate gates. |
-| No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Precise source producer contract4/4 and manual DOM-producer review pass on ce12d7c game source. The dc9a103 launcher source audit repeats all four contracts and reviews the new owner; only bounded native platform/font/a11y adapters remain. Actual runtime surface/input receipts include the GPU-only launcher. Current canonical platform packages remain required. |
+| No DOM/CSS facade, iframe visual replacement, test-only state fabrication, unfinished required TODO or dropped feature | root + acceptance | Source scan, DOM paint audit, real GPU counters/read-only widget geometry, all rows above | Precise source producer contract4/4 and manual DOM-producer review pass on ce12d7c game source. The dc9a103 launcher source audit repeats all four contracts and reviews the new owner; only bounded native platform/font/a11y adapters remain. Actual runtime surface/input receipts include the GPU-only launcher. Current 023c5ebf canonical packages pass on all four platforms. |
 
 ## Saved-session startup allocation
 

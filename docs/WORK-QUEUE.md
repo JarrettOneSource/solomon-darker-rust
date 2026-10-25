@@ -9,21 +9,19 @@ Current Website behavior, ownership and verification are mapped in
 complete release/deployment acceptance record. Earlier ticket receipts below retain their
 actual revisions and bounded scope.
 
-The game GPU UI and its browser/candidate qualification are complete at `b264cac5`.
-The desktop launcher replaces its three HTML/CSS/JavaScript presentation files with
-`crates/web/src/desktop/launcher`. Its 1dce46ad implementation passes 701 native tests,
-the strict native/WASM checks, complete browser smoke and reviewed Mac package journey,
-including held-pointer release after saved resume. Candidate 33f64b23 passes the canonical
-game/Linux/Apple Silicon/Intel checks, with 24 reviewed package screenshots and 21 safe child
-stops. Windows passes held input, save/resume, updates, conflicts and Return, then stalls
-waiting for its guest College client. Controlled process observations identify the driver
-starving behind higher-priority software GPU processes. Both exact-package journeys with
-equal driver priority pass, with 16 reviewed screenshots, 14 safe child stops and no
-resource errors or surviving processes. The canonical driver adopts the existing Node
-priority API; fresh four-platform qualification remains required. The [migration matrix](RUST-UI-MIGRATION.md) owns the accepted surface
-inventory and the earlier package journeys. Canonical main release, Website artifact
-admission, live recovery and task cleanup remain. Earlier DOM-era receipts below retain
-their original behavior scope and do not substitute for GPU acceptance.
+The game and desktop launcher GPU UI are qualified at `023c5ebf` in canonical
+[workflow 40166046505](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40166046505).
+All 701 native tests, strict native/main-WASM/loader checks, 45 browser-support tests,
+seven sdmod tests and four complete packaged journeys pass. Each platform passes 33
+desktop contracts; Windows also passes 47 native launcher tests and static CRT inspection.
+All 32 screenshots, final archive inspections and 28 safe child stops are reviewed.
+Three Intel music cancellations have actual ready-channel suspension evidence; all
+other raw resource lists and every media-error list are empty. The launcher replaces
+its three HTML/CSS/JavaScript presentation files with `crates/web/src/desktop/launcher`.
+The [migration matrix](RUST-UI-MIGRATION.md) owns the accepted surface inventory and
+retained earlier evidence. Canonical main release, Website artifact admission, live
+recovery and task cleanup remain. Earlier DOM-era receipts below retain their original
+behavior scope and do not substitute for GPU acceptance.
 
 Scenery Puppet hits, Earthquake pivots, repaint/retirement metadata, dynamic scenes, trusted
 mod content, custom frame/wearable geometry and current shadow behavior are integrated.
