@@ -36,7 +36,8 @@ fn loaded(id: &str) -> LoadedBoneyard {
             fences: Vec::new(),
             terrain: Vec::new(),
             solomon_dig: None,
-        },
+        }
+        .into(),
     }
 }
 fn base_state() -> GameSession {

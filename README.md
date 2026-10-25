@@ -31,6 +31,8 @@ revisions, release artifacts and deployment status.
   ownership and verification boundaries.
 - [docs/RUST-UI-MIGRATION.md](docs/RUST-UI-MIGRATION.md): GPU UI ownership, complete surface
   matrix, release qualification and live acceptance.
+- [docs/PERFORMANCE.md](docs/PERFORMANCE.md): measured PixiJS comparison, snapshot and GPU
+  caching changes, and remaining performance limits.
 
 ## Layout
 

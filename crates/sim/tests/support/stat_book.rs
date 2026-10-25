@@ -28,5 +28,5 @@ pub fn read(value: Option<&Value>) -> PlayerStatBookComponent {
             quick_description: row["quickDescription"].as_str().unwrap().to_owned(),
         });
     }
-    PlayerStatBookComponent { entries }
+    PlayerStatBookComponent { entries: entries.into() }
 }

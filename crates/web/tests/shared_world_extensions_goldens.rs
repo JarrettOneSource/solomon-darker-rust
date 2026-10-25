@@ -83,7 +83,7 @@ fn each_actual_party_uses_its_admitted_rules_and_callback_errors_end_the_epoch()
         run_id: "fixture".into(),
         source_sha256: loaded["sourceSha256"].as_str().unwrap().into(),
         geometry_sha256: loaded["geometrySha256"].as_str().unwrap().into(),
-        scene: decode_scene(&loaded["scene"].to_string()).unwrap(),
+        scene: decode_scene(&loaded["scene"].to_string()).unwrap().into(),
     };
     let navigation_file = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../web/assets/navigation")

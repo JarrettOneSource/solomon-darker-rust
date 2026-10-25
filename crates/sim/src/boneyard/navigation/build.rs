@@ -37,14 +37,25 @@ pub fn build_native_nav_mesh(
     clearance: f64,
 ) -> NavigationMesh {
     assert!(clearance.is_finite() && clearance > 0.0, "navigation clearance must be positive");
-    let mut navigation_world = world.clone();
-    navigation_world.circles.retain(|shape| shape.native_line_mask & COLLISION_EXCLUSION_MASK == 0);
-    navigation_world
-        .polygons
-        .retain(|shape| shape.native_line_mask & COLLISION_EXCLUSION_MASK == 0);
-    navigation_world
-        .segments
-        .retain(|shape| shape.native_line_mask & COLLISION_EXCLUSION_MASK == 0);
+    let navigation_world = BoneyardCollisionWorld::from_primitives(
+        world
+            .circles()
+            .iter()
+            .filter(|shape| shape.native_line_mask & COLLISION_EXCLUSION_MASK == 0)
+            .cloned()
+            .collect(),
+        world
+            .polygons()
+            .iter()
+            .filter(|shape| shape.native_line_mask & COLLISION_EXCLUSION_MASK == 0)
+            .cloned()
+            .collect(),
+        world
+            .segments()
+            .filter(|shape| shape.native_line_mask & COLLISION_EXCLUSION_MASK == 0)
+            .cloned()
+            .collect(),
+    );
     let constraints = navigation_constraints(&navigation_world, clearance);
     let mut candidates = Vec::with_capacity(constraints.len() * 2);
     for constraint in &constraints {
@@ -83,7 +94,7 @@ pub fn build_native_nav_mesh(
 
 fn navigation_constraints(world: &BoneyardCollisionWorld, clearance: f64) -> Vec<Constraint> {
     let mut constraints = Vec::new();
-    for polygon in &world.polygons {
+    for polygon in world.polygons() {
         for (index, start) in polygon.points.iter().enumerate() {
             append_capsule_constraints(
                 &mut constraints,
@@ -93,7 +104,7 @@ fn navigation_constraints(world: &BoneyardCollisionWorld, clearance: f64) -> Vec
             );
         }
     }
-    for segment in &world.segments {
+    for segment in world.segments() {
         append_capsule_constraints(
             &mut constraints,
             segment.start,
@@ -101,7 +112,7 @@ fn navigation_constraints(world: &BoneyardCollisionWorld, clearance: f64) -> Vec
             clearance + segment.radius,
         );
     }
-    for circle in &world.circles {
+    for circle in world.circles() {
         let radius = circle.radius + clearance;
         let mut ring = Vec::with_capacity(CIRCLE_SEGMENTS);
         for index in 0..CIRCLE_SEGMENTS {

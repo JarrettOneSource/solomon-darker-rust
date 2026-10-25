@@ -120,7 +120,8 @@ fn prepared_host_actions_filters_contacts_and_failed_batches_use_actual_game_aut
                     source_sha256: loaded["sourceSha256"].as_str().unwrap().into(),
                     geometry_sha256: loaded["geometrySha256"].as_str().unwrap().into(),
                     scene: solomon_assets::boneyard::decode_scene(&loaded["scene"].to_string())
-                        .unwrap(),
+                        .unwrap()
+                        .into(),
                 })
                 .map(|()| Value::Null)
             }

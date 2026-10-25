@@ -30,6 +30,31 @@ Context/actual browser contracts. Provenance and exact interfaces are in
 [`vendor/egui/SOLOMON-PATCH.md`](../vendor/egui/SOLOMON-PATCH.md). The Source registry owns
 game layering; this is not another window manager or a visual DOM adapter.
 
+## Immutable data in display snapshots
+
+**Share scenery and skill definitions, while retaining independent mutable display state.**
+The post-release comparison with PixiJS found that `NativePresentationTimeline::sample`
+deep-copied loaded geometry, collision primitives and every player's stock skill definitions
+on each display frame. Player projection then copied those definitions again, and enemy
+projection copied both input lists before producing its interpolated output.
+
+Loaded scenes and static collision primitives now use standard-library `Arc` storage.
+Dynamic gate segments remain local to each collision world, so refreshing a display gate
+does not copy or mutate static geometry. Skill entries use `Arc<[Entry]>`; `OnceLock` owns
+the stock definition table and `Arc::make_mut` isolates authored overrides. Serde's existing
+`rc` feature preserves the complete value-based save and snapshot shape. No pointer or
+process-local identity enters persistence.
+
+Player projection updates the already selected endpoint copy. Enemy projection borrows
+endpoint iterators and allocates only its output list. Actor lifetimes, insertion order,
+fractional clocks and gameplay RNG retain their existing contracts. The simulation already
+uses contiguous typed actor collections; this change does not introduce an ECS dependency
+or reorder a system to improve a benchmark.
+
+Cost: shared definitions retain an allocation until their final owner drops, and authored
+mutation copies the definition table when another snapshot still references it. The clone
+and mutation regressions verify resource sharing and unchanged source state together.
+
 ## Authored content and Lua
 
 **Shared authored-content values live in `sim::modding`; Lua VMs belong to a native-only

@@ -28,7 +28,7 @@ fn offline_boneyards_replay_the_website_geometry_movement_gates_and_entrance() {
     for (case_index, case) in fixture["collisionCases"].as_array().unwrap().iter().enumerate() {
         let scene = decode_scene(&case["scene"].to_string()).unwrap();
         let world = BoneyardCollisionWorld::from_scene(&scene);
-        for (index, circle) in world.circles.iter().enumerate() {
+        for (index, circle) in world.circles().iter().enumerate() {
             let expected = &case["world"]["circles"][index];
             assert_eq!(circle.center, point(&expected["center"]), "circle in case {case_index}");
             assert_eq!(circle.radius, expected["radius"].as_f64().unwrap());
@@ -38,10 +38,10 @@ fn offline_boneyards_replay_the_website_geometry_movement_gates_and_entrance() {
             );
             assert_eq!(circle.source_id.as_deref(), expected["sourceId"].as_str());
         }
-        assert_eq!(world.circles.len(), case["world"]["circles"].as_array().unwrap().len());
-        assert_eq!(world.polygons.len(), case["world"]["polygons"].as_array().unwrap().len());
-        assert_eq!(world.segments.len(), case["world"]["segments"].as_array().unwrap().len());
-        for (index, polygon) in world.polygons.iter().enumerate() {
+        assert_eq!(world.circles().len(), case["world"]["circles"].as_array().unwrap().len());
+        assert_eq!(world.polygons().len(), case["world"]["polygons"].as_array().unwrap().len());
+        assert_eq!(world.segments().count(), case["world"]["segments"].as_array().unwrap().len());
+        for (index, polygon) in world.polygons().iter().enumerate() {
             let expected: Vec<_> = case["world"]["polygons"][index]["points"]
                 .as_array()
                 .unwrap()
@@ -60,7 +60,7 @@ fn offline_boneyards_replay_the_website_geometry_movement_gates_and_entrance() {
             );
             assert_eq!(resolved, point(&movement["position"]), "movement in case {case_index}");
         }
-        for (index, segment) in world.segments.iter().enumerate() {
+        for (index, segment) in world.segments().enumerate() {
             let expected = &case["world"]["segments"][index];
             assert_eq!(segment.start, point(&expected["start"]));
             assert_eq!(segment.end, point(&expected["end"]));

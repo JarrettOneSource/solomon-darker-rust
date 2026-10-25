@@ -26,7 +26,6 @@ pub(super) fn project_players(
     // Source player Records retain older entries through this bracket. Hub's
     // separate participant Record retires them at its endpoint, so they are no
     // longer visible there; Boneyard has no corresponding participant Record.
-    output.participants.clear();
     output.participant_order.clear();
     for id in &older.participant_order {
         let first = &older.participants[id];
@@ -34,31 +33,31 @@ pub(super) fn project_players(
         if older.boneyard.is_none() && blend >= 1.0 && second.is_none() {
             continue;
         }
-        let participant = match second {
-            Some(second) => project_player(first, second, blend, older.boneyard.is_some(), clocks),
-            None => first.clone(),
-        };
+        // The selected endpoint already supplied each resident's discrete fields.
+        // Only Boneyard retirement can retain a player absent from the newer copy.
+        let participant = output.participants.entry(id.clone()).or_insert_with(|| first.clone());
+        if let Some(second) = second {
+            project_player(participant, first, second, blend, older.boneyard.is_some(), clocks);
+        }
         output.participant_order.push(id.clone());
-        output.participants.insert(id.clone(), participant);
     }
     if blend >= 1.0 {
         for id in &newer.participant_order {
-            if !output.participants.contains_key(id) {
+            if !older.participants.contains_key(id) {
                 output.participant_order.push(id.clone());
-                output.participants.insert(id.clone(), newer.participants[id].clone());
             }
         }
     }
 }
 
 fn project_player(
+    output: &mut SessionParticipant,
     first: &SessionParticipant,
     second: &SessionParticipant,
     blend: f64,
     boneyard: bool,
     clocks: &mut PresentationClocks,
-) -> SessionParticipant {
-    let mut output = if blend < 1.0 { first.clone() } else { second.clone() };
+) {
     let previous = &first.wizard;
     let next = &second.wizard;
     let wizard = &mut output.wizard;
@@ -112,9 +111,8 @@ fn project_player(
             .floor() as u64;
         }
     } else {
-        project_participant(&mut output, first, second, blend);
+        project_participant(output, first, second, blend);
     }
-    output
 }
 
 fn project_participant(

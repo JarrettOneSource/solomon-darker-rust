@@ -62,7 +62,7 @@ fn fresh_game(fixture: &Value) -> GameSession {
         seed: loaded["seed"].as_str().unwrap().into(),
         source_sha256: loaded["sourceSha256"].as_str().unwrap().into(),
         geometry_sha256: loaded["geometrySha256"].as_str().unwrap().into(),
-        scene: solomon_assets::boneyard::decode_scene(&loaded["scene"].to_string()).unwrap(),
+        scene: solomon_assets::boneyard::decode_scene(&loaded["scene"].to_string()).unwrap().into(),
     })
     .unwrap();
     let mut waves =

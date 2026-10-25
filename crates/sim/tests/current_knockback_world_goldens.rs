@@ -61,7 +61,8 @@ fn world() -> BoneyardWorld {
             sprites: Vec::new(),
             terrain: Vec::new(),
             solomon_dig: None,
-        },
+        }
+        .into(),
     })
 }
 fn point(v: &Value) -> Vec2 {

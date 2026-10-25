@@ -38,7 +38,9 @@ fn all_native_skill_and_weld_descriptors_match_source_rows_and_boundaries() {
                 } else {
                     NativeSkillStatBookValue::Scalar(value.as_f64().unwrap())
                 };
-                stat_book.entries[input.skill_id].numeric_properties.insert(name.clone(), property);
+                std::sync::Arc::make_mut(&mut stat_book.entries)[input.skill_id]
+                    .numeric_properties
+                    .insert(name.clone(), property);
             }
         }
         let result = describe_ml_bot_policy_skill(&book, &stat_book, input);

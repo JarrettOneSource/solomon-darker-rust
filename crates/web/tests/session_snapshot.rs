@@ -33,6 +33,31 @@ fn navigation(session: &GameSession) -> NavigationSet {
 }
 
 #[test]
+fn display_copies_share_scenery_while_gate_updates_remain_private() {
+    let mut source = session();
+    source
+        .install_boneyard(BoneyardCatalog::load_embedded().unwrap().materialize([0; 16]))
+        .unwrap();
+    let before = serde_json::to_value(source.snapshot()).unwrap();
+    let mut display = source.clone();
+    let original = source.boneyard.as_ref().unwrap();
+    let projected = display.boneyard.as_mut().unwrap();
+    assert_eq!(projected.loaded.scene.objects.as_ptr(), original.loaded.scene.objects.as_ptr());
+    assert_eq!(projected.collision.circles().as_ptr(), original.collision.circles().as_ptr());
+    assert_eq!(projected.collision.polygons().as_ptr(), original.collision.polygons().as_ptr());
+    assert_eq!(
+        projected.collision.segments().next().unwrap() as *const _,
+        original.collision.segments().next().unwrap() as *const _
+    );
+    assert!(!projected.gate_leaves.is_empty());
+    projected.gate_leaves[0].tip.x += 20.0;
+    projected.dynamic_collision.set_gate_leaves(&projected.gate_leaves);
+    assert_ne!(projected.dynamic_collision, original.dynamic_collision);
+    assert_eq!(projected.collision, original.collision);
+    assert_eq!(serde_json::to_value(source.snapshot()).unwrap(), before);
+}
+
+#[test]
 fn borrowed_frames_decode_as_owned_checkpoints_and_reject_invalid_membership_atomically() {
     let mut source = session();
     source.inventory_dye_sessions.insert(
@@ -73,7 +98,7 @@ fn applying_completed_world_frames_retains_geometry_and_accepts_owned_wave_table
     let mut client = GameSession::restore(source.checkpoint(), Some(loaded)).unwrap();
     let world = client.boneyard.as_ref().unwrap();
     let objects = world.loaded.scene.objects.as_ptr();
-    let collision = world.collision.segments.as_ptr();
+    let collision = world.collision.segments().next().unwrap() as *const _;
     let inputs = BTreeMap::from([
         ("zeta".into(), GameSessionInput::default()),
         ("alpha".into(), GameSessionInput::default()),
@@ -97,7 +122,7 @@ fn applying_completed_world_frames_retains_geometry_and_accepts_owned_wave_table
             world.waves.as_ref().unwrap().compiled_schedule,
             source.boneyard.as_ref().unwrap().waves.as_ref().unwrap().compiled_schedule
         );
-        assert_eq!(world.collision.segments.as_ptr(), collision);
+        assert_eq!(world.collision.segments().next().unwrap() as *const _, collision);
         assert_eq!(
             serde_json::to_value(client.snapshot()).unwrap(),
             serde_json::to_value(source.snapshot()).unwrap()

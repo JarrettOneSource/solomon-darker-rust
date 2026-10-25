@@ -53,15 +53,17 @@ pub(super) fn lerp_option(first: Option<f64>, second: Option<f64>, blend: f64) -
 /// Existing members keep their source order through a bracket. New members are
 /// admitted, and retired members removed, only at the newer endpoint.
 #[must_use]
-pub(super) fn interpolate_members<T: Clone, K: Clone + Ord>(
-    older: &[T],
-    newer: &[T],
+pub(super) fn interpolate_members<'a, T: Clone + 'a, K: Clone + Ord>(
+    older: impl IntoIterator<Item = &'a T>,
+    newer: impl IntoIterator<Item = &'a T> + Clone,
     blend: f64,
     id: impl Fn(&T) -> K,
     mut project: impl FnMut(&T, &T, f64) -> T,
 ) -> Vec<T> {
-    let newer_by_id: BTreeMap<_, _> = newer.iter().map(|member| (id(member), member)).collect();
-    let mut result = Vec::with_capacity(older.len());
+    let newer_by_id: BTreeMap<_, _> =
+        newer.clone().into_iter().map(|member| (id(member), member)).collect();
+    let older = older.into_iter();
+    let mut result = Vec::with_capacity(older.size_hint().1.unwrap_or(0));
     for member in older {
         result.push(match newer_by_id.get(&id(member)) {
             Some(next) => project(member, next, blend),

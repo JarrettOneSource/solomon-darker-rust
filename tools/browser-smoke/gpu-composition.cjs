@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const {chromium} = require(path.resolve(process.env.PW));
+const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
 const directory = path.resolve(process.env.PROBE_DIR);
 const files = new Map([
   ['/composition_probe.js', ['text/javascript', fs.readFileSync(path.join(directory, 'composition_probe.js'))]],
@@ -23,11 +24,12 @@ const files = new Map([
     response.end(file?.[1] || 'Not found');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  let browser;
+  let owned;
   try {
-    browser = await chromium.launch({headless:true,
+    owned = await launchOwnedBrowser(chromium, {headless:true,
       executablePath:process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist']});
+    const browser = owned.browser;
     const page = await browser.newPage();
     const errors = [];
     page.on('pageerror', error => errors.push(String(error)));
@@ -41,6 +43,11 @@ const files = new Map([
       if (!gl) throw Error('WebGL2 is unavailable');
       const actual = {...JSON.parse(module.composition_probe(gl)), sampling:JSON.parse(module.sampling_probe(gl)),
         spread:JSON.parse(module.spread_shadow_probe(gl))};
+      let batchDraws = 0;
+      const drawArrays = gl.drawArrays.bind(gl);
+      gl.drawArrays = (...args) => {batchDraws++; return drawArrays(...args)};
+      actual.indexedBatch = {...JSON.parse(module.indexed_batch_probe(gl)), draws:batchDraws};
+      gl.drawArrays = drawArrays;
       actual.largeShadows = [];
       for (const scale of [1,2]) {
         const width=256*scale,height=192*scale,sigma=12*scale;
@@ -73,6 +80,10 @@ const files = new Map([
       fs.writeFileSync(path.join(process.env.OUT, 'receipt.json'), JSON.stringify(receipt, null, 2));
     }
     assert.deepEqual(errors, []);
+    assert.deepEqual(actual.indexedBatch, {
+      red:[255,0,0,255], green:[0,255,0,255], outside:[0,0,0,255], capture:[0,255,255,255],
+      clipRestored:true, clipDisabled:true, draws:2,
+    });
     for (const key of ['allocationRestored','nestedRestored','screenRestored']) assert.equal(actual[key], true, key);
     for (const [name, rgba] of Object.entries(expected)) {
       assert.ok(rgba.every((channel, index) => Math.abs(channel - actual[name][index]) <= 1),
@@ -95,7 +106,7 @@ const files = new Map([
       `dense native Gaussian at scale${row.scale}: ${JSON.stringify(row)}`);
     console.log('Actual Rust nested GPU composition, projection and group opacity passed');
   } finally {
-    if (browser) await browser.close();
+    if (owned) await owned.close();
     await new Promise(resolve => server.close(resolve));
   }
 })().catch(error => {console.error(error); process.exitCode = 1});

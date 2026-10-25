@@ -40,7 +40,8 @@ fn loaded() -> LoadedBoneyard {
             fences: vec![],
             terrain: vec![],
             solomon_dig: None,
-        },
+        }
+        .into(),
     }
 }
 #[test]

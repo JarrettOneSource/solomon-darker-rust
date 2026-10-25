@@ -141,7 +141,6 @@ void main() {
 ";
 
 const FLOATS_PER_VERTEX: usize = 8;
-const VERTICES_PER_TRIANGLE: usize = 3;
 
 #[derive(Clone)]
 pub struct Texture {
@@ -304,6 +303,7 @@ pub struct Renderer {
     forced_opacity: Option<f32>,
     saturation: f32,
     opacity: f32,
+    clip: Option<[i32; 4]>,
     viewport: [i32; 4],
     logical_size: [f32; 2],
     native_world_pixel_centers: bool,
@@ -485,6 +485,7 @@ impl Renderer {
             forced_opacity: None,
             saturation: 1.0,
             opacity: 1.0,
+            clip: None,
             viewport: [0; 4],
             logical_size: [1.0; 2],
             native_world_pixel_centers: false,
@@ -671,6 +672,8 @@ impl Renderer {
         draw: impl FnOnce(&mut Self),
     ) {
         self.flush();
+        let previous_clip = self.clip;
+        self.set_clip(None);
         let previous_framebuffer = self.framebuffer.replace(target.framebuffer.clone());
         let previous_viewport = self.viewport;
         let previous_logical_size = self.logical_size;
@@ -686,6 +689,7 @@ impl Renderer {
         self.bound_texture = None;
         draw(self);
         self.flush();
+        self.set_clip(None);
         self.framebuffer = previous_framebuffer;
         self.viewport = previous_viewport;
         self.logical_size = previous_logical_size;
@@ -694,6 +698,7 @@ impl Renderer {
         self.gl.viewport(x, y, width, height);
         self.bind_projection(self.logical_size, [width as f32, height as f32]);
         self.bound_texture = None;
+        self.set_clip(previous_clip);
     }
 
     /// `NativePlayerDiffuseCapture`: preserve the articulated pose's diffuse
@@ -867,14 +872,29 @@ impl Renderer {
     /// A panel supplies its actual physical-buffer clip and fade. Flush before changing
     /// the native scissor so queued sprites cannot escape a scrolling Inventory viewport.
     pub fn draw_clipped(&mut self, clip: [i32; 4], opacity: f32, draw: impl FnOnce(&mut Self)) {
-        self.flush();
-        self.gl.enable(Gl::SCISSOR_TEST);
-        self.gl.scissor(clip[0], clip[1], clip[2], clip[3]);
+        let previous_clip = self.clip;
+        let previous_opacity = self.opacity;
+        self.set_clip(Some(clip));
         self.opacity = opacity;
         draw(self);
+        self.opacity = previous_opacity;
+        self.set_clip(previous_clip);
+    }
+
+    /// Adjacent UI meshes can retain their scissor without breaking the draw batch.
+    /// Target and screen-space scopes restore the incoming clip independently.
+    pub fn set_clip(&mut self, clip: Option<[i32; 4]>) {
+        if self.clip == clip {
+            return;
+        }
         self.flush();
-        self.opacity = 1.0;
-        self.gl.disable(Gl::SCISSOR_TEST);
+        if let Some([x, y, width, height]) = clip {
+            self.gl.enable(Gl::SCISSOR_TEST);
+            self.gl.scissor(x, y, width, height);
+        } else {
+            self.gl.disable(Gl::SCISSOR_TEST);
+        }
+        self.clip = clip;
     }
 
     pub fn destroy_texture(&self, texture: &Texture) {
@@ -919,13 +939,18 @@ impl Renderer {
         draw: impl FnOnce(&mut Self) -> Result<(), String>,
     ) -> Result<(), String> {
         self.flush();
+        let clip = self.clip;
+        let sampling = self.sampling;
+        self.set_clip(None);
         let viewport = self.viewport;
         let logical_size = self.logical_size;
         let native_centers = self.native_world_pixel_centers;
         let saturation = self.saturation;
+        let opacity = self.opacity;
         self.viewport = [0, 0, physical[0], physical[1]];
         self.logical_size = logical;
         self.native_world_pixel_centers = false;
+        self.opacity = 1.0;
         self.gl.viewport(0, 0, physical[0], physical[1]);
         self.bind_projection(logical, [physical[0] as f32, physical[1] as f32]);
         self.set_saturation(1.0);
@@ -933,10 +958,12 @@ impl Renderer {
         self.bound_texture = None;
         let result = draw(self);
         self.flush();
-        self.gl.disable(Gl::SCISSOR_TEST);
+        self.set_clip(clip);
+        self.set_sampling(sampling);
         self.viewport = viewport;
         self.logical_size = logical_size;
         self.native_world_pixel_centers = native_centers;
+        self.opacity = opacity;
         self.gl.viewport(viewport[0], viewport[1], viewport[2], viewport[3]);
         self.bind_projection(logical_size, [viewport[2] as f32, viewport[3] as f32]);
         self.set_saturation(saturation);
@@ -966,7 +993,8 @@ impl Renderer {
         result
     }
 
-    fn set_sampling(&mut self, sampling: TextureSampling) {
+    /// Retain sampling across adjacent batches; scoped draws restore it themselves.
+    pub fn set_sampling(&mut self, sampling: TextureSampling) {
         if self.sampling != sampling {
             self.flush();
             self.gl.bind_sampler(
@@ -1026,6 +1054,7 @@ impl Renderer {
 
     /// Clears the whole canvas and letterboxes the logical view into it.
     pub fn begin_frame(&mut self, canvas_width: i32, canvas_height: i32, logical: [f32; 2]) {
+        self.set_clip(None);
         let gl = &self.gl;
         gl.viewport(0, 0, canvas_width, canvas_height);
         gl.clear_color(0.0, 0.0, 0.0, 1.0);
@@ -1115,6 +1144,33 @@ impl Renderer {
         blend: BlendMode,
         color_mode: TextureColorMode,
     ) {
+        self.draw_vertices(texture, triangles.iter().flatten().copied(), blend, color_mode);
+    }
+
+    /// Submit an indexed UI mesh without expanding it into a second CPU triangle buffer.
+    pub fn draw_indexed_with_color_mode(
+        &mut self,
+        texture: &Texture,
+        vertices: &[Vertex],
+        indices: &[u32],
+        blend: BlendMode,
+        color_mode: TextureColorMode,
+    ) {
+        self.draw_vertices(
+            texture,
+            indices.iter().map(|index| vertices[*index as usize]),
+            blend,
+            color_mode,
+        );
+    }
+
+    fn draw_vertices(
+        &mut self,
+        texture: &Texture,
+        vertices: impl Iterator<Item = Vertex>,
+        blend: BlendMode,
+        color_mode: TextureColorMode,
+    ) {
         let color_mode = self.forced_texture_color_mode.unwrap_or(color_mode);
         if self.bound_texture != Some(texture.id) {
             self.flush();
@@ -1148,21 +1204,19 @@ impl Renderer {
             );
             self.texture_color_mode = color_mode;
         }
-        self.vertices.reserve(triangles.len() * VERTICES_PER_TRIANGLE * FLOATS_PER_VERTEX);
-        for triangle in triangles {
-            for vertex in triangle {
-                self.vertices.extend_from_slice(&vertex.position);
-                self.vertices.extend_from_slice(&[
-                    vertex.texel[0] / texture.width,
-                    vertex.texel[1] / texture.height,
-                ]);
-                let mut tint = vertex.tint;
-                if let Some(opacity) = self.forced_opacity {
-                    tint[3] = (tint[3] * opacity * 255.0).clamp(0.0, 255.0).trunc() / 255.0;
-                }
-                tint[3] *= self.opacity;
-                self.vertices.extend_from_slice(&tint);
+        self.vertices.reserve(vertices.size_hint().1.unwrap_or(0) * FLOATS_PER_VERTEX);
+        for vertex in vertices {
+            self.vertices.extend_from_slice(&vertex.position);
+            self.vertices.extend_from_slice(&[
+                vertex.texel[0] / texture.width,
+                vertex.texel[1] / texture.height,
+            ]);
+            let mut tint = vertex.tint;
+            if let Some(opacity) = self.forced_opacity {
+                tint[3] = (tint[3] * opacity * 255.0).clamp(0.0, 255.0).trunc() / 255.0;
             }
+            tint[3] *= self.opacity;
+            self.vertices.extend_from_slice(&tint);
         }
     }
 

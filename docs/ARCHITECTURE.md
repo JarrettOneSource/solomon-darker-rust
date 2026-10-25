@@ -64,6 +64,18 @@ obstacle) is in `web`, index-aligned with it.
    Scenery occlusion advances through whole display ticks using that displayed local
    position; snapshot receipt and simulation stepping do not also advance its view state.
 
+Display copies share immutable loaded scenery and static collision primitives through
+`Arc`; each collision world retains its own small gate-leaf buffer. Player skill definitions
+also use shared immutable entries, with the stock table initialized once and authored
+changes using copy-on-write. The player projector updates the selected endpoint copy in
+place, and enemy interpolation borrows the two endpoint lists. These choices reduce copies
+without sharing mutable actor state or advancing authoritative clocks during rendering.
+
+Enemies and effect families use contiguous typed `Vec` storage. Explicit participant and
+manager order still controls gameplay, painter allocation and RNG consumption. A general
+archetype ECS is not part of this design; changes to entity storage must preserve those
+ordering contracts and demonstrate an improvement in a measured workload.
+
 `GpuUi::begin_frame` collects native input in dispatch order. Each `paint_next` releases
 controller borrows so the Game owner can commit typed actions and refresh models before
 the next event. Transport polling, gameplay input and simulation advance once per browser
@@ -75,6 +87,12 @@ real completed image/font/audio counts to the separate Rust splash loader and re
 only after account/save admission and the first complete GPU frame. Match transitions retain
 their separate source delay and progress owner. The surface acceptance matrix and current
 verification limits are in [RUST-UI-MIGRATION.md](RUST-UI-MIGRATION.md).
+
+The GPU painter retains its vertex conversion buffer and reads mesh indices directly into
+the renderer's retained submission buffer, without a separate triangle list. Adjacent
+compatible meshes retain their scissor and sampler. A target, projection, texture, blend,
+color or clip change flushes
+the preceding batch; nested targets and screen-space scopes restore incoming state.
 
 The read-only `gpu_ui_state()` reports only submitted geometry, readiness, capture and
 visible widget bounds. Browser journeys use those bounds with ordinary input events.

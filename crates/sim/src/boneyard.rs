@@ -230,5 +230,6 @@ pub struct LoadedBoneyard {
     pub seed: String,
     pub source_sha256: String,
     pub geometry_sha256: String,
-    pub scene: BoneyardScene,
+    /// Admitted geometry is immutable and shared by authority and display snapshots.
+    pub scene: std::sync::Arc<BoneyardScene>,
 }

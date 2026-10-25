@@ -81,7 +81,9 @@ fn lua_controller_admission_leases_expiry_observation_and_skill_choices_match_so
         seed: fixture.loaded.seed,
         source_sha256: fixture.loaded.source_sha256,
         geometry_sha256: fixture.loaded.geometry_sha256,
-        scene: solomon_assets::boneyard::decode_scene(&fixture.loaded.scene.to_string()).unwrap(),
+        scene: solomon_assets::boneyard::decode_scene(&fixture.loaded.scene.to_string())
+            .unwrap()
+            .into(),
     })
     .unwrap();
     let mut controller = ModPlayerControl::default();

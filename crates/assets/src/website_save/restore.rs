@@ -457,6 +457,6 @@ pub(super) fn loaded_boneyard(value: &Value) -> Result<LoadedBoneyard, String> {
         seed: string(&loaded["seed"])?,
         source_sha256: string(&loaded["sourceSha256"])?,
         geometry_sha256: string(&loaded["geometrySha256"])?,
-        scene,
+        scene: scene.into(),
     })
 }

@@ -33,6 +33,19 @@ record for their evidence.
 
 ## Working on a follow-up
 
+The post-release performance audit and measured snapshot/GPU fixes are on
+`perf/runtime-20261025`. [PERFORMANCE.md](PERFORMANCE.md) records the pinned PixiJS
+comparison, local gates and exact limitations. Static scene/collision and skill definitions
+are shared, display projection avoids duplicate input copies, and UI batches retain
+submission storage and compatible GPU state. The 702 native tests, 45 browser-support
+tests, ordinary browser smoke and GPU composition regressions pass locally. Production
+continues to use the qualified release above.
+
+Performance follow-up priorities are decoded snapshot payload volume, title layout/draw
+cost, and remaining small-scene display copies. A blanket no-regression claim is not yet
+supported. Transport changes need exact state, ACK/backpressure and reconnect coverage;
+entity layout changes must retain manager/RNG order and show a measured improvement.
+
 - Use this standalone repository's current main as the base. The earlier fleet commits
   below describe historical acceptance; their temporary integration worktrees are removed.
 - **Work in a worktree**, one per task (`git worktree add ../rust-game-<task> -b

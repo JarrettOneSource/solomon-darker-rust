@@ -3,6 +3,7 @@
 //! belong to that player's component, independently of learned skill ranks.
 
 use std::collections::BTreeMap;
+use std::sync::{Arc, OnceLock};
 
 use super::{NATIVE_SKILL_CATALOG, NativeSkillValue};
 
@@ -48,33 +49,38 @@ impl NativeSkillStatBookEntry {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerStatBookComponent {
-    pub entries: Vec<NativeSkillStatBookEntry>,
+    /// Snapshots share definitions; authored mutation uses `Arc::make_mut`.
+    pub entries: Arc<[NativeSkillStatBookEntry]>,
 }
 
 impl Default for PlayerStatBookComponent {
     fn default() -> Self {
-        let mut entries = Vec::new();
-        for definition in NATIVE_SKILL_CATALOG {
-            let mut numeric_properties = BTreeMap::new();
-            for property in definition.numeric_properties {
-                let value = match property.value {
-                    NativeSkillValue::Scalar(value) => NativeSkillStatBookValue::Scalar(value),
-                    NativeSkillValue::Ranks(values) => {
-                        NativeSkillStatBookValue::Ranks(values.to_vec())
-                    }
-                };
-                numeric_properties.insert(property.name.to_owned(), value);
+        static STOCK: OnceLock<Arc<[NativeSkillStatBookEntry]>> = OnceLock::new();
+        let entries = STOCK.get_or_init(|| {
+            let mut entries = Vec::new();
+            for definition in NATIVE_SKILL_CATALOG {
+                let mut numeric_properties = BTreeMap::new();
+                for property in definition.numeric_properties {
+                    let value = match property.value {
+                        NativeSkillValue::Scalar(value) => NativeSkillStatBookValue::Scalar(value),
+                        NativeSkillValue::Ranks(values) => {
+                            NativeSkillStatBookValue::Ranks(values.to_vec())
+                        }
+                    };
+                    numeric_properties.insert(property.name.to_owned(), value);
+                }
+                entries.push(NativeSkillStatBookEntry {
+                    cap_level: definition.cap_level,
+                    description: definition.description.to_owned(),
+                    id: definition.id,
+                    maximum_level: definition.maximum_level,
+                    numeric_properties,
+                    quick_description: definition.quick_description.to_owned(),
+                });
             }
-            entries.push(NativeSkillStatBookEntry {
-                cap_level: definition.cap_level,
-                description: definition.description.to_owned(),
-                id: definition.id,
-                maximum_level: definition.maximum_level,
-                numeric_properties,
-                quick_description: definition.quick_description.to_owned(),
-            });
-        }
-        Self { entries }
+            entries.into()
+        });
+        Self { entries: Arc::clone(entries) }
     }
 }
 

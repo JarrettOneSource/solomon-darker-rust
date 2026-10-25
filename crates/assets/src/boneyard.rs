@@ -127,7 +127,7 @@ impl BoneyardCatalog {
             seed: seed.iter().map(|byte| format!("{byte:02x}")).collect(),
             source_sha256: entry.source_sha256.clone(),
             geometry_sha256: entry.geometry_sha256.clone(),
-            scene: entry.scene.clone(),
+            scene: entry.scene.clone().into(),
         })
     }
 
@@ -187,7 +187,7 @@ fn materialize_template(
         seed,
         source_sha256: template.source_sha256.clone(),
         geometry_sha256: template.geometry_sha256.clone(),
-        scene: template.scene.clone(),
+        scene: template.scene.clone().into(),
     }
 }
 

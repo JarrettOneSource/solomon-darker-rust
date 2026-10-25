@@ -107,7 +107,8 @@ fn loaded(scene: &Value) -> LoadedBoneyard {
             sprites: Vec::new(),
             terrain: Vec::new(),
             solomon_dig: None,
-        },
+        }
+        .into(),
     }
 }
 fn scenery_row(target: &PrimarySpellTarget) -> Value {
