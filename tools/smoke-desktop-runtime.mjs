@@ -238,7 +238,9 @@ try {
     console.error(JSON.stringify({
       label: instance.label,
       url: redact(instance.page.url()),
-      ui: await ui.readUi(instance.page).catch(()=>null),
+      // A stalled diagnostic read must still reach the owned-process cleanup.
+      ui: await bounded(ui.readUi(instance.page), 5000, `${instance.label} diagnostic UI read timed out`)
+        .catch(error => ({observationError: redact(error.message)})),
       errors,
       cancelledMenuImages: receipts.cancelledMenuImages
     }));
@@ -787,7 +789,7 @@ async function verifyServiceStops(instance) {
 async function bounded(operation, timeout, message) {
   let timer;
   try {
-    await Promise.race([operation, new Promise((_, reject) => {
+    return await Promise.race([operation, new Promise((_, reject) => {
       timer = setTimeout(() => reject(new Error(message)), timeout);
     })]);
   } finally {

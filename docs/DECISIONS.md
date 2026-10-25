@@ -275,6 +275,9 @@ later peer failures appearing in earlier closed-page phases because their report
 the live error array. `settleErrors` now copies its plain report data with the standard
 `structuredClone`; the live observer still retains every unexpected failure. A regression
 first fails with three errors in a phase that originally had one, then passes after the copy.
+Failure-only UI reads also use the existing five-second bound. The third Windows
+renderer diagnostic kept drawing after its original timeout but remained in that read
+until the 45-minute job limit; bounded observation lets the existing cleanup run.
 
 **Native font geometry and Rust editing share one text layout.** The installed egui
 row/cursor model assumes increasing horizontal positions and cannot represent mixed
