@@ -10,9 +10,13 @@ complete release/deployment acceptance record. Earlier ticket receipts below ret
 actual revisions and bounded scope.
 
 The game GPU UI and its browser/candidate qualification are complete at `b264cac5`.
-The desktop launcher now moves its three HTML/CSS/JavaScript presentation files into
-`crates/web/src/desktop/launcher`; its native/WASM and four-platform package checks
-remain in progress. The [migration matrix](RUST-UI-MIGRATION.md) owns the accepted surface
+The desktop launcher replaces its three HTML/CSS/JavaScript presentation files with
+`crates/web/src/desktop/launcher`. Its 1dce46ad implementation passes 701 native tests,
+the strict native/WASM checks, complete browser smoke and reviewed Mac package journey,
+including held-pointer release after saved resume;
+candidate dc9a103 passes game/Linux/Apple Silicon/Intel qualification; Windows saved-resume
+Settings input failed, and the later Windows trace reproduces the repaired held-click
+expiry on the Tutorial prompt. Current four-platform qualification remains required. The [migration matrix](RUST-UI-MIGRATION.md) owns the accepted surface
 inventory and the earlier package journeys. Canonical main release, Website artifact
 admission, live recovery and task cleanup remain. Earlier DOM-era receipts below retain
 their original behavior scope and do not substitute for GPU acceptance.
@@ -31,7 +35,8 @@ record for their evidence.
 - **Stock inputs are tracked**: run `python3 scripts/verify-client-assets.py` in a fresh
   worktree. Asset regeneration is a reviewed source change, not a build prerequisite.
 - **Dev servers use ports 4181 and up** (`cd web && trunk serve --port 4181`); 4180 is the
-  service. Pass your port to the smoke as `URL`. Native acceptance uses isolated 4190/4192 hosts.
+  service. Pass your port to the smoke as `URL`. Native acceptance uses isolated 4191/4192
+  hosts; Node's fetch rejects reserved port 4190 before making a connection.
 - Historical paths below are relative to the recorded Website revision's
   `frontend/src/game/`. Set `SOLOMON_WEBSITE_DIR` explicitly when recording new fixtures.
 

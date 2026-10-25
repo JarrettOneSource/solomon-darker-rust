@@ -678,7 +678,7 @@ compares every original byte before removing the redundant uncompressed file; su
 oracle recordings produce the compressed fixture and its JSON hash together. Simulation
 assertions, source inputs and expected numeric values are unchanged by packaging.
 
-### Fullscreen activation ownership
+### Held pointer activation
 
 The shared GPU context disables egui's default 0.8-second click expiry through
 `InputOptions::max_click_duration`. Source `NativeUiButton` delegates to ordinary
@@ -688,6 +688,15 @@ but stayed on Title. The native context regression fails at 0bab38d4 and also ch
 that cancellation and movement outside the button never activate it. The canonical
 packaged journey retains the held Settings click after saved resume. Existing
 pointer ownership, drag distance, cancellation and keyboard behavior stay native.
+An unchanged Windows dc9a103 package independently reproduced the same failure in
+diagnostic40153843543: a trusted stationary 4.3-second press/release focused the
+Tutorial prompt's No button, but did not activate it. The window remained visible
+and focused and rendered 90 frames between the two events. Two other full journeys
+passed. The canonical driver now waits for actual native window state and a fresh
+GPU frame after its existing Windows minimize/restore actions; background policy,
+input events and gameplay timeouts remain unchanged.
+
+### Fullscreen activation ownership
 
 The fullscreen capability runs synchronously in its trusted browser click, while
 native egui responses handle keyboard/controller activation. A mutable

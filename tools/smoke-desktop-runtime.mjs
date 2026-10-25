@@ -354,6 +354,7 @@ async function launch(label, userData) {
       } else if (message.type === 'snapshot') instance.state.frame = message.frame;else if (message.type === 'hosted' && message.message.kind === 'save_before_leave') instance.state.leaveReceipts++;else if (message.type === 'error') errors.push(redact(`${label} host: ${message.code}: ${message.reason}`));
     });
   });
+  if (process.platform === 'win32') await setWindowMinimized(instance, false);
   await ui.ready(page);
   await ui.surface(page, 'desktop-launcher');
   await ui.assertGpuOnly(page);
@@ -799,6 +800,20 @@ async function setWindowMinimized(instance, minimized) {
     if (minimized) window.minimize();
     else { window.restore(); window.show(); window.focus(); }
   }, minimized);
+  // Native window methods return before focus/visibility and rendering settle.
+  await waitFor(() => instance.app.evaluate(({BrowserWindow}, minimized) => {
+    const window = BrowserWindow.getAllWindows()[0];
+    return minimized ? window.isMinimized()
+      : !window.isMinimized() && window.isVisible() && window.isFocused();
+  }, minimized), `the actual ${instance.label} window ${minimized ? 'minimized' : 'visible and focused'}`);
+  if (!minimized) {
+    const previousFrame = (await ui.readUi(instance.page))?.frame;
+    await instance.page.waitForFunction(previousFrame => {
+      if (!document.hasFocus() || document.visibilityState !== 'visible') return false;
+      const read = window.wasmBindings?.gpu_ui_state;
+      return !read || previousFrame === undefined || JSON.parse(read()).frame !== previousFrame;
+    }, previousFrame);
+  }
 }
 async function waitForExit(pid) {
   await waitFor(() => {
