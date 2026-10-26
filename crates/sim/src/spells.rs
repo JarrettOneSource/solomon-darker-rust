@@ -20,6 +20,7 @@ pub mod presentation;
 pub mod projectile_storage;
 mod projectiles;
 mod simulation;
+pub mod transient_storage;
 pub use simulation::{
     PrimarySpellBatchTickResult, PrimarySpellCastAuthority, PrimarySpellEpochContext,
     PrimarySpellInput, PrimarySpellOwnerObstruction, PrimarySpellPlayer, PrimarySpellPlayerResult,

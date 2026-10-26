@@ -16,13 +16,13 @@ use solomon_sim::session::{GameSession, GameSessionOptions};
 use solomon_sim::spells::boneyard::{
     BoneyardPrimaryContactEpoch, resolve_boneyard_primary_contacts_for_players,
 };
-use solomon_sim::spells::model::{
-    FireExplosionPresentation, PrimarySpellTickResult, PrimarySpellTransient,
-};
+use solomon_sim::spells::model::PrimaryTransientRef;
+use solomon_sim::spells::model::{FireExplosionPresentation, PrimarySpellTickResult};
 use solomon_sim::spells::special_death::{
     NativeSpellSpecialDeathKind, NativeSpellSpecialDeathPayload,
 };
-use solomon_sim::spells::weld::{NativeWeldSteamVariant, NativeWeldWorldActor};
+use solomon_sim::spells::weld::NativeWeldSteamVariant;
+use solomon_sim::spells::weld::WeldWorldRef;
 use solomon_sim::{NativeRng, Vec2};
 
 struct OpenGeometry;
@@ -54,10 +54,10 @@ fn registration(value: PainterRegistration) -> Value {
         value.registration_ordinal
     ])
 }
-fn transient(value: &PrimarySpellTransient) -> Value {
+fn transient(value: PrimaryTransientRef<'_>) -> Value {
     let common = value.common();
     let (kind, detail) = match value {
-        PrimarySpellTransient::FireExplosion(actor) => (
+        PrimaryTransientRef::FireExplosion(actor) => (
             "fire-explosion",
             json!({
             "origin":[actor.origin.x,actor.origin.y],"damage":actor.damage,
@@ -65,7 +65,7 @@ fn transient(value: &PrimarySpellTransient) -> Value {
             "soundPitch":actor.sound_pitch,"presentation":match actor.presentation {
                 FireExplosionPresentation::Fire=>"fire",FireExplosionPresentation::Steam=>"steam"}}),
         ),
-        PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(actor)) => (
+        PrimaryTransientRef::Weld(WeldWorldRef::Steam(actor)) => (
             "weld-steam",
             json!({
             "position":[actor.position.x,actor.position.y],"velocity":[actor.velocity.x,actor.velocity.y],

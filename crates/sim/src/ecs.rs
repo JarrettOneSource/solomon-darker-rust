@@ -22,6 +22,12 @@ struct ComponentWorld<Q: IterQueryData> {
     query: QueryState<Q>,
 }
 
+pub(crate) struct EntityStep<T> {
+    pub retained: bool,
+    pub births_before: Vec<T>,
+    pub births_after: Vec<T>,
+}
+
 impl<Q: IterQueryData> Default for OrderedEntities<Q> {
     fn default() -> Self {
         // Empty domains and temporary birth collectors do not need a World.
@@ -121,11 +127,11 @@ impl<Q: IterQueryData> OrderedEntities<Q> {
         self.order.retain(|entity| !retired.contains(entity));
     }
 
-    /// Update the original population once. Children enter the order immediately
-    /// before their retained parent, but receive their first update on the next pass.
+    /// Update the original population once. Each system places its children around
+    /// their retained parent; newborns receive their first update on the next pass.
     pub fn advance_with_births<T>(
         &mut self,
-        mut step: impl FnMut(QueryItem<'_, '_, Q>) -> (bool, Vec<T>),
+        mut step: impl FnMut(QueryItem<'_, '_, Q>) -> EntityStep<T>,
         mut spawn: impl FnMut(&mut World, T) -> Entity,
     ) {
         let Some(storage) = &mut self.storage else { return };
@@ -136,14 +142,17 @@ impl<Q: IterQueryData> OrderedEntities<Q> {
                 .query
                 .get_mut(&mut storage.world, entity)
                 .expect("entity retains its components");
-            let (retained, births) = step(components);
-            for birth in births {
+            let update = step(components);
+            for birth in update.births_before {
                 self.order.insert(spawn(&mut storage.world, birth));
             }
-            if retained {
+            if update.retained {
                 self.order.insert(entity);
             } else {
                 storage.world.despawn(entity);
+            }
+            for birth in update.births_after {
+                self.order.insert(spawn(&mut storage.world, birth));
             }
         }
     }

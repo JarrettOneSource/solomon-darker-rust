@@ -1,6 +1,8 @@
 //! Source-ordered player visual phases from `core-server/air-water-player-visual-system.ts`.
 //! These actors remain in SpellState; the session calls synchronize before contacts
 //! and finalize afterward so Hail and Aura consume the native combat stream in order.
+use crate::spells::transient_storage::PrimaryTransientRef;
+
 use super::{
     create_native_water_aura_actor, create_native_water_hail_actor, step_native_water_hail_actor,
 };
@@ -66,32 +68,33 @@ pub fn synchronize_air_water_player_visual_actors(
             "Air/Water owner position is finite"
         );
     }
-    let mut hurricane_by_owner = BTreeMap::new();
-    for mut effect in std::mem::take(&mut spells.transients) {
-        if let PrimarySpellTransient::AirHurricane(actor) = effect {
-            assert!(
-                hurricane_by_owner.insert(actor.common.owner_id.clone(), actor).is_none(),
-                "Hurricane owners are unique"
-            );
-            continue;
-        }
-        if let PrimarySpellTransient::WaterAura(actor) = &mut effect {
-            let Some(owner) = owner_by_id.get(actor.common.owner_id.as_str()) else {
-                continue;
-            };
+    spells.transients.retain_mut(|effect| {
+        if let PrimaryTransientMut::WaterAura(actor) = effect {
+            let Some(owner) = owner_by_id.get(actor.common.owner_id.as_str()) else { return false };
             if owner.world_key != actor.common.world_key {
-                continue;
+                return false;
             }
             actor.origin = owner.position;
         }
-        spells.transients.push(effect);
+        true
+    });
+    let mut hurricane_by_owner = BTreeMap::new();
+    for (index, effect) in spells.transients.iter().enumerate() {
+        if let PrimaryTransientRef::AirHurricane(actor) = effect {
+            assert!(
+                hurricane_by_owner.insert(actor.common.owner_id.clone(), index).is_none(),
+                "Hurricane owners are unique"
+            );
+        }
     }
+    let mut hurricane_order = BTreeMap::new();
     // Owner input order is significant: births draw their lanes before the next owner.
     for owner in owners {
         if owner.hurricane_charge <= 0.0 {
             continue;
         }
-        if let Some(mut actor) = hurricane_by_owner.remove(&owner.owner_id)
+        if let Some(index) = hurricane_by_owner.remove(&owner.owner_id)
+            && let Some(PrimaryTransientMut::AirHurricane(actor)) = spells.transients.get_mut(index)
             && actor.common.world_key == owner.world_key
             && owner.hurricane_contact_charge > 0.0
         {
@@ -109,13 +112,14 @@ pub fn synchronize_air_water_player_visual_actors(
             actor.lanes = program.lanes;
             actor.phase_degrees = program.phase_degrees;
             actor.position = owner.position;
-            spells.transients.push(PrimarySpellTransient::AirHurricane(actor));
+            hurricane_order.insert(actor.common.id, hurricane_order.len());
             continue;
         }
         let program = create_native_hurricane_presentation(rng);
         let mut common = transient_base(spells.next_id, &owner.owner_id, &owner.world_key, None);
         common.painter_registrations.push(order.register(WorldManagerLane::Actor));
         spells.next_id += 1;
+        hurricane_order.insert(common.id, hurricane_order.len());
         spells.transients.push(PrimarySpellTransient::AirHurricane(PrimarySpellAirHurricane {
             common,
             birth_tick: tick,
@@ -129,6 +133,15 @@ pub fn synchronize_air_water_player_visual_actors(
             position: owner.position,
         }));
     }
+    spells.transients.retain(|effect| {
+        !matches!(effect, PrimaryTransientRef::AirHurricane(_))
+            || hurricane_order.contains_key(&effect.common().id)
+    });
+    // Retained Hurricanes follow the other effects in owner input order.
+    spells.transients.sort_by_key(|effect| match effect {
+        PrimaryTransientRef::AirHurricane(actor) => (1, hurricane_order[&actor.common.id]),
+        _ => (0, 0),
+    });
     for emission in channel_emissions {
         let NativePrimarySkillProfile::Water(profile) = &emission.primary_skill else {
             continue;
@@ -144,7 +157,7 @@ pub fn synchronize_air_water_player_visual_actors(
             .transients
             .iter()
             .filter_map(|effect| {
-                let PrimarySpellTransient::Water(actor) = effect else {
+                let PrimaryTransientRef::Water(actor) = effect else {
                     return None;
                 };
                 let common = &actor.common;
@@ -208,15 +221,8 @@ pub fn finalize_air_water_player_visual_actors(
             spells.next_id += 1;
         }
     }
-    for effect in std::mem::take(&mut spells.transients) {
-        if let PrimarySpellTransient::WaterHail(actor) = effect {
-            if actor.birth_tick == tick {
-                spells.transients.push(PrimarySpellTransient::WaterHail(actor));
-            } else if let Some(actor) = step_native_water_hail_actor(actor, rng) {
-                spells.transients.push(PrimarySpellTransient::WaterHail(actor));
-            }
-        } else {
-            spells.transients.push(effect);
-        }
-    }
+    spells.transients.retain_mut(|effect| {
+        let PrimaryTransientMut::WaterHail(actor) = effect else { return true };
+        actor.birth_tick == tick || step_native_water_hail_actor(actor, rng)
+    });
 }

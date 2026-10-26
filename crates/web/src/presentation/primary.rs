@@ -13,15 +13,14 @@ use solomon_sim::spells::fire::{
     native_fire_particle_lifetime_ticks,
 };
 use solomon_sim::spells::model::{
-    PrimaryProjectileRef, PrimarySpellProjectile, PrimarySpellTransient, SpellState,
+    PrimaryProjectileRef, PrimarySpellProjectile, PrimarySpellTransient, PrimaryTransientMut,
+    PrimaryTransientRef, SpellState,
 };
 use solomon_sim::spells::water::water_frost_jet_lifetime_ticks;
-use solomon_sim::spells::weld::effects::NativeWeldWorldActor;
+use solomon_sim::spells::weld::WeldWorldRef;
 
 use super::PresentationClocks;
-use super::math::{
-    interpolate_members, interpolate_projected_members, lerp, lerp_option, lerp_vec,
-};
+use super::math::{interpolate_projected_members, lerp, lerp_option, lerp_vec};
 
 #[derive(Default)]
 pub(super) struct PrimaryPresentationMemory {
@@ -35,8 +34,8 @@ pub(super) fn copy(
     memory: &mut PrimaryPresentationMemory,
     clocks: &mut PresentationClocks,
 ) {
-    for effect in &mut output.transients {
-        retain_hail(effect, snapshot_tick, memory, clocks);
+    for mut effect in output.transients.iter_mut() {
+        retain_hail(&mut effect, snapshot_tick, memory, clocks);
     }
     prune_memory(output, memory);
 }
@@ -68,48 +67,61 @@ pub(super) fn project(
     for spell in output.projectiles.iter() {
         clocks.primary.entry(spell.common().id).or_insert(spell.common().age_ticks as f64);
     }
-    let first: Vec<_> = older
-        .transients
-        .iter()
-        .filter(|effect| fixed_timing(effect, older_tick).is_none())
-        .cloned()
-        .collect();
-    let next: Vec<_> = newer
-        .transients
-        .iter()
-        .filter(|effect| fixed_timing(effect, newer_tick).is_none())
-        .cloned()
-        .collect();
-    output.transients = interpolate_members(
-        &first,
-        &next,
+    output.transients = interpolate_projected_members(
+        older.transients.iter().filter(|effect| fixed_timing(*effect, older_tick).is_none()),
+        newer.transients.iter().filter(|effect| fixed_timing(*effect, newer_tick).is_none()),
         blend,
         |effect| effect.common().id,
+        |effect| effect.snapshot(),
         |first, next, blend| {
-            let mut first = first.clone();
-            let mut next = next.clone();
-            retain_hail(&mut first, older_tick, memory, clocks);
-            retain_hail(&mut next, newer_tick, memory, clocks);
-            transients::project(&first, &next, blend, clocks)
+            if let (PrimaryTransientRef::WaterHail(first), PrimaryTransientRef::WaterHail(next)) =
+                (*first, *next)
+            {
+                // Hail uses snapshot-derived age and life before interpolation.
+                let mut first = first.clone();
+                let mut next = next.clone();
+                retain_hail(
+                    &mut PrimaryTransientMut::WaterHail(&mut first),
+                    older_tick,
+                    memory,
+                    clocks,
+                );
+                retain_hail(
+                    &mut PrimaryTransientMut::WaterHail(&mut next),
+                    newer_tick,
+                    memory,
+                    clocks,
+                );
+                transients::project(
+                    PrimaryTransientRef::WaterHail(&first),
+                    PrimaryTransientRef::WaterHail(&next),
+                    blend,
+                    clocks,
+                )
+            } else {
+                transients::project(*first, *next, blend, clocks)
+            }
         },
-    );
+    )
+    .into_iter()
+    .collect();
     // Source retains an older-only Hail at its older snapshot age until removal.
-    for effect in &mut output.transients {
+    for mut effect in output.transients.iter_mut() {
         if !clocks.primary.contains_key(&effect.common().id) {
             let snapshot = if blend < 1.0 { older_tick } else { newer_tick };
-            retain_hail(effect, snapshot, memory, clocks);
+            retain_hail(&mut effect, snapshot, memory, clocks);
         }
     }
     let mut fixed: BTreeMap<
         u64,
-        (Option<&PrimarySpellTransient>, Option<&PrimarySpellTransient>, FixedTiming),
+        (Option<PrimaryTransientRef<'_>>, Option<PrimaryTransientRef<'_>>, FixedTiming),
     > = BTreeMap::new();
-    for effect in &older.transients {
+    for effect in older.transients.iter() {
         if let Some(timing) = fixed_timing(effect, older_tick) {
             fixed.insert(effect.common().id, (Some(effect), None, timing));
         }
     }
-    for effect in &newer.transients {
+    for effect in newer.transients.iter() {
         if let Some(timing) = fixed_timing(effect, newer_tick) {
             fixed.entry(effect.common().id).and_modify(|entry| entry.1 = Some(effect)).or_insert((
                 None,
@@ -125,7 +137,7 @@ pub(super) fn project(
         }
         let mut effect = match (first, next) {
             (Some(first), Some(next)) => transients::project(first, next, blend, clocks),
-            (Some(effect), None) | (None, Some(effect)) => effect.clone(),
+            (Some(effect), None) | (None, Some(effect)) => effect.snapshot(),
             (None, None) => unreachable!("fixed bracket has an endpoint"),
         };
         let age = if matches!(effect, PrimarySpellTransient::Air(_)) { age.floor() } else { age };
@@ -134,9 +146,9 @@ pub(super) fn project(
         output.transients.push(effect);
     }
     output.transients.sort_by_key(|effect| effect.common().id);
-    for effect in &output.transients {
+    for effect in output.transients.iter() {
         clocks.primary.entry(effect.common().id).or_insert(effect.common().age_ticks as f64);
-        if let PrimarySpellTransient::FireGoodImp(imp) = effect
+        if let PrimaryTransientRef::FireGoodImp(imp) = effect
             && let Some(age) = imp.contact_age_ticks
         {
             clocks.primary_contact.entry(imp.common.id).or_insert(age as f64);
@@ -204,12 +216,12 @@ fn projectile(
 }
 
 fn retain_hail(
-    effect: &mut PrimarySpellTransient,
+    effect: &mut PrimaryTransientMut<'_>,
     snapshot_tick: u64,
     memory: &mut PrimaryPresentationMemory,
     clocks: &mut PresentationClocks,
 ) {
-    let PrimarySpellTransient::WaterHail(hail) = effect else {
+    let PrimaryTransientMut::WaterHail(hail) = effect else {
         return;
     };
     let retained = memory
@@ -232,7 +244,7 @@ fn prune_memory(output: &SpellState, memory: &mut PrimaryPresentationMemory) {
         .transients
         .iter()
         .filter_map(|effect| {
-            if let PrimarySpellTransient::WaterHail(hail) = effect {
+            if let PrimaryTransientRef::WaterHail(hail) = effect {
                 Some(hail.common.id)
             } else {
                 None
@@ -248,10 +260,10 @@ struct FixedTiming {
     first_visible_age: f64,
 }
 
-fn fixed_timing(effect: &PrimarySpellTransient, snapshot_tick: u64) -> Option<FixedTiming> {
+fn fixed_timing(effect: PrimaryTransientRef<'_>, snapshot_tick: u64) -> Option<FixedTiming> {
     let inferred_birth = snapshot_tick as f64 - effect.common().age_ticks as f64;
     let (birth, lifetime, first) = match effect {
-        PrimarySpellTransient::Air(effect) => (
+        PrimaryTransientRef::Air(effect) => (
             effect.birth_tick as f64,
             solomon_sim::spells::air::native_air_contact_lifetime_ticks(
                 effect.underpowered,
@@ -260,40 +272,40 @@ fn fixed_timing(effect: &PrimarySpellTransient, snapshot_tick: u64) -> Option<Fi
             ) as f64,
             0.0,
         ),
-        PrimarySpellTransient::EarthImpact(effect) => {
+        PrimaryTransientRef::EarthImpact(effect) => {
             (effect.birth_tick as f64, effect.lifetime_ticks as f64, 0.0)
         }
-        PrimarySpellTransient::EtherImpact(effect) => (effect.birth_tick as f64, 19.0, 0.0),
-        PrimarySpellTransient::EtherBlast(effect) => {
+        PrimaryTransientRef::EtherImpact(effect) => (effect.birth_tick as f64, 19.0, 0.0),
+        PrimaryTransientRef::EtherBlast(effect) => {
             (effect.birth_tick as f64, NATIVE_ETHER_BLAST_PARTICLE_LIFETIME_TICKS as f64, 0.0)
         }
-        PrimarySpellTransient::EtherPierceStreak(_) => (inferred_birth, 10.0, 0.0),
-        PrimarySpellTransient::FireParticle(effect) => (
+        PrimaryTransientRef::EtherPierceStreak(_) => (inferred_birth, 10.0, 0.0),
+        PrimaryTransientRef::FireParticle(effect) => (
             inferred_birth,
             native_fire_particle_lifetime_ticks(effect.common.id, effect.enhanced_effects) as f64,
             0.0,
         ),
-        PrimarySpellTransient::FireExplosion(_) => {
+        PrimaryTransientRef::FireExplosion(_) => {
             (inferred_birth, NATIVE_FIRE_EXPLOSION_LIFETIME_TICKS as f64, 0.0)
         }
-        PrimarySpellTransient::FireImpact(_) => {
+        PrimaryTransientRef::FireImpact(_) => {
             (inferred_birth, NATIVE_FIRE_IMPACT_LIFETIME_TICKS as f64, 0.0)
         }
-        PrimarySpellTransient::Water(effect) => {
+        PrimaryTransientRef::Water(effect) => {
             (inferred_birth, water_frost_jet_lifetime_ticks(effect.common.id) as f64, 1.0)
         }
-        PrimarySpellTransient::WaterAura(effect) => {
+        PrimaryTransientRef::WaterAura(effect) => {
             (effect.birth_tick as f64, effect.duration_ticks as f64, 0.0)
         }
-        PrimarySpellTransient::Weld(NativeWeldWorldActor::BlizzardChainFrost(effect)) => (
+        PrimaryTransientRef::Weld(WeldWorldRef::BlizzardChainFrost(effect)) => (
             effect.common.birth_tick as f64,
             water_frost_jet_lifetime_ticks(effect.common.owner.id) as f64,
             0.0,
         ),
-        PrimarySpellTransient::Weld(NativeWeldWorldActor::BlizzardGlow(effect)) => {
+        PrimaryTransientRef::Weld(WeldWorldRef::BlizzardGlow(effect)) => {
             (effect.common.birth_tick as f64, 1.0, 0.0)
         }
-        PrimarySpellTransient::Weld(NativeWeldWorldActor::FrostFade(effect)) => (
+        PrimaryTransientRef::Weld(WeldWorldRef::FrostFade(effect)) => (
             effect.common.birth_tick as f64,
             if effect.common.build_id == 1004 { 3.0 } else { 20.0 },
             0.0,

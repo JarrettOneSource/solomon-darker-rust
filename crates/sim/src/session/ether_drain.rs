@@ -1,6 +1,10 @@
 //! Source EtherDrain world projections and accepted forces from
 //! `core-server/native-ether-drain-world.ts` and `boneyard-world-placement.ts`.
 
+use crate::spells::transient_storage::{PrimaryTransientRef, WeldHailChildRef, WeldWorldRef};
+
+use crate::spells::transient_storage::{PrimaryTransientMut, WeldHailChildMut, WeldWorldMut};
+
 use super::*;
 use crate::Vec2;
 use crate::boneyard::BoneyardWorld;
@@ -13,8 +17,6 @@ use crate::secondary::ether_drain::*;
 use crate::secondary::{NativeSecondaryActorKind as Kind, NativeSecondarySimulationState};
 use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 use crate::spells::boneyard::boneyard_native_secondary_targets;
-use crate::spells::model::PrimarySpellTransient;
-use crate::spells::weld::{NativeWeldHailChildActorState, NativeWeldWorldActor};
 
 /// Source callbacks see the accepted pre-secondary store. This copied query
 /// projection lets the single mutable secondary owner advance without aliasing it.
@@ -107,7 +109,7 @@ impl SessionEtherDrainSnapshot {
 
 fn capture_world_animations(
     world: &BoneyardWorld,
-    primary: &[PrimarySpellTransient],
+    primary: &crate::spells::model::PrimaryTransients,
     secondary: &NativeSecondarySimulationState,
 ) -> Vec<NativeEtherDrainWorldAnimationTarget> {
     let mut targets = Vec::new();
@@ -137,20 +139,20 @@ fn capture_world_animations(
         }
     }
     let key = format!("boneyard:{}", world.loaded.run_id);
-    for effect in primary {
+    for effect in primary.iter() {
         if effect.common().world_key != key {
             continue;
         }
         let reference =
             NativeEtherDrainWorldAnimationRef::PrimaryTransient { id: effect.common().id };
         match effect {
-            PrimarySpellTransient::WaterHail(actor) => {
+            PrimaryTransientRef::WaterHail(actor) => {
                 push(actor.saved_bounce_velocity, actor.position, reference)
             }
-            PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
-                NativeWeldHailChildActorState::TerrainBouncer(actor),
+            PrimaryTransientRef::Weld(WeldWorldRef::HailChild(
+                WeldHailChildRef::TerrainBouncer(actor),
             )) => push(actor.bounce_velocity, actor.position, reference),
-            PrimarySpellTransient::Weld(NativeWeldWorldActor::BoulderDebris(actor)) => {
+            PrimaryTransientRef::Weld(WeldWorldRef::BoulderDebris(actor)) => {
                 push(actor.debris.bounce_velocity, actor.position, reference)
             }
             _ => {}
@@ -245,23 +247,21 @@ impl GameSession {
                             return true;
                         }
                         match effect {
-                            PrimarySpellTransient::WaterHail(actor) => {
+                            PrimaryTransientMut::WaterHail(actor) => {
                                 if contact.consume {
                                     return false;
                                 }
                                 actor.position = shift(actor.position);
                             }
-                            PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
-                                NativeWeldHailChildActorState::TerrainBouncer(actor),
+                            PrimaryTransientMut::Weld(WeldWorldMut::HailChild(
+                                WeldHailChildMut::TerrainBouncer(actor),
                             )) => {
                                 if contact.consume {
                                     return false;
                                 }
                                 actor.position = shift(actor.position);
                             }
-                            PrimarySpellTransient::Weld(NativeWeldWorldActor::BoulderDebris(
-                                actor,
-                            )) => {
+                            PrimaryTransientMut::Weld(WeldWorldMut::BoulderDebris(actor)) => {
                                 if contact.consume {
                                     return false;
                                 }

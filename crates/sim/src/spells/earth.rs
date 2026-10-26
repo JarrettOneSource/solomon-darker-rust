@@ -259,19 +259,19 @@ pub fn create_earth_called_rock(
 }
 
 pub fn advance_earth_called_rock(
-    mut rock: PrimarySpellEarthCalledRock,
+    rock: &mut PrimarySpellEarthCalledRock,
     parent: Option<ProjectileRef<'_, EarthProjectileProgram>>,
-) -> Option<PrimarySpellEarthCalledRock> {
+) -> bool {
     if rock.falling {
         let height = fround(rock.height + rock.fall_velocity);
         let accelerated = fround(rock.fall_velocity + 1.0);
         if height > 10.0 {
-            return None;
+            return false;
         }
         rock.common.age_ticks += 1;
         rock.fall_velocity = if height > 0.0 { 0.25_f32 as f64 } else { accelerated };
         rock.height = height;
-        return Some(rock);
+        return true;
     }
     rock.speed = fround(rock.speed * 1.1_f32 as f64).min(5.0);
     rock.falling =
@@ -283,7 +283,7 @@ pub fn advance_earth_called_rock(
         let dy = parent.common.position.y - rock.position.y;
         let distance = hypot(dx, dy);
         if distance < 5.0 {
-            return None;
+            return false;
         }
         let toward =
             if distance > 0.0 { Vec2::new(dx / distance, dy / distance) } else { Vec2::ZERO };
@@ -307,7 +307,7 @@ pub fn advance_earth_called_rock(
     }
     rock.common.age_ticks += 1;
     rock.rotation = fround(rock.rotation + rock.rotation_step);
-    Some(rock)
+    true
 }
 
 #[must_use]

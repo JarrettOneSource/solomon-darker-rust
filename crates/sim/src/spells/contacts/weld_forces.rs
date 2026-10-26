@@ -7,7 +7,9 @@ use crate::secondary::NativeSecondarySteamedEffectState;
 
 impl ContactWork<'_, '_> {
     pub(super) fn resolve_weld_transient_forces(&mut self) {
-        for effect in self.source.transients.clone() {
+        for effect in
+            self.source.transients.iter().map(|effect| effect.snapshot()).collect::<Vec<_>>()
+        {
             let PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
                 NativeWeldHailChildActorState::Knockback(mut actor),
             )) = effect
@@ -53,7 +55,9 @@ impl ContactWork<'_, '_> {
                 );
             }
         }
-        for effect in self.source.transients.clone() {
+        for effect in
+            self.source.transients.iter().map(|effect| effect.snapshot()).collect::<Vec<_>>()
+        {
             let PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(actor)) = effect else {
                 continue;
             };

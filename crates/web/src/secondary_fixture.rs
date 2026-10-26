@@ -130,7 +130,7 @@ pub fn render_secondary_fixture(input: &str) -> Result<String, JsValue> {
         let secondary_count = layers.len();
         for actor in &staff {
             layers.push(
-                SecondaryView::staff_painter(actor)
+                SecondaryView::staff_painter(actor.view())
                     .expect("fixture admits visible staff rows")
                     .layer,
             );
@@ -143,7 +143,7 @@ pub fn render_secondary_fixture(input: &str) -> Result<String, JsValue> {
                 view.secondary.draw_staff_transient(
                     &mut view.renderer,
                     &camera,
-                    &staff[index - secondary_count],
+                    staff[index - secondary_count].view(),
                     world_tint,
                 );
             }
@@ -418,7 +418,7 @@ pub fn render_harden_fixture(input: &str) -> Result<String, JsValue> {
             [31.0 / 255.0, 31.0 / 255.0, 31.0 / 255.0, 1.0],
         );
         let world_key =
-            spells.transients.first().map_or("", |effect| effect.common().world_key.as_str());
+            spells.transients.get(0).map_or("", |effect| effect.common().world_key.as_str());
         view.spells.prepare(&spells, world_key, 0, &|_| 1.0, &puppet_hits, None, true, None);
         let camera =
             Camera { origin: point(&input["origin"]), scale: input["scale"].as_f64().unwrap() };

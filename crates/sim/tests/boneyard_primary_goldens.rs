@@ -16,9 +16,8 @@ use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::secondary::NativeSecondarySimulationState;
 use solomon_sim::spells::PrimarySpellInput;
 use solomon_sim::spells::boneyard::*;
-use solomon_sim::spells::model::{
-    PrimaryProjectileRef, PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState,
-};
+use solomon_sim::spells::model::PrimaryTransientRef;
+use solomon_sim::spells::model::{PrimaryProjectileRef, PrimarySpellProjectilePhase, SpellState};
 use solomon_sim::spells::targeting::{
     PrimarySpellTarget, PrimarySpellTargetKind, native_primary_view_ray_endpoint,
 };
@@ -197,28 +196,28 @@ fn projectile_row(spell: PrimaryProjectileRef<'_>) -> Value {
     ])
 }
 
-fn transient_kind(effect: &PrimarySpellTransient) -> &'static str {
+fn transient_kind(effect: PrimaryTransientRef<'_>) -> &'static str {
     match effect {
-        PrimarySpellTransient::Harden(_) => unreachable!("this fixture has no Harden skill"),
-        PrimarySpellTransient::Staff(actor) => actor.kind(),
-        PrimarySpellTransient::Weld(_) => unreachable!("this fixture casts the five elements"),
-        PrimarySpellTransient::AirHurricane(_) => "air-hurricane",
-        PrimarySpellTransient::WaterAura(_) => "water-aura",
-        PrimarySpellTransient::WaterHail(_) => "water-hail",
-        PrimarySpellTransient::Air(_) => "air",
-        PrimarySpellTransient::Water(_) => "water",
-        PrimarySpellTransient::EarthBoulderBit(_) => "earth-boulder-bit",
-        PrimarySpellTransient::EarthImpact(_) => "earth-impact",
-        PrimarySpellTransient::EarthCalledRock(_) => "earth-called-rock",
-        PrimarySpellTransient::EtherImpact(_) => "ether-impact",
-        PrimarySpellTransient::EtherPierceStreak(_) => "ether-pierce-streak",
-        PrimarySpellTransient::EtherBlast(_) => "ether-blast",
-        PrimarySpellTransient::FireParticle(_) => "fire",
-        PrimarySpellTransient::FireImpact(_) => "fire-impact",
-        PrimarySpellTransient::FireEmber(_) => "fire-ember",
-        PrimarySpellTransient::FireExplosion(_) => "fire-explosion",
-        PrimarySpellTransient::FireGoodImp(_) => "fire-good-imp",
-        PrimarySpellTransient::FirePatch(_) => "fire-patch",
+        PrimaryTransientRef::Harden(_) => unreachable!("this fixture has no Harden skill"),
+        PrimaryTransientRef::Staff(actor) => actor.kind(),
+        PrimaryTransientRef::Weld(_) => unreachable!("this fixture casts the five elements"),
+        PrimaryTransientRef::AirHurricane(_) => "air-hurricane",
+        PrimaryTransientRef::WaterAura(_) => "water-aura",
+        PrimaryTransientRef::WaterHail(_) => "water-hail",
+        PrimaryTransientRef::Air(_) => "air",
+        PrimaryTransientRef::Water(_) => "water",
+        PrimaryTransientRef::EarthBoulderBit(_) => "earth-boulder-bit",
+        PrimaryTransientRef::EarthImpact(_) => "earth-impact",
+        PrimaryTransientRef::EarthCalledRock(_) => "earth-called-rock",
+        PrimaryTransientRef::EtherImpact(_) => "ether-impact",
+        PrimaryTransientRef::EtherPierceStreak(_) => "ether-pierce-streak",
+        PrimaryTransientRef::EtherBlast(_) => "ether-blast",
+        PrimaryTransientRef::FireParticle(_) => "fire",
+        PrimaryTransientRef::FireImpact(_) => "fire-impact",
+        PrimaryTransientRef::FireEmber(_) => "fire-ember",
+        PrimaryTransientRef::FireExplosion(_) => "fire-explosion",
+        PrimaryTransientRef::FireGoodImp(_) => "fire-good-imp",
+        PrimaryTransientRef::FirePatch(_) => "fire-patch",
     }
 }
 

@@ -6,7 +6,7 @@ use bevy_ecs::query::QueryItem;
 use bevy_ecs::world::EntityRef;
 
 use super::{BossSpellKind, BossSpellOwner, NativeBossSpell};
-use crate::ecs::OrderedEntities;
+use crate::ecs::{EntityStep, OrderedEntities};
 
 pub trait BossSpellRead {
     fn view(&self) -> BossSpellRef<'_>;
@@ -120,7 +120,10 @@ impl BossSpells {
         mut step: impl FnMut(&mut BossSpellMut<'_>) -> (bool, Vec<NativeBossSpell>),
     ) {
         self.entities.advance_with_births(
-            |components| step(&mut BossSpellMut::from_query(components)),
+            |components| {
+                let (retained, births_before) = step(&mut BossSpellMut::from_query(components));
+                EntityStep { retained, births_before, births_after: Vec::new() }
+            },
             |world, spell| world.spawn((spell.owner, spell.kind)).id(),
         );
     }

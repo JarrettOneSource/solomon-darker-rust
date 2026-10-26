@@ -9,13 +9,14 @@ use crate::spells::model::{
 };
 use crate::spells::simulation::{PrimarySpellEpochContext, PrimarySpellTraversalActor};
 use crate::spells::targeting::NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK;
+use crate::spells::transient_storage::{WeldPersistentRef, WeldWorldMut, WeldWorldRef};
 use crate::{NativeRng, Vec2};
 
 pub fn enroll_native_weld_actor_painter(
-    actor: &mut NativeWeldWorldActor,
+    actor: &mut NativeWeldActorBase,
     order: &mut WorldPainterOrder,
 ) {
-    let owner = &mut actor.common_mut().owner;
+    let owner = &mut actor.owner;
     if owner.painter_registrations.is_empty() {
         let registration = owner
             .light_registration
@@ -62,13 +63,12 @@ impl SpellState {
 
     pub(crate) fn advance_weld_world_actor(
         &mut self,
-        mut actor: NativeWeldWorldActor,
+        actor: &mut WeldWorldMut<'_>,
         context: &PrimarySpellEpochContext<'_>,
         rng: &mut NativeRng,
         order: &mut WorldPainterOrder,
-    ) {
-        if let NativeWeldWorldActor::Persistent(NativeWeldPersistentActorState::Hailstones(hail)) =
-            &actor
+    ) -> bool {
+        if let WeldWorldRef::Persistent(WeldPersistentRef::Hailstones(hail)) = actor.view()
             && hail.phase == PrimarySpellProjectilePhase::Flight
         {
             let origin = hail.common.origin;
@@ -97,13 +97,13 @@ impl SpellState {
                 self.transients.extend(children.into_iter().map(|child| {
                     PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(child))
                 }));
-                return;
+                return false;
             }
         }
         let already_impacting =
-            matches!(&actor, NativeWeldWorldActor::Meteor(meteor) if meteor.impact_due);
-        let can_advance = |persistent: &NativeWeldPersistentActorState, from, to| {
-            let NativeWeldPersistentActorState::EtherealBoulder(boulder) = persistent else {
+            matches!(actor.view(), WeldWorldRef::Meteor(meteor) if meteor.impact_due);
+        let can_advance = |persistent: WeldPersistentRef<'_>, from, to| {
+            let WeldPersistentRef::EtherealBoulder(boulder) = persistent else {
                 return true;
             };
             (context.can_traverse)(
@@ -114,7 +114,7 @@ impl SpellState {
                 0,
             )
         };
-        let step = step_native_weld_world_actor(&mut actor, rng, &can_advance);
+        let step = step_native_weld_world_actor(actor, rng, &can_advance);
         if let Some(boulder) = step.terrain_contact {
             let children = create_primary_spell_weld_boulder_terminal(
                 self.next_id,
@@ -125,13 +125,13 @@ impl SpellState {
             );
             self.next_id += children.len() as u64;
             self.transients.extend(children.into_iter().map(PrimarySpellTransient::Weld));
-            return;
+            return false;
         }
         if !step.alive {
-            return;
+            return false;
         }
         let mut children = Vec::new();
-        if let NativeWeldWorldActor::Meteor(meteor) = &actor
+        if let WeldWorldRef::Meteor(meteor) = actor.view()
             && meteor.impact_due
             && !already_impacting
         {
@@ -160,16 +160,18 @@ impl SpellState {
                 self.next_id += 1;
             }
         }
-        self.transients.push(PrimarySpellTransient::Weld(actor));
         self.transients.extend(children.into_iter().map(PrimarySpellTransient::Weld));
+        true
     }
 
     /// Source enrollment runs after every actor epoch and new cast. A logical
     /// actor-lane light may share its painter; transient-lane lights do not.
     pub(crate) fn enroll_weld_painters(&mut self, order: &mut WorldPainterOrder) {
-        for effect in &mut self.transients {
-            let PrimarySpellTransient::Weld(actor) = effect else { continue };
-            enroll_native_weld_actor_painter(actor, order);
+        for mut effect in self.transients.iter_mut() {
+            let crate::spells::model::PrimaryTransientMut::Weld(actor) = &mut effect else {
+                continue;
+            };
+            enroll_native_weld_actor_painter(actor.common_mut(), order);
         }
     }
 }

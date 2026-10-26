@@ -653,7 +653,7 @@ impl BattleViews {
                 if effect.common().world_key != world_key {
                     return None;
                 }
-                let solomon_sim::spells::model::PrimarySpellTransient::Staff(staff) = effect else {
+                let solomon_sim::spells::model::PrimaryTransientRef::Staff(staff) = effect else {
                     return None;
                 };
                 SecondaryView::staff_painter(staff).map(|painter| {
@@ -828,8 +828,8 @@ impl BattleViews {
                                 overlay_effect_phase: participant.overlay_effect_phase,
                                 staff_action_pose: frame.spells.transients.iter().find_map(
                                     |effect| match effect {
-                                        solomon_sim::spells::model::PrimarySpellTransient::Staff(
-                                            solomon_sim::spells::staff::NativePlayerStaffTransient::Action(action),
+                                        solomon_sim::spells::model::PrimaryTransientRef::Staff(
+                                            solomon_sim::spells::staff::StaffTransientRef::Action(action),
                                         ) if action.common().owner_id == participant.id => {
                                             Some(solomon_sim::spells::staff::native_player_staff_action_pose(action))
                                         }
@@ -876,8 +876,8 @@ impl BattleViews {
                             self.player_effects.draw(renderer, camera, *index, spells, tint)
                         }
                         BattlePainter::Staff(index) => {
-                            let solomon_sim::spells::model::PrimarySpellTransient::Staff(staff) =
-                                &frame.spells.transients[*index]
+                            let solomon_sim::spells::model::PrimaryTransientRef::Staff(staff) =
+                                frame.spells.transients.get(*index).expect("staff painter refers to a live effect")
                             else {
                                 unreachable!("prepared staff painter")
                             };

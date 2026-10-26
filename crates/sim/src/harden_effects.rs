@@ -52,6 +52,7 @@ impl NativeHardenEffectOwner {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub enum NativeHardenEffect {
     Shard { owner: NativeHardenEffectOwner, body: NativeHardenShardBody },
     Burst { owner: NativeHardenEffectOwner, alpha: f64, position: Vec2 },

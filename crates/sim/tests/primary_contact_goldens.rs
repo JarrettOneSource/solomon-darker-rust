@@ -16,6 +16,7 @@ use solomon_sim::profile::primary::*;
 use solomon_sim::profile::weld::{NativeWeldCastKind, NativeWeldPrimaryVector};
 use solomon_sim::secondary::NativeSecondaryTargetEffectPatch;
 use solomon_sim::spells::contacts::*;
+use solomon_sim::spells::model::PrimaryTransientRef;
 use solomon_sim::spells::model::*;
 use solomon_sim::spells::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
@@ -404,53 +405,53 @@ fn projectile_row(spell: PrimaryProjectileRef<'_>) -> Value {
         "velocity": point(common.velocity),
         "detail": detail})
 }
-fn transient_row(effect: &PrimarySpellTransient) -> Value {
-    if matches!(effect, PrimarySpellTransient::Weld(_)) {
+fn transient_row(effect: PrimaryTransientRef<'_>) -> Value {
+    if matches!(effect, PrimaryTransientRef::Weld(_)) {
         return weld_rows::transient(effect);
     }
     let (kind, detail) = match effect {
-        PrimarySpellTransient::AirHurricane(effect) => (
+        PrimaryTransientRef::AirHurricane(effect) => (
             "air-hurricane",
             json!({"birthTick":effect.birth_tick,"charge":effect.charge,"contactCharge":effect.contact_charge,
             "damageMinimum":effect.damage_minimum,"damageMaximum":effect.damage_maximum,"enhancedEffects":effect.enhanced_effects,"phaseDegrees":effect.phase_degrees,"position":point(effect.position)}),
         ),
-        PrimarySpellTransient::Air(effect) => (
+        PrimaryTransientRef::Air(effect) => (
             "air",
             json!({"birthTick": effect.birth_tick, "variant": effect.variant,
             "enhancedEffects": effect.enhanced_effects,
             "targetId": effect.target_id, "origin": point(effect.origin), "direction": point(effect.direction),
             "endpoint": point(effect.endpoint), "midpoint": point(effect.midpoint)}),
         ),
-        PrimarySpellTransient::EarthBoulderBit(effect) => (
+        PrimaryTransientRef::EarthBoulderBit(effect) => (
             "earth-boulder-bit",
             json!({"birthTick": effect.birth_tick, "origin": point(effect.origin), "position": point(effect.position)}),
         ),
-        PrimarySpellTransient::EarthImpact(effect) => (
+        PrimaryTransientRef::EarthImpact(effect) => (
             "earth-impact",
             json!({"birthTick": effect.birth_tick, "charge": effect.charge, "enhancedEffects": effect.enhanced_effects,
                 "lifetimeTicks": effect.lifetime_ticks, "origin": point(effect.origin)}),
         ),
-        PrimarySpellTransient::EtherBlast(effect) => (
+        PrimaryTransientRef::EtherBlast(effect) => (
             "ether-blast",
             json!({"birthTick": effect.birth_tick, "charges": effect.charges, "origin": point(effect.origin)}),
         ),
-        PrimarySpellTransient::EtherImpact(effect) => (
+        PrimaryTransientRef::EtherImpact(effect) => (
             "ether-impact",
             json!({"birthTick": effect.birth_tick, "visualScale": effect.visual_scale, "origin": point(effect.origin)}),
         ),
-        PrimarySpellTransient::EtherPierceStreak(effect) => (
+        PrimaryTransientRef::EtherPierceStreak(effect) => (
             "ether-pierce-streak",
             json!({"headingDegrees": effect.heading_degrees, "visualScale": effect.visual_scale, "origin": point(effect.origin)}),
         ),
-        PrimarySpellTransient::FireImpact(effect) => {
+        PrimaryTransientRef::FireImpact(effect) => {
             ("fire-impact", json!({"origin": point(effect.origin)}))
         }
-        PrimarySpellTransient::FireExplosion(effect) => (
+        PrimaryTransientRef::FireExplosion(effect) => (
             "fire-explosion",
             json!({"damage": effect.damage, "burnDamage": effect.burn_damage,
             "footprintDimension": effect.footprint_dimension, "visualScale": effect.visual_scale, "origin": point(effect.origin)}),
         ),
-        PrimarySpellTransient::FireEmber(effect) => (
+        PrimaryTransientRef::FireEmber(effect) => (
             "fire-ember",
             json!({"damage": effect.damage, "burnDamage": effect.burn_damage, "position": point(effect.position)}),
         ),

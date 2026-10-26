@@ -637,7 +637,7 @@ fn maximum_explosion<W: NativeSecondaryWorld>(
 }
 
 fn step_fragment(source: &impl SecondaryActorRead, actor: &mut impl SecondaryActorWrite) {
-    let result = step_native_fire_ember(PrimarySpellFireEmber {
+    let mut ember = PrimarySpellFireEmber {
         common: PrimarySpellTransientBase {
             age_ticks: source.age_ticks,
             id: 1,
@@ -657,8 +657,8 @@ fn step_fragment(source: &impl SecondaryActorRead, actor: &mut impl SecondaryAct
         position: source.position,
         spent_ember: NativeSpentEmber::None,
         vertical_velocity: source.slow_factor,
-    });
-    let Some(ember) = result.ember else {
+    };
+    if !step_native_fire_ember(&mut ember).retained {
         **actor = (**source).clone();
         actor.alpha = 0.0;
         return;

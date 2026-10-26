@@ -7,6 +7,7 @@ use solomon_sim::profile::primary::{NativePrimarySkillProfile, native_primary_sk
 use solomon_sim::profile::{NativeSkillBookState, WizardDiscipline, WizardElement};
 use solomon_sim::spells::air_water::*;
 use solomon_sim::spells::casting::NativePlayerWeaponKind;
+use solomon_sim::spells::model::PrimaryTransientRef;
 use solomon_sim::spells::model::*;
 use solomon_sim::spells::{PrimarySpellCastAuthority, PrimarySpellInput, PrimarySpellWorldContext};
 use solomon_sim::{NativeRng, Vec2};
@@ -16,10 +17,10 @@ mod website_rows;
 fn point(value: Vec2) -> [f64; 2] {
     [value.x, value.y]
 }
-fn actor_row(actor: &PrimarySpellTransient) -> Value {
+fn actor_row(actor: PrimaryTransientRef<'_>) -> Value {
     let common = actor.common();
     let (kind, birth, fields) = match actor {
-        PrimarySpellTransient::AirHurricane(actor) => (
+        PrimaryTransientRef::AirHurricane(actor) => (
             "air-hurricane",
             Some(actor.birth_tick),
             json!({
@@ -28,7 +29,7 @@ fn actor_row(actor: &PrimarySpellTransient) -> Value {
                 "position":point(actor.position),"lanes":actor.lanes.map(|lane|[lane.angle_degrees,lane.angular_velocity_degrees,lane.radius,lane.vertical_offset]),
             }),
         ),
-        PrimarySpellTransient::WaterAura(actor) => (
+        PrimaryTransientRef::WaterAura(actor) => (
             "water-aura",
             Some(actor.birth_tick),
             json!({
@@ -36,7 +37,7 @@ fn actor_row(actor: &PrimarySpellTransient) -> Value {
                 "rotationStepDegrees":actor.rotation_step_degrees,"origin":point(actor.origin),
             }),
         ),
-        PrimarySpellTransient::WaterHail(actor) => (
+        PrimaryTransientRef::WaterHail(actor) => (
             "water-hail",
             Some(actor.birth_tick),
             json!({
@@ -46,9 +47,7 @@ fn actor_row(actor: &PrimarySpellTransient) -> Value {
                 "verticalVelocity":actor.vertical_velocity,"position":point(actor.position),"horizontalVelocity":point(actor.horizontal_velocity),
             }),
         ),
-        PrimarySpellTransient::Water(actor) => {
-            ("water", None, json!({"origin":point(actor.origin)}))
-        }
+        PrimaryTransientRef::Water(actor) => ("water", None, json!({"origin":point(actor.origin)})),
         _ => panic!("unexpected actor in Air/Water source journey"),
     };
     json!({"age":common.age_ticks,"birth":birth,"id":common.id,"kind":kind,"owner":common.owner_id,"world":common.world_key,"light":null,
@@ -74,18 +73,18 @@ fn hurricane_plan(actor: &PrimarySpellAirHurricane) -> Value {
             .collect::<Vec<_>>()
     )
 }
-fn visual_row(actor: &PrimarySpellTransient) -> Value {
+fn visual_row(actor: PrimaryTransientRef<'_>) -> Value {
     match actor {
-        PrimarySpellTransient::AirHurricane(actor) => {
+        PrimaryTransientRef::AirHurricane(actor) => {
             let mut reduced = actor.clone();
             reduced.enhanced_effects = false;
             json!({"full":hurricane_plan(actor),"reduced":hurricane_plan(&reduced)})
         }
-        PrimarySpellTransient::WaterAura(actor) => {
+        PrimaryTransientRef::WaterAura(actor) => {
             let draw = native_water_aura_visual_plan(actor);
             json!({"alpha":draw.alpha,"rotationRadians":draw.rotation_radians,"scale":draw.scale,"tint":draw.tint})
         }
-        PrimarySpellTransient::WaterHail(actor) => {
+        PrimaryTransientRef::WaterHail(actor) => {
             let draw = native_hail_visual_plan(actor);
             json!({"alpha":draw.alpha,"offsetY":draw.offset_y,"rotationRadians":draw.rotation_radians,"scale":draw.scale})
         }

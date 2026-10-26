@@ -108,7 +108,7 @@ impl NativeWeldVisualPlan {
 #[derive(Clone, Copy, Debug)]
 pub enum NativeWeldPresentationState<'a> {
     Projectile(ProjectileRef<'a, WeldProjectileProgram>),
-    World(&'a NativeWeldWorldActor),
+    World(WeldWorldRef<'a>),
 }
 
 #[must_use]
@@ -139,8 +139,8 @@ pub fn native_weld_visual_plan_at_age(
         NativeWeldPresentationState::World(actor) => actor,
     };
     match actor {
-        NativeWeldWorldActor::Channel(actor) => channel_plan(actor, age),
-        NativeWeldWorldActor::BlizzardGlow(actor) => {
+        WeldWorldRef::Channel(actor) => channel_plan(actor, age),
+        WeldWorldRef::BlizzardGlow(actor) => {
             let mut plan = NativeWeldVisualPlan::at(actor.common.origin);
             plan.sprites =
                 lightning_core(actor.common.owner.id, frame, actor.scale, 1.0, frame as f64 * DEG);
@@ -149,7 +149,7 @@ pub fn native_weld_visual_plan_at_age(
             }
             plan
         }
-        NativeWeldWorldActor::BlizzardChainFrost(actor) => {
+        WeldWorldRef::BlizzardChainFrost(actor) => {
             let water = water_frost_jet_chaining_plan(
                 actor.common.owner.id,
                 actor.common.owner.age_ticks,
@@ -182,7 +182,7 @@ pub fn native_weld_visual_plan_at_age(
             }
             plan
         }
-        NativeWeldWorldActor::FlameLashFade(actor) => {
+        WeldWorldRef::FlameLashFade(actor) => {
             let mut plan = NativeWeldVisualPlan::at(actor.position);
             if !matches!(actor.flame_visual, NativeFlameFadeVisual::NativeBirth(_))
                 || actor.alpha <= 0.0
@@ -207,7 +207,7 @@ pub fn native_weld_visual_plan_at_age(
             );
             plan
         }
-        NativeWeldWorldActor::GroundSparkFade(actor) => {
+        WeldWorldRef::GroundSparkFade(actor) => {
             let seed = actor.seed;
             let mut plan = NativeWeldVisualPlan::at(seed.position);
             plan.sprites.push(
@@ -220,7 +220,7 @@ pub fn native_weld_visual_plan_at_age(
             );
             plan
         }
-        NativeWeldWorldActor::FrostFade(actor) => {
+        WeldWorldRef::FrostFade(actor) => {
             let mut plan = NativeWeldVisualPlan::at(actor.common.origin);
             let alpha =
                 (1.0 - age * if actor.common.build_id == 1004 { 0.4 } else { 0.05 }).max(0.0);
@@ -228,8 +228,8 @@ pub fn native_weld_visual_plan_at_age(
                 element_vfx_sprites(WizardElement::Water, frame as f64, actor.scale, alpha);
             plan
         }
-        NativeWeldWorldActor::HailChild(actor) => hail_child_plan(actor),
-        NativeWeldWorldActor::HailRockFade(actor) => {
+        WeldWorldRef::HailChild(actor) => hail_child_plan(actor),
+        WeldWorldRef::HailRockFade(actor) => {
             let mut plan = NativeWeldVisualPlan::at(actor.position);
             plan.sprites.push(
                 NativeSpellSprite {
@@ -241,9 +241,9 @@ pub fn native_weld_visual_plan_at_age(
             );
             plan
         }
-        NativeWeldWorldActor::Impact(actor) => impact_plan(actor, frame, age),
-        NativeWeldWorldActor::Meteor(actor) => meteor_plan(actor, frame, puppet_hit),
-        NativeWeldWorldActor::MeteorFlash(actor) => {
+        WeldWorldRef::Impact(actor) => impact_plan(actor, frame, age),
+        WeldWorldRef::Meteor(actor) => meteor_plan(actor, frame, puppet_hit),
+        WeldWorldRef::MeteorFlash(actor) => {
             let mut plan = NativeWeldVisualPlan::at(actor.position);
             plan.sprites.push(
                 NativeSpellSprite {
@@ -256,7 +256,7 @@ pub fn native_weld_visual_plan_at_age(
             );
             plan
         }
-        NativeWeldWorldActor::MeteorMarker(actor) => {
+        WeldWorldRef::MeteorMarker(actor) => {
             let mut plan = NativeWeldVisualPlan::at(actor.common.origin);
             plan.sprites.push(
                 NativeSpellSprite {
@@ -270,17 +270,13 @@ pub fn native_weld_visual_plan_at_age(
             );
             plan
         }
-        NativeWeldWorldActor::BoulderDebris(actor) => debris_plan(actor),
-        NativeWeldWorldActor::Persistent(actor) => match actor {
-            NativeWeldPersistentActorState::EtherealBoulder(actor) => {
-                ethereal_boulder_plan(actor, frame, age)
-            }
-            NativeWeldPersistentActorState::Hailstones(actor) => hailstones_plan(actor, frame, age),
-            NativeWeldPersistentActorState::MeteorField(actor) => {
-                NativeWeldVisualPlan::at(actor.common.origin)
-            }
+        WeldWorldRef::BoulderDebris(actor) => debris_plan(actor),
+        WeldWorldRef::Persistent(actor) => match actor {
+            WeldPersistentRef::EtherealBoulder(actor) => ethereal_boulder_plan(actor, frame, age),
+            WeldPersistentRef::Hailstones(actor) => hailstones_plan(actor, frame, age),
+            WeldPersistentRef::MeteorField(actor) => NativeWeldVisualPlan::at(actor.common.origin),
         },
-        NativeWeldWorldActor::Steam(actor) => steam_plan(actor),
+        WeldWorldRef::Steam(actor) => steam_plan(actor),
     }
 }
 
@@ -811,19 +807,17 @@ fn boulder_auxiliary_sprite(
     }
 }
 
-fn hail_child_plan(state: &NativeWeldHailChildActorState) -> NativeWeldVisualPlan {
+fn hail_child_plan(state: WeldHailChildRef<'_>) -> NativeWeldVisualPlan {
     match state {
-        NativeWeldHailChildActorState::Knockback(actor) => {
-            NativeWeldVisualPlan::at(actor.common.origin)
-        }
-        NativeWeldHailChildActorState::Flash(actor) => {
+        WeldHailChildRef::Knockback(actor) => NativeWeldVisualPlan::at(actor.common.origin),
+        WeldHailChildRef::Flash(actor) => {
             let mut plan = NativeWeldVisualPlan::at(actor.position);
             plan.sprites.push(
                 NativeSpellSprite { alpha: actor.alpha, ..NativeSpellSprite::new(15, 1.0) }.into(),
             );
             plan
         }
-        NativeWeldHailChildActorState::Line(actor) => {
+        WeldHailChildRef::Line(actor) => {
             let mut plan = NativeWeldVisualPlan::at(actor.start);
             let midpoint = Vec2::new(
                 fround((actor.end.x - actor.start.x) * 0.5),
@@ -847,7 +841,7 @@ fn hail_child_plan(state: &NativeWeldHailChildActorState) -> NativeWeldVisualPla
             });
             plan
         }
-        NativeWeldHailChildActorState::TerrainParticle(actor) => {
+        WeldHailChildRef::TerrainParticle(actor) => {
             let mut plan = NativeWeldVisualPlan::at(actor.position);
             plan.sprites.push(
                 NativeSpellSprite {
@@ -861,7 +855,7 @@ fn hail_child_plan(state: &NativeWeldHailChildActorState) -> NativeWeldVisualPla
             );
             plan
         }
-        NativeWeldHailChildActorState::TerrainBouncer(actor) => {
+        WeldHailChildRef::TerrainBouncer(actor) => {
             let mut plan = NativeWeldVisualPlan::at(actor.position);
             if actor.enhanced_shadow && actor.height != 0.0 {
                 plan.sprites.push(

@@ -4,7 +4,11 @@
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
+use solomon_sim::spells::model::PrimaryTransientRef;
 use solomon_sim::spells::model::*;
+use solomon_sim::spells::weld::WeldHailChildRef;
+use solomon_sim::spells::weld::WeldPersistentRef;
+use solomon_sim::spells::weld::WeldWorldRef;
 use solomon_sim::spells::weld::*;
 
 pub fn point(value: Vec2) -> [f64; 2] {
@@ -30,25 +34,25 @@ pub fn projectile(value: PrimaryProjectileRef<'_>) -> Value {
     json!({"age":common.age_ticks,"build":spell.build_id,"id":common.id,"kind":"weld","light":registration(common.registration),"painters":[registration(common.registration)],
         "physics":{"damage":common.damage,"contactsRemaining":spell.contacts_remaining,"hitTargetIds":spell.hit_target_ids,"headingDegrees":spell.heading_degrees,"underpowered":spell.underpowered,"targetId":spell.target_id,"flightTicks":common.flight_ticks,"direction":point(common.direction),"position":point(common.position),"velocity":point(common.velocity),"phase":"flight"}})
 }
-pub fn transient(effect: &PrimarySpellTransient) -> Value {
+pub fn transient(effect: PrimaryTransientRef<'_>) -> Value {
     match effect {
-        PrimarySpellTransient::Weld(actor) => world(actor),
-        PrimarySpellTransient::FireParticle(actor) => owner(
+        PrimaryTransientRef::Weld(actor) => world(actor),
+        PrimaryTransientRef::FireParticle(actor) => owner(
             &actor.common,
             "fire",
             None,
             json!({"direction":point(actor.direction),"origin":point(actor.origin),"variant":actor.variant}),
         ),
-        PrimarySpellTransient::FireImpact(actor) => {
+        PrimaryTransientRef::FireImpact(actor) => {
             owner(&actor.common, "fire-impact", None, json!({"origin":point(actor.origin)}))
         }
-        PrimarySpellTransient::FireExplosion(actor) => owner(
+        PrimaryTransientRef::FireExplosion(actor) => owner(
             &actor.common,
             "fire-explosion",
             None,
             json!({"damage":actor.damage,"origin":point(actor.origin)}),
         ),
-        PrimarySpellTransient::FireEmber(actor) => owner(
+        PrimaryTransientRef::FireEmber(actor) => owner(
             &actor.common,
             "fire-ember",
             None,
@@ -57,93 +61,93 @@ pub fn transient(effect: &PrimarySpellTransient) -> Value {
         _ => panic!("Weld journey effect"),
     }
 }
-fn world(actor: &NativeWeldWorldActor) -> Value {
+fn world(actor: WeldWorldRef<'_>) -> Value {
     let common = actor.common();
     let (kind, mut physics) = match actor {
-        NativeWeldWorldActor::BlizzardChainFrost(_) => ("weld-blizzard-chain-frost", json!({})),
-        NativeWeldWorldActor::BlizzardGlow(actor) => (
+        WeldWorldRef::BlizzardChainFrost(_) => ("weld-blizzard-chain-frost", json!({})),
+        WeldWorldRef::BlizzardGlow(actor) => (
             "weld-blizzard-glow",
             json!({"rotationDegrees":actor.rotation_degrees,"scale":actor.scale,"variant":actor.variant}),
         ),
-        NativeWeldWorldActor::Channel(actor) => (
+        WeldWorldRef::Channel(actor) => (
             "weld-channel",
             json!({"endpoint":actor.endpoint.map(point),"midpoint":actor.midpoint.map(point),"targetId":actor.target_id,"underpowered":actor.underpowered,"variant":actor.variant}),
         ),
-        NativeWeldWorldActor::BoulderDebris(actor) => {
+        WeldWorldRef::BoulderDebris(actor) => {
             let debris = &actor.debris.common;
             (
                 "weld-boulder-debris",
                 json!({"position":point(actor.position),"debris":[debris.alpha,debris.height,point(debris.position),point(debris.velocity),debris.vertical_velocity]}),
             )
         }
-        NativeWeldWorldActor::FlameLashFade(actor) => (
+        WeldWorldRef::FlameLashFade(actor) => (
             "weld-flame-lash-fade",
             json!({"alpha":actor.alpha,"position":point(actor.position),"rotationDegrees":actor.rotation_degrees,"variant":match actor.variant {NativeWeldFlameLashFadeVariant::Chain=>"chain",NativeWeldFlameLashFadeVariant::Endpoint=>"endpoint",NativeWeldFlameLashFadeVariant::Source=>"source"}}),
         ),
-        NativeWeldWorldActor::FrostFade(actor) => ("weld-frost-fade", json!({"scale":actor.scale})),
-        NativeWeldWorldActor::GroundSparkFade(actor) => {
+        WeldWorldRef::FrostFade(actor) => ("weld-frost-fade", json!({"scale":actor.scale})),
+        WeldWorldRef::GroundSparkFade(actor) => {
             let seed = actor.seed;
             (
                 "weld-ground-spark-fade",
                 json!({"alpha":seed.alpha,"position":point(seed.position),"rotationDegrees":seed.rotation_degrees,"scale":seed.scale}),
             )
         }
-        NativeWeldWorldActor::HailRockFade(actor) => (
+        WeldWorldRef::HailRockFade(actor) => (
             "weld-hail-rock-fade",
             json!({"position":point(actor.position),"rotationDegrees":actor.rotation_degrees}),
         ),
-        NativeWeldWorldActor::HailChild(actor) => match actor {
-            NativeWeldHailChildActorState::Flash(actor) => {
+        WeldWorldRef::HailChild(actor) => match actor {
+            WeldHailChildRef::Flash(actor) => {
                 ("weld-hail-flash", json!({"alpha":actor.alpha,"position":point(actor.position)}))
             }
-            NativeWeldHailChildActorState::Knockback(actor) => (
+            WeldHailChildRef::Knockback(actor) => (
                 "weld-hail-knockback",
                 json!({"remainingTicks":actor.remaining_ticks,"targetId":actor.target_id,"delta":point(actor.delta)}),
             ),
-            NativeWeldHailChildActorState::Line(actor) => (
+            WeldHailChildRef::Line(actor) => (
                 "weld-hail-line",
                 json!({"alpha":actor.alpha,"start":point(actor.start),"end":point(actor.end)}),
             ),
-            NativeWeldHailChildActorState::TerrainBouncer(actor) => (
+            WeldHailChildRef::TerrainBouncer(actor) => (
                 "weld-hail-terrain-bouncer",
                 json!({"alpha":actor.alpha,"scale":actor.scale,"height":actor.height,"rotationDegrees":actor.rotation_degrees,"verticalVelocity":actor.vertical_velocity,"position":point(actor.position),"velocity":point(actor.velocity)}),
             ),
-            NativeWeldHailChildActorState::TerrainParticle(actor) => (
+            WeldHailChildRef::TerrainParticle(actor) => (
                 "weld-hail-terrain-particle",
                 json!({"alpha":actor.alpha,"scale":actor.scale,"rotationDegrees":actor.rotation_degrees,"position":point(actor.position),"velocity":point(actor.velocity)}),
             ),
         },
-        NativeWeldWorldActor::Impact(actor) => (
+        WeldWorldRef::Impact(actor) => (
             "weld-impact",
             json!({"alpha":actor.alpha,"position":point(actor.position),"boulderTerminalCharge":actor.boulder_terminal_charge}),
         ),
-        NativeWeldWorldActor::Meteor(actor) => (
+        WeldWorldRef::Meteor(actor) => (
             "weld-meteor",
             json!({"damage":actor.damage,"pulseSequence":actor.pulse_sequence,"impactDue":actor.impact_due,"fallHeight":actor.fall_height,"impactTicksRemaining":actor.impact_ticks_remaining,"underpowered":actor.underpowered,"phase":if actor.phase==NativeWeldMeteorPhase::Fall {"fall"}else{"impact"},"position":point(actor.position)}),
         ),
-        NativeWeldWorldActor::MeteorFlash(actor) => (
+        WeldWorldRef::MeteorFlash(actor) => (
             "weld-meteor-flash",
             json!({"alpha":actor.alpha,"position":point(actor.position),"scale":actor.scale}),
         ),
-        NativeWeldWorldActor::MeteorMarker(actor) => (
+        WeldWorldRef::MeteorMarker(actor) => (
             "weld-meteor-marker",
             json!({"alpha":actor.alpha,"rotationDegrees":actor.rotation_degrees,"scale":actor.scale}),
         ),
-        NativeWeldWorldActor::Persistent(actor) => {
+        WeldWorldRef::Persistent(actor) => {
             let physics = match actor {
-                NativeWeldPersistentActorState::EtherealBoulder(actor) => {
+                WeldPersistentRef::EtherealBoulder(actor) => {
                     json!({"scale":actor.scale,"damage":actor.damage,"remainingDamage":actor.remaining_damage,"hitTargetIds":actor.hit_target_ids,"pulseSequence":actor.pulse_sequence,"lifetimeTicksRemaining":actor.lifetime_ticks_remaining,"flightTicks":actor.flight_ticks,"quantity":actor.quantity,"assemblyScale":actor.assembly_scale,"shellScale":actor.shell_scale,"phase":if actor.phase==PrimarySpellProjectilePhase::Held {"held"}else{"flight"},"velocity":point(actor.velocity)})
                 }
-                NativeWeldPersistentActorState::Hailstones(actor) => {
+                WeldPersistentRef::Hailstones(actor) => {
                     json!({"scale":actor.scale,"damage":actor.damage,"pulseSequence":actor.pulse_sequence,"collisionRadius":actor.collision_radius,"releaseAgeTicks":actor.release_age_ticks,"phase":if actor.phase==PrimarySpellProjectilePhase::Held {"held"}else{"flight"},"rocks":actor.rocks.iter().map(|rock|json!([rock.rock_id,rock.damage_remaining,[rock.local_position.x,rock.local_position.y,rock.local_position.z],rock.release_offset.map(point),rock.phase,rock.decay])).collect::<Vec<_>>()})
                 }
-                NativeWeldPersistentActorState::MeteorField(actor) => {
+                WeldPersistentRef::MeteorField(actor) => {
                     json!({"phase":"held","pulseSequence":actor.pulse_sequence})
                 }
             };
             ("weld-persistent", physics)
         }
-        NativeWeldWorldActor::Steam(actor) => (
+        WeldWorldRef::Steam(actor) => (
             "weld-steam",
             json!({"scale":actor.scale,"life":actor.life,"phase":actor.phase,"contactDue":actor.contact_due,"contactDamage":actor.contact_damage,"contactEnabled":actor.contact_enabled,"position":point(actor.position),"rotationDegrees":actor.rotation_degrees,"velocity":point(actor.velocity),"variant":if actor.variant==NativeWeldSteamVariant::Normal {"normal"}else{"over"}}),
         ),

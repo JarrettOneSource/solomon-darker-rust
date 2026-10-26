@@ -1,6 +1,8 @@
 //! Shared elemental and welded primaries, preserving the Website actor and player order.
 //! Movement commits before this step; damage/contact acceptance belongs to the world.
 
+use crate::spells::transient_storage::{PrimaryTransientRef, WeldWorldRef};
+
 use super::casting::*;
 use super::earth::*;
 use super::effects::*;
@@ -225,7 +227,7 @@ impl SpellState {
             .transients
             .iter()
             .filter_map(|effect| {
-                if let PrimarySpellTransient::EarthCalledRock(rock) = effect {
+                if let PrimaryTransientRef::EarthCalledRock(rock) = effect {
                     Some(rock.common.id)
                 } else {
                     None
@@ -303,7 +305,7 @@ impl SpellState {
         wizard.primary_cast.aim_direction = aim;
         if previous.channel_active {
             self.transients.retain(|effect| {
-                !matches!(effect, PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor))
+                !matches!(effect, PrimaryTransientRef::Weld(WeldWorldRef::Persistent(actor))
                     if actor.common().owner.owner_id == context.owner_id)
             });
         }
@@ -387,7 +389,7 @@ impl SpellState {
             if previous.channel_active {
                 self.transients.retain(|effect| {
                     !matches!(effect,
-                    PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor))
+                    PrimaryTransientRef::Weld(WeldWorldRef::Persistent(actor))
                     if actor.common().owner.owner_id==context.owner_id)
                 });
             }
@@ -1095,14 +1097,12 @@ impl SpellState {
     }
 
     fn advance_called_rocks(&mut self, existing_ids: &[u64]) {
-        for effect in std::mem::take(&mut self.transients) {
-            let PrimarySpellTransient::EarthCalledRock(rock) = effect else {
-                self.transients.push(effect);
-                continue;
+        self.transients.retain_mut(|effect| {
+            let PrimaryTransientMut::EarthCalledRock(rock) = effect else {
+                return true;
             };
             if !existing_ids.contains(&rock.common.id) {
-                self.transients.push(PrimarySpellTransient::EarthCalledRock(rock));
-                continue;
+                return true;
             }
             let parent = self.projectiles.iter().find_map(|spell| {
                 if let PrimaryProjectileRef::Earth(boulder) = spell
@@ -1113,10 +1113,8 @@ impl SpellState {
                     None
                 }
             });
-            if let Some(rock) = advance_earth_called_rock(rock, parent) {
-                self.transients.push(PrimarySpellTransient::EarthCalledRock(rock));
-            }
-        }
+            advance_earth_called_rock(rock, parent)
+        });
     }
 }
 

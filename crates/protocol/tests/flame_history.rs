@@ -196,7 +196,7 @@ fn current_source_flame_connection_history_and_retained_replay_match() {
                 actor.as_ref().map(|actor| actor_row(actor, &birth)).unwrap_or(Value::Null);
             website_rows::compare(&actual, &row["actor"], "Flame display-only actor");
             if let Some(actor) = actor {
-                assert_eq!(flame_presentation_birth(&actor).unwrap(), Some(birth.clone()));
+                assert_eq!(flame_presentation_birth(actor.view()).unwrap(), Some(birth.clone()));
             }
         }
     }

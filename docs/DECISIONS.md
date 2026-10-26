@@ -21,7 +21,10 @@ handle index preserves survivor order, which determines contact selection, RNG
 draws, and painter registration. Births enter at the owning system's boundary:
 secondary effects wait for the next actor pass, while terminal enemy children
 can advance later in the same pass. Boss spell children enter before their retained
-parent and receive their first update on the next pass.
+parent and receive their first update on the next pass. Primary transient children
+follow their retained parent, or occupy its position when it retires, and also
+wait until the next pass. These rules keep Meteor debris, spent Embers and boss
+spells from receiving an extra update on their birth tick.
 
 Tick functions run in their declared sequence. Damage accepted by one phase can
 retire a target or create an effect before the next phase runs, and several phases

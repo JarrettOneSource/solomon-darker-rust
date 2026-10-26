@@ -5,7 +5,7 @@ use crate::audio::{AudioCue, AudioEvent, AudioOptions};
 use crate::profile::WizardElement;
 use crate::secondary::NativeSecondaryActorKind;
 use crate::spells::model::{
-    PrimaryProjectileRef, PrimarySpellProjectilePhase, PrimarySpellTransient,
+    PrimaryProjectileRef, PrimarySpellProjectilePhase, PrimaryTransientRef,
 };
 use crate::spells::weld::native_weld_audio_plan;
 
@@ -194,8 +194,8 @@ impl CombatAudioCursor {
                 });
             }
         }
-        for actor in &frame.primary.transients {
-            if let PrimarySpellTransient::AirHurricane(hurricane) = actor
+        for actor in frame.primary.transients.iter() {
+            if let PrimaryTransientRef::AirHurricane(hurricane) = actor
                 && hurricane.common.world_key == listener.world_key
                 && hurricane.contact_charge > 0.0
             {

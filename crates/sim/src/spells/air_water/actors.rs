@@ -87,14 +87,14 @@ pub fn create_native_water_hail_actor(
 }
 
 pub fn step_native_water_hail_actor(
-    mut actor: PrimarySpellWaterHail,
+    actor: &mut PrimarySpellWaterHail,
     rng: &mut NativeRng,
-) -> Option<PrimarySpellWaterHail> {
+) -> bool {
     let life = fround(actor.life - 0.015_f32 as f64);
     if actor.height == 0.0 {
         actor.life = life;
         actor.common.age_ticks += 1;
-        return (life > 0.0).then_some(actor);
+        return life > 0.0;
     }
     let bounce_progress = fround(actor.bounce_progress + 0.02_f32 as f64).min(1.0);
     let acceleration = actor.bounce_progress * 0.4_f32 as f64;
@@ -128,7 +128,7 @@ pub fn step_native_water_hail_actor(
         height = vertical;
     }
     if life <= 0.0 {
-        return None;
+        return false;
     }
     actor.common.age_ticks += 1;
     actor.bounce_progress = bounce_progress;
@@ -140,5 +140,5 @@ pub fn step_native_water_hail_actor(
     );
     actor.rotation_degrees = fround(actor.rotation_degrees + actor.rotation_step_degrees);
     actor.vertical_velocity = vertical;
-    Some(actor)
+    true
 }

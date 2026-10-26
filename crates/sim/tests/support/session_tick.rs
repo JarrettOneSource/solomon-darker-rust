@@ -11,9 +11,8 @@ use solomon_sim::harden_effects::NativeHardenEffect;
 use solomon_sim::loot::NativeLootDropKind;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::session::GameSession;
-use solomon_sim::spells::model::{
-    PrimaryProjectileRef, PrimarySpellProjectilePhase, PrimarySpellTransient,
-};
+use solomon_sim::spells::model::PrimaryTransientRef;
+use solomon_sim::spells::model::{PrimaryProjectileRef, PrimarySpellProjectilePhase};
 
 fn point(position: Vec2) -> Value {
     json!([position.x, position.y])
@@ -29,29 +28,29 @@ fn registration(registration: PainterRegistration) -> Value {
     ])
 }
 
-fn transient_kind(effect: &PrimarySpellTransient) -> &'static str {
+fn transient_kind(effect: PrimaryTransientRef<'_>) -> &'static str {
     match effect {
-        PrimarySpellTransient::Harden(NativeHardenEffect::Shard { .. }) => "harden-shard",
-        PrimarySpellTransient::Harden(NativeHardenEffect::Burst { .. }) => "harden-burst",
-        PrimarySpellTransient::Staff(actor) => actor.kind(),
-        PrimarySpellTransient::Weld(_) => unreachable!("these journeys cast the five elements"),
-        PrimarySpellTransient::AirHurricane(_) => "air-hurricane",
-        PrimarySpellTransient::WaterAura(_) => "water-aura",
-        PrimarySpellTransient::WaterHail(_) => "water-hail",
-        PrimarySpellTransient::Air(_) => "air",
-        PrimarySpellTransient::Water(_) => "water",
-        PrimarySpellTransient::EarthBoulderBit(_) => "earth-boulder-bit",
-        PrimarySpellTransient::EarthImpact(_) => "earth-impact",
-        PrimarySpellTransient::EarthCalledRock(_) => "earth-called-rock",
-        PrimarySpellTransient::EtherImpact(_) => "ether-impact",
-        PrimarySpellTransient::EtherPierceStreak(_) => "ether-pierce-streak",
-        PrimarySpellTransient::EtherBlast(_) => "ether-blast",
-        PrimarySpellTransient::FireParticle(_) => "fire",
-        PrimarySpellTransient::FireImpact(_) => "fire-impact",
-        PrimarySpellTransient::FireEmber(_) => "fire-ember",
-        PrimarySpellTransient::FireExplosion(_) => "fire-explosion",
-        PrimarySpellTransient::FireGoodImp(_) => "fire-good-imp",
-        PrimarySpellTransient::FirePatch(_) => "fire-patch",
+        PrimaryTransientRef::Harden(NativeHardenEffect::Shard { .. }) => "harden-shard",
+        PrimaryTransientRef::Harden(NativeHardenEffect::Burst { .. }) => "harden-burst",
+        PrimaryTransientRef::Staff(actor) => actor.kind(),
+        PrimaryTransientRef::Weld(_) => unreachable!("these journeys cast the five elements"),
+        PrimaryTransientRef::AirHurricane(_) => "air-hurricane",
+        PrimaryTransientRef::WaterAura(_) => "water-aura",
+        PrimaryTransientRef::WaterHail(_) => "water-hail",
+        PrimaryTransientRef::Air(_) => "air",
+        PrimaryTransientRef::Water(_) => "water",
+        PrimaryTransientRef::EarthBoulderBit(_) => "earth-boulder-bit",
+        PrimaryTransientRef::EarthImpact(_) => "earth-impact",
+        PrimaryTransientRef::EarthCalledRock(_) => "earth-called-rock",
+        PrimaryTransientRef::EtherImpact(_) => "ether-impact",
+        PrimaryTransientRef::EtherPierceStreak(_) => "ether-pierce-streak",
+        PrimaryTransientRef::EtherBlast(_) => "ether-blast",
+        PrimaryTransientRef::FireParticle(_) => "fire",
+        PrimaryTransientRef::FireImpact(_) => "fire-impact",
+        PrimaryTransientRef::FireEmber(_) => "fire-ember",
+        PrimaryTransientRef::FireExplosion(_) => "fire-explosion",
+        PrimaryTransientRef::FireGoodImp(_) => "fire-good-imp",
+        PrimaryTransientRef::FirePatch(_) => "fire-patch",
     }
 }
 

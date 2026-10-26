@@ -4,7 +4,9 @@
 use serde::{Deserialize, Serialize};
 use solomon_sim::Vec2;
 use solomon_sim::painter::PainterRegistration;
+use solomon_sim::spells::model::PrimaryTransientRef;
 use solomon_sim::spells::model::{PrimarySpellTransient, SpellState};
+use solomon_sim::spells::weld::WeldWorldRef;
 use solomon_sim::spells::weld::{
     NativeFlameChannelVisual, NativeFlameFadeVisual, NativeWeldActorBirth,
     NativeWeldChannelActorState, NativeWeldFlameLashFadeState, NativeWeldFlameLashFadeVariant,
@@ -176,11 +178,11 @@ impl FlamePresentationFrame {
 /// Complete actors are the fallback after admission/reset; missing legacy
 /// samples are deliberately excluded rather than reconstructed from new RNG.
 pub fn flame_presentation_birth(
-    actor: &PrimarySpellTransient,
+    actor: PrimaryTransientRef<'_>,
 ) -> Result<Option<FlamePresentationBirth>, String> {
-    let PrimarySpellTransient::Weld(actor) = actor else { return Ok(None) };
+    let PrimaryTransientRef::Weld(actor) = actor else { return Ok(None) };
     let recipe = match actor {
-        NativeWeldWorldActor::Channel(channel) if channel.common.build_id == 1003 => {
+        WeldWorldRef::Channel(channel) if channel.common.build_id == 1003 => {
             let Some(NativeFlameChannelVisual::NativeBirth(_)) = &channel.flame_visual else {
                 return Ok(None);
             };
@@ -191,7 +193,7 @@ pub fn flame_presentation_birth(
                 painter_registration: root(actor)?,
             }
         }
-        NativeWeldWorldActor::FlameLashFade(fade) => {
+        WeldWorldRef::FlameLashFade(fade) => {
             let NativeFlameFadeVisual::NativeBirth(_) = fade.flame_visual else { return Ok(None) };
             FlamePresentationRecipe::Fade {
                 birth: fade.flame_visual,
@@ -234,7 +236,7 @@ pub fn capture_flame_presentation_births(
     spells: &SpellState,
 ) -> Result<Vec<FlamePresentationBirth>, String> {
     let mut births = Vec::new();
-    for actor in &spells.transients {
+    for actor in spells.transients.iter() {
         if let Some(birth) = flame_presentation_birth(actor)? {
             births.push(birth);
         }
@@ -326,7 +328,7 @@ pub fn materialize_flame_presentation(
     Some(PrimarySpellTransient::Weld(actor))
 }
 
-fn root(actor: &NativeWeldWorldActor) -> Result<PainterRegistration, String> {
+fn root(actor: WeldWorldRef<'_>) -> Result<PainterRegistration, String> {
     actor
         .common()
         .owner

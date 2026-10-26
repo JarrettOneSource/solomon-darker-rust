@@ -14,10 +14,10 @@ use solomon_sim::screen_feedback::{
 use solomon_sim::screen_flash::NativeScreenFlashState;
 use solomon_sim::secondary::presentation::repeated_float_multiply;
 use solomon_sim::secondary::{NativeSecondaryEventState, NativeSecondarySimulationState};
-use solomon_sim::spells::model::{PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState};
+use solomon_sim::spells::model::{PrimarySpellProjectilePhase, PrimaryTransientRef, SpellState};
 use solomon_sim::spells::weld::{
     NATIVE_FLAME_CAMERA_MAX_PRESENTATION_TICKS, NativeFlameCameraProposal, NativeWeldMeteorPhase,
-    NativeWeldPersistentActorState, NativeWeldWorldActor,
+    WeldPersistentRef, WeldWorldRef,
 };
 
 use crate::presentation::PresentationClocks;
@@ -262,9 +262,9 @@ impl FeedbackLane {
         presentation_tick: f64,
         clocks: Option<&PresentationClocks>,
     ) {
-        for effect in &spells.transients {
+        for effect in spells.transients.iter() {
             match effect {
-                PrimarySpellTransient::EtherBlast(effect) => {
+                PrimaryTransientRef::EtherBlast(effect) => {
                     if effect.common.id <= self.last_primary_feedback_id {
                         continue;
                     }
@@ -278,7 +278,7 @@ impl FeedbackLane {
                         effect.birth_tick,
                     );
                 }
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::Meteor(effect)) => {
+                PrimaryTransientRef::Weld(WeldWorldRef::Meteor(effect)) => {
                     if effect.phase != NativeWeldMeteorPhase::Impact {
                         continue;
                     }
@@ -290,8 +290,8 @@ impl FeedbackLane {
                         displacement,
                     );
                 }
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
-                    NativeWeldPersistentActorState::Hailstones(effect),
+                PrimaryTransientRef::Weld(WeldWorldRef::Persistent(
+                    WeldPersistentRef::Hailstones(effect),
                 )) => {
                     if effect.phase != PrimarySpellProjectilePhase::Flight {
                         continue;

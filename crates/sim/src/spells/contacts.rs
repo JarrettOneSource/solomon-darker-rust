@@ -3,6 +3,8 @@
 //! Projectile motion has committed before this step. EnemyWorld owns acceptance
 //! and semantic events; secondary status ownership receives the returned patches.
 
+use crate::spells::transient_storage::PrimaryTransientRef;
+
 use super::air_water::{draw_native_disintegrate_percentile, draw_native_spell_damage};
 use super::earth::{NativeEarthBoulderContactInput, consume_native_earth_boulder_contact};
 use super::earth_debris::create_native_weld_boulder_contact_debris_program;
@@ -246,18 +248,18 @@ fn resolve_with_order<'context, 'world>(
     let next_id = source.next_id;
     let pending_fire_contacts = context.fire_actor_contacts.to_vec();
     let mut active_knockback_target_ids = BTreeSet::new();
-    for effect in &source.transients {
+    for effect in source.transients.iter() {
         if effect.common().world_key != context.world_key {
             continue;
         }
         match effect {
-            PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
-                NativeWeldHailChildActorState::Knockback(knockback),
-            )) => {
+            PrimaryTransientRef::Weld(WeldWorldRef::HailChild(WeldHailChildRef::Knockback(
+                knockback,
+            ))) => {
                 active_knockback_target_ids.insert(knockback.target_id.clone());
             }
-            PrimarySpellTransient::Staff(
-                crate::spells::staff::NativePlayerStaffTransient::ContactKnockback(knockback),
+            PrimaryTransientRef::Staff(
+                crate::spells::staff::StaffTransientRef::ContactKnockback(knockback),
             ) => {
                 active_knockback_target_ids.insert(knockback.target_id.clone());
             }
@@ -315,19 +317,23 @@ fn resolve_with_order<'context, 'world>(
         true
     });
     spells.projectiles = projectiles;
-    for effect in work
-        .source
-        .transients
-        .into_iter()
-        .chain(work.impact_transients)
-        .chain(work.owned_transients)
-    {
+    let mut transients = work.source.transients;
+    transients.retain_mut(|effect| {
+        let id = effect.common().id;
+        if work.consumed_transients.contains(&id) {
+            return false;
+        }
+        if let Some(updated) = work.updated_transients.remove(&id) {
+            effect.replace(updated);
+        }
+        true
+    });
+    for effect in work.impact_transients.into_iter().chain(work.owned_transients) {
         if !work.consumed_transients.contains(&effect.common().id) {
-            spells
-                .transients
-                .push(work.updated_transients.remove(&effect.common().id).unwrap_or(effect));
+            transients.push(work.updated_transients.remove(&effect.common().id).unwrap_or(effect));
         }
     }
+    spells.transients = transients;
     spells.next_id = work.next_id;
     work.result
 }
@@ -486,7 +492,7 @@ impl ContactWork<'_, '_> {
                     },
                     self.rng,
                 ));
-                enroll_native_weld_actor_painter(&mut actor, self.order);
+                enroll_native_weld_actor_painter(actor.common_mut(), self.order);
                 PrimarySpellTransient::Weld(actor)
             }
             PrimarySpellProjectile::Earth(spell) => {
@@ -564,7 +570,7 @@ impl ContactWork<'_, '_> {
             .transients
             .iter()
             .filter_map(|effect| {
-                if let PrimarySpellTransient::EtherBlast(effect) = effect {
+                if let PrimaryTransientRef::EtherBlast(effect) = effect {
                     Some(effect.clone())
                 } else {
                     None
@@ -810,7 +816,7 @@ impl ContactWork<'_, '_> {
             .transients
             .iter()
             .filter_map(|effect| {
-                if let PrimarySpellTransient::FireEmber(ember) = effect {
+                if let PrimaryTransientRef::FireEmber(ember) = effect {
                     Some(ember.clone())
                 } else {
                     None
@@ -888,7 +894,7 @@ impl ContactWork<'_, '_> {
             panic!("Air channel requires an Air profile");
         };
         let mut target_id = self.source.transients.iter().find_map(|effect| {
-            if let PrimarySpellTransient::Air(effect) = effect
+            if let PrimaryTransientRef::Air(effect) = effect
                 && effect.common.id == emission.id
                 && effect.common.owner_id == emission.owner_id
                 && effect.common.world_key == emission.world_key

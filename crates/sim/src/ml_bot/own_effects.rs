@@ -4,11 +4,9 @@ use crate::Vec2;
 use crate::float::hypot;
 use crate::secondary::{NativeSecondaryActorKind as SecondaryKind, NativeSecondarySimulationState};
 use crate::spells::model::{
-    PrimaryProjectileRef, PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState,
+    PrimaryProjectileRef, PrimarySpellProjectilePhase, PrimaryTransientRef, SpellState,
 };
-use crate::spells::weld::{
-    NativeWeldHailChildActorState, NativeWeldPersistentActorState, NativeWeldWorldActor,
-};
+use crate::spells::weld::{WeldHailChildRef, WeldPersistentRef, WeldWorldRef};
 
 use super::numbers::{normalized, signed, unsigned, write};
 use super::spec::scales;
@@ -54,7 +52,7 @@ pub fn observe_ml_bot_policy_own_effects(
             velocity: common.velocity,
         });
     }
-    for transient in &primary.transients {
+    for transient in primary.transients.iter() {
         let common = transient.common();
         if common.owner_id != player_id || common.world_key != world_key {
             continue;
@@ -180,7 +178,7 @@ struct EffectRow {
     velocity: Vec2,
 }
 
-fn primary_transient_row(transient: &PrimarySpellTransient) -> Option<EffectRow> {
+fn primary_transient_row(transient: PrimaryTransientRef<'_>) -> Option<EffectRow> {
     let common = transient.common();
     let mut row = EffectRow {
         damage: 0.0,
@@ -196,70 +194,68 @@ fn primary_transient_row(transient: &PrimarySpellTransient) -> Option<EffectRow>
         velocity: Vec2::ZERO,
     };
     match transient {
-        PrimarySpellTransient::Air(state) => {
+        PrimaryTransientRef::Air(state) => {
             row.family = Family::Channel;
             row.position = state.midpoint;
             row.target = state.target_id.is_some();
         }
-        PrimarySpellTransient::Water(state) => {
+        PrimaryTransientRef::Water(state) => {
             row.family = Family::Channel;
             row.position = state.origin;
         }
-        PrimarySpellTransient::AirHurricane(state) => {
+        PrimaryTransientRef::AirHurricane(state) => {
             row.damage = state.damage_maximum;
             row.position = state.position;
         }
-        PrimarySpellTransient::WaterHail(state) => {
+        PrimaryTransientRef::WaterHail(state) => {
             row.position = state.position;
             row.velocity = state.horizontal_velocity;
         }
-        PrimarySpellTransient::EtherBlast(state) => row.position = state.origin,
-        PrimarySpellTransient::FireEmber(state) => {
+        PrimaryTransientRef::EtherBlast(state) => row.position = state.origin,
+        PrimaryTransientRef::FireEmber(state) => {
             row.damage = state.damage;
             row.position = state.position;
             row.velocity = state.horizontal_velocity;
         }
-        PrimarySpellTransient::FireExplosion(state) => {
+        PrimaryTransientRef::FireExplosion(state) => {
             row.damage = state.damage;
             row.position = state.origin;
         }
-        PrimarySpellTransient::FirePatch(state) => {
+        PrimaryTransientRef::FirePatch(state) => {
             row.damage = state.damage;
             row.position = state.position;
             row.velocity = state.velocity;
         }
-        PrimarySpellTransient::Weld(state) => {
+        PrimaryTransientRef::Weld(state) => {
             row.position = state.common().origin;
             match state {
-                NativeWeldWorldActor::Channel(state) => {
+                WeldWorldRef::Channel(state) => {
                     row.family = Family::Channel;
                     row.position = state.midpoint.unwrap_or(state.common.origin);
                     row.target = state.target_id.is_some();
                 }
-                NativeWeldWorldActor::Persistent(state) => match state {
-                    NativeWeldPersistentActorState::EtherealBoulder(state) => {
+                WeldWorldRef::Persistent(state) => match state {
+                    WeldPersistentRef::EtherealBoulder(state) => {
                         row.damage = state.damage;
                         row.held = state.phase == PrimarySpellProjectilePhase::Held;
                         row.velocity = state.velocity;
                     }
-                    NativeWeldPersistentActorState::Hailstones(state) => {
+                    WeldPersistentRef::Hailstones(state) => {
                         row.damage = state.damage;
                         row.radius = state.collision_radius;
                         row.held = state.phase == PrimarySpellProjectilePhase::Held;
                     }
-                    NativeWeldPersistentActorState::MeteorField(_) => row.held = true,
+                    WeldPersistentRef::MeteorField(_) => row.held = true,
                 },
-                NativeWeldWorldActor::Meteor(state) => {
+                WeldWorldRef::Meteor(state) => {
                     row.damage = state.damage;
                     row.position = state.position;
                 }
-                NativeWeldWorldActor::Steam(state) => {
+                WeldWorldRef::Steam(state) => {
                     row.position = state.position;
                     row.velocity = state.velocity;
                 }
-                NativeWeldWorldActor::HailChild(NativeWeldHailChildActorState::Knockback(_)) => {
-                    row.target = true
-                }
+                WeldWorldRef::HailChild(WeldHailChildRef::Knockback(_)) => row.target = true,
                 _ => return None,
             }
         }

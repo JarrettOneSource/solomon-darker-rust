@@ -3,9 +3,10 @@ use serde_json::{Value, json};
 use solomon_protocol::flame_presentation::*;
 use solomon_sim::Vec2;
 use solomon_sim::spells::model::{
-    PrimarySpellFireParticle, PrimarySpellTransient, PrimarySpellTransientBase, SpellState,
+    PrimarySpellFireParticle, PrimarySpellTransient, PrimarySpellTransientBase,
+    PrimaryTransientRef, SpellState,
 };
-use solomon_sim::spells::weld::NativeWeldWorldActor;
+use solomon_sim::spells::weld::WeldWorldRef;
 
 #[path = "../../sim/tests/support/website_rows.rs"]
 mod website_rows;
@@ -25,8 +26,11 @@ fn state(births: &[FlamePresentationBirth], indices: &Value) -> SpellState {
         origin: Vec2::ZERO,
         variant: 0,
     });
-    let mut state =
-        SpellState { next_id: 100, projectiles: Default::default(), transients: vec![ordinary] };
+    let mut state = SpellState {
+        next_id: 100,
+        projectiles: Default::default(),
+        transients: [ordinary].into_iter().collect(),
+    };
     for index in indices.as_array().unwrap() {
         let birth = &births[index.as_u64().unwrap() as usize];
         state
@@ -41,13 +45,11 @@ fn rows(state: &SpellState) -> Value {
         .iter()
         .map(|actor| {
             let (kind, alpha) = match actor {
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::Channel(_)) => {
-                    ("weld-channel", None)
-                }
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::FlameLashFade(fade)) => {
+                PrimaryTransientRef::Weld(WeldWorldRef::Channel(_)) => ("weld-channel", None),
+                PrimaryTransientRef::Weld(WeldWorldRef::FlameLashFade(fade)) => {
                     ("weld-flame-lash-fade", Some(fade.alpha))
                 }
-                PrimarySpellTransient::FireParticle(_) => ("fire", None),
+                PrimaryTransientRef::FireParticle(_) => ("fire", None),
                 _ => unreachable!(),
             };
             json!({"id":actor.common().id,"kind":kind,"age":actor.common().age_ticks,"alpha":alpha})

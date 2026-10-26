@@ -147,3 +147,101 @@ fn mixed_primary_flight_retirement_birth_and_restore_preserve_order() {
         assert_eq!(restored_order, order);
     }
 }
+
+#[test]
+fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
+    use solomon_sim::painter::WorldManagerLane;
+    use solomon_sim::spells::fire::NATIVE_FIRE_IMPACT_LIFETIME_TICKS;
+    use solomon_sim::spells::model::{
+        PrimarySpellFireImpact, PrimarySpellTransient, PrimarySpellTransientBase,
+        PrimaryTransientRef,
+    };
+    use solomon_sim::spells::weld::{
+        NativeWeldActorBirth, NativeWeldMeteorSpawnProgram, NativeWeldWorldActor, WeldWorldRef,
+        create_native_weld_meteor,
+    };
+
+    let mut rng = NativeRng::new(913);
+    let mut order = WorldPainterOrder::default();
+    let mut impact = |id, age_ticks| {
+        let registration = order.register(WorldManagerLane::Transient);
+        PrimarySpellTransient::FireImpact(PrimarySpellFireImpact {
+            common: PrimarySpellTransientBase {
+                id,
+                age_ticks,
+                owner_id: "wizard".into(),
+                world_key: "boneyard:ecs".into(),
+                light_registration: Some(registration),
+                painter_registrations: vec![registration],
+            },
+            origin: Vec2::new(100.0, 200.0),
+        })
+    };
+    let first = impact(1, 0);
+    let retiring = impact(2, NATIVE_FIRE_IMPACT_LIFETIME_TICKS - 1);
+    let last = impact(4, 0);
+    let meteor = create_native_weld_meteor(
+        NativeWeldActorBirth {
+            id: 3,
+            tick: 0,
+            build_id: 1007,
+            owner_id: "wizard",
+            world_key: "boneyard:ecs",
+            origin: Vec2::new(100.0, 200.0),
+            direction: Vec2::new(1.0, 0.0),
+            vector: &[0.0; 8],
+        },
+        NativeWeldMeteorSpawnProgram {
+            body_scale: 1.0,
+            fall_heading_degrees: 90.0,
+            fall_height: 1.0,
+            fall_step: 2.0,
+            impact_ticks: 30,
+            position: Vec2::new(100.0, 200.0),
+            private_seed: 19,
+        },
+        15.0,
+        false,
+        Some(&mut order),
+    );
+    let records =
+        [first, retiring, PrimarySpellTransient::Weld(NativeWeldWorldActor::Meteor(meteor)), last];
+    let mut live = SpellState {
+        next_id: 20,
+        transients: records.clone().into_iter().collect(),
+        ..SpellState::default()
+    };
+    assert_eq!(
+        serde_json::to_value(&live.transients).unwrap(),
+        serde_json::to_value(&records).unwrap()
+    );
+    step(&mut live, 1, None, &mut rng, &mut order);
+    let effects: Vec<_> = live.transients.iter().collect();
+    assert_eq!(effects[0].common().id, 1);
+    assert_eq!(effects[0].common().age_ticks, 1);
+    assert_eq!(effects[1].common().id, 3);
+    assert!(matches!(effects[2], PrimaryTransientRef::Weld(WeldWorldRef::MeteorFlash(_))));
+    assert_eq!(effects.last().unwrap().common().id, 4);
+    assert_eq!(effects.last().unwrap().common().age_ticks, 1);
+    assert_eq!(
+        effects[2..effects.len() - 1].iter().map(|effect| effect.common().id).collect::<Vec<_>>(),
+        (20..live.next_id).collect::<Vec<_>>()
+    );
+    assert!(effects[2..effects.len() - 1].iter().all(|effect| effect.common().age_ticks == 0));
+    assert!(effects.iter().all(|effect| !effect.common().painter_registrations.is_empty()));
+
+    let saved = serde_json::to_vec(&live).unwrap();
+    let mut restored: SpellState = serde_json::from_slice(&saved).unwrap();
+    let mut restored_rng = rng.clone();
+    let mut restored_order = order;
+    assert_eq!(serde_json::to_vec(&restored).unwrap(), saved);
+    // Enhanced debris starts at alpha 10 and fades after its Meteor has retired.
+    for tick in 2..=410 {
+        step(&mut live, tick, None, &mut rng, &mut order);
+        step(&mut restored, tick, None, &mut restored_rng, &mut restored_order);
+        assert_eq!(serde_json::to_vec(&restored).unwrap(), serde_json::to_vec(&live).unwrap());
+        assert_eq!(restored_rng, rng);
+        assert_eq!(restored_order, order);
+    }
+    assert!(live.transients.is_empty());
+}

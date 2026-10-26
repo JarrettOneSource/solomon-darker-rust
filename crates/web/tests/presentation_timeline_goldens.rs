@@ -21,7 +21,7 @@ use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::session::{GameSession, GameSessionInput, GameSessionOptions};
 use solomon_sim::spells::model::{
     PrimarySpellFireEmber, PrimarySpellFireParticle, PrimarySpellTransient,
-    PrimarySpellTransientBase, PrimarySpellWaterHail,
+    PrimarySpellTransientBase, PrimarySpellWaterHail, PrimaryTransientRef,
 };
 use solomon_web::presentation::NativePresentationTimeline;
 
@@ -202,10 +202,10 @@ fn client_clock_and_player_poses_follow_receipt_time_without_extrapolating() {
                         let common = effect.common();
                         let age = frame.clocks.primary[&common.id];
                         match effect {
-                            PrimarySpellTransient::FireParticle(effect) => {
+                            PrimaryTransientRef::FireParticle(effect) => {
                                 vec![0.0, common.id as f64, age, effect.origin.x, effect.origin.y]
                             }
-                            PrimarySpellTransient::FireEmber(effect) => vec![
+                            PrimaryTransientRef::FireEmber(effect) => vec![
                                 1.0,
                                 common.id as f64,
                                 age,
@@ -218,7 +218,7 @@ fn client_clock_and_player_poses_follow_receipt_time_without_extrapolating() {
                                 effect.phase,
                                 effect.vertical_velocity,
                             ],
-                            PrimarySpellTransient::WaterHail(effect) => vec![
+                            PrimaryTransientRef::WaterHail(effect) => vec![
                                 2.0,
                                 common.id as f64,
                                 age,

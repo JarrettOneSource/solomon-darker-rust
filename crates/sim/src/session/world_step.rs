@@ -1,5 +1,7 @@
 //! Input admission and the one shared movement/world epoch of the public Game tick.
 
+use crate::spells::transient_storage::{PrimaryTransientRef, StaffTransientRef};
+
 use super::*;
 use crate::Vec2;
 use crate::belt::NativeBeltEntry;
@@ -16,8 +18,6 @@ use crate::hub::interaction::HubNpcMarkerEpoch;
 use crate::loot::{NativeLootAttractionModifiers, native_loot_modifiers};
 use crate::painter::WorldManagerLane;
 use crate::profile::native_skill_category;
-use crate::spells::model::PrimarySpellTransient;
-use crate::spells::staff::NativePlayerStaffTransient;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Hosts project pointers/controllers into world-space input exactly once.
@@ -78,7 +78,7 @@ impl GameSession {
                 }
             }
             let acting_staff = self.spells.transients.iter().any(|effect| match effect {
-                PrimarySpellTransient::Staff(NativePlayerStaffTransient::Action(actor)) => {
+                PrimaryTransientRef::Staff(StaffTransientRef::Action(actor)) => {
                     actor.common().owner_id == *id
                 }
                 _ => false,

@@ -13,7 +13,7 @@ use solomon_sim::harden_effects::*;
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::secondary::NativeSecondarySimulationState;
 use solomon_sim::session::harden::*;
-use solomon_sim::spells::model::{PrimarySpellTransient, SpellState};
+use solomon_sim::spells::model::SpellState;
 use solomon_sim::{NativeRng, Vec2};
 
 fn read_rng(value: &Value) -> NativeRng {
@@ -128,7 +128,7 @@ fn harden_chips_and_coating_transitions_enroll_in_source_order_with_exact_rng() 
             .transients
             .iter()
             .map(|effect| {
-                let PrimarySpellTransient::Harden(effect) = effect else {
+                let solomon_sim::spells::model::PrimaryTransientRef::Harden(effect) = effect else {
                     panic!("Harden enrolls actual Harden actors")
                 };
                 effect_snapshot(effect)
