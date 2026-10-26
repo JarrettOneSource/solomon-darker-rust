@@ -526,6 +526,8 @@ impl Client {
             .unwrap();
         request.headers_mut().insert("origin", origin.parse().unwrap());
         let stream = TcpStream::connect(host.address).unwrap();
+        // Match the live native client's immediate commands and checkpoint ACKs.
+        stream.set_nodelay(true).unwrap();
         stream.set_read_timeout(Some(Duration::from_secs(8))).unwrap();
         stream.set_write_timeout(Some(Duration::from_secs(8))).unwrap();
         let socket = tungstenite::client(request, stream).unwrap().0;
