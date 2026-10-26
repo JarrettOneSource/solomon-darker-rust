@@ -1,46 +1,41 @@
 # Mod authoring CLI
 
-This is the current Website `tools/sdmod` frontend, using the canonical Rust
-definition compiler and Lua runtime. It imports no TypeScript game modules or
-Wasmoon. The existing ZIP, asset-download, Blender and reference-generation code
-is retained; the native owner supplies checked packages and compiler metadata.
+The CLI uses the Rust definition compiler and Lua runtime. It creates projects,
+validates and tests packages, writes archives, and generates editor references.
 
-Build the native tool once, then put `solomon-sdmod` on `PATH` or set its explicit
-location. The frontend never invokes Cargo or starts a game host:
+## Setup
+
+Build the native tool and put it on `PATH` or set its location:
 
 ```sh
 cargo build -p solomon-modding --bin solomon-sdmod
-export SOLOMON_SDMOD_BINARY=/path/to/solomon-sdmod
+export SOLOMON_SDMOD_BINARY=/absolute/path/to/solomon-sdmod
 node tools/sdmod/cli.mjs new /path/to/my-mod
 node tools/sdmod/cli.mjs check /path/to/my-mod
 ```
 
-The eight public commands remain `new`, `check`, `test`, `pack`, `migrate`,
-`generate`, `assets fetch` and `render-sprite`. Package tests run real Lua against
-the canonical compiled graph with the Source closed globals. Packed includes
-are recompiled without loose scripts and must retain their graph digest. The
-retained ZIP writer preserves Source file order, timestamps and bytes.
+The frontend does not invoke Cargo or start a game host.
 
-`generate <directory> --check` compares all five reference files. Their inventory
-comes directly from the Rust compiler's content schemas, constructor names,
-art slots, events, scopes and diagnostics. This preserves the Website lint
-consumer without keeping another definition compiler.
+Commands are `new`, `check`, `test`, `pack`, `migrate`, `generate`,
+`assets fetch`, and `render-sprite`. Package tests execute Lua against the
+compiled definition graph and supported sandbox globals. Packed includes are
+recompiled and must retain their graph digest. Archives use deterministic file
+order, timestamps, and bytes.
 
-Focused checks:
+`generate <directory> --check` compares all five reference files. Their schemas,
+constructors, art slots, events, scopes, and diagnostics come from the Rust compiler.
+The website editor consumes these references through its integration.
+
+## Checks and asset sources
 
 ```sh
 cargo test -p solomon-modding --test authoring_goldens
-SOLOMON_SDMOD_BINARY=/path/to/solomon-sdmod node --test tools/sdmod/cli.test.mjs
+SOLOMON_SDMOD_BINARY=/absolute/path/to/solomon-sdmod node --test tools/sdmod/cli.test.mjs
 ```
 
-The native fixture records 29 unchanged current-Source cases. The frontend tests
-exercise creation/check/test/migration, independent packed includes, exact five-file
-reference output, deterministic archives and the current Source starter ZIP hash.
-Website cutover must also run its existing `generate public/web-lua --check` and
-the four `examples/web-lua` checks through this entry. Those packages remain
-Website control-plane content; no example asset bank is copied here.
+Tests cover project creation, validation, Lua execution, migration, packed includes,
+reference output, and deterministic archives.
 
-`starter-icon.png` is the existing Source Kenney Game Icons CC0 image; `new` writes
-the same attribution. `asset-sources.json` and the art helpers retain the Source
-download hashes/licenses. Asset fetching and Blender execution occur only when
-their corresponding commands are requested.
+`starter-icon.png` is a Kenney Game Icons CC0 asset; `new` writes its attribution.
+`asset-sources.json` records download hashes and licenses.
+Asset downloads and Blender run only for the corresponding requested command.

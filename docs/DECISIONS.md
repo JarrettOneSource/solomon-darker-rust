@@ -1,887 +1,184 @@
-# Decisions
+# Design decisions
 
-Choices a maintainer would otherwise be tempted to reverse. Each records what was decided,
-why, and what it costs. Add an entry when a change opens a new seam, adds a dependency, or
-reverses one of these.
+These choices explain constraints that are easy to miss when changing the game.
+Keep each entry current; record execution history in commits and test artifacts.
 
-## Native GPU UI composition
+## One simulation
 
-**The application pins a narrow egui0.37 integration patch for fixed Source layering and
-passive containers.** Actual browser and Context traces showed HUD reappearance raising a
-full-screen Area above Party. Source roots have fixed document order and some backgrounds
-pass input to real child controls. Upstream `set_sublayer` supports only one level;
-`move_to_top` cannot establish a total order, and `interactable(false)` removes children
-too. Rewriting or resetting Area state would discard its real focus, geometry and lifecycle.
+Game rules live in `solomon-sim`. Browser, native, hosted, and modded play use the
+same session types and update order. Presentation and transport do not maintain
+another gameplay model.
 
-The verified registry crate is vendored with its original metadata/licenses and excluded
-from workspace lint membership. One explicit layer order feeds native hit testing, modal
-comparison and final graphics draining. Passive backgrounds preserve real layout and child
-responses; authored hit predicates reuse the existing ellipse/rotation model. The sole
-native textarea resolves its pointer target through that same canonical widget query.
-Unregistered/default egui behavior remains intact. Application Areas opt out of unsolicited
-entrance fades explicitly; this patch does not change animation defaults.
+Typed contiguous collections preserve actor order. A general engine or ECS would
+add lifecycle and ordering changes without a demonstrated benefit.
 
-The native pointer bridge also sends explicit cancellation rather than inventing a normal
-button release: cancellation retires click/drag ownership and motion without activation.
-Original raw Touch cancellation and ordinary pointer releases remain distinct.
+## Numeric contract
 
-Cost: upgrades must review the local integration patch and replay the focused
-Context/actual browser contracts. Provenance and exact interfaces are in
-[`vendor/egui/SOLOMON-PATCH.md`](../vendor/egui/SOLOMON-PATCH.md). The Source registry owns
-game layering; this is not another window manager or a visual DOM adapter.
+Kernels use `f64` arithmetic with explicit `fround` boundaries where required.
+Using `f32` throughout adds rounding; removing a boundary changes saved and
+recorded trajectories.
 
-## Immutable data in display snapshots
+The numeric owner supplies recorded `hypot`, `atan2`, sine, cosine, and power
+evaluation, including explicit fused operations. Platform libm results can differ
+by an ulp and later change collision or navigation. These implementations retain
+the required numeric behavior across native and WebAssembly.
 
-**Share scenery and skill definitions, while retaining independent mutable display state.**
-The post-release comparison with PixiJS found that `NativePresentationTimeline::sample`
-deep-copied loaded geometry, collision primitives and every player's stock skill definitions
-on each display frame. Player projection then copied those definitions again, and enemy
-projection copied both input lists before producing its interpolated output.
+The fdlibm/V8 notices remain in
+[the license](third-party/v8-fdlibm-LICENSE). Native/WASM bit tests and complete
+trajectory replays protect the contract. Preserve recorded tolerance bounds
+without substituting expected positions into an independently running replay.
 
-Loaded scenes and static collision primitives now use standard-library `Arc` storage.
-Dynamic gate segments remain local to each collision world, so refreshing a display gate
-does not copy or mutate static geometry. Skill entries use `Arc<[Entry]>`; `OnceLock` owns
-the stock definition table and `Arc::make_mut` isolates authored overrides. Serde's existing
-`rc` feature preserves the complete value-based save and snapshot shape. No pointer or
-process-local identity enters persistence.
+Gameplay RNG, ambient xorshift state, collision fallback state, and presentation
+randomness have separate owners. Changing their consumption order changes play.
 
-Player projection updates the already selected endpoint copy. Enemy projection borrows
-endpoint iterators and allocates only its output list. Actor lifetimes, insertion order,
-fractional clocks and gameplay RNG retain their existing contracts. The simulation already
-uses contiguous typed actor collections; this change does not introduce an ECS dependency
-or reorder a system to improve a benchmark.
+## Display copies and immutable data
 
-Imported scenery's three target-membership tables also use shared immutable storage.
-Cleanup first checks for removed items, then uses `Arc::make_mut` only when membership
-actually changes. Repeated sealed-world cleanup therefore keeps the shared allocation,
-while an older display/checkpoint copy retains its original target membership.
+Accepted session state owns commands, audio, checkpoints, and saves.
+`NativePresentationTimeline` owns bounded display history and fractional clocks.
+Boneyard frames interpolate without extrapolation; College prediction is limited
+to one snapshot interval of local movement.
 
-Cost: shared definitions retain an allocation until their final owner drops, and authored
-mutation copies the definition table when another snapshot still references it. The clone
-and mutation regressions verify resource sharing and unchanged source state together.
+Immutable loaded scenes, static collision primitives, skill definitions, and
+unchanged scenery target tables use `Arc` storage to avoid per-frame deep copies.
+Mutable gates and actors remain private. Authored changes use copy-on-write;
+serde continues to serialize values rather than process-local pointers.
+
+## GPU interface and layer order
+
+Rust owns visible game controls, menus, HUD, overlays, and launcher presentation.
+The browser provides canvas and platform APIs. Text rasterization may use an
+unattached font canvas; game UI is submitted through GPU textures and geometry.
+
+The vendored egui patch supplies fixed layer ordering, passive containers, authored
+hit predicates, and pointer cancellation. One comparator serves painting, hit
+testing, modal scope, and controller ownership. Resetting Area state to repair
+order would discard real focus and geometry.
+
+The patch retains upstream metadata and licenses. Egui upgrades must review
+[the patch contract](../vendor/egui/SOLOMON-PATCH.md) and its focused regressions.
+
+## Input and text
+
+Sample gameplay input once per frame. The selected display camera projects aim.
+Held casts and queued belt presses are different inputs; both host and client
+validate all `PLAYER_BELT_SLOT_COUNT` slots.
+
+UI dispatch commits each admitted action before resolving the next event.
+A prior modal, sort action, or binding capture can change the next event's owner.
+Pointer cancellation retires click and drag state without activating a control.
+Stationary held buttons activate on release; dragging outside does not.
+
+Fullscreen entry stays in the trusted browser input callback. Pointer activation
+and keyboard/controller activation have distinct provenance, preventing duplicate
+toggles. Tab is captured when an interactive GPU region or editor needs focus,
+including the first traversal after touch.
+
+Native font shaping and Rust editing share text geometry. Preserve complete font
+runs, Unicode composition, joining, emoji, caret position, selection, and wrapping.
+The text adapter uses bounded textures owned by the current GPU context.
+
+## Persistent state
+
+Supported player saves are a compatibility contract independent of implementation
+history. Native save containers retain unknown bytes; known fields are patched in
+the retained tree. ZIP, XOR/LZ, profile, and document codecs live in `solomon-assets`
+and work on native and WebAssembly targets.
+
+Large save/checkpoint records are heap-owned at deserialization boundaries.
+Resource construction completes before saved-session admission so their large
+futures and parsing frames do not overlap the WebAssembly stack.
+
+Persistence uses revision checks and atomic synced replacement. Encoding and disk
+I/O run outside the tick deadline. Welcome waits for a reconnect credential to be
+durable; SaveCommitted follows actual file completion.
+
+## Snapshot ordering
+
+The shared protocol carries canonical session values between matched native and
+client builds. Reliable results and save acknowledgements remain separate from
+replaceable snapshots.
+
+Compaction uses the last publication selected and written on that connection.
+Unsent replacements cannot become a baseline. The receiver reconstructs each
+ordered packet before coalescing completed state for display. First publications
+and changes that are larger than a full message use complete packets.
+
+This reduces repeated bytes while retaining exact state. It adds per-connection
+baseline memory and compression work; malformed sequences close the connection
+rather than fabricate a partial checkpoint.
+
+## Deployment identity and recovery
+
+The game recovery revision and website publication identity have separate roles.
+The deployment publication names website and game revisions, a unique deployment
+ID, a monotonic sequence, and readiness.
+
+Automatic reload requires the final durable save receipt, retirement of the old
+transport, and a healthy publication at the announced sequence or later with the
+signed target game revision. A new ID alone does not establish ordering.
+
+## Navigation and painter registration
+
+Retained scene geometry and prepared meshes are checked by source and geometry
+identity. Other navigation domains are built from the admitted scene. The ordered
+constraint sampling and triangulation remain in Rust because replacing them can
+change route and neighbor order.
+
+Painter registration belongs to the actor or transient owner. Fixed depth bands,
+row sorting, and owner overlays are explicit data. A render cache cannot assign
+new gameplay identities or reorder random consumption.
+
+## Tutorial disconnects
+
+A disconnected private Tutorial retains its sole participant and freezes until
+resume. Removing that participant would violate the Tutorial checkpoint invariant.
+Ordinary party sessions use detach/remove/rejoin instead.
 
 ## Authored content and Lua
 
-**Shared authored-content values live in `sim::modding`; Lua VMs belong to a native-only
-`solomon-modding` crate.** This follows the pinned Website's `PreparedModHost`, which borrows
-the same `GameSimulationState` used by stock play. Compiled definitions, accepted asset
-descriptors and runtime checkpoints contain ordinary values. Lua function and migration
-handles stay in the native host, keyed by reducer identity. They never enter a Session
-snapshot, gameplay RNG or browser presentation store. The source manifest/graph identities
-and `PreparedModHostCheckpoint` are persisted alongside the canonical Session, so a reload
-recreates the VM from the admitted package rather than serializing executable handles.
-
-The host will use **`mlua` with `lua54` and `vendored`**: no existing workspace dependency
-executes Lua, the standard library cannot do so, and a handwritten interpreter would narrow
-the source language. The pinned Website uses Wasmoon and actual Lua 5.4. `mlua` embeds that
-language rather than substituting Luau or LuaJIT; vendoring makes the native package
-independent of a system Lua installation. Its safe interface supplies
-[memory limits and execution hooks](https://docs.rs/mlua/latest/mlua/struct.Lua.html), used
-for the source 16 MiB VM and explicit definition/callback/tick budgets. Only source-enabled
-names and accepted package includes are exposed; filesystem/process/module loading remains
-unavailable. The pinned sandbox retains Lua's `math.random` and `math.randomseed`; their
-private VM state does not advance gameplay RNG. Native callbacks share a private
-`Rc<RefCell<Registry>>` because real Lua functions outlive the constructor; callbacks drop
-the borrow before executing Lua or its table conversions. This is an enabled-content trust
-boundary, not optional defensive behavior.
-
-Cost: native hosts gain the embedded Lua build. `mlua` documents
-[WebAssembly through Emscripten](https://github.com/mlua-rs/mlua#readme), whereas this client
-uses `wasm32-unknown-unknown`; therefore client and pure simulation values do not depend on
-the VM crate. Definitions/rules/reducers execute once in the Rust authority. Source timing
-limits are host admission budgets, not a simulation clock or a reason to approximate Lua.
-
-**Content graph digests retain JavaScript collation and numeric JSON spelling.** Source
-`web-lua-definition-compiler.ts` sorts graph keys with `localeCompare`, then hashes
-`JSON.stringify`. The pinned Node resolves `en-US`: valid keys `a_b`, `a-b`, `a.b` sort in
-that order, unlike Rust byte ordering. Its numeric spelling also differs (`1`, `1e+21` and
-`0` for negative zero). The native content crate uses Unicode's
-[ICU collator](https://docs.rs/icu_collator/latest/icu_collator/) with the captured locale,
-[ryu-js](https://docs.rs/ryu-js/latest/ryu_js/) for ECMAScript numbers, and the cached
-[RustCrypto SHA-256 implementation](https://docs.rs/sha2/0.11.0/sha2/). Existing serde_json
-still parses and escapes JSON. This avoids handwritten Unicode/number/cryptographic
-algorithms and leaves the pure simulation/client dependencies unchanged. Ordered Lua
-objects additionally enumerate JavaScript array-index keys numerically before other
-properties. The focused digest oracle checks punctuation, case, accents, index keys,
-number boundaries and final SHA-256 values; new ICU data requires that oracle to remain
-green rather than assuming every library version has identical collation.
-
-## Native multiplayer messages
-
-**Deployment publications have identities separate from signed game recovery revisions.**
-The native drain still signs the target Rust revision into the final save and accepts
-the existing checkpoint-sequence/revision acknowledgement. Its authenticated
-`X-Solomon-Deployment-Id` and `X-Solomon-Deployment-Sequence` headers name the fresh
-Website cutover and next publication sequence; both
-travel in the restart announcement and drain receipt. Website owns the mutable
-`/api/game/deployment` publication with `revision` (Website), `gameRevision`,
-`deploymentId`, monotonic `deploymentSequence` and `ready`. Its worker stages `ready: false` and atomically publishes
-`true` only after the replacement game and Website pass health and integrity checks.
-The immutable game's deployment document, manifest membership and hashes remain intact.
-
-The page can reload an announced update only after its final save receipt commits,
-its actual old transport retires, and a healthy publication has the announced sequence
-or a later sequence, with the same signed target game revision.
-The UUID correlates one drain/receipt; the sequence proves replacement ordering.
-Exact UUID matching would strand a sleeping tab that missed its publication or a
-healthy retry with another UUID. Failed candidates restore the prior publication;
-only readiness after verified health fulfills the announced sequence. Active sessions
-cannot reload through idle polling.
-Title/idle observes healthy publication changes, including Website-only replacements.
-This corrects the inherited `live game revision != current game revision` condition,
-which stranded a saved client when Website redeployed the same immutable game.
-
-Cost: publication-aware authorities/clients use deployment protocol 2 alongside the
-unchanged gameplay protocol. A Website worker may perform the first changed-game
-drain against the legacy authority using the original strict JSON request body; its
-extra header is ignored there. An unchanged-game drain against a legacy authority is
-rejected before retirement because its immutable clients cannot recognize publications.
-The first-cutover legacy manifest bridge remains until those tabs have transitioned.
-
-**Completed score timestamps use the installed native `time` crate at the launcher
-edge.** Source signs `new Date().toISOString()` as part of its account-bound receipt,
-including exactly three millisecond digits. The standard library supplies elapsed
-time but no UTC calendar formatter; a custom calendar or unsafe platform conversion
-would add an unrelated implementation. `time` with its formatting feature supplies
-the fixed Source representation. Neither the pure simulation nor the browser gains
-a wall clock or this dependency. Compact previous-score facts detect completion;
-the current authoritative participant supplies the actual Hall entry.
-
-**One shared Rust protocol crate carries canonical simulation values.** The native host and
-WebAssembly client use `solomon-protocol` version 2 for direct join. It intentionally does
-not claim compatibility with the Website's version 129 protocol. The host serializes a
-borrowed `GameSnapshot`; the client decodes its identical `GameCheckpoint` shape. Snapshot
-ACKs are keyed by participant, so all peers share one serialized complete world rather than
-personalized copies. Reliable commands, accepted audio cues and save receipts remain
-separate from replaceable snapshots. Connection credentials, readiness, pause deadlines
-and input queues stay in the launcher; the sole `GameSession` owns gameplay. Cost: protocol
-changes require the native host and bundled client to advance together.
-
-**Snapshot compaction belongs to the ordered connection, after outbox selection.** One
-`PreparedSnapshot` shares the complete canonical JSON value and full message across peers
-with the same publication. Each socket writer retains its last selected document, emits
-the next document's recursive field/array changes, and reuses the existing `miniz_oxide`
-and `base64` dependencies for zlib/base64 encoding. A complete message is used on first
-publication or whenever it is smaller. Replaced unsent publications never become a
-baseline. The next encoding waits until Tungstenite has flushed the previous frame.
-
-The shared Rust `SnapshotReader` reconstructs every received document before render-time
-coalescing and decodes the unchanged `GameCheckpoint`. It validates sequence continuity,
-array edits, compressed and reconstructed size bounds; a malformed update retires the
-connection's baseline. A new socket starts with a complete document. Reliable controls,
-Welcome transfers, snapshot ACKs and flame history retain their separate contracts. No
-gameplay field, number precision, authored definition or saved state is omitted.
-The reader retains the complete document's encoded byte count and updates it from the
-changed fragments, including escaped keys and JSON punctuation. Re-serializing the entire
-document for every size check produced a measured decode regression. An independent
-full-serialization oracle verifies the incremental count across nested changes.
-The four change shapes use a direct serde visitor. A recursive untagged derive cloned
-buffered subtrees while trying variants; the visitor reads each shape once without changing
-the wire representation or its validation.
-
-Cost: one previous JSON document per connection at each endpoint, a shared prepared
-document per publication, and compression/reconstruction CPU. These costs require actual
-browser measurement alongside byte counts. The existing JSON, compression and base64
-libraries own parsing and encoding; the small change representation is private to the
-protocol crate. Native and JavaScript observers cover exact reconstruction, dropped
-publications, controls, reconnects and real socket backpressure.
-Diagnostic run archives accept the unchanged checkpoint schema from protocols 1 and 2;
-their recorded protocol version describes provenance, not a live connection handshake.
-
-The native launcher uses `getrandom` (already present through Tungstenite) for host
-credentials and run seeds, keeping OS entropy out of every gameplay RNG stream. The small
-native-only `ctrlc` crate supplies a portable shutdown handler: the standard library has no
-cross-platform signal registration and this repository forbids application `unsafe`. Its
-handler only sets a stop flag; the normal authority loop saves and closes its own resources.
-See the [crate's documented handler contract](https://docs.rs/ctrlc/latest/ctrlc/fn.set_handler.html).
-
-**A disconnected private Tutorial retains its sole participant.** The source Tutorial
-tick and checkpoint require exactly one player; the pinned Website host asserts after
-removing its final Tutorial socket. The native adapter retains that actual participant,
-freezes the world without a connected player, and resumes the same durable record.
-Ordinary party runs use canonical detach/remove/rejoin. This is a transport lifecycle
-choice, not another player simulation or a fabricated Tutorial state.
-
-## Native display timeline
-
-**Accepted authority and display frames have separate owners.** The pinned JS client
-interpolates Boneyard snapshots and applies bounded local movement prediction only in the
-Hub. The Rust browser keeps at most eight frozen accepted Sessions and samples a private
-display copy, preserving source actor identity and discrete transition rules. Fractional
-clocks and endpoint appearance data accompany that copy because canonical tick types stay
-integral. Camera, light, geometry and painter consumers all use the same sampled frame.
-Commands, saves, accepted audio and acknowledgements keep reading authority. No Boneyard
-sampling step advances gameplay or its random streams; Hub prediction uses the canonical
-movement/collision kernel on private state for at most one snapshot interval. Cost: bounded
-Session copies per native client; immutable storage can be shared later if measurements
-justify changing ownership. The Metal GPU submission comparison established the actual
-20 Hz transform holds before this cutover.
-
-## Numbers
-
-**f64 arithmetic, narrowed with `fround` at the reference's rounding points.** The Website
-computes in JavaScript doubles and calls `Math.fround` where the native game stored a single.
-Computing in `f32` throughout would round at every operation and diverge; computing in `f64`
-and rounding at the same points reproduces the doubles bit for bit. Cost: every port has to
-find the rounding points by reading, and a missed one surfaces as a fixture failure.
-
-**Lengths use V8's `Math.hypot` algorithm** (`float::hypot`: scale by the larger operand, sum
-with Kahan compensation, square root). `sqrt(dx*dx + dy*dy)` differs in the last bit often
-enough to move a collision response. Cost: a dozen lines that look like a slow `sqrt`.
-
-**Source angle calculations use the pinned V8 `atan2` implementation.** At template-9
-Solomon tick 940, equal route-goal operands produced a one-ulp macOS libm difference that
-later grew into the measured 27.38-unit escape-path defect. `float::atan2` ports fdlibm's
-constants and the fused evaluation witnessed in the actual Node 22.17.0 ARM64 binary;
-`f64::mul_add` keeps that evaluation explicit on native and WASM. All 7,697 recorded IEEE
-cases compare exact result bits on both targets. Its Sun/V8 license ships in
-`docs/third-party/v8-fdlibm-LICENSE`. Sine, cosine and the measured Fire power envelope now
-use the same pinned numeric owner, as described below. Historical trajectory fixtures retain
-their named bounds; no assertion that a downstream loop cannot amplify an ulp is justified.
-
-**The ambient state owns its own xorshift sampler**, separate from `NativeRng`. The Website's
-`hub-ambient.ts` seeds a `u32` xorshift (`0x2f6e2b1d`) that only the courtyard life consumes;
-sharing the native generator would entangle the spray with the collision fallback draws.
-
-## Shape
-
-**Native save containers retain their unknown bytes and use portable installed codecs.**
-The assets boundary ports the source SyncBuffer tree, custom Darkdata XOR/LZ stream,
-launcher ZIP manifest and portable profile contract. Known profile/wizard fields are
-patched inside the retained native tree; opaque native inventory and scene siblings are
-not reconstructed from guessed values. Base64 attachment bytes use the already installed
-`base64` crate. ZIP framing remains the source's small format, including its exact
-validation and deterministic stored output; compressed input uses installed pure-Rust
-`miniz_oxide`, and SHA-256 uses the existing content package dependency. These readers run
-on native and WASM without a JavaScript codec or an additional archive framework.
-
-**Navigation retains source eager preparations and builds other domains from actual geometry.**
-Stock assets still carry the source/geometry-checked native meshes. The loader installs only
-the domains `boneyardWorldNavigationPreparations` actually warms: hostile bounds at 25/50
-clearance, plus expanded escape bounds when the Default source owns Solomon. Imported Mod
-scenes build those graphs in Rust. The builder translates the source's ordered constraint
-sampling and incremental Delaunay triangulator; another library could change triangle and
-neighbor order, so no triangulation dependency is added.
-
-A private geometry-owned cache builds a missing domain from its first query's current
-collision, including moving gates, and retains it thereafter. Clear direct routes do not
-initialize the cache. `NavigationSet` clones share immutable graph handles under a small
-mutex, matching the source collision-geometry identity. `CatalogNavigation` retains those
-owners across materializations of the same stock template or admitted Mod entry, matching
-the source catalog's shared scene objects. A cloned catalog shares Mod entry identities;
-replacing an entry creates a fresh identity even when its bytes are equal. Decoded saves
-use the fresh navigation loader and never borrow a catalog owner. The native host owns one
-cache beside its catalog; the browser content owner uses the same shared asset module.
-Eight complete graph fixtures, 24 routes, four source-kind preparation inventories, a
-100-tick moving-gate case and repeated catalog/decoded/replaced-entry checks verify these
-lifetimes without a stock-map substitute.
-
-**Independent trajectories retain their own spatial state between source comparisons.**
-The assets escape replay continuously advances all 6,695 transitions across thirteen scenes;
-it replaces the earlier per-transition spatial-input overwrite test. After the `atan2` fix,
-template 9's largest Euclidean position delta is 6.915300366811401e-13 world units and heading
-delta 5.172751116333529e-12 degrees. The largest position delta across all thirteen cases is
-9.927276321703277e-13; nine cases are spatially exact. The existing 1e-9 trigonometric bound
-is unchanged, and RNG, phases, timers and overlap IDs remain exact. These measured paths do
-not establish whole-game bit-identical trajectories. Receipts live in
-`codex-runs/solomon-rust-parity-20261021`, job `job_20261021T051936Z_0092923486`.
-
-**The offline Boneyard bank ships as retained stock geometry, decoded only at the browser
-edge with the workspace's existing serde dependencies.** The Website already selects among
-twelve retained native generator outputs and a separate stock tutorial. Copying those complete
-data records preserves that contract without a TypeScript host at runtime. `solomon-sim`
-keeps its dependency-free scene and world types; `solomon-web` translates JSON into them.
-Cost: the browser artifact includes the 1.8 MB geometry bank and a small explicit wire model.
-
-**Visible game UI belongs to the Rust GPU renderer.** The October 23 full-port requirement
-supersedes the earlier DOM presentation decision below. Menus, HUD, panels, social/mod
-screens and lifecycle overlays use the existing WebGL2 canvas, stock atlases and native
-layout rules. The shared `gpu_ui` module uses egui for Rust interaction, text/layout and
-tessellation; it does not replace the game loop or simulation. Browser font rasterization,
-text composition, clipboard, file access and other platform capabilities remain adapters,
-not a visual HTML/CSS implementation. A CSS interpreter, DOM screenshot renderer, hidden
-legacy UI or synthetic-action test facade would not satisfy this contract. The live migration
-inventory and acceptance state are in `RUST-UI-MIGRATION.md`; implementation is in progress.
-Stock bitmap text keeps its recovered glyph layout. Ordinary system/licensed font glyphs
-use the browser font adapter; Sack names preserve Source's complete font-run shaping and
-wrapping, including Arabic joins and emoji sequences, in bounded egui-owned GPU textures.
-The font adapter paints only text into an unattached canvas, never HTML or game controls.
-
-**The desktop launcher shares the same Rust/WASM presentation owner.** The October 24
-clarification extends the no-HTML-controls requirement to solo/host/join launch settings.
-`desktop/launcher.{html,css,mjs}` at c537dc9 is the behavioral reference; its replacement
-is `crates/web/src/desktop/launcher`, entered through the ordinary canvas bootstrap at
-`/launcher`. Drafts, validation, status, update presentation and interaction live in Rust.
-The Electron preload still owns native processes, networking, OS menus/dialogs and
-external links. No native process is started merely to display the launcher. The existing
-GPU editor, loader, renderer and read-only geometry diagnostics are reused. Package
-preparation removes the three retired presentation files, and archive validation rejects
-them. The actual packaged journey must reject DOM controls and exercise launch errors,
-keyboard editing, updates, saved return and all three game modes before qualification.
-The packaged port-field regression showed that native editor arrows intentionally do not
-enter egui's key queue. The numeric launcher field reads the existing native key receipts;
-the shared text editor keeps its caret behavior. Keyboard button acceptance uses real Tab
-traversal before Space, rather than assuming a pointer click also grants keyboard focus.
-
-**Desktop media acceptance uses the existing resident-channel evidence.** Pacing only
-the original main-process music response bytes at 256 KiB/s reproduced three actual
-`ERR_ABORTED` requests at 96d99b3. Each unchanged connected stock channel had one source,
-one load, trusted loaded-data and suspend events, ready data, idle networking and no media
-abort/error event. The shared `browser-errors.cjs` classifier accepts only that observed
-lifecycle; the desktop journey now uses it and retains every raw failure and classification.
-Unclassified cancellations and actual media errors still fail. This experiment does not
-retroactively qualify the earlier Intel/Windows jobs, which lacked those observations.
-Each completed error report is a snapshot. The failed Windows 33f64b23 receipt showed
-later peer failures appearing in earlier closed-page phases because their reports shared
-the live error array. `settleErrors` now copies its plain report data with the standard
-`structuredClone`; the live observer still retains every unexpected failure. A regression
-first fails with three errors in a phase that originally had one, then passes after the copy.
-Failure-only UI reads also use the existing five-second bound. The third Windows
-renderer diagnostic kept drawing after its original timeout but remained in that read
-until the 45-minute job limit; bounded observation lets the existing cleanup run.
-
-**Windows package automation shares the software GPU's scheduling priority.** The
-unchanged 33f64b23 package in diagnostic40164904579 times out with the Node driver at
-normal priority. Win32 process observations show both software GPU processes at
-above-normal priority while more than 10 GiB of physical memory remains available.
-The renderer keeps drawing and a restored-window predicate returns true before its
-automation call times out. Raising only the Node driver to above-normal priority makes
-both controlled full journeys pass with no resource errors or surviving owned processes;
-the one-second driver timer's largest gaps fall to 1.031 and 1.025 seconds. The canonical
-driver uses Node's existing `os.setPriority` and records its actual priority. Application
-process priorities, package bytes, browser focus policy, inputs and gameplay deadlines
-are unchanged. The rejected focus-emulation experiment is absent from the implementation.
-`windows-courtyard-diagnostic/scheduling/analysis.json` retains the control and both
-successful runs, including all 16 reviewed screenshots and 14 safe child stops. These
-software-renderer journeys establish functionality, not graphics performance.
-The canonical 023c5ebf run40166046505 then passes all four complete package journeys;
-its Windows receipt records priority -7 and no resource or media failures.
-
-**Native font geometry and Rust editing share one text layout.** The installed egui
-row/cursor model assumes increasing horizontal positions and cannot represent mixed
-bidirectional caret/selection geometry with its per-grapheme browser font hook. The shared
-GPU text editor therefore uses the browser's standard SVG text and Range font measurements
-and Canvas font rasterization, while Rust owns values, selection, interaction and drawing.
-The transient, invisible SVG is a noninteractive font-run measurement adapter; it contains
-no controls or game-layout proxy. The existing nonvisual input adapter carries native
-composition and clipboard operations. This preserves installed/licensed fonts and full-run
-joining without shipping system fonts or maintaining a second text editor.
-
-The editor reuses the already installed `unicode-segmentation`1.13.3 and the small
-`unicode-linebreak`0.1.5 UAX#14 implementation for grapheme boundaries and wrapping. This
-keeps Unicode tables in maintained libraries instead of hand-written character rules.
-Browser rendering/input acceptance must cover the complete caller cutover, including
-multiline editing, joined scripts, selection, undo and composition before completion.
-
-The one nonvisual textarea carries accepted full-value/UTF-16 selection snapshots and
-immutable native edit intents. Field-owned normalization and validation run synchronously
-before the next native dispatch. Rust replays those intents between the existing ordered
-UI passes, so an earlier Clear/history action cannot be overwritten by a later stale
-transport snapshot. Reconciliation acknowledges delivered or discarded receipt sequences;
-an earlier layout cannot retire a later native field/composition. Clipboard events write
-their trusted native data synchronously. Enter submission is a per-dispatch result and
-does not surrender single-line focus.
-
-Editing history follows native operations rather than a render-time timer: continuous
-typing/deletion can stay one command across a pause, while cut, paste, selection changes
-and complete composition delimit commands. A small `VecDeque` history owns before/after
-values and UTF-16 selection together, retaining the existing undo-depth budget. The generic
-egui Undoer's timed, opaque snapshots cannot preserve these native clipboard transactions
-and cursor states. The independent Chrome cut/paste and paused-typing probes retain the
-reason for this boundary. Native selection is sampled before key/default-input/clipboard
-work, so a coalesced selectionchange event cannot make an immediately following paste use
-an earlier caret.
-
-Focus-changing UI events also commit before the next native keyboard, clipboard or
-pointer-down dispatch. Egui resolves Tab through the actual interested widgets and
-layout; an editor-only target list cannot reproduce disabled controls, buttons or
-modal ownership. Game therefore reuses its genuine UI paint/action passes in a
-native-only transaction, without sampling controllers/gameplay or submitting pixels.
-Platform focus/selection updates happen during that transaction, so a following
-trusted clipboard event reads the new field synchronously. Managed texture deltas,
-image retirements and surviving keyboard activations carry into the next animation
-frame. Internal input ownership can advance, while public widget/mesh diagnostics
-remain the last actual GPU submission.
-
-Font rows preserve complete native shaping, disjoint bidi selection rectangles and
-pointer caret affinity. UAX#14 wrapping uses native `Intl.Segmenter` dictionary boundaries
-for complex-context scripts. Browser tabs keep their original accepted value; only font
-raster input substitutes the nonprinting U+001F segment separator so Canvas does not
-normalize TAB into a space and change bidi ordering. Native full-context font pixels are
-positioned at the Source tab stops (Console: two spaces) with the same geometry used for
-selection. The native tab/embedding and selection probes are retained in the October23
-full-UI task. This is font geometry and text rasterization, not a rendered DOM control.
-
-Readonly content can explicitly request normal word wrapping and hanging line-end spaces.
-Cloud's unsupported-glyph heading uses measured native rows to grow its phone header,
-then paints within intrinsic inline boxes whose minimum width comes from the header's
-containing layout. Wrapping and box alignment remain separate; ordinary aligned text
-and native editors retain their existing behavior.
-
-**Superseded: the HUD used browser DOM with stock atlas sprites and repeated strips.** The world stays
-in WebGL; the screen-space HUD uses the browser's existing layout, hit testing and accessible
-buttons. `web/ui.rs` reads the same stock bundles as the renderer and projects the sprites,
-strips, mirrored frames and button art these screens require. This keeps the native art
-without introducing a UI engine.
-The HUD reads an explicit `HudState`; the local courtyard begins with the Website's fresh
-Ether loadout, and an authoritative runtime can replace those values without DOM ownership.
-
-**Menus emit typed commands; the session owns game state and persistence.** Title/Create,
-pause and settings share stock art and Rust GPU hit testing. Create emits `NewGameSelection`,
-and settings emits `GameSettings`; views never grant ranks or fabricate inventory. Modal
-input is scoped to its active surface and requires a controller-neutral handoff. Cost:
-the host must apply the preferences and supply the actual saved session behind Continue.
-
-Controller focus resolves after all real widgets register, under the highest active
-input scope. Explicit dispatch provenance keeps physical Tab on egui's global native
-path. The controller reuses the existing Source spatial kernel, then wraps in native
-registration order; native widget filters and consumed keys retain their ownership.
-The small egui accessors expose actual focus registrations and its deferred focus
-request, rather than maintaining a second application target inventory.
-Controller A queues one ordinary native activation independently of movement, using
-the pre-move active control or the winning scope's real preferred control. The
-existing empty commit delivers it only if the same enabled, visible widget/layer
-registers again. It expires immediately otherwise; physical Enter is not replayed.
-
-**No engine crate.** Bevy, macroquad and friends bring their own loop, scheduling and asset
-pipeline, and the game's whole value is that its loop, order and numbers are the native
-ones. The renderer is a few hundred lines of WebGL2 over `web-sys`. Cost: shadows, text and
-particles are ours to write.
-
-**The default `solomon-sim` build has no dependencies.** Hosts that
-save games enable the optional `persistence` feature, which derives serialization on the
-canonical state using the workspace's existing serde. This avoids a second mutable model
-and hand-maintained field copies for every actor. The simulation still performs no I/O.
-The storage boundary owns format versioning, validation and write conflicts; the map loader
-reconstructs immutable scenery and checks its identity before restoring mutable state.
-Cost: serialized field changes require a save-schema decision, and host-enabled builds
-include serde. Fixed-size native arrays retain their lengths through one shared adapter.
-The complete save-document codec lives in `solomon-assets`, alongside identity-checked
-world reconstruction. Browser IndexedDB and native files use that same boundary.
-
-**Browser and native hosts use the same retained world decoders.** `solomon-assets`
-owns the existing Boneyard catalog and navigation decoder, depending on `solomon-sim`
-for their output types and the workspace's serde/serde_json for the stock JSON format.
-The browser retains only fetch/upload work. This lets the native authority load precisely
-the same geometry without depending on browser code or duplicating format validation.
-
-**Owner overlays are promoted after native row planning.** The source's spell view
-raises selected roots to at least the owner's display depth plus 0.5. Its Pixi parent
-sorts children in place, retaining the preceding display order on equal depths. The
-shared presentation cursor retains view identity, creation order and empty-view depths;
-it never changes canonical registrations, rows or insertion admission. Courtyard and
-Boneyard pass their actual assigned depths, including the latter's grouped static bands.
-The source promotion method and installed Pixi sorter generate the regression fixture.
-
-**Large checkpoint records are heap-owned at the save boundary.** `GameCheckpoint` boxes
-its player and optional Boneyard records; serde writes the same JSON shape. Debug wasm
-deserialization otherwise retains several large nested return slots, exhausting the stack
-even with ample linear memory. The real reload journey measured a negative stack pointer
-at the first store of a derived visitor. Heap-pinning the loading future and boxing these
-two records removes that duplication without increasing the stack limit or changing live
-simulation ownership. College and Boneyard reloads verify the complete boundary.
-
-**Trunk with wasm-bindgen, and no JavaScript bundler.** `web/index.html` is the only
-hand-written web file; Trunk builds the wasm, the loader and `web/dist/`. Cost: Trunk's
-version matters (0.22 on the M2, fetching a matching wasm-bindgen CLI).
-
-**The browser edge returns `Result<T, String>`.** Startup failures (a bundle that is too
-short, a missing WebGL2 context, a fetch that 404s) surface as one sentence in the page's
-status line. A typed error enum would add variants nothing matches on. Kernels never return
-`Result`; their inputs are typed so invalid input does not exist.
-
-**A 100 Hz accumulator with a 250 ms catch-up cap.** The native game ticks at 100 Hz and the
-Website's accepted-frame model does the same; a cap stops a backgrounded tab from running
-seconds of simulation on resume. Cost: a tab hidden for a minute loses that minute.
-
-**Website kernel names survive the port** (`hubPortalAt` → `hub_portal_at`,
-`stepHubAmbient` → `HubAmbientState::step`, constants verbatim in `SCREAMING_SNAKE`). A grep
-on either side finds the other. Cost: a few names that are not what a Rust author would
-choose first.
-
-**Fixed-actor tables live in `sim`; the art that dresses them lives in `web`.**
-`HUB_COURTYARD_OBSTACLES` carries position, radius and sort bias because they are rules;
-`OBSTACLE_RECORDS` in the web crate carries the sprite records because they are art. The
-two arrays are index-aligned and each says so.
-
-**The ambient state owns the teacher's registrations for one release.** The Website reserves
-two transient painters while the column or frame strip is visible, retaining those ordinals
-until both disappear. In a world, the ambient step uses the shared `WorldPainterOrder`; in
-the standalone oracle it derives the source fallback ordinals from release order. This keeps
-teacher, enemy and spell births in one manager sequence without a second registration owner.
-
-**Painter insertion bands keep their owner's registration.** Air Lightning's invisible
-ZAnimSplit owner queues 25-unit bands when its row drains. Those children append after
-already-queued roots, including roots from other manager lanes. `PainterLayer::is_insertion`
-and `visible` retain that source admission rule in the shared planner; allocating new actor
-ordinals or sorting a flat list would change occlusion. The source cases live beside the
-ordinary depth/manager oracle in `hub-depth-goldens.json`.
-
-**Released Ether Boulder pieces draw with their actual Actor registrations.** The pinned
-Website release spreads the parent's painter list onto every piece while allocating distinct
-logical Actor registrations. Its own strict painter planner then rejects the duplicate painter
-ordinal. Rust preserves those source simulation rows for replay, and its view uses each piece's
-actual Actor registration, keeping the source's shared light/painter ownership contract without
-allocating extra IDs. The strict planner remains unchanged. The matched release capture and
-original source error are retained in the fleet's `visuals-weld-gpu` receipt.
-
-**Room collision uses the same swept circle against segments as the courtyard.** The Website
-expresses every Hub room as a segment table with a table-to-world offset; porting those
-tables keeps one collision kernel. Rectangle collision in `collision.rs` serves the knockback
-and enemy movement kernels, which the Boneyard port will use.
-
-## Verification
-
-**Gameplay input has one browser sample and a camera-owned aim projection.**
-`MovementInput::sample` owns the native gamepad read for movement, primary and belt levels.
-It returns canvas-normalized pointer points, player-relative directions, a facing request,
-or `Retain`; `None` clears aim. The Game maps requests through its actual renderer viewport
-and preserves the last world target after mouse/touch release. Controller aim continues to
-reproject while the player moves. The same adapter clears held input on UI blocking, blur,
-page hide and touch cancellation, with a neutral controller handoff after modals.
-
-**Belt presses and held casts are distinct.** Queued `belt_pressed` intents activate items
-once, while `quickbar` supplies the held secondary level. GUI taps activate on release and
-provide one sampled pulse if they begin and end between frames. The session processes this
-input path and ignores the HUD's legacy click notification for that same pointer press.
-The HUD's controller outline is view context from the input sample, including empty slots.
-
-**Player panels borrow canonical state and emit commands.** `PlayerPanelSnapshot` carries
-the actual skillbook, economy, belt, progression, resources and session-derived attributes.
-The DOM owns selection, pointer capture, learned-page placement and modal navigation.
-`PlayerPanelAction` wraps the existing inventory and belt commands; the session applies
-them and supplies the next snapshot. Item selection retains its source ownership, so an
-equip or consume cannot turn a stale backpack selection into another equipment command.
-
-**Native tooltip numbers preserve JavaScript's decimal rounding.** Rust's formatter uses
-ties-to-even; the pinned source's `toFixed` rounds exact halves away from zero. The panel
-kernel formats the original binary significand rather than multiplying the float first.
-This preserves both `2.5 → 3` and `2.55 → 2.5` at their respective authored precisions.
-All authored stat/bonus templates replay against the source formatter.
-
-**Fixtures are JSON written by one Node script per kernel family**, read with serde's
-`float_roundtrip` so every double survives the trip. Each file starts with `source` (the
-Website file) and `generator` (the script), so a reader can regenerate it. A single large
-script would make every ticket conflict; a per-family script lets tickets add fixtures in
-parallel.
-
-**Fixtures are committed.** The tests must pass on a clean checkout without Node; the
-scripts exist to regenerate when the Website checkout moves.
-
-**The old Mod Loader is retired and nothing here reads it.** This rebuild replaces it. The
-three retail recordings its tests used (`rng-goldens`, `float-rng-goldens`,
-`movement-goldens`) are copied into `crates/sim/tests/fixtures/native/` with their headers
-intact, so the native evidence travels with this repository. Reverse-engineering notes are
-cited from the Website's native-parity ledger (`../Website/docs/game-native-parity-re.md`)
-or by native address.
-
-**Unit tests use hand-derived numbers; fixtures carry the truth.** A unit test that merely
-restates a fixture value explains nothing. A unit test that derives a value (a cycle of 847
-ticks is 268 cast, 79 release, 500 idle) shows the reader why.
-
-## Operations
-
-**The standalone launcher serves bundled assets on a fixed loopback origin.**
-`solomon-launcher` uses the standard library to serve the compiled client and opens the
-installed browser. The package carries the complete `web/dist` tree; Website, Node, Rust
-and Trunk are build/development tools only. Port 4188 is stable because IndexedDB saves
-belong to an origin. A busy port produces an error instead of silently moving saves to a
-new origin. Four bounded file readers support concurrent atlas loads and single audio byte
-ranges. This host adds no simulation rules or new dependencies. Cost: the game uses the
-system browser and the launcher process remains open while playing.
-
-**The service binds loopback and `tailscale serve` publishes it.** Nothing listens on a LAN
-interface; the tailnet is the only route. The launchd agent `com.jarrett.solomon-rust-game`
-owns port 4180 and serves the main checkout's release build. Cost: a developer's dev server
-uses another port, and an edit in the main checkout rebuilds the served site, which is why
-agents work in worktrees.
-
-**`rustfmt.toml` sets width 100 and `use_small_heuristics = "Max"`.** Reference tables and
-struct literals stay on one line each, so a row of a table reads like the row in the source.
-
-**Native WebSocket transport uses synchronous Tungstenite over standard TCP.** The launcher
-reuses its existing HTTP asset responder; upgrades to `/session` leave the four framing workers
-after the handshake. The browser uses its native WebSocket feature. One caller-owned
-authority loop consumes connection/message/disconnection events; transport workers never
-interpret gameplay or run a simulation. Reliable output is bounded by count and bytes,
-while one replaceable `Arc<PreparedSnapshot>` shares a completed world across peers and
-is compacted only after the socket selects it. Event pressure
-blocks socket workers instead of losing critical participant lifecycle events; shutdown
-drops the receiver and closes owned sockets before joining workers. Cost: one native-only
-protocol dependency and explicit thread/queue ownership, without an async web framework or
-another implementation of RFC 6455. Gameplay credentials, input sequencing, pause/readiness
-and session ownership remain in the host above this transport.
-
-Framed static responses also move into existing owned, connection-leased workers. A
-browser may pause media consumption after buffering; a30-second write timeout was
-observed truncating a declared206 with Unix WouldBlock. Static transfers therefore have
-no consumption deadline, while request/header parsing, supervisor HTTP and the upgrade
-handshake retain their blocking deadlines. Static writes use nonblocking TCP and retain
-their byte offset on `WouldBlock`, checking the existing shutdown flag at the existing
-10 ms poll interval. Windows CI established that closing retained socket clones alone did
-not reliably release an already blocked asset send. Shutdown also closes those clones
-before joining workers, and admission checks the stop flag under the same connection lock
-as the shutdown sweep. The existing connection bound limits worker lifetime/count.
-MIME, ranges and path validation stay in one responder; its unused alternate accept pool
-is removed. [The causal ledger](NATIVE-HTTP-MEDIA.md) records actual trace and TCP evidence.
-
-Established WebSockets use nonblocking TCP. The real Windows package lost its College
-connection when a blocking
-send reached its 250 ms deadline while the native process stayed alive. Windows documents
-that a timed-out blocking send leaves the connection indeterminate, so extending or retrying
-that kernel deadline is not the transport contract. The standard library's nonblocking
-mode gives the installed Tungstenite codec `WouldBlock` instead. The codec retains the
-partially written frame; the worker flushes those bytes before taking another message.
-Remaining reliable messages stay in the bounded outbox and its single unsent snapshot
-remains replaceable. Idle polls keep the existing 10 ms cadence, and the existing missed-pong
-and close deadlines still retire stalled readers. No async runtime or new dependency is
-needed. An explicit close starts its deadline when observed, allowing preceding reliable
-bytes to drain within that same deadline even when its close frame cannot yet be queued.
-After receiving a peer Close, the worker stops reading and drives only the codec's
-flush until the reply drains or that same deadline expires. The restored-session
-deployment test exposed a queued close reply behind a partially written large frame:
-after flush returned WouldBlock, another read could report ConnectionClosed before
-the output finished. The real TCP peer-close regression holds reads, sends Close,
-then requires an intact started frame and the exact close reply when reading resumes.
-The actual TCP slow-reader tests require an intact 16 MiB frame exactly once,
-ordered subsequent control, the latest snapshot and resumed input, plus heartbeat expiry
-and explicit-close identity/deadlines when reading never resumes. See the
-[Windows socket contract](https://learn.microsoft.com/en-us/windows/win32/winsock/sol-socket-socket-options)
-and [Rust nonblocking TCP](https://doc.rust-lang.org/std/net/struct.TcpStream.html#method.set_nonblocking).
-
-
-**Native portable profiles use the source attachment and one canonical JSON writer.**
-The import/export bridge retains the original CFG, SAV and opaque slot files with their
-canonical base64 and SHA-256 identities. The portable settled-Hub fields are separate from
-that byte-preserved native state, matching `save/portable-game-profile.ts`; this layer
-contains no Session reconstruction or second gameplay owner. Fresh native export starts
-from the unmodified controlled retail Hub template, embedded as a tracked source asset.
-The existing shared JSON writer now formats all serializable records with ECMAScript
-number spelling, preserving source record order and its finite-Lua-value validation.
-
-The source permits isolated UTF-16 surrogates in portable JSON strings. Rust `String`
-cannot represent them; the portable JSON parser rejects those crafted documents instead
-of replacing their characters. The exact source witness is retained in the parity evidence directory as
-`native-save/utf16-source-edge.json`. Standard valid UTF-8 native files and portable
-profiles have exact source fixtures; arbitrary JavaScript string parity is not claimed.
-
-
-**Authored Boneyards use the editor's binary reader and ordered scene projection.**
-`assets::boneyard::decode_boneyard` follows `parseBoneyard` then `projectBoneyard` on
-actual imported bytes. It shares the canonical chunk record with native saves, while
-retaining the editor's distinct depth/size limits and its acceptance of duplicate,
-non-UTF-8 named-buffer names. Unknown object and recipe records project to the same
-opaque geometry; content admission remains responsible for playable-scene validation.
-
-`boneyard_scene_source_value` preserves compact field order and absent-field omission for
-source geometry digests. Raw nonfinite f32s become JSON null exactly where JSON.stringify
-would do so. Roads retain link bits; fences omit native post sentinels; opening Solomon
-selection and ground-clutter filtering run before hashing. The DeadHawg index is u64:
-the editor adds 114 to a u32 atlas index, which can exceed usize on wasm32. The complete
-ordered output and rejection strings replay against five real files and authored binary
-cases, without a separate geometry/hash model or a fallback stock scene.
-
-
-**Saved XP thresholds retain the source's floating values.** The unchanged native portable
-import accepts fractional and inverted next/previous thresholds, and a zero-XP grant keeps
-them. PlayerProgressionState therefore uses f64 for those two fields. The generated stock
-threshold table remains integer data, converted exactly when ordinary XP or a shared
-milestone replaces the imported values. Experience progress retains the source's span<=0
-branch. A real portable→web→restore fixture verifies the imported values, ratio and later
-XP/RNG transitions, without integer truncation or numeric tolerance.
-
-
-**Native import/export composes the public Website save boundary.**
-`native_save::runtime` follows `game-save-portability.ts` and `game-save-files.ts`, using
-one canonical GameSession for a settled native import and the existing public Website
-restore/create/profile functions for conversion. It contains no browser I/O or competing
-legacy migration. Native CFG/SAV bytes and opaque sibling files remain in their attachment;
-a native ZIP replaces its one browser support document instead of nesting older copies.
-
-A raw browser JSON import starts a local-only lineage and clears its native attachment
-and party resume token. Importing a ZIP's browser support document instead supplies the
-ZIP's current, verified native attachment. Export retains the actual continuation, loaded
-scene, mod identities and ordered state in that support document while projecting only
-retail-supported profile/wizard fields into the native files. The embedded support JSON
-is compared as a complete source value; exact disk bytes and portable JSON are compared
-separately. ZIP framing has its independent exact-byte codec fixtures.
-
-The source wraps integer words when writing a native disk file, then validates the
-original web values in its final portable parser. The conversion retains those originals
-through final validation, so values such as 4,294,967,297 gold cannot silently wrap to one
-and become accepted. Unsupported Weld/Plane Orb, native storage, advanced purchases,
-unserialized bonuses and mod Boasts retain the source's exact warning and reset rules.
-
-**Source sine and cosine use the same pinned V8 numeric owner as headings.** Complete
-native-profile import exposed a one-bit student-wander difference after the existing
-900-tick College settlement. With the identical radians word `40021c3f8b5a7e55`, pinned
-Node's sine is `3fe89e6475b33eb8`; Apple libm produces `3fe89e6475b33eb7`. Multiplying by
-the actual 7.688988409936428 magnitude reproduces the original saved-state discrepancy.
-`float::{sin,cos}` now retain fdlibm's kernel, medium cancellation passes and large
-24-bit-limb reduction. Their explicit fused operations follow the pinned ARM64 binary,
-including separately rounded products that precede compensated tails. The existing V8
-license applies. The independent `float-sincos-goldens` corpus retains 20,100 IEEE input
-words spanning the witnessed argument, signed zero, subnormals, reduction boundaries,
-large exponents and nonfinite inputs. Source-owned simulation and pure presentation
-kernels call this owner without moving any `fround` boundary. A source pair on one
-operand uses `float::sin_cos`; it returns the two scalar results rather than calling a
-platform combined sine/cosine implementation.
-
-**Fire's envelope uses the recorded V8 power evaluation.** The current low-quality Fire
-fixture exposed the equal-input `0.95 ** 10` difference: the JavaScript result ends in
-IEEE word `...f382`, while native `powf` ends in `...f383`. The fdlibm split logarithm
-and exponential from Node v22.17.0 reproduce that witness. A broader independent corpus
-found four additional one-bit differences; compiling that same C++ source with ARM64
-expression contraction enabled matches all 17,431 cases, while disabling it reproduces
-the four differences. `float::pow` makes those fused operations explicit so native and
-WASM use the same rounding. Both targets pass the unchanged corpus, including negative
-bases, signed zero, subnormals and overflow boundaries. The existing V8 license applies.
-Only the observed Fire envelope caller changes; this does not assert that every browser
-engine or platform implements transcendental functions identically.
-
-**Developer policy inference uses the retained deployed checkpoint and plain Float32 loops.**
-`web/assets/native/ml-bot-policy-v7-selected.sdml` is the pinned Source server asset,
-SHA-256 `85edda9d6bd7f7f08eca209fb9790c8d4d5e570e20b8ff8d5bb08284b3dd055c`.
-`assets::ml_bot_checkpoint` owns its binary/ordered-JSON boundary and the retained v7
-schema. `sim::ml_bot` owns the immutable tensor model and inference; the host can share
-one model while each real admitted bot retains its own observation/controller memory.
-There is no training or ML runtime dependency. Source `fused` requires a rounded Float32
-product followed by a separate rounded Float32 sum, not a hardware FMA. Softmax stores
-Float32 exponentials but accumulates the original double values before normalization.
-Injected sampling draws are separate from gameplay RNG; the deployed host uses argmax.
-The source fixture runs the actual selected checkpoint and retains complete latent,
-probability, action and value outputs as well as checkpoint admission/re-encoding cases.
-
-**Runtime event delivery stays native and off the authority thread.** The Source
-`host/runtime-event-publisher.ts` contract uses loopback HTTP, a 256-entry queue,
-five attempts and a two-second request timeout. The launcher reuses the installed
-`url` WHATWG parser and `ureq` HTTP client with default features disabled; it does
-not add a browser dependency or its own HTTP parser. A single worker owns ordered
-delivery and shutdown draining. Actual Source configuration and HTTP fixtures pin
-the body, authorization, retry order, queue eviction and closed admission behavior.
-
-**The complete enemy AI recording is stored as lossless zlib data.** Its original JSON
-exceeds GitHub's single-file publication limit. The oracle uses Node's standard zlib
-encoder; the existing replay loader inflates the owned `.json.zlib` fixture with the
-already-installed `miniz_oxide` codec (a simulation test dependency only). The neighboring
-`.json.sha256` file records the exact decompressed JSON bytes. The initial conversion
-compares every original byte before removing the redundant uncompressed file; subsequent
-oracle recordings produce the compressed fixture and its JSON hash together. Simulation
-assertions, source inputs and expected numeric values are unchanged by packaging.
-
-### Held pointer activation
-
-The shared GPU context disables egui's default 0.8-second click expiry through
-`InputOptions::max_click_duration`. Source `NativeUiButton` delegates to ordinary
-browser click activation, which accepts a stationary release after a longer hold.
-The actual c2a64e0 package received a trusted browser click after a 1.1-second hold
-but stayed on Title. The native context regression fails at 0bab38d4 and also checks
-that cancellation and movement outside the button never activate it. The canonical
-packaged journey retains the held Settings click after saved resume. Existing
-pointer ownership, drag distance, cancellation and keyboard behavior stay native.
-An unchanged Windows dc9a103 package independently reproduced the same failure in
-diagnostic40153843543: a trusted stationary 4.3-second press/release focused the
-Tutorial prompt's No button, but did not activate it. The window remained visible
-and focused and rendered 90 frames between the two events. Two other full journeys
-passed. The canonical driver now waits for actual native window state and a fresh
-GPU frame after its existing Windows minimize/restore actions; background policy,
-input events and gameplay timeouts remain unchanged.
-
-### Fullscreen activation ownership
-
-The fullscreen capability runs synchronously in its trusted browser click, while
-native egui responses handle keyboard/controller activation. A mutable
-`gesture_handled` flag cleared by every paint could be consumed by an intermediate
-layout before the queued pointer release. The actual7954665 browser trace records
-one pointer click requesting fullscreen at1628.1ms and exiting it at1640.8ms.
-`fullscreen-runtime.cjs` retains the failing browser calls and checks actual
-pointer, touch, Enter and Space activation against both the browser and GPU label.
-
-Classify the native response by its existing pointer provenance: a primary pointer
-click belongs exclusively to the trusted DOM listener; only non-pointer clicks
-activate from the egui response. No timing window or duplicate-action suppression
-state is needed. Existing hit ownership still checks the topmost enabled widget,
-clipping, transforms and modal admission.
-
-The same actual browser check exposed a separate native Tab boundary: after touch
-cleared egui focus, the first Tab kept its browser default and moved focus to
-browser chrome before the queued GPU navigation ran. Document focus was true
-before Tab and false after it; bringing the page forward did not change that.
-The browser input owner now captures Tab whenever an actual interactive GPU hit
-region or active editor exists. This admits the first native focus without
-requiring a previously focused widget. Other keys keep their existing capture
-rules, and no DOM control or forced focus call is introduced.
-
-### Three-bank input admission
-
-The existing player belt stores three eight-slot banks and the UI sends their
-absolute slot indices. Both input validators still imposed the historical
-eight-slot limit, so a correctly bound second or third bank could never cast.
-The client and native host now use `belt::PLAYER_BELT_SLOT_COUNT` as their common
-bound. Input sequencing, cast edges, acknowledgements and the wire shape remain
-unchanged; an invalid slot never advances a sequence.
-
-The client and host `all_three_hotbars` regressions fail on the old validators
-and cover the first/last slot of every bank, late press/release rebasing and
-invalid slots24/usize::MAX. The historical Website oracle remains unchanged:
-revision `bd93153c0aff32a656b2d37b9cfbcf070a5917d6` retains both recorded source
-hashes. Its regenerated fixtures use slot24 as their common invalid boundary,
-while the current additional valid banks are covered by those regressions and
-the actual `panel-variants.cjs` native casting journey. This does not claim the
-historical Source input validator accepted all three banks.
-
-### Mobile layout sharing presentation
-
-`DarkCloudLayouts.tsx` and `dark-cloud-content.css` keep the share-code field
-editable while its already-captured request is pending. Only Load and Submit
-are disabled. The real `mobile-sharing.cjs` request hold reproduces the previous
-Rust field disabling after an ordinary editor Save, real publication and trusted
-clipboard copy. Its phone screenshot also shows the author obscured by Copy.
-
-The layout view now uses the Source control-panel actions, native text, centered
-980px sections and 800px receipt. The viewport's 700px breakpoint changes the
-receipt to four separate rows. Narrative text retains its Source line height;
-the native editor owns centered monospace text, selection, caret and placeholder
-geometry through one explicit alignment option. Existing fields keep left
-alignment. The shared Cloud control-panel action painter serves detail and
-layout screens; neither adds another button skin inside the native bevel.
-
-Actual API requests, device layout validation/storage and completion generations
-keep their current owners. No visual DOM control or test-installed layout is
-used by this repair or its browser journey.
-
-### Create retry and match-loading presentation
-
-The pinned `create-loadout-finalization.ts` releases a failed manual or randomized
-commit without replacing its draft. `CreateMenuScene.tsx` retains the selection;
-`MainMenuScene.tsx::startHub` retries that selection after a failed connection.
-The actual219f990 loading journey holds a real Welcome, closes only that owned
-transport, and observes the restored Lucian draft. Its next ordinary submission
-never opens another connection: the separate `HostedGame::creating` flag had
-already reset, so admission reopened Create beneath its still-pending commit.
-
-The menu's pending commit now distinguishes Title's initial New Game request from
-the final loadout submission. Removing the duplicate hosted flag preserves the
-same admission, save-retirement and consent paths while making a released draft
-retryable. No new retry timer, transport fallback or synthetic state is involved.
-
-The same browser witness measures the old loading label at23/22/28px for
-900/844/1100px-high viewports instead of Source26.6667/25.0074/32.5926px line boxes.
-`match-loading-screen.css` specifies Alegreya600, an explicit clamped line height
-and a0/1/2px text shadow. The painter now uses the canonical native font run and
-Gaussian text shadow (sigma1), with native ellipsis for a constrained line. Its
-delay, progress, artwork, input scope and lifecycle remain unchanged.
-
-### Saved-content mismatch cancellation
-
-The actual `routing-content.cjs` journey changes three real packages after saving
-a wizard. Its added, missing and changed groups render correctly, but Cancel
-leaves a hidden menu because Continue hid Play before the mismatch was checked.
-Pinned `MainMenuScene.tsx::requestResumeLastGame` retains Play under the dialog;
-its cancellation clears only that dialog and the pending new-game admission.
-
-`Menu::show_mod_mismatch` now restores Play when the preceding admission hid it,
-using the same retained-menu rule as the local-content consent. Other visible
-contexts remain intact. The ordinary browser journey is the regression: Cancel
-must restore Play and preserve the complete saved document and revision before
-the same wizard can Continue with the changed content.
+Compiled definitions, admitted asset descriptors, and checkpoints are plain
+`sim::modding` values. Lua VMs and function handles live in native
+`solomon-modding` and are reconstructed from the admitted package on reload.
+
+`mlua` with vendored Lua 5.4 preserves the supported language without requiring a
+system Lua installation. Execution hooks, memory limits, allowed globals, and
+accepted includes bound the VM. Filesystem, process, and module loading are not
+exposed. VM randomness does not consume gameplay RNG.
+
+Package graph digests are a data compatibility contract: en-US collation,
+ECMAScript number spelling, array-index ordering, and SHA256 must stay stable.
+ICU collation and `ryu-js` provide those representations. Compiler tests protect
+the digest when dependencies change.
+
+## Native I/O
+
+The native transport uses synchronous Tungstenite and standard TCP with owned
+connection lifetimes. Asset transfers leave the framing pool after header parsing
+and use shutdown-aware nonblocking writes. Slow media readers can pause without
+truncating the declared response or preventing new request framing.
+
+Event publishing and diagnostic serialization stay off the authority thread.
+The UTC formatter at the launcher edge emits signed score timestamps with three
+millisecond digits; the simulation itself does not read wall-clock time.
+
+## Desktop packaging
+
+The released shell owns the window, native menus, child processes, peer transport,
+and optional updates. The Rust authority owns gameplay. Desktop startup serves
+root-mounted WebAssembly with an external initializer and a narrow CSP that
+permits WASM compilation.
+
+A package records its release repository and immutable revision. Release archives
+are inspected before the packaged journey. Unit tests alone cannot qualify a
+desktop archive. Optional update failures leave offline play available.
+
+Media checks distinguish trusted suspension on an already-ready channel from
+truncation or an unexpected failure. Error reports copy their observations so
+later page failures cannot mutate an earlier result.
+
+## Test and documentation data
+
+Committed fixtures keep their exact expected values, provenance, and compression
+checksums. They run without a reference server. New fixtures need independent
+evidence; expected output generated by the code under test does not establish
+correctness.
