@@ -267,3 +267,77 @@ impl serde::Serialize for LootActorRef<'_> {
         serialize_actor(self, serializer)
     }
 }
+
+// Preserve the flat fields and record name for the legacy save decoder. It uses
+// typed struct and enum visitors, which serde flatten would bypass.
+#[cfg(feature = "persistence")]
+#[derive(serde::Deserialize)]
+#[serde(rename = "BoneyardLootActor")]
+pub(super) struct LootActorFields {
+    activation_delay_ticks: i64,
+    age_ticks: u64,
+    alpha: f64,
+    amount: u64,
+    animation_phase: f64,
+    bonus_kind: Option<crate::loot::NativeBonusKind>,
+    bounce_height: f64,
+    bounce_velocity: f64,
+    frame_phase: f64,
+    id: usize,
+    item: Option<crate::economy::HubInventoryItem>,
+    kind: crate::loot::NativeLootDropKind,
+    last_step_tick: Option<u64>,
+    lifetime_ticks_remaining: Option<i64>,
+    native_type_id: u32,
+    orb_kind: Option<crate::loot::NativeOrbKind>,
+    orb_value: f64,
+    painter_registration: crate::painter::PainterRegistration,
+    position: crate::Vec2,
+    rotation_deg: f64,
+    scatter_seed: u32,
+    scatter_active: bool,
+    scatter_progress: f64,
+    settled_sound_emitted: bool,
+    source: crate::loot::NativeLootDropSource,
+    spawn_tick: u64,
+    tier: u32,
+}
+
+#[cfg(feature = "persistence")]
+impl From<LootActorFields> for BoneyardLootActor {
+    fn from(row: LootActorFields) -> Self {
+        Self {
+            body: LootBody {
+                activation_delay_ticks: row.activation_delay_ticks,
+                age_ticks: row.age_ticks,
+                alpha: row.alpha,
+                animation_phase: row.animation_phase,
+                bounce_height: row.bounce_height,
+                bounce_velocity: row.bounce_velocity,
+                frame_phase: row.frame_phase,
+                id: row.id,
+                kind: row.kind,
+                last_step_tick: row.last_step_tick,
+                lifetime_ticks_remaining: row.lifetime_ticks_remaining,
+                painter_registration: row.painter_registration,
+                position: row.position,
+                rotation_deg: row.rotation_deg,
+                scatter_seed: row.scatter_seed,
+                scatter_active: row.scatter_active,
+                scatter_progress: row.scatter_progress,
+                settled_sound_emitted: row.settled_sound_emitted,
+                spawn_tick: row.spawn_tick,
+            },
+            reward: LootReward {
+                amount: row.amount,
+                bonus_kind: row.bonus_kind,
+                item: row.item,
+                native_type_id: row.native_type_id,
+                orb_kind: row.orb_kind,
+                orb_value: row.orb_value,
+                source: row.source,
+                tier: row.tier,
+            },
+        }
+    }
+}

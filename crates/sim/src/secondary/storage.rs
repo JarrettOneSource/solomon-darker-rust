@@ -413,3 +413,89 @@ impl serde::Serialize for SecondaryActorRef<'_> {
         serialize_actor(self, serializer)
     }
 }
+
+// Preserve the flat fields and record name for the legacy save decoder. It uses
+// typed struct and enum visitors, which serde flatten would bypass.
+#[cfg(feature = "persistence")]
+#[derive(serde::Deserialize)]
+#[serde(rename = "NativeSecondaryActorState")]
+pub(super) struct SecondaryActorFields {
+    age_ticks: u64,
+    alpha: f64,
+    damage: f64,
+    enhanced: bool,
+    endpoint: crate::Vec2,
+    ether_drain: Option<super::ether_drain::NativeEtherDrainState>,
+    frame: f64,
+    freeze_ticks: u64,
+    golem: Option<NativeSecondaryGolemState>,
+    golem_death: Option<crate::death_animations::NativeGolemDeathAnimation>,
+    /// This source field holds both enemy IDs and parent secondary actor IDs.
+    hit_target_ids: Vec<u64>,
+    id: u64,
+    kind: NativeSecondaryActorKind,
+    lifetime_ticks: u64,
+    light_registration: Option<crate::painter::PainterRegistration>,
+    midpoint: crate::Vec2,
+    misc_light_append_ordinal: Option<usize>,
+    owner_id: String,
+    painter_registrations: Vec<crate::painter::PainterRegistration>,
+    phase: f64,
+    position: crate::Vec2,
+    presentation_rng: Option<crate::NativeRng>,
+    quantity: f64,
+    radius: f64,
+    rank: u32,
+    rotation_radians: f64,
+    scale: f64,
+    /// Native effect actors can also carry non-ability rows 14, 22 and 53.
+    skill_id: Option<usize>,
+    slow_factor: f64,
+    target_id: Option<usize>,
+    variant: i32,
+    velocity: crate::Vec2,
+    world_key: String,
+}
+
+#[cfg(feature = "persistence")]
+impl From<SecondaryActorFields> for NativeSecondaryActorState {
+    fn from(row: SecondaryActorFields) -> Self {
+        Self {
+            common: SecondaryActor {
+                age_ticks: row.age_ticks,
+                alpha: row.alpha,
+                damage: row.damage,
+                enhanced: row.enhanced,
+                endpoint: row.endpoint,
+                frame: row.frame,
+                freeze_ticks: row.freeze_ticks,
+                hit_target_ids: row.hit_target_ids,
+                id: row.id,
+                kind: row.kind,
+                lifetime_ticks: row.lifetime_ticks,
+                light_registration: row.light_registration,
+                midpoint: row.midpoint,
+                misc_light_append_ordinal: row.misc_light_append_ordinal,
+                owner_id: row.owner_id,
+                painter_registrations: row.painter_registrations,
+                phase: row.phase,
+                position: row.position,
+                presentation_rng: row.presentation_rng,
+                quantity: row.quantity,
+                radius: row.radius,
+                rank: row.rank,
+                rotation_radians: row.rotation_radians,
+                scale: row.scale,
+                skill_id: row.skill_id,
+                slow_factor: row.slow_factor,
+                target_id: row.target_id,
+                variant: row.variant,
+                velocity: row.velocity,
+                world_key: row.world_key,
+            },
+            ether_drain: row.ether_drain,
+            golem: row.golem,
+            golem_death: row.golem_death,
+        }
+    }
+}

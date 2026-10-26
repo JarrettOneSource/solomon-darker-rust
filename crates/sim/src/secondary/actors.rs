@@ -267,8 +267,8 @@ pub struct SecondaryActor {
 /// Runtime actors are queried through `SecondaryActors`.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Deserialize))]
+#[cfg_attr(feature = "persistence", serde(from = "super::storage::SecondaryActorFields"))]
 pub struct NativeSecondaryActorState {
-    #[cfg_attr(feature = "persistence", serde(flatten))]
     pub common: SecondaryActor,
     pub ether_drain: Option<super::ether_drain::NativeEtherDrainState>,
     pub golem: Option<NativeSecondaryGolemState>,

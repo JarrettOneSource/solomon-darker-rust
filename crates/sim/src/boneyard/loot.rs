@@ -126,10 +126,9 @@ pub struct LootReward {
 /// Owned birth/checkpoint record. Live entities keep body and reward as components.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Deserialize))]
+#[cfg_attr(feature = "persistence", serde(from = "storage::LootActorFields"))]
 pub struct BoneyardLootActor {
-    #[cfg_attr(feature = "persistence", serde(flatten))]
     pub body: LootBody,
-    #[cfg_attr(feature = "persistence", serde(flatten))]
     pub reward: LootReward,
 }
 
