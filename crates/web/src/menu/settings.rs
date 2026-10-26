@@ -3,6 +3,8 @@
 mod fullscreen;
 mod mobile;
 mod mobile_sharing;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests;
 mod transfer;
 
 use super::widgets;
@@ -78,6 +80,47 @@ enum NumericSetting {
 }
 
 impl NumericSetting {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn accessible_value(self, ui: &Ui, response: &egui::Response, value: &mut u16) {
+        use egui::accesskit::{Action, ActionData};
+
+        let (_, _, min, max) = self.definition();
+        if response.enabled() {
+            ui.input_mut(|input| {
+                input.consume_accesskit_action_requests(response.id, |request| {
+                    match request.action {
+                        Action::SetValue => {
+                            if let Some(ActionData::NumericValue(next)) = request.data
+                                && next.is_finite()
+                            {
+                                *value = next.round().clamp(f64::from(min), f64::from(max)) as u16;
+                            }
+                        }
+                        Action::Increment => *value = value.saturating_add(1).min(max),
+                        Action::Decrement => *value = value.saturating_sub(1).max(min),
+                        _ => return false,
+                    }
+                    true
+                });
+            });
+        }
+        ui.ctx().accesskit_node_builder(response.id, |node| {
+            node.set_numeric_value(f64::from(*value));
+            node.set_min_numeric_value(f64::from(min));
+            node.set_max_numeric_value(f64::from(max));
+            node.set_numeric_value_step(1.0);
+            if response.enabled() {
+                node.add_action(Action::SetValue);
+                if *value < max {
+                    node.add_action(Action::Increment);
+                }
+                if min < *value {
+                    node.add_action(Action::Decrement);
+                }
+            }
+        });
+    }
+
     fn definition(self) -> (&'static str, &'static str, u16, u16) {
         match self {
             Self::Sound => ("sound", "SOUND VOL:", 0, 100),
@@ -983,6 +1026,8 @@ impl SettingsView {
         if response.has_focus() {
             row_outline(&paint, ui, rect);
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        setting.accessible_value(ui, &response, &mut value);
         if value != before {
             setting.set(&mut self.settings, value);
             self.changed = true;

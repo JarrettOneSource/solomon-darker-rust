@@ -107,6 +107,8 @@ Native accessibility uses AccessKit and the operating system's accessibility tre
 Text ranges, bidirectional character bounds and UTF-16 selection come from the
 same editor layout. OS edits and selection requests enter the normal editing
 model, including read-only policy and undo history.
+Settings sliders expose their numeric value, bounds and step. Native adjustment
+requests update the same bounded setting used by pointer and keyboard input.
 Browser announcements use `ariaNotify` when available or one marked, nonvisual
 text-only live region. Native text shaping and composition use Parley and winit;
 browser text uses its native font and composition APIs.

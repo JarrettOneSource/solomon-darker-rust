@@ -288,8 +288,12 @@ def settings(app, verify=False):
     slider = app.control("settings-range:music")
     if not verify:
         app.activate()
+        slider.set_numeric_value(37)
+        wait(lambda: slider.element().numeric_value == 37, "accessible music adjustment", 10)
         slider.focus()
+        slider.wait_focused()
         INPUT.press("Home")
+        wait(lambda: slider.element().numeric_value == 0, "music range minimum", 10)
         INPUT.press("ArrowRight")
     wait(lambda: slider.element().value == "1" or slider.element().numeric_value == 1,
          "persisted music volume", 10)
@@ -447,9 +451,10 @@ def check_peers():
     host.key("Escape")
     guest = Application("guest", PROFILES / "guest")
     guest.activate()
-    guest.control("launcher/invite").focus()
-    INPUT.chord("v", held=["Meta" if PLATFORM == "darwin" else "Ctrl"])
     invite = guest.control("launcher/invite")
+    invite.focus()
+    invite.wait_focused()
+    INPUT.chord("v", held=["Meta" if PLATFORM == "darwin" else "Ctrl"])
     wait(lambda: (invite.element().value or "").startswith("solomondarker://"),
          "native clipboard invite", 10)
     guest.click("launcher/join")
