@@ -139,8 +139,8 @@ fn four_welded_projectile_builds_keep_birth_rng_tracking_and_private_turn_state(
                     live.remove(0);
                 }
                 for projectile in &mut projectiles {
-                    step_native_weld_projectile(projectile, &live);
-                    step_native_weld_projectile_presentation(projectile, &mut rng);
+                    step_native_weld_projectile(&mut projectile.view_mut(), &live);
+                    step_native_weld_projectile_presentation(&mut projectile.view_mut(), &mut rng);
                 }
             }
             let Some(expected) =
@@ -152,7 +152,9 @@ fn four_welded_projectile_builds_keep_birth_rng_tracking_and_private_turn_state(
             website_rows::compare(&actual, expected, &format!("{} tick{tick}", case["name"]));
             if let Some(sample) = weld_visual_rows::sample(case, tick) {
                 weld_visual_rows::compare(
-                    projectiles.iter().map(NativeWeldPresentationState::Projectile),
+                    projectiles
+                        .iter()
+                        .map(|spell| NativeWeldPresentationState::Projectile(spell.view())),
                     sample,
                     "Weld projectile compositor",
                 );
@@ -162,7 +164,8 @@ fn four_welded_projectile_builds_keep_birth_rng_tracking_and_private_turn_state(
         for expected in case["groundSparkFades"].as_array().unwrap() {
             let native_age = expected["nativeAge"].as_u64().unwrap();
             projectiles[0].ground_spark_native_age_ticks = Some(native_age);
-            let fades = create_native_weld_ground_spark_fade_program(&projectiles[0], &mut rng);
+            let fades =
+                create_native_weld_ground_spark_fade_program(projectiles[0].view(), &mut rng);
             let rows: Vec<Value> = fades.iter().map(|fade|json!({
                 "alpha":fade.alpha,"alphaStep":fade.alpha_step,"position":point(fade.position),
                 "record":fade.record,"rotationDegrees":fade.rotation_degrees,"scale":fade.scale,

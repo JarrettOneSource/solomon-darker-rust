@@ -19,8 +19,8 @@ pub struct NativeFireballPresentationState {
     pub underpowered: bool,
 }
 
-impl From<&PrimarySpellFireProjectile> for NativeFireballPresentationState {
-    fn from(state: &PrimarySpellFireProjectile) -> Self {
+impl From<ProjectileRef<'_, FireProjectileProgram>> for NativeFireballPresentationState {
+    fn from(state: ProjectileRef<'_, FireProjectileProgram>) -> Self {
         Self {
             age_ticks: state.common.age_ticks as f64,
             direction: state.common.direction,

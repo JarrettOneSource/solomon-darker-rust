@@ -12,12 +12,16 @@ use solomon_sim::spells::fire::{
     NATIVE_FIRE_EXPLOSION_LIFETIME_TICKS, NATIVE_FIRE_IMPACT_LIFETIME_TICKS,
     native_fire_particle_lifetime_ticks,
 };
-use solomon_sim::spells::model::{PrimarySpellProjectile, PrimarySpellTransient, SpellState};
+use solomon_sim::spells::model::{
+    PrimaryProjectileRef, PrimarySpellProjectile, PrimarySpellTransient, SpellState,
+};
 use solomon_sim::spells::water::water_frost_jet_lifetime_ticks;
 use solomon_sim::spells::weld::effects::NativeWeldWorldActor;
 
 use super::PresentationClocks;
-use super::math::{interpolate_members, lerp, lerp_option, lerp_vec};
+use super::math::{
+    interpolate_members, interpolate_projected_members, lerp, lerp_option, lerp_vec,
+};
 
 #[derive(Default)]
 pub(super) struct PrimaryPresentationMemory {
@@ -51,14 +55,17 @@ pub(super) fn project(
 ) {
     clocks.primary.clear();
     clocks.primary_contact.clear();
-    output.projectiles = interpolate_members(
-        &older.projectiles,
-        &newer.projectiles,
+    output.projectiles = interpolate_projected_members(
+        older.projectiles.iter(),
+        newer.projectiles.iter(),
         blend,
         |spell| spell.common().id,
+        |spell| spell.snapshot(),
         |first, next, blend| projectile(first, next, blend, clocks),
-    );
-    for spell in &output.projectiles {
+    )
+    .into_iter()
+    .collect();
+    for spell in output.projectiles.iter() {
         clocks.primary.entry(spell.common().id).or_insert(spell.common().age_ticks as f64);
     }
     let first: Vec<_> = older
@@ -139,12 +146,12 @@ pub(super) fn project(
 }
 
 fn projectile(
-    first: &PrimarySpellProjectile,
-    next: &PrimarySpellProjectile,
+    first: &PrimaryProjectileRef<'_>,
+    next: &PrimaryProjectileRef<'_>,
     blend: f64,
     clocks: &mut PresentationClocks,
 ) -> PrimarySpellProjectile {
-    let mut output = if blend < 1.0 { first.clone() } else { next.clone() };
+    let mut output = if blend < 1.0 { first.snapshot() } else { next.snapshot() };
     if std::mem::discriminant(first) != std::mem::discriminant(next) {
         return output;
     }
@@ -158,8 +165,8 @@ fn projectile(
     match (&mut output, first, next) {
         (
             PrimarySpellProjectile::Weld(output),
-            PrimarySpellProjectile::Weld(first),
-            PrimarySpellProjectile::Weld(next),
+            PrimaryProjectileRef::Weld(first),
+            PrimaryProjectileRef::Weld(next),
         ) => {
             output.ball_lightning_acceleration = lerp_option(
                 first.ball_lightning_acceleration,
@@ -185,8 +192,8 @@ fn projectile(
         }
         (
             PrimarySpellProjectile::Earth(output),
-            PrimarySpellProjectile::Earth(first),
-            PrimarySpellProjectile::Earth(next),
+            PrimaryProjectileRef::Earth(first),
+            PrimaryProjectileRef::Earth(next),
         ) => {
             output.common.charge = lerp(first.common.charge, next.common.charge, blend);
             output.shell_charge = lerp(first.shell_charge, next.shell_charge, blend);

@@ -5,7 +5,7 @@ use crate::audio::{AudioCue, AudioEvent, AudioOptions};
 use crate::profile::WizardElement;
 use crate::secondary::NativeSecondaryActorKind;
 use crate::spells::model::{
-    PrimarySpellProjectile, PrimarySpellProjectilePhase, PrimarySpellTransient,
+    PrimaryProjectileRef, PrimarySpellProjectilePhase, PrimarySpellTransient,
 };
 use crate::spells::weld::native_weld_audio_plan;
 
@@ -163,7 +163,7 @@ impl CombatAudioCursor {
                 )),
                 WizardElement::Earth => {
                     let gathering = frame.primary.projectiles.iter().any(|spell| {
-                        matches!(spell, PrimarySpellProjectile::Earth(earth) if earth.common.owner_id == player.id
+                        matches!(spell, PrimaryProjectileRef::Earth(earth) if earth.common.owner_id == player.id
                             && earth.common.phase == PrimarySpellProjectilePhase::Held && earth.common.charge < 1.0
                             && earth.common.world_key == listener.world_key)
                     });
@@ -179,8 +179,8 @@ impl CombatAudioCursor {
                 });
             }
         }
-        for spell in &frame.primary.projectiles {
-            if let PrimarySpellProjectile::Earth(earth) = spell
+        for spell in frame.primary.projectiles.iter() {
+            if let PrimaryProjectileRef::Earth(earth) = spell
                 && earth.common.phase == PrimarySpellProjectilePhase::Flight
                 && earth.common.world_key == listener.world_key
             {

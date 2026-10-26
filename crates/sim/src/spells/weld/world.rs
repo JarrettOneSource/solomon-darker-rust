@@ -5,7 +5,7 @@ use super::*;
 use crate::float::fround;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 use crate::spells::model::{
-    PrimarySpellProjectile, PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState,
+    PrimaryProjectilePartsMut, PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState,
 };
 use crate::spells::simulation::{PrimarySpellEpochContext, PrimarySpellTraversalActor};
 use crate::spells::targeting::NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK;
@@ -28,16 +28,16 @@ pub fn enroll_native_weld_actor_painter(
 impl SpellState {
     pub(crate) fn advance_projectile_with_presentation(
         &mut self,
-        spell: PrimarySpellProjectile,
+        spell: &mut PrimaryProjectilePartsMut<'_>,
         targets: &[crate::spells::targeting::PrimarySpellTarget],
         tick: u64,
         rng: &mut NativeRng,
-    ) -> PrimarySpellProjectile {
-        let mut spell = crate::spells::projectiles::advance_projectile(spell, targets);
-        let PrimarySpellProjectile::Weld(weld) = &mut spell else { return spell };
+    ) {
+        crate::spells::projectiles::advance_projectile(spell, targets);
+        let PrimaryProjectilePartsMut::Weld(weld) = spell else { return };
         step_native_weld_projectile_presentation(weld, rng);
         if weld.build_id == 1009 {
-            let fades = create_native_weld_ground_spark_fade_program(weld, rng);
+            let fades = create_native_weld_ground_spark_fade_program(weld.view(), rng);
             for seed in fades {
                 let actor = create_native_weld_ground_spark_fade_actor(
                     NativeWeldActorBirth {
@@ -58,7 +58,6 @@ impl SpellState {
                 self.next_id += 1;
             }
         }
-        spell
     }
 
     pub(crate) fn advance_weld_world_actor(

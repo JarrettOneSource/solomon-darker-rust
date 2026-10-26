@@ -24,8 +24,8 @@ fn owner(
 ) -> Value {
     json!({"age":value.age_ticks,"build":build,"id":value.id,"kind":kind,"light":value.light_registration.map(registration),"painters":value.painter_registrations.iter().copied().map(registration).collect::<Vec<_>>(),"physics":physics})
 }
-pub fn projectile(value: &PrimarySpellProjectile) -> Value {
-    let PrimarySpellProjectile::Weld(spell) = value else { panic!("Weld journey projectile") };
+pub fn projectile(value: PrimaryProjectileRef<'_>) -> Value {
+    let PrimaryProjectileRef::Weld(spell) = value else { panic!("Weld journey projectile") };
     let common = &spell.common;
     json!({"age":common.age_ticks,"build":spell.build_id,"id":common.id,"kind":"weld","light":registration(common.registration),"painters":[registration(common.registration)],
         "physics":{"damage":common.damage,"contactsRemaining":spell.contacts_remaining,"hitTargetIds":spell.hit_target_ids,"headingDegrees":spell.heading_degrees,"underpowered":spell.underpowered,"targetId":spell.target_id,"flightTicks":common.flight_ticks,"direction":point(common.direction),"position":point(common.position),"velocity":point(common.velocity),"phase":"flight"}})

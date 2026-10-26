@@ -17,6 +17,7 @@ pub mod fire_presentation;
 mod lifecycle;
 pub mod model;
 pub mod presentation;
+pub mod projectile_storage;
 mod projectiles;
 mod simulation;
 pub use simulation::{

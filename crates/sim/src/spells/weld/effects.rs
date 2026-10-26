@@ -16,7 +16,6 @@ use super::persistent::{
     NativeWeldEtherealBoulderState, NativeWeldFrostFadeActorState, NativeWeldPersistentActorState,
     NativeWeldPersistentTraversal, step_native_weld_persistent_actor,
 };
-use super::projectiles::NativeWeldProjectileState;
 use super::steam::{NativeWeldSteamActorState, step_native_weld_steam_actor};
 use crate::float::{cos, fround, sin};
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
@@ -186,7 +185,7 @@ pub struct NativeWeldGroundSparkFadeSeed {
 }
 
 pub fn create_native_weld_ground_spark_fade_program(
-    projectile: &NativeWeldProjectileState,
+    projectile: crate::spells::model::ProjectileRef<'_, super::WeldProjectileProgram>,
     rng: &mut NativeRng,
 ) -> Vec<NativeWeldGroundSparkFadeSeed> {
     if projectile.build_id != 1009 {

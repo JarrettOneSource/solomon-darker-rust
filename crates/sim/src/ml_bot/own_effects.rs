@@ -4,7 +4,7 @@ use crate::Vec2;
 use crate::float::hypot;
 use crate::secondary::{NativeSecondaryActorKind as SecondaryKind, NativeSecondarySimulationState};
 use crate::spells::model::{
-    PrimarySpellProjectile, PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState,
+    PrimaryProjectileRef, PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState,
 };
 use crate::spells::weld::{
     NativeWeldHailChildActorState, NativeWeldPersistentActorState, NativeWeldWorldActor,
@@ -29,16 +29,16 @@ pub fn observe_ml_bot_policy_own_effects(
     world_key: &str,
 ) -> MlBotPolicyOwnEffectObservation {
     let mut rows = Vec::new();
-    for projectile in &primary.projectiles {
+    for projectile in primary.projectiles.iter() {
         let common = projectile.common();
         if common.owner_id != player_id || common.world_key != world_key {
             continue;
         }
         let (target, radius) = match projectile {
-            PrimarySpellProjectile::Ether(state) => (state.target_id.is_some(), 0.0),
-            PrimarySpellProjectile::Weld(state) => (state.target_id.is_some(), 0.0),
-            PrimarySpellProjectile::Fire(state) => (false, state.explode_radius),
-            PrimarySpellProjectile::Earth(_) => (false, 0.0),
+            PrimaryProjectileRef::Ether(state) => (state.target_id.is_some(), 0.0),
+            PrimaryProjectileRef::Weld(state) => (state.target_id.is_some(), 0.0),
+            PrimaryProjectileRef::Fire(state) => (false, state.explode_radius),
+            PrimaryProjectileRef::Earth(_) => (false, 0.0),
         };
         rows.push(EffectRow {
             damage: common.damage,

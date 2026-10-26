@@ -10,6 +10,11 @@ use crate::painter::PainterRegistration;
 use crate::profile::primary::{NativePrimarySkillProfile, NativeSpentEmber};
 use crate::{NativeRng, Vec2};
 
+pub use super::projectile_storage::{
+    PrimaryProjectilePartsMut, PrimaryProjectileRead, PrimaryProjectileRef, PrimaryProjectiles,
+    ProjectileMut, ProjectileRef,
+};
+
 pub type EarthBoulderOrientation = [f64; 9];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -19,7 +24,7 @@ pub enum PrimarySpellProjectilePhase {
     Held,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellProjectileBase {
     pub age_ticks: u64,
@@ -38,9 +43,18 @@ pub struct PrimarySpellProjectileBase {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "persistence",
+    derive(serde::Deserialize),
+    serde(from = "PrimarySpellEarthProjectileFields")
+)]
 pub struct PrimarySpellEarthProjectile {
     pub common: PrimarySpellProjectileBase,
+    pub program: EarthProjectileProgram,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct EarthProjectileProgram {
     pub assembly_charge: f64,
     pub hit_target_ids: Vec<String>,
     pub maximum_charge: f64,
@@ -50,10 +64,51 @@ pub struct PrimarySpellEarthProjectile {
     pub toughness: f64,
 }
 
+#[cfg(feature = "persistence")]
+#[derive(serde::Deserialize)]
+#[serde(rename = "PrimarySpellEarthProjectile")]
+struct PrimarySpellEarthProjectileFields {
+    common: PrimarySpellProjectileBase,
+    assembly_charge: f64,
+    hit_target_ids: Vec<String>,
+    maximum_charge: f64,
+    orientation: EarthBoulderOrientation,
+    remaining_damage: f64,
+    shell_charge: f64,
+    toughness: f64,
+}
+
+#[cfg(feature = "persistence")]
+impl From<PrimarySpellEarthProjectileFields> for PrimarySpellEarthProjectile {
+    fn from(row: PrimarySpellEarthProjectileFields) -> Self {
+        Self {
+            common: row.common,
+            program: EarthProjectileProgram {
+                assembly_charge: row.assembly_charge,
+                hit_target_ids: row.hit_target_ids,
+                maximum_charge: row.maximum_charge,
+                orientation: row.orientation,
+                remaining_damage: row.remaining_damage,
+                shell_charge: row.shell_charge,
+                toughness: row.toughness,
+            },
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "persistence",
+    derive(serde::Deserialize),
+    serde(from = "PrimarySpellEtherProjectileFields")
+)]
 pub struct PrimarySpellEtherProjectile {
     pub common: PrimarySpellProjectileBase,
+    pub program: EtherProjectileProgram,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct EtherProjectileProgram {
     pub damage_retention: f64,
     pub heading_degrees: f64,
     pub pierces_remaining: u32,
@@ -66,10 +121,57 @@ pub struct PrimarySpellEtherProjectile {
     pub visual_scale: f64,
 }
 
+#[cfg(feature = "persistence")]
+#[derive(serde::Deserialize)]
+#[serde(rename = "PrimarySpellEtherProjectile")]
+struct PrimarySpellEtherProjectileFields {
+    common: PrimarySpellProjectileBase,
+    damage_retention: f64,
+    heading_degrees: f64,
+    pierces_remaining: u32,
+    reacquires_target: bool,
+    speed: f64,
+    target_id: Option<String>,
+    turn_input: f64,
+    turn_accumulator: f64,
+    underpowered: bool,
+    visual_scale: f64,
+}
+
+#[cfg(feature = "persistence")]
+impl From<PrimarySpellEtherProjectileFields> for PrimarySpellEtherProjectile {
+    fn from(row: PrimarySpellEtherProjectileFields) -> Self {
+        Self {
+            common: row.common,
+            program: EtherProjectileProgram {
+                damage_retention: row.damage_retention,
+                heading_degrees: row.heading_degrees,
+                pierces_remaining: row.pierces_remaining,
+                reacquires_target: row.reacquires_target,
+                speed: row.speed,
+                target_id: row.target_id,
+                turn_input: row.turn_input,
+                turn_accumulator: row.turn_accumulator,
+                underpowered: row.underpowered,
+                visual_scale: row.visual_scale,
+            },
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "persistence",
+    derive(serde::Deserialize),
+    serde(from = "PrimarySpellFireProjectileFields")
+)]
 pub struct PrimarySpellFireProjectile {
     pub common: PrimarySpellProjectileBase,
+    pub program: FireProjectileProgram,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FireProjectileProgram {
     pub burn_damage: f64,
     pub ember_damage: f64,
     pub ember_fragments: u32,
@@ -78,6 +180,40 @@ pub struct PrimarySpellFireProjectile {
     pub private_seed: i32,
     pub spent_ember: NativeSpentEmber,
     pub underpowered: bool,
+}
+
+#[cfg(feature = "persistence")]
+#[derive(serde::Deserialize)]
+#[serde(rename = "PrimarySpellFireProjectile")]
+struct PrimarySpellFireProjectileFields {
+    common: PrimarySpellProjectileBase,
+    burn_damage: f64,
+    ember_damage: f64,
+    ember_fragments: u32,
+    explode_damage: f64,
+    explode_radius: f64,
+    private_seed: i32,
+    spent_ember: NativeSpentEmber,
+    underpowered: bool,
+}
+
+#[cfg(feature = "persistence")]
+impl From<PrimarySpellFireProjectileFields> for PrimarySpellFireProjectile {
+    fn from(row: PrimarySpellFireProjectileFields) -> Self {
+        Self {
+            common: row.common,
+            program: FireProjectileProgram {
+                burn_damage: row.burn_damage,
+                ember_damage: row.ember_damage,
+                ember_fragments: row.ember_fragments,
+                explode_damage: row.explode_damage,
+                explode_radius: row.explode_radius,
+                private_seed: row.private_seed,
+                spent_ember: row.spent_ember,
+                underpowered: row.underpowered,
+            },
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -533,13 +669,13 @@ pub enum FireActorContact {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SpellState {
     pub next_id: u64,
-    pub projectiles: Vec<PrimarySpellProjectile>,
+    pub projectiles: PrimaryProjectiles,
     pub transients: Vec<PrimarySpellTransient>,
 }
 
 impl Default for SpellState {
     fn default() -> Self {
-        Self { next_id: 1, projectiles: Vec::new(), transients: Vec::new() }
+        Self { next_id: 1, projectiles: PrimaryProjectiles::default(), transients: Vec::new() }
     }
 }
 

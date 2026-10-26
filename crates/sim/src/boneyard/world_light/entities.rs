@@ -12,7 +12,7 @@ use crate::secondary::NativeSecondarySimulationState;
 use crate::spells::air::{
     NativeAirLightPlan, build_native_air_contact_light_source, build_native_air_path_light_sources,
 };
-use crate::spells::model::{PrimarySpellProjectile, PrimarySpellTransient, SpellState};
+use crate::spells::model::{PrimaryProjectileRef, PrimarySpellTransient, SpellState};
 use crate::spells::weld::{
     NativeWeldMeteorPhase, NativeWeldPersistentActorState, NativeWeldWorldActor,
 };
@@ -169,29 +169,29 @@ pub fn collect_boneyard_entity_lights(
     }
     let world_key = format!("boneyard:{run_id}");
     if let Some(primary) = environment.primary_spells {
-        for spell in &primary.projectiles {
+        for spell in primary.projectiles.iter() {
             let common = spell.common();
             if common.world_key != world_key {
                 continue;
             }
             let source = match spell {
-                PrimarySpellProjectile::Weld(spell) => native_weld_projectile_light_source(
+                PrimaryProjectileRef::Weld(spell) => native_weld_projectile_light_source(
                     spell.build_id,
                     common.id as usize,
                     common.position,
                     frame,
                     multiple_shadows,
                 ),
-                PrimarySpellProjectile::Earth(_) => {
+                PrimaryProjectileRef::Earth(_) => {
                     native_boulder_light_source(common.position, common.charge, multiple_shadows)
                 }
-                PrimarySpellProjectile::Ether(_) => native_missile_light_source(
+                PrimaryProjectileRef::Ether(_) => native_missile_light_source(
                     common.id as u32,
                     common.position,
                     frame,
                     multiple_shadows,
                 ),
-                PrimarySpellProjectile::Fire(_) => native_fireball_light_source(
+                PrimaryProjectileRef::Fire(_) => native_fireball_light_source(
                     common.id,
                     common.position,
                     frame,

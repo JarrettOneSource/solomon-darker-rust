@@ -158,7 +158,7 @@ impl SpellView {
         self.pre_world.clear();
         self.post_world.clear();
         let mut live_view_ids = BTreeSet::new();
-        for spell in &spells.projectiles {
+        for spell in spells.projectiles.iter() {
             if spell.common().world_key == world_key {
                 live_view_ids.insert(spell.common().id);
             }
@@ -169,7 +169,7 @@ impl SpellView {
             }
         }
         self.view_creation_orders.retain(|id, _| live_view_ids.contains(id));
-        for spell in &spells.projectiles {
+        for spell in spells.projectiles.iter() {
             let common = spell.common();
             if common.world_key != world_key {
                 continue;
@@ -181,11 +181,11 @@ impl SpellView {
             let first_root = self.roots.len();
             self.admit_view(common.id);
             let plan = match spell {
-                PrimarySpellProjectile::Earth(spell) => {
+                PrimaryProjectileRef::Earth(spell) => {
                     // EarthBoulderView uses actor age for its cosmetic program too.
                     earth_boulder_sprite_plan_at_age(spell, age, age)
                 }
-                PrimarySpellProjectile::Ether(spell) => {
+                PrimaryProjectileRef::Ether(spell) => {
                     let mut plan = ether_primary_flight_plan(
                         common.id,
                         age,
@@ -198,14 +198,14 @@ impl SpellView {
                     plan.world_y = common.position.y;
                     plan
                 }
-                PrimarySpellProjectile::Fire(spell) => native_fireball_plan(
+                PrimaryProjectileRef::Fire(spell) => native_fireball_plan(
                     NativeFireballPresentationState {
                         age_ticks: age,
                         ..NativeFireballPresentationState::from(spell)
                     },
                     presentation_frame,
                 ),
-                PrimarySpellProjectile::Weld(spell) => {
+                PrimaryProjectileRef::Weld(spell) => {
                     let target_id = format!("primary:{}", common.id);
                     let puppet_hit = puppet_hits.iter().any(|hit| hit.target_id == target_id);
                     self.append_weld(
@@ -223,7 +223,7 @@ impl SpellView {
                 }
             };
             self.append_plan(plan, common.registration);
-            if matches!(spell, PrimarySpellProjectile::Earth(_)) {
+            if matches!(spell, PrimaryProjectileRef::Earth(_)) {
                 self.roots
                     .last_mut()
                     .expect("Earth Boulder owns a world root")

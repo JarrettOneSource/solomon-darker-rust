@@ -35,35 +35,38 @@ fn common(value: &Value) -> NativeWeldActorBase {
 pub fn projectile(value: &Value, common: PrimarySpellProjectileBase) -> NativeWeldProjectileState {
     NativeWeldProjectileState {
         common,
-        ball_lightning_acceleration: value["ballLightningAcceleration"].as_f64(),
-        base_presentation_phase_degrees: value["basePresentationPhaseDegrees"].as_f64(),
-        frost_pulse_aspect: value["frostPulseAspect"].as_f64(),
-        frost_turn_degrees: value["frostTurnDegrees"].as_f64(),
-        secondary_presentation_phase_degrees: value["secondaryPresentationPhaseDegrees"].as_f64(),
-        build_id: integer(value, "buildId") as u32,
-        contacts_remaining: integer(value, "contactsRemaining") as u32,
-        cast_playback_rate: number(value, "castPlaybackRate"),
-        heading_degrees: number(value, "headingDegrees"),
-        speed: number(value, "speed"),
-        turn_accumulator: number(value, "turnAccumulator"),
-        turn_input: number(value, "turnInput"),
-        cast_sound_variant: value["castSoundVariant"].as_u64().map(|v| v as u32),
-        presentation_seed: value["presentationSeed"].as_u64().map(|v| v as u32),
-        hit_target_ids: strings(value, "hitTargetIds"),
-        ground_spark_native_age_ticks: value["groundSparkNativeAgeTicks"].as_u64(),
-        ground_spark_turn_ticks_remaining: value["groundSparkTurnTicksRemaining"].as_i64(),
-        projectile_index: integer(value, "projectileIndex") as usize,
-        reacquires_target: flag(value, "reacquiresTarget"),
-        underpowered: flag(value, "underpowered"),
-        target_id: value["targetId"].as_str().map(String::from),
-        vector: scalars(value, "vector"),
-        frost_presentation_lanes: value["frostPresentationLanes"].as_array().map(|lanes| {
-            std::array::from_fn(|i| NativeWeldFrostPresentationLane {
-                aspect: number(&lanes[i], "aspect"),
-                rotation_degrees: number(&lanes[i], "rotationDegrees"),
-                scale: number(&lanes[i], "scale"),
-            })
-        }),
+        program: WeldProjectileProgram {
+            ball_lightning_acceleration: value["ballLightningAcceleration"].as_f64(),
+            base_presentation_phase_degrees: value["basePresentationPhaseDegrees"].as_f64(),
+            frost_pulse_aspect: value["frostPulseAspect"].as_f64(),
+            frost_turn_degrees: value["frostTurnDegrees"].as_f64(),
+            secondary_presentation_phase_degrees: value["secondaryPresentationPhaseDegrees"]
+                .as_f64(),
+            build_id: integer(value, "buildId") as u32,
+            contacts_remaining: integer(value, "contactsRemaining") as u32,
+            cast_playback_rate: number(value, "castPlaybackRate"),
+            heading_degrees: number(value, "headingDegrees"),
+            speed: number(value, "speed"),
+            turn_accumulator: number(value, "turnAccumulator"),
+            turn_input: number(value, "turnInput"),
+            cast_sound_variant: value["castSoundVariant"].as_u64().map(|v| v as u32),
+            presentation_seed: value["presentationSeed"].as_u64().map(|v| v as u32),
+            hit_target_ids: strings(value, "hitTargetIds"),
+            ground_spark_native_age_ticks: value["groundSparkNativeAgeTicks"].as_u64(),
+            ground_spark_turn_ticks_remaining: value["groundSparkTurnTicksRemaining"].as_i64(),
+            projectile_index: integer(value, "projectileIndex") as usize,
+            reacquires_target: flag(value, "reacquiresTarget"),
+            underpowered: flag(value, "underpowered"),
+            target_id: value["targetId"].as_str().map(String::from),
+            vector: scalars(value, "vector"),
+            frost_presentation_lanes: value["frostPresentationLanes"].as_array().map(|lanes| {
+                std::array::from_fn(|i| NativeWeldFrostPresentationLane {
+                    aspect: number(&lanes[i], "aspect"),
+                    rotation_degrees: number(&lanes[i], "rotationDegrees"),
+                    scale: number(&lanes[i], "scale"),
+                })
+            }),
+        },
     }
 }
 pub fn actor(value: &Value) -> NativeWeldWorldActor {

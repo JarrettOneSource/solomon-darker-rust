@@ -13,7 +13,7 @@ use crate::spells::earth_presentation::{
     EarthBoulderPresentationState, earth_boulder_presentation_plan,
 };
 use crate::spells::fire_presentation::{NativeFireballPresentationState, native_fireball_plan};
-use crate::spells::model::PrimarySpellProjectilePhase;
+use crate::spells::model::{PrimarySpellProjectilePhase, ProjectileRef};
 use crate::spells::presentation::{NativeSpellSprite, SpellAtlas, SpellBlend, pack_spell_rgb};
 use crate::spells::water::{
     WaterFrostJetBlend, WaterFrostJetSprite, water_frost_jet_chaining_plan,
@@ -107,7 +107,7 @@ impl NativeWeldVisualPlan {
 
 #[derive(Clone, Copy, Debug)]
 pub enum NativeWeldPresentationState<'a> {
-    Projectile(&'a NativeWeldProjectileState),
+    Projectile(ProjectileRef<'a, WeldProjectileProgram>),
     World(&'a NativeWeldWorldActor),
 }
 
@@ -285,7 +285,7 @@ pub fn native_weld_visual_plan_at_age(
 }
 
 fn projectile_plan(
-    state: &NativeWeldProjectileState,
+    state: ProjectileRef<'_, WeldProjectileProgram>,
     frame: u64,
     age: f64,
 ) -> NativeWeldVisualPlan {

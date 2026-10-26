@@ -303,14 +303,18 @@ fn resolve_with_order<'context, 'world>(
         work.resolve_fire_contacts();
         work.resolve_channels();
     }
-    for projectile in work.source.projectiles {
-        if work.consumed_projectiles.contains(&projectile.common().id) {
-            continue;
+    let mut projectiles = work.source.projectiles;
+    projectiles.retain_mut(|projectile| {
+        let id = projectile.common().id;
+        if work.consumed_projectiles.contains(&id) {
+            return false;
         }
-        spells
-            .projectiles
-            .push(work.updated_projectiles.remove(&projectile.common().id).unwrap_or(projectile));
-    }
+        if let Some(updated) = work.updated_projectiles.remove(&id) {
+            projectile.replace(updated);
+        }
+        true
+    });
+    spells.projectiles = projectiles;
     for effect in work
         .source
         .transients
@@ -602,7 +606,8 @@ impl ContactWork<'_, '_> {
     }
 
     fn resolve_projectiles(&mut self) {
-        let mut projectiles = self.source.projectiles.clone();
+        let mut projectiles: Vec<_> =
+            self.source.projectiles.iter().map(|spell| spell.snapshot()).collect();
         projectiles.sort_by_key(|spell| spell.common().id);
         for projectile in projectiles {
             let common = projectile.common();

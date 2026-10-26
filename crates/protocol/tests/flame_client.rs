@@ -26,7 +26,7 @@ fn state(births: &[FlamePresentationBirth], indices: &Value) -> SpellState {
         variant: 0,
     });
     let mut state =
-        SpellState { next_id: 100, projectiles: Vec::new(), transients: vec![ordinary] };
+        SpellState { next_id: 100, projectiles: Default::default(), transients: vec![ordinary] };
     for index in indices.as_array().unwrap() {
         let birth = &births[index.as_u64().unwrap() as usize];
         state

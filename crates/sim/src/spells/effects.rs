@@ -246,7 +246,7 @@ pub(super) fn standalone_painter_order(source: &SpellState) -> WorldPainterOrder
         };
         *next = (*next).max(registration.registration_ordinal + 1);
     };
-    for projectile in &source.projectiles {
+    for projectile in source.projectiles.iter() {
         include(projectile.common().registration);
     }
     for effect in &source.transients {

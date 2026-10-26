@@ -44,7 +44,7 @@ impl PresentationClocks {
     #[must_use]
     pub fn from_session(session: &GameSession) -> Self {
         let mut clocks = Self::default();
-        for projectile in &session.spells.projectiles {
+        for projectile in session.spells.projectiles.iter() {
             let common = projectile.common();
             clocks.primary.insert(common.id, common.age_ticks as f64);
         }

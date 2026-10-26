@@ -82,6 +82,11 @@ and pickup reward. Enemy projectiles pair flight and contact state with their mo
 program; boss spells pair identity and lifetime with their spell program. Small
 particle and effect lifecycles use `ComponentEntities`.
 
+Player-fired projectiles pair common flight state with an Earth, Ether, Fire or
+Weld program. Motion updates those components directly. The contact transaction
+reads the completed motion state, then commits retained projectile changes after
+resolving contacts in game-ID order.
+
 The store's private ECS handles identify live component allocations. Game IDs
 and painter registrations remain the identities used by contacts, saves, and
 network snapshots. Constructing or restoring an owned record enrolls its
