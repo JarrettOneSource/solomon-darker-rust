@@ -51,8 +51,8 @@ Static browser mode advances the same rules locally with a 250 ms catch-up cap.
 ### Tick ordering
 
 The [session tick](../crates/sim/src/session/tick.rs) owns the sequence across
-systems. Participants have a map for lookup and an explicit `participant_order`
-for ordered work. Map key order is not a substitute for admission order. Level-up
+systems. Participant components have a keyed entity index and an explicit
+`participant_order` for ordered work. Key order is not a substitute for admission order. Level-up
 cohorts and secondary-spell player order have their own sorting rules.
 
 Existing actors advance once per global tick, with participant phases between
@@ -80,7 +80,8 @@ the controller that owns emergence, admission and navigation. Secondary views in
 ability-specific components present on that entity; loot views combine the body
 and pickup reward. Enemy projectiles pair flight and contact state with their motion
 program; boss spells pair identity and lifetime with their spell program. Small
-particle and effect lifecycles use `ComponentEntities`.
+particle and effect lifecycles, including authored consumable effects, use
+`ComponentEntities`. Spider web modifiers use keyed components for each affected player.
 
 Player-fired projectiles pair common flight state with an Earth, Ether, Fire or
 Weld program. Motion updates those components directly. The contact transaction
@@ -97,6 +98,12 @@ Secondary ability clocks and mana reserves are keyed player components; their
 iteration follows sorted player IDs. Target modifier components retain their
 application order. A tick reads the previous modifier values before applying
 expiry and damage, and commits player ability transactions to the same entities.
+
+Participants separate identity, character transactions, movement and aim, Hub
+state, lighting, run score, and screen feedback. `PlayerState` keeps inventory,
+skill choices, derived combat values and their transaction rules together.
+`ParticipantRef` and `ParticipantMut` borrow the live components; an owned
+`SessionParticipant` carries saves, detach transactions and private prediction.
 
 Courtyard students separate body and route/wander components. All routes read
 the preceding population, then collision resolution commits the planned bodies

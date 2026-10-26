@@ -28,9 +28,9 @@ fn snapshot(session: &GameSession) -> Value {
     for (id, player) in secondary.players.iter() {
         players[id] = secondary_snapshot::player_snapshot(player);
     }
-    let score = &session.participants["local"].score;
+    let score = &session.participants.get("local").expect("participant exists").score;
     let world = if let Some(world) = &session.boneyard {
-        let baseline = session.participants["local"].tutorial_profile_economy.as_ref().map(|economy| json!({
+        let baseline = session.participants.get("local").expect("participant exists").tutorial_profile_economy.as_ref().map(|economy| json!({
             "gold":economy.gold, "revision":economy.revision,"collegeIntroPending":economy.college_intro_pending,
             "inventory":economy.backpack.iter().map(|item|[item.id,u64::from(item.native_type_id),u64::from(item.quantity)]).collect::<Vec<_>>(),
             "equippedTints":[economy.equipment.hat.as_ref().and_then(|item|item.icon_tints),economy.equipment.robe.as_ref().and_then(|item|item.icon_tints)],
@@ -44,14 +44,14 @@ fn snapshot(session: &GameSession) -> Value {
             "score":session_snapshot::score(score)})
     } else {
         json!({"kind":"hub","traderAnimationSeed":session.hub_trader_animation_seed,
-            "collisionRngState":session.collision_rng,"participant":session_snapshot::hub_participant(&session.participants["local"]),
+            "collisionRngState":session.collision_rng,"participant":session_snapshot::hub_participant(&session.participants.get("local").expect("participant exists")),
             "studentIds":session.npcs.students.students.iter().map(|student|student.id).collect::<Vec<_>>(),
             "studentRegistrations":session.npcs.students.students.iter().map(|student|student.registration_ordinal).collect::<Vec<_>>()})
     };
-    json!({"tick":session.ticks,"player":player_snapshot::snapshot(&session.participants["local"].player,&session.gameplay_rng),
+    json!({"tick":session.ticks,"player":player_snapshot::snapshot(session.participants.get("local").expect("participant exists").player,&session.gameplay_rng),
         "combatRng":player_snapshot::rng_snapshot(&session.combat_rng),
-        "character":session_snapshot::character(&session.participants["local"]),
-        "lighting":session_snapshot::lighting(&session.participants["local"].lighting),
+        "character":session_snapshot::character(&session.participants.get("local").expect("participant exists")),
+        "lighting":session_snapshot::lighting(session.participants.get("local").expect("participant exists").lighting),
         "secondary":{"actors":secondary.actors.iter().map(|actor| secondary_snapshot::actor_snapshot(&actor)).collect::<Vec<_>>(),
             "nextActorId":secondary.next_actor_id,"nextEventId":secondary.next_event_id,"players":players,"rng":player_snapshot::rng_snapshot(&secondary.rng)},
         "run":session_snapshot::run(&session.run),

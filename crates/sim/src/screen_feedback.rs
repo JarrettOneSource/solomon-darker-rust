@@ -107,6 +107,7 @@ pub fn native_secondary_world_shake(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeSecondaryScreenFeedbackPresentation {
     pub alpha: f64,
     pub blue: f64,

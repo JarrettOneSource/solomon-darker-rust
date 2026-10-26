@@ -150,7 +150,7 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
         return Err("game save active run summary drifted".into());
     }
     let participant = session.participants.get_mut(&summary.player_id).unwrap();
-    participant.entity_id = integer(&players["entityIds"][0], "game save player entity ID")?;
+    *participant.entity_id = integer(&players["entityIds"][0], "game save player entity ID")?;
     participant.player.economy = decode(players["economies"][0].clone())?;
     if !participant.player.economy.inventory_is_valid() {
         return Err("game save player economy 0 inventory is invalid".into());
@@ -170,12 +170,12 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
     participant.player.progression = decode(players["progressions"][0].clone())?;
     participant.player.combat = decode(players["progressions"][0].clone())?;
     participant.player.skill_runtime = decode(players["skillRuntimes"][0].clone())?;
-    participant.lighting = decode(players["lightings"][0].clone())?;
+    *participant.lighting = decode(players["lightings"][0].clone())?;
     let mut locomotion = record(&players["locomotions"][0], "game save player locomotion")?.clone();
     locomotion.insert("primaryCast".into(), players["primaryCasts"][0].clone());
     locomotion.insert("region".into(), Value::from("courtyard"));
     locomotion.insert("transition".into(), Value::Null);
-    participant.wizard = decode(Value::Object(locomotion))?;
+    *participant.wizard = decode(Value::Object(locomotion))?;
     let loaded_boneyard = match summary.world_kind {
         SaveWorldKind::Hub => {
             if !continuation.loaded_boneyard.is_null()
@@ -193,19 +193,19 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
                 parsed.source_schema_version,
             )?;
             if legacy_intro {
-                participant.wizard =
+                *participant.wizard =
                     solomon_sim::HubWizard::at(solomon_sim::Vec2::new(972.0, 1044.0));
             }
             participant.wizard.region = decode(hub["region"].clone())?;
             participant.wizard.transition = decode(hub["transition"].clone())?;
-            participant.college_intro = decode(hub["collegeIntro"].clone())?;
+            *participant.college_intro = decode(hub["collegeIntro"].clone())?;
             let seed = session.gameplay_rng.draw_integer(0x4000_0000) as u32;
             session.npcs =
                 HubNpcState::with_live_student_painters(seed, &mut session.painter_order);
             session.ambient = HubAmbientState::new();
             session.hub_trader_animation_seed = seed;
             session.dowser_clock = HubCommonTraderClock::new(seed ^ 5016);
-            participant.marker_epoch =
+            *participant.marker_epoch =
                 HubNpcMarkerEpoch::new(seed, tick, &participant.player.economy.npc.help_flags);
             None
         }
@@ -252,15 +252,16 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
                     "openingReleaseThreshold": world["waves"]["openingReleaseThreshold"],
                 }))?)
             };
-            participant.score = decode(world["hallOfFameRuns"][&summary.player_id].clone())?;
-            participant.tutorial_profile_economy = decode(world["tutorialProfileEconomy"].clone())?;
+            *participant.score = decode(world["hallOfFameRuns"][&summary.player_id].clone())?;
+            *participant.tutorial_profile_economy =
+                decode(world["tutorialProfileEconomy"].clone())?;
             session.boneyard = Some(BoneyardWorld::restore(loaded.clone(), checkpoint)?);
             Some(loaded)
         }
     };
     session.migrate_participant_starter_appearance(&summary.player_id)?;
     let participant = session.participants.get_mut(&summary.player_id).unwrap();
-    let player = &mut participant.player;
+    let player = participant.player;
     if player.autofill_skill_selections(&mut session.gameplay_rng) {
         let selected = if player.book.primary_skill_id == 52 {
             player.book.weld_build_id.expect("normalized Weld book retains its build")
@@ -275,7 +276,7 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
                 .participants
                 .get_mut(id)
                 .ok_or("game save level-up barrier pending player is absent")?;
-            let player = &mut pending.player;
+            let player = pending.player;
             if player.progression.pending_offer.is_some() {
                 continue;
             }
@@ -301,7 +302,7 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
             PlayerDeathWeaponTrigger, legacy_player_death_weapon_motion,
         };
         for id in &session.participant_order {
-            let participant = &session.participants[id];
+            let participant = &session.participants.get(id).expect("participant exists");
             let combat = &participant.player.combat;
             let Some(registration) = participant.lighting.death_weapon_painter_registration else {
                 continue;
@@ -345,7 +346,7 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
         }
     }
     crate::save_document::validate_participant(
-        session.participants.get(&summary.player_id).unwrap(),
+        &session.participants.get(&summary.player_id).unwrap(),
     )?;
     session.checkpoint().validate()?;
     Ok(RestoredGameSave {

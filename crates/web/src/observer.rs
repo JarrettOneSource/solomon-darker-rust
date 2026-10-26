@@ -91,7 +91,7 @@ impl ObserverUi {
         let mut players = Vec::new();
         let mut current = Vec::new();
         for id in &snapshot.session.participant_order {
-            let participant = &snapshot.session.participants[id];
+            let participant = &snapshot.session.participants.get(id).expect("participant exists");
             let player = &participant.player;
             players.push(ObserverSkillPlayer {
                 id,

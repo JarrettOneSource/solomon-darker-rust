@@ -109,7 +109,7 @@ impl SharedWorldsTickObserver for HostRunArchives {
             ArchivedState::capture(state),
             inputs
                 .iter()
-                .filter(|(id, _)| state.participants.contains_key(*id))
+                .filter(|(id, _)| state.participants.contains_key(id))
                 .map(|(id, input)| (id.clone(), *input))
                 .collect(),
             intents.to_vec(),

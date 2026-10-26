@@ -127,6 +127,7 @@ pub struct ModEquipmentAffix {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
+#[derive(bevy_ecs::component::Component)]
 pub struct GameSimulationModEffect {
     pub color: [f64; 4],
     pub content_id: String,

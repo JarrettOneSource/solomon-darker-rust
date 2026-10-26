@@ -27,7 +27,7 @@ pub struct GameSnapshot<'a> {
     pub run: &'a GameRunLifecycle,
     pub level_up_barrier: &'a Option<PlayerLevelUpBarrier>,
     pub next_level_up_barrier_id: &'a u64,
-    pub mod_effects: &'a Vec<GameSimulationModEffect>,
+    pub mod_effects: &'a crate::ComponentEntities<GameSimulationModEffect>,
     pub next_mod_consumable_use_id: &'a u64,
     pub ticks: &'a u64,
     pub boneyard: Option<BoneyardSnapshot<'a>>,
@@ -105,17 +105,17 @@ impl GameSession {
 /// A normal frame borrows only the retained map. Rejoin staging borrows that
 /// same map plus one privately projected participant, without cloning the world.
 pub struct GameSnapshotParticipants<'a> {
-    pub(super) retained: &'a std::collections::BTreeMap<String, SessionParticipant>,
+    pub(super) retained: &'a Participants,
     pub(super) detached: Option<&'a SessionParticipant>,
 }
 
 impl<'a> GameSnapshotParticipants<'a> {
     #[must_use]
-    pub fn get(&self, id: &str) -> Option<&'a SessionParticipant> {
+    pub fn get(&self, id: &str) -> Option<ParticipantRef<'a>> {
         if let Some(participant) = self.detached
             && participant.id == id
         {
-            Some(participant)
+            Some(participant.view())
         } else {
             self.retained.get(id)
         }
@@ -138,8 +138,8 @@ impl serde::Serialize for GameSnapshotParticipants<'_> {
         use serde::ser::SerializeMap;
         let mut map = serializer
             .serialize_map(Some(self.retained.len() + usize::from(self.detached.is_some())))?;
-        for (id, participant) in self.retained {
-            map.serialize_entry(id, participant)?;
+        for (id, participant) in self.retained.iter() {
+            map.serialize_entry(id, &participant)?;
         }
         if let Some(participant) = self.detached {
             map.serialize_entry(&participant.id, participant)?;

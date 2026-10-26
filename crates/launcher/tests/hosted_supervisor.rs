@@ -558,7 +558,14 @@ impl Client {
     ) -> (Self, ServerMessage<Value>) {
         let selection = if let Some(save) = &save {
             let saved = solomon_assets::website_save::restore(save).unwrap();
-            saved.session.participants[&saved.player_id].player.selection.clone()
+            saved
+                .session
+                .participants
+                .get(&saved.player_id)
+                .expect("participant exists")
+                .player
+                .selection
+                .clone()
         } else {
             NewGameSelection {
                 name: name.into(),
@@ -698,7 +705,15 @@ fn restored_hosted_boneyards_advance_after_the_actual_renderer_and_resume_admiss
     let run_id = source.loaded_boneyard.as_ref().unwrap().run_id.clone();
     let saved_tick = source.session.ticks;
     let id = source.player_id;
-    let name = source.session.participants[&id].player.selection.name.clone();
+    let name = source
+        .session
+        .participants
+        .get(&id)
+        .expect("participant exists")
+        .player
+        .selection
+        .name
+        .clone();
     let routes =
         if source.metadata.integrity == solomon_assets::website_save::SaveIntegrity::GlobalClean {
             vec!["/admin/hub/tickets", "/admin/sessions"]

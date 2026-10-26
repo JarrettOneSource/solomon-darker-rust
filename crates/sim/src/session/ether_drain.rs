@@ -56,7 +56,7 @@ impl SessionEtherDrainSnapshot {
             }
         }
         for id in &session.participant_order {
-            let participant = &session.participants[id];
+            let participant = &session.participants.get(id).expect("participant exists");
             if participant.player.combat.life_state == PlayerLifeState::Spectating
                 || participant.player.combat.corpse_consumed
             {
@@ -376,10 +376,10 @@ impl GameSession {
             ordered_participants_mut(&mut self.participants, &self.participant_order)
                 .into_iter()
                 .map(|participant| super::player_contacts::PlayerContactPlayer {
-                    player_id: &participant.id,
-                    player: &mut participant.player,
-                    wizard: &mut participant.wizard,
-                    lighting: &mut participant.lighting,
+                    player_id: participant.id,
+                    player: participant.player,
+                    wizard: participant.wizard,
+                    lighting: participant.lighting,
                 })
                 .collect();
         // This early Source phase accepts the mutated stores, but does not

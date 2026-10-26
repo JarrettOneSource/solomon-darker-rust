@@ -271,13 +271,13 @@ impl EnemyWorld {
     pub fn step_spider_webs(&mut self, context: &EnemyStepContext<'_>) {
         self.spider_spit_ticks_remaining = self.spider_spit_ticks_remaining.saturating_sub(1);
         let actors = &self.actors;
-        self.webbed_players.retain(|id, web| {
+        self.webbed_players.retain_mut(|id, web| {
             // Full restraint belongs to a live Cocoon, unlike partial Silk webs.
             let restraint_valid = web.severity < 3.0
                 || actors.iter().any(|actor| {
                     actor.life_state == EnemyLifeState::Alive
                         && matches!(&actor.brain, EnemyBrain::Cocoon(brain)
-                            if brain.owner_player_id.as_deref() == Some(id.as_str()))
+                            if brain.owner_player_id.as_deref() == Some(id))
                 });
             if !restraint_valid {
                 return false;

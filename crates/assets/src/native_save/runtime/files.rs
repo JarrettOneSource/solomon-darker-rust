@@ -71,7 +71,8 @@ fn preview_save(
     native_source: Option<NativeSaveSource>,
 ) -> Result<GameSaveImportPreview, String> {
     let restored = website_save::restore(document)?;
-    let player = &restored.session.participants[&restored.player_id].player;
+    let player =
+        &restored.session.participants.get(&restored.player_id).expect("participant exists").player;
     let mut metadata = restored.metadata;
     metadata.integrity = SaveIntegrity::LocalOnly;
     // A raw browser JSON import starts a new local lineage. An embedded support

@@ -161,7 +161,8 @@ fn each_actual_party_uses_its_admitted_rules_and_callback_errors_end_the_epoch()
                     .iter()
                     .map(|&id| {
                         let state = worlds.state_for_player(id).unwrap();
-                        let player = &state.participants[id].player;
+                        let player =
+                            &state.participants.get(id).expect("participant exists").player;
                         json!({"id":id,"tick":state.ticks,"mana":player.combat.current_mana,
                             "health":player.combat.current_health})
                     })

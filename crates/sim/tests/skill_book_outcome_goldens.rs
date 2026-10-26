@@ -56,7 +56,7 @@ fn current_book_receipts_follow_choice_rank_and_exhaustion() {
             // rejected there retains its first receipt, just as the Source Game API.
             let result = session
                 .apply_inventory("owner", &HubInventoryAction::ReadSkillBook { item_id: 1000 });
-            let player = &session.participants["owner"].player;
+            let player = &session.participants.get("owner").expect("participant exists").player;
             let feedback = player.economy.action_feedback.as_ref().unwrap();
             let state = player_snapshot::snapshot(player, &session.gameplay_rng);
             let actual = json!({

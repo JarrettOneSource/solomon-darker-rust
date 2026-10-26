@@ -428,7 +428,16 @@ fn pending_rejoin_choices_and_the_single_player_tutorial_survive_socket_loss_and
         };
         session.install_boneyard(loaded).unwrap();
         session.grant_experience("saved", 91.0);
-        assert!(session.participants["saved"].player.progression.pending_offer.is_some());
+        assert!(
+            session
+                .participants
+                .get("saved")
+                .expect("participant exists")
+                .player
+                .progression
+                .pending_offer
+                .is_some()
+        );
         let initial_save = solomon_assets::save_document::encode(&session.checkpoint()).unwrap();
         let mut host = HostThread::start(checkpoint_path.clone());
         let mut client = Client::connect(&host);

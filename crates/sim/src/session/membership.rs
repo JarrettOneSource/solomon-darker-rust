@@ -125,7 +125,7 @@ impl GameSession {
         let participant =
             self.participants.get(id).ok_or("active-run detach has no matching player")?;
         Ok(DetachedSessionParticipant {
-            participant: participant.clone(),
+            participant: participant.snapshot(),
             next_entity_id: self.next_entity_id,
             run_id: self.run.run_id.clone().ok_or("active-run detach has no run identity")?,
         })
@@ -208,7 +208,9 @@ impl GameSession {
             }
         }
         for id in &source.participant_order {
-            self.import_hub_participant(source.participants[id].clone())?;
+            self.import_hub_participant(
+                source.participants.get(id).expect("participant exists").snapshot(),
+            )?;
         }
         Ok(())
     }
@@ -262,7 +264,7 @@ impl GameSession {
             .participants
             .get_mut(id)
             .ok_or("game save profile owner is absent from the fresh game")?;
-        let player = &mut participant.player;
+        let player = &mut *participant.player;
         player.economy = profile.economy;
         player.refresh_economy();
         migrate_starter_equipment_appearance(player);
@@ -284,7 +286,7 @@ impl GameSession {
             .participants
             .get_mut(id)
             .ok_or("game save profile owner is absent from the fresh game")?;
-        migrate_starter_equipment_appearance(&mut participant.player);
+        migrate_starter_equipment_appearance(participant.player);
         Ok(())
     }
 
@@ -355,28 +357,32 @@ impl GameSession {
     }
 
     fn refresh_rejoin_barrier(&mut self, id: &str, milestone: Option<&SharedPlayerLevelMilestone>) {
-        let (barrier, next_id) = self.project_rejoin_barrier(&self.participants[id], milestone);
+        let (barrier, next_id) = self.project_rejoin_barrier(
+            &self.participants.get(id).expect("participant exists"),
+            milestone,
+        );
         self.level_up_barrier = barrier;
         self.next_level_up_barrier_id = next_id;
     }
 
     pub(super) fn project_rejoin_barrier(
         &self,
-        participant: &SessionParticipant,
+        participant: &impl ParticipantRead,
         milestone: Option<&SharedPlayerLevelMilestone>,
     ) -> (Option<PlayerLevelUpBarrier>, u64) {
+        let participant = participant.view();
         let mut cohort: Vec<_> = self.participants.keys().cloned().collect();
-        if !self.participants.contains_key(&participant.id) {
+        if !self.participants.contains_key(participant.id) {
             cohort.push(participant.id.clone());
             cohort.sort();
         }
         let pending: Vec<_> = cohort
             .iter()
             .filter(|id| {
-                let player = if **id == participant.id {
+                let player = if *id == participant.id {
                     &participant.player
                 } else {
-                    &self.participants[*id].player
+                    &self.participants.get(id).expect("participant exists").player
                 };
                 player.progression.pending_offer.is_some()
                     || !player.progression.pending_levels.is_empty()

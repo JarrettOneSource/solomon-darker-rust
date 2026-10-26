@@ -91,7 +91,7 @@ pub(super) fn project_listener_audio(
     }
     let mut players = Vec::with_capacity(world_keys.len());
     for (player_id, world_key) in session.participant_order.iter().zip(&world_keys) {
-        let participant = &session.participants[player_id];
+        let participant = &session.participants.get(player_id).expect("participant exists");
         let wizard = &participant.wizard;
         players.push(CombatAudioPlayer {
             id: player_id,

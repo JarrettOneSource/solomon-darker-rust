@@ -31,7 +31,7 @@ pub(crate) fn participant(
     if participants.len() != 1 || !participants.contains_key(owner) {
         return Err("game save owner is not the sole Hub participant".into());
     }
-    let value = &participants[owner];
+    let value = &participants.get(owner).expect("participant exists");
     let keys: &[&str] = if version >= 15 {
         &["collegeIntro", "region", "transition"]
     } else {

@@ -48,7 +48,7 @@ impl GameSession {
 
         let mut owners = Vec::with_capacity(self.participants.len());
         for id in &self.participant_order {
-            let participant = &self.participants[id];
+            let participant = &self.participants.get(id).expect("participant exists");
             let player = &participant.player;
             let runtime = &player.skill_runtime;
             let factors = player.derived_stats().offensive_factors(runtime);
@@ -100,7 +100,7 @@ impl GameSession {
             .participant_order
             .iter()
             .map(|id| {
-                let participant = &self.participants[id];
+                let participant = &self.participants.get(id).expect("participant exists");
                 WorldLightPlayer {
                     id,
                     position: participant.wizard.position,
@@ -141,7 +141,7 @@ impl GameSession {
         // These small rows are input values; existing actors remain in one queue.
         let mut samples = Vec::with_capacity(self.participants.len());
         for id in &self.participant_order {
-            let participant = &self.participants[id];
+            let participant = &self.participants.get(id).expect("participant exists");
             let player = &participant.player;
             let derived = player.derived_stats();
             samples.push(PrimaryPlayerSample {
@@ -263,7 +263,7 @@ impl GameSession {
                 plane_active: sample.plane_active,
             });
             players.push(PrimarySpellPlayer {
-                wizard: &mut participant.wizard,
+                wizard: participant.wizard,
                 authority,
                 input: PrimarySpellInput { aim: sample.input.aim, primary: sample.input.primary },
                 context: PrimarySpellWorldContext {
@@ -313,7 +313,7 @@ impl GameSession {
         for player in &result.players {
             if player.mana_spent > 0.0 {
                 super::extensions::apply_filtered_mana_delta(
-                    &mut self.participants.get_mut(&player.owner_id).unwrap().player,
+                    self.participants.get_mut(&player.owner_id).unwrap().player,
                     &player.owner_id,
                     -player.mana_spent,
                     crate::modding::extensions::GameSimulationManaSource::PrimaryCast,
@@ -341,7 +341,7 @@ impl GameSession {
             .iter()
             .map(|id| BoneyardPrimaryContactPlayer {
                 owner_id: id,
-                player: &self.participants[id].player,
+                player: self.participants.get(id).expect("participant exists").player,
                 viewport: inputs[id].viewport,
             })
             .collect();

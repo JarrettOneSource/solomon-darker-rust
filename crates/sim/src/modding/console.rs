@@ -192,7 +192,7 @@ pub fn create_web_lua_frame_state(
 ) -> WebLuaFrameState {
     let mut players = Vec::new();
     for id in &game.participant_order {
-        let participant = &game.participants[id];
+        let participant = &game.participants.get(id).expect("participant exists");
         let player = &participant.player;
         let life = match player.combat.life_state {
             PlayerLifeState::Alive => "alive",

@@ -100,6 +100,23 @@ impl<Q: IterQueryData> KeyedEntities<Q> {
         Some(value)
     }
 
+    pub fn retain_mut(&mut self, mut keep: impl FnMut(&str, QueryItem<'_, '_, Q>) -> bool) {
+        let Some(storage) = &mut self.storage else { return };
+        let order = &mut self.order;
+        self.entries.retain(|key, entity| {
+            let components = storage
+                .query
+                .get_mut(&mut storage.world, *entity)
+                .expect("entity retains its components");
+            let retained = keep(key, components);
+            if !retained {
+                storage.world.despawn(*entity);
+                order.shift_remove(entity);
+            }
+            retained
+        });
+    }
+
     pub fn retain(&mut self, mut keep: impl FnMut(&str, EntityRef<'_>) -> bool) {
         let Some(storage) = &mut self.storage else { return };
         self.entries.retain(|key, entity| {
@@ -180,6 +197,10 @@ impl<T: Component<Mutability = Mutable>> KeyedComponents<T> {
     pub fn remove(&mut self, key: &str) -> Option<T> {
         self.entities
             .remove(key, |entity| entity.take::<T>().expect("entity retains its component"))
+    }
+
+    pub fn retain_mut(&mut self, mut keep: impl FnMut(&str, &mut T) -> bool) {
+        self.entities.retain_mut(|key, component| keep(key, component.into_inner()));
     }
 
     pub fn retain(&mut self, mut keep: impl FnMut(&str, &T) -> bool) {

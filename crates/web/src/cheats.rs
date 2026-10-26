@@ -547,7 +547,7 @@ impl CheatFrame {
         let session = snapshot.session;
         let mut players = Vec::new();
         for id in &session.participant_order {
-            let participant = &session.participants[id];
+            let participant = &session.participants.get(id).expect("participant exists");
             let player = &participant.player;
             let combat = &player.combat;
             let state = match combat.life_state {

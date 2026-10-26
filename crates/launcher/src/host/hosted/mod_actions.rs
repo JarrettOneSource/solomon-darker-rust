@@ -159,7 +159,14 @@ fn apply_action(
         ModAction::SkillChoose => {
             let eligible =
                 world.runtime.runtime().content.skill(target).is_some_and(|definition| {
-                    world.state.participants[player_id].player.progression.level
+                    world
+                        .state
+                        .participants
+                        .get(player_id)
+                        .expect("participant exists")
+                        .player
+                        .progression
+                        .level
                         >= definition.minimum_level
                 });
             if !eligible {
@@ -225,7 +232,13 @@ fn apply_action(
         }
         ModAction::PortalEnter => {
             let owner = world.state.run.run_id.clone().unwrap_or_else(|| player_id.into());
-            let position = world.state.participants[player_id].wizard.position;
+            let position = world
+                .state
+                .participants
+                .get(player_id)
+                .expect("participant exists")
+                .wizard
+                .position;
             let monument = world.state.boneyard.as_ref().is_some_and(|world| {
                 world.loaded.scene.objects.iter().any(|object| {
                     let x = object.position.x - position.x;

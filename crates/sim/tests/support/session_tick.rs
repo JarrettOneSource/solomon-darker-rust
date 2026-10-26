@@ -105,7 +105,7 @@ fn primary_snapshot(session: &GameSession) -> Value {
 
 fn world_snapshot(session: &GameSession, id: &str) -> Value {
     let Some(world) = &session.boneyard else {
-        return json!({"kind":"hub","participant":session_snapshot::hub_participant(&session.participants[id]),
+        return json!({"kind":"hub","participant":session_snapshot::hub_participant(&session.participants.get(id).expect("participant exists")),
             "collisionRng":session.collision_rng,
             "students":session.npcs.students.students.iter().map(|student| json!([
                 student.id,point(student.position),student.controller.tick,student.controller.rng_state,
@@ -172,7 +172,7 @@ fn world_snapshot(session: &GameSession, id: &str) -> Value {
             waves.state.low_population_ticks,waves.state.spawn_countdown,player_snapshot::rng_snapshot(&waves.state.rng)])),
         "tutorial":world.tutorial.as_ref().map(tutorial_snapshot::state_row),
         "feedback":{"accumulator":world.enemy_world_feedback.accumulator,"magnitude":world.enemy_world_feedback.magnitude},
-        "score":session_snapshot::score(&session.participants[id].score),"ouchDeadline":world.player_ouch_deadline_tick,
+        "score":session_snapshot::score(session.participants.get(id).expect("participant exists").score),"ouchDeadline":world.player_ouch_deadline_tick,
         "actors":actors,
         "projectiles":enemies.projectiles.iter().map(|projectile| {
             let state=projectile.state();json!([state.id,projectile.kind().id(),point(state.position),
@@ -192,7 +192,9 @@ fn world_snapshot(session: &GameSession, id: &str) -> Value {
 }
 
 pub fn snapshot(session: &GameSession, id: &str) -> Value {
-    let player = player_combat::player_snapshot(&session.participants[id].player);
+    let player = player_combat::player_snapshot(
+        session.participants.get(id).expect("participant exists").player,
+    );
     let progression = &player["progression"];
     let barrier = session.level_up_barrier.as_ref().map(|barrier| {
         json!({
@@ -201,11 +203,11 @@ pub fn snapshot(session: &GameSession, id: &str) -> Value {
         "pendingPlayerIds":barrier.pending_player_ids,"runId":barrier.run_id,
         "sourcePlayerId":barrier.source_player_id})
     });
-    json!({"tick":session.ticks,"player":player_snapshot::snapshot(&session.participants[id].player,&session.gameplay_rng),
+    json!({"tick":session.ticks,"player":player_snapshot::snapshot(session.participants.get(id).expect("participant exists").player,&session.gameplay_rng),
         "combat":player["combat"],"potionClocks":[progression["damageX4TicksRemaining"],
             progression["mindChugTicksRemaining"],progression["poisonImmunityTicksRemaining"],progression["hagathaRuntime"]],
-        "runtime":player["runtime"],"character":session_snapshot::character(&session.participants[id]),
-        "lighting":session_snapshot::lighting(&session.participants[id].lighting),
+        "runtime":player["runtime"],"character":session_snapshot::character(&session.participants.get(id).expect("participant exists")),
+        "lighting":session_snapshot::lighting(session.participants.get(id).expect("participant exists").lighting),
         "combatRng":player_snapshot::rng_snapshot(&session.combat_rng),
         "secondary":secondary_state::state_snapshot(&session.secondary),"primary":primary_snapshot(session),
         "barrier":barrier,"run":session_snapshot::run(&session.run),
@@ -242,7 +244,8 @@ pub fn snapshot_all(session: &GameSession) -> Value {
 #[allow(dead_code)]
 pub fn current_source_snapshot(session: &GameSession, id: &str) -> Value {
     let mut value = snapshot(session, id);
-    value["character"]["headingDegrees"] = json!(session.participants[id].wizard.heading_degrees);
+    value["character"]["headingDegrees"] =
+        json!(session.participants.get(id).expect("participant exists").wizard.heading_degrees);
     add_current_secondary_fields(&mut value["secondary"], session);
     value
 }
@@ -252,7 +255,7 @@ pub fn current_source_snapshot_all(session: &GameSession) -> Value {
     let mut value = snapshot_all(session);
     for id in &session.participant_order {
         value["participants"][id.as_str()]["character"]["headingDegrees"] =
-            json!(session.participants[id].wizard.heading_degrees);
+            json!(session.participants.get(id).expect("participant exists").wizard.heading_degrees);
     }
     add_current_secondary_fields(&mut value["shared"]["secondary"], session);
     value

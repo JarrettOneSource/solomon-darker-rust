@@ -174,7 +174,7 @@ pub fn apply_game_intent(
         "spell-effect" => {
             let id =
                 target_player(game, Some(&LuaValue::String("caster".into())), context)?.to_owned();
-            let origin = game.participants[&id].wizard.position;
+            let origin = game.participants.get(&id).expect("participant exists").wizard.position;
             let content_id = text(fields.get("spell_content_id"), "spell effect content id")?;
             if runtime.content.spell(content_id).is_none() {
                 return Err("spell effect content is unavailable".into());
@@ -241,7 +241,7 @@ fn apply_damage(
         .filter(|value| value.is_finite() && *value > 0.0 && *value <= 1_000_000_000.0)
         .ok_or("damage amount must be finite within 0..1000000000")?;
     if let Some(id) = damage_player_target(game, fields.get("target"), context) {
-        let player = &game.participants[&id].player;
+        let player = &game.participants.get(&id).expect("participant exists").player;
         let filtered = runtime.filter_damage(
             GameSimulationDamageFilterInput {
                 amount,
@@ -260,7 +260,7 @@ fn apply_damage(
         .context
         .get("participant_id")
         .and_then(LuaValue::as_str)
-        .filter(|id| game.participants.contains_key(*id));
+        .filter(|id| game.participants.contains_key(id));
     let modifier = fields
         .get("modifier")
         .and_then(LuaValue::as_str)
@@ -381,7 +381,7 @@ pub fn target_player<'a>(
         _ => None,
     };
     candidate
-        .filter(|id| game.participants.contains_key(*id))
+        .filter(|id| game.participants.contains_key(id))
         .ok_or_else(|| "mod intent target player is unavailable".into())
 }
 
@@ -404,7 +404,7 @@ fn damage_player_target(
         Some(LuaValue::Object(fields)) => fields.get("participant_id").and_then(LuaValue::as_str),
         _ => None,
     };
-    candidate.filter(|id| game.participants.contains_key(*id)).map(str::to_owned)
+    candidate.filter(|id| game.participants.contains_key(id)).map(str::to_owned)
 }
 
 fn damage_enemy_target(

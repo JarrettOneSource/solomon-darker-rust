@@ -214,7 +214,7 @@ pub struct EnemyWorld {
         Option<super::deferred_painters::DeferredEnemyPainterRegistrations>,
     pub actors: super::model::EnemyActors,
     pub maggots: MaggotActors,
-    pub webbed_players: BTreeMap<String, WebbedState>,
+    pub webbed_players: crate::KeyedComponents<WebbedState>,
     pub rng_state: u32,
     pub steering_rng: NativeRng,
     pub locomotion_rng: NativeRng,
@@ -264,7 +264,7 @@ impl EnemyWorld {
             deferred_projectile_painters: None,
             actors: super::model::EnemyActors::default(),
             maggots: MaggotActors::default(),
-            webbed_players: BTreeMap::new(),
+            webbed_players: crate::KeyedComponents::default(),
             rng_state: seed_from_text(&format!("{seed}:enemy-actors")),
             steering_rng: NativeRng::new(i64::from(seed_from_text(&format!(
                 "{seed}:enemy-steering"

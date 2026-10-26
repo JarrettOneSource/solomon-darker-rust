@@ -135,12 +135,25 @@ impl HostedGameHost {
         let Some(state) = self.worlds.state_for_player(id) else { return Ok(false) };
         if !state.can_enter_boneyard()
             || self.controls.get(&party_id).is_some_and(|control| control.pause().is_some())
-            || (!tutorial && state.participants[id].wizard.transition.is_some())
+            || (!tutorial
+                && state
+                    .participants
+                    .get(id)
+                    .expect("participant exists")
+                    .wizard
+                    .transition
+                    .is_some())
         {
             return Ok(false);
         }
         if tutorial {
-            let fresh = state.participants[id].player.economy.tutorial_pending;
+            let fresh = state
+                .participants
+                .get(id)
+                .expect("participant exists")
+                .player
+                .economy
+                .tutorial_pending;
             let vanilla = self.content.manifest.mods.is_empty();
             let eligible = self.player(id).is_some_and(|player| match &self.worlds {
                 HostedWorlds::Global(_) => player.global_score_eligible && party_size == 1,

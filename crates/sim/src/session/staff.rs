@@ -182,7 +182,7 @@ impl GameSession {
         });
         for id in self.participant_order.clone() {
             let participant = self.participants.get_mut(&id).unwrap();
-            let player = &mut participant.player;
+            let player = participant.player;
             let world = self.boneyard.as_ref().unwrap();
             let derived = player.derived_stats();
             let input = inputs[&id];
@@ -263,7 +263,7 @@ impl GameSession {
         output: &mut StaffTickResult,
     ) {
         let owner = &action.common().owner_id;
-        let participant = &self.participants[owner];
+        let participant = &self.participants.get(owner).expect("participant exists");
         let element = participant.player.selection.element;
         let derived = participant.player.derived_stats();
         let total = player_staff_damage(
@@ -370,7 +370,13 @@ impl GameSession {
             for target in selected {
                 let amount = damage
                     * native_hagatha_boss_damage_factor(
-                        &self.participants[owner].player.economy.owned_perk_selectors,
+                        &self
+                            .participants
+                            .get(owner)
+                            .expect("participant exists")
+                            .player
+                            .economy
+                            .owned_perk_selectors,
                         u32::from(target.native_type_id),
                     );
                 let result = self.damage_enemy(EnemyDamageRequest {

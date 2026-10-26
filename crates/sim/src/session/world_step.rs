@@ -58,7 +58,7 @@ impl GameSession {
     ) -> BTreeMap<String, GameSessionInput> {
         let mut admitted = BTreeMap::new();
         for id in &self.participant_order {
-            let participant = &self.participants[id];
+            let participant = &self.participants.get(id).expect("participant exists");
             let mut input = inputs.get(id).copied().unwrap_or_default();
             if participant.player.progression.pending_offer.is_some()
                 || !participant.player.combat.can_accept_input()
@@ -96,7 +96,7 @@ impl GameSession {
         id: &str,
         mut input: GameSessionInput,
     ) -> GameSessionInput {
-        let player = &self.participants[id].player;
+        let player = &self.participants.get(id).expect("participant exists").player;
         let category =
             input.quickbar.and_then(|slot| player.belt.entries.get(slot)).and_then(|entry| {
                 match entry {
@@ -129,7 +129,7 @@ impl GameSession {
             let id = &self.participant_order[0];
             let participant = self.participants.get_mut(id).unwrap();
             self.boneyard.as_mut().unwrap().step_tutorial(
-                &mut participant.wizard,
+                participant.wizard,
                 BoneyardTutorialPlayer {
                     combat: &participant.player.combat,
                     economy: &participant.player.economy,
@@ -176,7 +176,7 @@ impl GameSession {
         for participant in ordered_participants_mut(&mut self.participants, &self.participant_order)
         {
             let id = participant.id.as_str();
-            let player = &participant.player;
+            let player = &*participant.player;
             let derived = player.derived_stats();
             let has_health_potion =
                 project_inventory_items(&player.economy.backpack).iter().any(|entry| {
@@ -193,13 +193,13 @@ impl GameSession {
             let status = crate::boneyard::world::BoneyardPlayerStatus {
                 id,
                 alive: player.combat.life_state == crate::combat::PlayerLifeState::Alive,
-                eligible: self.run.eligible_player_ids.contains(&participant.id),
+                eligible: self.run.eligible_player_ids.contains(participant.id),
                 collision_enabled: player.combat.collision_enabled(),
                 movement_scale: player.combat.movement_scale() * derived.movement_factor,
             };
             let input = inputs[id];
             rows.push(BoneyardWorldParticipant {
-                wizard: &mut participant.wizard,
+                wizard: participant.wizard,
                 combat: BoneyardPlayerCombatStatus {
                     status,
                     advanced_unlocks: &player.book.advanced_unlocks,
@@ -305,15 +305,15 @@ impl GameSession {
                 ordered_participants_mut(&mut self.participants, &self.participant_order)
             {
                 rows.push(crate::hub::world::HubParticipantMotion {
-                    id: &participant.id,
-                    movement: inputs[&participant.id].movement,
+                    id: participant.id,
+                    movement: inputs[participant.id.as_str()].movement,
                     movement_scale: participant.player.combat.movement_scale()
                         * participant.player.derived_stats().movement_factor,
                     force_movement_facing: participant.player.combat.dazzle_ticks_remaining > 0,
                     college_intro_pending: participant.player.economy.college_intro_pending,
-                    renderer_ready: ready.is_none_or(|ids| ids.contains(&participant.id)),
-                    wizard: &mut participant.wizard,
-                    college_intro: &mut participant.college_intro,
+                    renderer_ready: ready.is_none_or(|ids| ids.contains(participant.id.as_str())),
+                    wizard: participant.wizard,
+                    college_intro: participant.college_intro,
                 });
             }
             crate::hub::world::step_hub_participants(
@@ -330,7 +330,7 @@ impl GameSession {
             if result.region_changed {
                 participant.lighting.light_registration =
                     self.painter_order.register(WorldManagerLane::Actor);
-                participant.marker_epoch = HubNpcMarkerEpoch::new(
+                *participant.marker_epoch = HubNpcMarkerEpoch::new(
                     self.hub_trader_animation_seed,
                     self.ticks + 1,
                     &participant.player.economy.npc.help_flags,

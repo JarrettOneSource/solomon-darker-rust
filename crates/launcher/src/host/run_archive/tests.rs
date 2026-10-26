@@ -123,8 +123,14 @@ fn source_run_archive_living_retention_lifecycle_and_performance_windows_are_exa
                 let recorded = snapshot(&base, &operation["state"]);
                 state.ticks = recorded.checkpoint.ticks;
                 for id in &state.participant_order {
-                    state.participants.get_mut(id).unwrap().player.combat.life_state =
-                        recorded.checkpoint.participants[id].player.combat.life_state;
+                    state.participants.get_mut(id).unwrap().player.combat.life_state = recorded
+                        .checkpoint
+                        .participants
+                        .get(id)
+                        .expect("participant exists")
+                        .player
+                        .combat
+                        .life_state;
                 }
                 recorder.checkpoint(&state, &loaded(operation["run"].as_str().unwrap()));
             }

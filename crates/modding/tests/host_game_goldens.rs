@@ -153,7 +153,7 @@ fn prepared_host_actions_filters_contacts_and_failed_batches_use_actual_game_aut
             }
             Err(error) => assert_eq!(Some(error), case.error, "{path}.error"),
         }
-        let player = &game.participants["player-1"].player;
+        let player = &game.participants.get("player-1").expect("participant exists").player;
         let state = json!({
             "health":player.combat.current_health,"mana":player.combat.current_mana,
             "gold":player.economy.gold,"experience":player.progression.experience,

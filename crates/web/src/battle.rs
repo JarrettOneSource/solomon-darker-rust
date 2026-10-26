@@ -90,7 +90,7 @@ pub struct BattleFrame<'a> {
     pub players: &'a [BattlePlayer<'a>],
     pub spells: &'a SpellState,
     pub secondary: &'a NativeSecondarySimulationState,
-    pub mod_effects: &'a [GameSimulationModEffect],
+    pub mod_effects: &'a solomon_sim::ComponentEntities<GameSimulationModEffect>,
     pub mod_catalog: &'a [ModConsumableCatalogEntry],
     pub camera: &'a Camera,
     pub viewport: Vec2,

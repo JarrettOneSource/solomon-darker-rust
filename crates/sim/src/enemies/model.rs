@@ -1305,6 +1305,7 @@ pub enum MaggotMovementPhase {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct WebbedState {
     pub severity: f64,
     pub strength: f64,

@@ -30,7 +30,7 @@ pub(super) fn capture_enemies(session: &GameSession) -> Option<EnemyPresentation
         .participant_order
         .iter()
         .map(|id| {
-            let participant = &session.participants[id];
+            let participant = &session.participants.get(id).expect("participant exists");
             WorldLightPlayer {
                 id,
                 position: participant.wizard.position,

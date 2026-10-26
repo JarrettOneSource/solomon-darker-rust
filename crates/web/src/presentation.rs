@@ -60,7 +60,7 @@ impl PresentationClocks {
         for actor in session.secondary.actors.iter() {
             clocks.secondary.insert(actor.id, actor.age_ticks as f64);
         }
-        for (id, participant) in &session.participants {
+        for (id, participant) in session.participants.iter() {
             clocks.player_damage_x4.insert(
                 id.clone(),
                 participant.player.progression.damage_x4_ticks_remaining as f64,

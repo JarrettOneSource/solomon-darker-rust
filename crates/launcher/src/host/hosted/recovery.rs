@@ -77,7 +77,15 @@ impl HostedGameHost {
             ));
         }
         let restored = website_save::restore(document).map_err(invalid_owned)?;
-        if restored.session.participants[&restored.player_id].player.selection != hello.selection {
+        if restored
+            .session
+            .participants
+            .get(&restored.player_id)
+            .expect("participant exists")
+            .player
+            .selection
+            != hello.selection
+        {
             return Err(invalid("The game save character does not match the resume request."));
         }
         if restored.player_id != verified.player_id

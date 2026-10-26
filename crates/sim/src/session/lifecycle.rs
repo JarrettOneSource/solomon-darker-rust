@@ -35,7 +35,7 @@ impl GameSession {
             next_transient_ordinal: 0,
         };
         let mut gameplay_rng = NativeRng::new(options.gameplay_rng_seed);
-        let mut participants = std::collections::BTreeMap::new();
+        let mut participants = Participants::default();
         let mut participant_order = Vec::with_capacity(selections.len());
         let mut next_entity_id = 1;
         for (id, selection) in selections {
@@ -78,7 +78,7 @@ impl GameSession {
             run: GameRunLifecycle::new(),
             level_up_barrier: None,
             next_level_up_barrier_id: 1,
-            mod_effects: Vec::new(),
+            mod_effects: crate::ComponentEntities::default(),
             next_mod_consumable_use_id: 1,
             ticks: 0,
             boneyard: None,
@@ -106,7 +106,7 @@ impl GameSession {
         self.painter_order = WorldPainterOrder::default();
         for id in &self.participant_order {
             let participant = self.participants.get_mut(id).unwrap();
-            participant.lighting =
+            *participant.lighting =
                 PlayerLightingState::new(self.painter_order.register(WorldManagerLane::Actor));
         }
         if world.loaded.scene.solomon_dig.is_some() {
@@ -117,9 +117,9 @@ impl GameSession {
         }
         for id in &self.participant_order {
             let participant = self.participants.get_mut(id).unwrap();
-            participant.score =
+            *participant.score =
                 NativeHallOfFameRunState::new(self.hall_of_fame_clock_started_at_tick);
-            participant.tutorial_profile_economy = if world.tutorial.is_some() {
+            *participant.tutorial_profile_economy = if world.tutorial.is_some() {
                 let mut baseline = participant.player.economy.clone();
                 if !baseline.college_intro_pending {
                     baseline.college_intro_pending = true;
@@ -129,14 +129,14 @@ impl GameSession {
             } else {
                 None
             };
-            participant.wizard = world.spawn_wizard();
-            participant.college_intro = None;
-            participant.world_aim = None;
+            *participant.wizard = world.spawn_wizard();
+            *participant.college_intro = None;
+            *participant.world_aim = None;
             participant.player.reset_for_new_run(true);
-            reset_selected_primary(&mut participant.wizard, &participant.player);
+            reset_selected_primary(participant.wizard, participant.player);
             if world.tutorial.is_some() {
                 participant.player.prepare_tutorial_loadout();
-                reset_selected_primary(&mut participant.wizard, &participant.player);
+                reset_selected_primary(participant.wizard, participant.player);
             }
         }
         self.secondary.reset_world();
@@ -179,19 +179,19 @@ impl GameSession {
         };
         for id in &self.participant_order {
             let participant = self.participants.get_mut(id).unwrap();
-            participant.lighting =
+            *participant.lighting =
                 PlayerLightingState::new(self.painter_order.register(WorldManagerLane::Actor));
-            participant.wizard = HubWizard::spawn();
-            participant.college_intro = None;
+            *participant.wizard = HubWizard::spawn();
+            *participant.college_intro = None;
             participant.player.reset_for_new_run(false);
-            reset_selected_primary(&mut participant.wizard, &participant.player);
-            participant.marker_epoch = HubNpcMarkerEpoch::new(
+            reset_selected_primary(participant.wizard, participant.player);
+            *participant.marker_epoch = HubNpcMarkerEpoch::new(
                 seed,
                 self.ticks,
                 &participant.player.economy.npc.help_flags,
             );
-            participant.tutorial_profile_economy = None;
-            participant.world_aim = None;
+            *participant.tutorial_profile_economy = None;
+            *participant.world_aim = None;
         }
         self.npcs = HubNpcState::new(seed, Some(&mut self.painter_order));
         self.ambient = HubAmbientState::new();

@@ -57,7 +57,7 @@ fn snapshot(state: &GameSession) -> Value {
         .participant_order
         .iter()
         .map(|id| {
-            let participant = &state.participants[id];
+            let participant = &state.participants.get(id).expect("participant exists");
             let combat = &participant.player.combat;
             let life = match combat.life_state {
                 PlayerLifeState::Alive => "alive",

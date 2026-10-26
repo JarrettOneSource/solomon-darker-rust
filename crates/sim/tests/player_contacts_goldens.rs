@@ -136,7 +136,7 @@ fn world() -> BoneyardWorld {
 
 fn world_snapshot(world: &BoneyardWorld) -> Value {
     let mut webbed = json!({});
-    for (id, web) in &world.enemies.webbed_players {
+    for (id, web) in world.enemies.webbed_players.iter() {
         webbed[id] = json!({ "severity": web.severity, "strength": web.strength, "cocoonHealth": web.cocoon_health, "hitPulse": web.hit_pulse });
     }
     let enemies = world.enemies.actors.iter().map(|actor| json!({ "id": actor.id,

@@ -390,7 +390,9 @@ impl NativeAuthority {
                 ));
             }
             let id = checkpoint.participant_order[0].clone();
-            if checkpoint.participants[&id].player.selection != selection {
+            if checkpoint.participants.get(&id).expect("participant exists").player.selection
+                != selection
+            {
                 return Err(invalid("The saved wizard does not match this create/resume request"));
             }
             let loaded =

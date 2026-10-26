@@ -85,7 +85,7 @@ fn initial(case: &Value) -> GameSession {
         session.install_boneyard(loaded()).unwrap();
     }
     let participant = session.participants.get_mut("caster").unwrap();
-    let player = &mut participant.player;
+    let player = participant.player;
     player.book = secondary_rows::read_book(&case["inputs"]["book"]);
     player.skill_runtime.refresh_with_stat_book(
         &mut player.book,
@@ -141,7 +141,7 @@ fn initial(case: &Value) -> GameSession {
 }
 
 fn snapshot(session: &GameSession) -> Value {
-    let participant = &session.participants["caster"];
+    let participant = &session.participants.get("caster").expect("participant exists");
     let flashes = &session.screen_flashes;
     let writes: Vec<_> = flashes.writes.iter().map(|row| json!({ "order":row.order,
         "tick":row.tick,"worldKey":row.world_key,"position":secondary_rows::point_snapshot(row.position),

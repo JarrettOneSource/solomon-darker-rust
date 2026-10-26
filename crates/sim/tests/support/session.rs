@@ -5,7 +5,7 @@ use solomon_sim::game_run::GameRunLifecycle;
 use solomon_sim::hub::regions::HubTransitionPhase;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::score::NativeHallOfFameRunState;
-use solomon_sim::session::{PlayerLightingState, SessionParticipant};
+use solomon_sim::session::{ParticipantRead, PlayerLightingState};
 
 pub fn registration(value: PainterRegistration) -> Value {
     json!({"managerLane":match value.manager_lane {
@@ -13,7 +13,8 @@ pub fn registration(value: PainterRegistration) -> Value {
     }, "registrationOrdinal":value.registration_ordinal})
 }
 
-pub fn character(session: &SessionParticipant) -> Value {
+pub fn character(session: &impl ParticipantRead) -> Value {
+    let session = session.view();
     let wizard = &session.wizard;
     let primary = &wizard.primary_cast;
     let selection = &session.player.selection;
@@ -60,7 +61,8 @@ pub fn score(score: &NativeHallOfFameRunState) -> Value {
         "portraitScale":score.portrait_scale,"startedAtTick":score.started_at_tick})
 }
 
-pub fn hub_participant(session: &SessionParticipant) -> Value {
+pub fn hub_participant(session: &impl ParticipantRead) -> Value {
+    let session = session.view();
     let wizard = &session.wizard;
     let intro = session.college_intro.map(|intro| json!({
         "contactCounter":intro.contact_counter,"coverAlpha":intro.cover_alpha,

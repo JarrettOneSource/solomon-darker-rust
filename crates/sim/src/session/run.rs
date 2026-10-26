@@ -107,7 +107,13 @@ impl GameSession {
         self.hall_of_fame_clock_started_at_tick = self.ticks;
         if tutorial
             && let Some(id) = self.participant_order.first()
-            && self.participants[id].player.economy.college_intro_pending
+            && self
+                .participants
+                .get(id)
+                .expect("participant exists")
+                .player
+                .economy
+                .college_intro_pending
         {
             assert!(self.run.continue_post_run_to_college_intro());
             return Some(id.clone());
@@ -165,7 +171,7 @@ impl GameSession {
 
     pub(super) fn trigger_last_word(&mut self, id: &str, tick: u64, record_score: bool) {
         let world = self.boneyard.as_ref().expect("Last Word belongs to the current Boneyard");
-        let participant = &self.participants[id];
+        let participant = &self.participants.get(id).expect("participant exists");
         let position = participant.wizard.position;
         let key = format!("boneyard:{}", world.loaded.run_id);
         let registration = self.painter_order.register(WorldManagerLane::Actor);
@@ -198,7 +204,13 @@ impl GameSession {
                     1.0,
                     |actor| {
                         native_hagatha_boss_damage_factor(
-                            &self.participants[id].player.economy.owned_perk_selectors,
+                            &self
+                                .participants
+                                .get(id)
+                                .expect("participant exists")
+                                .player
+                                .economy
+                                .owned_perk_selectors,
                             u32::from(actor.config.native_type_id),
                         )
                     },

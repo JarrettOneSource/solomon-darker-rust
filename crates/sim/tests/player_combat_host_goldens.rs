@@ -186,7 +186,7 @@ fn authored_resource_filters_follow_public_source_epochs_and_finite_error_bounda
         );
         let participant = state.participants.get_mut("local").unwrap();
         *participant.player = player;
-        participant.wizard = wizard;
+        *participant.wizard = wizard;
         let filters = RecordedFilters { spec, calls: RefCell::new(Vec::new()) };
         let inputs = BTreeMap::from([("local".into(), GameSessionInput::default())]);
         for sample in case["samples"].as_array().unwrap() {
@@ -206,7 +206,9 @@ fn authored_resource_filters_follow_public_source_epochs_and_finite_error_bounda
             }
             assert_eq!(state.ticks, sample["tick"].as_u64().unwrap(), "{name} tick");
             support::assert_snapshot(
-                &support::player_snapshot(&state.participants["local"].player),
+                &support::player_snapshot(
+                    state.participants.get("local").expect("participant exists").player,
+                ),
                 &sample["player"],
                 &format!("{name} resources at {}", state.ticks),
             );
@@ -239,7 +241,7 @@ fn authored_skill_replacement_consumes_only_the_current_native_offer_and_updates
         );
         let participant = state.participants.get_mut("local").unwrap();
         *participant.player = player;
-        participant.wizard = wizard;
+        *participant.wizard = wizard;
         state.grant_experience("local", 900.0);
         for sample in case["samples"].as_array().unwrap() {
             let id = sample["playerId"].as_str().unwrap();
@@ -251,13 +253,14 @@ fn authored_skill_replacement_consumes_only_the_current_native_offer_and_updates
             );
             support::assert_snapshot(
                 &command_player_snapshot::snapshot(
-                    &state.participants["local"].player,
+                    state.participants.get("local").expect("participant exists").player,
                     &state.gameplay_rng,
                 ),
                 &sample["player"],
                 "authored replacement player/RNG",
             );
-            let progression = &state.participants["local"].player.progression;
+            let progression =
+                &state.participants.get("local").expect("participant exists").player.progression;
             assert_eq!(json!(progression.pending_levels), sample["pendingLevels"]);
             assert_eq!(json!(progression.forced_offer_skill_ids), sample["forcedOfferSkillIds"]);
             assert_eq!(
@@ -309,7 +312,7 @@ fn inventory_filters_and_authored_consumption_replay_public_source_transactions(
         );
         let participant = state.participants.get_mut("local").unwrap();
         *participant.player = player;
-        participant.wizard = wizard;
+        *participant.wizard = wizard;
         if spec["mod"].as_bool() == Some(true) {
             for _ in 0..spec["repeats"].as_u64().unwrap() {
                 assert!(
@@ -327,7 +330,13 @@ fn inventory_filters_and_authored_consumption_replay_public_source_transactions(
                     let item_id = step["action"]["itemId"].as_u64().unwrap();
                     assert!(
                         find_inventory_item(
-                            &state.participants["local"].player.economy.backpack,
+                            &state
+                                .participants
+                                .get("local")
+                                .expect("participant exists")
+                                .player
+                                .economy
+                                .backpack,
                             item_id,
                         )
                         .is_some()
@@ -356,7 +365,7 @@ fn inventory_filters_and_authored_consumption_replay_public_source_transactions(
                 &step["modConsumption"],
                 &format!("{name} accepted consumption"),
             );
-            let player = &state.participants["local"].player;
+            let player = &state.participants.get("local").expect("participant exists").player;
             let mut snapshot = support::player_snapshot(player);
             snapshot["economy"]["boast"]["selected"] =
                 serde_json::to_value(&player.economy.npc.boast.selected).unwrap();

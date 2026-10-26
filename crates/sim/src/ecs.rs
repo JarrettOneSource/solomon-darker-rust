@@ -9,6 +9,7 @@ mod keyed;
 mod optional;
 pub use components::{ComponentEntities, ComponentIter};
 pub use keyed::KeyedComponents;
+pub(crate) use keyed::KeyedEntities;
 pub use optional::OptionalEntity;
 
 use bevy_ecs::entity::{Entity, EntityHashSet, EntityIndexSet};

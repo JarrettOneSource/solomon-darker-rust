@@ -1,5 +1,8 @@
-//! One authoritative participant. Its character has one locomotion owner in every world;
-//! the shared session owns enemies, spells, RNG streams and the painter allocator.
+//! Participant construction and checkpoint records. Live actors separate identity,
+//! character transactions, locomotion, Hub state, lighting, score and feedback.
+
+mod storage;
+pub use storage::{ParticipantMut, ParticipantRead, ParticipantRef, Participants};
 
 use crate::HubWizard;
 use crate::Vec2;
@@ -12,6 +15,8 @@ use crate::screen_feedback::NativeSecondaryScreenFeedbackPresentation;
 
 use super::PlayerLightingState;
 
+/// Owned boundary record for construction, saves, detach and private prediction.
+/// Live session participants are queried through `ParticipantRef` and `ParticipantMut`.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SessionParticipant {
@@ -34,11 +39,7 @@ pub struct SessionParticipant {
 
 impl SessionParticipant {
     pub(super) fn selected_primary_id(&self) -> u32 {
-        if self.player.book.primary_skill_id == 52 {
-            self.player.book.weld_build_id.expect("selected Weld has its build")
-        } else {
-            self.player.book.primary_skill_id as u32
-        }
+        self.view().selected_primary_id()
     }
 
     pub(super) fn synchronize_primary_selection(&mut self, previous: u32) {

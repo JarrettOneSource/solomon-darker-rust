@@ -122,7 +122,12 @@ impl Game {
         if hosted.content_pending {
             return Ok(());
         }
-        let player = &self.session.participants[&self.local_player_id].player;
+        let player = &self
+            .session
+            .participants
+            .get(&self.local_player_id)
+            .expect("participant exists")
+            .player;
         self.hud
             .set_mod_belt_icons(Some((&player.belt, &player.economy)), self.mod_assets.as_ref())?;
         if let Some(audio) = &mut self.mod_audio {
@@ -142,10 +147,11 @@ impl Game {
         if !self.has_game || self.is_hosted_observer() {
             return false;
         }
-        let local = &self.session.participants[&self.local_player_id];
+        let local =
+            &self.session.participants.get(&self.local_player_id).expect("participant exists");
         self.session.boneyard.is_some()
             || !solomon_sim::hub::college_intro::hub_college_admission_pre_loadout(
-                &local.wizard,
+                local.wizard,
                 local.player.economy.college_intro_pending,
             )
     }
@@ -164,7 +170,11 @@ impl Game {
             runtime: hosted.runtime.as_ref(),
             player_id: &self.local_player_id,
             skills_open: self.panels.panel() == Some(PlayerPanel::Skills),
-            native_offer_sequence: self.session.participants[&self.local_player_id]
+            native_offer_sequence: self
+                .session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
                 .player
                 .progression
                 .pending_offer
@@ -182,14 +192,21 @@ impl Game {
             self.mod_skill_quickbar.reset()?;
             return Ok(());
         }
-        let local = &self.session.participants[&self.local_player_id];
+        let local =
+            &self.session.participants.get(&self.local_player_id).expect("participant exists");
         let players: Vec<_> = self
             .session
             .participant_order
             .iter()
             .map(|id| ModMinimapPlayer {
                 id,
-                position: self.session.participants[id].wizard.position,
+                position: self
+                    .session
+                    .participants
+                    .get(id)
+                    .expect("participant exists")
+                    .wizard
+                    .position,
             })
             .collect();
         let enemies: Vec<_> = self
@@ -259,8 +276,13 @@ impl Game {
             return Ok(());
         };
         let projection = self.mod_projection.map(|mut projection| {
-            projection.local_player_position =
-                self.session.participants[&self.local_player_id].wizard.position;
+            projection.local_player_position = self
+                .session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .wizard
+                .position;
             projection
         });
         self.mod_overlays.refresh(
@@ -277,7 +299,14 @@ impl Game {
             .iter()
             .map(|id| ModScenePartyMember {
                 id,
-                display_name: &self.session.participants[id].player.selection.name,
+                display_name: &self
+                    .session
+                    .participants
+                    .get(id)
+                    .expect("participant exists")
+                    .player
+                    .selection
+                    .name,
             })
             .collect();
         let is_host = !welcome.observer
@@ -302,7 +331,8 @@ impl Game {
             return Ok(());
         }
         let session = self.display_session();
-        let wizard = &session.participants[&self.local_player_id].wizard;
+        let wizard =
+            &session.participants.get(&self.local_player_id).expect("participant exists").wizard;
         let location = if session.boneyard.is_some() {
             ModWorldLocation::Boneyard
         } else if wizard.region == HubRegion::Courtyard {
@@ -319,7 +349,13 @@ impl Game {
                 rect.left() + (wizard.position.x - camera.origin.x) * zoom,
                 rect.top() + (wizard.position.y - camera.origin.y) * zoom,
             ),
-            local_player_position: self.session.participants[&self.local_player_id].wizard.position,
+            local_player_position: self
+                .session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .wizard
+                .position,
             zoom,
         };
         let size = (self.canvas.client_width(), self.canvas.client_height());

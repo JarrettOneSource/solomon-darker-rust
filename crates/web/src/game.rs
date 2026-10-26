@@ -828,7 +828,12 @@ impl Game {
             }
         }
         if self.has_game {
-            let player = &self.session.participants[&self.local_player_id].player;
+            let player = &self
+                .session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .player;
             let derived = player.derived_stats();
             let offensive = derived.offensive_factors(&player.skill_runtime);
             let concentrations = [
@@ -864,8 +869,20 @@ impl Game {
                     concentrations: &concentrations,
                     mind_chug_active: player.progression.mind_chug_ticks_remaining > 0,
                     perk_removal_enabled: self.session.boneyard.is_none(),
-                    kills: self.session.participants[&self.local_player_id].score.monsters_killed,
-                    awesomeness: self.session.participants[&self.local_player_id].score.awesomeness,
+                    kills: self
+                        .session
+                        .participants
+                        .get(&self.local_player_id)
+                        .expect("participant exists")
+                        .score
+                        .monsters_killed,
+                    awesomeness: self
+                        .session
+                        .participants
+                        .get(&self.local_player_id)
+                        .expect("participant exists")
+                        .score
+                        .awesomeness,
                 },
                 time,
                 self.canvas.client_width(),
@@ -976,7 +993,13 @@ impl Game {
         for slot in &input.belt_pressed {
             // Held skills execute during the fixed tick; item activation is a press edge.
             if !matches!(
-                self.session.participants[&self.local_player_id].player.belt.entries[*slot],
+                self.session
+                    .participants
+                    .get(&self.local_player_id)
+                    .expect("participant exists")
+                    .player
+                    .belt
+                    .entries[*slot],
                 Some(NativeBeltEntry::Skill { .. })
             ) {
                 self.activate_belt_slot(*slot, None, time)?;
@@ -1010,8 +1033,18 @@ impl Game {
                 GameplayAction::Interact if self.session.boneyard.is_none() => {
                     if !self.open_hub_player(None)
                         && let Some(interaction) = nearest_hub_interaction(
-                            self.session.participants[&self.local_player_id].wizard.region,
-                            self.session.participants[&self.local_player_id].wizard.position,
+                            self.session
+                                .participants
+                                .get(&self.local_player_id)
+                                .expect("participant exists")
+                                .wizard
+                                .region,
+                            self.session
+                                .participants
+                                .get(&self.local_player_id)
+                                .expect("participant exists")
+                                .wizard
+                                .position,
                             self.interaction_availability(),
                         )
                     {
@@ -1244,7 +1277,13 @@ impl Game {
         self.skill_picker.is_open()
             || self
                 .has_game
-                .then(|| &self.session.participants[&self.local_player_id].player)
+                .then(|| {
+                    self.session
+                        .participants
+                        .get(&self.local_player_id)
+                        .expect("participant exists")
+                        .player
+                })
                 .is_some_and(|player| player.progression.pending_offer.is_some())
     }
 
@@ -1325,8 +1364,12 @@ impl Game {
         let Some(entry) = solomon_sim::hall_of_fame::completed_hall_of_fame_entry(
             &world.loaded.run_id,
             self.session.run.phase,
-            &self.session.participants[&self.local_player_id].score,
-            &self.session.participants[&self.local_player_id].player,
+            self.session.participants.get(&self.local_player_id).expect("participant exists").score,
+            self.session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .player,
             world.waves.as_ref().map_or(0, |waves| waves.state.wave_ordinal),
             js_sys::Date::new_0().to_iso_string().into(),
         ) else {
@@ -1427,11 +1470,15 @@ impl Game {
     }
 
     fn college_loadout_pending(&self) -> bool {
-        self.session.participants[&self.local_player_id].wizard.transition.is_some_and(
-            |transition| {
+        self.session
+            .participants
+            .get(&self.local_player_id)
+            .expect("participant exists")
+            .wizard
+            .transition
+            .is_some_and(|transition| {
                 transition.phase == solomon_sim::hub::regions::HubTransitionPhase::CollegeLoadout
-            },
-        )
+            })
     }
 
     fn advance_session_ui(&mut self, now: f64) -> Result<(), String> {
@@ -1442,15 +1489,27 @@ impl Game {
         if self.session.run.phase == GameRunPhase::Loadout || self.college_loadout_pending() {
             if !self.menu.is_blocking() {
                 self.menu.show_loadout(
-                    &self.session.participants[&self.local_player_id].player.selection.name,
+                    &self
+                        .session
+                        .participants
+                        .get(&self.local_player_id)
+                        .expect("participant exists")
+                        .player
+                        .selection
+                        .name,
                 )?;
             }
-        } else if self.session.participants[&self.local_player_id].college_intro.is_some_and(
-            |intro| {
+        } else if self
+            .session
+            .participants
+            .get(&self.local_player_id)
+            .expect("participant exists")
+            .college_intro
+            .is_some_and(|intro| {
                 intro.phase
                     == solomon_sim::hub::college_intro::NativeCollegeIntroPhase::ArchDialogue
-            },
-        ) && !self.panels.is_open()
+            })
+            && !self.panels.is_open()
         {
             self.open_hub_dialogue(HubInteractionId::ArchChancellor, now)?;
         }
@@ -1501,7 +1560,7 @@ impl Game {
             .iter()
             .zip(&world_keys)
             .map(|(id, world_key)| {
-                let participant = &session.participants[id];
+                let participant = &session.participants.get(id).expect("participant exists");
                 CombatAudioPlayer {
                     id,
                     world_key,
@@ -1535,7 +1594,13 @@ impl Game {
             camera.origin.y + viewport.logical_size.y / (2.0 * camera.scale),
         );
         let width = viewport.logical_size.x / camera.scale;
-        let alternate = session.participants[&self.local_player_id].player.combat.life_state
+        let alternate = session
+            .participants
+            .get(&self.local_player_id)
+            .expect("participant exists")
+            .player
+            .combat
+            .life_state
             != solomon_sim::combat::PlayerLifeState::Alive;
         let point_gain = |point| {
             solomon_sim::region_feedback::native_region_point_gain(point, center, width, alternate)
@@ -1575,7 +1640,11 @@ impl Game {
         let college_admission = self.has_game
             && !self.menu.covers_world()
             && self.session.boneyard.is_none()
-            && self.session.participants[&self.local_player_id]
+            && self
+                .session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
                 .player
                 .economy
                 .college_intro_pending;
@@ -1612,20 +1681,33 @@ impl Game {
         self.hud.set_action_enabled(
             HudAction::Map,
             self.session.can_enter_boneyard()
-                && !self.session.participants[&self.local_player_id]
+                && !self
+                    .session
+                    .participants
+                    .get(&self.local_player_id)
+                    .expect("participant exists")
                     .player
                     .economy
                     .college_intro_pending,
         )?;
         self.hud.set_quickbar_player(
-            self.has_game.then(|| self.session.participants[&self.local_player_id].player.as_ref()),
+            self.has_game.then(|| {
+                self.session
+                    .participants
+                    .get(&self.local_player_id)
+                    .expect("participant exists")
+                    .player
+            }),
             self.session.secondary.players.get(&self.local_player_id),
             &self.menu.settings().controls,
             self.session.boneyard.is_none(),
         )?;
         self.hud.update(&self.hud_state, width, height)?;
         self.college_overlay.update(
-            self.session.participants[&self.local_player_id]
+            self.session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
                 .college_intro
                 .as_ref()
                 .filter(|_| !self.menu.covers_world()),
@@ -1655,7 +1737,12 @@ impl Game {
             self.session.boneyard.as_ref().filter(|_| !self.menu.covers_world()).map(|world| {
                 TutorialFrame {
                     world,
-                    player: &self.session.participants[&self.local_player_id].player,
+                    player: self
+                        .session
+                        .participants
+                        .get(&self.local_player_id)
+                        .expect("participant exists")
+                        .player,
                     wizard: self.session.wizard(&self.local_player_id).expect("local participant"),
                     camera: &camera,
                     settings: self.menu.settings(),
@@ -1699,7 +1786,13 @@ impl Game {
         // A restored offer waits behind Continue; it must not cover the title screen.
         let player = self
             .has_game
-            .then(|| &self.session.participants[&self.local_player_id].player)
+            .then(|| {
+                self.session
+                    .participants
+                    .get(&self.local_player_id)
+                    .expect("participant exists")
+                    .player
+            })
             .filter(|_| !self.menu.covers_world());
         self.skill_picker.update(
             player.and_then(|player| player.progression.pending_offer.as_ref()),
@@ -2064,7 +2157,12 @@ impl Game {
         {
             return Ok(());
         }
-        let player = &self.session.participants[&self.local_player_id].player;
+        let player = &self
+            .session
+            .participants
+            .get(&self.local_player_id)
+            .expect("participant exists")
+            .player;
         let Some(entry) = player.belt.entries.get(slot).copied().flatten() else {
             return Ok(());
         };
@@ -2128,7 +2226,15 @@ impl Game {
             self.menu.settings().camera_fov_percent,
         );
         let world_size = session.boneyard.as_ref().map_or_else(
-            || session.participants[&self.local_player_id].wizard.region.size(),
+            || {
+                session
+                    .participants
+                    .get(&self.local_player_id)
+                    .expect("participant exists")
+                    .wizard
+                    .region
+                    .size()
+            },
             |run| Vec2::new(run.loaded.scene.bounds.width, run.loaded.scene.bounds.height),
         );
         let viewport = solomon_sim::viewport::bounded_game_viewport(size, world_size, zoom);
@@ -2136,8 +2242,18 @@ impl Game {
         let origin = session.boneyard.as_ref().map_or_else(
             || {
                 hub_region_camera_origin_for_view(
-                    session.participants[&self.local_player_id].wizard.region,
-                    session.participants[&self.local_player_id].wizard.position,
+                    session
+                        .participants
+                        .get(&self.local_player_id)
+                        .expect("participant exists")
+                        .wizard
+                        .region,
+                    session
+                        .participants
+                        .get(&self.local_player_id)
+                        .expect("participant exists")
+                        .wizard
+                        .position,
                     viewport.logical_size,
                     scale,
                 )
@@ -2202,7 +2318,14 @@ impl Game {
             || self.skill_selection_active()
             || self.native_gameplay_held()
             || self.world_loading
-            || self.session.participants[&self.local_player_id].wizard.transition.is_some()
+            || self
+                .session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .wizard
+                .transition
+                .is_some()
         {
             return Ok(());
         }
@@ -2217,7 +2340,12 @@ impl Game {
         }
         let availability = self.interaction_availability();
         let Some(interaction) = hub_interaction_at_point(
-            self.session.participants[&self.local_player_id].wizard.region,
+            self.session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .wizard
+                .region,
             point,
             availability,
         ) else {
@@ -2225,8 +2353,18 @@ impl Game {
         };
         if hub_interaction_within_range(
             interaction,
-            self.session.participants[&self.local_player_id].wizard.region,
-            self.session.participants[&self.local_player_id].wizard.position,
+            self.session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .wizard
+                .region,
+            self.session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .wizard
+                .position,
             availability,
         ) {
             self.open_hub_dialogue(interaction, now)?;
@@ -2252,7 +2390,13 @@ impl Game {
                 .map(|skorcha| skorcha.variant),
             story_office: self
                 .has_game
-                .then(|| &self.session.participants[&self.local_player_id].player)
+                .then(|| {
+                    self.session
+                        .participants
+                        .get(&self.local_player_id)
+                        .expect("participant exists")
+                        .player
+                })
                 .is_some_and(|player| player.economy.college_intro_pending),
         }
     }
@@ -2261,9 +2405,21 @@ impl Game {
         if !self.has_game {
             return Ok(());
         }
-        let player = &self.session.participants[&self.local_player_id].player;
+        let player = &self
+            .session
+            .participants
+            .get(&self.local_player_id)
+            .expect("participant exists")
+            .player;
         if self.session.boneyard.is_some()
-            || self.session.participants[&self.local_player_id].wizard.transition.is_some()
+            || self
+                .session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .wizard
+                .transition
+                .is_some()
         {
             return Ok(());
         }
@@ -2282,10 +2438,16 @@ impl Game {
             random_index,
         };
         if interaction == HubInteractionId::ArchChancellor
-            && self.session.participants[&self.local_player_id].college_intro.is_some_and(|intro| {
-                intro.phase
-                    == solomon_sim::hub::college_intro::NativeCollegeIntroPhase::ArchDialogue
-            })
+            && self
+                .session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .college_intro
+                .is_some_and(|intro| {
+                    intro.phase
+                        == solomon_sim::hub::college_intro::NativeCollegeIntroPhase::ArchDialogue
+                })
         {
             self.panels.show_college_intro_dialogue(context, &player.economy.npc, now)
         } else {
@@ -2299,7 +2461,12 @@ impl Game {
             self.menu.set_mobile_editor_secondary(None);
             return;
         }
-        let player = &self.session.participants[&self.local_player_id].player;
+        let player = &self
+            .session
+            .participants
+            .get(&self.local_player_id)
+            .expect("participant exists")
+            .player;
         let secondary = self.session.secondary.players.get(&self.local_player_id);
         self.menu.set_mobile_editor_player(Some(player), self.session.boneyard.is_none());
         self.menu.set_mobile_editor_secondary(secondary);
@@ -2562,7 +2729,8 @@ impl Game {
             self.renderer.end_frame();
             return Ok(());
         }
-        let player = &session.participants[&self.local_player_id].player;
+        let player =
+            &session.participants.get(&self.local_player_id).expect("participant exists").player;
         let equipment = crate::wizard::WizardEquipment::prepare(
             &mut self.renderer,
             player.selection.element,
@@ -2582,7 +2750,10 @@ impl Game {
                 .boneyard
                 .as_ref()
                 .and_then(|world| world.enemies.webbed_players.get(&self.local_player_id).copied()),
-            overlay_effect_phase: session.participants[&self.local_player_id]
+            overlay_effect_phase: session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
                 .lighting
                 .overlay_effect_phase,
             // Active Boneyard actions are sampled per participant by BattleViews.
@@ -2696,12 +2867,17 @@ impl Game {
             },
         });
         let host = self.native.as_ref().and_then(NativeGame::host_snapshot);
-        let local_region = session.participants[&self.local_player_id].wizard.region;
+        let local_region = session
+            .participants
+            .get(&self.local_player_id)
+            .expect("participant exists")
+            .wizard
+            .region;
         let overlay_players: Vec<_> = session
             .participant_order
             .iter()
             .filter_map(|id| {
-                let participant = &session.participants[id];
+                let participant = &session.participants.get(id).expect("participant exists");
                 if session.boneyard.is_none() && participant.wizard.region != local_region {
                     return None;
                 }
@@ -2725,10 +2901,11 @@ impl Game {
             let camera_focus = self.boneyard_camera_focus();
             // The source owns one level-up view driven by this client's picker.
             self.level_up.retain(|id, _| id == &self.local_player_id);
-            let local = &session.participants[&self.local_player_id];
+            let local =
+                &session.participants.get(&self.local_player_id).expect("participant exists");
             let level_up = self.level_up.entry(self.local_player_id.clone()).or_default().sample(
                 &world.loaded.run_id,
-                &local.player,
+                local.player,
                 session.level_up_barrier.as_ref().map(|barrier| barrier.barrier_id),
                 self.last_time.unwrap_or(0.0),
                 (local.wizard.position.y - camera.origin.y) * camera.scale,
@@ -2737,12 +2914,12 @@ impl Game {
                 .participant_order
                 .iter()
                 .map(|id| {
-                    let participant = &session.participants[id];
+                    let participant = &session.participants.get(id).expect("participant exists");
                     let lighting = &participant.lighting;
                     BattlePlayer {
                         id,
-                        player: &participant.player,
-                        wizard: &participant.wizard,
+                        player: participant.player,
+                        wizard: participant.wizard,
                         light_registration: lighting.light_registration,
                         // `host/game-snapshot.ts` projects both action and weapon phases.
                         overlay_effect_phase: participant
@@ -2826,7 +3003,12 @@ impl Game {
                     camera_center,
                     base_camera.scale,
                     viewport,
-                    session.participants[&self.local_player_id].wizard.position,
+                    session
+                        .participants
+                        .get(&self.local_player_id)
+                        .expect("participant exists")
+                        .wizard
+                        .position,
                     if self.menu.settings().zoom_effects {
                         screen_feedback.camera_magnitude
                     } else {
@@ -2848,10 +3030,15 @@ impl Game {
             let hub_players: Vec<_> = session
                 .participant_order
                 .iter()
-                .map(|id| &session.participants[id])
+                .map(|id| session.participants.get(id).expect("participant exists"))
                 .filter(|participant| {
                     participant.wizard.region
-                        == session.participants[&self.local_player_id].wizard.region
+                        == session
+                            .participants
+                            .get(&self.local_player_id)
+                            .expect("participant exists")
+                            .wizard
+                            .region
                 })
                 .collect();
             let mut hub_equipment = Vec::with_capacity(hub_players.len());
@@ -2879,12 +3066,23 @@ impl Game {
                     )
                 })
                 .collect();
-            if session.participants[&self.local_player_id].wizard.region.is_private() {
+            if session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .wizard
+                .region
+                .is_private()
+            {
                 self.rooms.draw(
                     &mut self.renderer,
                     &camera,
                     &PrivateRoomFrame {
-                        local_wizard: &session.participants[&self.local_player_id].wizard,
+                        local_wizard: session
+                            .participants
+                            .get(&self.local_player_id)
+                            .expect("participant exists")
+                            .wizard,
                         player_painters: &player_painters,
                         tick: session.ticks,
                         dowser_frame: session.dowser_clock.frame(),
@@ -2895,7 +3093,7 @@ impl Game {
                             &mut self.wizard_view,
                             participant,
                             &hub_equipment[index],
-                            session.secondary.players.get(&participant.id),
+                            session.secondary.players.get(participant.id),
                             self.menu.settings().complex_lighting,
                             presentation_tick,
                             clocks,
@@ -2903,7 +3101,7 @@ impl Game {
                         self.wizard_view.draw(
                             renderer,
                             &camera,
-                            &participant.wizard,
+                            participant.wizard,
                             presentation_tick,
                             &self.spell_view,
                         );
@@ -2921,7 +3119,13 @@ impl Game {
                     &session.spells,
                     &format!(
                         "hub:{}",
-                        session.participants[&self.local_player_id].wizard.region.id()
+                        session
+                            .participants
+                            .get(&self.local_player_id)
+                            .expect("participant exists")
+                            .wizard
+                            .region
+                            .id()
                     ),
                     session.ticks,
                     &|_| 1.0,
@@ -2986,7 +3190,13 @@ impl Game {
                     &mut self.renderer,
                     &camera,
                     &session.ambient,
-                    session.participants[&self.local_player_id].wizard.position.y,
+                    session
+                        .participants
+                        .get(&self.local_player_id)
+                        .expect("participant exists")
+                        .wizard
+                        .position
+                        .y,
                     &ActorPainters {
                         layers: &actors,
                         owner_overlays: &overlays,
@@ -3000,7 +3210,7 @@ impl Game {
                                     &mut self.wizard_view,
                                     participant,
                                     &hub_equipment[index],
-                                    session.secondary.players.get(&participant.id),
+                                    session.secondary.players.get(participant.id),
                                     self.menu.settings().complex_lighting,
                                     presentation_tick,
                                     clocks,
@@ -3008,7 +3218,7 @@ impl Game {
                                 self.wizard_view.draw(
                                     renderer,
                                     &camera,
-                                    &participant.wizard,
+                                    participant.wizard,
                                     presentation_tick,
                                     &self.spell_view,
                                 );
@@ -3019,7 +3229,10 @@ impl Game {
                                     self.npc_view.draw_courtyard_marker(
                                         renderer,
                                         &camera,
-                                        session.participants[&self.local_player_id]
+                                        session
+                                            .participants
+                                            .get(&self.local_player_id)
+                                            .expect("participant exists")
                                             .marker_epoch
                                             .frame(
                                                 HubInteractionId::Teacher,
@@ -3036,7 +3249,10 @@ impl Game {
                                     self.npc_view.draw_courtyard_marker(
                                         renderer,
                                         &camera,
-                                        session.participants[&self.local_player_id]
+                                        session
+                                            .participants
+                                            .get(&self.local_player_id)
+                                            .expect("participant exists")
                                             .marker_epoch
                                             .frame(id, session.ticks, marker_availability, None),
                                     );
@@ -3106,7 +3322,13 @@ impl Game {
             }
         }
         overlay_diagnostics.apply(&self.canvas)?;
-        if let Some(transition) = session.participants[&self.local_player_id].wizard.transition {
+        if let Some(transition) = session
+            .participants
+            .get(&self.local_player_id)
+            .expect("participant exists")
+            .wizard
+            .transition
+        {
             self.renderer.draw_solid(
                 [0.0, 0.0, viewport.x as f32, viewport.y as f32],
                 [0.0, 0.0, 0.0, transition.alpha as f32],
@@ -3140,7 +3362,7 @@ impl Game {
 /// One shared view is prepared from each actual Hub participant immediately before drawing.
 fn prepare_hub_wizard(
     view: &mut WizardView,
-    participant: &solomon_sim::session::SessionParticipant,
+    participant: solomon_sim::session::ParticipantRef<'_>,
     equipment: &crate::wizard::WizardEquipment,
     secondary: Option<&solomon_sim::secondary::NativeSecondaryPlayerState>,
     complex_lighting: bool,
@@ -3163,7 +3385,7 @@ fn prepare_hub_wizard(
         complex_lighting,
         tick,
         damage_x4_ticks_remaining: clocks
-            .and_then(|clocks| clocks.player_damage_x4.get(&participant.id))
+            .and_then(|clocks| clocks.player_damage_x4.get(participant.id))
             .copied()
             .unwrap_or(player.progression.damage_x4_ticks_remaining as f64),
     });

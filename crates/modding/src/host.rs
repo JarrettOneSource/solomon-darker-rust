@@ -245,7 +245,13 @@ impl PreparedModHost {
             0.0
         } else {
             filter_equipment_modifiers(
-                &game.participants[input.player_id].player.economy.equipment,
+                &game
+                    .participants
+                    .get(input.player_id)
+                    .expect("participant exists")
+                    .player
+                    .economy
+                    .equipment,
                 "mana_spend",
                 self.runtime.skills.filter(input.player_id, "mana_spend", -status_delta)?,
             )

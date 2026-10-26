@@ -30,7 +30,10 @@ impl GameSession {
         let mut live_bindings = HashSet::new();
         for id in &self.participant_order {
             live_bindings.insert(id.clone());
-            world.enemies.bind_native_query_target(id, self.participants[id].wizard.position);
+            world.enemies.bind_native_query_target(
+                id,
+                self.participants.get(id).expect("participant exists").wizard.position,
+            );
         }
         for actor in self.secondary.actors.iter() {
             if actor.kind != NativeSecondaryActorKind::Golem || actor.world_key != world_key {

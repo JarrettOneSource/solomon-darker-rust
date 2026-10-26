@@ -375,11 +375,9 @@ impl SharedGameWorlds {
         if party.member_player_ids.iter().any(|id| self.hub.participant(id).is_none()) {
             return Err(PartyActionRejection::NotInHub.into());
         }
-        if party
-            .member_player_ids
-            .iter()
-            .any(|id| self.hub.participants[id].wizard.transition.is_some())
-        {
+        if party.member_player_ids.iter().any(|id| {
+            self.hub.participants.get(id).expect("participant exists").wizard.transition.is_some()
+        }) {
             return Err(SharedWorldActionRejection::RunUnavailable);
         }
         let party_id = party.id.clone();
@@ -509,7 +507,15 @@ impl SharedGameWorlds {
                 run.state.boneyard.as_ref().map(|world| world.loaded.run_id.clone());
             let mut newly_completed = Vec::new();
             for id in &run.state.participant_order {
-                if run.state.participants[id].score.elapsed_ticks.is_none() {
+                if run
+                    .state
+                    .participants
+                    .get(id)
+                    .expect("participant exists")
+                    .score
+                    .elapsed_ticks
+                    .is_none()
+                {
                     newly_completed.push(id.clone());
                 }
             }
@@ -537,7 +543,7 @@ impl SharedGameWorlds {
                     {
                         continue;
                     }
-                    let participant = &run.state.participants[&id];
+                    let participant = &run.state.participants.get(&id).expect("participant exists");
                     let score = &participant.score;
                     let (Some(elapsed_ticks), Some(heading_index), Some(portrait_scale)) =
                         (score.elapsed_ticks, score.portrait_heading_index, score.portrait_scale)
