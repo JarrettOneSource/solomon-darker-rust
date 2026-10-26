@@ -1,6 +1,5 @@
-//! Verified package bytes from Website `game-content-cache.ts`.
-//! The browser streams through the mounted account API, then admits only the descriptor's
-//! exact length and SHA-256 to CacheStorage and the image/audio/document consumers.
+//! Verified package bytes from the mounted account API. Both platform caches admit
+//! only the descriptor's exact length and SHA-256 before image, audio or document use.
 
 use crate::hosted::WebsiteApi;
 use crate::platform::http::ReadError;
@@ -96,8 +95,8 @@ impl ModContentCache {
         self.read(asset, |_| {}).await
     }
 
-    /// Source `gameContentUrl`, resolved within this Website mount. HTML media
-    /// uses this same-origin address after its content bytes have been verified.
+    /// Resolve content within the configured Website mount. Browser media uses
+    /// this same-origin address after its bytes have been verified.
     pub(crate) fn content_url(&self, asset: &GameModAsset) -> String {
         self.api.mount().path(&format!("/api/game/content/{}", asset.sha256))
     }

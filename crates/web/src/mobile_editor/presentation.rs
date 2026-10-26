@@ -1,4 +1,4 @@
-//! GPU editor page/chrome from `MobileUiEditor.tsx` and its authored control layout.
+//! Touch-control editor panels and layout preview.
 
 use super::preview::ElementPaint;
 use super::{EditorEvent, Hit, HitTarget, MobileUiEditor, egui_rect, hud_rect};

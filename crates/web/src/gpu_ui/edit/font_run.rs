@@ -1,5 +1,5 @@
-//! Native font runs, not DOM controls. SVG/Range measure typography only; an
-//! unattached Canvas rasterizes text-only tiles into egui-managed GPU textures.
+//! Shared line wrapping and GPU text tiles. Platform adapters shape and rasterize
+//! font runs; egui owns the resulting textures.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};

@@ -1,4 +1,4 @@
-//! GPU authored minimap from `mod-ui/ModMinimap.tsx`.
+//! Authored minimap rendered from accepted world projections.
 //! The accepted projection supplies every marker and the exact displayed action center.
 
 use crate::gpu_ui::{UiFrame, clip_polygon_ellipse};

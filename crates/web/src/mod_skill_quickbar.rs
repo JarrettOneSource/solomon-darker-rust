@@ -1,4 +1,4 @@
-//! GPU `mod-ui/ModSkillQuickbar.tsx` with Source's stable keyboard controller.
+//! Authored skill quickbar with keyboard bindings owned for the session lifetime.
 
 use crate::gpu_ui::UiFrame;
 use crate::mod_presentation_assets::ModPresentationAssets;

@@ -1,4 +1,4 @@
-//! GPU forms for `CheatMenu.tsx`; drafts retain their source validation/admission.
+//! Cheat forms with local drafts and host-validated actions.
 
 use super::{CheatFrame, button, copy};
 use crate::gpu_ui::UiFrame;

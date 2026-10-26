@@ -1,4 +1,4 @@
-//! GPU learned authored skills and mod choice offer from `mod-ui/ModSkillBook.tsx`.
+//! Learned authored skills and pending skill choices.
 //! Exact host offer/binding identities remain in typed actions.
 
 use crate::gpu_ui::UiFrame;

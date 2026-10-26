@@ -1,4 +1,4 @@
-//! Session content lifetime from `client/game-client-session.ts` and `mod-ui`.
+//! Session ownership of authored content and its presentation resources.
 //! Accepted snapshots wait for verified textures and audio before their renderer-ready ACK.
 
 use super::*;
@@ -295,8 +295,8 @@ impl Game {
         })
     }
 
-    /// The source DOM subscriptions read the most recently rendered scene metrics. Only
-    /// accepted notifications and viewport changes refresh their keyed elements.
+    /// Overlays use the most recently rendered scene metrics. Accepted notifications
+    /// and viewport changes refresh their keyed elements.
     pub(in crate::game) fn record_mod_scene_projection(&mut self) -> Result<(), String> {
         if self.hosted.is_none() || self.mod_assets.is_none() {
             return Ok(());

@@ -8,6 +8,8 @@ use serde_json::{Value, json};
 use solomon_modding::console::*;
 use solomon_sim::modding::console::WebLuaFrameState;
 use solomon_sim::modding::{LuaObject, LuaValue};
+use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
+use solomon_sim::session::{GameSession, GameSessionOptions};
 
 #[derive(Deserialize)]
 struct Fixture {
@@ -66,6 +68,7 @@ fn real_console_sdk_scheduling_authority_and_limits_match_source() {
         .unwrap();
         let mut binding = Binding { frame: case.frame, bot_calls: Vec::new() };
         for (index, (action, expected)) in case.actions.iter().zip(case.rows).enumerate() {
+            let expected = expected_with_lua_nil(&case.name, index, expected);
             let mut result = Value::Null;
             match action["kind"].as_str().unwrap() {
                 "execute" | "enqueue" => {
@@ -120,6 +123,85 @@ fn real_console_sdk_scheduling_authority_and_limits_match_source() {
         }
         assert!(runtime.metrics().memory_bytes <= 16 * 1024 * 1024);
     }
+}
+
+// Retain every recorded action and the immutable recording. These explicit
+// expectations replace the retired JavaScript bridge's null exception and its
+// consequences: normal Lua nil values, continued commands and surviving callbacks.
+fn expected_with_lua_nil(case: &str, index: usize, mut expected: Value) -> Value {
+    match (case, index) {
+        ("boneyard-spawn-and-source-identities", 0) => {
+            expected["completions"][0]["result"] = json!({
+                "error": null, "ok": true, "output": [],
+                "values": [
+                    {"base":"skeleton", "key":"skeleton", "native_type_id":1001,
+                     "request_id":1, "x":60, "y":70},
+                    null, null, null, 2
+                ]
+            });
+            expected["commands"].as_array_mut().unwrap().push(json!({
+                "requestId":2, "token":"DEMON", "type":"spawn-enemy", "x":-1, "y":0
+            }));
+        }
+        ("events-frame-boundary-and-current-authority", 0) => {
+            expected["completions"][0]["result"] =
+                json!({"error":null, "ok":true, "output":[], "values":[1]});
+        }
+        ("events-frame-boundary-and-current-authority", 3..=5) => {
+            if index == 3 {
+                expected["logs"].as_array_mut().unwrap().remove(0);
+            }
+            expected["state"] =
+                json!({"run":if index == 3 { "run-a" } else { "run-b" }, "tick":99});
+            expected["metrics"]["callbackCount"] = json!(1);
+            expected["metrics"]["stateBytes"] = json!(25);
+        }
+        ("seed-selection-and-lifecycle", 4) => {
+            expected["completions"][0]["result"] =
+                json!({"error":null, "ok":true, "output":[], "values":[null]});
+        }
+        _ => {}
+    }
+    expected
+}
+
+#[test]
+fn college_console_reads_optional_values_as_lua_nil() {
+    let game = GameSession::new(
+        "player-1".into(),
+        NewGameSelection {
+            name: "Native Wizard".into(),
+            element: WizardElement::Ether,
+            discipline: WizardDiscipline::Arcane,
+        },
+        GameSessionOptions::default(),
+    );
+    let mut binding = Binding {
+        frame: solomon_sim::modding::console::create_web_lua_frame_state(&game, Some("player-1")),
+        bot_calls: Vec::new(),
+    };
+    let mut runtime = WebLuaRuntime::with_clock(false, None, || 0.0).unwrap();
+    assert!(
+        runtime.enqueue_execution(WebLuaExecutionRequest {
+            request_id: 1,
+            player_id: "player-1".into(),
+            code: "local frame = sd.runtime.get_frame_state(); \
+               return frame.world, frame.players[1].displayName, \
+               frame.runId == nil, frame.boneyardSeed == nil, frame.waves == nil, \
+               sd.waves.get_state() == nil, sd.gameplay.get_combat_state() == nil, \
+               sd.enemies.get('missing') == nil, sd.state.get('missing') == nil, \
+               sd.rng.get_seed() == nil"
+                .into(),
+        })
+    );
+    runtime.begin_tick(1, &mut binding).unwrap();
+    let result = runtime.drain_completions().remove(0).result;
+    assert!(result.ok, "{:?}", result.error);
+    let mut expected =
+        vec![LuaValue::String("hub".into()), LuaValue::String("Native Wizard".into())];
+    expected.extend(std::iter::repeat_n(LuaValue::Boolean(true), 8));
+    assert_eq!(result.values, expected);
+    assert!(runtime.drain_commands().is_empty());
 }
 
 #[test]

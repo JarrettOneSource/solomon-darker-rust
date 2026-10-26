@@ -1,5 +1,5 @@
-//! GPU Lua console from `CheatMenu.tsx`; raw code executes only in the actual host VM.
-//! History and the last100 returned executions belong to this mounted view.
+//! Lua editor and results; code executes only in the authoritative host VM.
+//! History and the last 100 returned executions belong to this open view.
 
 use super::{button, copy, format_values};
 use crate::gpu_ui::UiFrame;

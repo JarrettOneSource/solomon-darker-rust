@@ -1,4 +1,4 @@
-//! GPU readonly match panel from `DeveloperObserverScene.tsx`.
+//! Read-only match observer panel.
 //! Camera selection leaves through the connection owner; this panel creates no participant.
 
 use crate::gpu_ui::UiFrame;

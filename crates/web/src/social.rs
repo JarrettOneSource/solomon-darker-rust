@@ -1,5 +1,4 @@
-//! Social GPU surfaces from Website `GameChat.tsx`, `NativeUiPartyChip.tsx`,
-//! `NativeUiPartyMenu.tsx`, `PlayerCardDialog.tsx` and `AllyHud.tsx`.
+//! Chat, party controls, player cards and ally status in the shared GPU interface.
 //! Accepted messages, membership, profiles and health remain host-owned.
 
 mod allies;

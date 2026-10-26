@@ -1,4 +1,4 @@
-//! GPU native spectator rails/text from `NativeSpectatorStatus.tsx`.
+//! Spectator status and viewport rails.
 
 use crate::gpu_ui::{self, StockAtlas, UiFrame};
 use egui::{Color32, Rect, pos2, vec2};

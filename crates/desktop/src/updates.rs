@@ -14,7 +14,7 @@ pub struct Build {
 
 impl Build {
     pub fn validate(&self) -> Result<(), String> {
-        if self.revision != "development" && !revision(&self.revision) {
+        if !revision(&self.revision) {
             return Err("The application build revision is invalid.".into());
         }
         let parts: Vec<_> = self.release_repository.split('/').collect();
@@ -182,6 +182,14 @@ mod tests {
                 .collect(),
         }
     }
+    #[test]
+    fn build_identity_must_be_accepted_by_the_session_supervisor() {
+        let mut build = build();
+        assert!(build.validate().is_ok());
+        build.revision = "development".into();
+        assert!(build.validate().is_err());
+    }
+
     #[test]
     fn only_the_owned_published_platform_archive_is_an_update_candidate() {
         let build = build();

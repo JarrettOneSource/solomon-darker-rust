@@ -1,4 +1,4 @@
-//! GPU layout editor from Website `MobileUiEditor.tsx`.
+//! Touch-control layout editor rendered by the shared GPU interface.
 //! Layout drafts, gestures and undo history stay local until Settings saves the draft.
 
 mod interaction;

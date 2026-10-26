@@ -1,4 +1,4 @@
-//! GPU chat transcript/composer from Website `GameChat.tsx`.
+//! Chat transcript and composer.
 //! Drafts stay local; sending queues a host command and never inserts a message.
 
 mod announcements;

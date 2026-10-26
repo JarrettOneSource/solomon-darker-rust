@@ -970,7 +970,7 @@ impl GpuUi {
         ctx.options_mut(|options| {
             options.max_passes = std::num::NonZeroUsize::new(1).expect("one UI pass");
             options.input_options.raw_point_scroll = true;
-            // Source HTML buttons accept a stationary release after any hold.
+            // A stationary release activates a button regardless of hold duration.
             options.input_options.max_click_duration = f64::INFINITY;
         });
         ctx

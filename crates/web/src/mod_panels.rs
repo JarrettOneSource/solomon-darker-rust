@@ -1,4 +1,4 @@
-//! GPU `mod-ui/ModPanels.tsx`; mounted actions use accepted host IDs and positions.
+//! Authored panels; their actions use accepted host IDs and positions.
 
 use crate::gpu_ui::UiFrame;
 use egui::{Color32, FontFamily, FontId, Stroke, vec2};

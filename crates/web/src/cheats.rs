@@ -1,4 +1,4 @@
-//! GPU `CheatMenu.tsx`; host commands, catalog admission and VM request IDs remain canonical.
+//! Cheat controls and Lua console; the host admits commands and owns VM request results.
 
 mod console;
 mod controls;
@@ -179,8 +179,8 @@ impl CheatUi {
         Ok(true)
     }
 
-    /// Unmounting discards form drafts and console history, matching source React
-    /// lifetime. The request counter survives so late VM replies cannot reopen it.
+    /// Closing discards form drafts and console history. The request counter
+    /// survives so late VM replies cannot reopen the view.
     pub fn close(&mut self) {
         self.view = None;
         self.key_admission.borrow_mut().open = false;

@@ -39,6 +39,37 @@ RECEIPT = {"platform": PLATFORM, "arch": ARCH, "revision": MANIFEST["revision"],
 INPUT = xa11y.input_sim()
 xa11y.set_default_timeout(30)
 
+# xa11y's AT-SPI stable_id is the D-Bus object path, while its AX and UIA
+# backends expose AccessKit's author ID. Use the actual Linux roles and labels.
+LINUX_CONTROLS = {
+    "launcher/solo": "button[name='Play offline']",
+    "launcher/host": "text_field[name='Your reachable IP or hostname']",
+    "launcher/port": "text_field[name='TCP port']",
+    "launcher/start-host": "button[name='Host game']",
+    "launcher/invite": "text_area[name='Multiplayer invite']",
+    "launcher/join": "button[name='Join game']",
+    "launcher/status": "static_text[name^='Enter your reachable'], static_text[name^='Paste your friend']",
+    "play": "button[name='Play']",
+    "continue": "button[name='Last game']",
+    "new-game": "button[name='New game']",
+    "prompt-primary": "button[name='YES']",
+    "prompt-secondary": "button[name='NO']",
+    "create-name": "text_field[name='Wizard name']",
+    "panel:dialogue-next": "button[name='Skip'], button[name='Done']",
+    "panel:dialogue-choice:0": "button[name='Solomon Dark?']",
+    "hud:inventory": "button[name^='Inventory,']",
+    "hud:map": "button[name='Enter the Boneyard']",
+    "settings": "button[name='Settings']",
+    "settings-range:music": "slider[name='MUSIC VOL:']",
+    "settings-page:controls": "button[name='CUSTOMIZE KEYBOARD']",
+    "settings-toggle:reverse-hotbar": "checkbox[name='REVERSE HOTBAR CYCLING']",
+    "settings-back": "button[name='BACK'], button[name='DONE']",
+    "desktop/launcher": "button[name='Save and return to launcher']",
+    "desktop/copy-invite": "button[name='Copy multiplayer invite']",
+    "desktop/keep-playing": "button[name='Keep playing']",
+    "desktop/close-unsaved": "button[name='Close without saving']",
+}
+
 
 def wait(predicate, description, timeout=120):
     deadline = time.monotonic() + timeout
@@ -80,6 +111,7 @@ def identity(document):
 
 class Application:
     def __init__(self, name, profile):
+        print(f"Launching {name}", flush=True)
         self.name, self.profile, self.closed = name, profile, False
         self.log_path = EVIDENCE / f"{name}.log"
         self.log = self.log_path.open("wb")
@@ -91,12 +123,23 @@ class Application:
         self.app = xa11y.App.by_pid(self.process.pid, timeout=30)
         self.control("launcher/solo").wait_enabled(timeout=60)
         self.activate()
+        print(f"{name}: launcher ready", flush=True)
 
     def control(self, identifier):
+        if PLATFORM == "linux":
+            if identifier.startswith(("element:", "discipline:")):
+                return self.app.locator(f"button[name={json.dumps(identifier.split(':', 1)[1])}]")
+            return self.app.locator(LINUX_CONTROLS[identifier])
         return self.app.locator(f"[stable_id='{identifier}']")
 
     def activate(self):
-        self.app.locator("window").first().activate()
+        window = self.app.locator("window").first()
+        if PLATFORM == "linux":
+            # The CI display is 1280x1024. Keep both launcher and game windows
+            # fully visible for input and screenshots.
+            window.resize_to(1180, 800)
+            window.move_to(40, 40)
+        window.activate()
         if PLATFORM == "darwin":
             # macOS runners can expose the window tree while the system-wide
             # AXFocusedApplication is empty. Claim and verify the native process
@@ -140,11 +183,15 @@ class Application:
             INPUT.key_up(key)
 
     def capture(self, name, activate=True):
+        print(f"{self.name}: capturing {name}", flush=True)
         if activate:
             self.activate()
-        xa11y.screenshot(element=self.app.locator("window").first().element()).save_png(
-            EVIDENCE / f"{name}.png"
-        )
+        # A failed startup may leave a window beyond the X11 screen boundary.
+        # Capture the dedicated display so failure evidence remains available.
+        shot = (xa11y.screenshot() if PLATFORM == "linux" else
+                xa11y.screenshot(element=self.app.locator("window").first().element()))
+        shot.save_png(EVIDENCE / f"{name}.png")
+        print(f"{self.name}: captured {name}", flush=True)
 
     def title(self, fresh=False):
         wait(lambda: self.control("play").exists() or self.control("prompt-secondary").exists(),
@@ -161,6 +208,7 @@ class Application:
         self.control("hud:inventory").wait_enabled(timeout=120)
 
     def new_game(self, name, element):
+        print(f"{self.name}: creating {name}", flush=True)
         self.title(fresh=True)
         self.click("play")
         self.click("new-game")
@@ -211,6 +259,7 @@ class Application:
         self.log.close()
         RECEIPT["exits"].append({"name": self.name, "code": code})
         assert code == 0, f"{self.name} failed; see {self.log_path}"
+        print(f"{self.name}: clean exit", flush=True)
         record = save_record(self.profile)
         if record:
             write_json(EVIDENCE / f"{self.name}-save.json", record[0])

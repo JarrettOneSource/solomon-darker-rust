@@ -1,4 +1,4 @@
-//! GPU authored room map and host controls from `mod-ui/ModSceneOverlay.tsx`.
+//! Authored room map and host controls rendered over the game scene.
 
 use crate::gpu_ui::{
     FontRunOptions, GroupEffect, ImageShadow, NativeFontStroke, UiFrame, font_run,

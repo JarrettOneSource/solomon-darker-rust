@@ -229,6 +229,13 @@ system Lua installation. Execution hooks, memory limits, allowed globals, and
 accepted includes bound the VM. Filesystem, process, and module loading are not
 exposed. VM randomness does not consume gameplay RNG.
 
+Console API values use the same Rust-to-Lua conversion as event payloads:
+missing optional values become Lua `nil`, including fields in frame snapshots.
+The retired JavaScript bridge's null exception is not a supported contract; it
+prevented the default Console query from reading a normal College frame. Frozen
+recordings remain intact, with explicit corrected expectations for the affected
+queries, subsequent commands and callbacks, plus a real College-frame regression.
+
 Package graph digests are a data compatibility contract: en-US collation,
 ECMAScript number spelling, array-index ordering, and SHA256 must stay stable.
 ICU collation and `ryu-js` provide those representations. Compiler tests protect

@@ -1,4 +1,4 @@
-//! Source `mod-ui/ModAudio.tsx` and world component sound notifications.
+//! Authored world audio and component sound notifications.
 //! The accepted runtime owns actors/events. This session-scoped observer only remembers
 //! heard IDs and owned audio loops, using the existing GameAudio context.
 
@@ -30,8 +30,8 @@ pub struct ModAudioSources {
 }
 
 impl ModAudioSources {
-    /// Retain verified encoded bytes for WebAudio. Only HTML music uses the playable
-    /// same-origin content URL; it starts synchronously when a runtime loop is published.
+    /// Retain verified encoded bytes for platform decoders. Browser music also uses
+    /// the same-origin URL when an accepted runtime loop starts playback.
     pub async fn load(
         cache: &ModContentCache,
         assets: &[GameModAsset],
