@@ -48,6 +48,19 @@ The release workflow is `.github/workflows/validate.yml`.
 [Performance](PERFORMANCE.md) documents hardware measurements separately from
 the functional package checks.
 
+The package journey uses ordinary input against the actual launcher and game.
+Save checks compare completed documents and fresh-process continuation; a title
+screen or successful WASM load alone does not establish offline play. Keep
+controlled setup, emulated capabilities, and hardware results identifiable.
+Inspect media-channel state before classifying a cancellation as expected, and
+require owned processes to exit cleanly.
+
+CI creates immutable package candidates before acceptance and publishes qualified
+archives only after the required platform journeys pass. Diagnostic artifacts
+named `unqualified-desktop-*` are excluded from release selection. Confirm the
+published repository, revision, update manifest, and checksums match the tested
+candidate, then verify the downloadable assets themselves.
+
 ## Installation and live acceptance
 
 The owning deployment worker validates the artifact before installation and
@@ -71,3 +84,9 @@ locations, credentials, and scheduler operation. Rollback must preserve newer
 database, save, and content data.
 
 Keep test artifacts tied to the revision and package actually exercised.
+
+Preserve valid evidence for unchanged behavior and repeat affected checks when
+code, assets, packaging, or an observed failure changes the acceptance question.
+Keep original failures attributable rather than overwriting them with later
+results. Source validation, package qualification, installation, and live player
+continuation each establish their own boundary.

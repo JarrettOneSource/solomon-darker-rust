@@ -40,6 +40,11 @@ An open stdin pipe lets the child detect an abruptly lost parent.
 The preload supplies `window.solomonDarkRuntime.gameEndpoint` with endpoint kind,
 session kind, URL, and credential. The client uses that explicit endpoint.
 
+For a local session the endpoint has `kind: 'localhost'` and
+`sessionKind: 'standalone'`. The client sends its normal hosted Hello to that
+endpoint; startup does not provision a website party. Its schema 51 player
+document and the direct launcher's schema 2 server file are separate formats.
+
 The desktop API exposes `getState`, `startSession`, `returnToLauncher`,
 `checkUpdates`, `downloadUpdate`, `openWebsite`, `onBeforeClose`, and `onState`.
 
@@ -71,6 +76,10 @@ It forwards WebSocket bytes to loopback without interpreting gameplay.
 The client is root-mounted with an external generated initializer. The content
 policy permits WebAssembly compilation and supplies correct WASM/audio MIME types.
 Prebuilt clients are checked against the desktop root contract.
+
+The policy allows `'wasm-unsafe-eval'` while leaving JavaScript `'unsafe-eval'`
+disabled. The build uses Trunk `--public-url /`; a client built for a website or
+editor mount is not a valid prebuilt desktop client.
 
 Release packaging records the native executable hash, runtime identity, revision,
 and release repository. Archive inspection checks CRCs, asset membership/hashes,
