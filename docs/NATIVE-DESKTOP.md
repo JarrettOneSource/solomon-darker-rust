@@ -25,7 +25,7 @@ or deployment acceptance.
   corrupted or undeclared files, changed assets and retired runtime payloads.
 - [ ] Final Windows x64, Linux x64, Intel Mac and Apple silicon Mac packages pass
   the ordinary OS-input journey and screenshot/error/cleanup review.
-- [ ] Native Console/mods and optional update presentation/download are exercised;
+- [x] Native Console/mods and optional update presentation/browser handoff are exercised;
   failed update access leaves offline play available.
 - [ ] Final source passes formatting, strict native/WASM lint, workspace tests,
   asset validation, browser-support checks and actual browser journeys.

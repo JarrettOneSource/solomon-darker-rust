@@ -29,6 +29,16 @@ jobs:
         run: rustup show
       - name: Install native client build dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libfontconfig1-dev libclang-dev cmake
+      - name: Restore game build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
+          restore-keys: |
+            game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
       - run: cargo install trunk --locked --version 0.22.0
       - run: npm ci --no-audit --no-fund
       - run: npm run test:browser-support

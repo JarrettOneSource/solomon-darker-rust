@@ -634,7 +634,24 @@ impl Client {
                 Err(mpsc::RecvTimeoutError::Disconnected) => panic!("the socket listener stopped"),
             }
         }
-        panic!("the real hosted authority did not reach the requested state")
+        let errors: Vec<_> = self
+            .pending
+            .iter()
+            .filter_map(|message| match message {
+                ServerMessage::Error { code, reason } => Some((code, reason)),
+                _ => None,
+            })
+            .collect();
+        let latest = self.pending.iter().rev().find_map(|message| match message {
+            ServerMessage::Snapshot { frame } => {
+                Some((&frame.host, &frame.snapshot["run"], &frame.snapshot["ticks"]))
+            }
+            _ => None,
+        });
+        panic!(
+            "the real hosted authority did not reach the requested state; \
+             pending errors: {errors:?}; latest host/run/tick: {latest:?}"
+        )
     }
 
     #[track_caller]
@@ -1113,6 +1130,7 @@ fn supervisor_replays_source_http_colleges_broker_and_party_membership() {
     h1.send(ClientMessage::Hosted {
         command: HostedCommand::StartMatch { boneyard_id: "default-random".into() },
     });
+    h1.until(|message| matches!(message, ServerMessage::BoneyardLoaded { .. }));
     let message = h2.until(|message| matches!(message, ServerMessage::BoneyardLoaded { .. }));
     let ServerMessage::BoneyardLoaded { boneyard: party_world } = message else { unreachable!() };
     let message = h2.until(|message| {

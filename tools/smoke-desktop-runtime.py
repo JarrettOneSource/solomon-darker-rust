@@ -510,7 +510,18 @@ try:
 except Exception:
     RECEIPT["status"] = "failed"
     for app in RUNNING:
+        print(f"{app.name}: process status {app.process.poll()}", flush=True)
+        log_tail = re.sub(r"solomondarker://[^\s\"']+", "",
+                          app.log_path.read_text(errors="replace")[-8000:])
+        print(f"{app.name}: application log\n{log_tail}", flush=True)
         if app.process.poll() is None:
+            if PLATFORM == "darwin":
+                try:
+                    sample = EVIDENCE / f"{app.name}-failure.sample.txt"
+                    subprocess.run(["sample", str(app.process.pid), "2", "10", "-file", str(sample)],
+                                   capture_output=True, text=True, timeout=10, check=True)
+                except Exception as error:
+                    RECEIPT.setdefault("diagnosticErrors", []).append(str(error))
             try:
                 tree = re.sub(r"solomondarker://[^\s\"']+", "", app.app.dump())
                 (EVIDENCE / f"{app.name}-failure.txt").write_text(tree)
