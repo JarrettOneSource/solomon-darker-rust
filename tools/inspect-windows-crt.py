@@ -17,7 +17,7 @@ installation = pathlib.Path(subprocess.check_output([str(vswhere), '-latest', '-
 tools = sorted((installation / 'VC/Tools/MSVC').glob('*/bin/Hostx64/x64/dumpbin.exe'))
 assert tools, 'The normal MSVC build must supply its PE inspection tool'
 dumpbin = tools[-1]
-result = subprocess.run([str(dumpbin), '/DEPENDENTS', str(path)], capture_output=True, text=True, check=True, timeout=30)
+result = subprocess.run([str(dumpbin), '/IMPORTS', str(path)], capture_output=True, text=True, check=True, timeout=30)
 imports = sorted(set(re.findall(r'^\s+([\w.-]+\.dll)\s*$', result.stdout, re.IGNORECASE | re.MULTILINE)), key=str.lower)
 assert imports, 'PE inspection must identify actual import DLLs'
 external_crt = [name for name in imports if name.lower().startswith(('vcruntime', 'msvcp', 'msvcr', 'concrt'))]

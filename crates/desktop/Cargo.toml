@@ -20,7 +20,8 @@ url = "2.5"
 blocking = "1.7.0"
 futures-lite = "2.6"
 ureq = { version = "3.4", default-features = false, features = ["rustls", "gzip"] }
-rfd = { version = "=0.17.2", features = ["common-controls-v6"] }
+# Startup errors use the system message box, without a Common Controls manifest dependency.
+rfd = "=0.17.2"
 webbrowser = "1.2.5"
 if-addrs = "0.15"
 openssl = { version = "0.10.81", features = ["vendored"] }

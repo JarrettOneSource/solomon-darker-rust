@@ -61,7 +61,7 @@ LINUX_CONTROLS = {
     "settings": "button[name='Settings']",
     "settings-range:music": "slider[name='MUSIC VOL:']",
     "settings-page:controls": "button[name='CUSTOMIZE KEYBOARD']",
-    "settings-toggle:reverse-hotbar": "checkbox[name='REVERSE HOTBAR CYCLING']",
+    "settings-toggle:reverse-hotbar": "check_box[name='REVERSE HOTBAR CYCLING']",
     "settings-back": "button[name='BACK'], button[name='DONE']",
     "desktop/launcher": "button[name='Save and return to launcher']",
     "desktop/copy-invite": "button[name='Copy multiplayer invite']",
@@ -124,19 +124,24 @@ class Application:
         self.activate()
         print(f"{name}: launcher ready", flush=True)
 
-    def control(self, identifier):
-        if identifier == "launcher/status":
-            return self.app.locator(
-                "static_text[name^='Enter your reachable'], static_text[name^='Paste your friend']"
-            )
-        if PLATFORM == "linux":
-            if identifier.startswith(("element:", "discipline:")):
-                return self.app.locator(f"button[name={json.dumps(identifier.split(':', 1)[1])}]")
-            return self.app.locator(LINUX_CONTROLS[identifier])
-        return self.app.locator(f"[stable_id='{identifier}']")
+    def control(self, *identifiers):
+        selectors = []
+        for identifier in identifiers:
+            if identifier == "launcher/status":
+                selectors.append(
+                    "static_text[name^='Enter your reachable'], static_text[name^='Paste your friend']"
+                )
+            elif PLATFORM == "linux":
+                if identifier.startswith(("element:", "discipline:")):
+                    selectors.append(f"button[name={json.dumps(identifier.split(':', 1)[1])}]")
+                else:
+                    selectors.append(LINUX_CONTROLS[identifier])
+            else:
+                selectors.append(f"[stable_id='{identifier}']")
+        return self.app.locator(", ".join(selectors))
 
     def activate(self):
-        window = self.app.locator("window").first()
+        window = self.app.locator("window").first().element()
         if PLATFORM == "linux":
             # The CI display is 1280x1024. Keep both launcher and game windows
             # fully visible for input and screenshots.
@@ -165,13 +170,11 @@ class Application:
 
     def click(self, identifier):
         print(f"{self.name}: click {identifier}", flush=True)
-        self.control(identifier).wait_enabled()
-        self.control(identifier).press()
+        self.control(identifier).wait_enabled().press()
 
     def fill(self, identifier, value):
         print(f"{self.name}: edit {identifier}", flush=True)
-        self.control(identifier).wait_enabled()
-        self.control(identifier).set_value(value)
+        self.control(identifier).wait_enabled().set_value(value)
         wait(lambda: (self.control(identifier).element().value or "") == value,
              f"{identifier} accepting its edit", 10)
 
@@ -199,12 +202,11 @@ class Application:
         print(f"{self.name}: captured {name}", flush=True)
 
     def title(self, fresh=False):
-        wait(lambda: self.control("play").exists() or self.control("prompt-secondary").exists(),
-             f"{self.name} title")
-        if self.control("prompt-secondary").exists():
+        entry = self.control("play", "prompt-secondary").first().wait_enabled(timeout=120)
+        if entry.name == "NO":
             assert fresh, "an established profile must retain its tutorial preference"
-            self.click("prompt-secondary")
-        self.control("play").wait_enabled()
+            entry.press()
+            self.control("play").wait_enabled()
 
     def continue_game(self):
         self.title()
@@ -217,15 +219,14 @@ class Application:
         self.title(fresh=True)
         self.click("play")
         self.click("new-game")
-        wait(lambda: self.control("create-name").exists()
-             or self.control("panel:dialogue-next").exists()
-             or self.control("prompt-primary").exists(), "new wizard admission")
-        if self.control("prompt-primary").exists():
-            self.click("prompt-primary")
-        wait(lambda: self.control("create-name").exists()
-             or self.control("panel:dialogue-next").exists(), "College introduction")
-        if not self.control("create-name").exists():
-            self.click("panel:dialogue-next")
+        entry = self.control("create-name", "panel:dialogue-next", "prompt-primary").first()
+        entry = entry.wait_enabled(timeout=120)
+        if entry.name == "YES":
+            entry.press()
+            entry = self.control("create-name", "panel:dialogue-next").first()
+            entry = entry.wait_enabled(timeout=120)
+        if entry.name != "Wizard name":
+            entry.press()
             self.click("panel:dialogue-choice:0")
             self.key("Escape")
             self.control("panel:dialogue-next").wait_detached()
@@ -295,8 +296,7 @@ def settings(app, verify=False):
         INPUT.press("Home")
         wait(lambda: slider.element().numeric_value == 0, "music range minimum", 10)
         INPUT.press("ArrowRight")
-    wait(lambda: slider.element().value == "1" or slider.element().numeric_value == 1,
-         "persisted music volume", 10)
+    wait(lambda: slider.element().numeric_value == 1, "persisted music volume", 10)
     app.click("settings-page:controls")
     reverse = app.control("settings-toggle:reverse-hotbar")
     if not verify:
