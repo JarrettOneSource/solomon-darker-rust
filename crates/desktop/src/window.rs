@@ -3,6 +3,7 @@
 use std::num::NonZeroU32;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use glutin::config::{ConfigTemplateBuilder, GlConfig};
 use glutin::context::{
@@ -22,6 +23,7 @@ pub struct NativeWindow {
     gl: GraphicsContext,
     surface: Surface<WindowSurface>,
     context: PossiblyCurrentContext,
+    frame_delay: Duration,
     // Driver objects retire before the OS destroys the window they reference.
     pub window: Arc<Window>,
 }
@@ -76,7 +78,12 @@ impl NativeWindow {
         surface
             .set_swap_interval(&context, SwapInterval::Wait(nonzero(1)))
             .map_err(|error| format!("Set native display synchronization: {error}"))?;
-        Ok(Self { window, gl, surface, context })
+        // A software context does not pace draws through hardware V-sync. Leave
+        // an event-dispatch interval so repeated redraws cannot starve native AX
+        // requests on the main thread.
+        let frame_delay =
+            if config.hardware_accelerated() { Duration::ZERO } else { Duration::from_millis(16) };
+        Ok(Self { window, gl, surface, context, frame_delay })
     }
 
     /// # Safety
@@ -102,10 +109,12 @@ impl NativeWindow {
         self.surface.resize(&self.context, nonzero(width), nonzero(height));
     }
 
-    pub fn present(&self) -> Result<(), String> {
+    /// Present this frame and return the next redraw deadline.
+    pub fn present(&self) -> Result<Instant, String> {
         self.surface
             .swap_buffers(&self.context)
-            .map_err(|error| format!("Present native frame: {error}"))
+            .map_err(|error| format!("Present native frame: {error}"))?;
+        Ok(Instant::now() + self.frame_delay)
     }
 }
 

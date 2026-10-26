@@ -422,6 +422,13 @@ existing save-before-leave coordinator before releasing Game, its tasks, authori
 and GPU context, in that order. A failed save keeps the running game and offers
 Keep playing or Close without saving.
 
+Hardware-accelerated windows use V-sync to pace presentation. An unaccelerated
+graphics context leaves a 16 ms event-dispatch interval after presentation before
+requesting another draw. Unconditionally requesting redraw before `WaitUntil`
+prevented the Mac software renderer from yielding and delayed accessibility
+requests by tens of seconds. The window supplies its next redraw deadline, which
+the application respects while continuing to process native events and client work.
+
 A close deadline cancels the pending leave request and its disconnect receipt;
 a late successful checkpoint may persist while the player continues. Retiring a
 native session revokes any write still waiting for the document lock and waits for

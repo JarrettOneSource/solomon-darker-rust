@@ -199,7 +199,8 @@ fn main() -> Result<(), String> {
                 )
             })?;
             self.frames += 1;
-            window.present()
+            window.present()?;
+            Ok(())
         }
         fn paint(
             frame: &mut solomon_web::gpu_ui::UiFrame<'_>,

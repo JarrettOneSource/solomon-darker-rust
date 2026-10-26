@@ -140,6 +140,12 @@ class Application:
                 selectors.append(f"[stable_id='{identifier}']")
         return self.app.locator(", ".join(selectors))
 
+    def wait_ready(self, *identifiers):
+        controls = self.control(*identifiers)
+        # A modal can retain a disabled matching control beneath its own choices.
+        return wait(lambda: next((item for item in controls.elements() if item.enabled), None),
+                    f"{self.name} ready control from {identifiers}")
+
     def activate(self):
         window = self.app.locator("window").first().element()
         if PLATFORM == "linux":
@@ -202,7 +208,7 @@ class Application:
         print(f"{self.name}: captured {name}", flush=True)
 
     def title(self, fresh=False):
-        entry = self.control("play", "prompt-secondary").first().wait_enabled(timeout=120)
+        entry = self.wait_ready("play", "prompt-secondary")
         if entry.name == "NO":
             assert fresh, "an established profile must retain its tutorial preference"
             entry.press()
@@ -219,12 +225,10 @@ class Application:
         self.title(fresh=True)
         self.click("play")
         self.click("new-game")
-        entry = self.control("create-name", "panel:dialogue-next", "prompt-primary").first()
-        entry = entry.wait_enabled(timeout=120)
+        entry = self.wait_ready("create-name", "panel:dialogue-next", "prompt-primary")
         if entry.name == "YES":
             entry.press()
-            entry = self.control("create-name", "panel:dialogue-next").first()
-            entry = entry.wait_enabled(timeout=120)
+            entry = self.wait_ready("create-name", "panel:dialogue-next")
         if entry.name != "Wizard name":
             entry.press()
             self.click("panel:dialogue-choice:0")
@@ -289,19 +293,19 @@ def settings(app, verify=False):
     slider = app.control("settings-range:music")
     if not verify:
         app.activate()
-        slider.set_numeric_value(37)
+        slider.wait_enabled().set_numeric_value(37)
         wait(lambda: slider.element().numeric_value == 37, "accessible music adjustment", 10)
         slider.focus()
         slider.wait_focused()
         INPUT.press("Home")
         wait(lambda: slider.element().numeric_value == 0, "music range minimum", 10)
         INPUT.press("ArrowRight")
-    wait(lambda: slider.element().numeric_value == 1, "persisted music volume", 10)
+    slider.wait_until(lambda item: item is not None and item.numeric_value == 1, timeout=10)
     app.click("settings-page:controls")
     reverse = app.control("settings-toggle:reverse-hotbar")
     if not verify:
         app.click("settings-toggle:reverse-hotbar")
-    wait(lambda: reverse.element().checked == "on", "persisted hotbar preference", 10)
+    reverse.wait_until(lambda item: item is not None and item.checked == "on", timeout=10)
     app.click("settings-back")
     app.click("settings-back")
 

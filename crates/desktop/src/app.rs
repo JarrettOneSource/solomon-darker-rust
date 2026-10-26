@@ -113,6 +113,7 @@ struct App {
     checking: Option<Pending<Result<Option<AvailableUpdate>, String>>>,
     manual_check: bool,
     next_check: Instant,
+    next_redraw: Instant,
     proxy: EventLoopProxy<AccessibilityEvent>,
     config: Config,
     profile: Profile,
@@ -160,6 +161,7 @@ pub fn run(config: Config) -> Result<(), String> {
         checking: None,
         manual_check: false,
         next_check: Instant::now(),
+        next_redraw: Instant::now(),
         proxy: event_loop.create_proxy(),
         config,
         profile,
@@ -507,11 +509,12 @@ impl App {
         {
             self.controls.set_message(Some(error.into()));
         }
-        if let Some(screen) = &self.screen {
+        if Instant::now() >= self.next_redraw
+            && let Some(screen) = &self.screen
+        {
             screen.window().window.request_redraw();
         }
-        event_loop
-            .set_control_flow(ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(16)));
+        event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_redraw));
         Ok(())
     }
 
@@ -594,7 +597,7 @@ impl ApplicationHandler<AccessibilityEvent> for App {
                     view.window_event(&event, now)?;
                     if matches!(event, WindowEvent::RedrawRequested) {
                         view.frame(now)?;
-                        window.present()?;
+                        self.next_redraw = window.present()?;
                     }
                     if let Some(action) = view.take_action() {
                         self.controls.request(action);
@@ -614,7 +617,7 @@ impl ApplicationHandler<AccessibilityEvent> for App {
                             game.borrow_mut().present_failure(now)?;
                         }
                         Game::run_pending_work(game);
-                        window.present()?;
+                        self.next_redraw = window.present()?;
                     }
                 }
             }
