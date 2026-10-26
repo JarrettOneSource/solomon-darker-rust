@@ -2,13 +2,15 @@
 
 ## Native desktop
 
-A separate native-window implementation is in progress on
-`feat/native-desktop-20261026`. It replaces the desktop shell while sharing Rust
-gameplay and GPU UI with the browser. It has not replaced the released desktop app.
+The current source builds a native Rust window, platform services, durable saves
+and encrypted peers while sharing Game and GPU UI with the browser. Electron and
+its Node peer runtime have been removed from desktop packaging. The published
+release has not yet changed.
 
-Before release it needs complete platform packaging, save/import compatibility,
-peer-play, audio, lifecycle failure, and update checks. Its branch owns the detailed
-implementation plan.
+Remaining work is final four-platform package execution, update and Console/mod
+journeys, browser regression acceptance, review and publication/cleanup. The
+[qualification checklist](NATIVE-DESKTOP.md) distinguishes established behavior
+from unfinished release checks.
 
 ## Performance
 

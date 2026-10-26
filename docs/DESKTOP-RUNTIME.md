@@ -1,82 +1,113 @@
-# Desktop runtime
+# Native desktop runtime
 
-The released desktop app uses an Electron shell around the Rust authority and
-WebAssembly GPU client. The shell owns its sandboxed window, preload, native menus,
-process lifetimes, peer transport, and optional updates. Rust owns gameplay and
-visible launcher/game UI.
+The desktop app runs the shared Rust Game and GPU interface in an OS window.
+`solomon-desktop` owns the event loop, graphics context, sessions, encrypted peers,
+profile lock and optional updates. It embeds `solomon-launcher`'s standalone
+supervisor on an owned thread. The browser separately compiles the same game
+and interface to WASM. Desktop packages contain no Electron, Chromium or Node runtime.
 
-[Desktop commands](../desktop/README.md) cover development and packaging.
-Native-window work is tracked in [Open work](WORK-QUEUE.md).
+## Build and package
 
-## Native child
+Use the pinned Rust toolchain, platform linker, CMake, libclang and Perl. Linux
+also needs ALSA, udev and Fontconfig development packages. On Ubuntu:
 
-The shell starts the packaged executable in `authority/`:
-
-```text
-solomon-darker --desktop --assets <absolute packaged client directory>
+```sh
+sudo apt-get install libasound2-dev libudev-dev libfontconfig1-dev libclang-dev cmake
 ```
 
-| Environment variable | Value |
-| --- | --- |
-| `SDR_GAME_HOST` | `127.0.0.1` |
-| `SDR_GAME_PORT` | `0`, selecting an ephemeral port |
-| `SDR_GAME_ALLOWED_ORIGINS` | `solomon-darker://app` |
-| `SDR_GAME_BOOTSTRAP_CREDENTIAL` | Random 32-byte base64url capability |
-| `SDR_GAME_REVISION` | Full package Git revision |
+Windows uses the MSVC toolchain and native Strawberry Perl for vendored OpenSSL.
+When a shell selects another Perl, set `OPENSSL_SRC_PERL` to the native interpreter.
+Node and Python run repository tooling; they are not application dependencies.
 
-The credential stays out of arguments and logs. Readiness is one JSON line after
-the WebSocket route is installed:
+From the repository root:
 
-```json
-{"type":"ready","url":"ws://127.0.0.1:<port>/game","protocol":"solomon-game-v1"}
+```sh
+npm ci
+npm run dev:desktop
+npm run test:desktop
+npm run package:desktop -- --release-repository JarrettOneSource/solomon-darker-rust
+npm run archive:desktop
+python -m pip install -r tools/desktop-smoke-requirements.txt
+npm run smoke:desktop
 ```
 
-The parent enforces a twelve-second readiness deadline and bounded output.
-Ordinary shutdown sends SIGTERM, then SIGKILL after three seconds if needed.
-An open stdin pipe lets the child detect an abruptly lost parent.
+Packaging supports `--platform win32 --arch x64`, `--platform linux --arch x64`,
+and `--platform darwin --arch arm64` or `x64`. Build on the target platform with
+its linker and system libraries. macOS packaging signs the final bundle ad hoc;
+these builds are not publisher-signed or notarized.
 
-## Preload and saves
+To stage an already built native executable:
 
-The preload supplies `window.solomonDarkRuntime.gameEndpoint` with endpoint kind,
-session kind, URL, and credential. The client uses that explicit endpoint.
+```sh
+npm run package:desktop -- --platform darwin --arch arm64 --skip-build \
+  --native-app /absolute/solomon-darker-app --assets-root /absolute/source/web \
+  --release-repository JarrettOneSource/solomon-darker-rust
+```
 
-The desktop API exposes `getState`, `startSession`, `returnToLauncher`,
-`checkUpdates`, `downloadUpdate`, `openWebsite`, `onBeforeClose`, and `onState`.
+Development accepts `SDR_DESKTOP_APP_BINARY` and `SDR_DESKTOP_CLIENT_ROOT`.
+The executable accepts `--assets`, `--data-dir` and `--revision` for explicit
+development paths. A packaged app discovers its assets and build record beside
+the executable, or under `Contents/Resources` in a Mac bundle.
 
-Before close or return, the client requests SaveBeforeLeave, persists the browser
-save document, and disposes the session only after success. The desktop document
-uses schema 51 with supported migrations. A failed or unfinished write rejects
-close; the shell's twenty-second deadline offers **Keep playing** or
-**Close without saving**.
+## Profiles and save-before-close
 
-Optional update failure leaves offline play available. Updates validate revision,
-timestamp, platform, and artifact identity; they do not restart an active game.
+The default profile is `Solomon Darker` under `%APPDATA%` on Windows,
+`~/Library/Application Support` on macOS, or `$XDG_CONFIG_HOME` (otherwise
+`~/.config`) on Linux. Native documents live in its `native-v1` directory.
+An OS file lock gives one process ownership; a second launch requests focus from
+that owner and exits without opening another game.
 
-## Authority and peer transport
+`solomon-storage` holds a separate OS lock across each revision check and atomic,
+synced document replacement. Client saves preserve the complete supported schema51
+document. Browser builds use IndexedDB through their own storage adapter.
 
-`HostedSupervisor::new_standalone` creates a `HostedGameHost` with
-`GameSessionKind::Standalone`. It owns accepted commands, inventory, mods,
-pause/readiness, audio, and saves.
+Close, macOS Quit and return to launcher request the shared SaveBeforeLeave flow.
+The app waits for persistence before retiring Game, tasks, peer/authority workers
+and the GPU context. A failed save or twenty-second deadline keeps the game alive
+and offers **Keep playing** or **Close without saving**. The latter preserves the
+preceding durable document. Keep playing also cancels pending Cocoa termination.
 
-Desktop admission uses a timing-safe shared capability. Direct standalone play
-has no website party directory or Global chat. When the last human leaves, a fresh
-owner resets participant and run state while retaining pending sockets and catalog
-identity.
+The previous Electron profile stays intact. To migrate, use the previous app's
+Settings → Online and account → Stock / browser save → Download save archive.
+In the native app choose Play offline, then Settings → Online and account →
+Import / export save and select that ZIP. Inspect the preview before replacing
+the native slot. Keep the previous app until the wizard is restored.
 
-The peer process uses revision-checked invites and an HKDF-SHA256/TLS 1.3 PSK tunnel.
-It forwards WebSocket bytes to loopback without interpreting gameplay.
+## Authority and peers
 
-## Packaging contract
+The local authority owns accepted commands, inventory, mods, readiness, audio and
+world state. The client owns its durable player document. A generated capability
+authenticates loopback admission; credentials stay out of arguments and logs.
 
-The client is root-mounted with an external generated initializer. The content
-policy permits WebAssembly compilation and supplies correct WASM/audio MIME types.
-Prebuilt clients are checked against the desktop root contract.
+Host game opens a revision-checked v1 invitation. Press Escape and choose
+**Copy multiplayer invite**; friends paste it into **Join a friend**. The host
+must remain reachable on the advertised TCP port. Tokio forwards WebSocket bytes
+through an HKDF-SHA256/TLS 1.3 PSK tunnel implemented by bundled OpenSSL. Each
+service cancels sockets and joins its worker before session retirement.
 
-Release packaging records the native executable hash, runtime identity, revision,
-and release repository. Archive inspection checks CRCs, asset membership/hashes,
-shell files, the native manifest, and build residue before writing checksums.
+The party leader starts a shared Boneyard. Direct standalone play has no website
+party directory or Global chat. Saved worlds may load only on a fresh host owner;
+a joining saved world cannot overwrite an already active host.
 
-Run shell tests and the actual packaged journey on each affected platform.
-The journey checks GPU launcher controls, offline play, save/Continue, failed saves,
-updates, return to launcher, and two encrypted peers in one Boneyard.
-[Release](RELEASE.md) defines qualification and publication.
+## Updates and release validation
+
+The app checks its configured GitHub release owner in the background. It validates
+the revision, timestamp, platform and archive identity before offering a download.
+Download opens the qualified ZIP in the system browser; the app never replaces or
+restarts an active game. Network failure leaves offline play available.
+
+The schema2 package manifest hashes every final payload file, including the signed
+executable and Mac bundle metadata. Archive inspection checks CRCs, complete file
+membership, source assets/licenses, revision and absence of retired runtime files
+before producing the archive checksum.
+
+The packaged journey drives OS accessibility, keyboard, clipboard and window APIs
+with xa11y. It reads real saves, exercises a concurrent revision conflict, and
+connects two real encrypted peers. The driver and its Python dependency stay outside
+the package. Reports default to `reports/desktop-smoke`; `SDR_DESKTOP_APP` selects
+a package and `SDR_DESKTOP_EVIDENCE` selects the report directory. CI provides a
+separate desktop session, accessibility permissions and software graphics as needed.
+
+Run the journey on Windows x64, Linux x64 and both Mac architectures. Screenshot
+review and process cleanup are part of acceptance. [Release](RELEASE.md) separates
+source checks, qualified archives, installation and live browser outcomes.

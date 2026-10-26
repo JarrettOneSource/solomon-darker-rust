@@ -63,7 +63,7 @@ impl Game {
             SharedGameplayUi::resume_layer(), // 90
             self.observer_ui.layer_id(),      // 120
         ]);
-        if let Some(desktop) = &self.desktop_bridge {
+        if let Some(desktop) = &self.desktop_ui {
             layers.push(desktop.layer_id()); // 10000, desktop-only producer.
         }
         if let Some(hosted) = &self.hosted {

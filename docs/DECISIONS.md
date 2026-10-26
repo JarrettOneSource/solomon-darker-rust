@@ -247,10 +247,9 @@ millisecond digits; the simulation itself does not read wall-clock time.
 
 ## Desktop packaging
 
-The released shell owns the window, native menus, child processes, peer transport,
-and optional updates. The Rust authority owns gameplay. Desktop startup serves
-root-mounted WebAssembly with an external initializer and a narrow CSP that
-permits WASM compilation.
+Native packages contain the Rust executable, tracked game assets, licenses and
+build metadata. Desktop compiles the shared client directly. The separately
+packaged browser artifact keeps its mounted WASM initializer and content policy.
 
 A package records its release repository and immutable revision. Release archives
 are inspected and exercised through the [packaged journey](RELEASE.md#qualification)
@@ -276,7 +275,6 @@ existing save-before-leave coordinator before releasing Game, its tasks, authori
 and GPU context, in that order. A failed save keeps the running game and offers
 Keep playing or Close without saving.
 
-
 ## Native encrypted peers and macOS Quit
 
 Desktop peer invitations preserve the existing v1 capability grammar and HKDF-SHA256
@@ -289,8 +287,9 @@ Each service cancels its sockets and joins its worker before its session retires
 Winit retains its macOS NSApplication delegate. Its absent optional
 applicationShouldTerminate selector is supplied through objc2 with the documented
 NSUInteger ABI. The callback only requests deferred termination; the ordinary Rust
-event loop runs the shared save coordinator and replies to Cocoa. Keep playing cancels the pending Cocoa termination. GPU owners and cancelled
-tasks retire with their window context current.
+event loop runs the shared save coordinator and replies to Cocoa. Keep playing
+cancels the pending Cocoa termination. GPU owners and cancelled tasks retire with
+their window context current.
 
 ## Native Opus decoding
 

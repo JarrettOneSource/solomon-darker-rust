@@ -29,10 +29,10 @@ in [Reference data](REFERENCE-DATA.md).
 | --- | --- | --- |
 | World drawing, painter order, lights, shadows, and weather | `crates/web/src/` world views and simulation presentation plans | Geometry/material fixtures, GPU checks, and browser captures |
 | Fractional display state | `crates/web/src/presentation.rs`, protocol | Timeline, interpolation, endpoint, and draw-cadence checks |
-| Menus, HUD, Inventory, Skillbook, and overlays | Web feature controllers and shared GPU UI | Layout/text/input regressions and browser journeys |
+| Menus, HUD, Inventory, Skillbook, and overlays | Shared client controllers and GPU UI | Layout/text/input regressions and browser journeys |
 | Keyboard, mouse, gamepad, and touch | `crates/web/src/input.rs` and navigation/controllers | Input fixtures and ordinary browser events |
-| Sound, music, and narration playback | `sim::audio` and web audio owners | Catalog/event tests, actual playback, and reload checks |
-| Save/Continue and local preferences | Web storage and native persistence owners | Validation, revision conflict, restore, and packaged continuation checks |
+| Sound, music, and narration playback | `sim::audio`, shared director and native/browser audio backends | Catalog/event tests, actual playback, and reload checks |
+| Save/Continue and local preferences | Client storage adapters and native persistence owner | Validation, revision conflict, restore, and packaged continuation checks |
 
 [GPU UI](GPU-UI.md) defines layer, input, text, and accessibility contracts.
 [Client presentation](CLIENT-PRESENTATION.md) defines display ownership.
@@ -48,6 +48,6 @@ in [Reference data](REFERENCE-DATA.md).
 | Score, Memorial, and run publishing | Native publishers plus website APIs | Signed publication and archive/storage tests |
 | Editor Test/Return | Website editor and disposable Rust authority | Handoff, cancellation, authored-scene, and return checks |
 | Website artifact | Packaging scripts and website artifact adapter | Complete manifest/hash validation and installed identity checks |
-| Desktop app and direct peers | Desktop shell, Rust authority, GPU client | Archive inspection and per-platform packaged journeys |
+| Desktop app and direct peers | `solomon-desktop`, Rust authority, shared GPU client | Archive inspection and per-platform packaged journeys |
 
 [Release](RELEASE.md) lists package and deployment checks.

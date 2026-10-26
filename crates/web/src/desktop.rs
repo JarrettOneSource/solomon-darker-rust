@@ -93,13 +93,13 @@ impl Notice {
     }
 }
 
-pub struct DesktopBridge {
+pub struct DesktopUi {
     controls: DesktopControls,
     notice: Notice,
     close_prompt_visible: bool,
 }
 
-impl DesktopBridge {
+impl DesktopUi {
     pub fn new(controls: DesktopControls) -> Self {
         Self {
             controls,
@@ -109,7 +109,7 @@ impl DesktopBridge {
     }
 }
 
-impl DesktopBridge {
+impl DesktopUi {
     pub fn layer_id(&self) -> egui::LayerId {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("desktop/update"))
     }

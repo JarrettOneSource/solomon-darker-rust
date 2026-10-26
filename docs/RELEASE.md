@@ -27,16 +27,16 @@ This repository publishes the Rust game, native authority, WebAssembly client,
 save tools, mod compiler, and desktop app. The website consumes a verified artifact
 and owns accounts, cloud storage, community content, and editing.
 
-The published desktop app uses the shell described in
-[Desktop runtime](DESKTOP-RUNTIME.md). Native-window work is tracked separately
-in [Open work](WORK-QUEUE.md).
+The qualified release above still uses Electron. The current source builds the
+native Rust app described in [Desktop runtime](DESKTOP-RUNTIME.md); its pending
+qualification is tracked in [Open work](WORK-QUEUE.md).
 
 ## Qualification
 
 Source validation uses [the game checks](../AGENTS.md#checks).
 A release additionally requires:
 
-1. Build each platform's native host and client from the intended revision.
+1. Build each platform's native executable and the Website artifact from the intended revision.
 2. Verify complete asset membership, payload hashes, runtime identity, archive
    contents, and platform requirements.
 3. Exercise the final packages through offline play, save/Continue, rejected-save

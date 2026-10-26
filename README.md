@@ -23,7 +23,7 @@ To update, save and close the game, then replace the app folder with the new ver
 To play with friends:
 
 1. Choose **Host game** and start a game.
-2. Select **Game → Copy multiplayer invite**.
+2. Press Escape and choose **Copy multiplayer invite**.
 3. Have your friends choose **Join a friend** and paste the invite.
 
 Everyone needs the same build. The host must stay running and have a reachable IP
@@ -39,9 +39,11 @@ in the browser version.
 
 - Rust 1.98.1 with Clippy, rustfmt, and the `wasm32-unknown-unknown` target.
   The repository's `rust-toolchain.toml` selects these.
-- [Trunk](https://trunkrs.dev), version 0.22.0.
+- [Trunk](https://trunkrs.dev), version 0.22.0, for the browser build.
 - Python 3.11+ for asset checks and packaging.
 - Node.js 22.6+ and npm for development tools and desktop packaging.
+- Native builds also need a platform linker, CMake, libclang and Perl. Linux
+  needs ALSA, udev and Fontconfig development packages; see [Desktop runtime](docs/DESKTOP-RUNTIME.md).
 
 ```sh
 npm ci
@@ -75,7 +77,7 @@ The output is in `web/dist/`.
 From the repository root:
 
 ```sh
-npm run package:desktop
+npm run package:desktop -- --release-repository JarrettOneSource/solomon-darker-rust
 npm run archive:desktop
 ```
 
@@ -125,14 +127,15 @@ module, and a manifest of file hashes.
 | `crates/sim` | Gameplay, movement, spells, enemies, inventory, and session state |
 | `crates/assets` | Sprite bundles, map data, and save-document codec |
 | `crates/graphics` | Shared GPU renderer and asset decoding |
-| `crates/web` | WebAssembly client, input, audio, menus, and HUD |
+| `crates/web` | Shared Rust Game, input, audio, menus, HUD, and native/browser adapters |
 | `crates/loader` | WebAssembly loading screen |
 | `crates/protocol` | Messages between the client and host |
 | `crates/launcher` | Native host, asset server, and durable saves |
 | `crates/modding` | Mod validation and authoring tools |
 | `crates/save-tools` | Save import, export, and validation |
 | `web` | Browser entry point and game assets |
-| `desktop` | Desktop shell and packaging |
+| `crates/desktop` | Native window, session lifetime, encrypted peers, and updates |
+| `crates/storage` | Locked atomic native documents |
 | `tools` | Authoring tools, fixture generators, and browser checks |
 
 ## Testing
@@ -141,15 +144,17 @@ Run from the repository root:
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets
-cargo clippy -p solomon-web --target wasm32-unknown-unknown
-cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo clippy -p solomon-web --target wasm32-unknown-unknown -- -D warnings
+cargo clippy -p solomon-loader --target wasm32-unknown-unknown -- -D warnings
+cargo test --workspace --all-features
 npm run test:browser-support
 npm run test:desktop
 ```
 
 The simulation tests replay recorded fixtures. Browser checks exercise the running
-client, and desktop checks cover the shell and packaging.
+client, and desktop checks cover native platform services and packaging. The
+packaged journey additionally launches the actual executable through ordinary OS input.
 
 ### Browser smoke
 

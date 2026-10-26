@@ -1,10 +1,12 @@
-//! Browser game owner: assets and UI project the authoritative simulation state.
+//! Shared game owner: assets and UI project the authoritative simulation state.
 //! Loading prepares resources before installation; fixed ticks remain in the Rust kernels.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
+#[cfg(target_arch = "wasm32")]
+mod browser;
 mod cheats;
 mod desktop;
 #[cfg(target_arch = "wasm32")]
@@ -68,10 +70,6 @@ use solomon_sim::session::{
     GameCheckpoint, GameSession, GameSessionInput, GameSessionOptions, GameSessionTickContext,
 };
 use solomon_sim::settings::GameSettings;
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::JsCast;
-#[cfg(target_arch = "wasm32")]
-use web_sys::HtmlCanvasElement;
 
 use crate::audio::GameAudio;
 use crate::boneyard::PreparedBoneyardView;
@@ -136,7 +134,7 @@ pub struct Game {
     hosted: Option<hosted::HostedGame>,
     #[cfg(target_arch = "wasm32")]
     editor_test: Option<editor_test::EditorTestPhase>,
-    desktop_bridge: Option<crate::desktop::DesktopBridge>,
+    desktop_ui: Option<crate::desktop::DesktopUi>,
     desktop_close: Option<desktop::DesktopClose>,
     _playtime: Option<storage::PlaytimeRecorder>,
     mobile_layout_store: crate::mobile_layout::MobileUiLayoutStore,
@@ -216,53 +214,6 @@ struct ActiveBattle {
 }
 
 impl Game {
-    /// Resource construction retires before saved-session parsing begins.
-    #[cfg(target_arch = "wasm32")]
-    pub fn load() -> impl std::future::Future<Output = Result<Rc<RefCell<Self>>, String>> {
-        Box::pin(async {
-            let window = web_sys::window().ok_or("no window")?;
-            let document = window.document().ok_or("no document")?;
-            let playtime = if editor_test::configured(&document)? {
-                None
-            } else {
-                Some(storage::PlaytimeRecorder::start(&window)?)
-            };
-            let canvas: HtmlCanvasElement = document
-                .get_element_by_id("game")
-                .ok_or("the page has no #game canvas")?
-                .dyn_into()
-                .map_err(|_| "#game is not a canvas")?;
-
-            let renderer = Renderer::for_canvas(&canvas)?;
-            let surface = crate::platform::Surface::from_canvas(canvas);
-            let mut game = Self::load_resources(surface, renderer, playtime).await?;
-            game.initialize_session().await?;
-            Ok(Rc::new(RefCell::new(game)))
-        })
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_native(
-        surface: crate::platform::Surface,
-        renderer: Renderer,
-        endpoint: crate::desktop::DesktopEndpoint,
-        controls: crate::desktop::DesktopControls,
-    ) -> impl std::future::Future<Output = Result<Rc<RefCell<Self>>, String>> {
-        Box::pin(async move {
-            let playtime = Some(storage::PlaytimeRecorder::start());
-            let mut game = Self::load_resources(surface, renderer, playtime).await?;
-            game.initialize_settings()?;
-            match storage::read_hall() {
-                Ok(entries) => game.hall_entries = entries,
-                Err(error) => Self::show_storage_error(&error),
-            }
-            game.desktop_bridge = Some(crate::desktop::DesktopBridge::new(controls));
-            game.load_hosted(crate::hosted::WebsiteMount::default(), Some(endpoint)).await?;
-            crate::runtime_ui::completed(crate::runtime_ui::RUNTIME)?;
-            Ok(Rc::new(RefCell::new(game)))
-        })
-    }
-
     /// Allocate the retained resource future before polling its child loaders.
     fn load_resources(
         surface: crate::platform::Surface,
@@ -377,7 +328,7 @@ impl Game {
                 hosted: None,
                 #[cfg(target_arch = "wasm32")]
                 editor_test: None,
-                desktop_bridge: None,
+                desktop_ui: None,
                 desktop_close: None,
                 _playtime: playtime,
                 mobile_layout_store: crate::mobile_layout::MobileUiLayoutStore::new(&surface)?,
@@ -451,67 +402,6 @@ impl Game {
                 self.menu.set_settings(settings)?;
             }
             Err(error) => Self::show_storage_error(&error),
-        }
-        Ok(())
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    async fn initialize_session(&mut self) -> Result<(), String> {
-        let window = web_sys::window().ok_or("no window")?;
-        let document = window.document().ok_or("no document")?;
-        self.initialize_settings()?;
-        if editor_test::configured(&document)? {
-            self.load_editor_test(&window).await?;
-            return Ok(());
-        }
-        match storage::read_hall() {
-            Ok(entries) => self.hall_entries = entries,
-            Err(error) => Self::show_storage_error(&error),
-        }
-        if let Some(mount) = crate::hosted::WebsiteMount::configured(&window)? {
-            self.load_hosted(mount, None).await?;
-            return Ok(());
-        }
-        if crate::network::native_host_requested()? {
-            self.native = Some(NativeGame::inspect()?);
-            self.menu.show_title(false)?;
-            set_status("Checking saved game…");
-            return Ok(());
-        }
-        let mut no_saved_game = false;
-        match SaveStore::open().await {
-            Ok(store) => {
-                let stored = store.read().await;
-                self.save_store = Some(store);
-                match stored {
-                    Ok(Some(record)) => {
-                        self.save_revision = record.revision;
-                        let restored = match save_document::decode(&record.document) {
-                            Ok(checkpoint) => self.restore_checkpoint(checkpoint).await,
-                            Err(error) => Err(error),
-                        };
-                        if let Err(error) = restored {
-                            self.save_error = Some(error.clone());
-                            Self::show_storage_error(&error);
-                        }
-                    }
-                    Ok(None) => {
-                        no_saved_game = true;
-                    }
-                    Err(error) => {
-                        self.save_error = Some(error.clone());
-                        Self::show_storage_error(&error);
-                    }
-                }
-            }
-            Err(error) => {
-                self.save_error = Some(error.clone());
-                Self::show_storage_error(&error);
-            }
-        }
-        self.menu.show_title(self.has_game)?;
-        if no_saved_game && !storage::tutorial_declined().unwrap_or(true) {
-            self.menu.offer_tutorial()?;
         }
         Ok(())
     }
@@ -669,29 +559,9 @@ impl Game {
         Ok(())
     }
 
-    #[cfg(target_arch = "wasm32")]
-    pub(crate) fn attach_native_ui(
-        game: &Rc<RefCell<Self>>,
-        window: &web_sys::Window,
-    ) -> Result<(), String> {
-        let clock = window.document().ok_or("The game document is unavailable.")?.timeline();
-        let owner = Rc::downgrade(game);
-        game.borrow_mut().gpu_ui.set_native_dispatch_handler(move || {
-            // Native events and rAF use one document animation clock. A performance
-            // sample can be newer than the next rAF timestamp; inactive documents
-            // have no animation time and leave input queued until they become active.
-            let Some(time) = clock.current_time() else {
-                return Ok(());
-            };
-            let game = owner.upgrade().ok_or("The game is no longer available for input.")?;
-            game.borrow_mut().dispatch_native_ui(time)
-        });
-        Ok(())
-    }
-
-    /// Native clipboard and editing defaults observe the preceding UI action's
-    /// committed focus. Simulation, transport polling and drawing remain on rAF.
-    fn dispatch_native_ui(&mut self, time: f64) -> Result<(), String> {
+    /// Platform clipboard and editing defaults observe the preceding UI action's
+    /// committed focus. Simulation, transport polling and drawing advance once per frame.
+    fn dispatch_ui_input(&mut self, time: f64) -> Result<(), String> {
         #[cfg(target_arch = "wasm32")]
         if self.editor_test_disposed() {
             return Ok(());
@@ -725,32 +595,6 @@ impl Game {
         self.input
             .set_ui_geometry(self.gpu_ui.input_diagnostics(), &self.hud.belt_input_geometry());
         Ok(())
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn native_ui(&mut self) -> &mut GpuUi {
-        &mut self.gpu_ui
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn window_event(
-        &mut self,
-        event: &winit::event::WindowEvent,
-        time: f64,
-    ) -> Result<(), String> {
-        self.dispatch_native_ui(time)?;
-        self.gpu_ui.window_event(event)?;
-        self.input.window_event(event)
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn accesskit_action(
-        &mut self,
-        action: egui::accesskit::ActionRequest,
-        time: f64,
-    ) -> Result<(), String> {
-        self.dispatch_native_ui(time)?;
-        self.gpu_ui.accesskit_action(action)
     }
 
     /// Start asynchronous work selected by the previous frame without borrowing
@@ -2127,14 +1971,6 @@ impl Game {
         crate::runtime_ui::set_error(error);
     }
 
-    #[cfg(target_arch = "wasm32")]
-    pub fn retain_save_listener(
-        &mut self,
-        listener: wasm_bindgen::closure::Closure<dyn FnMut(web_sys::Event)>,
-    ) {
-        self.save_listeners.push(listener);
-    }
-
     fn activate_belt_slot(
         &mut self,
         slot: usize,
@@ -2536,7 +2372,7 @@ impl Game {
             spectator_ui,
             hosted,
             fullscreen,
-            desktop_bridge,
+            desktop_ui,
             match_loading_view,
             ..
         } = self;
@@ -2567,7 +2403,7 @@ impl Game {
                 hosted.paint_boneyard_library(menu, frame)?;
             }
             fullscreen.paint(frame)?;
-            if let Some(desktop) = desktop_bridge {
+            if let Some(desktop) = desktop_ui {
                 desktop.paint(frame, menu.desktop_controls_visible())?;
             }
             match_loading_view.paint(frame)?;
@@ -2590,7 +2426,7 @@ impl Game {
         self.renderer.end_frame();
         self.gpu_ui.run(&mut self.renderer, viewport, time / 1000.0, |frame| {
             crate::runtime_ui::paint(frame);
-            if let Some(desktop) = &mut self.desktop_bridge {
+            if let Some(desktop) = &mut self.desktop_ui {
                 desktop.paint(frame, true)?;
             }
             Ok(())

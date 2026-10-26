@@ -45,15 +45,17 @@ and emoji clusters. Painting, caret movement, selection, wrapping, composition,
 and clipping use the same layout.
 
 Platform adapters provide native composition, clipboard access, and file dialogs.
-Accessibility announcements use native `ariaNotify` when available or one marked,
-nonvisual text-only live region.
+Native accessibility uses AccessKit and the operating system's accessibility tree.
+Browser announcements use `ariaNotify` when available or one marked, nonvisual
+text-only live region. Native text shaping and composition use Parley and winit;
+browser text uses its native font and composition APIs.
 
 GPU textures for shaped text belong to the current egui context. Retired runs
 release through that context's managed resource lifetime.
 
 ## Startup and transitions
 
-The separate Rust loader renders the splash while resources load. Progress counts
+The browser's separate Rust loader renders the splash while resources load. Progress counts
 completed images, fonts, and audio. It hands off only after account/save admission
 and the first complete game frame; retired loader draws stop.
 
