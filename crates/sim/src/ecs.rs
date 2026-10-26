@@ -5,7 +5,9 @@
 //! reorders survivors, even when Bevy moves its table row.
 
 mod components;
+mod optional;
 pub use components::{ComponentEntities, ComponentIter};
+pub use optional::OptionalEntity;
 
 use bevy_ecs::entity::{Entity, EntityHashSet, EntityIndexSet};
 use bevy_ecs::query::{IterQueryData, QueryItem, QueryState};

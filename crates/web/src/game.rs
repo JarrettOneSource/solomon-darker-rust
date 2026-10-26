@@ -505,7 +505,7 @@ impl Game {
         let students = &self.session.npcs.students.students;
         let mut snapshot = Vec::with_capacity(1 + students.len() * 3);
         snapshot.push(students.len() as f64);
-        for student in students {
+        for student in students.iter() {
             snapshot.extend([student.id as f64, student.position.x, student.position.y]);
         }
         snapshot

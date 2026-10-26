@@ -6,6 +6,8 @@
 //! generator for trader clocks. Keeping those owners separate preserves its draw order.
 
 mod physics;
+mod storage;
+pub use storage::{StudentActors, StudentMut, StudentRead, StudentRef};
 mod splines;
 mod traders;
 
@@ -122,31 +124,101 @@ pub struct HubStudentPhysicalProfile {
     pub radius: f64,
 }
 
-/// A live student, including its route cursor and its own deterministic wander stream.
+/// One saved or constructed student. Runtime ownership separates its body and route.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "persistence", derive(serde::Deserialize), serde(from = "StudentRecord"))]
 pub struct HubStudentState {
+    pub body: StudentBody,
+    pub controller: StudentRoute,
+}
+
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
+pub struct StudentBody {
     pub current_speed: f64,
-    pub desired_speed: f64,
     pub frame_phase: f64,
     pub gait_degrees: f64,
     pub heading: f64,
     pub heading_index: usize,
     pub id: usize,
-    pub path_cursor: f64,
-    pub path_id: usize,
-    pub path_step: i32,
     pub registration_ordinal: usize,
     pub position: Vec2,
     pub profile: HubStudentPhysicalProfile,
     pub props: Vec<HubStudentProp>,
     pub reading: bool,
     pub retired: bool,
-    pub rng_state: u32,
     pub scale: f64,
     pub static_collision_enabled: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
+pub struct StudentRoute {
+    pub desired_speed: f64,
+    pub path_cursor: f64,
+    pub path_id: usize,
+    pub path_step: i32,
+    pub rng_state: u32,
     pub tick: u64,
     pub wander: Vec2,
+}
+
+// The importer needs the original flat field names and typed visitor.
+#[cfg(feature = "persistence")]
+#[derive(serde::Deserialize)]
+#[serde(rename = "HubStudentState")]
+struct StudentRecord {
+    current_speed: f64,
+    desired_speed: f64,
+    frame_phase: f64,
+    gait_degrees: f64,
+    heading: f64,
+    heading_index: usize,
+    id: usize,
+    path_cursor: f64,
+    path_id: usize,
+    path_step: i32,
+    registration_ordinal: usize,
+    position: Vec2,
+    profile: HubStudentPhysicalProfile,
+    props: Vec<HubStudentProp>,
+    reading: bool,
+    retired: bool,
+    rng_state: u32,
+    scale: f64,
+    static_collision_enabled: bool,
+    tick: u64,
+    wander: Vec2,
+}
+#[cfg(feature = "persistence")]
+impl From<StudentRecord> for HubStudentState {
+    fn from(row: StudentRecord) -> Self {
+        Self {
+            body: StudentBody {
+                current_speed: row.current_speed,
+                frame_phase: row.frame_phase,
+                gait_degrees: row.gait_degrees,
+                heading: row.heading,
+                heading_index: row.heading_index,
+                id: row.id,
+                registration_ordinal: row.registration_ordinal,
+                position: row.position,
+                profile: row.profile,
+                props: row.props,
+                reading: row.reading,
+                retired: row.retired,
+                scale: row.scale,
+                static_collision_enabled: row.static_collision_enabled,
+            },
+            controller: StudentRoute {
+                desired_speed: row.desired_speed,
+                path_cursor: row.path_cursor,
+                path_id: row.path_id,
+                path_step: row.path_step,
+                rng_state: row.rng_state,
+                tick: row.tick,
+                wander: row.wander,
+            },
+        }
+    }
 }
 
 impl HubStudentState {
@@ -181,31 +253,35 @@ impl HubStudentState {
         let next = splines.evaluate(path_id, 0.01);
         let heading = heading_degrees_from_vector(next.x - position.x, next.y - position.y);
         Self {
-            current_speed: desired_speed,
-            desired_speed,
-            frame_phase: frame,
-            gait_degrees: gait,
-            heading,
-            heading_index: heading_index(heading),
-            id,
-            path_cursor: 0.0,
-            path_id,
-            path_step: 1,
-            registration_ordinal,
-            position,
-            profile: HubStudentPhysicalProfile {
-                push_resistance: 1.0,
-                push_strength: 11.0 + strength,
-                radius: 12.0 + radius,
+            body: StudentBody {
+                current_speed: desired_speed,
+                frame_phase: frame,
+                gait_degrees: gait,
+                heading,
+                heading_index: heading_index(heading),
+                id,
+                registration_ordinal,
+                position,
+                profile: HubStudentPhysicalProfile {
+                    push_resistance: 1.0,
+                    push_strength: 11.0 + strength,
+                    radius: 12.0 + radius,
+                },
+                props,
+                reading: reading == 1,
+                retired: false,
+                scale: 0.75 + scale,
+                static_collision_enabled: false,
             },
-            props,
-            reading: reading == 1,
-            retired: false,
-            rng_state: rng,
-            scale: 0.75 + scale,
-            static_collision_enabled: false,
-            tick: 0,
-            wander: Vec2::ZERO,
+            controller: StudentRoute {
+                desired_speed,
+                path_cursor: 0.0,
+                path_id,
+                path_step: 1,
+                rng_state: rng,
+                tick: 0,
+                wander: Vec2::ZERO,
+            },
         }
     }
 
@@ -245,49 +321,49 @@ pub fn hub_student_static_collision_enabled(position: Vec2) -> bool {
 
 /// `planHubStudentRoute`: native cursor pursuit, crowd following, turning and wander draws.
 #[must_use]
-pub fn plan_hub_student_route(
+pub fn plan_hub_student_route<'a>(
     splines: &HubStudentSplines,
-    source: &HubStudentState,
-    students: &[HubStudentState],
+    source: &impl StudentRead,
+    students: impl IntoIterator<Item = StudentRef<'a>>,
 ) -> HubStudentRoutePlan {
-    let mut state = source.clone();
+    let mut state = source.snapshot();
     if source.retired {
         return HubStudentRoutePlan { delta: Vec2::ZERO, state };
     }
-    if source.tick.is_multiple_of(HUB_STUDENT_STATIC_COLLISION_REFRESH_TICKS) {
+    if source.controller().tick.is_multiple_of(HUB_STUDENT_STATIC_COLLISION_REFRESH_TICKS) {
         state.static_collision_enabled = hub_student_static_collision_enabled(source.position);
     }
-    let extent = (HUB_STUDENT_SPLINES[source.path_id].len() - 1) as f64;
-    if source.path_cursor < 0.0 || source.path_cursor >= extent {
+    let extent = (HUB_STUDENT_SPLINES[source.controller().path_id].len() - 1) as f64;
+    if source.controller().path_cursor < 0.0 || source.controller().path_cursor >= extent {
         state.retired = true;
         return HubStudentRoutePlan { delta: Vec2::ZERO, state };
     }
-    if random_integer(&mut state.rng_state, 50) == 3 {
+    if random_integer(&mut state.controller.rng_state, 50) == 3 {
         let magnitude = random_float(
-            &mut state.rng_state,
-            if source.desired_speed > 1.0 { 30.0 } else { 20.0 },
+            &mut state.controller.rng_state,
+            if source.controller().desired_speed > 1.0 { 30.0 } else { 20.0 },
         );
-        let radians = random_float(&mut state.rng_state, 360.0) * std::f64::consts::PI / 180.0;
-        state.wander = Vec2::new(float::sin(radians) * magnitude, -float::cos(radians) * magnitude);
+        let radians =
+            random_float(&mut state.controller.rng_state, 360.0) * std::f64::consts::PI / 180.0;
+        state.controller.wander =
+            Vec2::new(float::sin(radians) * magnitude, -float::cos(radians) * magnitude);
     }
+    let wander = state.controller.wander;
     let offset_at = |cursor| {
-        let target = splines.evaluate(source.path_id, cursor);
-        Vec2::new(
-            target.x + state.wander.x - source.position.x,
-            target.y + state.wander.y - source.position.y,
-        )
+        let target = splines.evaluate(source.controller().path_id, cursor);
+        Vec2::new(target.x + wander.x - source.position.x, target.y + wander.y - source.position.y)
     };
-    let mut offset = offset_at(state.path_cursor);
+    let mut offset = offset_at(state.controller.path_cursor);
     let mut distance = hypot(offset.x, offset.y);
     state.profile.push_resistance = distance / 5.5;
-    state.tick += 1;
+    state.controller.tick += 1;
     if distance <= source.profile.radius * 2.0 {
-        state.path_cursor += f64::from(source.path_step) * 0.1;
-        if state.path_cursor < 0.0 || state.path_cursor >= extent {
+        state.controller.path_cursor += f64::from(source.controller().path_step) * 0.1;
+        if state.controller.path_cursor < 0.0 || state.controller.path_cursor >= extent {
             state.retired = true;
             return HubStudentRoutePlan { delta: Vec2::ZERO, state };
         }
-        offset = offset_at(state.path_cursor);
+        offset = offset_at(state.controller.path_cursor);
         distance = hypot(offset.x, offset.y);
     }
     let target_heading = if distance > f64::EPSILON {
@@ -303,13 +379,13 @@ pub fn plan_hub_student_route(
         (source.heading + delta.signum() * turn_step + 360.0) % 360.0
     };
     state.heading_index = heading_index(state.heading);
-    let cap_sample = random_float(&mut state.rng_state, 0.25);
+    let cap_sample = random_float(&mut state.controller.rng_state, 0.25);
     let travel = distance
         .min((1.0 + cap_sample) * source.current_speed * student_speed_factor(source, students));
-    state.current_speed = if source.current_speed < source.desired_speed {
-        source.desired_speed.min(source.current_speed + 0.01)
+    state.current_speed = if source.current_speed < source.controller().desired_speed {
+        source.controller().desired_speed.min(source.current_speed + 0.01)
     } else {
-        source.desired_speed.max(source.current_speed - 0.01)
+        source.controller().desired_speed.max(source.current_speed - 0.01)
     };
     let radians = state.heading * std::f64::consts::PI / 180.0;
     HubStudentRoutePlan {
@@ -328,7 +404,7 @@ pub struct HubStudentPopulation {
     pub spawning_enabled: bool,
     pub spawn_request_pending: bool,
     pub spawn_ticker_counter: u64,
-    pub students: Vec<HubStudentState>,
+    pub students: StudentActors,
     next_registration_ordinal: usize,
     #[cfg_attr(feature = "persistence", serde(skip))]
     splines: HubStudentSplines,
@@ -363,7 +439,7 @@ impl HubStudentPopulation {
         if let Some(order) = painter_order {
             // The source warms its population before the live world manager exists.
             // Only survivors enroll after the players; retired warmup births use no slots.
-            for student in &mut population.students {
+            for mut student in population.students.iter_mut() {
                 student.registration_ordinal =
                     order.register(WorldManagerLane::Actor).registration_ordinal;
             }
@@ -381,7 +457,7 @@ impl HubStudentPopulation {
             spawning_enabled: true,
             spawn_request_pending: true,
             spawn_ticker_counter: 0,
-            students: Vec::new(),
+            students: StudentActors::default(),
             next_registration_ordinal: first_registration_ordinal,
             splines: HubStudentSplines::new(),
         }
@@ -390,8 +466,8 @@ impl HubStudentPopulation {
     /// Free route advancement used by the source's pre-presentation warmup and oracle.
     pub fn step_routes(&mut self, painter_order: Option<&mut WorldPainterOrder>) {
         let mut students = Vec::with_capacity(self.students.len());
-        for student in &self.students {
-            let plan = plan_hub_student_route(&self.splines, student, &self.students);
+        for student in self.students.iter() {
+            let plan = plan_hub_student_route(&self.splines, &student, self.students.iter());
             let mut state = plan.state;
             let position =
                 Vec2::new(state.position.x + plan.delta.x, state.position.y + plan.delta.y);
@@ -406,7 +482,7 @@ impl HubStudentPopulation {
     pub fn plan_routes(&self) -> Vec<HubStudentRoutePlan> {
         self.students
             .iter()
-            .map(|student| plan_hub_student_route(&self.splines, student, &self.students))
+            .map(|student| plan_hub_student_route(&self.splines, &student, self.students.iter()))
             .collect()
     }
 
@@ -478,7 +554,12 @@ impl HubStudentPopulation {
             self.spawn_request_pending = true;
             self.spawn_ticker_counter = 0;
         }
-        self.students = students.into_iter().filter(|student| !student.retired).collect();
+        assert_eq!(students.len(), self.students.len(), "route plans cover the current population");
+        for (mut stored, planned) in self.students.iter_mut().zip(students) {
+            assert_eq!(stored.id, planned.id, "route plans retain admission order");
+            stored.replace(planned);
+        }
+        self.students.retain(|student| !student.retired);
         if !self.spawning_enabled || !self.spawn_request_pending {
             return;
         }
@@ -526,7 +607,7 @@ impl HubStudentPopulation {
             );
             self.next_id += 1;
             self.next_registration_ordinal = registration_ordinal + 1;
-            self.rng_state = student.rng_state;
+            self.rng_state = student.controller.rng_state;
             self.students.push(student);
         }
     }
@@ -544,7 +625,7 @@ pub fn hub_student_prop_offset(heading: f64, prop: HubStudentProp, index: usize)
 
 /// `hubStudentHeadOffset`: unscaled head pass, including small-student registration.
 #[must_use]
-pub fn hub_student_head_offset(student: &HubStudentState) -> Vec2 {
+pub fn hub_student_head_offset(student: &impl StudentRead) -> Vec2 {
     let gait = student.gait_degrees * std::f64::consts::PI / 180.0;
     let perpendicular = (student.heading + 90.0) * std::f64::consts::PI / 180.0;
     let lateral = -float::cos(gait) * 0.5 * student.scale;
@@ -560,7 +641,10 @@ fn signed_angle_delta(current: f64, target: f64) -> f64 {
     ((target - current + 540.0) % 360.0) - 180.0
 }
 
-fn student_speed_factor(student: &HubStudentState, students: &[HubStudentState]) -> f64 {
+fn student_speed_factor<'a>(
+    student: &impl StudentRead,
+    students: impl IntoIterator<Item = StudentRef<'a>>,
+) -> f64 {
     let radians = student.heading * std::f64::consts::PI / 180.0;
     let ahead = Vec2::new(
         student.position.x + float::sin(radians) * 15.0,
@@ -568,7 +652,7 @@ fn student_speed_factor(student: &HubStudentState, students: &[HubStudentState])
     );
     for other in students {
         if other.id == student.id
-            || other.desired_speed > student.current_speed
+            || other.controller.desired_speed > student.current_speed
             || signed_angle_delta(student.heading, other.heading).abs() > 90.0
         {
             continue;
@@ -617,9 +701,9 @@ mod tests {
     fn route_end_retires_a_student_instead_of_teleporting_it() {
         let splines = HubStudentSplines::new();
         let mut student = HubStudentState::new(&splines, 0, 0, STUDENT_SEED, 0.75, 49);
-        student.path_cursor = 12.99;
+        student.controller.path_cursor = 12.99;
         student.position = splines.evaluate(0, 12.99);
-        let plan = plan_hub_student_route(&splines, &student, &[student.clone()]);
+        let plan = plan_hub_student_route(&splines, &student, [student.view()]);
         assert!(plan.state.retired);
         assert_eq!(plan.delta, Vec2::ZERO);
         assert_eq!(plan.state.position, student.position);
@@ -636,7 +720,7 @@ mod tests {
         population.rng_state = STUDENT_SEED;
         population.spawn_request_pending = true;
         population.step_routes(Some(&mut order));
-        let admitted = population.students.first().expect("the seeded cold admission");
+        let admitted = population.students.get(0).expect("the seeded cold admission");
         assert_eq!(admitted.registration_ordinal, spell.registration_ordinal + 1);
     }
 }

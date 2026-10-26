@@ -34,7 +34,9 @@ and demonstrate a benefit on an equivalent workload before changing that sequenc
 Enemy controllers use a working record and commit its components together. Peer
 queries during the action observe the previous committed record. Mutating the
 live body throughout an action would change those queries. Read-only targeting
-and rendering borrow components; they do not need working copies.
+and rendering borrow components; they do not need working copies. Student route
+plans similarly read the preceding population before any movement commits, so
+crowd following and collision responses do not depend on table layout.
 
 Save and snapshot fields retain their supported layout and game identities.
 ECS handles stay local to the store. The flat deserialization records also retain

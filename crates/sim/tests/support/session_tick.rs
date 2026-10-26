@@ -108,7 +108,7 @@ fn world_snapshot(session: &GameSession, id: &str) -> Value {
         return json!({"kind":"hub","participant":session_snapshot::hub_participant(&session.participants[id]),
             "collisionRng":session.collision_rng,
             "students":session.npcs.students.students.iter().map(|student| json!([
-                student.id,point(student.position),student.tick,student.rng_state,
+                student.id,point(student.position),student.controller.tick,student.controller.rng_state,
                 student.registration_ordinal])).collect::<Vec<_>>()});
     };
     let enemies = &world.enemies;

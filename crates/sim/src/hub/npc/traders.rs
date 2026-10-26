@@ -222,6 +222,7 @@ impl HubHagathaClock {
 /// A present Skorcha, with native variant, gesture and independently pulsing hat.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct HubSkorcha {
     pub dismissal_index: usize,
     pub gesture: usize,
@@ -298,7 +299,7 @@ impl HubSkorcha {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubSkorchaSchedule {
     pub rng: NativeRng,
-    pub skorcha: Option<HubSkorcha>,
+    pub skorcha: crate::OptionalEntity<HubSkorcha>,
     pub transition_ticks_remaining: u64,
     hidden_ticks: Option<u64>,
     visible_ticks: Option<u64>,
@@ -332,8 +333,13 @@ impl HubSkorchaSchedule {
         } else {
             None
         };
-        let mut schedule =
-            Self { rng, skorcha, transition_ticks_remaining: 0, hidden_ticks, visible_ticks };
+        let mut schedule = Self {
+            rng,
+            skorcha: skorcha.into(),
+            transition_ticks_remaining: 0,
+            hidden_ticks,
+            visible_ticks,
+        };
         schedule.schedule_window();
         schedule
     }
@@ -341,18 +347,18 @@ impl HubSkorchaSchedule {
     pub fn step(&mut self) {
         if self.transition_ticks_remaining > 1 {
             self.transition_ticks_remaining -= 1;
-            if let Some(skorcha) = &mut self.skorcha {
+            if let Some(skorcha) = self.skorcha.as_mut() {
                 skorcha.step();
             }
             return;
         }
         if self.skorcha.is_some() {
-            self.skorcha = None;
+            self.skorcha.set(None);
         } else {
             let variant = self.rng.draw_integer(3) as usize;
             let skorcha = HubSkorcha::at_variant(self.rng.clone(), variant);
             self.rng = skorcha.rng.clone();
-            self.skorcha = Some(skorcha);
+            self.skorcha.set(Some(skorcha));
         }
         self.schedule_window();
     }

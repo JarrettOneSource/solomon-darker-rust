@@ -93,6 +93,11 @@ preserves the mixed Staff, Weld, Harden and elemental queue. Lifecycle systems
 update retained components and admit children at their original position in that
 queue; renderers borrow the same components.
 
+Courtyard students separate body and route/wander components. All routes read
+the preceding population, then collision resolution commits the planned bodies
+to their existing entities. Skorcha is an optional actor component; its appearance
+schedule remains a world resource. Fixed scenery animation clocks remain resources.
+
 The store's private ECS handles identify live component allocations. Game IDs
 and painter registrations remain the identities used by contacts, saves, and
 network snapshots. Constructing or restoring an owned record enrolls its
