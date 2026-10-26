@@ -80,4 +80,6 @@ lifecycle.launchOwnedBrowser=async(...args)=>{
   };
   return owned;
 };
-require('./smoke.cjs');
+const journey=process.env.CAPTURE_JOURNEY;
+assert.ok(['smoke','settings-parity'].includes(journey));
+require(`./${journey}.cjs`);

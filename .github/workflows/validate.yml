@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        budget: [30000, 180000]
+        budget: [120000]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -45,8 +45,13 @@ jobs:
           $env:CAPTURE_TIMEOUT_MS = '${{ matrix.budget }}'
           $server = Start-Process -FilePath (Get-Command python).Source -ArgumentList @('scripts/serve-client.py', '4181', '--bind', '127.0.0.1', '--directory', 'web/dist') -PassThru -RedirectStandardOutput reports/capture/server.log -RedirectStandardError reports/capture/server-error.log
           try {
+            $env:CAPTURE_JOURNEY = 'smoke'
             node tools/browser-smoke/diagnose-screenshot.cjs
-            if ($LASTEXITCODE) { throw 'Diagnostic journey failed; inspect retained timings.' }
+            if ($LASTEXITCODE) { throw 'Gameplay journey failed; inspect retained timings.' }
+            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/capture/settings'
+            $env:CAPTURE_JOURNEY = 'settings-parity'
+            node tools/browser-smoke/diagnose-screenshot.cjs
+            if ($LASTEXITCODE) { throw 'Settings journey failed; inspect retained timings.' }
           } finally {
             if (!$server.HasExited) { Stop-Process -Id $server.Id }
             if (!$server.WaitForExit(10000)) { throw 'The owned diagnostic server did not exit.' }

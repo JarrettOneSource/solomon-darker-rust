@@ -62,7 +62,8 @@ async function clickThenEscape(page,id) {
     await ui.surface(page, 'title');
     const titleGpu = await ui.assertGpuOnly(page);
     const filename = path.parse(screenshot);
-    await page.screenshot({path:path.join(filename.dir, `${filename.name}-title${filename.ext || '.png'}`)});
+    // Cold captures on the Windows software renderer can take about a minute.
+    await page.screenshot({timeout:120000,path:path.join(filename.dir, `${filename.name}-title${filename.ext || '.png'}`)});
     if(ui.findWidget(await ui.readUi(page),'prompt-secondary')) {
       await ui.click(page,'prompt-secondary');
       await ui.noWidget(page,'prompt-secondary');
@@ -113,7 +114,7 @@ async function clickThenEscape(page,id) {
     }
     const gameplayGpu = await ui.assertGpuOnly(page);
     const submissions = await ui.gpuDraws(page);
-    await page.screenshot({path:screenshot});
+    await page.screenshot({timeout:120000,path:screenshot});
     await ui.settleErrors(page);
     const checks = {
       settledFromOffice: spawned[0]===officeArrival.scriptedTarget[0]
@@ -146,8 +147,10 @@ async function clickThenEscape(page,id) {
     if(page&&!page.isClosed()) {
       try {receipt.gpu=await ui.readUi(page)}
       catch(observationError) {receipt.observationError=observationError.stack}
-      try {await page.screenshot({path:path.join(path.dirname(screenshot),'smoke-failure.png')})}
+      try {await page.screenshot({timeout:120000,path:path.join(path.dirname(screenshot),'smoke-failure.png')})}
       catch(screenshotError) {receipt.screenshotError=screenshotError.stack}
+      try {await ui.settleErrors(page)}
+      catch(settleError) {receipt.settleError=settleError.stack}
     }
     fs.writeFileSync(receiptPath,JSON.stringify(receipt,null,2));
     throw error;
