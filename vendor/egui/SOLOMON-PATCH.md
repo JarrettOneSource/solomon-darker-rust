@@ -1,73 +1,64 @@
-# Pinned egui integration
+# Egui integration patch
 
-This is egui0.37.0, extracted from the unchanged crates.io registry package. Its SHA256
-is `bec9144f49b7a28b5f395d3147e325b4fe3e77ba686eac11d1bdf0a7da3f375f`, matching
-the original workspace Cargo.lock. The package's `.cargo_vcs_info.json` records
-upstream revision `7c0b40402271e8d40cda69f87cf3c2617c2e4382`.
+The game vendors egui 0.37.0 from the crates.io package with SHA256
+`bec9144f49b7a28b5f395d3147e325b4fe3e77ba686eac11d1bdf0a7da3f375f`.
+Its upstream revision is `7c0b40402271e8d40cda69f87cf3c2617c2e4382`.
 
-The package manifest retains its original `MIT OR Apache-2.0` license. The release's
-unchanged license texts are included from
-[LICENSE-MIT](https://raw.githubusercontent.com/emilk/egui/0.37.0/LICENSE-MIT) and
-[LICENSE-APACHE](https://raw.githubusercontent.com/emilk/egui/0.37.0/LICENSE-APACHE).
-Their SHA256 values are respectively
+The package retains its `MIT OR Apache-2.0` license and upstream notices.
+The included MIT and Apache license texts have SHA256 values
 `95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c` and
 `8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90`.
 
-Local changes are confined to the following implementation files:
+## Integration behavior
 
-- `context.rs`, `memory/mod.rs`, `layers.rs`: one opt-in fixed layer order shared by
-  paint draining, pointer ownership and modal comparisons. Registering an ID creates
-  no Area, widget, visibility, geometry or focus. Unregistered/default contexts keep
-  normal egui behavior. The fixed registry is runtime configuration, not persisted memory.
-- `containers/area.rs`, `ui.rs`, `widget_rect.rs`, `hit_test.rs`: passive container
-  backgrounds retain layout and genuine child widgets. Hover-only passive content does
-  not occlude lower controls; disabled interactive children still block. Native pointer
-  queries use actual clipped child regions and optional pure authored hit predicates.
-- `data/input/event.rs`, `input_state/mod.rs`, `interaction.rs`, plus the response
-  projection in `context.rs`: explicit native pointer cancellation retires its buttons,
-  potential click/drag owners and motion without a normal release or click. It preserves
-  the original raw Touch cancellation and leaves ordinary release/click behavior intact.
-- `input_state/mod.rs`, `input_state/wheel_state.rs`: opt-in
-  `InputOptions::raw_point_scroll` consumes browser/platform-paced pixel deltas once.
-  It preserves native wheel phase/source/modifiers, line/page handling and upstream
-  default smoothing. The game enables this option to match native browser scrolling
-  and prevent replayed wheel motion after a newly focused control has been revealed.
-- `context.rs`, `memory/mod.rs`: expose the existing per-pass focus direction,
-  ordered native focusable registrations and deferred focus request. The application
-  holds navigation only for explicitly sampled controller dispatches, then resolves
-  its recovered Source policy under the highest active input scope. Actual widget
-  filters and consumed events retain ownership; physical keyboard traversal and
-  unmodified/default contexts keep normal egui behavior.
-  A controller confirmation can queue one genuine widget activation for the next
-  existing commit, independently of focus movement. Queue and delivery require the
-  same actual enabled, visible click widget/layer and native modal admission. A
-  missing target expires after that pass; previous-pass response lookup cannot
-  deliver an activation. This preserves click-only A behavior without replaying
-  Enter or manufacturing pointer/accessibility input.
+| Files under `src/` | Behavior |
+| --- | --- |
+| `context.rs`, `memory/mod.rs`, `layers.rs` | Opt-in fixed ordering shared by paint draining, pointer ownership, and modal comparisons |
+| `containers/area.rs`, `ui.rs`, `widget_rect.rs`, `hit_test.rs` | Passive backgrounds with real child widgets, clipped hit regions, and optional authored hit predicates |
+| `data/input/event.rs`, `input_state/mod.rs`, `interaction.rs`, `context.rs` | Pointer cancellation that retires button, click, drag, and motion ownership without release activation |
+| `input_state/mod.rs`, `input_state/wheel_state.rs` | Opt-in `raw_point_scroll` for one-time consumption of platform-paced pixel deltas |
+| `context.rs`, `memory/mod.rs` | Focusable registrations, deferred focus, and scoped controller activation |
 
-Public integration methods are `Context::set_fixed_layer_order`,
-`Context::fixed_layer_order_index`, `Context::compare_layer_order`, `Context::set_widget_hit_test`,
-`Context::pointer_widget_at`, `Area::background_interactable`, and
+Registering a fixed layer does not create an Area, widget, geometry, visibility,
+or focus. The registry is runtime configuration and is not persisted.
+Unregistered contexts retain upstream ordering.
+
+Passive hover content does not occlude lower controls; disabled interactive
+children still block. Hit predicates use the application's ellipse/rotation
+geometry and cannot call Context while it is locked.
+
+Cancellation preserves raw Touch cancellation and ordinary release behavior.
+Raw point scrolling preserves phase, source, modifiers, and line/page handling;
+upstream smoothing remains the default.
+
+The application resolves sampled controller navigation under the highest active
+input scope. Confirmation may queue one activation for the next commit. Both
+queueing and delivery require the same enabled, visible click widget, layer, and
+modal admission. A missing target expires after that pass.
+
+## Application API
+
+Layer and hit integration uses `Context::set_fixed_layer_order`,
+`fixed_layer_order_index`, `compare_layer_order`, `set_widget_hit_test`,
+`pointer_widget_at`, `Area::background_interactable`, and
 `Event::PointerCancelled`.
-Controller navigation additionally uses `Context::focusable_widgets_in_layer`,
-`Context::request_activation_next_frame`, `Memory::take_focus_direction`, and
-`Memory::request_focus_next_frame`.
-The application supplies its recovered fixed registry before input/layout. Hit predicates
-reuse its canonical ellipse/rotation geometry and cannot call Context while it is locked.
-The native textarea adapter resolves its target through the same real widget hit test.
 
-No animation, typography, Area lifetime, widget parentage, clip geometry or default
-window policy is replaced. No shared Cargo registry files are modified. This package
-is excluded from the application workspace's lint targets and selected with
-`[patch.crates-io]`; its upstream manifest/dependencies remain unchanged.
+Navigation uses `Context::focusable_widgets_in_layer`,
+`request_activation_next_frame`, `Memory::take_focus_direction`, and
+`request_focus_next_frame`.
 
-Focused application regressions live in `crates/web/src/gpu_ui/layer_tests.rs`, covering
-real paint/input/modal order, hidden registration, reappearance, default restoration,
-passive controls, disabled children and circular cutout ownership. Further upstream
-upgrades must retain these contracts or replace the patch with equivalent supported APIs.
-`crates/web/src/gpu_ui/input/cancel_tests.rs` drives the production native projection
-through real Context responses for cancellation, drag retirement, secondary touches,
-multiple mouse buttons and subsequent ordinary tap/double-click behavior.
-`crates/web/src/menu/widgets.rs` covers native point-delta pacing, unchanged line/page
-policy, held/released cardinal and Tab focus reveal, and retained user wheel scrolling
-at the actual input-commit/final-layout clock boundary.
+The application supplies the registry before input/layout. The native text adapter
+resolves its target through the same widget hit test.
+
+## Upgrade checks
+
+The workspace selects this package with `[patch.crates-io]` and excludes it from
+application lint targets.
+
+Application regressions in `crates/web/src/gpu_ui/layer_tests.rs` cover paint,
+input, modal order, reappearance, passive controls, disabled children, and cutouts.
+`crates/web/src/gpu_ui/input/cancel_tests.rs` covers cancellation and later taps.
+`crates/web/src/menu/widgets.rs` covers wheel pacing and focus reveal.
+
+Paths in this section are relative to the repository root.
+An upgrade must retain these contracts or replace the patch with supported APIs.

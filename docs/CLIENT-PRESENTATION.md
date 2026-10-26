@@ -1,51 +1,59 @@
-# Native client presentation
+# Client presentation
 
-The accepted `GameSession` remains the source for commands, UI, sound, saves and checkpoints.
-`web::presentation::NativePresentationTimeline` owns only received display copies. It ports
-`Website/frontend/src/game/client/{hub,boneyard}-presentation-timeline.ts` and the bounded
-local College movement in `client/game-client-session.ts` / `client/hub-prediction.ts`.
+Accepted `GameSession` state owns commands, UI decisions, sound, saves, and
+checkpoints. `web::presentation::NativePresentationTimeline` owns display copies
+sampled from received snapshots.
 
-Initialize the timeline with the validated Welcome tick and snapshot rates. After applying
-an accepted snapshot, call `push(&session, received_at_ms)` with the browser callback's
-original `performance.now()` receipt time, including snapshots retained during world loading.
-Call `reset()` on admission/disconnect. A world-kind or Boneyard run-ID change also clears it.
+## Lifecycle
 
-Sample once per animation frame, after selecting raw movement and before converting aim
-through the camera:
+Initialize with the validated Welcome tick and snapshot rates. After applying an
+accepted snapshot, call `push(&session, received_at_ms)` with the callback's original
+`performance.now()` receipt time, including snapshots held during world loading.
+
+Reset on admission or disconnect. A world-kind or Boneyard run-ID change also clears
+history. Duplicate ticks replace data without restarting elapsed time. History holds
+at most eight snapshots.
+
+## Sampling
+
+Sample once per frame after selecting raw movement and before projecting aim:
 
 ```rust
 let display = timeline.sample(now_ms, local_player_id, input, gameplay_held);
 ```
 
-The returned `PresentationFrame` owns a display-only `Box<GameSession>`, its fractional `tick`,
-`PresentationClocks`, and optional `EnemyPresentationMetadata`. Camera, input-to-world aim,
-players, world geometry, painter order and lights must borrow this same display frame. Never
-step, restore, acknowledge or save that copy. Local UI blocking supplies zero movement;
-`gameplay_held` means the actual shared pause/resume grace or loading hold. Level-up barriers
-are already read by the timeline.
+The returned `PresentationFrame` contains a display-only session, fractional tick,
+`PresentationClocks`, and optional `EnemyPresentationMetadata`. Camera, aim,
+players, geometry, painter order, and lights borrow that same frame.
 
-The history holds at most eight snapshots and never extrapolates a Boneyard. Duplicate ticks
-replace data without restarting elapsed time. New/removed actors and discrete IDs follow the
-source endpoint rules; fixed-lifetime primary effects use their reconstructed birth times.
-The College additionally predicts only its local movement for one snapshot interval and
-reconciles with the source correction fade. This calls existing movement/collision kernels on
-one private character; it never runs a second session or advances combat/gameplay RNG.
+Local UI blocking supplies zero movement. `gameplay_held` represents shared
+pause/resume grace or a loading hold; the timeline reads level-up barriers itself.
+Display state cannot be stepped as a session, acknowledged, restored, or saved.
 
-Simulation ticks remain integers. Fractional primary/secondary ages, player damage-four timers
-and Puppet hit alpha are carried in `PresentationClocks`. Enemy endpoint animation is sampled
-before interpolation (including Spider target/light appearance), so articulated bones and
-wrapped phases blend exactly as the source protocol does. Draw plans receive those sampled
-fields rather than resampling an interpolated brain.
+## Interpolation and prediction
 
-`BattleFrame` supplies `presentation_tick`, `clocks` and `enemy_presentation`. `SpellView::prepare`
-accepts the clocks; `SecondaryView::prepare` accepts its secondary-age map. Direct snapshot
-and isolated fixture callers pass `None`. This selects their actual whole actor clocks and
-uses the same draw-plan implementation. Player orb, Enchant Staff and status effects use the
-fractional display tick. Primary/secondary cosmetic per-draw noise keeps the source retained
-frame counter, separate from display time; a skill-picker barrier selects the frozen world
-clock instead. Tree occlusion advances at draw time to `floor(presentation_tick)` using the
-displayed local position. Weather also explicitly samples whole native epochs.
+Boneyards interpolate without extrapolation. New and removed actors follow endpoint
+identity rules. Fixed-lifetime primary effects use reconstructed birth times.
+The College predicts only local movement for one snapshot interval, using the
+canonical movement/collision kernels on a private character.
 
-The focused source fixtures are `presentation-timeline-goldens.json`,
-`enemy-samples-goldens.json` and `secondary-fractional-presentation-goldens.json`. The actual renderer cadence
-receipt lives with the fleet evidence, not in gameplay state.
+Simulation ticks remain integers. Fractional effect ages, damage timers, and hit
+alpha travel in presentation clocks. Enemy animation is sampled at endpoints
+before interpolation so bones, wrapped phases, and appearance metadata retain
+their correct lifetime.
+
+`BattleFrame` supplies `presentation_tick`, `clocks`, and
+`enemy_presentation`. Spell and secondary views consume those fields.
+Direct snapshots and isolated fixtures use whole actor clocks through the same
+draw-plan code.
+
+Cosmetic per-draw noise retains its own frame counter. Skill-picker barriers use
+the frozen world clock. Tree occlusion advances to whole presentation ticks using
+the displayed local player; weather samples whole simulation epochs.
+
+## Checks
+
+The tracked fixtures include `presentation-timeline-goldens.json`,
+`enemy-samples-goldens.json`, and
+`secondary-fractional-presentation-goldens.json`.
+Use browser captures to check draw cadence between received snapshots.

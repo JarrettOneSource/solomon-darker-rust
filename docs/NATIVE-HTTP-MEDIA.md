@@ -1,106 +1,43 @@
-# Native HTTP media backpressure
+# Native HTTP media
 
-## Confirmed failure
+Static asset responses must survive a paused reader and shut down promptly.
+Browsers may stop downloading media after buffering enough data and resume later.
+A TCP write timeout does not prove the reader disconnected.
 
-The unchanged Tutorial journey against immutable game9fab/nativee607 produced an
-uncancelled truncated206 for `combat.mp3`. The separate ef5d diagnostic native binary
-observed one `io::copy` for an advertised18,799,976-byte response begin at
-1792816542.571333 and return OS35/WouldBlock at1792816577.795616:35.224308166seconds.
-Chrome request4272.404 started at1792816542.499295, observed206 and the declared size,
-received6,291,456 data bytes/5,242,880 encoded bytes, and later reported the uncancelled
-content-length failure at171.273seconds. This is a native response truncation, not a
-permitted browser cancellation or an acceptable UI/audio error.
+## Ownership
 
-Raw trace and unchanged-driver result are retained under the full-UI task's
-`common-browser/9fab4e4/m5/tutorial-native-transport-trace-r2/`, including
-`native-host.log`, `receipt.json`, `browser-errors-1.json` and `launch-identity.json`.
-The diagnostic is separate from the serving immutable native; it is not part of the fix.
+The native transport parses bounded request headers under its handshake deadline.
+Static responses then leave the framing pool and run in owned transfer workers.
+Each retains its connection lease and shares the immutable `AssetServer`.
 
-## Owner and contract
+The asset worker streams the declared body once using nonblocking writes.
+On `WouldBlock`, it retains the pending offset, waits for the existing 10 ms
+I/O interval, and checks shutdown before trying again. A real write error ends the
+response. There is no asset-consumption write deadline.
 
-`transport/socket.rs::serve_connection` reads the complete bounded request headers under
-the existing handshake deadline, then sets a30-second TCP write deadline and calls the
-asset responder inline on one of four framing workers. `AssetServer::serve_stream`
-writes the declared range headers and streams the file once with `io::copy`. A write
-timeout propagates out, dropping the connection after only part of the declared body.
-Four independently paused bodies can also occupy all framing workers.
+Accepted connections remain bounded by the transport's admission limit.
+Slow asset readers cannot occupy all request-framing workers. Shutdown closes
+retained sockets and joins owned workers; writes also check the stop flag because
+closing a socket clone alone may not cancel an already-blocked platform send.
+Admission and shutdown share the connection-bookkeeping lock.
 
-The [HTML media loading contract](https://html.spec.whatwg.org/multipage/media.html#concept-media-load-resource)
-allows a user agent to stop downloading after sufficient buffering and resume later.
-The [Rust TCP write-timeout contract](https://doc.rust-lang.org/std/net/struct.TcpStream.html#method.set_write_timeout)
-documents that Unix can report a timeout as WouldBlock; that error does not establish
-that the reader disconnected. Raising the timeout or retrying a partly written body
-would not establish the response contract.
+Supervisor HTTP keeps its own write deadline. Request/header limits, upgrade
+deadlines, WebSocket heartbeat/close rules, MIME types, path validation, and byte
+ranges retain their respective owners.
 
-The native transport already bounds accepted connections with `ConnectionLease`, keeps
-their socket clones for shutdown, and owns/reaps/join its long-lived workers. Static
-responses belong to that lifetime after header framing: share the immutable asset
-responder, keep the lease in an owned transfer worker, and remove the asset consumption
-write deadline. No asset may occupy a framing worker while waiting for a reader.
-Shutdown closes the owned TCP connections before joining workers. Asset writes also check
-the shutdown flag between nonblocking attempts: closing a cloned socket alone did not
-reliably release an already blocked Windows send. Connection count remains bounded by the
-existing admission limit.
+## Regression checks
 
-Request read/header limits, upgrade deadlines, supervisor HTTP deadlines, WebSocket
-heartbeat/close behavior, MIME, path validation and byte-range semantics stay with their
-existing owners. The asset file streams directly to TCP. `WouldBlock` retains the exact
-pending offset and waits for the existing 10 ms I/O poll interval; a real write error
-terminates the response. No consumption deadline or frontend error allowance is added.
+Tests use public `NativeServer` and real loopback TCP:
 
-## Verification boundary
+- A paused ranged response resumes with its complete length and SHA256.
+- Four stalled asset bodies leave a small request serviceable.
+- Shutdown completes while those readers remain paused.
+- MIME, path, range, framing, upgrade, and API semantics still pass.
 
-Regressions use public `NativeServer` and real loopback TCP: a paused ranged response
-must resume past the original deadline with its complete length/SHA256; four stalled
-asset bodies must leave a small request serviceable; shutdown must finish while those
-readers remain paused. Existing framing/upgrade/API and asset semantics tests remain
-required. Record the observed red before implementation, then native focused/full
-gates and immutable fixed-native identity. Root/QA owns the original browser rerun and
-paired artifact admission; a native regression alone does not claim that browser result.
+Check actual browser playback as well as TCP integrity. Distinguish expected media
+suspension or deliberate cancellation from an unexpectedly truncated response.
 
-The initial public-TCP regression on source0e74d53 demonstrated framing starvation:
-four paused64MiB bodies made the small request hit its actual2s client read deadline
-(OS35/WouldBlock). Its18,799,976-byte single-range control still passed after40s, so
-that control did not establish a blocked sender and is not a timeout reproduction.
-Job `job_20261024T044655Z_f60a766645` retains both independent outcomes. The range is
-therefore strengthened to the64MiB fixture minus its17-byte offset, without changing
-production deadlines or adding a test-only transport knob.
-
-The second raw64MiB range control also passed on fec735b, while framing starvation
-remained red (`job_20261024T045120Z_39aec9338e`). It is likewise not claimed as a
-truncation reproduction. The range regression now uses Python's existing standard
-socket API to set the actual client's SO_RCVBUF before connect, then pauses reads40s.
-Python is already installed by the canonical CI/build workflow; this adds no Rust
-dependency, unsafe FFI, global socket setting or server-only test behavior. It restores
-the reported18,799,976-byte range with a bounded client receive window instead of
-expanding fixtures until an incidental socket-buffer configuration happens to fail.
-
-The bounded-window control on2ea592a also passed40s; framing starvation remained red
-(`job_20261024T045904Z_208095a06f`). No additional timeout-reproduction claim follows
-from these controls. The Python probe is removed from the maintained regression: the
-simple pure-Rust long-range pause/resume length/SHA control remains, alongside the
-genuine four-paused-body starvation/shutdown contract. The definitive timeout RED is
-the unchanged browser plus native-copy trace above; its original browser GREEN is
-still required after root admits the fixed native binary.
-
-## Implementation
-
-Static responses now share the immutable `AssetServer` through an Arc and leave the
-framing pool in a retained connection worker. The worker owns its existing lease and
-streams the file once without a consumption write deadline. Supervisor HTTP keeps its
-30s write deadline and all header/upgrade read deadlines remain unchanged. Shutdown
-closes the retained connection clones before joining these workers. The unused alternate
-`AssetServer::serve` accept pool and its private30s socket path are removed after the
-repository caller search; existing MIME/range/path tests now use public `NativeServer`.
-
-PR CI `40209085729` passed the game and three non-Windows packages, but Windows timed
-out in `asset_http_paused_readers_leave_framing_available_and_shutdown_is_prompt`. Its already
-blocked send survived shutdown long enough to violate the join deadline. Windows documents
-that [shutdown disables future sends](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-shutdown);
-that does not establish cancellation of every pending blocking write.
-
-The asset worker now uses nonblocking TCP after the complete request headers have been
-buffered. `AssetStream` waits only on `WouldBlock` and checks the existing stop flag on
-every attempt. The acceptor checks that flag while holding the connection bookkeeping
-lock, preventing a newly admitted connection from escaping the shutdown sweep. The same
-paused-range integrity and shutdown tests remain the acceptance contract on each platform.
+Implementation lives in the launcher's transport and asset-server modules.
+The contract follows [HTML media resource loading](https://html.spec.whatwg.org/multipage/media.html#concept-media-load-resource),
+[Rust TCP write timeouts](https://doc.rust-lang.org/std/net/struct.TcpStream.html#method.set_write_timeout),
+and [Windows socket shutdown](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-shutdown).

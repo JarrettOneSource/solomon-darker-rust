@@ -1,150 +1,77 @@
-# Glossary
+# Game glossary
 
-The words this repository uses, in the sense it uses them. Code, tests, fixtures and tickets
-use these terms exactly; when a new concept earns a name, add it here.
+## Game and state
 
-## Sources of truth
-
-- **Native** (or **retail**): Solomon Dark 0.72.5, the Windows game. The ground truth for every
-  behaviour. Its decompilation lives with the workspace.
-- **Website**: the web port whose `fa08ae249ff5563570bdb2a653e2ef9358ce7b83` revision
-  defines the rebuild's accepted behavior. Historical recordings retain their actual source
-  revision. Accounts, cloud content and editing remain Website responsibilities.
-- **Native goldens**: language-neutral JSON captured from the instrumented retail
-  executable, committed under `crates/sim/tests/fixtures/native/`; each file carries its
-  native contract in its header. The old Mod Loader that first held them is retired.
-- **Kernel**: a pure function or state type in `solomon-sim` that reproduces one game behaviour
-  from a cited reference.
-- **Oracle**: a Node script under `tools/website-oracle/` that imports unmodified Website
-  kernels and records what they produce.
-- **Fixture** (or **golden**): recorded reference output as JSON. Website fixtures live in
-  `crates/sim/tests/fixtures/website/` and native goldens in `crates/sim/tests/fixtures/native/`.
-- **Differential test**: a test in `crates/sim/tests/website_goldens.rs` that replays a fixture
-  through the port and requires bit-for-bit equality.
-- **Smoke**: the headless-Chrome check of the served client (`tools/browser-smoke/smoke.cjs`).
+- **Retail**: the original C++ Solomon Dark 0.72.5 Windows game.
+- **College** or **Hub**: the courtyard and its four private rooms: mortuary,
+  library, storeroom, and office.
+- **Boneyard**: a combat scene with geometry, enemies, waves, loot, and a run identity.
+- **Session**: the canonical `GameSession`, including participants, world state,
+  inventories, random streams, and run lifecycle.
+- **Participant**: one player's identity, wizard, profile, equipment, and combat state.
+- **Accepted state**: a completed session state received from the authoritative host.
+- **Checkpoint**: the state needed to restore and continue a session.
+- **Kernel**: a game rule implemented as a pure function or explicitly stepped state.
+- **Golden fixture**: recorded input and expected output replayed by a regression test.
+  [Reference data](docs/REFERENCE-DATA.md) describes its provenance.
 
 ## Time and numbers
 
-- **Tick**: one 10 ms simulation step; the game runs at 100 Hz. Tick counters are `u64`.
-- **Frame**: one browser draw, independent of the authoritative simulation tick.
-- **Accepted session**: the completed game state admitted from the native host, including
-  participants, world, inventories and random streams.
-- **Display frame**: the presentation of accepted sessions at the current draw time; its
-  positions and animation phases can lie between authoritative ticks.
-- **Presentation tick**: the fractional tick of a display frame, bounded by the newest
-  received state. It is not another gameplay step.
-- **Hub prediction**: the local wizard's displayed movement for at most one snapshot
-  interval, reconciled to the next accepted session. Boneyard displays interpolate instead.
-- **fround** / **single-precision point**: narrowing a value to `f32` and back, where the
-  reference (`Math.fround` or the native 32-bit store) does the same. The port rounds at those
-  points and nowhere else.
-- **Lane cap**: 118.75 world units per second, the largest per-axis speed. A **scripted speed**
-  is a multiplier on it.
-- **Native RNG**: the 55-word lagged-Fibonacci generator (`NativeRng`), 30-bit words under
-  `MASK`, float divisor 100000.
-- **Semantic word**: one native RNG word used as an opaque input to a **random domain**
-  reduction: an integer below a bound or a float up to a maximum.
-- **Collision fallback sampler**: the xorshift `u32` the courtyard uses when a sweep cannot
-  resolve; it advances only on fallback, which the fixtures count.
+- **Tick**: one 10 ms simulation step; the simulation runs at 100 Hz.
+- **Frame**: one display update, independent of the simulation tick.
+- **Display frame**: a presentation copy sampled from accepted snapshots.
+- **Presentation tick**: the fractional time of a display frame. It cannot advance
+  gameplay or be saved as authoritative state.
+- **Hub prediction**: bounded local movement between snapshots, reconciled on receipt.
+- **Single-precision boundary**: a deliberate narrowing through `float::fround`.
+- **Native RNG**: the 55-word lagged-Fibonacci generator, with 30-bit words and
+  float divisor 100000.
+- **Semantic word**: an RNG word reduced to a bounded integer or scaled float.
+- **Collision fallback sampler**: the separate xorshift state consumed by unresolved
+  courtyard collision.
+- **Lane cap**: 118.75 world units per second per axis.
+- **Heading**: one of 24 sprite facings, starting north and increasing clockwise.
 
-## Space and movement
+## Space and drawing
 
-- **World units**: the courtyard is 2000 × 1024; positions are `f64`.
-- **Heading index** / **facing**: one of 24 sprite facings 15° apart, index 0 pointing north,
-  increasing clockwise.
-- **Gait** and **walk cycle**: the wizard's pose phases, advanced by distance travelled.
-- **Segment**: a line obstacle; collision is a circle swept against segments. The courtyard
-  has 129.
-- **Movement plan** (`HubWizardPlan`): what one tick wants to do (delta, requested velocity,
-  retained velocity, whether movement is active) before collision resolves it.
+- **World units**: the coordinate system used by simulation and collision.
+  The College courtyard is 2000 × 1024.
+- **Segment**: a line obstacle tested against a swept circle.
+- **Portal**: a doorway trigger with a destination and scripted transition.
+- **Painter**: a world actor's entry in the ordered drawing queue.
+- **Registration ordinal**: the actor's stable insertion index.
+- **Painter row**: a two-unit row measured relative to the reference actor's feet.
+- **Sort bias**: an offset applied before choosing a painter row.
+- **Depth band**: a fixed drawing layer outside the actor queue.
+- **Bundle record**: sprite metadata containing atlas bounds, logical size,
+  registered origin, and collision points.
+- **Atlas**: a texture containing sprites referenced by bundle records.
+- **Registered origin**: the authored point used to position a sprite.
+- **Logical view**: design coordinates mapped into the available canvas.
+- **Tint**: a quantized per-channel color multiplier, with separate alpha.
+- **Transient**: an effect whose lifetime and painter registration are explicitly owned.
 
-## The Hub
+## Items, skills, and Tutorial
 
-- **Hub**: the College. Its **regions** are the **courtyard** and four **private rooms**:
-  mortuary, library, storeroom, office.
-- **Portal** (or **doorway**): a trigger segment in a source region with a destination, a
-  scripted target and speed, and whether the contact x is preserved.
-- **Transition**: the walk through a doorway in phases: outgoing fade, **placement** (where
-  the wizard appears and the walk in), incoming fade. The College intro has its own fade rate.
-- **Scripted movement**: a walk toward a target with no input and nothing retained between
-  ticks.
+- **Ground loot actor**: an Orb, Gold, Sack, or Bonus on a Boneyard floor.
+- **Sack**: either a ground item carrier or an inventory container with addressed children.
+- **Goodie**: a locked scenery chest opened with a Wizard Key.
+- **Loot stream**: the shared RNG used by loot construction, pickups, and Goodie effects.
+- **Weld**: a combination of two elemental primary spells.
+- **Belt**: three banks of eight slots for skills and items.
+- **Tutorial stage**: one of twenty progression states in the authored Tutorial.
+- **Narration**: timed Tutorial voice cues; playback does not advance simulation time.
+- **Camera lock**: the Tutorial transition from the full scene to the combat rectangle.
 
-## Painting
+## Runtime and services
 
-- **Painter**: the stock draw-order queue for world actors.
-- **Registration ordinal**: the index at which an actor registered with the world manager.
-  The 48 **fixed actors** in `HUB_FIXED_PAINTER_IDS` (the traders, the teacher, the
-  obstacles, the statue, the room paintings and props, and the named College staff) reserve
-  ordinals 0..47; the first player takes 48.
-- **Painter row**: two-unit rows measured from the reference actor's feet; ties break by
-  ordinal.
-- **Sort bias**: a nudge to an actor's row; the player gets ±20 inside the north arch.
-- **Transient lane**: painters an effect registers for a while, such as the teacher's burst
-  column and frame strip.
-- **Depth band**: the fixed drawing band of a non-actor layer (seal glyphs, seal core,
-  fountain spray, foreground) relative to the actors at 1000 + row.
-- **Obstacle**: one of eight fixed courtyard presences with a position and radius that sort
-  among the actors.
-
-## Ambient life
-
-- **Ambient state**: the courtyard's self-running life, advanced once per tick: fountain
-  spray, seal pulse, statue bob and the teacher clock.
-- **Drop**: one fountain spray particle with an id, remaining lifetime and scale.
-- **Seal**: the courtyard's additive floor emblem: thirteen **glyph** records under one
-  **core** record, each tinted along a three-colour **track** by its **phase**.
-- **Statue bob**: the College statue's vertical offset and aura drift from its phase in
-  degrees.
-- **Teacher cycle**: 847 ticks of cast (0..267), release (268..346) and idle. The **burst** is
-  the release's effect with four members (core, flare, column, frames) that fade by native
-  decay; the **release index** counts cycles.
-
-## Art and rendering
-
-- **Bundle** / **record**: a stock `.bundle` sprite record: atlas rectangle, logical frame,
-  registration centre, collision points.
-- **Registered origin**: where a record draws inside the room's logical frame; the seal draws
-  at scale 2 from a rounded registered origin.
-- **Atlas**: the stock PNG a bundle indexes (`College.bundle` for the courtyard).
-- **Camera origin** / **logical view**: gameplay uses a minimum 1600 × 900 logical view
-  at scale 1.2 in the College. Smaller canvases scale that minimum down; wider or taller
-  canvases reveal more world. The regional camera clamps that actual view to the world,
-  with bounded-world zoom where needed. Fixed UI stages have their own anchors.
-- **Blend mode**: Normal, Multiply (the statue aura) or Add (seals and spray), on
-  premultiplied output.
-- **Tint**: a colour multiplier quantised to 8 bits per channel, with alpha separate, the way
-  Pixi applies it.
-- **Starter tints**: the hat and robe colours rolled from the owner's base colour with the
-  native RNG.
-
-## Boneyard loot
-
-- **Ground loot actor**: an Orb (2011), Gold (2012), Sack (2013) or Bonus (2038) on the
-  Boneyard floor, with its own pickup timing and world-manager registration.
-- **Sack**: a ground carrier for an inventory item. An inventory Sack (7008) is a container
-  item with addressed child items; picking up a ground Sack can therefore carry a nested tree.
-- **Goodie**: a locked scenery chest (2061). An explicit nearest-facing interaction consumes
-  a Wizard Key; opening advances through phases at 100/200 ticks and yields contents at 250.
-- **Loot stream**: the ground store's shared native RNG, used by constructors, enemy loot
-  seed writes, pickups and Goodie fragments. An enemy's separate private stream chooses its
-  candidate category; constructing that candidate advances the shared stream.
-
-## Tutorial
-
-- **Stage**: one of twenty stock Tutorial progression states. The numeric IDs preserve the
-  authored script; named variants describe the instruction or condition at that stage.
-- **Narration**: ordered Sirmin/Solomon cues with PCM-derived durations at 100 Hz. Playback
-  consumes cue events; it does not advance the Tutorial clock.
-- **Camera lock**: the Tutorial's checked transition from the full scene to its upper combat
-  rectangle. Enemy bodies and ground Sacks must remain safe before its cleanup starts.
-
-## Operations
-
-- **Social snapshot**: an immutable host projection of actual Party membership, durable
-  roster rows, accepted chat messages and player cards. It does not own gameplay state.
-- **Directory capability**: whether an actual broker can resolve party codes, invitations
-  and listings. A direct native host has no directory; its roster and chat still work.
-
-- **Trunk**: the WebAssembly bundler and dev server; `web/` is its root.
-- **Launchd agent**: `com.jarrett.solomon-rust-game`, the M2 service that serves the release
-  build on loopback port 4180, published to the tailnet by `tailscale serve`.
+- **Native authority**: the Rust host that accepts commands and advances the session.
+- **Standalone session**: desktop or direct-host play with local persistence.
+- **Hosted session**: a session integrated with website accounts and services.
+- **Social snapshot**: host-authored membership, chat, and profile information.
+- **Directory capability**: access to party listings and invitations through the
+  website broker. Direct peer play has no global directory.
+- **Game artifact**: a packaged native host, WebAssembly client, tools, assets, and
+  manifest consumed by the website.
+- **Publication**: the website's advertised deployment identity and readiness.
+- **Trunk**: the WebAssembly bundler and development server rooted at `web/`.
