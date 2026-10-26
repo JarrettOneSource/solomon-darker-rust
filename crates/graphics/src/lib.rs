@@ -7,6 +7,7 @@
 pub mod announcements;
 pub mod assets;
 pub mod raster;
+mod sprite_program;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod text;
 
@@ -286,6 +287,8 @@ pub struct Vertex {
 
 pub struct Renderer {
     gl: GraphicsContext,
+    sprite_program: sprite_program::SpriteProgram,
+    sprite_program_active: bool,
     #[cfg(target_arch = "wasm32")]
     browser_gl: Option<WebGl2RenderingContext>,
     u_logical_size: glow::UniformLocation,
@@ -317,6 +320,7 @@ pub struct Renderer {
     clip: Option<[i32; 4]>,
     viewport: [i32; 4],
     logical_size: [f32; 2],
+    pixel_center_offset: [f32; 2],
     native_world_pixel_centers: bool,
     vertices: Vec<f32>,
     bound_texture: Option<u32>,
@@ -500,8 +504,12 @@ impl Renderer {
             check_error(&gl, "texture upload")?;
             gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
             gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
+            let sprite_program = sprite_program::SpriteProgram::new(&gl)?;
+            gl.use_program(Some(program));
             Ok(Self {
                 gl,
+                sprite_program,
+                sprite_program_active: false,
                 #[cfg(target_arch = "wasm32")]
                 browser_gl: None,
                 u_logical_size,
@@ -533,6 +541,7 @@ impl Renderer {
                 clip: None,
                 viewport: [0; 4],
                 logical_size: [1.0; 2],
+                pixel_center_offset: [0.0; 2],
                 native_world_pixel_centers: false,
                 vertices: Vec::new(),
                 bound_texture: None,
@@ -807,6 +816,7 @@ impl Renderer {
         unsafe {
             if saturation != self.saturation {
                 self.flush();
+                self.bind_effect_program();
                 self.gl.uniform_1_f32(Some(&self.u_saturation), saturation);
                 self.saturation = saturation;
             }
@@ -829,6 +839,7 @@ impl Renderer {
         unsafe {
             if filter != self.color_filter {
                 self.flush();
+                self.bind_effect_program();
                 let values =
                     filter.map_or([-1.0, 1.0], |filter| [filter.brightness, filter.saturation]);
                 self.gl.uniform_2_f32(Some(&self.u_color_filter), values[0], values[1]);
@@ -867,6 +878,7 @@ impl Renderer {
         unsafe {
             if self.blur != blur {
                 self.flush();
+                self.bind_effect_program();
                 if let Some(blur) = blur {
                     self.gl.uniform_4_f32_slice(Some(&self.u_blur_bounds), &blur.bounds);
                     self.gl.uniform_2_f32_slice(Some(&self.u_blur_sigma), &blur.sigma);
@@ -884,6 +896,7 @@ impl Renderer {
         unsafe {
             if shadow != self.shadow {
                 self.flush();
+                self.bind_effect_program();
                 if let Some(shadow) = shadow {
                     self.gl.uniform_4_f32_slice(Some(&self.u_shadow_bounds), &shadow.bounds);
                     self.gl.uniform_4_f32_slice(Some(&self.u_shadow_color), &shadow.color);
@@ -1174,10 +1187,11 @@ impl Renderer {
         self.native_world_pixel_centers = enabled;
     }
 
-    fn bind_projection(&self, logical: [f32; 2], physical: [f32; 2]) {
+    fn bind_projection(&mut self, logical: [f32; 2], physical: [f32; 2]) {
         // SAFETY: the renderer owns these handles in the live current context;
         // uploads borrow initialized slices only for the duration of each driver call.
         unsafe {
+            self.bind_effect_program();
             self.gl.uniform_2_f32(Some(&self.u_logical_size), logical[0], logical[1]);
             // Source adds projection.a/d * (0.5 / targetResolution). Express that
             // same translation in this target's logical units before projection.
@@ -1190,6 +1204,7 @@ impl Renderer {
                 [0.0; 2]
             };
             self.gl.uniform_2_f32(Some(&self.u_pixel_center_offset), offset[0], offset[1]);
+            self.pixel_center_offset = offset;
         }
     }
 
@@ -1328,6 +1343,7 @@ impl Renderer {
             }
             if self.blend != blend {
                 self.flush();
+                self.bind_effect_program();
                 // `native-fixed-function-render-pipeline.ts::installNativeBlendModes`.
                 // Multiply preserves straight source RGB; normal/add use premultiplied RGB.
                 self.blend = blend;
@@ -1339,6 +1355,7 @@ impl Renderer {
             }
             if self.texture_color_mode != color_mode {
                 self.flush();
+                self.bind_effect_program();
                 self.gl.uniform_1_f32(
                     Some(&self.u_alpha_mask),
                     if color_mode == TextureColorMode::AlphaMask { 1.0 } else { 0.0 },
@@ -1409,6 +1426,25 @@ impl Renderer {
             if self.vertices.is_empty() {
                 return;
             }
+            if self.shadow.is_none()
+                && self.blur.is_none()
+                && self.color_filter.is_none()
+                && self.saturation == 1.0
+                && matches!(
+                    self.texture_color_mode,
+                    TextureColorMode::Texture | TextureColorMode::Premultiplied
+                )
+            {
+                self.sprite_program.bind(
+                    self.logical_size,
+                    self.pixel_center_offset,
+                    self.blend,
+                    self.texture_color_mode,
+                );
+                self.sprite_program_active = true;
+            } else {
+                self.bind_effect_program();
+            }
             self.gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
                 bytemuck::cast_slice(&self.vertices),
@@ -1426,6 +1462,14 @@ impl Renderer {
     pub fn end_frame(&mut self) {
         self.flush();
     }
+
+    fn bind_effect_program(&mut self) {
+        if self.sprite_program_active {
+            // SAFETY: the original effect program belongs to this current renderer.
+            unsafe { self.gl.use_program(Some(self._program)) };
+            self.sprite_program_active = false;
+        }
+    }
 }
 
 fn link_program(
@@ -1441,6 +1485,10 @@ fn link_program(
         let program = gl.create_program()?;
         gl.attach_shader(program, vertex);
         gl.attach_shader(program, fragment);
+        // Both programs consume the same batch buffer and vertex array.
+        for (location, name) in [(0, "a_position"), (1, "a_uv"), (2, "a_color")] {
+            gl.bind_attrib_location(program, location, name);
+        }
         gl.link_program(program);
         gl.detach_shader(program, vertex);
         gl.detach_shader(program, fragment);

@@ -468,6 +468,9 @@ impl NativeInput {
             }
         }
         output.commands.retain(|command| !matches!(command, egui::OutputCommand::CopyText(_)));
+        if let Some(update) = &mut output.accesskit_update {
+            super::super::edit::accessibility::update(update, &self.queue.editors);
+        }
         self.state.handle_platform_output(&self.window, output);
         Ok(())
     }

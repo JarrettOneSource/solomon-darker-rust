@@ -246,20 +246,6 @@ impl<'a> NativeTextEdit<'a> {
         }
         frame.record(self.id, self.label, "textbox", &response);
         frame.record_value(self.id, self.text, None);
-        #[cfg(not(target_arch = "wasm32"))]
-        frame.ctx.accesskit_node_builder(id, |node| {
-            node.set_role(if self.multiline {
-                egui::accesskit::Role::MultilineTextInput
-            } else {
-                egui::accesskit::Role::TextInput
-            });
-            if enabled && !self.readonly {
-                node.add_action(egui::accesskit::Action::SetValue);
-                node.add_action(egui::accesskit::Action::ReplaceSelectedText);
-            } else {
-                node.set_read_only();
-            }
-        });
         NativeEditOutput { response, submitted, rejected }
     }
 
@@ -436,7 +422,7 @@ impl<'a> NativeTextEdit<'a> {
             }) {
                 state.transport = Some(Arc::new(state.model.clone()));
             }
-            frame.editors.borrow_mut().push(EditorDescriptor {
+            let editor = EditorDescriptor {
                 layer_id: response.layer_id,
                 owner: state.owner,
                 text: self.text.as_str().into(),
@@ -461,7 +447,8 @@ impl<'a> NativeTextEdit<'a> {
                     stroke: None,
                     ..Default::default()
                 },
-            });
+            };
+            frame.editors.borrow_mut().push(editor);
         }
         Ok(())
     }

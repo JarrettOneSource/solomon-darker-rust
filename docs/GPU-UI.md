@@ -104,6 +104,9 @@ and clipping use the same layout.
 
 Platform adapters provide native composition, clipboard access, and file dialogs.
 Native accessibility uses AccessKit and the operating system's accessibility tree.
+Text ranges, bidirectional character bounds and UTF-16 selection come from the
+same editor layout. OS edits and selection requests enter the normal editing
+model, including read-only policy and undo history.
 Browser announcements use `ariaNotify` when available or one marked, nonvisual
 text-only live region. Native text shaping and composition use Parley and winit;
 browser text uses its native font and composition APIs.

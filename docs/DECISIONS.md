@@ -92,6 +92,15 @@ The window must outlive
 its renderer and caches, including failure/close paths. Native and WASM both run
 the renderer acceptance; compilation alone does not establish pixel equivalence.
 
+Ordinary textured draws use a small sprite shader; shadows, blur, color filters
+and alpha masks retain the effect shader. Apple Software Renderer spends substantial
+time executing the effect shader even with its effect uniforms disabled. Separate
+programs remove that instruction cost without changing draw order, texture
+sampling, vertex layout, projection or blend equations. Both consume the same
+batch buffer. Native and browser pixel checks compare straight and premultiplied
+textures across normal, additive and multiply blending, and verify state restoration
+when draws alternate between the programs.
+
 ## One simulation
 
 Game rules live in `solomon-sim`. Browser, native, hosted, and modded play use the

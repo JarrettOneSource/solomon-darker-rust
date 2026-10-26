@@ -87,4 +87,5 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSWo
 windows-sys = { version = "0.61.2", features = ["Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+accesskit_consumer = "=0.39.1"
 futures-lite = "2.6"

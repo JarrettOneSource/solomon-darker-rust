@@ -39,6 +39,7 @@ jobs:
           key: game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
           restore-keys: |
             game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+            game-${{ runner.os }}-${{ runner.arch }}-
       - run: cargo install trunk --locked --version 0.22.0
       - run: npm ci --no-audit --no-fund
       - run: npm run test:browser-support
@@ -138,6 +139,7 @@ jobs:
           key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
           restore-keys: |
             native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+            native-${{ runner.os }}-${{ runner.arch }}-
       - name: Build standalone app from this revision
         id: native-build
         run: npm run package:desktop -- --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --release-repository "$GITHUB_REPOSITORY"
@@ -151,6 +153,7 @@ jobs:
             target
           key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Archive and inspect the final standalone app
+        id: native-archive
         run: node tools/archive-desktop.mjs
       - name: Verify the complete native workspace on Windows
         if: ${{ runner.os == 'Windows' }}
@@ -159,6 +162,7 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         run: python tools/inspect-windows-crt.py 'dist-desktop/Solomon Darker-win32-x64/solomon-darker.exe' reports/desktop-smoke/native-imports.json static
       - name: Verify packaged offline save and peer gameplay
+        if: always() && steps.native-archive.outcome == 'success'
         timeout-minutes: 30
         run: npm run smoke:desktop
       - uses: actions/upload-artifact@v4

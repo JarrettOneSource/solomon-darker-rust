@@ -4251,6 +4251,7 @@ version = "0.1.0"
 name = "solomon-web"
 version = "0.1.0"
 dependencies = [
+ "accesskit_consumer",
  "arboard",
  "async-executor",
  "blocking",

@@ -1,7 +1,7 @@
 use egui::accesskit::{Action, ActionData, ActionRequest, TreeId};
 
 use super::super::{InputQueue, Session};
-use crate::gpu_ui::edit::{TextSelection, model::Intent};
+use crate::gpu_ui::edit::{TextSelection, accessibility, model::Intent};
 
 /// Assistive technology edits the same model, rules, undo history and ordered
 /// receipts as the keyboard. SetValue can target an editor without stealing focus.
@@ -28,25 +28,39 @@ pub(super) fn edit_action(
         }
         return true;
     }
-    if !matches!(request.action, Action::SetValue | Action::ReplaceSelectedText) {
+    if !matches!(
+        request.action,
+        Action::SetValue | Action::ReplaceSelectedText | Action::SetTextSelection
+    ) {
         return false;
     }
-    let Some(ActionData::Value(text)) = &request.data else {
-        return true;
-    };
-    if editor.readonly {
+    if editor.readonly && request.action != Action::SetTextSelection {
         return true;
     }
+    let intent = match (&request.action, &request.data) {
+        (Action::SetTextSelection, Some(ActionData::SetTextSelection(selection))) => {
+            let Some(selection) = accessibility::selection(&editor, selection) else { return true };
+            Intent::Select(selection)
+        }
+        (Action::SetValue | Action::ReplaceSelectedText, Some(ActionData::Value(text))) => {
+            let model = queue
+                .session
+                .as_ref()
+                .filter(|session| session.descriptor.owner == editor.owner)
+                .map_or(editor.model.as_ref(), |session| &session.model);
+            let range = if request.action == Action::SetValue {
+                TextSelection { anchor: 0, focus: model.text().encode_utf16().count() }
+            } else {
+                model.selection()
+            };
+            Intent::Replace { range, text: text.to_string(), group: None }
+        }
+        _ => return true,
+    };
     let same_owner =
         queue.session.as_ref().is_some_and(|session| session.descriptor.owner == editor.owner);
     let previous = if same_owner { None } else { queue.session.replace(Session::new(editor)) };
-    let model = &queue.session.as_ref().expect("targeted editor session").model;
-    let range = if request.action == Action::SetValue {
-        TextSelection { anchor: 0, focus: model.text().encode_utf16().count() }
-    } else {
-        model.selection()
-    };
-    queue.edit(Intent::Replace { range, text: text.to_string(), group: None }, None);
+    queue.edit(intent, None);
     if !same_owner {
         queue.session = previous;
     }
@@ -103,5 +117,59 @@ mod tests {
         assert_eq!(queue.session.as_ref().unwrap().model.text(), "after");
         queue.edit(Intent::Undo, None);
         assert_eq!(queue.session.as_ref().unwrap().model.text(), "before");
+    }
+
+    #[test]
+    fn accessibility_selects_utf16_across_bidi_runs_in_a_readonly_field() {
+        use egui::accesskit::{Node, Role, TextPosition, TreeInfo, TreeUpdate};
+
+        let ctx = egui::Context::default();
+        let (_fonts, mut editor) = text_descriptor("A😀bc אב\nZ");
+        editor.readonly = true;
+        let id = editor.owner.id.accesskit_id();
+        let mut update = TreeUpdate {
+            nodes: vec![(id, Node::new(Role::TextInput))],
+            tree: Some(TreeInfo::new(id)),
+            tree_id: TreeId::ROOT,
+            focus: id,
+        };
+        accessibility::update(&mut update, std::slice::from_ref(&editor));
+        let run = |value: &str| {
+            update.nodes.iter().find(|(_, node)| node.value() == Some(value)).unwrap().0
+        };
+        let selected = egui::accesskit::TextSelection {
+            anchor: TextPosition { node: run("אב\n"), character_index: 1 },
+            focus: TextPosition { node: run("A😀bc "), character_index: 1 },
+        };
+        let mut queue = InputQueue {
+            session: Some(Session::new(editor.clone())),
+            editors: vec![editor],
+            ..Default::default()
+        };
+        let mut request = ActionRequest {
+            action: Action::SetTextSelection,
+            target_tree: TreeId::ROOT,
+            target_node: id,
+            data: Some(ActionData::SetTextSelection(selected)),
+        };
+        assert!(edit_action(&mut queue, &ctx, &request));
+        let model = &queue.session.as_ref().unwrap().model;
+        assert_eq!(model.selection(), TextSelection { anchor: 7, focus: 1 });
+        assert_eq!(model.text(), "A😀bc אב\nZ");
+        assert_eq!(queue.edits.len(), 1);
+        request.action = Action::ReplaceSelectedText;
+        request.data = Some(ActionData::Value("not admitted".into()));
+        assert!(edit_action(&mut queue, &ctx, &request));
+        assert_eq!(queue.edits.len(), 1);
+        request.action = Action::SetTextSelection;
+        request.data = Some(ActionData::SetTextSelection(egui::accesskit::TextSelection {
+            anchor: TextPosition {
+                node: egui::Id::unique("another-editor").accesskit_id(),
+                character_index: 0,
+            },
+            ..selected
+        }));
+        assert!(edit_action(&mut queue, &ctx, &request));
+        assert_eq!(queue.edits.len(), 1);
     }
 }

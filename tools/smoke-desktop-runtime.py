@@ -172,7 +172,7 @@ class Application:
         print(f"{self.name}: edit {identifier}", flush=True)
         self.control(identifier).wait_enabled()
         self.control(identifier).set_value(value)
-        wait(lambda: self.control(identifier).element().value == value,
+        wait(lambda: (self.control(identifier).element().value or "") == value,
              f"{identifier} accepting its edit", 10)
 
     def key(self, key):

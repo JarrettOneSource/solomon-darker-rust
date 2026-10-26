@@ -1,8 +1,8 @@
-//! Rust screen-space interaction and painting over the existing WebGL2 game loop.
+//! Shared Rust screen-space interaction and painting for native and browser graphics.
 //!
 //! Stock bundle geometry and bitmap text remain the canonical native UI primitives.
-//! egui owns layout, focus, text editing and tessellation; this module owns the browser
-//! input/text adapters and the renderer's GPU resource lifetime. No visual DOM is created.
+//! egui owns layout, focus and tessellation; this module owns canonical editing,
+//! platform input/accessibility adapters and the renderer's GPU resource lifetime.
 
 mod accessibility;
 mod batches;

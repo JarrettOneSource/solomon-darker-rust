@@ -48,6 +48,7 @@ const files = new Map([
       gl.drawArrays = (...args) => {batchDraws++; return drawArrays(...args)};
       actual.indexedBatch = {...JSON.parse(module.indexed_batch_probe(gl)), draws:batchDraws};
       gl.drawArrays = drawArrays;
+      actual.spritePrograms = JSON.parse(module.sprite_program_probe(gl));
       actual.largeShadows = [];
       for (const scale of [1,2]) {
         const width=256*scale,height=192*scale,sigma=12*scale;
@@ -80,6 +81,11 @@ const files = new Map([
       fs.writeFileSync(path.join(process.env.OUT, 'receipt.json'), JSON.stringify(receipt, null, 2));
     }
     assert.deepEqual(errors, []);
+    assert.equal(actual.spritePrograms.length, 12);
+    for (const row of actual.spritePrograms) {
+      assert.ok(row.maxChannelDifference <= 1, `sprite/effect equivalence: ${JSON.stringify(row)}`);
+      assert.equal(row.restored, true, `sprite state restoration: ${JSON.stringify(row)}`);
+    }
     assert.deepEqual(actual.indexedBatch, {
       red:[255,0,0,255], green:[0,255,0,255], outside:[0,0,0,255], capture:[0,255,255,255],
       clipRestored:true, clipDisabled:true, draws:2,

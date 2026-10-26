@@ -1,4 +1,6 @@
 //! Complete font-run typography and the native GPU editing owner.
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::gpu_ui) mod accessibility;
 mod font_run;
 mod geometry;
 pub(super) mod model;
