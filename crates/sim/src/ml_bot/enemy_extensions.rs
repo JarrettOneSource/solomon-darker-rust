@@ -44,14 +44,14 @@ pub fn observe_ml_bot_policy_enemy_extensions(
         let facing = heading_vector(row.heading_deg);
         let (clock, contact, shield, armor) = match row.source {
             EnemySource::Actor(index) => {
-                let actor = &enemies.actors[index];
+                let actor = enemies.actors.get(index).expect("enemy index is live");
                 let contact = match &actor.brain {
                     EnemyBrain::Skeleton(brain) => brain.contact_target_player_id.as_deref(),
                     EnemyBrain::Zombie(brain) => brain.contact_target_player_id.as_deref(),
                     _ => None,
                 };
                 (
-                    enemy_clock(actor),
+                    enemy_clock(&actor),
                     contact,
                     ratio(actor.shield_health, actor.shield_maximum_health),
                     matches!(actor.config.family, EnemyFamilyConfig::Skeleton { armor: true, .. }),
@@ -167,9 +167,9 @@ fn ticks_for_progress(progress: f64, rate: f64) -> Option<f64> {
     (rate > 0.0).then(|| (progress / rate).max(0.0))
 }
 
-fn enemy_clock(actor: &EnemyActor) -> Clock {
+fn enemy_clock(actor: &impl EnemyActorRead) -> Clock {
     let speed = (actor.config.attack_speed * actor.staff_action_factor).max(0.0);
-    match &actor.brain {
+    match actor.brain() {
         EnemyBrain::DemonSkull(brain) => {
             let Some(action) = brain.actions.iter().find(|action| !action.retired) else {
                 return passive(Phase::Approach, 0.0);

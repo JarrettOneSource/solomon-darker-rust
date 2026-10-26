@@ -20,7 +20,7 @@ use crate::enemies::model::*;
 
 #[must_use]
 pub fn native_enemy_actor_plan(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     context: EnemyActorAppearanceContext,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyActorPresentationPlan {
@@ -31,7 +31,7 @@ pub fn native_enemy_actor_plan(
 /// Draw an already sampled/interpolated animation without resampling brain state.
 #[must_use]
 pub fn native_enemy_actor_plan_with_input(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     context: EnemyActorAppearanceContext,
     sample: &NativeEnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
@@ -45,14 +45,14 @@ pub fn native_enemy_actor_plan_with_input(
         | EnemyToken::DireFaculty => 1.0,
         _ => actor.config.scale,
     };
-    let heading = match &actor.brain {
+    let heading = match actor.brain() {
         EnemyBrain::Zombie(_) => actor.heading_deg + sample.zombie_angular_offset_deg,
         EnemyBrain::Faculty(brain) => brain.body_heading_deg,
         _ => actor.heading_deg,
     };
     let facing = layers::facing(token, heading);
     let spawn_age_ticks = context.tick.saturating_sub(actor.spawn_tick);
-    let family = if matches!(&actor.brain, EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured)
+    let family = if matches!(actor.brain(), EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured)
     {
         EnemyFamilyPresentation::default()
     } else if actor.life_state == EnemyLifeState::Dying {
@@ -150,7 +150,7 @@ pub fn native_enemy_actor_plan_with_input(
 }
 
 fn attack_effect_origin(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     layers: &[EnemySpriteLayer],
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> Option<Vec2> {
@@ -261,7 +261,7 @@ pub fn native_maggot_plan_with_input(
 /// dispatch. Families without a capturable image still flush the field manager.
 #[must_use]
 pub fn native_ether_drain_captured_image(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
 ) -> Option<crate::secondary::ether_drain::NativeEtherDrainCapturedImage> {
     use crate::enemies::config::EnemyFamilyConfig;
@@ -285,7 +285,7 @@ pub fn native_ether_drain_captured_image(
             )
         }
         EnemyToken::Zombie => {
-            let EnemyBrain::Zombie(brain) = &actor.brain else { return None };
+            let EnemyBrain::Zombie(brain) = actor.brain() else { return None };
             if brain.head_type > 2 {
                 return None;
             }

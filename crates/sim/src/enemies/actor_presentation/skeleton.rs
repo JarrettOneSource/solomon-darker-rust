@@ -8,14 +8,14 @@ use crate::enemies::EnemyToken;
 use crate::enemies::config::{
     ArrowType, EnemyFamilyConfig, MageElement, SkeletonWeapon, desaturate_color,
 };
-use crate::enemies::model::{EnemyActor, EnemyBrain};
+use crate::enemies::model::{EnemyActorRead, EnemyBrain};
 use crate::float;
 use crate::float::fround;
 
 pub(super) const HEADGEAR_BASES: [usize; 6] = [1477, 1531, 1549, 1495, 1513, 1567];
 
 pub(super) fn skeleton_presentation(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     facing: usize,
     context: EnemyActorAppearanceContext,
     sample: &NativeEnemyPresentationInput,
@@ -191,7 +191,7 @@ pub(super) fn skeleton_presentation(
 }
 
 pub(super) fn archer_presentation(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     facing: usize,
     tick: u64,
     sample: &NativeEnemyPresentationInput,
@@ -200,7 +200,7 @@ pub(super) fn archer_presentation(
     let EnemyFamilyConfig::Archer { headgear, arrow_type, .. } = actor.config.family else {
         unreachable!("Archer family")
     };
-    let EnemyBrain::Archer(brain) = &actor.brain else { unreachable!("Archer brain") };
+    let EnemyBrain::Archer(brain) = actor.brain() else { unreachable!("Archer brain") };
     let limb_facing = super::layers::facing(EnemyToken::Skeleton, brain.strafe.limb_heading_deg);
     let body_entry = 451 + bounded_pose(sample.body_pose, 8) * 18 + facing;
     let head_facing = (facing as i64 + i64::from(actor.head_facing_offset) + 18) as usize % 18;
@@ -240,7 +240,7 @@ pub(super) fn archer_presentation(
 }
 
 pub(super) fn mage_presentation(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     facing: usize,
     context: EnemyActorAppearanceContext,
     sample: &NativeEnemyPresentationInput,
@@ -249,7 +249,7 @@ pub(super) fn mage_presentation(
     let EnemyFamilyConfig::Mage { headgear, cloak, element, .. } = actor.config.family else {
         unreachable!("Mage family")
     };
-    let EnemyBrain::Mage(brain) = &actor.brain else { unreachable!("Mage brain") };
+    let EnemyBrain::Mage(brain) = actor.brain() else { unreachable!("Mage brain") };
     let body_entry = 1729 + bounded_pose(sample.body_pose, 4) * 18 + facing;
     let mut source = vec![
         EnemySpriteLayer::new(
@@ -290,7 +290,7 @@ pub(super) fn mage_presentation(
 }
 
 fn compose_family(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     age: u64,
     source: Vec<EnemySpriteLayer>,
     family: &str,
@@ -396,7 +396,7 @@ fn compose_family(
 
 /// `nativeSkeletonBaseTint` is shared with EtherDrain's accepted head capture.
 #[must_use]
-pub fn native_skeleton_base_tint(actor: &EnemyActor, age: u64, include_fire: bool) -> u32 {
+pub fn native_skeleton_base_tint(actor: &impl EnemyActorRead, age: u64, include_fire: bool) -> u32 {
     if !include_fire && actor.lighting.charge > 0.0 {
         return 0xffffff;
     }

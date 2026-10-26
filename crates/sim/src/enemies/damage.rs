@@ -17,7 +17,7 @@ use crate::painter::WorldPainterOrder;
 impl EnemyWorld {
     pub fn set_hurricane_contact_cooldown(&mut self, actor_id: usize, cooldown: u64) -> bool {
         assert!(cooldown <= 0xffff, "enemy Hurricane cooldown must fit an unsigned short");
-        if let Some(actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) {
+        if let Some(mut actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) {
             actor.hurricane_contact_cooldown = cooldown as f64;
             return true;
         }
@@ -30,7 +30,7 @@ impl EnemyWorld {
 
     /// Staff disable stacks its native movement/action multipliers only on live targets.
     pub fn apply_staff_disable(&mut self, actor_id: usize) {
-        if let Some(actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) {
+        if let Some(mut actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) {
             if actor.life_state == EnemyLifeState::Alive {
                 actor.staff_action_factor = fround(actor.staff_action_factor * 0.5);
                 actor.staff_movement_factor = fround(actor.staff_movement_factor * 0.75);
@@ -45,7 +45,7 @@ impl EnemyWorld {
 
     pub fn apply_staff_heading_perturbation(&mut self, actor_id: usize, delta_degrees: f64) {
         assert!(delta_degrees.is_finite(), "staff heading perturbation must be finite");
-        if let Some(actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) {
+        if let Some(mut actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) {
             if actor.life_state == EnemyLifeState::Alive {
                 actor.heading_deg = ((actor.heading_deg + delta_degrees) % 360.0 + 360.0) % 360.0;
             }
@@ -58,7 +58,7 @@ impl EnemyWorld {
 
     pub fn apply_staff_impact_vertical_velocity(&mut self, actor_id: usize, velocity: f64) {
         assert!(velocity.is_finite(), "staff vertical velocity must be finite");
-        if let Some(actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id)
+        if let Some(mut actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id)
             && actor.life_state == EnemyLifeState::Alive
             && let EnemyBrain::Imp(brain) = &mut actor.brain
         {
@@ -68,7 +68,7 @@ impl EnemyWorld {
 
     pub fn break_skeleton_pike(&mut self, actor_id: usize) -> bool {
         use super::config::SkeletonWeapon;
-        let Some(actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) else {
+        let Some(mut actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) else {
             return false;
         };
         if actor.life_state != EnemyLifeState::Alive
@@ -79,7 +79,7 @@ impl EnemyWorld {
         let EnemyBrain::Skeleton(brain) = &mut actor.brain else {
             return false;
         };
-        let EnemyFamilyConfig::Skeleton { weapon, .. } = &mut actor.config.family else {
+        let EnemyFamilyConfig::Skeleton { weapon, .. } = &mut actor.body.config.family else {
             return false;
         };
         if *weapon != SkeletonWeapon::Pike {
@@ -112,7 +112,7 @@ impl EnemyWorld {
         let Some(actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) else {
             return false;
         };
-        detach_skeleton_pike(actor)
+        detach_skeleton_pike(actor.body, actor.brain)
     }
 
     /// `setBoneyardEnemyBlizzardPushState` also addresses independently registered Maggots.
@@ -126,7 +126,7 @@ impl EnemyWorld {
             accumulator.is_finite() && accumulator >= 0.0,
             "enemy Blizzard push accumulator must be finite and nonnegative"
         );
-        if let Some(actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) {
+        if let Some(mut actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) {
             actor.blizzard_push_accumulator = accumulator;
             actor.blizzard_push_last_tick = Some(last_tick);
             return true;
@@ -159,7 +159,7 @@ impl EnemyWorld {
         let Some(index) = self.actors.iter().position(|actor| actor.id == request.actor_id) else {
             return self.damage_maggot(request);
         };
-        let mut actor = self.actors[index].clone();
+        let mut actor = self.actors.get(index).expect("enemy index is live").snapshot();
         if actor.life_state != EnemyLifeState::Alive {
             return EnemyDamageResult::REJECTED;
         }
@@ -186,7 +186,7 @@ impl EnemyWorld {
                 self.emit_damage_sound(&actor, request.tick, EnemySound::PopShield, 0.8);
                 self.spawn_shield_break_particles(&actor, request.tick, order);
             }
-            self.actors[index] = actor;
+            self.actors.replace(index, actor);
             return EnemyDamageResult {
                 accepted: true,
                 health_damage: 0.0,
@@ -238,7 +238,7 @@ impl EnemyWorld {
                 request.enhanced_effects.unwrap_or(true),
                 order,
             );
-            let EnemyFamilyConfig::Skeleton { armor, headgear, .. } = &mut actor.config.family
+            let EnemyFamilyConfig::Skeleton { armor, headgear, .. } = &mut actor.body.config.family
             else {
                 unreachable!()
             };
@@ -250,7 +250,7 @@ impl EnemyWorld {
             };
             current_health = fround(fround(4.0 + self.draw_unit() * 2.0) + bonus);
             *armor = false;
-            detach_skeleton_pike(&mut actor);
+            detach_skeleton_pike(&mut actor.body, &mut actor.brain);
             actor.config.flags.retain(|flag| *flag != EnemyFlag::Armor);
             actor.config.base_speed = fround(actor.config.base_speed * 1.75);
             actor.config.attack_speed = fround(actor.config.attack_speed * 1.5);
@@ -312,7 +312,7 @@ impl EnemyWorld {
                 ));
             }
         }
-        self.actors[index] = actor;
+        self.actors.replace(index, actor);
         EnemyDamageResult { accepted: true, health_damage, killed, special_death_accepted: killed }
     }
 
@@ -345,11 +345,11 @@ impl EnemyWorld {
 
     fn damage_cocoon(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         request: EnemyDamageRequest,
         order: &mut WorldPainterOrder,
     ) -> EnemyDamageResult {
-        let EnemyBrain::Cocoon(brain) = &actor.brain else { unreachable!() };
+        let EnemyBrain::Cocoon(brain) = actor.brain() else { unreachable!() };
         let prior =
             brain.owner_player_id.as_ref().and_then(|id| self.webbed_players.get(id).copied());
         let hit_pulse =
@@ -365,11 +365,11 @@ impl EnemyWorld {
             }
         }
         if next.is_none() {
-            for candidate in &mut self.actors {
+            for mut candidate in self.actors.iter_mut() {
                 if let EnemyBrain::Cocoon(candidate_brain) = &mut candidate.brain
                     && candidate_brain.owner_player_id == brain.owner_player_id
                 {
-                    candidate.life_state = EnemyLifeState::Dying;
+                    candidate.body.life_state = EnemyLifeState::Dying;
                     candidate_brain.phase = CocoonPhase::Death;
                 }
             }
@@ -504,7 +504,7 @@ impl EnemyWorld {
 
     pub(super) fn emit_damage_sound(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         sound: EnemySound,
         pitch: f64,
@@ -534,7 +534,7 @@ impl EnemyWorld {
 
     fn spawn_shield_break_particles(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         order: &mut WorldPainterOrder,
     ) {
@@ -586,15 +586,15 @@ impl EnemyWorld {
     }
 }
 
-pub(super) fn detach_skeleton_pike(actor: &mut EnemyActor) -> bool {
-    let EnemyBrain::Skeleton(brain) = &mut actor.brain else {
+pub(super) fn detach_skeleton_pike(body: &mut EnemyBody, brain: &mut EnemyBrain) -> bool {
+    let EnemyBrain::Skeleton(brain) = brain else {
         return false;
     };
     if brain.pike.is_none() {
         return false;
     }
-    actor.body_pose = 0.0;
-    actor.head_facing_offset = 0;
+    body.body_pose = 0.0;
+    body.head_facing_offset = 0;
     brain.pike = None;
     brain.action_progress = 0.0;
     brain.contact_target_player_id = None;

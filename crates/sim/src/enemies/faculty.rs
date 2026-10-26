@@ -48,8 +48,11 @@ pub fn step_faculty(
         if reorienting {
             let target = target_by_id(actor.target_player_id.as_deref(), context.players)
                 .map(|target| target.position);
-            actor.heading_deg =
-                actor.path.step_reorientation(actor.heading_deg, actor.position, target);
+            actor.heading_deg = actor.body.path.step_reorientation(
+                actor.body.heading_deg,
+                actor.body.position,
+                target,
+            );
         } else if fleeing {
             move_toward_target(
                 world,
@@ -159,7 +162,7 @@ pub fn step_faculty(
 
 pub fn reset_faculty(actor: &mut EnemyActor) {
     let EnemyBrain::Faculty(brain) = &mut actor.brain else { panic!("Faculty brain required") };
-    actor.body_pose = 0.0;
+    actor.body.body_pose = 0.0;
     brain.action = None;
     brain.body_pose = 0.0;
     brain.hand_mask = 0;

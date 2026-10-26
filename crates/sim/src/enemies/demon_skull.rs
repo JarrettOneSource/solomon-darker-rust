@@ -26,9 +26,10 @@ pub fn step_demon_skull(
     let EnemyBrain::DemonSkull(brain) = &mut actor.brain else {
         panic!("DemonSkull brain required")
     };
-    let admitted = context.native_visibility.is_none_or(|visible| visible(actor.position).admitted);
+    let admitted =
+        context.native_visibility.is_none_or(|visible| visible(actor.body.position).admitted);
     prepare_native_demon_skull_tick(brain, admitted);
-    let effect = context.ability_effect(actor.id);
+    let effect = context.ability_effect(actor.body.id);
     let disrupted = effect.disrupted_ticks > 0;
     let fleeing = effect.flee_ticks > 0;
     let active = effect.time_scale >= 9.999_999_747_378_752e-5;
@@ -43,8 +44,11 @@ pub fn step_demon_skull(
             if actor.path.reorientation_ticks_remaining > 0 {
                 let target = target_by_id(actor.target_player_id.as_deref(), context.players)
                     .map(|target| target.position);
-                actor.heading_deg =
-                    actor.path.step_reorientation(actor.heading_deg, actor.position, target);
+                actor.heading_deg = actor.body.path.step_reorientation(
+                    actor.body.heading_deg,
+                    actor.body.position,
+                    target,
+                );
             } else {
                 move_toward_target(
                     world,
@@ -81,13 +85,16 @@ pub fn step_demon_skull(
     let EnemyBrain::DemonSkull(brain) = &mut actor.brain else { unreachable!() };
     let recoil = brain.recoil;
     if recoil.x * recoil.x + recoil.y * recoil.y > 1.0 {
-        actor.position = context.geometry.resolve_movement(EnemyMovementRequest {
-            actor_id: actor.id,
-            position: actor.position,
+        actor.body.position = context.geometry.resolve_movement(EnemyMovementRequest {
+            actor_id: actor.body.id,
+            position: actor.body.position,
             delta: recoil,
-            radius: actor.config.collision_radius,
+            radius: actor.body.config.collision_radius,
             purpose: EnemyMovementPurpose::Movement,
-            requested_position: Vec2::new(actor.position.x + recoil.x, actor.position.y + recoil.y),
+            requested_position: Vec2::new(
+                actor.body.position.x + recoil.x,
+                actor.body.position.y + recoil.y,
+            ),
         });
         brain.recoil = Vec2::new(fround(recoil.x * 0.5), fround(recoil.y * 0.5));
     } else {
@@ -103,12 +110,13 @@ pub fn step_demon_skull(
         NativeDemonSkullControllerContext {
             alternate_player: false,
             has_action: !brain.actions.is_empty(),
-            heading_deg: actor.heading_deg,
-            health_ratio: actor.current_health / actor.config.maximum_health,
+            heading_deg: actor.body.heading_deg,
+            health_ratio: actor.body.current_health / actor.body.config.maximum_health,
             line_of_sight,
-            movement_scale: actor.config.scale,
+            movement_scale: actor.body.config.scale,
             scream_playing: world.demon_skull_encounter.scream_stream_ticks_remaining > 0,
-            target_distance_squared: target.map(|target| squared(actor.position, target.position)),
+            target_distance_squared: target
+                .map(|target| squared(actor.body.position, target.position)),
         },
     );
     if step.increment_attack_seed {
@@ -129,11 +137,11 @@ pub fn step_demon_skull(
         shake(world, actor, context.tick, CameraShakeAttenuation::Hit, 8.0);
     }
     let EnemyBrain::DemonSkull(brain) = &mut actor.brain else { unreachable!() };
-    actor.body_pose = brain.body_pose;
+    actor.body.body_pose = brain.body_pose;
     brain.phase = if brain.actions.is_empty() { BossPhase::RangeControl } else { BossPhase::Cast };
 }
 
-fn clear_line(context: &EnemyStepContext<'_>, actor: &EnemyActor, end: Vec2) -> bool {
+fn clear_line(context: &EnemyStepContext<'_>, actor: &impl EnemyActorRead, end: Vec2) -> bool {
     !context.geometry.projectile_world_blocked(EnemyProjectileWorldQuery::Line {
         projectile_id: actor.id,
         start: actor.position,

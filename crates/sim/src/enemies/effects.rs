@@ -20,8 +20,8 @@ pub struct DeathEffectOwner {
     pub position: Vec2,
 }
 
-impl From<&EnemyActor> for DeathEffectOwner {
-    fn from(actor: &EnemyActor) -> Self {
+impl<T: EnemyActorRead> From<&T> for DeathEffectOwner {
+    fn from(actor: &T) -> Self {
         Self { id: actor.id, position: actor.position }
     }
 }

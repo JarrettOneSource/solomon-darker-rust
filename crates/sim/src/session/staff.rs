@@ -468,14 +468,14 @@ impl GameSession {
 
 fn staff_targets(world: &BoneyardWorld) -> Vec<StaffCombatTarget> {
     let mut rows = Vec::new();
-    for actor in &world.enemies.actors {
-        if boneyard_enemy_actor_flags(actor) & 2 == 0 {
+    for actor in world.enemies.actors.iter() {
+        if boneyard_enemy_actor_flags(&actor) & 2 == 0 {
             continue;
         }
         rows.push(StaffCombatTarget {
             actor_id: actor.id,
             row: NativeStaffTarget {
-                collision_radius: boneyard_enemy_collision_radius(actor),
+                collision_radius: boneyard_enemy_collision_radius(&actor),
                 id: format!("enemy:{}", actor.id),
                 position: actor.position,
                 registration_order: Some(actor.native_registration_order),

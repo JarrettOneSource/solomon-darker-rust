@@ -6,8 +6,37 @@ behavior across native and WebAssembly builds.
 ## One simulation
 
 Game rules live in `solomon-sim`. Browser, native, hosted, and modded play use the
-same session types and update order. Typed contiguous collections keep actor
-iteration stable, preserving the order of contacts and random-number consumption.
+same session types and update order. Contacts, actor admission, and random-number
+consumption retain their defined order on both targets.
+
+## Component storage and simulation order
+
+`bevy_ecs` supplies component storage and typed queries. Domain stores own their
+entity handles, admission order, and checkpoint conversion. Enemy bodies and
+controller brains are separate components; ground loot separates its body from
+the reward collected by a player. A small particle keeps its related fields together.
+
+Removing an entity can move another entity within an ECS table. The ordered
+handle index preserves survivor order, which determines contact selection, RNG
+draws, and painter registration. Births enter at the owning system's boundary:
+secondary effects wait for the next actor pass, while terminal enemy children
+can advance later in the same pass.
+
+Tick functions run in their declared sequence. Damage accepted by one phase can
+retire a target or create an effect before the next phase runs, and several phases
+consume the same random stream. Parallel work must preserve those dependencies
+and demonstrate a benefit on an equivalent workload before changing that sequence.
+
+Enemy controllers use a working record and commit its components together. Peer
+queries during the action observe the previous committed record. Mutating the
+live body throughout an action would change those queries. Read-only targeting
+and rendering borrow components; they do not need working copies.
+
+Save and snapshot fields retain their supported layout and game identities.
+ECS handles stay local to the store. The flat deserialization records also retain
+their declared struct names: supported save-import decoders use typed field and
+enum visitors to translate values. `serde(flatten)` buffers untyped values and
+would bypass those conversions.
 
 ## Numeric contract
 

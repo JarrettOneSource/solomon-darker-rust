@@ -13,12 +13,12 @@ use crate::heading::heading_degrees_from_vector;
 pub const MOVEMENT_CADENCE_TICKS: u64 = 2;
 
 #[must_use]
-pub fn staff_attack_speed(actor: &EnemyActor) -> f64 {
+pub fn staff_attack_speed(actor: &impl EnemyActorRead) -> f64 {
     actor.config.attack_speed * actor.staff_action_factor
 }
 #[must_use]
-pub fn staff_movement_speed(actor: &EnemyActor) -> f64 {
-    let speed = match &actor.brain {
+pub fn staff_movement_speed(actor: &impl EnemyActorRead) -> f64 {
+    let speed = match actor.brain() {
         EnemyBrain::DemonSkull(brain) => {
             brain.speed / actor.config.scale * (actor.config.base_speed / 4.0)
         }

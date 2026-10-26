@@ -28,7 +28,7 @@ pub(super) struct LootEnemySnapshot {
 impl LootEnemySnapshot {
     pub(super) fn new(enemies: &EnemyWorld) -> Self {
         let mut positions = Vec::with_capacity(enemies.actors.len() + enemies.maggots.len());
-        for actor in &enemies.actors {
+        for actor in enemies.actors.iter() {
             positions.push((actor.id, actor.position));
         }
         for actor in &enemies.maggots {

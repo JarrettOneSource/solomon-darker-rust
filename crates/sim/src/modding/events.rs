@@ -93,7 +93,7 @@ impl GameSimulationEventSnapshot {
         }
         let world = state.boneyard.as_ref().map(|world| {
             let mut actors = Vec::with_capacity(world.enemies.actors.len());
-            for actor in &world.enemies.actors {
+            for actor in world.enemies.actors.iter() {
                 actors.push(NativeEnemyActorEventSnapshot {
                     id: actor.id,
                     native_type_id: actor.config.native_type_id,

@@ -624,7 +624,7 @@ fn player_contact_source(
     if let Some(actor) = world.enemies.actors.iter().find(|actor| actor.id == damage.actor_id) {
         return Some(EnemyPlayerDamageSource {
             position: actor.position,
-            collision_radius: boneyard_enemy_collision_radius(actor),
+            collision_radius: boneyard_enemy_collision_radius(&actor),
             reflectable_actor_id: Some(actor.id),
         });
     }

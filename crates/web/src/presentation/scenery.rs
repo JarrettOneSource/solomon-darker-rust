@@ -23,7 +23,7 @@ pub fn scenery_actor_poses(
 ) -> NativeTreeActorPoses {
     let mut poses =
         NativeTreeActorPoses { players: players.into_iter().collect(), ..Default::default() };
-    for actor in &world.enemies.actors {
+    for actor in world.enemies.actors.iter() {
         if matches!(&actor.brain, EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured)
         {
             continue;
@@ -34,7 +34,7 @@ pub fn scenery_actor_poses(
                 sample
             } else {
                 fallback = native_enemy_presentation_input(
-                    actor,
+                    &actor,
                     EnemyActorAppearanceContext {
                         tick: world.ticks,
                         application_tick: world.ticks,

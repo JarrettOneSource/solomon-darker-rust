@@ -131,7 +131,7 @@ fn current_hit_reaction_and_visible_feedback_have_independent_lifetimes() {
         // Source finishes the independently constructed initial store at tick zero.
         world.last_step_tick = Some(0);
         let mut request =
-            EnemyDamageRequest::new(world.actors[0].id, 0.125, 0, Some("hero".into()));
+            EnemyDamageRequest::new(world.actors.get(0).unwrap().id, 0.125, 0, Some("hero".into()));
         request.hit_strength = case.hit_strength;
         request.suppress_hit_reaction = case.suppress_hit_reaction;
         let result = world.damage(request, Some(&mut order));
@@ -164,7 +164,7 @@ fn current_hit_reaction_and_visible_feedback_have_independent_lifetimes() {
                     None,
                 );
             }
-            let actor = &world.actors[0];
+            let actor = world.actors.get(0).unwrap();
             let context = format!("{} tick{tick}", case.seed);
             assert_eq!(actor.current_health, frame.health, "{context} health");
             assert_eq!(actor.hit_feedback.strength, frame.hit.strength, "{context} hit strength");

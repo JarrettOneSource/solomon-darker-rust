@@ -1302,7 +1302,7 @@ fn target_rows(enemies: &EnemyWorld) -> Vec<TargetRow> {
     let mut rows = Vec::new();
     for (index, target) in enemies.spell_targets().into_iter().enumerate() {
         let (actor_id, current_health, maximum_health) = if index < enemies.actors.len() {
-            let actor = &enemies.actors[index];
+            let actor = enemies.actors.get(index).expect("enemy index is live");
             (actor.id, actor.current_health, actor.config.maximum_health)
         } else {
             let actor = &enemies.maggots[index - enemies.actors.len()];

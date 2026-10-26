@@ -277,7 +277,7 @@ pub fn step_projectile_knockbacks(
 
 pub fn spawn_burning_skeleton_fire(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     order: &mut WorldPainterOrder,
 ) {
@@ -293,7 +293,7 @@ pub fn spawn_burning_skeleton_fire(
     {
         return;
     }
-    let copies = if matches!(actor.brain, EnemyBrain::Mage(_)) { 2 } else { 1 };
+    let copies = if matches!(actor.brain(), EnemyBrain::Mage(_)) { 2 } else { 1 };
     for _ in 0..copies {
         if world.steering_rng.draw_integer(5) != 3 {
             continue;

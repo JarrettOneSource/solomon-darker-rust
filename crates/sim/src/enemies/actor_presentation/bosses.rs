@@ -5,14 +5,14 @@ use super::model::*;
 use super::sample::*;
 use crate::enemies::EnemyToken;
 use crate::enemies::config::EnemyFamilyConfig;
-use crate::enemies::model::{EnemyActor, EnemyBrain, EnemyLifeState};
+use crate::enemies::model::{EnemyActorRead, EnemyBrain, EnemyLifeState};
 use crate::enemies::presentation::native_death_magic_layers;
 use crate::float;
 use crate::float::fround;
 use crate::{NativeRng, Vec2};
 
 pub(super) fn faculty(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     facing: usize,
     tick: u64,
     sample: &NativeEnemyPresentationInput,
@@ -21,7 +21,7 @@ pub(super) fn faculty(
     let EnemyFamilyConfig::Faculty(appearance) = &actor.config.family else {
         unreachable!("Faculty appearance")
     };
-    let EnemyBrain::Faculty(brain) = &actor.brain else { unreachable!("Faculty brain") };
+    let EnemyBrain::Faculty(brain) = actor.brain() else { unreachable!("Faculty brain") };
     let pose = sample.body_pose.trunc() as usize;
     let robe_pose = if pose > 0 { 4 + pose } else { sample.gait_pose.trunc() as usize };
     let body_entry = 1 + pose * 18 + facing;
@@ -133,12 +133,12 @@ pub(super) fn faculty(
 }
 
 pub(super) fn heartmonger(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     facing: usize,
     sample: &NativeEnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyFamilyPresentation {
-    let EnemyBrain::Heartmonger(brain) = &actor.brain else { unreachable!("Heartmonger brain") };
+    let EnemyBrain::Heartmonger(brain) = actor.brain() else { unreachable!("Heartmonger brain") };
     let legs = 200 + sample.gait_pose.trunc() as usize * 18 + facing;
     let torso = 146 + sample.body_pose.trunc() as usize * 18 + facing;
     let head = 110 + brain.head_variant as usize * 18 + facing;
@@ -169,11 +169,11 @@ pub(super) fn heartmonger(
 }
 
 pub(super) fn demon_skull(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyFamilyPresentation {
-    let EnemyBrain::DemonSkull(brain) = &actor.brain else { unreachable!("DemonSkull brain") };
+    let EnemyBrain::DemonSkull(brain) = actor.brain() else { unreachable!("DemonSkull brain") };
     let mut rng = NativeRng::new(actor.id as i64 + tick as i64);
     let bob = fround(float::sin(radians(brain.body_phase_deg)) * 10.0 - 25.0);
     let scale = actor.config.scale;

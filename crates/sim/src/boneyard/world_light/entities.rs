@@ -130,9 +130,12 @@ pub fn collect_boneyard_entity_lights(
     } = presentation;
     let mut providers = Vec::new();
     let mut misc = Vec::new();
-    for actor in &enemies.actors {
-        let sources =
-            native_enemy_light_sources(NativeEnemyLightOwner::from(actor), frame, multiple_shadows);
+    for actor in enemies.actors.iter() {
+        let sources = native_enemy_light_sources(
+            NativeEnemyLightOwner::from(&actor),
+            frame,
+            multiple_shadows,
+        );
         if !sources.is_empty() {
             providers.push(WorldLightOwner {
                 registration: PainterRegistration {

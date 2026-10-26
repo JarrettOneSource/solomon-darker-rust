@@ -130,7 +130,7 @@ pub struct NativeEnemyPresentationInput {
 
 #[must_use]
 pub fn native_enemy_presentation_input(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     context: EnemyActorAppearanceContext,
 ) -> NativeEnemyPresentationInput {
     let action = if actor.life_state == EnemyLifeState::Alive { action(actor) } else { None };
@@ -162,7 +162,7 @@ pub fn native_enemy_presentation_input(
         stride_phase_deg: actor.stride_phase_deg,
         ..Default::default()
     };
-    match &actor.brain {
+    match actor.brain() {
         EnemyBrain::Skeleton(brain) => {
             sample.action_progress = brain.action_progress;
             sample.vertical_offset = brain.vertical_offset;
@@ -327,9 +327,9 @@ pub fn native_enemy_presentation_input(
     sample
 }
 
-fn action(actor: &EnemyActor) -> Option<NativeEnemyAction> {
+fn action(actor: &impl EnemyActorRead) -> Option<NativeEnemyAction> {
     use NativeEnemyAction as Action;
-    match &actor.brain {
+    match actor.brain() {
         EnemyBrain::Skeleton(brain) if brain.phase == SkeletonPhase::Attack => {
             Some(match brain.action {
                 SkeletonAction::Pike => Action::SkeletonPike,

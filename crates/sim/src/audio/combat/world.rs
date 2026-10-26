@@ -114,7 +114,7 @@ pub fn native_boneyard_enemy_ambient_requests(
     hit_gain: &dyn Fn(Vec2) -> f64,
 ) -> [BoneyardEnemyAmbientRequest; 10] {
     let mut gains = [0.0_f64; 10];
-    for actor in &world.actors {
+    for actor in world.actors.iter() {
         if actor.life_state == EnemyLifeState::Dying {
             if actor.config.enemy_token == EnemyToken::DemonSkull {
                 gains[0] = 1.0;

@@ -463,9 +463,9 @@ impl BoneyardWorld {
                     safety_bodies.push((player.position, PLAYER_CHARACTER_RADIUS));
                 }
             }
-            for actor in &self.enemies.actors {
-                if boneyard_enemy_actor_flags(actor) != 0 {
-                    safety_bodies.push((actor.position, boneyard_enemy_collision_radius(actor)));
+            for actor in self.enemies.actors.iter() {
+                if boneyard_enemy_actor_flags(&actor) != 0 {
+                    safety_bodies.push((actor.position, boneyard_enemy_collision_radius(&actor)));
                 }
             }
             for maggot in &self.enemies.maggots {
@@ -659,14 +659,14 @@ impl BoneyardWorld {
     #[must_use]
     pub fn enemy_bodies(&self) -> Vec<ActorPhysicsBody> {
         let mut bodies = Vec::new();
-        for actor in &self.enemies.actors {
+        for actor in self.enemies.actors.iter() {
             if !matches!(actor.brain, EnemyBrain::Cocoon(_))
-                && boneyard_enemy_actor_flags(actor) != 0
+                && boneyard_enemy_actor_flags(&actor) != 0
             {
                 let mut body = enemy_collision_body(
                     format!("enemy-{}", actor.id),
                     actor.position,
-                    boneyard_enemy_collision_radius(actor),
+                    boneyard_enemy_collision_radius(&actor),
                 );
                 body.collision_recipient = match &actor.brain {
                     EnemyBrain::Wraith(brain) => brain.collision_recipient,
@@ -718,7 +718,7 @@ impl BoneyardWorld {
     }
 
     fn commit_enemy_positions(&mut self, bodies: &[ActorPhysicsBody]) {
-        for actor in &mut self.enemies.actors {
+        for mut actor in self.enemies.actors.iter_mut() {
             let id = format!("enemy-{}", actor.id);
             if let Some(body) = bodies.iter().find(|body| body.id == id) {
                 actor.position = body.position;
@@ -734,7 +734,8 @@ impl BoneyardWorld {
 
     fn staff_hostile_body(&self, body_id: &str) -> bool {
         self.enemies.actors.iter().any(|actor| {
-            body_id == format!("enemy-{}", actor.id) && boneyard_enemy_actor_flags(actor) & 0x2 != 0
+            body_id == format!("enemy-{}", actor.id)
+                && boneyard_enemy_actor_flags(&actor) & 0x2 != 0
         }) || self.enemies.maggots.iter().any(|maggot| {
             body_id == format!("enemy-{}", maggot.id)
                 && maggot.life_state == EnemyLifeState::Alive

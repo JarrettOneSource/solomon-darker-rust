@@ -196,7 +196,7 @@ impl Game {
             .session
             .boneyard
             .iter()
-            .flat_map(|world| &world.enemies.actors)
+            .flat_map(|world| world.enemies.actors.iter())
             // Source projectBoneyardEnemies omits the captured spider from snapshots.
             .filter(|actor| {
                 !matches!(&actor.brain, EnemyBrain::Spider(brain)

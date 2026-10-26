@@ -267,7 +267,7 @@ fn projectile_world_queries_contacts_hazards_and_retirement_match_the_website() 
             &geometry,
             Some(&mut order),
         );
-        let owner = world.actors[0].clone();
+        let owner = world.actors.get(0).unwrap().snapshot();
         let input = &case["options"];
         spawn_projectile(
             &mut world,

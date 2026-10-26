@@ -13,7 +13,7 @@ use crate::painter::WorldPainterOrder;
 impl EnemyWorld {
     pub(super) fn spawn_unbind(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         order: &mut WorldPainterOrder,
     ) {
@@ -111,7 +111,7 @@ impl EnemyWorld {
 
     pub(super) fn spawn_portal_terminal_effects(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         enhanced_effects: bool,
         order: &mut WorldPainterOrder,
@@ -173,7 +173,7 @@ impl EnemyWorld {
 
     pub(super) fn spawn_zombie_terminal_effects(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         enhanced_effects: bool,
         order: &mut WorldPainterOrder,
@@ -300,7 +300,7 @@ impl EnemyWorld {
 
     pub(super) fn spawn_wraith_terminal_effects(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         enhanced_effects: bool,
         order: &mut WorldPainterOrder,
@@ -448,7 +448,7 @@ impl EnemyWorld {
 
     pub(super) fn spawn_coffin_terminal_effects(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         enhanced_effects: bool,
         order: &mut WorldPainterOrder,

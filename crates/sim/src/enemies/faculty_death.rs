@@ -14,7 +14,7 @@ use crate::painter::WorldPainterOrder;
 
 pub fn spawn_faculty_dying_effects(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     death_tick: u64,
     enhanced_effects: bool,
@@ -58,7 +58,7 @@ pub fn spawn_faculty_dying_effects(
 
 pub fn spawn_faculty_finale(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     enhanced_effects: bool,
     order: &mut WorldPainterOrder,

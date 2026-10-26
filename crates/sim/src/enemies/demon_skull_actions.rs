@@ -48,7 +48,7 @@ pub fn begin_demon_skull_action(
     brain.actions.push(action);
     if matches!(kind, DemonSkullActionKind::Scream | DemonSkullActionKind::Flair) {
         world.demon_skull_encounter.scream_stream_ticks_remaining = NATIVE_DEMON_SKULL_SCREAM_TICKS;
-        let mut event = EnemyEvent::new(EnemyEventKind::EnemyStream, actor.id, context.tick);
+        let mut event = EnemyEvent::new(EnemyEventKind::EnemyStream, actor.body.id, context.tick);
         event.stream = Some("unholy-scream".to_owned());
         world.emit_event(event);
         brain.body_pose = 1.0;
@@ -57,7 +57,7 @@ pub fn begin_demon_skull_action(
     if matches!(kind, DemonSkullActionKind::Eyes | DemonSkullActionKind::Mouth) {
         brain.charge_glow = 0.0;
         world.emit_action_sound(
-            DeathEffectOwner { id: actor.id, position: actor.position },
+            DeathEffectOwner { id: actor.body.id, position: actor.body.position },
             context.tick,
             EnemySound::EyeLaserCharge,
             authored_attack_speed * if kind == DemonSkullActionKind::Eyes { 2.0 } else { 0.5 },
@@ -86,7 +86,7 @@ pub fn step_demon_skull_actions(
         actions.push(step_action(world, actor, action, context, order));
     }
     let EnemyBrain::DemonSkull(brain) = &mut actor.brain else { unreachable!() };
-    actor.body_pose = brain.body_pose;
+    actor.body.body_pose = brain.body_pose;
     brain.actions = actions;
 }
 
@@ -357,7 +357,7 @@ fn recover(brain: &mut DemonSkullBrain, scale: f64) {
 }
 pub(super) fn shake(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     attenuation: CameraShakeAttenuation,
     radius: f64,

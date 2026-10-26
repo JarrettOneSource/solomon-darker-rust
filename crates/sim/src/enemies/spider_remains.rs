@@ -1,6 +1,6 @@
 //! Dead Spider slide, decal admission and shared lifetime from `native-dead-spider.ts`.
-use super::model::EnemyActor;
 use super::world::EnemyWorld;
+use crate::enemies::model::EnemyActorRead;
 use crate::float::fround;
 use crate::spells::targeting::direction_from_heading;
 use crate::{NativeRng, Vec2};
@@ -108,7 +108,7 @@ pub fn native_dead_spider_entry(source: &DeadSpiderState) -> Option<usize> {
     if index < 20 { Some(208 + index) } else { None }
 }
 impl EnemyWorld {
-    pub fn spawn_spider_remains(&mut self, actor: &EnemyActor, tick: u64) {
+    pub fn spawn_spider_remains(&mut self, actor: &impl EnemyActorRead, tick: u64) {
         self.spider_remains.push(SpiderRemains {
             id: self.next_death_effect_id,
             spawn_tick: tick,

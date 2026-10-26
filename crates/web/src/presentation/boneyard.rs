@@ -58,7 +58,7 @@ pub(super) fn capture_enemies(session: &GameSession) -> Option<EnemyPresentation
             secondary_abilities: Some(&session.secondary),
         },
     );
-    let actor_context = |actor: &solomon_sim::enemies::model::EnemyActor| {
+    let actor_context = |actor: &solomon_sim::enemies::model::EnemyActorRef<'_>| {
         let target = actor.target_player_id.as_ref().and_then(|id| session.participants.get(id));
         let pike_target_position = match &actor.brain {
             EnemyBrain::Skeleton(brain) => brain.pike.as_ref().map(|pike| {

@@ -23,7 +23,7 @@ use solomon_sim::boneyard::world_light::{
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::crow_blindness::native_crow_blindness_frame;
 use solomon_sim::enemies::EnemyToken;
-use solomon_sim::enemies::model::{EnemyActor, EnemyEvent};
+use solomon_sim::enemies::model::{EnemyActorRef, EnemyEvent};
 use solomon_sim::enemies::puppet_hits::EnemyPuppetHitKind;
 use solomon_sim::enemies::underlay::native_enemy_directional_shadow_family;
 use solomon_sim::hub::painter::PainterLayer;
@@ -454,7 +454,7 @@ impl BattleViews {
             &effect_players,
             &world.death_weapons,
         );
-        let actor_tint = |actor: &EnemyActor| {
+        let actor_tint = |actor: &EnemyActorRef<'_>| {
             native_secondary_target_material_tint(
                 tint_at(actor.position),
                 native_secondary_target_effect(
@@ -464,7 +464,7 @@ impl BattleViews {
                 ),
             )
         };
-        let actor_shadows = |actor: &EnemyActor| {
+        let actor_shadows = |actor: &EnemyActorRef<'_>| {
             let enabled = native_enemy_directional_shadow_family(actor.config.enemy_token)
                 && (frame.settings.complex_shadows
                     || actor.config.enemy_token == EnemyToken::Heartmonger);

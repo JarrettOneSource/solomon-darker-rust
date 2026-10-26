@@ -114,7 +114,7 @@ pub fn fire_demon_skull_eyes(
         }
     }
     let EnemyBrain::DemonSkull(brain) = &mut actor.brain else { unreachable!() };
-    brain.recoil = direction(actor.heading_deg + 180.0, 10.0);
+    brain.recoil = direction(actor.body.heading_deg + 180.0, 10.0);
 }
 
 pub fn bite_demon_skull(
@@ -625,7 +625,7 @@ fn spawn_rising_burst(
 
 pub fn step_demon_skull_mouth_beam(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     context: &EnemyStepContext<'_>,
     power: f64,
     order: &mut WorldPainterOrder,
@@ -784,7 +784,7 @@ fn contact(
 
 pub(super) fn flash(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     screen: EnemyScreenFlash,
 ) {

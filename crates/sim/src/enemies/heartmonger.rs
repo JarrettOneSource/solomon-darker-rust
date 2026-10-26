@@ -289,8 +289,11 @@ pub fn step_heartmonger(
         if actor.path.reorientation_ticks_remaining > 0 {
             let target = target_by_id(actor.target_player_id.as_deref(), context.players)
                 .map(|target| target.position);
-            actor.heading_deg =
-                actor.path.step_reorientation(actor.heading_deg, actor.position, target);
+            actor.heading_deg = actor.body.path.step_reorientation(
+                actor.body.heading_deg,
+                actor.body.position,
+                target,
+            );
         } else {
             let radial = if effect.flee_ticks > 0 {
                 RadialDirection::Retreat
@@ -332,7 +335,7 @@ pub fn step_heartmonger(
 impl EnemyWorld {
     pub(super) fn spawn_heartmonger_departure(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         order: &mut WorldPainterOrder,
     ) {
@@ -363,8 +366,8 @@ impl EnemyWorld {
         );
         self.boss_spells.push(soul);
     }
-    pub fn detach_heartmonger_crows(&mut self, actor: &EnemyActor, tick: u64) {
-        let EnemyBrain::Heartmonger(brain) = &actor.brain else { return };
+    pub fn detach_heartmonger_crows(&mut self, actor: &impl EnemyActorRead, tick: u64) {
+        let EnemyBrain::Heartmonger(brain) = actor.brain() else { return };
         let crows = detach_native_heartmonger_crows(
             brain,
             &mut self.steering_rng,

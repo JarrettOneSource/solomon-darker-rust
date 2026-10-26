@@ -54,7 +54,7 @@ impl EnemyWorld {
             }
         }
         let mut owners = BTreeMap::new();
-        for actor in &self.actors {
+        for actor in self.actors.iter() {
             if actor.life_state != EnemyLifeState::Alive
                 || actor.config.enemy_token != EnemyToken::Coffin
             {

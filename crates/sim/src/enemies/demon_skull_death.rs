@@ -154,11 +154,11 @@ pub fn step_dying_demon_skull(
     let EnemyBrain::DemonSkull(brain) = &mut actor.brain else { unreachable!() };
     brain.body_pose = body_pose;
     brain.body_offset = body_offset;
-    brain.body_heading_deg = actor.heading_deg;
+    brain.body_heading_deg = actor.body.heading_deg;
     brain.death_countdown = countdown;
 }
 
-fn flash(world: &mut EnemyWorld, actor: &EnemyActor, tick: u64, alpha: f64, loss: f64) {
+fn flash(world: &mut EnemyWorld, actor: &impl EnemyActorRead, tick: u64, alpha: f64, loss: f64) {
     let mut event = EnemyEvent::new(EnemyEventKind::EnemyScreenFlash, actor.id, tick);
     event.source_position = Some(actor.position);
     event.screen_flash = Some(EnemyScreenFlash {

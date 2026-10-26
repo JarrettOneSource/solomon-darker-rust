@@ -70,6 +70,7 @@ pub mod spider;
 pub mod spider_movement;
 pub mod spider_remains;
 mod step;
+mod storage;
 pub mod targeting;
 pub mod tendrils;
 mod terminal_effects;

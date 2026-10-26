@@ -11,7 +11,7 @@ use crate::painter::{WorldManagerLane, WorldPainterOrder};
 
 pub fn attack_marker(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     target_player_id: Option<String>,
     order: &mut WorldPainterOrder,
@@ -26,7 +26,7 @@ pub fn attack_marker(
 
 pub fn direct_player_damage(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     target_player_id: Option<&str>,
     event_id: usize,
 ) {
@@ -70,7 +70,7 @@ pub fn direct_player_damage(
 
 pub fn direct_contact_player_damage(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     target_player_id: Option<&str>,
     players: &[EnemyTarget],
     center_reach: f64,

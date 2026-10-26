@@ -115,7 +115,7 @@ impl PreparedModHost {
         }
         let mut native_targets = Vec::new();
         if let Some(world) = &game.boneyard {
-            for actor in &world.enemies.actors {
+            for actor in world.enemies.actors.iter() {
                 if actor.life_state == EnemyLifeState::Alive {
                     native_targets.push(ModSpellEffectTarget {
                         id: actor.id as u64,

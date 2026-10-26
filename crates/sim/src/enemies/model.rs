@@ -1,7 +1,6 @@
-//! The enemy actor, family brains and combat messages from Website `enemies/model.ts`.
-//!
-//! Rules live in the family modules. Public fields retain the reference's names so the
-//! renderer, wave director and spell contacts can consume one actor row without adapters.
+//! Enemy body and controller components, their checkpoint record, and combat messages.
+//! Family modules own behavior; the entity store provides borrowed views to targeting
+//! and presentation without copying controller state.
 
 use super::config::EnemyConfig;
 use super::path::NativeEnemyPathState;
@@ -496,6 +495,7 @@ pub struct CocoonBrain {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub enum EnemyBrain {
     Skeleton(SkeletonBrain),
     Archer(ArcherBrain),
@@ -523,7 +523,8 @@ pub struct EnemyLighting {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct EnemyActor {
+#[derive(bevy_ecs::component::Component)]
+pub struct EnemyBody {
     pub ether_drain_captured: bool,
     pub hit_feedback: PuppetHit,
     /// Native +0x80 controls movement independently of visible feedback +0x78.
@@ -532,7 +533,6 @@ pub struct EnemyActor {
     pub blizzard_push_last_tick: Option<u64>,
     pub body_gait_phase: f64,
     pub body_pose: f64,
-    pub brain: EnemyBrain,
     pub config: EnemyConfig,
     pub current_health: f64,
     pub death_epoch: Option<u64>,
@@ -574,6 +574,18 @@ pub struct EnemyActor {
     pub terminal_emitted: bool,
     pub wave_ordinal: u64,
 }
+
+/// Owned constructor, checkpoint and controller-update record. A live enemy keeps
+/// its body and brain as separate components; an action commits them together.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "persistence", derive(serde::Deserialize))]
+#[cfg_attr(feature = "persistence", serde(from = "super::storage::EnemyActorFields"))]
+pub struct EnemyActor {
+    pub body: EnemyBody,
+    pub brain: EnemyBrain,
+}
+
+pub use super::storage::{EnemyActorMut, EnemyActorRead, EnemyActorRef, EnemyActors};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyTarget {

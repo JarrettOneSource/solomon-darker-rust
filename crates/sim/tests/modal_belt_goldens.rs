@@ -132,7 +132,7 @@ fn initial(case: &Value) -> GameSession {
             &OpenArena,
             Some(&mut session.painter_order),
         );
-        for actor in &mut world.enemies.actors {
+        for mut actor in world.enemies.actors.iter_mut() {
             actor.heading_deg = 180.0;
             actor.next_movement_tick = 9_007_199_254_740_991;
         }
@@ -146,7 +146,7 @@ fn snapshot(session: &GameSession) -> Value {
     let writes: Vec<_> = flashes.writes.iter().map(|row| json!({ "order":row.order,
         "tick":row.tick,"worldKey":row.world_key,"position":secondary_rows::point_snapshot(row.position),
         "flash":secondary_rows::flash_snapshot(row.flash),"onlyIfClear":row.only_if_clear })).collect();
-    let enemies: Vec<_> = session.boneyard.iter().flat_map(|world| &world.enemies.actors).map(|actor| json!({
+    let enemies: Vec<_> = session.boneyard.iter().flat_map(|world| world.enemies.actors.iter()).map(|actor| json!({
         "id":actor.id,"position":secondary_rows::point_snapshot(actor.position),"heading":actor.heading_deg,
         "wanderHeading":actor.path.wander_heading_deg })).collect();
     let enemy_events: Vec<_> = session.boneyard.iter().flat_map(|world| &world.enemy_events).map(|event| json!({

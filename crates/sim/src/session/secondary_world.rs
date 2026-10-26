@@ -42,11 +42,11 @@ impl SessionSecondaryWorld<'_> {
         let Some(world) = world else {
             return bodies;
         };
-        for actor in &world.enemies.actors {
-            if boneyard_enemy_actor_flags(actor) != 0 {
+        for actor in world.enemies.actors.iter() {
+            if boneyard_enemy_actor_flags(&actor) != 0 {
                 bodies.push(BoneyardNativeTeleportBody {
                     position: actor.position,
-                    radius: boneyard_enemy_collision_radius(actor),
+                    radius: boneyard_enemy_collision_radius(&actor),
                 });
             }
         }
@@ -153,7 +153,7 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
             (position.x - origin.x).abs() <= 400.0 && (position.y - origin.y).abs() <= 400.0
         };
         let mut result = NativeSecondaryDampenCandidates::default();
-        for actor in &world.enemies.actors {
+        for actor in world.enemies.actors.iter() {
             if actor.life_state != EnemyLifeState::Alive || !inside(actor.position) {
                 continue;
             }

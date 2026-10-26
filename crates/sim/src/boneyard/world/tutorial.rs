@@ -36,8 +36,8 @@ impl BoneyardWorld {
             wizard.velocity = velocity;
         }
         let mut safety_bodies = Vec::new();
-        for actor in &self.enemies.actors {
-            safety_bodies.push((actor.position, boneyard_enemy_collision_radius(actor)));
+        for actor in self.enemies.actors.iter() {
+            safety_bodies.push((actor.position, boneyard_enemy_collision_radius(&actor)));
         }
         for maggot in &self.enemies.maggots {
             safety_bodies.push((maggot.position, maggot.collision_radius));

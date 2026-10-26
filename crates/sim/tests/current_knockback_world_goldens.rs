@@ -69,7 +69,7 @@ fn point(v: &Value) -> Vec2 {
     Vec2::new(v["x"].as_f64().unwrap(), v["y"].as_f64().unwrap())
 }
 fn snapshot(world: &BoneyardWorld) -> Value {
-    json!({"actors":world.enemies.actors.iter().map(|actor|json!({"id":actor.id,"position":actor.position,"radius":boneyard_enemy_collision_radius(actor)})).collect::<Vec<_>>(),
+    json!({"actors":world.enemies.actors.iter().map(|actor|json!({"id":actor.id,"position":actor.position,"radius":boneyard_enemy_collision_radius(&actor)})).collect::<Vec<_>>(),
         "lantern":world.lantern_position})
 }
 #[test]

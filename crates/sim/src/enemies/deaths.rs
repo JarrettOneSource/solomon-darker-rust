@@ -169,7 +169,7 @@ impl EnemyWorld {
         false
     }
 
-    fn terminal_output_count(&self, actor: &EnemyActor) -> Option<usize> {
+    fn terminal_output_count(&self, actor: &impl EnemyActorRead) -> Option<usize> {
         let imps =
             self.actors.iter().filter(|actor| actor.config.enemy_token == EnemyToken::Imp).count();
         match actor.config.family {
@@ -185,7 +185,7 @@ impl EnemyWorld {
 
     fn spawn_terminal_children(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         context: &mut EnemyStepContext<'_>,
         order: &mut WorldPainterOrder,
     ) {
@@ -228,7 +228,7 @@ impl EnemyWorld {
         let spawned = self.materialize_step_intents(&intents, context, Some(split_depth), order);
         if imp {
             for (index, id) in spawned.into_iter().enumerate() {
-                let child = self
+                let mut child = self
                     .actors
                     .iter_mut()
                     .find(|child| child.id == id)
@@ -239,7 +239,12 @@ impl EnemyWorld {
         }
     }
 
-    fn emit_enemy_death_sounds(&mut self, actor: &EnemyActor, tick: u64, count: Option<usize>) {
+    fn emit_enemy_death_sounds(
+        &mut self,
+        actor: &impl EnemyActorRead,
+        tick: u64,
+        count: Option<usize>,
+    ) {
         let cue = |world: &mut Self, sound: EnemySound, base: f64, range: f64| {
             let pitch = if range == 0.0 { base } else { base + world.draw_unit() * range };
             emit_death_sound(world, actor, tick, sound, pitch);
@@ -282,7 +287,7 @@ impl EnemyWorld {
 
     fn spawn_terminal_effects(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         count: Option<usize>,
         enhanced_effects: bool,
@@ -390,7 +395,7 @@ impl EnemyWorld {
 
     fn spawn_demon_death_fires(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         start: u64,
         order: &mut WorldPainterOrder,
     ) {
@@ -433,7 +438,7 @@ impl EnemyWorld {
 
     fn spawn_demon_death_fire_burst(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         order: &mut WorldPainterOrder,
     ) {
@@ -498,7 +503,7 @@ impl EnemyWorld {
     }
 }
 
-fn emit_stream(world: &mut EnemyWorld, actor: &EnemyActor, tick: u64, stream: &str) {
+fn emit_stream(world: &mut EnemyWorld, actor: &impl EnemyActorRead, tick: u64, stream: &str) {
     let mut event = EnemyEvent::new(EnemyEventKind::EnemyStream, actor.id, tick);
     event.stream = Some(stream.to_owned());
     event.source_position = Some(actor.position);
@@ -506,7 +511,7 @@ fn emit_stream(world: &mut EnemyWorld, actor: &EnemyActor, tick: u64, stream: &s
 }
 fn emit_death_sound(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     sound: EnemySound,
     pitch: f64,

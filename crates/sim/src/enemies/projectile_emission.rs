@@ -33,7 +33,7 @@ pub struct SpawnEnemyProjectileOptions {
 #[allow(clippy::too_many_arguments)] // Source birth receives the current work policy.
 pub fn spawn_projectile(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     kind: EnemyProjectileKind,
     damage: f64,
@@ -207,7 +207,7 @@ pub fn spawn_projectile(
 
 pub fn emit_archer_volley(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     private_seed: u32,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
@@ -286,7 +286,7 @@ pub struct MageLightningDispatch {
 
 pub fn emit_mage_attack(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) -> Option<MageLightningDispatch> {

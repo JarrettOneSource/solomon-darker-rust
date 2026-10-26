@@ -114,7 +114,7 @@ fn step_ordinary_living_actor(
             super::targeting::target_by_id(actor.target_player_id.as_deref(), context.players)
                 .map(|target| target.position);
         actor.heading_deg =
-            actor.path.step_reorientation(actor.heading_deg, actor.position, target);
+            actor.body.path.step_reorientation(actor.body.heading_deg, actor.body.position, target);
         step_skeleton_recoil(actor);
         step_enemy_lighting(actor);
         if matches!(actor.brain, EnemyBrain::Mage(_)) {

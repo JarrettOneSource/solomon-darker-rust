@@ -160,11 +160,12 @@ fn secondary_terminal_dispatch_precedes_next_hit_and_publishes_after_primary_pas
             &OpenGeometry,
             Some(&mut session.painter_order),
         );
-        world.actors[0].current_health = case["health"].as_f64().unwrap();
-        world.actors[1].current_health = case["neighborHealth"].as_f64().unwrap_or(10.0);
+        world.actors.get_mut(0).unwrap().current_health = case["health"].as_f64().unwrap();
+        world.actors.get_mut(1).unwrap().current_health =
+            case["neighborHealth"].as_f64().unwrap_or(10.0);
         if let Some(shield) = case["shield"].as_f64() {
-            world.actors[0].shield_health = shield;
-            world.actors[0].shield_maximum_health = shield;
+            world.actors.get_mut(0).unwrap().shield_health = shield;
+            world.actors.get_mut(0).unwrap().shield_maximum_health = shield;
         }
         let result = NativeSecondaryTickResult {
             damage: case["contacts"].as_array().unwrap().iter().map(contact).collect(),

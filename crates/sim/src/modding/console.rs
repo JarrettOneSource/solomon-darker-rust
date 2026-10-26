@@ -220,7 +220,7 @@ pub fn create_web_lua_frame_state(
     }
     let mut enemies = Vec::new();
     let (world, scene, seed, waves) = if let Some(world) = &game.boneyard {
-        for enemy in &world.enemies.actors {
+        for enemy in world.enemies.actors.iter() {
             enemies.push(WebLuaEnemyState {
                 health: enemy.current_health,
                 id: enemy.id as u64,

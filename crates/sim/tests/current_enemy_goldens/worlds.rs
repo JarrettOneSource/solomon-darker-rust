@@ -132,7 +132,7 @@ fn current_wraith_world_motion_and_shared_random_streams_match_the_source() {
                 1.0
             };
             let effects = [(
-                world.actors[0].id,
+                world.actors.get(0).unwrap().id,
                 EnemyAbilityEffect {
                     time_scale,
                     disrupted_ticks: u64::from((240..260).contains(&tick)),
@@ -164,7 +164,7 @@ fn current_wraith_world_motion_and_shared_random_streams_match_the_source() {
                 Some(&mut order),
                 None,
             );
-            let actor = &world.actors[0];
+            let actor = world.actors.get(0).unwrap();
             let EnemyBrain::Wraith(brain) = &actor.brain else { panic!("live Wraith brain") };
             let context = format!("{} tick{tick}", case.seed);
             assert_eq!(

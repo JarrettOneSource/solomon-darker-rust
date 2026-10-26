@@ -34,7 +34,7 @@ struct ContactModifiers {
 
 pub fn spawn_faculty_spell(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     action: FacultyActionKind,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
@@ -245,7 +245,7 @@ pub fn spawn_faculty_spell(
     );
 }
 
-fn emit_faculty_throw(world: &mut EnemyWorld, actor: &EnemyActor, tick: u64) {
+fn emit_faculty_throw(world: &mut EnemyWorld, actor: &impl EnemyActorRead, tick: u64) {
     let first_pitch = 1.5 - world.draw_unit() * 0.25;
     world.emit_action_sound(
         DeathEffectOwner::from(actor),
@@ -343,11 +343,11 @@ impl EnemyWorld {
 
 fn spawn_blightning(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) {
-    let EnemyBrain::Faculty(brain) = &actor.brain else {
+    let EnemyBrain::Faculty(brain) = actor.brain() else {
         panic!("Blightning requires a Faculty caster")
     };
     let start = native_faculty_lightning_source(

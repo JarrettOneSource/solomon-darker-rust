@@ -30,7 +30,7 @@ use crate::boneyard::{
 };
 use crate::combat::PlayerLifeState;
 use crate::economy::EquipmentType;
-use crate::enemies::model::{EnemyActor, EnemyLifeState, EnemyMaggotActor};
+use crate::enemies::model::{EnemyActorRef, EnemyLifeState, EnemyMaggotActor};
 use crate::enemies::path::EnemyNavigation;
 use crate::enemies::targeting::{boneyard_enemy_actor_flags, boneyard_enemy_collision_radius};
 use crate::enemies::world::EnemyWorld;
@@ -402,8 +402,8 @@ pub fn boneyard_native_secondary_targets(
     targets
 }
 
-fn secondary_actor_target(actor: &EnemyActor) -> Option<NativeSecondaryTarget> {
-    if actor.life_state != EnemyLifeState::Alive || boneyard_enemy_actor_flags(actor) & 0x2 == 0 {
+fn secondary_actor_target(actor: EnemyActorRef<'_>) -> Option<NativeSecondaryTarget> {
+    if actor.life_state != EnemyLifeState::Alive || boneyard_enemy_actor_flags(&actor) & 0x2 == 0 {
         return None;
     }
     Some(NativeSecondaryTarget {
@@ -416,7 +416,7 @@ fn secondary_actor_target(actor: &EnemyActor) -> Option<NativeSecondaryTarget> {
         native_flags: Some(0x2),
         registration_order: Some(actor.native_registration_order),
         position: actor.position,
-        radius: boneyard_enemy_collision_radius(actor),
+        radius: boneyard_enemy_collision_radius(&actor),
         scale: actor.config.scale,
         shield_health: actor.shield_health,
     })

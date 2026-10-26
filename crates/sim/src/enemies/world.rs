@@ -3,8 +3,8 @@
 
 use super::config::EnemyArenaScalars;
 use super::model::{
-    EnemyActor, EnemyDeathEffect, EnemyEvent, EnemyMaggotActor, EnemyPlayerDamage,
-    EnemyPlayerKnockback, EnemyTarget, WebbedState,
+    EnemyDeathEffect, EnemyEvent, EnemyMaggotActor, EnemyPlayerDamage, EnemyPlayerKnockback,
+    EnemyTarget, WebbedState,
 };
 use super::path::EnemyNavigation;
 use super::projectiles::{
@@ -211,7 +211,7 @@ pub struct EnemyWorld {
     #[cfg_attr(feature = "persistence", serde(skip))]
     pub(super) deferred_projectile_painters:
         Option<super::deferred_painters::DeferredEnemyPainterRegistrations>,
-    pub actors: Vec<EnemyActor>,
+    pub actors: super::model::EnemyActors,
     pub maggots: Vec<EnemyMaggotActor>,
     pub webbed_players: BTreeMap<String, WebbedState>,
     pub rng_state: u32,
@@ -261,7 +261,7 @@ impl EnemyWorld {
     pub fn new(seed: &str, native_registration_base: usize) -> Self {
         Self {
             deferred_projectile_painters: None,
-            actors: Vec::new(),
+            actors: super::model::EnemyActors::default(),
             maggots: Vec::new(),
             webbed_players: BTreeMap::new(),
             rng_state: seed_from_text(&format!("{seed}:enemy-actors")),
@@ -343,7 +343,7 @@ impl EnemyWorld {
     pub(super) fn standalone_painter_order(&self) -> WorldPainterOrder {
         self.assert_painter_registrations_committed();
         let mut order = WorldPainterOrder::default();
-        for actor in &self.actors {
+        for actor in self.actors.iter() {
             order.next_actor_ordinal = order.next_actor_ordinal.max(actor.registration_ordinal + 1);
         }
         for maggot in &self.maggots {

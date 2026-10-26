@@ -1,7 +1,7 @@
 //! Source transactions through actual enemy acceptance, shared RNG and painter owners.
 use serde_json::{Map, Value, json};
 use solomon_sim::enemies::config::EnemyArenaScalars;
-use solomon_sim::enemies::model::EnemyLifeState;
+use solomon_sim::enemies::model::{EnemyActorRead, EnemyLifeState};
 use solomon_sim::enemies::path::EnemyNavigation;
 use solomon_sim::enemies::projectile_emission::{SpawnEnemyProjectileOptions, spawn_projectile};
 use solomon_sim::enemies::projectiles::EnemyProjectileKind;
@@ -525,7 +525,7 @@ fn replay_contacts(fixture: &str) {
             &OpenGeometry,
             Some(&mut order),
         );
-        for (actor, spec) in enemies.actors.iter_mut().zip(values(case, "enemies")) {
+        for (mut actor, spec) in enemies.actors.iter_mut().zip(values(case, "enemies")) {
             if let Some(cooldown) = spec["hurricaneCooldown"].as_f64() {
                 actor.hurricane_contact_cooldown = cooldown;
             }
@@ -542,7 +542,7 @@ fn replay_contacts(fixture: &str) {
             }
         }
         if case["forces"] == true {
-            let owner = enemies.actors[0].clone();
+            let owner = enemies.actors.get(0).unwrap().snapshot();
             spawn_projectile(
                 &mut enemies,
                 &owner,

@@ -111,7 +111,7 @@ pub fn observe_ml_bot_policy_enemies(
             id: actor.id,
             maximum_health: actor.config.maximum_health,
             position: actor.position,
-            radius: boneyard_enemy_collision_radius(actor),
+            radius: boneyard_enemy_collision_radius(&actor),
             source: EnemySource::Actor(index),
             species: species(actor.config.enemy_token),
             target_player_id: actor.target_player_id.clone(),

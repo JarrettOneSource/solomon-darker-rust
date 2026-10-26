@@ -86,12 +86,12 @@ fn emit_coffin_release(world: &mut EnemyWorld, actor_id: usize, tick: u64, count
 
 fn spawn_coffin_maggots(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     context: &EnemyStepContext<'_>,
     count: usize,
     order: &mut WorldPainterOrder,
 ) -> usize {
-    let EnemyBrain::Coffin(brain) = &actor.brain else {
+    let EnemyBrain::Coffin(brain) = actor.brain() else {
         return 0;
     };
     let EnemyFamilyConfig::Coffin { maggot_health, maggot_damage, maggot_poison_damage, .. } =
