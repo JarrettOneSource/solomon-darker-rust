@@ -239,7 +239,7 @@ impl EnemyWorld {
                 registration_order: actor.native_registration_order,
             });
         }
-        for maggot in &self.maggots {
+        for maggot in self.maggots.iter() {
             targets.push(PrimarySpellTarget {
                 active: maggot.life_state == EnemyLifeState::Alive && maggot.combat_active,
                 actor_flags: 0x2,
@@ -278,7 +278,7 @@ impl EnemyWorld {
             actor.position = position;
             return true;
         }
-        let Some(maggot) = self.maggots.iter_mut().find(|maggot| maggot.id == actor_id) else {
+        let Some(mut maggot) = self.maggots.iter_mut().find(|maggot| maggot.id == actor_id) else {
             return false;
         };
         if maggot.life_state != EnemyLifeState::Alive || !maggot.combat_active {

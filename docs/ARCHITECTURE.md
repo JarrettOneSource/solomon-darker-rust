@@ -75,7 +75,8 @@ can rebuild immutable geometry and navigation inputs consistently.
 
 [`sim::ecs`](../crates/sim/src/ecs.rs) owns admission-ordered component queries.
 Domain stores define the components and expose borrowed views to their callers.
-Enemy views combine body and controller state; secondary views include the
+Enemy views combine body and controller state; Maggots separate their body from
+the controller that owns emergence, admission and navigation. Secondary views include the
 ability-specific components present on that entity; loot views combine the body
 and pickup reward. Enemy projectiles pair flight and contact state with their motion
 program; boss spells pair identity and lifetime with their spell program. Small

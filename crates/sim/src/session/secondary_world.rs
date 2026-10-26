@@ -51,7 +51,7 @@ impl SessionSecondaryWorld<'_> {
                 });
             }
         }
-        for maggot in &world.enemies.maggots {
+        for maggot in world.enemies.maggots.iter() {
             if maggot.life_state == EnemyLifeState::Alive {
                 bodies.push(BoneyardNativeTeleportBody {
                     position: maggot.position,

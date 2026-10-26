@@ -1144,23 +1144,23 @@ fn actor_json(value: &impl EnemyActorRead) -> Value {
     record
 }
 
-fn maggot_json(value: &solomon_sim::enemies::model::EnemyMaggotActor) -> Value {
+fn maggot_json(value: solomon_sim::enemies::model::MaggotRef<'_>) -> Value {
     use solomon_sim::enemies::model::*;
     let mut record = json!({
         "hitFeedback":puppet_hit_json(&value.hit_feedback),"blizzardPushAccumulator":value.blizzard_push_accumulator,"blizzardPushLastTick":value.blizzard_push_last_tick,
         "combatActive":value.combat_active,"nativeTreeQueryMember":value.native_tree_query_member,"collisionRadius":value.collision_radius,"currentHealth":value.current_health,
         "deathOffsets":value.death_offsets.iter().copied().map(point_json).collect::<Vec<_>>(),"damage":value.damage,"deathEpoch":value.death_epoch,
         "deathStartedTick":value.death_started_tick,"deathTick":value.death_tick,"gaitPose":value.gait_pose,"headingDeg":value.heading_deg,
-        "hurricaneContactCooldown":value.hurricane_contact_cooldown,"id":value.id,"emergenceTick":value.emergence_tick,"emergencePhase":value.emergence_phase,
-        "launchTrajectory":match value.launch_trajectory {MaggotLaunchTrajectory::Edge=>"edge",MaggotLaunchTrajectory::Lid=>"lid"},"launchVelocity":point_json(value.launch_velocity),
-        "landingBounceVelocity":value.landing_bounce_velocity,"lastAttackTick":value.last_attack_tick,"lastDamagedByPlayerId":value.last_damaged_by_player_id,
-        "lastDamageTick":value.last_damage_tick,"lastMovementTick":value.last_movement_tick,"lifeState":match value.life_state {EnemyLifeState::Alive=>"alive",EnemyLifeState::Dying=>"dying"},
+        "hurricaneContactCooldown":value.hurricane_contact_cooldown,"id":value.id,"emergenceTick":value.controller.emergence_tick,"emergencePhase":value.controller.emergence_phase,
+        "launchTrajectory":match value.controller.launch_trajectory {MaggotLaunchTrajectory::Edge=>"edge",MaggotLaunchTrajectory::Lid=>"lid"},"launchVelocity":point_json(value.controller.launch_velocity),
+        "landingBounceVelocity":value.controller.landing_bounce_velocity,"lastAttackTick":value.controller.last_attack_tick,"lastDamagedByPlayerId":value.last_damaged_by_player_id,
+        "lastDamageTick":value.last_damage_tick,"lastMovementTick":value.controller.last_movement_tick,"lifeState":match value.life_state {EnemyLifeState::Alive=>"alive",EnemyLifeState::Dying=>"dying"},
         "lightRegistration":{"managerLane":"actor","registrationOrdinal":value.registration_ordinal},"maximumHealth":value.maximum_health,
-        "nextAttackTick":value.next_attack_tick,"nextMovementTick":value.next_movement_tick,"nextTargetRefreshTick":value.next_target_refresh_tick,
+        "nextAttackTick":value.controller.next_attack_tick,"nextMovementTick":value.controller.next_movement_tick,"nextTargetRefreshTick":value.controller.next_target_refresh_tick,
         "nativeCellBindingOrder":value.native_cell_binding_order,"nativeRegistrationOrder":value.native_registration_order,"ownerCoffinActorId":value.owner_coffin_actor_id,
-        "path":path_json(&value.path),"poisonDamage":value.poison_damage,"poisonDuration":value.poison_duration,"position":point_json(value.position),
-        "movementPhase":match value.movement_phase {MaggotMovementPhase::Crawl=>"crawl",MaggotMovementPhase::Emerging=>"emerging"},"spawnTick":value.spawn_tick,
-        "staffActionFactor":value.staff_action_factor,"staffMovementFactor":value.staff_movement_factor,"targetPlayerId":value.target_player_id,
+        "path":path_json(&value.controller.path),"poisonDamage":value.poison_damage,"poisonDuration":value.poison_duration,"position":point_json(value.position),
+        "movementPhase":match value.controller.movement_phase {MaggotMovementPhase::Crawl=>"crawl",MaggotMovementPhase::Emerging=>"emerging"},"spawnTick":value.spawn_tick,
+        "staffActionFactor":value.staff_action_factor,"staffMovementFactor":value.staff_movement_factor,"targetPlayerId":value.controller.target_player_id,
         "terminalEmitted":value.terminal_emitted,"verticalOffset":value.vertical_offset,"verticalVelocity":value.vertical_velocity,"visualScale":value.visual_scale,
     });
     if value.ether_drain_captured {

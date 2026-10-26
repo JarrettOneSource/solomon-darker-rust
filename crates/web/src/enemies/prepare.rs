@@ -142,14 +142,14 @@ impl EnemyView {
             }
             self.underlays.push((actor.registration_ordinal, underlay));
         }
-        for maggot in &world.maggots {
+        for maggot in world.maggots.iter() {
             let group = EnemyDrawGroup::sprites(
                 maggot.position,
                 match frame.presentation.and_then(|metadata| metadata.maggots.get(&maggot.id)) {
                     Some(sample) => {
-                        native_maggot_plan_with_input(maggot, sample, frame.complex_lighting)
+                        native_maggot_plan_with_input(&maggot, sample, frame.complex_lighting)
                     }
-                    None => native_maggot_plan(maggot, frame.tick, frame.complex_lighting),
+                    None => native_maggot_plan(&maggot, frame.tick, frame.complex_lighting),
                 },
                 true,
             );

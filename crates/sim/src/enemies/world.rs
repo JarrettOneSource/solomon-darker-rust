@@ -3,8 +3,8 @@
 
 use super::config::EnemyArenaScalars;
 use super::model::{
-    EnemyDeathEffect, EnemyEvent, EnemyMaggotActor, EnemyPlayerDamage, EnemyPlayerKnockback,
-    EnemyTarget, WebbedState,
+    EnemyDeathEffect, EnemyEvent, EnemyPlayerDamage, EnemyPlayerKnockback, EnemyTarget,
+    MaggotActors, WebbedState,
 };
 use super::path::EnemyNavigation;
 use super::projectiles::{
@@ -213,7 +213,7 @@ pub struct EnemyWorld {
     pub(super) deferred_projectile_painters:
         Option<super::deferred_painters::DeferredEnemyPainterRegistrations>,
     pub actors: super::model::EnemyActors,
-    pub maggots: Vec<EnemyMaggotActor>,
+    pub maggots: MaggotActors,
     pub webbed_players: BTreeMap<String, WebbedState>,
     pub rng_state: u32,
     pub steering_rng: NativeRng,
@@ -263,7 +263,7 @@ impl EnemyWorld {
         Self {
             deferred_projectile_painters: None,
             actors: super::model::EnemyActors::default(),
-            maggots: Vec::new(),
+            maggots: MaggotActors::default(),
             webbed_players: BTreeMap::new(),
             rng_state: seed_from_text(&format!("{seed}:enemy-actors")),
             steering_rng: NativeRng::new(i64::from(seed_from_text(&format!(
@@ -347,7 +347,7 @@ impl EnemyWorld {
         for actor in self.actors.iter() {
             order.next_actor_ordinal = order.next_actor_ordinal.max(actor.registration_ordinal + 1);
         }
-        for maggot in &self.maggots {
+        for maggot in self.maggots.iter() {
             order.next_actor_ordinal =
                 order.next_actor_ordinal.max(maggot.registration_ordinal + 1);
         }

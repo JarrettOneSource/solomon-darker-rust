@@ -444,7 +444,7 @@ impl GameSession {
                 if change.mode == NativeSecondaryHeadingMode::Absolute {
                     actor.path.wander_heading_deg = actor.heading_deg;
                 }
-            } else if let Some(actor) =
+            } else if let Some(mut actor) =
                 world.enemies.maggots.iter_mut().find(|actor| actor.id == change.target_id)
             {
                 let heading = if change.mode == NativeSecondaryHeadingMode::Absolute {

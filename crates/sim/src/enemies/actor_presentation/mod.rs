@@ -186,7 +186,7 @@ pub(super) fn puppet_hit_tint(complex_lighting: bool, tint: u32) -> u32 {
 /// Coffin children register and paint independently from the parent body.
 #[must_use]
 pub fn native_maggot_plan(
-    maggot: &EnemyMaggotActor,
+    maggot: &impl MaggotRead,
     tick: u64,
     complex_lighting: bool,
 ) -> Vec<EnemySpriteLayer> {
@@ -196,7 +196,7 @@ pub fn native_maggot_plan(
 
 #[must_use]
 pub fn native_maggot_plan_with_input(
-    maggot: &EnemyMaggotActor,
+    maggot: &impl MaggotRead,
     sample: &NativeMaggotPresentationInput,
     complex_lighting: bool,
 ) -> Vec<EnemySpriteLayer> {
@@ -211,8 +211,8 @@ pub fn native_maggot_plan_with_input(
         (EnemyArtAtlas::DeadHawg, 28)
     } else if emerging {
         let heading = crate::heading::heading_degrees_from_vector(
-            maggot.launch_velocity.x,
-            maggot.launch_velocity.y,
+            maggot.controller().launch_velocity.x,
+            maggot.controller().launch_velocity.y,
         );
         let orientation = (((heading + 18.0) / 36.0).floor() as i64).rem_euclid(10) as usize;
         (
@@ -229,7 +229,7 @@ pub fn native_maggot_plan_with_input(
     let role = if emerging {
         format!(
             "maggot-body-emerging-{}",
-            match maggot.launch_trajectory {
+            match maggot.controller().launch_trajectory {
                 MaggotLaunchTrajectory::Edge => "edge",
                 MaggotLaunchTrajectory::Lid => "lid",
             }

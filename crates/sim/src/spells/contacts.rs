@@ -1305,7 +1305,10 @@ fn target_rows(enemies: &EnemyWorld) -> Vec<TargetRow> {
             let actor = enemies.actors.get(index).expect("enemy index is live");
             (actor.id, actor.current_health, actor.config.maximum_health)
         } else {
-            let actor = &enemies.maggots[index - enemies.actors.len()];
+            let actor = enemies
+                .maggots
+                .get(index - enemies.actors.len())
+                .expect("Maggot target index is live");
             (actor.id, actor.current_health, actor.maximum_health)
         };
         rows.push(TargetRow {

@@ -39,7 +39,7 @@ impl SessionEtherDrainSnapshot {
                 },
             });
         }
-        for maggot in &world.enemies.maggots {
+        for maggot in world.enemies.maggots.iter() {
             if maggot.life_state == EnemyLifeState::Alive && !maggot.combat_active {
                 targets.push(NativeEtherDrainTarget {
                     activation_delay_ticks: 0,

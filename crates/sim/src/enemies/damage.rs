@@ -21,7 +21,7 @@ impl EnemyWorld {
             actor.hurricane_contact_cooldown = cooldown as f64;
             return true;
         }
-        if let Some(actor) = self.maggots.iter_mut().find(|actor| actor.id == actor_id) {
+        if let Some(mut actor) = self.maggots.iter_mut().find(|actor| actor.id == actor_id) {
             actor.hurricane_contact_cooldown = cooldown as f64;
             return true;
         }
@@ -35,7 +35,7 @@ impl EnemyWorld {
                 actor.staff_action_factor = fround(actor.staff_action_factor * 0.5);
                 actor.staff_movement_factor = fround(actor.staff_movement_factor * 0.75);
             }
-        } else if let Some(actor) = self.maggots.iter_mut().find(|actor| actor.id == actor_id)
+        } else if let Some(mut actor) = self.maggots.iter_mut().find(|actor| actor.id == actor_id)
             && actor.life_state == EnemyLifeState::Alive
         {
             actor.staff_action_factor = fround(actor.staff_action_factor * 0.5);
@@ -49,7 +49,7 @@ impl EnemyWorld {
             if actor.life_state == EnemyLifeState::Alive {
                 actor.heading_deg = ((actor.heading_deg + delta_degrees) % 360.0 + 360.0) % 360.0;
             }
-        } else if let Some(actor) = self.maggots.iter_mut().find(|actor| actor.id == actor_id)
+        } else if let Some(mut actor) = self.maggots.iter_mut().find(|actor| actor.id == actor_id)
             && actor.life_state == EnemyLifeState::Alive
         {
             actor.heading_deg = ((actor.heading_deg + delta_degrees) % 360.0 + 360.0) % 360.0;
@@ -131,7 +131,7 @@ impl EnemyWorld {
             actor.blizzard_push_last_tick = Some(last_tick);
             return true;
         }
-        if let Some(maggot) = self.maggots.iter_mut().find(|actor| actor.id == actor_id) {
+        if let Some(mut maggot) = self.maggots.iter_mut().find(|actor| actor.id == actor_id) {
             maggot.blizzard_push_accumulator = accumulator;
             maggot.blizzard_push_last_tick = Some(last_tick);
             return true;
@@ -317,7 +317,7 @@ impl EnemyWorld {
     }
 
     fn damage_maggot(&mut self, request: EnemyDamageRequest) -> EnemyDamageResult {
-        let Some(maggot) = self.maggots.iter_mut().find(|maggot| maggot.id == request.actor_id)
+        let Some(mut maggot) = self.maggots.iter_mut().find(|maggot| maggot.id == request.actor_id)
         else {
             return EnemyDamageResult::REJECTED;
         };

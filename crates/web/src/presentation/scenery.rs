@@ -55,7 +55,7 @@ pub fn scenery_actor_poses(
             coffin_state: sample.coffin_state,
         });
     }
-    for maggot in &world.enemies.maggots {
+    for maggot in world.enemies.maggots.iter() {
         poses.maggots.push(NativeTreeMaggotPose {
             id: maggot.id,
             position: maggot.position,

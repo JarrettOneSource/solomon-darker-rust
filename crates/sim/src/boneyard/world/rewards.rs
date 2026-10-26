@@ -31,7 +31,7 @@ impl LootEnemySnapshot {
         for actor in enemies.actors.iter() {
             positions.push((actor.id, actor.position));
         }
-        for actor in &enemies.maggots {
+        for actor in enemies.maggots.iter() {
             positions.push((actor.id, actor.position));
         }
         Self { badguy_count: enemies.actors.len(), positions }

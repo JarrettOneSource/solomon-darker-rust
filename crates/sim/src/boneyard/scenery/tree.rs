@@ -129,7 +129,7 @@ pub fn native_tree_actor_positions(
         }
         positions.push(enemy.position);
     }
-    for maggot in &poses.maggots {
+    for maggot in poses.maggots.iter() {
         if maggot.native_tree_query_member {
             positions.push(maggot.position);
         }

@@ -11,7 +11,8 @@ use solomon_sim::enemies::actor_presentation::{
     native_enemy_presentation_input, native_maggot_presentation_input,
 };
 use solomon_sim::enemies::model::{
-    EnemyActorRead, EnemyActorRef, EnemyBrain, EnemyDeathEffect, EnemyEvent, SpiderPhase,
+    EnemyActorRead, EnemyActorRef, EnemyBrain, EnemyDeathEffect, EnemyEvent, MaggotRead,
+    SpiderPhase,
 };
 use solomon_sim::enemies::presentation::NativeEnemyEffectPresentationInput;
 use solomon_sim::enemies::projectiles::{
@@ -74,8 +75,8 @@ pub(super) fn from_world(
         metadata.actors.insert(actor.id, sample);
     }
     let tick = world.last_step_tick.unwrap_or(presentation_tick as u64);
-    for maggot in &world.maggots {
-        metadata.maggots.insert(maggot.id, native_maggot_presentation_input(maggot, tick));
+    for maggot in world.maggots.iter() {
+        metadata.maggots.insert(maggot.id, native_maggot_presentation_input(&maggot, tick));
     }
     for projectile in world.projectiles.iter() {
         metadata
@@ -286,20 +287,21 @@ pub(super) fn interpolate(
         interpolate_death_effects(&older.death_effects, &newer.death_effects, blend);
     output.death_effects = effects.into_iter().collect();
     metadata.death_effects = ages;
-    output.maggots = interpolate_members(
-        &older.maggots,
-        &newer.maggots,
+    output.maggots = interpolate_projected_members(
+        older.maggots.iter(),
+        newer.maggots.iter(),
         blend,
         |maggot| maggot.id,
+        |maggot| maggot.snapshot(),
         |first, second, blend| {
-            let mut maggot = endpoint(first, second, blend).clone();
+            let mut maggot = endpoint(first, second, blend).snapshot();
             let sample = interpolate_maggot(
                 &older_metadata.maggots[&first.id],
                 &newer_metadata.maggots[&second.id],
                 blend,
             );
             maggot.current_health = sample.current_health;
-            maggot.emergence_phase = sample.emergence_phase;
+            maggot.controller.emergence_phase = sample.emergence_phase;
             maggot.heading_deg = sample.heading_deg;
             maggot.gait_pose = sample.pose;
             maggot.position = sample.position;
@@ -307,8 +309,10 @@ pub(super) fn interpolate(
             maggot.visual_scale = sample.visual_scale;
             maggot
         },
-    );
-    for maggot in &output.maggots {
+    )
+    .into_iter()
+    .collect();
+    for maggot in output.maggots.iter() {
         let sample = match (
             older_metadata.maggots.get(&maggot.id),
             newer_metadata.maggots.get(&maggot.id),

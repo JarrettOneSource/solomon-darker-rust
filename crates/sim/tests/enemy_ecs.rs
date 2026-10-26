@@ -302,3 +302,73 @@ fn boss_spell_children_precede_the_parent_and_wait_for_the_next_tick() {
         assert_eq!(restored_order, order);
     }
 }
+
+#[test]
+fn emerging_maggots_keep_their_motion_after_capture_and_restore() {
+    use solomon_sim::enemies::model::{CoffinPhase, EnemyBrain, MaggotMovementPhase, MaggotRead};
+
+    let mut live = EnemyWorld::new("maggot-ecs", 50);
+    let mut order = WorldPainterOrder::default();
+    live.spawn(
+        &[EnemySpawnIntent::new(EnemyToken::Coffin, Vec2::new(200.0, 200.0), 1, 0, 31)],
+        EnemySpawnContext {
+            players: &[],
+            tick: 0,
+            arena_scalars: EnemyArenaScalars::default(),
+            roll_loot_seed: None,
+        },
+        &ClearArena,
+        Some(&mut order),
+    );
+    {
+        let coffin = live.actors.get_mut(0).unwrap();
+        let EnemyBrain::Coffin(brain) = coffin.brain else { panic!("Coffin has its controller") };
+        brain.phase = CoffinPhase::Open;
+        brain.maggot_charge = 0.0;
+    }
+    step(&mut live, &[], 1, &mut order);
+    let admitted: Vec<_> = live.maggots.iter().map(|maggot| maggot.id).collect();
+    assert_eq!(admitted.len(), 3);
+    assert!(live.maggots.iter().all(|maggot| maggot.controller().emergence_tick == 0));
+    // Stop further releases while the existing brood emerges.
+    live.actors.get_mut(0).unwrap().staff_movement_factor = 0.0;
+    let middle = live.maggots.get(1).unwrap();
+    let mut capture = EnemyDamageRequest::new(middle.id, middle.current_health + 1.0, 1, None);
+    capture.ether_drain_capture = true;
+    assert!(live.damage(capture, Some(&mut order)).killed);
+    step(&mut live, &[], 2, &mut order);
+    let survivors = [admitted[0], admitted[2]];
+    assert_eq!(live.maggots.iter().map(|maggot| maggot.id).collect::<Vec<_>>(), survivors);
+
+    let saved = serde_json::to_vec(&live).unwrap();
+    let document: serde_json::Value = serde_json::from_slice(&saved).unwrap();
+    for row in document["maggots"].as_array().unwrap() {
+        assert!(row.get("body").is_none() && row.get("controller").is_none());
+        assert!(row.get("emergence_tick").is_some() && row.get("path").is_some());
+    }
+    let mut restored: EnemyWorld = serde_json::from_slice(&saved).unwrap();
+    let mut restored_order = order;
+    for tick in 3..=60 {
+        step(&mut live, &[], tick, &mut order);
+        step(&mut restored, &[], tick, &mut restored_order);
+        assert_eq!(live.maggots.iter().map(|maggot| maggot.id).collect::<Vec<_>>(), survivors);
+        assert_eq!(
+            serde_json::to_vec(&restored).unwrap(),
+            serde_json::to_vec(&live).unwrap(),
+            "tick {tick}"
+        );
+        assert_eq!(restored_order, order);
+    }
+    assert!(
+        live.maggots
+            .iter()
+            .all(|maggot| maggot.controller().movement_phase == MaggotMovementPhase::Crawl)
+    );
+    live.actors.remove(0);
+    restored.actors.remove(0);
+    step(&mut live, &[], 61, &mut order);
+    step(&mut restored, &[], 61, &mut restored_order);
+    assert!(live.maggots.is_empty());
+    assert_eq!(live.retired.iter().map(|entry| entry.actor_id).collect::<Vec<_>>(), survivors);
+    assert_eq!(serde_json::to_vec(&restored).unwrap(), serde_json::to_vec(&live).unwrap());
+}

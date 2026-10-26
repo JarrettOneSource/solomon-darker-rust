@@ -468,7 +468,7 @@ impl BoneyardWorld {
                     safety_bodies.push((actor.position, boneyard_enemy_collision_radius(&actor)));
                 }
             }
-            for maggot in &self.enemies.maggots {
+            for maggot in self.enemies.maggots.iter() {
                 safety_bodies.push((maggot.position, maggot.collision_radius));
             }
             for actor in self.loot.actors.iter() {
@@ -680,7 +680,7 @@ impl BoneyardWorld {
                 bodies.push(body);
             }
         }
-        for maggot in &self.enemies.maggots {
+        for maggot in self.enemies.maggots.iter() {
             if maggot.life_state == EnemyLifeState::Alive {
                 let mut body = enemy_collision_body(
                     format!("enemy-{}", maggot.id),
@@ -724,7 +724,7 @@ impl BoneyardWorld {
                 actor.position = body.position;
             }
         }
-        for maggot in &mut self.enemies.maggots {
+        for mut maggot in self.enemies.maggots.iter_mut() {
             let id = format!("enemy-{}", maggot.id);
             if let Some(body) = bodies.iter().find(|body| body.id == id) {
                 maggot.position = body.position;

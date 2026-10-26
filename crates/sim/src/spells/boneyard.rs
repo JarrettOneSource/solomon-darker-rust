@@ -30,7 +30,7 @@ use crate::boneyard::{
 };
 use crate::combat::PlayerLifeState;
 use crate::economy::EquipmentType;
-use crate::enemies::model::{EnemyActorRef, EnemyLifeState, EnemyMaggotActor};
+use crate::enemies::model::{EnemyActorRef, EnemyLifeState, MaggotRef};
 use crate::enemies::path::EnemyNavigation;
 use crate::enemies::targeting::{boneyard_enemy_actor_flags, boneyard_enemy_collision_radius};
 use crate::enemies::world::EnemyWorld;
@@ -422,7 +422,7 @@ fn secondary_actor_target(actor: EnemyActorRef<'_>) -> Option<NativeSecondaryTar
     })
 }
 
-fn secondary_maggot_target(maggot: &EnemyMaggotActor) -> Option<NativeSecondaryTarget> {
+fn secondary_maggot_target(maggot: MaggotRef<'_>) -> Option<NativeSecondaryTarget> {
     if maggot.life_state != EnemyLifeState::Alive || !maggot.combat_active {
         return None;
     }

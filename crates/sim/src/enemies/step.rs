@@ -174,7 +174,7 @@ impl EnemyWorld {
         let maggot_positions: Vec<_> =
             self.maggots.iter().map(|actor| (actor.id, actor.position)).collect();
         self.step_maggots(&context, elapsed, order);
-        for actor in &mut self.maggots {
+        for mut actor in self.maggots.iter_mut() {
             if maggot_positions.iter().any(|(id, position)| {
                 *id == actor.id && primary_cell_changed(*position, actor.position)
             }) {
@@ -235,7 +235,7 @@ impl EnemyWorld {
                 actor.hit_feedback.tick = tick;
             }
         }
-        for actor in &mut self.maggots {
+        for mut actor in self.maggots.iter_mut() {
             if actor.hit_feedback.timer != 0.0 {
                 actor.hit_feedback.tick = tick;
             }

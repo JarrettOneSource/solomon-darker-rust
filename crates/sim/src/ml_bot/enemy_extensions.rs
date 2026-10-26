@@ -57,9 +57,15 @@ pub fn observe_ml_bot_policy_enemy_extensions(
                     matches!(actor.config.family, EnemyFamilyConfig::Skeleton { armor: true, .. }),
                 )
             }
-            EnemySource::Maggot(index) => {
-                (maggot_clock(&enemies.maggots[index], tick), None, 0.0, false)
-            }
+            EnemySource::Maggot(index) => (
+                maggot_clock(
+                    &enemies.maggots.get(index).expect("selected Maggot remains live"),
+                    tick,
+                ),
+                None,
+                0.0,
+                false,
+            ),
         };
         write(&mut block, start + 9, &[facing.x, facing.y]);
         block[start + 11 + clock.phase as usize] = 1.0;
@@ -362,21 +368,21 @@ fn enemy_clock(actor: &impl EnemyActorRead) -> Clock {
     }
 }
 
-fn maggot_clock(actor: &EnemyMaggotActor, tick: u64) -> Clock {
-    if actor.movement_phase == MaggotMovementPhase::Emerging {
+fn maggot_clock(actor: &impl MaggotRead, tick: u64) -> Clock {
+    if actor.controller().movement_phase == MaggotMovementPhase::Emerging {
         return passive(Phase::Approach, 0.0);
     }
-    let remaining = actor.next_attack_tick.saturating_sub(tick) as f64;
+    let remaining = actor.controller().next_attack_tick.saturating_sub(tick) as f64;
     Clock {
         marker: false,
-        phase: if actor.last_attack_tick.is_some() && remaining > 0.0 {
+        phase: if actor.controller().last_attack_tick.is_some() && remaining > 0.0 {
             Phase::Cooldown
         } else {
             Phase::Approach
         },
         remaining,
-        end: actor.target_player_id.as_ref().map(|_| remaining),
-        strike: actor.target_player_id.as_ref().map(|_| remaining),
+        end: actor.controller().target_player_id.as_ref().map(|_| remaining),
+        strike: actor.controller().target_player_id.as_ref().map(|_| remaining),
     }
 }
 

@@ -396,14 +396,18 @@ pub struct NativeMaggotPresentationInput {
 
 #[must_use]
 pub fn native_maggot_presentation_input(
-    maggot: &EnemyMaggotActor,
+    maggot: &impl MaggotRead,
     tick: u64,
 ) -> NativeMaggotPresentationInput {
-    let state = if maggot.last_attack_tick.is_some_and(|attack| tick.saturating_sub(attack) < 6) {
+    let state = if maggot
+        .controller()
+        .last_attack_tick
+        .is_some_and(|attack| tick.saturating_sub(attack) < 6)
+    {
         NativeMaggotState::Bite
     } else if maggot.life_state == EnemyLifeState::Dying {
         NativeMaggotState::Death
-    } else if maggot.movement_phase == MaggotMovementPhase::Emerging {
+    } else if maggot.controller().movement_phase == MaggotMovementPhase::Emerging {
         NativeMaggotState::Emerging
     } else {
         NativeMaggotState::Crawl
@@ -412,8 +416,8 @@ pub fn native_maggot_presentation_input(
         alpha: 1.0,
         current_health: maggot.current_health,
         death_tick: maggot.death_tick as f64,
-        emergence_tick: maggot.emergence_tick as f64,
-        emergence_phase: maggot.emergence_phase,
+        emergence_tick: maggot.controller().emergence_tick as f64,
+        emergence_phase: maggot.controller().emergence_phase,
         heading_deg: maggot.heading_deg,
         hit_flash: maggot.hit_feedback.alpha(tick as f64),
         pose: maggot.gait_pose,

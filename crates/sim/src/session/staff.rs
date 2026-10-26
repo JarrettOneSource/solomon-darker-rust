@@ -486,7 +486,7 @@ fn staff_targets(world: &BoneyardWorld) -> Vec<StaffCombatTarget> {
                 && actor.config.flags.contains(&EnemyFlag::Pike),
         });
     }
-    for actor in &world.enemies.maggots {
+    for actor in world.enemies.maggots.iter() {
         if actor.life_state != EnemyLifeState::Alive || !actor.combat_active {
             continue;
         }

@@ -131,7 +131,7 @@ pub fn observe_ml_bot_policy_enemies(
             radius: actor.collision_radius,
             source: EnemySource::Maggot(index),
             species: MlBotPolicyEnemySpecies::Maggot,
-            target_player_id: actor.target_player_id.clone(),
+            target_player_id: actor.controller.target_player_id.clone(),
             velocity: Vec2::ZERO,
         });
     }

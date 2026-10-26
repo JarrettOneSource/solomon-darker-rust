@@ -151,6 +151,7 @@ pub fn native_boneyard_enemy_ambient_requests(
                         // The source projector gives its six-tick bite precedence over death.
                         // A recently biting terminal row therefore still contributes here.
                         let biting = maggot
+                            .controller
                             .last_attack_tick
                             .is_some_and(|attack| tick.saturating_sub(attack) < 6);
                         maggot.owner_coffin_actor_id == actor.id

@@ -129,8 +129,14 @@ fn ambient_world(value: &Value) -> EnemyWorld {
             },
             &mut order,
         );
-        let template = world.maggots[0].clone();
-        world.maggots.resize(value["world"]["maggots"].as_array().unwrap().len(), template);
+        let template = world.maggots.get(0).unwrap().snapshot();
+        let count = value["world"]["maggots"].as_array().unwrap().len();
+        while world.maggots.len() > count {
+            world.maggots.remove(world.maggots.len() - 1);
+        }
+        while world.maggots.len() < count {
+            world.maggots.push(template.clone());
+        }
         world.actors.push(coffin);
     }
     world.boss_spells.clear();
