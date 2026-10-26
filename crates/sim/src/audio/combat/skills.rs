@@ -206,7 +206,7 @@ impl CombatAudioCursor {
                 );
             }
         }
-        for (owner_id, player) in &frame.secondary.players {
+        for (owner_id, player) in frame.secondary.players.iter() {
             if player.planewalker_ticks_remaining == 0 {
                 continue;
             }

@@ -66,3 +66,65 @@ fn retirement_and_birth_preserve_order_through_checkpoint_continuation() {
     assert_eq!(ids(&live), [2], "Golem fragments survive their owner's departure");
     assert!(live.actors.get(0).unwrap().golem_death().is_some());
 }
+
+#[test]
+fn ability_owner_removal_preserves_other_players_and_shared_target_modifiers() {
+    use solomon_sim::secondary::{NativeSecondaryPlayerState, NativeSecondaryTargetEffectState};
+    use std::collections::BTreeMap;
+
+    let mut live = NativeSecondarySimulationState::new(718);
+    let records: BTreeMap<_, _> = ["zeta", "middle", "alpha"]
+        .into_iter()
+        .map(|id| {
+            let mut player = NativeSecondaryPlayerState {
+                global_cooldown_ticks: 40.0,
+                ..NativeSecondaryPlayerState::default()
+            };
+            player.cooldown_ticks_by_skill[45] = 70.0;
+            (id.to_owned(), player)
+        })
+        .collect();
+    live.players = records.clone().into_iter().rev().collect();
+    assert_eq!(
+        serde_json::to_value(&live.players).unwrap(),
+        serde_json::to_value(&records).unwrap()
+    );
+    let mut shared = NativeSecondaryTargetEffectState::new("boneyard".into(), 1);
+    shared.cold_slow_ticks = 100;
+    shared.cold_slow_factor = 0.5;
+    shared.frost_burn_ticks = 10;
+    shared.frost_burn_damage_per_tick = 3.0;
+    shared.frost_burn_owner_id = Some("middle".into());
+    let mut owned = NativeSecondaryTargetEffectState::new("boneyard".into(), 2);
+    owned.frost_burn_ticks = 10;
+    owned.frost_burn_damage_per_tick = 3.0;
+    owned.frost_burn_owner_id = Some("middle".into());
+    live.target_effects = [shared, owned].into_iter().collect();
+    live.remove_owner("middle");
+    assert_eq!(live.players.keys().map(String::as_str).collect::<Vec<_>>(), ["alpha", "zeta"]);
+    assert_eq!(live.target_effects.len(), 1);
+    assert_eq!(live.target_effects[0].target_id, 1);
+    assert_eq!(live.target_effects[0].cold_slow_ticks, 100);
+    assert_eq!(live.target_effects[0].frost_burn_owner_id, None);
+    assert_eq!(live.target_effects[0].frost_burn_ticks, 0);
+    live.players.insert("beta".into(), NativeSecondaryPlayerState::default());
+
+    let saved = serde_json::to_vec(&live).unwrap();
+    let mut restored: NativeSecondarySimulationState = serde_json::from_slice(&saved).unwrap();
+    assert_eq!(serde_json::to_vec(&restored).unwrap(), saved);
+    for state in [&mut live, &mut restored] {
+        state.cooldown_rejuvenation("alpha");
+        assert_eq!(state.players["alpha"].cooldown_ticks_by_skill[45], 0.0);
+        assert_eq!(state.players["zeta"].cooldown_ticks_by_skill[45], 70.0);
+        state.reset_world();
+        assert!(state.target_effects.is_empty());
+        assert_eq!(
+            state.players.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["alpha", "beta", "zeta"]
+        );
+        assert!(
+            state.players.values().all(|player| *player == NativeSecondaryPlayerState::default())
+        );
+    }
+    assert_eq!(restored, live);
+}

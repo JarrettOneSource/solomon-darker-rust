@@ -5,8 +5,10 @@
 //! reorders survivors, even when Bevy moves its table row.
 
 mod components;
+mod keyed;
 mod optional;
 pub use components::{ComponentEntities, ComponentIter};
+pub use keyed::KeyedComponents;
 pub use optional::OptionalEntity;
 
 use bevy_ecs::entity::{Entity, EntityHashSet, EntityIndexSet};
@@ -22,6 +24,13 @@ pub(crate) struct OrderedEntities<Q: IterQueryData> {
 struct ComponentWorld<Q: IterQueryData> {
     world: World,
     query: QueryState<Q>,
+}
+impl<Q: IterQueryData> ComponentWorld<Q> {
+    fn new() -> Self {
+        let mut world = World::new();
+        let query = world.query::<Q>();
+        Self { world, query }
+    }
 }
 
 pub(crate) struct EntityStep<T> {
@@ -82,11 +91,7 @@ impl<Q: IterQueryData> OrderedEntities<Q> {
 
     /// The domain inserts its complete component set before exposing the entity.
     pub fn spawn(&mut self, insert: impl FnOnce(&mut World) -> Entity) {
-        let storage = self.storage.get_or_insert_with(|| {
-            let mut world = World::new();
-            let query = world.query::<Q>();
-            Box::new(ComponentWorld { world, query })
-        });
+        let storage = self.storage.get_or_insert_with(|| Box::new(ComponentWorld::new()));
         self.order.insert(insert(&mut storage.world));
     }
 

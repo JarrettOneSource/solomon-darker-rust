@@ -19,7 +19,7 @@ pub mod crow_blindness;
 pub mod death_animations;
 pub mod economy;
 mod ecs;
-pub use ecs::{ComponentEntities, ComponentIter, OptionalEntity};
+pub use ecs::{ComponentEntities, ComponentIter, KeyedComponents, OptionalEntity};
 pub mod element_vfx;
 pub mod enemies;
 pub mod equipment;

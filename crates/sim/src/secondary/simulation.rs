@@ -1,7 +1,6 @@
 //! Secondary actor ownership, burn replacement and shield/Golem damage contracts.
 
 use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
-use std::collections::BTreeMap;
 
 use super::golem::{
     NativeGolemIncomingDamage, NativeGolemKernelActor, damage_native_secondary_golem,
@@ -28,9 +27,9 @@ pub struct NativeSecondarySimulationState {
     pub firewalker_geometry_sequence: u32,
     pub next_actor_id: u64,
     pub next_event_id: u64,
-    pub players: BTreeMap<String, NativeSecondaryPlayerState>,
+    pub players: crate::KeyedComponents<NativeSecondaryPlayerState>,
     pub rng: NativeRng,
-    pub target_effects: Vec<NativeSecondaryTargetEffectState>,
+    pub target_effects: crate::ComponentEntities<NativeSecondaryTargetEffectState>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -97,9 +96,9 @@ impl NativeSecondarySimulationState {
             firewalker_geometry_sequence: 0,
             next_actor_id: 1,
             next_event_id: 1,
-            players: BTreeMap::new(),
+            players: crate::KeyedComponents::default(),
             rng: NativeRng::new(seed),
-            target_effects: Vec::new(),
+            target_effects: crate::ComponentEntities::default(),
         }
     }
 
@@ -321,7 +320,7 @@ impl NativeSecondarySimulationState {
         self.actors.retain(|actor| {
             actor.owner_id != player_id || actor.kind == NativeSecondaryActorKind::GolemDeath
         });
-        for effect in &mut self.target_effects {
+        for effect in self.target_effects.iter_mut() {
             if effect.electric_burn.as_ref().is_some_and(|burn| burn.owner_id == player_id) {
                 effect.electric_burn = None;
             }

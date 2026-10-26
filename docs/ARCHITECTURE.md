@@ -93,6 +93,11 @@ preserves the mixed Staff, Weld, Harden and elemental queue. Lifecycle systems
 update retained components and admit children at their original position in that
 queue; renderers borrow the same components.
 
+Secondary ability clocks and mana reserves are keyed player components; their
+iteration follows sorted player IDs. Target modifier components retain their
+application order. A tick reads the previous modifier values before applying
+expiry and damage, and commits player ability transactions to the same entities.
+
 Courtyard students separate body and route/wander components. All routes read
 the preceding population, then collision resolution commits the planned bodies
 to their existing entities. Skorcha is an optional actor component; its appearance

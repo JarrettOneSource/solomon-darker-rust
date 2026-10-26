@@ -249,9 +249,9 @@ impl NativeSecondarySimulationState {
         // query cannot replace this: dying and emerging actors still own modifiers.
         self.target_effects
             .retain(|effect| world.target_exists(&effect.world_key, effect.target_id));
-        let old_effects = self.target_effects.clone();
+        let old_effects: Vec<_> = self.target_effects.iter().cloned().collect();
         self.events.retain(|event| event.tick >= context.tick.saturating_sub(200));
-        for effect in &mut self.target_effects {
+        for effect in self.target_effects.iter_mut() {
             effect.step();
         }
         self.target_effects.retain(NativeSecondaryTargetEffectState::is_active);
@@ -564,7 +564,10 @@ fn step_players<W: NativeSecondaryWorld>(
         player.held_slot = slot;
         players.insert(id.clone(), player);
     }
-    engine.state.players = players;
+    engine.state.players.retain(|id, _| players.contains_key(id));
+    for (id, player) in players {
+        engine.state.players.insert(id, player);
+    }
 }
 
 fn emit_overload<W: NativeSecondaryWorld>(

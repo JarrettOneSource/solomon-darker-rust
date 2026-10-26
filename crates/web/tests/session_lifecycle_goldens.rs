@@ -25,7 +25,7 @@ fn registration(value: PainterRegistration) -> Value {
 fn snapshot(session: &GameSession) -> Value {
     let secondary = &session.secondary;
     let mut players = json!({});
-    for (id, player) in &secondary.players {
+    for (id, player) in secondary.players.iter() {
         players[id] = secondary_snapshot::player_snapshot(player);
     }
     let score = &session.participants["local"].score;

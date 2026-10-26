@@ -108,7 +108,7 @@ fn every_movement_order_burn_priority_thaw_and_material_tint_replays_the_website
         serde_json::from_str(include_str!("fixtures/website/secondary-status-goldens.json"))
             .unwrap();
     for journey in fixture["journeys"].as_array().unwrap() {
-        let mut effects = Vec::new();
+        let mut effects = solomon_sim::ComponentEntities::default();
         for (index, record) in journey["records"].as_array().unwrap().iter().enumerate() {
             let action = &record["action"];
             match action["type"].as_str().unwrap() {
@@ -146,7 +146,7 @@ fn every_movement_order_burn_priority_thaw_and_material_tint_replays_the_website
         }
     }
     for case in fixture["tints"].as_array().unwrap() {
-        let mut effects = Vec::new();
+        let mut effects = solomon_sim::ComponentEntities::default();
         if !case["patch"].is_null() {
             apply_native_secondary_target_effect(
                 &mut effects,

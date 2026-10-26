@@ -306,7 +306,7 @@ pub fn state_snapshot(state: &NativeSecondarySimulationState) -> Value {
     let actors: Vec<_> = state.actors.iter().map(|actor| actor_snapshot(&actor)).collect();
     let events: Vec<_> = state.events.iter().map(event_snapshot).collect();
     let mut players = json!({});
-    for (id, player) in &state.players {
+    for (id, player) in state.players.iter() {
         players[id] = player_snapshot(player);
     }
     let effects: Vec<_> = state.target_effects.iter().map(effect_snapshot).collect();
