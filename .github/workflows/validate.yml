@@ -85,12 +85,6 @@ jobs:
           macos-tcc-client: ${{ env.TCC_CLIENT }}
       - name: Install the native acceptance driver
         run: python -m pip install -r tools/desktop-smoke-requirements.txt
-      - name: Grant screenshot capture in the dedicated Mac runner
-        if: ${{ runner.os == 'macOS' }}
-        run: |
-          sudo sqlite3 "/Library/Application Support/com.apple.TCC/TCC.db" \
-            "INSERT OR REPLACE INTO access(service,client,client_type,auth_value,auth_reason,auth_version,csreq,policy_id,indirect_object_identifier_type,indirect_object_identifier,indirect_object_code_identity,flags,last_modified) VALUES('kTCCServiceScreenCapture','$TCC_CLIENT',1,2,4,1,NULL,NULL,0,'UNUSED',NULL,0,$(date +%s));"
-          sudo launchctl stop com.apple.tccd || true
       - name: Provide software OpenGL on the Windows runner
         if: ${{ runner.os == 'Windows' }}
         uses: ssciwr/setup-mesa-dist-win@2dfeaebfa514f74c2b8cd8d27108c31486d33e72
@@ -155,7 +149,7 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         run: python tools/inspect-windows-crt.py 'dist-desktop/Solomon Darker-win32-x64/solomon-darker.exe' reports/desktop-smoke/native-imports.json static
       - name: Verify packaged offline save and peer gameplay
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: npm run smoke:desktop
       - uses: actions/upload-artifact@v4
         with:

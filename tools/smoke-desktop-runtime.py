@@ -48,7 +48,6 @@ LINUX_CONTROLS = {
     "launcher/start-host": "button[name='Host game']",
     "launcher/invite": "text_area[name='Multiplayer invite']",
     "launcher/join": "button[name='Join game']",
-    "launcher/status": "static_text[name^='Enter your reachable'], static_text[name^='Paste your friend']",
     "play": "button[name='Play']",
     "continue": "button[name='Last game']",
     "new-game": "button[name='New game']",
@@ -126,6 +125,10 @@ class Application:
         print(f"{name}: launcher ready", flush=True)
 
     def control(self, identifier):
+        if identifier == "launcher/status":
+            return self.app.locator(
+                "static_text[name^='Enter your reachable'], static_text[name^='Paste your friend']"
+            )
         if PLATFORM == "linux":
             if identifier.startswith(("element:", "discipline:")):
                 return self.app.locator(f"button[name={json.dumps(identifier.split(':', 1)[1])}]")
@@ -161,10 +164,12 @@ class Application:
                  f"{self.name} in the foreground", 10)
 
     def click(self, identifier):
+        print(f"{self.name}: click {identifier}", flush=True)
         self.control(identifier).wait_enabled()
         self.control(identifier).press()
 
     def fill(self, identifier, value):
+        print(f"{self.name}: edit {identifier}", flush=True)
         self.control(identifier).wait_enabled()
         self.control(identifier).set_value(value)
         wait(lambda: self.control(identifier).element().value == value,
