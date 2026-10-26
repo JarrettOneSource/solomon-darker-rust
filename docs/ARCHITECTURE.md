@@ -77,7 +77,8 @@ can rebuild immutable geometry and navigation inputs consistently.
 Domain stores define the components and expose borrowed views to their callers.
 Enemy views combine body and controller state; secondary views include the
 ability-specific components present on that entity; loot views combine the body
-and pickup reward. Small particle and effect lifecycles use `ComponentEntities`.
+and pickup reward. Enemy projectiles pair flight and contact state with their motion
+program. Small particle and effect lifecycles use `ComponentEntities`.
 
 The store's private ECS handles identify live component allocations. Game IDs
 and painter registrations remain the identities used by contacts, saves, and

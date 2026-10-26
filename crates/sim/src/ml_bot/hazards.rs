@@ -2,6 +2,7 @@
 
 use crate::Vec2;
 use crate::boneyard::collision::closest_point_on_segment;
+use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::enemies::projectiles::{EnemyProjectileKind, MageLightningContact};
 use crate::enemies::world::EnemyWorld;
 use crate::float::hypot;
@@ -16,7 +17,7 @@ pub fn observe_ml_bot_policy_hazards(
     radius: f64,
 ) -> Vec<f32> {
     let mut rows = Vec::new();
-    for projectile in &enemies.projectiles {
+    for projectile in enemies.projectiles.iter() {
         let state = projectile.state();
         let heading = heading_vector(state.heading_deg);
         let velocity = Vec2::new(heading.x * state.speed, heading.y * state.speed);

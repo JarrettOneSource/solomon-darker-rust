@@ -6,6 +6,7 @@ mod support;
 mod tutorial_snapshot;
 
 use solomon_sim::boneyard::loot::LootActorRead;
+use solomon_sim::enemies::projectiles::EnemyProjectileRead;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 

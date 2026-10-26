@@ -5,6 +5,7 @@ use solomon_sim::enemies::model::{EnemyActorRead, EnemyLifeState};
 use solomon_sim::enemies::path::EnemyNavigation;
 use solomon_sim::enemies::projectile_emission::{SpawnEnemyProjectileOptions, spawn_projectile};
 use solomon_sim::enemies::projectiles::EnemyProjectileKind;
+use solomon_sim::enemies::projectiles::EnemyProjectileRead;
 use solomon_sim::enemies::silk::{EnemySilkActor, create_native_silk, step_native_silk};
 use solomon_sim::enemies::world::{
     EnemyGeometry, EnemyMovementRequest, EnemyProjectileWorldQuery, EnemySpawnContext, EnemyWorld,

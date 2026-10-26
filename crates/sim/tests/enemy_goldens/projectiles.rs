@@ -292,7 +292,7 @@ fn projectile_world_queries_contacts_hazards_and_retirement_match_the_website() 
             &mut order,
         );
         if case["alternateTargets"].as_bool() == Some(true) {
-            world.projectiles[0].state_mut().target_player_id = None;
+            world.projectiles.get_mut(0).unwrap().state_mut().target_player_id = None;
         }
         world.last_step_tick = Some(10);
         let mut combat = solomon_sim::NativeRng::new(801);

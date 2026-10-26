@@ -8,6 +8,7 @@ use crate::boneyard::{BoneyardBounds, BoneyardWorld};
 use crate::enemies::EnemyToken;
 use crate::enemies::boss_spell::BossSpellKind;
 use crate::enemies::model::EnemyLifeState;
+use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::enemies::projectiles::{EnemyProjectileKind, EnemyProjectilePayload};
 use crate::enemies::targeting::{boneyard_enemy_actor_flags, boneyard_enemy_collision_radius};
 use crate::enemies::world::EnemyProjectileWorldQuery;

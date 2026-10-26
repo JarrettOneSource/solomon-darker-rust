@@ -5,6 +5,7 @@ use super::boss_spell::BossSpellKind;
 use super::config::{EnemyClassification, EnemyFamilyConfig};
 use super::dampen::spawn_dampened_mage_smoke;
 use super::model::{EnemyActorRead, EnemyBrain, EnemyLifeState, EnemyTarget};
+use super::projectiles::EnemyProjectileRead;
 use super::targeting::primary_cell_changed;
 use super::world::{EnemyStepContext, EnemyWorld};
 use super::{EnemySpawnIntent, EnemyToken};
@@ -189,7 +190,7 @@ impl EnemyWorld {
         self.step_projectiles(&context, order);
         self.step_silks(&context, order);
         self.step_boss_spells(&mut context, order);
-        for projectile in &mut self.projectiles {
+        for mut projectile in self.projectiles.iter_mut() {
             let state = projectile.state_mut();
             if projectile_positions.iter().any(|(id, position)| {
                 *id == state.id && primary_cell_changed(*position, state.position)
@@ -245,7 +246,7 @@ impl EnemyWorld {
         for knockback in self.projectile_knockbacks.iter_mut() {
             knockback.last_step_tick = tick;
         }
-        for projectile in &mut self.projectiles {
+        for mut projectile in self.projectiles.iter_mut() {
             projectile.state_mut().last_step_tick = tick;
         }
         for effect in self.projectile_effects.iter_mut() {

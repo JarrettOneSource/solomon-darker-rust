@@ -117,3 +117,102 @@ fn mixed_controllers_keep_identity_and_order_after_retirement_and_restore() {
         assert_eq!(restored_order, order);
     }
 }
+
+#[test]
+fn projectile_retirement_birth_and_restore_preserve_motion_and_event_order() {
+    use solomon_sim::enemies::model::EnemyEventKind;
+    use solomon_sim::enemies::projectile_emission::{
+        SpawnEnemyProjectileOptions, spawn_projectile,
+    };
+    use solomon_sim::enemies::projectiles::{EnemyProjectileKind, EnemyProjectileRead};
+
+    let mut live = EnemyWorld::new("projectile-ecs", 50);
+    let mut order = WorldPainterOrder::default();
+    live.spawn(
+        &[EnemySpawnIntent::new(EnemyToken::SkeletonArcher, Vec2::new(100.0, 100.0), 1, 0, 31)],
+        EnemySpawnContext {
+            players: &[],
+            tick: 0,
+            arena_scalars: EnemyArenaScalars::default(),
+            roll_loot_seed: None,
+        },
+        &ClearArena,
+        Some(&mut order),
+    );
+    let owner = live.actors.remove(0);
+    let mut records = Vec::new();
+    for kind in [
+        EnemyProjectileKind::Arrow,
+        EnemyProjectileKind::Firebolt,
+        EnemyProjectileKind::GuidedMissile,
+        EnemyProjectileKind::DemonBomb,
+        EnemyProjectileKind::PoisonPool,
+    ] {
+        records.push(spawn_projectile(
+            &mut live,
+            &owner,
+            0,
+            kind,
+            1.0,
+            SpawnEnemyProjectileOptions {
+                heading_deg: Some(70.0),
+                speed: Some(2.0),
+                minimum_speed: Some(1.0),
+                lifetime_ticks: Some(if kind == EnemyProjectileKind::Arrow { 100 } else { 1 }),
+                ..Default::default()
+            },
+            true,
+            &mut order,
+        ));
+    }
+    // A save keeps the established enum variants and fields, including Arrow velocity.
+    assert_eq!(
+        serde_json::to_value(&live.projectiles).unwrap(),
+        serde_json::to_value(&records).unwrap()
+    );
+    {
+        let bomb = live.projectiles.get_mut(3).unwrap();
+        bomb.state.speed = 0.0;
+        bomb.state.settled_ticks_remaining = 1;
+    }
+    let admitted: Vec<_> = live.projectiles.iter().map(|p| p.state().id).collect();
+    step(&mut live, &[], 1, &mut order);
+    assert_eq!(
+        live.projectiles.iter().map(|p| p.state().id).collect::<Vec<_>>(),
+        [admitted[0], admitted[4]]
+    );
+    assert_eq!(
+        live.events
+            .iter()
+            .filter(|event| event.kind == EnemyEventKind::ProjectileRetired)
+            .map(|event| event.projectile_id.unwrap())
+            .collect::<Vec<_>>(),
+        admitted[1..4]
+    );
+    let newborn = spawn_projectile(
+        &mut live,
+        &owner,
+        1,
+        EnemyProjectileKind::Firebolt,
+        1.0,
+        SpawnEnemyProjectileOptions { lifetime_ticks: Some(2), ..Default::default() },
+        true,
+        &mut order,
+    );
+    assert_eq!(live.projectiles.get(2).unwrap().state().age_ticks, 0);
+    assert_eq!(live.projectiles.get(2).unwrap().state().id, newborn.state().id);
+    let saved = serde_json::to_vec(&live).unwrap();
+    let mut restored: EnemyWorld = serde_json::from_slice(&saved).unwrap();
+    let mut restored_order = order;
+    assert_eq!(serde_json::to_vec(&restored).unwrap(), saved);
+    for tick in 2..=20 {
+        step(&mut live, &[], tick, &mut order);
+        step(&mut restored, &[], tick, &mut restored_order);
+        assert_eq!(
+            serde_json::to_vec(&restored).unwrap(),
+            serde_json::to_vec(&live).unwrap(),
+            "tick {tick}"
+        );
+        assert_eq!(restored_order, order);
+    }
+}

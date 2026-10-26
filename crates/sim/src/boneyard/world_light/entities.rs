@@ -4,6 +4,7 @@
 use crate::Vec2;
 use crate::enemies::model::EnemyDeathEffectKind;
 use crate::enemies::projectiles::EnemyProjectileEffectKind;
+use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::enemies::world::EnemyWorld;
 use crate::float::fround;
 use crate::painter::{PainterRegistration, WorldManagerLane};
@@ -200,7 +201,7 @@ pub fn collect_boneyard_entity_lights(
             append(&mut providers, Some(source), Some(common.registration));
         }
     }
-    for projectile in &enemies.projectiles {
+    for projectile in enemies.projectiles.iter() {
         let state = projectile.state();
         let source = native_enemy_projectile_light_provider(
             projectile.kind(),

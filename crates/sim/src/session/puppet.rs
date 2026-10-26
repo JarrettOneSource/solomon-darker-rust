@@ -1,13 +1,14 @@
 //! Commit late spell targets before the next enemy pass, from
 //! `core-server/enemies/puppet-hits.ts::finalizeBoneyardPuppetQueries`.
 
+use crate::enemies::projectiles::EnemyProjectileRead;
 use std::collections::HashSet;
 
 use super::*;
 use crate::boneyard::world::boneyard_mouth_world_targets;
 use crate::boneyard::world_light::BoneyardLightEnvironment;
 use crate::enemies::boss_spell::BossSpellKind;
-use crate::enemies::projectiles::EnemyProjectile;
+use crate::enemies::projectiles::EnemyProjectileKind;
 use crate::enemies::puppet_hits::{EnemyPuppetHitKind, boneyard_puppet_target};
 use crate::secondary::NativeSecondaryActorKind;
 use crate::spells::targeting::PrimarySpellQueryLane;
@@ -61,9 +62,9 @@ impl GameSession {
             live_bindings.insert(id.clone());
             world.enemies.bind_native_query_target(&id, position);
         }
-        for projectile in &world.enemies.projectiles {
-            let arrow = matches!(projectile, EnemyProjectile::Arrow { .. });
-            if !arrow && !matches!(projectile, EnemyProjectile::Firebolt(_)) {
+        for projectile in world.enemies.projectiles.iter() {
+            let arrow = projectile.kind() == EnemyProjectileKind::Arrow;
+            if !arrow && !(projectile.kind() == EnemyProjectileKind::Firebolt) {
                 continue;
             }
             let state = projectile.state();

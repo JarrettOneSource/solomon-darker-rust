@@ -14,7 +14,7 @@ use super::targeting::*;
 use super::weld::*;
 use crate::enemies::config::EnemyConfig;
 use crate::enemies::model::{EnemyDamageRequest, EnemyDamageResult};
-use crate::enemies::projectiles::EnemyProjectileKind;
+use crate::enemies::projectiles::{EnemyProjectileKind, EnemyProjectileRead};
 use crate::enemies::world::EnemyWorld;
 use crate::float::{fround, hypot};
 use crate::painter::{WorldManagerLane, WorldPainterOrder};

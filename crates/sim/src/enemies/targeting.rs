@@ -7,6 +7,7 @@ use super::world::EnemyStepContext;
 use super::world::EnemyWorld;
 use crate::Vec2;
 use crate::enemies::model::EnemyActorRead;
+use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::float::hypot;
 use crate::heading::heading_degrees_from_vector;
 use crate::spells::targeting::{
@@ -172,10 +173,11 @@ impl EnemyWorld {
     #[must_use]
     pub fn projectile_force_targets(&self) -> Vec<PrimarySpellTarget> {
         let mut targets = Vec::new();
-        for projectile in &self.projectiles {
-            let super::projectiles::EnemyProjectile::Arrow { state, .. } = projectile else {
+        for projectile in self.projectiles.iter() {
+            if projectile.kind() != super::projectiles::EnemyProjectileKind::Arrow {
                 continue;
-            };
+            }
+            let state = projectile.state();
             targets.push(PrimarySpellTarget {
                 active: state.age_ticks < state.lifetime_ticks,
                 actor_flags: 0x80,

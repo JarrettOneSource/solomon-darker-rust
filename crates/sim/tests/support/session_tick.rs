@@ -6,6 +6,7 @@ use solomon_sim::Vec2;
 use solomon_sim::boneyard::loot::BoneyardLootEventType;
 use solomon_sim::boneyard::loot::LootActorRead;
 use solomon_sim::enemies::model::EnemyLifeState;
+use solomon_sim::enemies::projectiles::EnemyProjectileRead;
 use solomon_sim::harden_effects::NativeHardenEffect;
 use solomon_sim::loot::NativeLootDropKind;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};

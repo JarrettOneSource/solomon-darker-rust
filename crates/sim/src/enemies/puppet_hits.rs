@@ -2,11 +2,12 @@
 
 use super::boss_spell::BossSpellKind;
 use super::model::EnemyTarget;
-use super::projectiles::EnemyProjectile;
+use super::projectiles::EnemyProjectileKind;
 use super::targeting::target_eligible;
 use super::world::{EnemyStepContext, EnemyWorld};
 use crate::Vec2;
 use crate::combat::PuppetHitState;
+use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::spells::targeting::{PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -138,11 +139,11 @@ impl EnemyWorld {
             }
             targets.push(target);
         }
-        for projectile in &self.projectiles {
+        for projectile in self.projectiles.iter() {
             let state = projectile.state();
-            match projectile {
-                EnemyProjectile::Arrow { .. } | EnemyProjectile::Firebolt(_) => {
-                    let arrow = matches!(projectile, EnemyProjectile::Arrow { .. });
+            match projectile.kind() {
+                EnemyProjectileKind::Arrow | EnemyProjectileKind::Firebolt => {
+                    let arrow = projectile.kind() == EnemyProjectileKind::Arrow;
                     targets.push(boneyard_puppet_target(
                         format!("projectile:{}", state.id),
                         state.position,
@@ -156,7 +157,7 @@ impl EnemyWorld {
                         PrimarySpellQueryLane::Transient,
                     ));
                 }
-                EnemyProjectile::GuidedMissile(_) => {
+                EnemyProjectileKind::GuidedMissile => {
                     let mut target = boneyard_puppet_target(
                         format!("projectile:{}", state.id),
                         state.position,

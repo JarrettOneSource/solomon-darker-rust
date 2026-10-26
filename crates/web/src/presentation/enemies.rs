@@ -1,7 +1,6 @@
 //! Enemy display samples from `client/boneyard-enemy-samples.ts`.
 //! Only the retained presentation clone is written. Brains, RNG and authority are never stepped.
 
-use solomon_sim::enemies::model::EnemyActorRead;
 use std::collections::{BTreeMap, BTreeSet};
 use std::f64::consts::{PI, TAU};
 
@@ -12,10 +11,12 @@ use solomon_sim::enemies::actor_presentation::{
     native_enemy_presentation_input, native_maggot_presentation_input,
 };
 use solomon_sim::enemies::model::{
-    EnemyActorRef, EnemyBrain, EnemyDeathEffect, EnemyEvent, SpiderPhase,
+    EnemyActorRead, EnemyActorRef, EnemyBrain, EnemyDeathEffect, EnemyEvent, SpiderPhase,
 };
 use solomon_sim::enemies::presentation::NativeEnemyEffectPresentationInput;
-use solomon_sim::enemies::projectiles::{EnemyProjectile, EnemyProjectileKind, MageLightningPulse};
+use solomon_sim::enemies::projectiles::{
+    EnemyProjectileKind, EnemyProjectileMotion, EnemyProjectileRead, MageLightningPulse,
+};
 use solomon_sim::enemies::world::EnemyWorld;
 
 use super::math::{interpolate_members, interpolate_projected_members, lerp, lerp_cycle, lerp_vec};
@@ -76,14 +77,14 @@ pub(super) fn from_world(
     for maggot in &world.maggots {
         metadata.maggots.insert(maggot.id, native_maggot_presentation_input(maggot, tick));
     }
-    for projectile in &world.projectiles {
+    for projectile in world.projectiles.iter() {
         metadata
             .projectile_age_ticks
             .insert(projectile.state().id, projectile.state().age_ticks as f64);
     }
-    for projectile in &world.projectiles {
+    for projectile in world.projectiles.iter() {
         let id = projectile.state().id;
-        metadata.projectile_heading_deg.insert(id, projectile_heading(projectile));
+        metadata.projectile_heading_deg.insert(id, projectile_heading(&projectile));
         metadata
             .projectile_visual_phase_deg
             .insert(id, positive_phase(projectile.state().visual_phase_deg));
@@ -188,13 +189,14 @@ pub(super) fn interpolate(
         sample.presentation_tick = presentation_tick;
         metadata.actors.insert(actor.id, sample);
     }
-    output.projectiles = interpolate_members(
-        &older.projectiles,
-        &newer.projectiles,
+    output.projectiles = interpolate_projected_members(
+        older.projectiles.iter(),
+        newer.projectiles.iter(),
         blend,
         |projectile| projectile.state().id,
+        |projectile| projectile.snapshot(),
         |first, second, blend| {
-            let mut projectile = endpoint(first, second, blend).clone();
+            let mut projectile = endpoint(first, second, blend).snapshot();
             let first_heading = projectile_heading(first);
             let second_heading = projectile_heading(second);
             let period = if first.kind() == EnemyProjectileKind::GuidedMissile {
@@ -218,8 +220,10 @@ pub(super) fn interpolate(
             state.visual_scale = lerp(first.visual_scale, second.visual_scale, blend);
             projectile
         },
-    );
-    for projectile in &output.projectiles {
+    )
+    .into_iter()
+    .collect();
+    for projectile in output.projectiles.iter() {
         let id = projectile.state().id;
         metadata.projectile_age_ticks.insert(
             id,
@@ -231,7 +235,7 @@ pub(super) fn interpolate(
             ),
         );
     }
-    for projectile in &output.projectiles {
+    for projectile in output.projectiles.iter() {
         let state = projectile.state();
         metadata.projectile_heading_deg.insert(state.id, state.heading_deg);
         metadata.projectile_visual_phase_deg.insert(state.id, state.visual_phase_deg);
@@ -368,9 +372,9 @@ fn positive_phase(phase: f64) -> f64 {
     ((phase % 720.0) + 720.0) % 720.0
 }
 
-fn projectile_heading(projectile: &EnemyProjectile) -> f64 {
-    if let EnemyProjectile::Arrow { state, velocity } = projectile
-        && state.speed > 0.0
+fn projectile_heading(projectile: &impl EnemyProjectileRead) -> f64 {
+    if let EnemyProjectileMotion::Arrow { velocity } = projectile.motion()
+        && projectile.state().speed > 0.0
     {
         return solomon_sim::heading::heading_degrees_from_vector(velocity.x, velocity.y);
     }

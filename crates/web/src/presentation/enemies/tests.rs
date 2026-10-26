@@ -66,7 +66,7 @@ use solomon_sim::enemies::model::{
     EnemyEventKind, WebbedState,
 };
 use solomon_sim::enemies::projectiles::{
-    EnemyProjectileEffect, EnemyProjectileEffectKind, EnemyProjectileEffectState,
+    EnemyProjectile, EnemyProjectileEffect, EnemyProjectileEffectKind, EnemyProjectileEffectState,
     EnemyProjectilePayload, EnemyProjectileState, MageLightningContact,
 };
 use solomon_sim::enemies::silk::{EnemySilkActor, create_native_silk};

@@ -8,6 +8,7 @@ use crate::boneyard::projectile_world::BoneyardProjectileViewport;
 use crate::boneyard::world::{BoneyardPlayerBody, BoneyardPlayerStatus};
 use crate::combat::PlayerLifeState;
 use crate::enemies::model::EnemyDamageRequest;
+use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::float::fround;
 use crate::hub::interaction::BoastFailureProducer;
 use crate::player::PlayerState;

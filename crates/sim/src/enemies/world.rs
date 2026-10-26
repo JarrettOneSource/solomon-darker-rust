@@ -8,7 +8,8 @@ use super::model::{
 };
 use super::path::EnemyNavigation;
 use super::projectiles::{
-    EnemyProjectile, EnemyProjectileEffect, EnemyProjectileKnockback, MageLightningPulse,
+    EnemyProjectileEffect, EnemyProjectileKnockback, EnemyProjectileRead, EnemyProjectiles,
+    MageLightningPulse,
 };
 pub use super::step::EnemyLiveCounts;
 use super::voices::BossNarration;
@@ -240,7 +241,7 @@ pub struct EnemyWorld {
     pub player_knockbacks: Vec<EnemyPlayerKnockback>,
     pub player_positions: BTreeMap<String, Vec2>,
     pub pending_spawn_intents: Vec<EnemySpawnIntent>,
-    pub projectiles: Vec<EnemyProjectile>,
+    pub projectiles: EnemyProjectiles,
     pub mage_lightning_pulses: crate::ComponentEntities<MageLightningPulse>,
     pub projectile_effects: crate::ComponentEntities<EnemyProjectileEffect>,
     pub projectile_knockbacks: crate::ComponentEntities<EnemyProjectileKnockback>,
@@ -296,7 +297,7 @@ impl EnemyWorld {
             player_knockbacks: Vec::new(),
             player_positions: BTreeMap::new(),
             pending_spawn_intents: Vec::new(),
-            projectiles: Vec::new(),
+            projectiles: EnemyProjectiles::default(),
             mage_lightning_pulses: crate::ComponentEntities::default(),
             projectile_effects: crate::ComponentEntities::default(),
             projectile_knockbacks: crate::ComponentEntities::default(),
@@ -350,7 +351,7 @@ impl EnemyWorld {
             order.next_actor_ordinal =
                 order.next_actor_ordinal.max(maggot.registration_ordinal + 1);
         }
-        for projectile in &self.projectiles {
+        for projectile in self.projectiles.iter() {
             for registration in [
                 Some(projectile.state().painter_registration),
                 projectile.state().light_registration,

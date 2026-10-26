@@ -16,6 +16,7 @@ use solomon_sim::enemies::presentation::{
 use solomon_sim::enemies::projectile_presentation::{
     enemy_projectile_effect_bypasses_world_tint, native_enemy_projectile_effect_plan_with_input,
 };
+use solomon_sim::enemies::projectiles::EnemyProjectileRead;
 use solomon_sim::enemies::projectiles::{
     EnemyProjectileEffectKind, EnemyProjectileKind, EnemyProjectilePayload,
 };
@@ -174,7 +175,7 @@ impl EnemyView {
     }
 
     pub(super) fn prepare_projectiles(&mut self, world: &EnemyWorld, frame: &EnemyViewFrame<'_>) {
-        for projectile in &world.projectiles {
+        for projectile in world.projectiles.iter() {
             let state = projectile.state();
             let visual = NativeEnemyProjectileVisual {
                 age_ticks: state.age_ticks,
