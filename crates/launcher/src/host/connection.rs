@@ -172,9 +172,11 @@ impl HostConnection {
         self.sent_flame_baselines.values().copied()
     }
 
-    pub fn acknowledge_snapshot(&mut self, sequence: u64) -> Result<(), &'static str> {
+    /// Returns whether this acknowledges the current baseline or advances it.
+    /// A stale ACK cannot confirm receipt of this connection's Welcome.
+    pub fn acknowledge_snapshot(&mut self, sequence: u64) -> Result<bool, &'static str> {
         if sequence <= self.acknowledged_snapshot {
-            return Ok(());
+            return Ok(sequence != 0 && sequence == self.acknowledged_snapshot);
         }
         if sequence > self.last_sent_snapshot {
             return Err("Snapshot acknowledgement is ahead of the server.");
@@ -190,6 +192,6 @@ impl HostConnection {
         if self.pending_snapshots.len() <= SNAPSHOT_LOW_WATER_MARK {
             self.snapshot_backpressure = false;
         }
-        Ok(())
+        Ok(true)
     }
 }

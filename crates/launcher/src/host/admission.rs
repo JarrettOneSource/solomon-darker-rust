@@ -53,7 +53,7 @@ impl NativeAuthority {
                     self.metadata
                         .resume_slots
                         .get(&credentials.player_id)
-                        .is_some_and(|slot| slot.token == credentials.token)
+                        .is_some_and(|slot| slot.accepts(&credentials.token))
                 })
                 .map(|credentials| credentials.player_id.as_str());
             let selection = id
@@ -165,7 +165,20 @@ impl NativeAuthority {
             }
             ClientMessage::SnapshotAck { sequence } => {
                 let was_blocked = !connection.can_publish_snapshot();
-                connection.acknowledge_snapshot(sequence).map_err(invalid)?;
+                let current = connection.acknowledge_snapshot(sequence).map_err(invalid)?;
+                if current
+                    && self
+                        .metadata
+                        .resume_slots
+                        .get_mut(&id)
+                        .expect("the admitted connection owns its resume slot")
+                        .previous_token
+                        .take()
+                        .is_some()
+                {
+                    self.changed();
+                    self.require_checkpoint();
+                }
                 if was_blocked && connection.can_publish_snapshot() {
                     self.publish_dirty = true;
                 }
@@ -283,6 +296,7 @@ impl NativeAuthority {
         }
         // Obtain fallible OS entropy before changing any canonical player or RNG state.
         let token = random_hex::<32>().map_err(server_error)?;
+        let previous_token = resume.as_ref().map(|credentials| credentials.token.clone());
         let player_reference = if let Some(credentials) = &resume {
             self.metadata
                 .resume_slots
@@ -318,7 +332,13 @@ impl NativeAuthority {
             };
         self.metadata.resume_slots.insert(
             id.clone(),
-            ResumeSlot { token, player_reference, saved, peer_id: Some(connection.peer.id()) },
+            ResumeSlot {
+                token,
+                previous_token,
+                player_reference,
+                saved,
+                peer_id: Some(connection.peer.id()),
+            },
         );
         if let Some(previous) = previous_peer
             && previous != connection.peer.id()
@@ -443,7 +463,7 @@ impl NativeAuthority {
             .resume_slots
             .get(&credentials.player_id)
             .ok_or_else(invalid_credentials)?;
-        if slot.token != credentials.token {
+        if !slot.accepts(&credentials.token) {
             return Err(invalid_credentials());
         }
         if slot.peer_id == Some(connection.peer.id()) {

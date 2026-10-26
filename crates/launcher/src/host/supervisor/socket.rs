@@ -208,6 +208,7 @@ impl HostedSupervisor {
             return match message {
                 ClientMessage::SnapshotAck { sequence } => connection
                     .acknowledge_snapshot(sequence)
+                    .map(|_| ())
                     .map_err(|reason| (HostErrorCode::InvalidMessage, reason.into())),
                 ClientMessage::Ping { nonce } => {
                     send_control(&connection.peer, ServerMessage::Pong { nonce })

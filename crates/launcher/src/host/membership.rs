@@ -57,7 +57,9 @@ impl NativeAuthority {
             }
         }
         for (id, slot) in &self.metadata.resume_slots {
-            if slot.token.len() != 64 || !slot.token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            if std::iter::once(slot.token.as_str()).chain(slot.previous_token.as_deref()).any(
+                |token| token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()),
+            ) {
                 return Err("A saved native resume credential is invalid".into());
             }
             let retained_id = match &slot.saved {

@@ -32,7 +32,9 @@ async function focusedControl(page, id) {
 (async () => {
   const owned = await launchOwnedBrowser(chromium,{headless: true,
     executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    args: ['--use-angle=metal', '--ignore-gpu-blocklist']});
+    args: process.platform === 'darwin'
+      ? ['--use-angle=metal', '--ignore-gpu-blocklist']
+      : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
   const browser = owned.browser;
   const checks = [];
   const receipt = {checks, errors: [], pass: false};

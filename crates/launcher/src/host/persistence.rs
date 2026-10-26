@@ -36,12 +36,26 @@ pub enum SavedParticipant {
 #[serde(deny_unknown_fields)]
 pub struct ResumeSlot {
     pub token: String,
+    /// Keep the credential actually presented until this generation ACKs admission.
+    /// Both credentials must survive a host restart during the Welcome transfer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_token: Option<String>,
     pub player_reference: String,
     pub saved: Option<SavedParticipant>,
     /// A transport generation is meaningful only in this process, and never authorizes
     /// a reconnect after restart. The durable token and participant do that instead.
     #[serde(skip)]
     pub peer_id: Option<PeerId>,
+}
+
+impl ResumeSlot {
+    pub fn accepts(&self, token: &str) -> bool {
+        super::signing::credentials_equal(&self.token, token)
+            || self
+                .previous_token
+                .as_deref()
+                .is_some_and(|previous| super::signing::credentials_equal(previous, token))
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -226,6 +226,14 @@ Persistence uses revision checks and atomic synced replacement. Encoding and dis
 I/O run outside the tick deadline. Welcome waits for a reconnect credential to be
 durable; SaveCommitted follows actual file completion.
 
+Direct-host reconnect rotates its credential while retaining the credential the
+client presented until that connection acknowledges the Welcome snapshot. Both
+are durable during admission, so losing the final Welcome bytes or restarting
+the host does not strand the wizard. Only the current connection can retire the
+previous credential; stale snapshot acknowledgements cannot confirm admission.
+The optional previous credential is omitted after confirmation, and existing
+host saves without that field remain readable.
+
 ### Save conversion
 
 The native attachment retains CFG, SAV, and opaque sibling files with their

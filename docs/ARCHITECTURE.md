@@ -143,6 +143,10 @@ sounds, loops and music channels. Browser playback uses WebAudio and media eleme
 native playback uses Rodio/CPAL and streaming compressed music. Trusted browser
 input resumes the AudioContext. Accepted actor events supply sounds.
 Narration duration remains simulation state even when sound is muted.
+If the OS reports no output device at startup, native play uses an elapsed-time
+audio clock and inactive playback controls. It creates no mixer or audio worker.
+Device initialization and decoding failures still propagate; an audio device
+connected later is picked up on the next game launch.
 
 The browser audio backend owns one AudioContext. The shared director owns named
 loop sources and six resident music channels. A loop combines requests using the

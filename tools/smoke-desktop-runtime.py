@@ -149,7 +149,7 @@ class Application:
                     f"{self.name} ready control from {identifiers}")
 
     def activate(self):
-        window = self.app.locator("window").first().element()
+        window = self.app.locator("window").first().wait_attached()
         if PLATFORM == "linux" and window.stable_id not in self.sized_windows:
             # The CI display is 1280x1024. Keep both launcher and game windows
             # fully visible for input and screenshots.
@@ -189,8 +189,8 @@ class Application:
     def fill(self, identifier, value):
         print(f"{self.name}: edit {identifier}", flush=True)
         self.control(identifier).wait_enabled().set_value(value)
-        wait(lambda: (self.control(identifier).element().value or "") == value,
-             f"{identifier} accepting its edit", 10)
+        self.control(identifier).wait_until(
+            lambda item: item is not None and (item.value or "") == value, timeout=10)
 
     def key(self, key):
         self.activate()
@@ -211,7 +211,7 @@ class Application:
         # A failed startup may leave a window beyond the X11 screen boundary.
         # Capture the dedicated display so failure evidence remains available.
         shot = (xa11y.screenshot() if PLATFORM == "linux" else
-                xa11y.screenshot(element=self.app.locator("window").first().element()))
+                xa11y.screenshot(element=self.app.locator("window").first().wait_attached()))
         shot.save_png(EVIDENCE / f"{name}.png")
         print(f"{self.name}: captured {name}", flush=True)
 
@@ -271,7 +271,7 @@ class Application:
         return None
 
     def request_close(self):
-        self.app.locator("window").first().close()
+        self.app.locator("window").first().wait_attached().close()
 
     def exited(self):
         code = self.process.wait(timeout=30)
@@ -304,11 +304,11 @@ def settings(app, verify=False):
     if not verify:
         app.activate()
         slider.wait_enabled().set_numeric_value(37)
-        wait(lambda: slider.element().numeric_value == 37, "accessible music adjustment", 10)
+        slider.wait_until(lambda item: item is not None and item.numeric_value == 37, timeout=10)
         slider.focus()
         slider.wait_focused()
         INPUT.press("Home")
-        wait(lambda: slider.element().numeric_value == 0, "music range minimum", 10)
+        slider.wait_until(lambda item: item is not None and item.numeric_value == 0, timeout=10)
         INPUT.press("ArrowRight")
     slider.wait_until(lambda item: item is not None and item.numeric_value == 1, timeout=10)
     app.click("settings-page:controls")
@@ -408,8 +408,8 @@ def check_offline():
     solo.click("launcher/start-host")
     wait(lambda: solo.control("launcher/status").exists(), "host validation", 10)
     solo.click("launcher/join")
-    wait(lambda: "invite" in (solo.control("launcher/status").element().name or "").lower(),
-         "empty invite validation", 10)
+    solo.control("launcher/status").wait_until(
+        lambda item: item is not None and "invite" in (item.name or "").lower(), timeout=10)
     solo.click("launcher/solo")
     solo.title(fresh=True)
     settings(solo)
@@ -469,11 +469,12 @@ def check_peers():
     invite.focus()
     invite.wait_focused()
     INPUT.chord("v", held=["Meta" if PLATFORM == "darwin" else "Ctrl"])
-    wait(lambda: (invite.element().value or "").startswith("solomondarker://"),
-         "native clipboard invite", 10)
+    invite.wait_until(
+        lambda item: item is not None and (item.value or "").startswith("solomondarker://"),
+        timeout=10)
     guest.click("launcher/join")
     guest.new_game("NativeGuest", "fire")
-    assert not guest.control("hud:map").element().enabled, "the guest may not start the match"
+    assert not guest.control("hud:map").wait_attached().enabled, "the guest may not start the match"
     host.activate()
     host.click("hud:map")
 
@@ -489,6 +490,10 @@ def check_peers():
         return run_ids[0] if run_ids[0] == run_ids[1] else None
 
     run_id = wait(shared_boneyard, "both genuine peer Boneyard checkpoints")
+    # The checkpoint precedes local scene loading. Capture each app only once
+    # its ordinary loading surface retires and it accepts gameplay input.
+    for app in (host, guest):
+        app.control("match-loading").wait_detached(timeout=120)
     host.capture("peer-host-boneyard")
     guest.capture("peer-guest-boneyard")
     guest_save = guest.close()[1]
