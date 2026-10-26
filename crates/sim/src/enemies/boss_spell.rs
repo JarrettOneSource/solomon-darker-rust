@@ -5,8 +5,12 @@ use super::guided_missile::NativeGuidedMissileState;
 use crate::Vec2;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 
+mod storage;
+pub use storage::{BossSpellMut, BossSpellRead, BossSpellRef, BossSpells};
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct BossSpellOwner {
     pub age_ticks: u64,
     pub damage: f64,
@@ -27,6 +31,7 @@ pub struct BossSpellLight {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub enum BossSpellKind {
     UltraBanish {
         remaining_ticks: u64,
@@ -182,7 +187,7 @@ pub struct NativeBossSpell {
     pub kind: BossSpellKind,
 }
 
-impl NativeBossSpell {
+impl BossSpellRef<'_> {
     #[must_use]
     pub fn guided_missile_state(&self) -> NativeGuidedMissileState {
         let BossSpellKind::SkullMissile {
@@ -194,7 +199,7 @@ impl NativeBossSpell {
             turn_rate,
             visual_scale,
             ..
-        } = self.kind
+        } = *self.kind
         else {
             panic!("Skull Missile state required");
         };
@@ -219,7 +224,7 @@ impl NativeBossSpell {
             remaining_ticks,
             velocity,
             ..
-        } = self.kind
+        } = *self.kind
         else {
             panic!("Dark Fireball state required");
         };
@@ -237,7 +242,7 @@ impl NativeBossSpell {
     #[must_use]
     pub fn rain_state(&self) -> NativeRainOfBonesState {
         let BossSpellKind::RainOfBones { alpha, phase, remaining_ticks, rotation_sign, scale } =
-            self.kind
+            *self.kind
         else {
             panic!("Rain of Bones state required");
         };
@@ -250,36 +255,50 @@ impl NativeBossSpell {
             scale,
         }
     }
+}
 
+impl BossSpellMut<'_> {
     pub fn set_guided_missile_state(&mut self, state: NativeGuidedMissileState) {
-        let BossSpellKind::SkullMissile { target_player_id, .. } = &self.kind else {
-            panic!("Skull Missile state required");
+        let BossSpellKind::SkullMissile {
+            heading_deg,
+            minimum_speed,
+            phase_deg,
+            remaining_ticks,
+            speed,
+            turn_rate,
+            visual_scale,
+            ..
+        } = &mut *self.kind
+        else {
+            panic!("Skull Missile state required")
         };
-        self.kind = BossSpellKind::SkullMissile {
-            heading_deg: state.heading_deg,
-            minimum_speed: state.minimum_speed,
-            phase_deg: state.phase_deg,
-            remaining_ticks: state.remaining_ticks,
-            speed: state.speed,
-            turn_rate: state.turn_rate,
-            visual_scale: state.visual_scale,
-            target_player_id: target_player_id.clone(),
-        };
+        *heading_deg = state.heading_deg;
+        *minimum_speed = state.minimum_speed;
+        *phase_deg = state.phase_deg;
+        *remaining_ticks = state.remaining_ticks;
+        *speed = state.speed;
+        *turn_rate = state.turn_rate;
+        *visual_scale = state.visual_scale;
         self.owner.position = state.position;
     }
 
     pub fn set_dark_fireball_state(&mut self, state: NativeDarkFireballState) {
-        let BossSpellKind::DarkFireball { ground_fire_damage, .. } = self.kind else {
-            panic!("Dark Fireball state required");
+        let BossSpellKind::DarkFireball {
+            arc_phase,
+            arc_phase_step,
+            heading_deg,
+            remaining_ticks,
+            velocity,
+            ..
+        } = &mut *self.kind
+        else {
+            panic!("Dark Fireball state required")
         };
-        self.kind = BossSpellKind::DarkFireball {
-            arc_phase: state.arc_phase,
-            arc_phase_step: state.arc_phase_step,
-            heading_deg: state.heading_deg,
-            remaining_ticks: state.remaining_ticks,
-            velocity: state.velocity,
-            ground_fire_damage,
-        };
+        *arc_phase = state.arc_phase;
+        *arc_phase_step = state.arc_phase_step;
+        *heading_deg = state.heading_deg;
+        *remaining_ticks = state.remaining_ticks;
+        *velocity = state.velocity;
         self.owner.age_ticks = state.age_ticks;
         self.owner.position = state.position;
     }

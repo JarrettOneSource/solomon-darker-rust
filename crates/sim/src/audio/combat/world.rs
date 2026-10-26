@@ -163,7 +163,7 @@ pub fn native_boneyard_enemy_ambient_requests(
             _ => {}
         }
     }
-    for spell in &world.boss_spells {
+    for spell in world.boss_spells.iter() {
         let position = spell.owner.position;
         match &spell.kind {
             BossSpellKind::GreenFire { .. } => gains[9] = gains[9].max(point_gain(position) / 3.0),

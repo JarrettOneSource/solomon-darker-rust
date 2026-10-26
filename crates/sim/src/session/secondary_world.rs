@@ -210,7 +210,7 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
                 },
             });
         }
-        for spell in &world.enemies.boss_spells {
+        for spell in world.enemies.boss_spells.iter() {
             if !inside(spell.owner.position) {
                 continue;
             }

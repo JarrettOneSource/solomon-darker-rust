@@ -1,6 +1,6 @@
 //! Discorporeal terminal spell lifetimes from `enemies/ultra-banish.ts`.
 
-use super::boss_spell::{BossSpellKind, NativeBossSpell};
+use super::boss_spell::{BossSpellKind, BossSpellMut, NativeBossSpell};
 use super::demon_skull_effects::UNHOLY_GREEN;
 use super::effects::{
     BouncerOptions, DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec, radial_vector,
@@ -14,14 +14,14 @@ use crate::painter::WorldPainterOrder;
 
 pub fn step_ultra_banish_spell(
     world: &mut EnemyWorld,
-    mut spell: NativeBossSpell,
+    spell: &mut BossSpellMut<'_>,
     context: &EnemyStepContext<'_>,
     has_long_ultra_banish: bool,
     order: &mut WorldPainterOrder,
-) -> Option<NativeBossSpell> {
+) -> bool {
     spell.owner.age_ticks += 1;
     let owner = DeathEffectOwner { id: spell.owner.owner_actor_id, position: spell.owner.position };
-    match &mut spell.kind {
+    match &mut *spell.kind {
         BossSpellKind::UnholySoul {
             origin,
             angle_deg,
@@ -45,7 +45,7 @@ pub fn step_ultra_banish_spell(
                 *angle_deg = fround(*angle_deg + 360.0);
             }
             if *life <= 0.0 {
-                return None;
+                return false;
             }
             let angle = *angle_deg * std::f64::consts::PI / 180.0;
             spell.owner.position = Vec2::new(
@@ -57,7 +57,7 @@ pub fn step_ultra_banish_spell(
                 *angular_speed = fround(*angular_speed * fround(1.05));
                 *vertical_speed = fround(*vertical_speed * fround(1.05));
             }
-            Some(spell)
+            true
         }
         BossSpellKind::UltraBanish {
             remaining_ticks,
@@ -151,7 +151,7 @@ pub fn step_ultra_banish_spell(
                 *alpha = fround(*alpha - fround(0.01));
             }
             if *alpha <= 0.0 {
-                return None;
+                return false;
             }
             if *mega_death
                 && *remaining_ticks > 100
@@ -186,7 +186,7 @@ pub fn step_ultra_banish_spell(
             if *flash_alpha <= 0.0 && world.steering_rng.draw_integer(1000) == 3 {
                 *flash_alpha = 1.0;
             }
-            Some(spell)
+            true
         }
         _ => panic!("UltraBanish spell required"),
     }

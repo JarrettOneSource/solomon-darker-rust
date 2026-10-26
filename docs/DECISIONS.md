@@ -20,7 +20,8 @@ Removing an entity can move another entity within an ECS table. The ordered
 handle index preserves survivor order, which determines contact selection, RNG
 draws, and painter registration. Births enter at the owning system's boundary:
 secondary effects wait for the next actor pass, while terminal enemy children
-can advance later in the same pass.
+can advance later in the same pass. Boss spell children enter before their retained
+parent and receive their first update on the next pass.
 
 Tick functions run in their declared sequence. Damage accepted by one phase can
 retire a target or create an effect before the next phase runs, and several phases

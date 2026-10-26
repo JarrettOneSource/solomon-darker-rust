@@ -253,7 +253,7 @@ pub struct EnemyWorld {
     pub spider_spit_ticks_remaining: u64,
     pub spider_remains: crate::ComponentEntities<super::spider_remains::SpiderRemains>,
     pub detached_crows: crate::ComponentEntities<super::heartmonger::DetachedCrow>,
-    pub boss_spells: Vec<super::boss_spell::NativeBossSpell>,
+    pub boss_spells: super::boss_spell::BossSpells,
     pub puppet_hits: crate::ComponentEntities<super::puppet_hits::EnemyPuppetHit>,
 }
 
@@ -309,7 +309,7 @@ impl EnemyWorld {
             spider_spit_ticks_remaining: 0,
             spider_remains: crate::ComponentEntities::default(),
             detached_crows: crate::ComponentEntities::default(),
-            boss_spells: Vec::new(),
+            boss_spells: super::boss_spell::BossSpells::default(),
             puppet_hits: crate::ComponentEntities::default(),
         }
     }
@@ -403,7 +403,7 @@ impl EnemyWorld {
             order.next_actor_ordinal =
                 order.next_actor_ordinal.max(silk.painter_registration.registration_ordinal + 1);
         }
-        for spell in &self.boss_spells {
+        for spell in self.boss_spells.iter() {
             let registration = spell.owner.painter_registration;
             let next = match registration.manager_lane {
                 WorldManagerLane::Actor => &mut order.next_actor_ordinal,

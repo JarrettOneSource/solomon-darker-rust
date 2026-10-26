@@ -309,7 +309,7 @@ impl EnemyPresentationGoldens {
             assert_plan(&actual, &record["expected"], &record_key);
             self.checked_effects[1] += 1;
         }
-        for spell in &world.boss_spells {
+        for spell in world.boss_spells.iter() {
             let rain = if matches!(
                 spell.kind,
                 solomon_sim::enemies::boss_spell::BossSpellKind::RainOfBones { .. }
@@ -317,15 +317,15 @@ impl EnemyPresentationGoldens {
                 let state = self
                     .rain
                     .entry(format!("{name}:{}", spell.owner.id))
-                    .or_insert_with(|| NativeRainCloud::new(spell, tick));
-                Some(state.update(spell, tick))
+                    .or_insert_with(|| NativeRainCloud::new(&spell, tick));
+                Some(state.update(&spell, tick))
             } else {
                 None
             };
             let record_key = key("boss", name, tick, spell.owner.id);
             let Some(index) = self.effect_indices[2].get(&record_key) else { continue };
             let record = &self.source["effects"]["boss"][index];
-            let plan = native_boss_spell_plan(spell, tick, 900.0);
+            let plan = native_boss_spell_plan(&spell, tick, 900.0);
             let actual = json!({"gradients":plan.gradients.iter().map(gradient_json).collect::<Vec<_>>(),
                 "layers":plan.layers.iter().map(layer_json).collect::<Vec<_>>()});
             assert_plan(&actual, &record["expected"], &record_key);
@@ -388,12 +388,12 @@ impl EnemyPresentationGoldens {
                 self.checked_meshes += 1;
             }
         }
-        for spell in &world.boss_spells {
+        for spell in world.boss_spells.iter() {
             let record_key = key("dark", name, tick, spell.owner.id);
             let Some(indices) = self.mesh_indices.get(&record_key) else { continue };
             for index in indices {
                 let record = &self.source["meshes"][index];
-                let body = native_dark_lightning_body(spell);
+                let body = native_dark_lightning_body(&spell);
                 let actual = json!({"layers":body.iter().map(ribbon_json).collect::<Vec<_>>()});
                 assert_plan(&actual, &record["expected"], &record_key);
                 self.checked_meshes += 1;

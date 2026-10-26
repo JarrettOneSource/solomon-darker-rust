@@ -2,7 +2,7 @@
 //! and `native-ultra-banish-presentation.ts`. Mesh-only spells retain their own view paths.
 
 use super::actor_presentation::{EnemyArtAtlas, EnemyArtBlend, EnemySpriteLayer};
-use super::boss_spell::{BossSpellKind, NativeBossSpell};
+use super::boss_spell::{BossSpellKind, BossSpellRead};
 use super::death_presentation::EnemyBanishGradient;
 use super::presentation::native_death_magic_layers;
 use crate::float;
@@ -16,12 +16,13 @@ pub struct EnemyBossSpellPlan {
 
 #[must_use]
 pub fn native_boss_spell_plan(
-    spell: &NativeBossSpell,
+    spell: &impl BossSpellRead,
     tick: u64,
     view_height: f64,
 ) -> EnemyBossSpellPlan {
-    let mut rng = NativeRng::new((spell.owner.id as u64 + tick) as i64);
-    let layers = match &spell.kind {
+    let spell_view = spell.view();
+    let mut rng = NativeRng::new((spell_view.owner.id as u64 + tick) as i64);
+    let layers = match spell_view.kind {
         BossSpellKind::UltraBanish { alpha, flash_alpha, .. } => {
             return ultra_banish_plan(*alpha, *flash_alpha, view_height, &mut rng);
         }
@@ -138,7 +139,7 @@ pub fn native_boss_spell_plan(
                     tint: 0xff8000,
                     ..layer(
                         EnemyArtAtlas::BadGuys,
-                        255 + (spell.owner.age_ticks % 12) as usize,
+                        255 + (spell_view.owner.age_ticks % 12) as usize,
                         "direball-flame",
                     )
                 },

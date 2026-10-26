@@ -12,7 +12,8 @@ use bevy_ecs::query::{IterQueryData, QueryItem, QueryState};
 use bevy_ecs::world::{EntityRef, EntityWorldMut, World};
 
 pub(crate) struct OrderedEntities<Q: IterQueryData> {
-    storage: Option<ComponentWorld<Q>>,
+    // Sessions embed several domains; their World/query allocations belong on the heap.
+    storage: Option<Box<ComponentWorld<Q>>>,
     order: EntityIndexSet,
 }
 
@@ -76,7 +77,7 @@ impl<Q: IterQueryData> OrderedEntities<Q> {
         let storage = self.storage.get_or_insert_with(|| {
             let mut world = World::new();
             let query = world.query::<Q>();
-            ComponentWorld { world, query }
+            Box::new(ComponentWorld { world, query })
         });
         self.order.insert(insert(&mut storage.world));
     }
@@ -118,6 +119,33 @@ impl<Q: IterQueryData> OrderedEntities<Q> {
             storage.world.despawn(*entity);
         }
         self.order.retain(|entity| !retired.contains(entity));
+    }
+
+    /// Update the original population once. Children enter the order immediately
+    /// before their retained parent, but receive their first update on the next pass.
+    pub fn advance_with_births<T>(
+        &mut self,
+        mut step: impl FnMut(QueryItem<'_, '_, Q>) -> (bool, Vec<T>),
+        mut spawn: impl FnMut(&mut World, T) -> Entity,
+    ) {
+        let Some(storage) = &mut self.storage else { return };
+        let population = std::mem::take(&mut self.order);
+        self.order.reserve(population.len());
+        for entity in population {
+            let components = storage
+                .query
+                .get_mut(&mut storage.world, entity)
+                .expect("entity retains its components");
+            let (retained, births) = step(components);
+            for birth in births {
+                self.order.insert(spawn(&mut storage.world, birth));
+            }
+            if retained {
+                self.order.insert(entity);
+            } else {
+                storage.world.despawn(entity);
+            }
+        }
     }
 
     pub fn extract_if<T>(

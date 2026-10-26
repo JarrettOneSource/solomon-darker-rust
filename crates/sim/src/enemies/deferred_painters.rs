@@ -126,9 +126,9 @@ impl EnemyWorld {
                 resolve(registration);
             }
         }
-        for spell in &mut self.boss_spells {
+        for spell in self.boss_spells.iter_mut() {
             resolve(&mut spell.owner.painter_registration);
-            if let super::boss_spell::BossSpellKind::GreenFire { fire, .. } = &mut spell.kind {
+            if let super::boss_spell::BossSpellKind::GreenFire { fire, .. } = &mut *spell.kind {
                 for registration in &mut fire.common.painter_registrations {
                     resolve(registration);
                 }

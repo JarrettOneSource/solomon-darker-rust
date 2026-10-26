@@ -78,13 +78,15 @@ Domain stores define the components and expose borrowed views to their callers.
 Enemy views combine body and controller state; secondary views include the
 ability-specific components present on that entity; loot views combine the body
 and pickup reward. Enemy projectiles pair flight and contact state with their motion
-program. Small particle and effect lifecycles use `ComponentEntities`.
+program; boss spells pair identity and lifetime with their spell program. Small
+particle and effect lifecycles use `ComponentEntities`.
 
 The store's private ECS handles identify live component allocations. Game IDs
 and painter registrations remain the identities used by contacts, saves, and
 network snapshots. Constructing or restoring an owned record enrolls its
-components; serialization reads them in admission order. A controller working
-copy is committed back to the same entity after its action finishes.
+components; serialization reads them in admission order. Enemy controller working
+copies commit back to the same entity after each action. Projectile and effect
+systems update their queried components in place.
 
 The [component-storage decision](DECISIONS.md#component-storage-and-simulation-order)
 explains the ordering and persistence constraints.

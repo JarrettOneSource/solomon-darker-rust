@@ -2,7 +2,7 @@
 //! `core-kernels/native-faculty-spells.ts::createNativeRainCloudBillow`.
 
 use super::actor_presentation::{EnemyArtAtlas, EnemySpriteLayer};
-use super::boss_spell::{BossSpellKind, NativeBossSpell};
+use super::boss_spell::{BossSpellKind, BossSpellRead};
 use crate::float;
 use crate::float::fround;
 use crate::{NativeRng, Vec2};
@@ -28,39 +28,41 @@ pub struct NativeRainCloud {
 
 impl NativeRainCloud {
     #[must_use]
-    pub fn new(spell: &NativeBossSpell, presentation_tick: u64) -> Self {
+    pub fn new(spell: &impl BossSpellRead, presentation_tick: u64) -> Self {
+        let spell_view = spell.view();
         assert!(
-            matches!(spell.kind, BossSpellKind::RainOfBones { .. }),
+            matches!(*spell_view.kind, BossSpellKind::RainOfBones { .. }),
             "Rain Cloud requires Rain of Bones"
         );
         Self {
             billows: Vec::new(),
-            last_birth_tick: if spell.owner.age_ticks <= 1 {
-                spell.owner.spawn_tick
+            last_birth_tick: if spell_view.owner.age_ticks <= 1 {
+                spell_view.owner.spawn_tick
             } else {
                 presentation_tick
             },
-            rng: NativeRng::new(spell.owner.id as i64),
+            rng: NativeRng::new(spell_view.owner.id as i64),
         }
     }
 
     #[must_use]
     pub fn update(
         &mut self,
-        spell: &NativeBossSpell,
+        spell: &impl BossSpellRead,
         presentation_tick: u64,
     ) -> Vec<EnemySpriteLayer> {
-        let BossSpellKind::RainOfBones { alpha, .. } = spell.kind else {
+        let spell_view = spell.view();
+        let BossSpellKind::RainOfBones { alpha, .. } = *spell_view.kind else {
             panic!("Rain Cloud requires Rain of Bones")
         };
         if alpha <= 0.0 {
             return Vec::new();
         }
-        let through = presentation_tick.min(spell.owner.spawn_tick + 1199);
-        let first = (self.last_birth_tick + 1).max(spell.owner.spawn_tick + 20);
+        let through = presentation_tick.min(spell_view.owner.spawn_tick + 1199);
+        let first = (self.last_birth_tick + 1).max(spell_view.owner.spawn_tick + 20);
         for _ in first..=through {
             for _ in 0..2 {
-                self.billows.push(create_billow(spell.owner.position, &mut self.rng));
+                self.billows.push(create_billow(spell_view.owner.position, &mut self.rng));
             }
         }
         self.last_birth_tick = presentation_tick;
@@ -73,8 +75,8 @@ impl NativeRainCloud {
             layers.push(EnemySpriteLayer {
                 alpha: fround(float::sin(billow.phase_deg * std::f64::consts::PI / 180.0)),
                 offset: Vec2::new(
-                    billow.position.x - spell.owner.position.x,
-                    billow.position.y - spell.owner.position.y - 175.0,
+                    billow.position.x - spell_view.owner.position.x,
+                    billow.position.y - spell_view.owner.position.y - 175.0,
                 ),
                 rotation_radians: billow.rotation_deg * std::f64::consts::PI / 180.0,
                 scale: billow.scale,

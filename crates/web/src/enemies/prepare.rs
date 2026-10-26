@@ -397,10 +397,12 @@ impl EnemyView {
     pub(super) fn prepare_boss_spells(&mut self, world: &EnemyWorld, frame: &EnemyViewFrame<'_>) {
         self.rain_clouds
             .retain(|id, _| world.boss_spells.iter().any(|spell| spell.owner.id == *id));
-        for spell in &world.boss_spells {
+        for spell in world.boss_spells.iter() {
             if matches!(spell.kind, BossSpellKind::Blightning { .. }) {
                 let layers =
-                    solomon_sim::enemies::lightning_presentation::native_dark_lightning_body(spell);
+                    solomon_sim::enemies::lightning_presentation::native_dark_lightning_body(
+                        &spell,
+                    );
                 self.append_lightning_body(
                     spell.owner.position,
                     &layers,
@@ -409,11 +411,11 @@ impl EnemyView {
                 );
                 continue;
             }
-            let plan = native_boss_spell_plan(spell, frame.tick, frame.view_height);
+            let plan = native_boss_spell_plan(&spell, frame.tick, frame.view_height);
             let mut group = EnemyDrawGroup::at(spell.owner.position);
             group.draws.extend(plan.gradients.into_iter().map(EnemyDraw::Gradient));
             if let BossSpellKind::MouthBeamSegment { vertices, uv_offset, start_alpha, end_alpha } =
-                spell.kind
+                *spell.kind
             {
                 group.draws.push(EnemyDraw::MouthBeam {
                     vertices,
@@ -426,15 +428,15 @@ impl EnemyView {
                 let rain = self
                     .rain_clouds
                     .entry(spell.owner.id)
-                    .or_insert_with(|| NativeRainCloud::new(spell, frame.tick));
-                for layer in rain.update(spell, frame.tick) {
+                    .or_insert_with(|| NativeRainCloud::new(&spell, frame.tick));
+                for layer in rain.update(&spell, frame.tick) {
                     group.draws.push(EnemyDraw::Sprite { layer, region_tint: false });
                 }
             }
             for layer in plan.layers {
                 group.draws.push(EnemyDraw::Sprite { layer, region_tint: false });
             }
-            let bias = match spell.kind {
+            let bias = match *spell.kind {
                 BossSpellKind::UltraBanish { .. } => 50.0,
                 BossSpellKind::GreenFire { .. } => -25.0,
                 BossSpellKind::HeartmongerFlicker { .. } => -200.0,

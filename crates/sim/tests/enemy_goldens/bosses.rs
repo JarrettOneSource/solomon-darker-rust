@@ -63,14 +63,14 @@ pub(super) fn guided_missile_json(state: NativeGuidedMissileState) -> Value {
         "speed":state.speed,"turnRate":state.turn_rate,"visualScale":state.visual_scale})
 }
 
-pub(super) fn boss_spell_json(spell: &solomon_sim::enemies::boss_spell::NativeBossSpell) -> Value {
+pub(super) fn boss_spell_json(spell: solomon_sim::enemies::boss_spell::BossSpellRef<'_>) -> Value {
     use solomon_sim::enemies::boss_spell::BossSpellKind;
     let owner = spell.owner;
     let mut record = json!({"ageTicks":owner.age_ticks,"damage":owner.damage,"id":owner.id,
         "painterRegistration":painter_registration_json(owner.painter_registration),
         "ownerActorId":owner.owner_actor_id,"position":point_json(owner.position),
         "spawnTick":owner.spawn_tick,"kind":spell.kind.id()});
-    let fields = match &spell.kind {
+    let fields = match spell.kind {
         BossSpellKind::UltraBanish {
             remaining_ticks,
             alpha,

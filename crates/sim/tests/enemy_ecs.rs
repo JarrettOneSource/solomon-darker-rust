@@ -216,3 +216,89 @@ fn projectile_retirement_birth_and_restore_preserve_motion_and_event_order() {
         assert_eq!(restored_order, order);
     }
 }
+
+#[test]
+fn boss_spell_children_precede_the_parent_and_wait_for_the_next_tick() {
+    use solomon_sim::enemies::boss_spell::{BossSpellKind, BossSpellOwner, NativeBossSpell};
+
+    let mut live = EnemyWorld::new("boss-spell-ecs", 50);
+    let mut order = WorldPainterOrder::default();
+    let kinds = [
+        BossSpellKind::HeartmongerFlicker { phase_deg: 0.0 },
+        BossSpellKind::RainOfBones {
+            alpha: 1.0,
+            phase: 0.0,
+            remaining_ticks: 100,
+            rotation_sign: 1.0,
+            scale: 1.0,
+        },
+        BossSpellKind::DeathMagic {
+            scale: 1.0,
+            alpha: 0.5,
+            alpha_loss_per_tick: 1.0,
+            painter_sort_bias: 0.0,
+            light: None,
+        },
+        BossSpellKind::HeartmongerSoul { life_phase_deg: 0.0, bob_phase_deg: 0.0 },
+    ];
+    let mut records = Vec::new();
+    for (index, kind) in kinds.into_iter().enumerate() {
+        let record = NativeBossSpell {
+            owner: BossSpellOwner {
+                age_ticks: 0,
+                damage: 1.0,
+                id: index + 1,
+                painter_registration: order.register(kind.manager_lane()),
+                owner_actor_id: 100,
+                position: Vec2::new(200.0, 200.0),
+                spawn_tick: 0,
+            },
+            kind,
+        };
+        live.boss_spells.push(record.clone());
+        records.push(record);
+    }
+    live.next_projectile_id = 5;
+    assert_eq!(
+        serde_json::to_value(&live.boss_spells).unwrap(),
+        serde_json::to_value(&records).unwrap()
+    );
+
+    let mut first_birth = None;
+    for tick in 1..=20 {
+        step(&mut live, &[], tick, &mut order);
+        let spells: Vec<_> = live.boss_spells.iter().collect();
+        assert_eq!(spells.first().unwrap().owner.id, 1);
+        assert_eq!(spells.last().unwrap().owner.id, 4);
+        assert!(!spells.iter().any(|spell| spell.owner.id == 3));
+        if let Some(index) = spells.iter().position(|spell| spell.owner.id >= 5) {
+            let child = spells[index];
+            assert_eq!(spells[index + 1].owner.id, 2);
+            assert_eq!(child.owner.age_ticks, 0);
+            assert_eq!(child.owner.spawn_tick, tick);
+            let BossSpellKind::FallingBone { height, .. } = *child.kind else {
+                panic!("Rain of Bones births a falling bone");
+            };
+            assert_eq!(height, -175.0);
+            first_birth = Some((tick, child.owner.id));
+            break;
+        }
+    }
+    let (birth_tick, child_id) =
+        first_birth.expect("fixed-seed rain produces a child within 20 ticks");
+    let saved = serde_json::to_vec(&live).unwrap();
+    let mut restored: EnemyWorld = serde_json::from_slice(&saved).unwrap();
+    let mut restored_order = order;
+    for tick in birth_tick + 1..=birth_tick + 20 {
+        step(&mut live, &[], tick, &mut order);
+        step(&mut restored, &[], tick, &mut restored_order);
+        let child = live.boss_spells.iter().find(|spell| spell.owner.id == child_id).unwrap();
+        assert_eq!(child.owner.age_ticks, tick - birth_tick);
+        assert_eq!(
+            serde_json::to_vec(&restored).unwrap(),
+            serde_json::to_vec(&live).unwrap(),
+            "tick {tick}"
+        );
+        assert_eq!(restored_order, order);
+    }
+}

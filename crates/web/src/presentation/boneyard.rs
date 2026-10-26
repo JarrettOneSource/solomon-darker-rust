@@ -11,7 +11,7 @@ use solomon_sim::combat::PuppetHitState;
 use solomon_sim::enemies::actor_presentation::{
     EnemyActorAppearanceContext, EnemySpiderOutlineTarget,
 };
-use solomon_sim::enemies::boss_spell::{BossSpellKind, NativeBossSpell};
+use solomon_sim::enemies::boss_spell::{BossSpellKind, BossSpellRead, BossSpells};
 use solomon_sim::enemies::model::EnemyBrain;
 use solomon_sim::enemies::puppet_hits::{EnemyPuppetHit, EnemyPuppetHitKind};
 use solomon_sim::float::fround;
@@ -218,21 +218,17 @@ pub(super) fn project(
     metadata
 }
 
-fn project_boss_spells(
-    older: &[NativeBossSpell],
-    newer: &[NativeBossSpell],
-    blend: f64,
-) -> Vec<NativeBossSpell> {
+fn project_boss_spells(older: &BossSpells, newer: &BossSpells, blend: f64) -> BossSpells {
     if blend >= 1.0 {
-        return newer.to_vec();
+        return newer.clone();
     }
     let by_id: BTreeMap<_, _> = newer.iter().map(|spell| (spell.owner.id, spell)).collect();
     older
         .iter()
         .map(|first| {
-            let mut spell = first.clone();
+            let mut spell = first.snapshot();
             let Some(next) = by_id.get(&first.owner.id) else { return spell };
-            if std::mem::discriminant(&first.kind) != std::mem::discriminant(&next.kind)
+            if std::mem::discriminant(first.kind) != std::mem::discriminant(next.kind)
                 || matches!(first.kind, BossSpellKind::MouthBeamSegment { .. })
             {
                 return spell;

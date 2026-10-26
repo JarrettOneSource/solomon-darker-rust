@@ -184,7 +184,7 @@ impl EnemyWorld {
             target.target.cell_binding_order = silk.native_cell_binding_order;
             targets.push(target);
         }
-        for spell in &self.boss_spells {
+        for spell in self.boss_spells.iter() {
             let lane = match spell.kind {
                 BossSpellKind::EyeLaser { .. } => PrimarySpellQueryLane::Transient,
                 BossSpellKind::SkullMissile { .. } => PrimarySpellQueryLane::Grid,
