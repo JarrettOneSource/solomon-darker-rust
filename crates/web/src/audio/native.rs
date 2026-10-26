@@ -12,7 +12,7 @@ use rodio::{
 use std::cell::Cell;
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Clone)]
 pub(super) struct AudioBuffer(SamplesBuffer);
@@ -36,22 +36,38 @@ impl Bus {
         Self { mixer, player }
     }
 }
-struct Engine {
+struct DeviceOutput {
     root: Bus,
     master: Bus,
     effects: Bus,
-    error: Arc<Mutex<Option<String>>>,
     _device: MixerDeviceSink,
+}
+struct Engine {
+    output: Option<DeviceOutput>,
+    started: Instant,
+    error: Arc<Mutex<Option<String>>>,
 }
 #[derive(Clone)]
 pub(super) struct AudioEngine(Rc<Engine>);
 
 impl AudioEngine {
     pub fn new(_surface: &crate::platform::Surface) -> Result<Self, String> {
+        Self::from_device(DeviceSinkBuilder::from_default_device())
+    }
+    fn from_device(
+        device: Result<DeviceSinkBuilder, rodio::DeviceSinkError>,
+    ) -> Result<Self, String> {
         let error = Arc::new(Mutex::new(None));
+        let device = match device {
+            Ok(device) => device,
+            Err(rodio::DeviceSinkError::NoDevice) => {
+                crate::platform::warn("No audio output device; playing without sound.");
+                return Ok(Self(Rc::new(Engine { output: None, started: Instant::now(), error })));
+            }
+            Err(error) => return Err(format!("Open native audio device: {error}")),
+        };
         let callback_error = error.clone();
-        let mut device = DeviceSinkBuilder::from_default_device()
-            .map_err(|error| format!("Open native audio device: {error}"))?
+        let mut device = device
             .with_buffer_size(rodio::cpal::BufferSize::Fixed(1024))
             .with_error_callback(move |error| {
                 *callback_error.lock().expect("audio error lock") =
@@ -65,19 +81,30 @@ impl AudioEngine {
         let root = Bus::new(device.mixer(), channels, rate);
         let master = Bus::new(&root.mixer, channels, rate);
         let effects = Bus::new(&master.mixer, channels, rate);
-        Ok(Self(Rc::new(Engine { root, master, effects, error, _device: device })))
+        Ok(Self(Rc::new(Engine {
+            output: Some(DeviceOutput { root, master, effects, _device: device }),
+            started: Instant::now(),
+            error,
+        })))
     }
     pub fn current_time(&self) -> f64 {
-        self.0.root.player.get_pos().as_secs_f64()
+        self.0.output.as_ref().map_or_else(
+            || self.0.started.elapsed().as_secs_f64(),
+            |output| output.root.player.get_pos().as_secs_f64(),
+        )
     }
     pub fn check(&self) -> Result<(), String> {
         self.0.error.lock().expect("audio error lock").clone().map_or(Ok(()), Err)
     }
     pub fn set_sound_volume(&self, value: f32) {
-        self.0.master.player.set_volume(value);
+        if let Some(output) = &self.0.output {
+            output.master.player.set_volume(value);
+        }
     }
     pub fn set_narration_mix(&self, value: f32) {
-        self.0.effects.player.set_volume(value);
+        if let Some(output) = &self.0.output {
+            output.effects.player.set_volume(value);
+        }
     }
     pub async fn decode(&self, bytes: Vec<u8>) -> Result<AudioBuffer, String> {
         blocking::unblock(move || decode(bytes)).await
@@ -85,10 +112,14 @@ impl AudioEngine {
     pub async fn load_music(&self, cue: AudioCue) -> Result<Music, String> {
         let bytes =
             assets::fetch_bytes(&format!("assets/stock/audio/{}", cue.definition().path)).await?;
-        Music::new(self.0.root.mixer.clone(), bytes.into(), self.0.error.clone())
+        self.asset_music(cue.definition().path, bytes.into())
     }
     pub fn asset_music(&self, _url: &str, bytes: Arc<[u8]>) -> Result<Music, String> {
-        Music::new(self.0.root.mixer.clone(), bytes, self.0.error.clone())
+        Music::new(
+            self.0.output.as_ref().map(|output| output.root.mixer.clone()),
+            bytes,
+            self.0.error.clone(),
+        )
     }
     pub fn voice(
         &self,
@@ -99,15 +130,16 @@ impl AudioEngine {
         bus: AudioBus,
     ) -> Result<Voice, String> {
         self.check()?;
-        let mixer = match bus {
-            AudioBus::Effects => &self.0.effects.mixer,
-            AudioBus::Narration => &self.0.master.mixer,
-        };
         let source = voice_source(buffer, options, looping, delay)?;
+        let Some(output) = &self.0.output else { return Ok(Voice(None)) };
+        let mixer = match bus {
+            AudioBus::Effects => &output.effects.mixer,
+            AudioBus::Narration => &output.master.mixer,
+        };
         let player = Player::connect_new(mixer);
         player.set_volume(options.volume.clamp(0.0, 1.0) as f32);
         player.append(source);
-        Ok(Voice(player))
+        Ok(Voice(Some(player)))
     }
 }
 
@@ -168,13 +200,17 @@ fn voice_source(
     Ok(Box::new(source.speed(options.playback_rate as f32).delay(duration(delay)?)))
 }
 
-pub(super) struct Voice(Player);
+pub(super) struct Voice(Option<Player>);
 impl Voice {
     pub fn set_volume(&self, value: f32) {
-        self.0.set_volume(value);
+        if let Some(player) = &self.0 {
+            player.set_volume(value);
+        }
     }
     pub fn stop(&self) -> Result<(), String> {
-        self.0.stop();
+        if let Some(player) = &self.0 {
+            player.stop();
+        }
         Ok(())
     }
     pub fn disconnect(&self) -> Result<(), String> {
@@ -182,19 +218,28 @@ impl Voice {
     }
 }
 
+enum MusicPlayback {
+    Device { mixer: Mixer, player: RefCell<Option<Player>> },
+    Silent { paused: Cell<bool> },
+}
+
 pub(super) struct Music {
-    mixer: Mixer,
+    playback: MusicPlayback,
     bytes: Arc<[u8]>,
-    player: RefCell<Option<Player>>,
     volume: Cell<f32>,
     error: Arc<Mutex<Option<String>>>,
 }
 impl Music {
     pub fn paused(&self) -> bool {
-        self.player.borrow().as_ref().is_none_or(Player::is_paused)
+        match &self.playback {
+            MusicPlayback::Device { player, .. } => {
+                player.borrow().as_ref().is_none_or(Player::is_paused)
+            }
+            MusicPlayback::Silent { paused } => paused.get(),
+        }
     }
     fn new(
-        mixer: Mixer,
+        mixer: Option<Mixer>,
         bytes: Arc<[u8]>,
         error: Arc<Mutex<Option<String>>>,
     ) -> Result<Self, String> {
@@ -203,17 +248,28 @@ impl Music {
         if decoder.next().is_none() {
             return Err("Music contains no samples".into());
         }
-        Ok(Self { mixer, bytes, player: RefCell::new(None), volume: Cell::new(0.0), error })
+        let playback = match mixer {
+            Some(mixer) => MusicPlayback::Device { mixer, player: RefCell::new(None) },
+            None => MusicPlayback::Silent { paused: Cell::new(true) },
+        };
+        Ok(Self { playback, bytes, volume: Cell::new(0.0), error })
     }
     fn play(&self) -> Result<(), String> {
-        let mut player = self.player.borrow_mut();
+        let (mixer, player) = match &self.playback {
+            MusicPlayback::Device { mixer, player } => (mixer, player),
+            MusicPlayback::Silent { paused } => {
+                paused.set(false);
+                return Ok(());
+            }
+        };
+        let mut player = player.borrow_mut();
         if let Some(player) = player.as_ref() {
             player.play();
         } else {
             // The decoder seeks its encoded input at loop boundaries; songs never
             // accumulate a whole decoded PCM copy just to repeat.
             let source = stream_source(self.bytes.clone(), true, self.error.clone())?;
-            let next = Player::connect_new(&self.mixer);
+            let next = Player::connect_new(mixer);
             next.set_volume(self.volume.get());
             next.append(source);
             *player = Some(next);
@@ -221,17 +277,29 @@ impl Music {
         Ok(())
     }
     pub fn pause(&self) -> Result<(), String> {
-        if let Some(player) = self.player.borrow().as_ref() {
-            player.pause();
+        match &self.playback {
+            MusicPlayback::Device { player, .. } => {
+                if let Some(player) = player.borrow().as_ref() {
+                    player.pause();
+                }
+            }
+            MusicPlayback::Silent { paused } => paused.set(true),
         }
         Ok(())
     }
     pub fn rewind(&self) {
-        self.player.borrow_mut().take();
+        match &self.playback {
+            MusicPlayback::Device { player, .. } => {
+                player.borrow_mut().take();
+            }
+            MusicPlayback::Silent { paused } => paused.set(true),
+        }
     }
     pub fn set_volume(&self, value: f64) {
         self.volume.set(value as f32);
-        if let Some(player) = self.player.borrow().as_ref() {
+        if let MusicPlayback::Device { player, .. } = &self.playback
+            && let Some(player) = player.borrow().as_ref()
+        {
             player.set_volume(value as f32);
         }
     }
@@ -252,6 +320,39 @@ pub(super) fn play_music(media: &Music) -> Result<(), String> {
 mod tests {
     use super::*;
     use std::num::NonZero;
+
+    #[test]
+    fn missing_output_device_keeps_the_audio_clock_and_controls_available() {
+        let engine = AudioEngine::from_device(Err(rodio::DeviceSinkError::NoDevice))
+            .expect("a computer without speakers must remain playable");
+        let started = engine.current_time();
+        let buffer =
+            decode(include_bytes!("../../tests/fixtures/audio/opus-mono.ogg").to_vec()).unwrap();
+        let voice =
+            engine.voice(&buffer, AudioOptions::default(), false, 0.0, AudioBus::Effects).unwrap();
+        voice.set_volume(0.5);
+        voice.stop().unwrap();
+        let music = engine
+            .asset_music(
+                "silent-test",
+                Arc::from(&include_bytes!("../../tests/fixtures/audio/opus-stereo.ogg")[..]),
+            )
+            .unwrap();
+        assert!(music.paused());
+        music.play().unwrap();
+        assert!(!music.paused());
+        music.pause().unwrap();
+        assert!(music.paused());
+        music.rewind();
+        music.play().unwrap();
+        assert!(!music.paused());
+        assert!(engine.current_time() > started, "inaudible narration still advances");
+        engine.check().unwrap();
+        assert!(engine.asset_music("invalid", Arc::from(&b"not audio"[..])).is_err());
+        assert!(
+            AudioEngine::from_device(Err(rodio::DeviceSinkError::UnsupportedSampleFormat)).is_err()
+        );
+    }
 
     #[test]
     fn decoded_stock_sound_contains_pcm_and_rejects_invalid_content() {

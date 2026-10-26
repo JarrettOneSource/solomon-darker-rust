@@ -11,6 +11,7 @@ env:
   CARGO_INCREMENTAL: '0'
   CARGO_PROFILE_DEV_DEBUG: '0'
   CARGO_PROFILE_TEST_DEBUG: '0'
+  RUST_BACKTRACE: '1'
 
 jobs:
   game:
@@ -55,6 +56,16 @@ jobs:
       - run: npm run test:sdmod
         env:
           SOLOMON_SDMOD_BINARY: ${{ github.workspace }}/target/debug/solomon-sdmod
+      - name: Build the standalone browser embedding
+        run: trunk build --config web/Trunk.toml --release
+      - name: Retain the browser embedding for Windows acceptance
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-client
+          path: |
+            web/dist/
+            !web/dist/assets/**
+          if-no-files-found: error
       - name: Build the complete Website artifact
         run: python3 scripts/package-hosted-game.py --output artifacts/solomon-game-linux --mount /game
       - name: Record the immutable archive checksum
@@ -66,6 +77,55 @@ jobs:
           path: |
             artifacts/solomon-game-linux.tar.gz
             artifacts/solomon-game-linux.tar.gz.sha256
+          if-no-files-found: error
+
+  browser:
+    name: Browser (Windows)
+    needs: game
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:browser-support
+      - uses: actions/download-artifact@v4
+        with:
+          name: browser-client
+          path: web/dist
+      - name: Verify browser gameplay and settings with ordinary input
+        shell: pwsh
+        run: |
+          Copy-Item web/assets -Destination web/dist -Recurse
+          New-Item -ItemType Directory -Force reports/browser | Out-Null
+          $env:PW = Join-Path $env:GITHUB_WORKSPACE 'node_modules/playwright-core'
+          $env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'
+          if (!(Test-Path $env:CHROME)) { throw 'The Windows runner has no installed Chrome.' }
+          $env:URL = 'http://127.0.0.1:4181/'
+          $server = Start-Process -FilePath (Get-Command python).Source -ArgumentList @('-m', 'http.server', '4181', '--bind', '127.0.0.1', '--directory', 'web/dist') -PassThru -RedirectStandardOutput reports/browser/server.log -RedirectStandardError reports/browser/server-error.log
+          try {
+            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser/gameplay'
+            node tools/browser-smoke/smoke.cjs
+            if ($LASTEXITCODE) { throw 'Browser gameplay failed.' }
+            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser/settings'
+            node tools/browser-smoke/settings-parity.cjs
+            if ($LASTEXITCODE) { throw 'Browser settings failed.' }
+          } finally {
+            if (!$server.HasExited) { Stop-Process -Id $server.Id }
+            if (!$server.WaitForExit(10000)) { throw 'The owned browser test server did not exit.' }
+          }
+      - name: Retain browser acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-evidence-windows
+          path: reports/browser
           if-no-files-found: error
 
   desktop:
@@ -195,7 +255,7 @@ jobs:
 
   desktop-release:
     name: Publish standalone apps
-    needs: [game, desktop]
+    needs: [game, browser, desktop]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -41,6 +41,7 @@ A release additionally requires:
    contents, and platform requirements.
 3. Exercise the final packages through offline play, save/Continue, rejected-save
    handling, return to launcher, update presentation, and encrypted peer play.
+   Exercise the browser embedding's gameplay and settings/persistence on Windows.
 4. Review screenshots, resource/media errors, and process cleanup.
 5. Publish only the qualified archives and their checksums.
 

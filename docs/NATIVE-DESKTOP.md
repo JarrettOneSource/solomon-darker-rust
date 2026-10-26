@@ -28,7 +28,8 @@ or deployment acceptance.
 - [x] Native Console/mods and optional update presentation/browser handoff are exercised;
   failed update access leaves offline play available.
 - [ ] Final source passes formatting, strict native/WASM lint, workspace tests,
-  asset validation, browser-support checks and actual browser journeys.
+  asset validation, browser-support checks and actual browser journeys, including
+  Windows browser gameplay and settings/persistence.
 - [ ] Final review resolves defects in affected callers, data compatibility,
   failure paths, dependencies, packaging and current documentation.
 - [ ] Publication, installed/live acceptance and removal of task-owned worktrees,
