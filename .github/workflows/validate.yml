@@ -106,7 +106,7 @@ jobs:
           $env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'
           if (!(Test-Path $env:CHROME)) { throw 'The Windows runner has no installed Chrome.' }
           $env:URL = 'http://127.0.0.1:4181/'
-          $server = Start-Process -FilePath (Get-Command python).Source -ArgumentList @('-m', 'http.server', '4181', '--bind', '127.0.0.1', '--directory', 'web/dist') -PassThru -RedirectStandardOutput reports/browser/server.log -RedirectStandardError reports/browser/server-error.log
+          $server = Start-Process -FilePath (Get-Command python).Source -ArgumentList @('scripts/serve-client.py', '4181', '--bind', '127.0.0.1', '--directory', 'web/dist') -PassThru -RedirectStandardOutput reports/browser/server.log -RedirectStandardError reports/browser/server-error.log
           try {
             $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser/gameplay'
             node tools/browser-smoke/smoke.cjs
