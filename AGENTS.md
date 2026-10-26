@@ -73,6 +73,9 @@ Describe the implementation and operating contract that exist now. Replace stale
 statements instead of appending corrections. Keep open work in the work queue and
 historical execution details in Git history or external test artifacts.
 
+Write for readers who have not seen the development conversations. A design decision
+should explain the concrete problem and the reason for the chosen behavior.
+
 Record consequential tradeoffs in `docs/DECISIONS.md`; keep `CONTEXT.md` a glossary.
 Do not add task assignments, attempt logs, chronological receipts, or repeated test
 totals to product and architecture documents.

@@ -33,7 +33,6 @@ explains the compatibility contract.
 
 Keep RNG consumption, actor insertion, contact order, and painter registration
 deterministic. Ambient, cosmetic, and gameplay streams have distinct owners.
-Do not share them to simplify a call signature.
 
 ## Interfaces and persistence
 
@@ -44,9 +43,6 @@ Persistence must retain the full supported document, including opaque native
 container fields. Validate before replacing a save; use the existing revision
 and atomic-write contracts. Display copies never enter persistence.
 
-Use `unknown` or explicit wire types for untrusted input and narrow them at the
-boundary. Do not replace validation with assertions or unchecked casts.
-
 ## Names and comments
 
 Name the game concept: `HubRegion`, `painter_row`, `registration_ordinal`.
@@ -56,9 +52,6 @@ Comments explain evidence, ordering constraints, numeric behavior, or lifecycle
 ownership. Cite original C++ addresses, asset records, or fixture paths where they
 establish a recovered rule. A comment should not restate an assignment or preserve
 an implementation diary.
-
-Existing fixture names and provenance are historical identifiers. Keep them
-truthful; they do not prescribe the naming of new Rust modules.
 
 ## Rust conventions
 
@@ -86,7 +79,6 @@ the fixture's numeric bounds unless evidence supports changing the contract.
 
 Browser checks use ordinary input and read-only observations of accepted state
 and submitted GPU geometry. Review screenshots for presentation changes.
-A passing source check alone cannot establish visual correctness.
 
 Use the commands in [AGENTS.md](../AGENTS.md#checks) and the affected package's
 checks. Report failures and unavailable checks accurately. Documentation-only

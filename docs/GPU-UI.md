@@ -45,7 +45,6 @@ and emoji clusters. Painting, caret movement, selection, wrapping, composition,
 and clipping use the same layout.
 
 Platform adapters provide native composition, clipboard access, and file dialogs.
-They do not paint game controls or maintain hidden interactive copies.
 Accessibility announcements use native `ariaNotify` when available or one marked,
 nonvisual text-only live region.
 
@@ -100,7 +99,3 @@ Run cold/warm startup, delayed and failed required resources, resize, input-devi
 changes, modal replacement, save/Continue, and the affected feature's failure paths.
 For desktop changes, inspect and exercise each affected final package.
 [Release](RELEASE.md) defines publication and live acceptance separately.
-
-A surface entry maps ownership and available checks; it does not claim that the
-journey has been rerun on every later commit. Historical test transcripts and
-screenshots belong with their tested revision, not in this document.

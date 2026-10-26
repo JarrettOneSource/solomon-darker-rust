@@ -34,10 +34,8 @@ Tests use public `NativeServer` and real loopback TCP:
 - Shutdown completes while those readers remain paused.
 - MIME, path, range, framing, upgrade, and API semantics still pass.
 
-The pause/resume test checks integrity; it does not guarantee reproduction of a
-particular operating system's blocked-send timeout. Browser playback remains an
-independent integration check. Unexpected truncation is an error, distinct from a
-trusted media suspension or deliberate cancellation.
+Check actual browser playback as well as TCP integrity. Distinguish expected media
+suspension or deliberate cancellation from an unexpectedly truncated response.
 
 Implementation lives in the launcher's transport and asset-server modules.
 The contract follows [HTML media resource loading](https://html.spec.whatwg.org/multipage/media.html#concept-media-load-resource),

@@ -40,9 +40,7 @@ they do not measure total machine CPU or GPU execution time.
 | 300 enemies | 0.697 | 207 |
 
 Application bytes include compact-update zlib/base64 but exclude WebSocket framing,
-TLS, and transport compression. Encoded bytes do not measure decoded heap usage.
-JS heap, WASM linear memory, and host RSS have different accounting boundaries;
-these results do not establish total memory use or absence of leaks.
+TLS, and transport compression.
 
 ## Native kernel and codec measurements
 

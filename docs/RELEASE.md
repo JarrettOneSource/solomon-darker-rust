@@ -12,7 +12,9 @@ the update manifest, and the Linux game artifact and checksum.
 The recorded production installation at
 [solomondarker.com/game](https://solomondarker.com/game/) uses that game through
 website `db9a9c98434aa5df56e3f9c402719209001f061b`.
-Documentation commits do not change the qualified runtime identity.
+The production check verified saved checkpoints and continuation through service
+replacement. Publication polling encountered transient HTTP failures during the
+replacement.
 
 The Linux artifact SHA256 is
 `29a9a722dd0ba8d5b83ba11997a7b0fc527fdb13e75d64dda9ee37b60299ab87`.
@@ -24,11 +26,10 @@ Its manifest SHA256 is
 This repository publishes the Rust game, native authority, WebAssembly client,
 save tools, mod compiler, and desktop app. The website consumes a verified artifact
 and owns accounts, cloud storage, community content, and editing.
-The original C++ game remains a retail reference.
 
 The published desktop app uses the shell described in
 [Desktop runtime](DESKTOP-RUNTIME.md). Native-window work is tracked separately
-in [Open work](WORK-QUEUE.md) and is not an installed-release claim.
+in [Open work](WORK-QUEUE.md).
 
 ## Qualification
 
@@ -43,9 +44,9 @@ A release additionally requires:
 4. Review screenshots, resource/media errors, and process cleanup.
 5. Publish only the qualified archives and their checksums.
 
-The configured workflow is `.github/workflows/validate.yml`. A configured job is
-not evidence that a particular run passed. Software-renderer checks establish
-functionality; [Performance](PERFORMANCE.md) describes the measured workload.
+The release workflow is `.github/workflows/validate.yml`.
+[Performance](PERFORMANCE.md) documents hardware measurements separately from
+the functional package checks.
 
 ## Installation and live acceptance
 
@@ -63,16 +64,10 @@ A fresh authenticated read must match the saved checkpoint. Continue must restor
 the same wizard and loadout, accept movement, save through Leave, and survive a
 fresh document.
 
-The qualified installation passes authenticated save and continuation checks.
-That acceptance establishes persisted continuation and replacement identity;
-it does not establish zero transient HTTP errors during deployment.
-
 ## Recovery and evidence
 
 Device-owned deployment guides hold runtime paths, managed release inputs, backup
 locations, credentials, and scheduler operation. Rollback must preserve newer
 database, save, and content data.
 
-Keep test artifacts tied to the revision and package actually exercised. Current
-documentation records contracts and qualified identities; commit history and CI
-artifacts retain previous attempts and receipts.
+Keep test artifacts tied to the revision and package actually exercised.

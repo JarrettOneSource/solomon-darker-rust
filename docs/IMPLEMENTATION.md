@@ -37,17 +37,6 @@ in [Reference data](REFERENCE-DATA.md).
 [GPU UI](GPU-UI.md) defines layer, input, text, and accessibility contracts.
 [Client presentation](CLIENT-PRESENTATION.md) defines display ownership.
 
-Book-rank feedback consumes an accepted economy result. Eligible rank awards close
-Inventory and retain pause/input ownership until confirmation. Other book outcomes
-play their audio without inventing a rank confirmation. Session/world replacement,
-player departure, Game Over, or returning to loadout clears the feedback.
-World floating text has a separate presentation owner for the same accepted result.
-
-Dialogue focus follows the active speech, choice, or selector identity, including
-changes within one input timestamp. HUD and book geometry clip in their transformed
-design coordinates. These contracts belong to the shared UI owners rather than
-scene-specific offsets or timers.
-
 ## Saves and service integration
 
 | Boundary | Owner | Verification |
@@ -61,10 +50,4 @@ scene-specific offsets or timers.
 | Website artifact | Packaging scripts and website artifact adapter | Complete manifest/hash validation and installed identity checks |
 | Desktop app and direct peers | Desktop shell, Rust authority, GPU client | Archive inspection and per-platform packaged journeys |
 
-Save schema and player-data compatibility remain supported regardless of the
-recording's origin. `solomon-assets::website_save` is the existing browser-document
-codec name; it is part of the Rust implementation.
-
-Local tests, browser checks, package qualification, and live installation have
-different scopes. [Release](RELEASE.md) records the qualified artifact and the
-checks needed at each boundary.
+[Release](RELEASE.md) lists package and deployment checks.

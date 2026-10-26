@@ -55,13 +55,13 @@ interaction/layout and tessellation. The shared graphics code submits stock spri
 bitmap text, shaped font runs, and meshes.
 
 One application layer order controls painting, hit testing, modal ownership, and
-controller scope. UI controllers emit typed actions and borrow canonical models.
-They do not maintain another inventory, social roster, or gameplay session.
+controller scope. UI controllers borrow inventory, social, and session models and
+emit typed actions for their owners to apply.
 [GPU UI](GPU-UI.md) describes the interaction and platform boundaries.
 
 Immutable scenes, collision primitives, skill definitions, and unchanged scenery
 target tables share `Arc` storage. Dynamic gate segments and mutable display actors
-remain private. A cached renderer result cannot commit gameplay.
+remain private.
 
 ## Assets and audio
 
@@ -71,7 +71,7 @@ Tracked assets include stock atlases, bundle records, scenes, fonts, and audio.
 
 `sim::audio` defines cues and event rules. Browser `GameAudio` owns decoded buffers,
 loops, and music channels. Trusted user input resumes the AudioContext. Accepted
-actor events supply sounds; a rendered sprite is not evidence of a new cast or hit.
+actor events supply sounds.
 Narration duration remains simulation state even when sound is muted.
 
 ## Transport and persistence

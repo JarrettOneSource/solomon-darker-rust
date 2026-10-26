@@ -56,5 +56,4 @@ the displayed local player; weather samples whole simulation epochs.
 The tracked fixtures include `presentation-timeline-goldens.json`,
 `enemy-samples-goldens.json`, and
 `secondary-fractional-presentation-goldens.json`.
-GPU observations must also establish draw cadence between snapshots; simulation
-state alone cannot demonstrate smooth rendering.
+Use browser captures to check draw cadence between received snapshots.

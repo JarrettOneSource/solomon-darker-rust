@@ -53,7 +53,7 @@ resolves its target through the same widget hit test.
 ## Upgrade checks
 
 The workspace selects this package with `[patch.crates-io]` and excludes it from
-application lint targets. Shared Cargo registry files remain untouched.
+application lint targets.
 
 Application regressions in `crates/web/src/gpu_ui/layer_tests.rs` cover paint,
 input, modal order, reappearance, passive controls, disabled children, and cutouts.

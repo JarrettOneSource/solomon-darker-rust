@@ -36,7 +36,7 @@ Metadata records runtime and protocol versions, revision, content manifest, and
 loaded geometry. `read_run_archive` decodes the private format. It is not a
 player-save import or public upload format.
 
-I/O failures emit `run_archive.failed` without turning a diagnostic into a save.
+I/O failures emit `run_archive.failed`.
 
 ## Retention and checks
 

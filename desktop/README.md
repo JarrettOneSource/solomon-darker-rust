@@ -48,5 +48,5 @@ Reports default to `reports/desktop-smoke`. Set `SDR_DESKTOP_APP` to select an
 assembled candidate and `SDR_DESKTOP_EVIDENCE` for an external report directory.
 
 CI qualifies Windows x64, Linux x64, and both Mac architectures separately.
-Publication waits for all package jobs and the game gate. A passing shell unit
-suite does not establish packaged gameplay. See [Release](../docs/RELEASE.md).
+Publication waits for all package jobs and the game gate.
+See [Release](../docs/RELEASE.md).
