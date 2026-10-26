@@ -131,7 +131,10 @@ fn native_file_selection_admission_and_metadata_match_the_source() {
             .collect();
         let result = read_game_save_file_selection(&files);
         if let Some(error) = case["error"].as_str() {
-            assert_eq!(result.unwrap_err(), error, "{}", case["name"]);
+            // The format is shared by native and browser clients. Keep the
+            // captured data unchanged while checking the current platform-neutral copy.
+            let expected = error.replace("Choose a browser save JSON", "Choose a game save JSON");
+            assert_eq!(result.unwrap_err(), expected, "{}", case["name"]);
             continue;
         }
         let result = result.unwrap_or_else(|error| panic!("{}: {error}", case["name"]));

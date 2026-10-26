@@ -1,4 +1,4 @@
-//! GPU editor gestures/history from `MobileUiEditor.tsx`; constraints and snapping use the canonical kernel.
+//! Layout editor gestures and history; the layout kernel owns constraints and snapping.
 
 use solomon_sim::Vec2;
 use solomon_sim::float::hypot;

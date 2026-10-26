@@ -65,7 +65,7 @@ const heldFile={name:'owned-delayed.json',mimeType:'application/json',buffer:Buf
       'visible file capability failure');
     await page.screenshot({path:path.join(output,'actual-file-read-error.png')});
     await choose(process.env.ARCHIVE);await reveal('save-preview');
-    assert.match((await ui.widget(page,'save-preview')).value,/Browser save: inventory, equipment, and the saved run will be restored/);
+    assert.match((await ui.widget(page,'save-preview')).value,/Game save: inventory, equipment, and the saved run will be restored/);
     await ui.noWidget(page,'save-error');await reveal('save-cancel');await ui.click(page,'save-cancel');
     receipt.checks.push('the declared file read failure is visible and a genuine exported ZIP retries successfully');
 
@@ -82,7 +82,7 @@ const heldFile={name:'owned-delayed.json',mimeType:'application/json',buffer:Buf
     const files=process.env.ARCHIVE_FILES;
     for(const [selection,source] of [
       [[path.join(files,'darkdata.cfg'),path.join(files,'gamestate.sav')],'Stock progression only:'],
-      [path.join(files,'browser-game-save.json'),'Browser save:'],
+      [path.join(files,'browser-game-save.json'),'Game save:'],
     ]){
       await choose(selection);await reveal('save-preview');
       assert.ok((await ui.widget(page,'save-preview')).value.includes(source));

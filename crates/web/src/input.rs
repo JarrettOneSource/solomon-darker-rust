@@ -6,22 +6,26 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use crate::hotbar::HotbarSelection;
+use crate::platform::{KeyboardEffect, KeyboardEvent, KeyboardListener};
 use solomon_sim::Vec2;
 use solomon_sim::belt::{NATIVE_BELT_SLOT_COUNT, PLAYER_BELT_SLOT_COUNT};
 use solomon_sim::input::{
     BeltInputSource, GameplayAction, GameplayAim, GameplayInputSample, HeldBeltInputs,
-    MovementKeys, StandardGamepadSnapshot, StandardGameplayState, joystick_vector,
-    movement_from_gamepad, sample_movement,
+    MovementKeys, StandardGameplayState, joystick_vector, movement_from_gamepad, sample_movement,
 };
 use solomon_sim::mobile_ui::MobileUiLayoutState;
 use solomon_sim::settings::{GameControlAction, GameControlBindings};
-use wasm_bindgen::JsCast;
-use wasm_bindgen::prelude::*;
-use web_sys::{
-    Event, EventTarget, Gamepad, GamepadButton, GamepadMappingType, HtmlCanvasElement, HtmlElement,
-    KeyboardEvent, MouseEvent, PointerEvent, Window,
-};
 
+#[cfg(target_arch = "wasm32")]
+mod browser;
+#[cfg(target_arch = "wasm32")]
+use browser as platform;
+#[cfg(not(target_arch = "wasm32"))]
+mod native;
+#[cfg(not(target_arch = "wasm32"))]
+use native as platform;
+
+mod controls;
 mod joystick;
 mod pointer;
 use crate::gpu_ui::{UiDiagnostics, UiFrame};
@@ -86,12 +90,11 @@ struct GameplayInputState {
 }
 
 pub struct MovementInput {
-    window: Window,
-    canvas: HtmlCanvasElement,
+    transport: platform::InputTransport,
     hotbar: HotbarSelection,
     state: Rc<RefCell<GameplayInputState>>,
     menu_requested: Cell<bool>,
-    _listeners: Vec<InputListener>,
+    _keyboard: KeyboardListener,
 }
 impl GameplayInputState {
     fn new(bank: usize) -> Self {
@@ -135,276 +138,22 @@ impl GameplayInputState {
     }
 }
 impl MovementInput {
-    pub fn attach(window: &Window, hotbar: HotbarSelection) -> Result<Self, String> {
-        let document = window.document().ok_or("no document for gameplay input")?;
-        let canvas = document
-            .get_element_by_id("game")
-            .ok_or("no gameplay canvas")?
-            .dyn_into::<HtmlCanvasElement>()
-            .map_err(|_| "gameplay surface is not a canvas")?;
-        // Source joysticks/scene disable native pan before a gesture starts.
-        // preventDefault on pointerdown cannot prevent browser pointercancel.
-        canvas
-            .style()
-            .set_property("touch-action", "none")
-            .map_err(|_| "cannot configure game canvas touch gestures".to_owned())?;
+    pub fn attach(
+        surface: &crate::platform::Surface,
+        hotbar: HotbarSelection,
+    ) -> Result<Self, String> {
         let state = Rc::new(RefCell::new(GameplayInputState::new(hotbar.bank())));
-        let mut listeners = Vec::new();
-        for (name, pressed) in [("keydown", true), ("keyup", false)] {
-            let state = state.clone();
-            let hotbar = hotbar.clone();
-            listen(window.as_ref(), name, &mut listeners, move |event| {
-                let Some(key) = event.dyn_ref::<KeyboardEvent>() else {
-                    return;
-                };
-                if pressed && editing_text(key) {
-                    return;
-                }
-                let mut state = state.borrow_mut();
-                let code = key.code();
-                if pressed && state.ui.text {
-                    return;
-                }
-                if pressed && state.ui.keyboard && matches!(code.as_str(), "Enter" | "Space") {
-                    return;
-                }
-                if pressed
-                    && !key.repeat()
-                    && !key.alt_key()
-                    && !key.ctrl_key()
-                    && !key.meta_key()
-                    && code == state.controls.open_chat
-                {
-                    event.prevent_default();
-                    state.actions.push(GameplayAction::Chat);
-                }
-                // The source chat opener remains available over Inventory. Its own
-                // view admission rejects title/pause/Tutorial; movement stays sealed.
-                if state.world_input_blocked() {
-                    return;
-                }
-                if let Some(slot) = belt_slot(&state.controls, &code) {
-                    event.prevent_default();
-                    if pressed && !key.repeat() {
-                        hold_belt(&mut state, BeltInputSource::Keyboard(slot), hotbar.slot(slot));
-                    } else if !pressed {
-                        state.belt.release_source(BeltInputSource::Keyboard(slot));
-                    }
-                }
-
-                if pressed && !key.repeat() && code == "KeyE" {
-                    state.actions.push(GameplayAction::Interact);
-                }
-                if is_movement_key(&code, &state.controls) {
-                    event.prevent_default();
-                    if pressed {
-                        state.held.insert(code);
-                    } else {
-                        state.held.remove(&code);
-                    }
-                }
-            })?;
-        }
-        for name in ["mousedown", "mousemove", "mouseup"] {
-            let state = state.clone();
-            let hotbar = hotbar.clone();
-            let canvas = canvas.clone();
-            let target: &EventTarget =
-                if name == "mousedown" { canvas.as_ref() } else { window.as_ref() };
-            let captured_canvas = canvas.clone();
-            listen(target, name, &mut listeners, move |event| {
-                let Some(mouse) = event.dyn_ref::<MouseEvent>() else {
-                    return;
-                };
-                let Some(point) =
-                    canvas_point(&captured_canvas, mouse.client_x(), mouse.client_y())
-                else {
-                    return;
-                };
-                let mut state = state.borrow_mut();
-                if name == "mousedown" {
-                    let point = egui::pos2(
-                        mouse.client_x() as f32
-                            - captured_canvas.get_bounding_client_rect().left() as f32,
-                        mouse.client_y() as f32
-                            - captured_canvas.get_bounding_client_rect().top() as f32,
-                    );
-                    state.mouse_ui_press = state.ui.hit(point).is_some();
-                    if state.mouse_ui_press {
-                        return;
-                    }
-                }
-                if name == "mousemove" {
-                    // Hover keeps the next keyboard belt cast's screen point without taking aim ownership.
-                    state.captured_pointer = Some(point);
-                    if state.world_input_blocked() {
-                        return;
-                    }
-                    if state.mouse_primary || state.belt.current().is_some() {
-                        state.aim_owner = Some(AimOwner::Mouse);
-                        state.pending_aim =
-                            Some(if state.mouse_primary || state.secondary_at_pointer {
-                                GameplayAim::Pointer(point)
-                            } else {
-                                GameplayAim::Facing
-                            });
-                        event.prevent_default();
-                    }
-                    return;
-                }
-                if state.world_input_blocked() {
-                    return;
-                }
-                let primary = mouse.button() == 0;
-                let slot = if primary {
-                    None
-                } else {
-                    belt_slot(&state.controls, &format!("Mouse{}", mouse.button()))
-                };
-                if !primary && slot.is_none() {
-                    return;
-                }
-                if primary && !state.primary_enabled {
-                    return;
-                }
-                if name == "mousedown"
-                    && state.spectator_camera_active
-                    && (primary
-                        || slot.is_none_or(|slot| !state.spectator_item_slots[hotbar.slot(slot)]))
-                {
-                    // Boneyard's claimMouseCastStart follows the item press
-                    // claim and consumes either mapped cast lane before aim/hold.
-                    state.spectator_camera_advances += 1;
-                    event.prevent_default();
-                    return;
-                }
-                let was_held = if primary {
-                    state.mouse_primary
-                } else {
-                    slot.is_some_and(|slot| {
-                        state.belt.held_slot(BeltInputSource::Mouse(slot)).is_some()
-                    })
-                };
-                if name == "mouseup" && !was_held {
-                    return;
-                }
-                state.captured_pointer = Some(point);
-                state.aim_owner = Some(AimOwner::Mouse);
-                state.pending_aim = Some(if primary || state.secondary_at_pointer {
-                    GameplayAim::Pointer(point)
-                } else {
-                    GameplayAim::Facing
-                });
-                if primary {
-                    state.mouse_primary = name == "mousedown";
-                } else if let Some(slot) = slot {
-                    if name == "mousedown" {
-                        hold_belt(&mut state, BeltInputSource::Mouse(slot), hotbar.slot(slot));
-                    } else {
-                        state.belt.release_source(BeltInputSource::Mouse(slot));
-                    }
-                }
-                event.prevent_default();
-            })?;
-        }
-        listen(canvas.as_ref(), "contextmenu", &mut listeners, |event| event.prevent_default())?;
-        let clicked = state.clone();
-        let clicked_canvas = canvas.clone();
-        listen(canvas.as_ref(), "click", &mut listeners, move |event| {
-            let Some(mouse) = event.dyn_ref::<MouseEvent>() else { return };
-            let mut state = clicked.borrow_mut();
-            if state.mouse_ui_press {
-                state.mouse_ui_press = false;
-                return;
-            }
-            let bounds = clicked_canvas.get_bounding_client_rect();
-            let point = egui::pos2(
-                mouse.client_x() as f32 - bounds.left() as f32,
-                mouse.client_y() as f32 - bounds.top() as f32,
-            );
-            if !state.world_input_blocked()
-                && !state.spectator_camera_active
-                && mouse.button() == 0
-                && state.ui.hit(point).is_none()
-            {
-                state.world_click =
-                    canvas_point(&clicked_canvas, mouse.client_x(), mouse.client_y());
-            }
+        let keyed = state.clone();
+        let bank = hotbar.clone();
+        let keyboard = KeyboardListener::attach(surface, move |event| {
+            keyed.borrow_mut().keyboard(event, bank.start())
         })?;
-        for name in
-            ["pointerdown", "pointermove", "pointerup", "pointercancel", "lostpointercapture"]
-        {
-            let captured = state.clone();
-            let surface = canvas.clone();
-            let bank = hotbar.clone();
-            listen(window.as_ref(), name, &mut listeners, move |event| {
-                let Some(pointer) = event.dyn_ref::<PointerEvent>() else { return };
-                let client = match pointer_client_point(pointer) {
-                    Ok(point) => point,
-                    Err(message) => {
-                        report_input_error(Err(message));
-                        return;
-                    }
-                };
-                let bounds = surface.get_bounding_client_rect();
-                let point = Vec2::new(client.x - bounds.left(), client.y - bounds.top());
-                let id = pointer.pointer_id();
-                let outcome = {
-                    let mut state = captured.borrow_mut();
-                    match name {
-                        "pointerdown" => state.begin_ui_pointer(id, pointer.button(), point),
-                        "pointermove" => state.move_ui_pointer(id, point, bank.bank()),
-                        _ => state.end_ui_pointer(id, name == "pointerup", bank.bank()),
-                    }
-                };
-                if outcome.owned {
-                    event.prevent_default();
-                }
-                if outcome.capture {
-                    report_input_error(
-                        surface
-                            .set_pointer_capture(id)
-                            .map_err(|_| "cannot capture gameplay UI pointer".to_owned()),
-                    );
-                }
-                if outcome.release && surface.has_pointer_capture(id) {
-                    report_input_error(
-                        surface
-                            .release_pointer_capture(id)
-                            .map_err(|_| "cannot release gameplay UI pointer".to_owned()),
-                    );
-                }
-            })?;
-        }
-        for (target, name) in [
-            (window.as_ref(), "blur"),
-            (window.as_ref(), "pagehide"),
-            (document.as_ref(), "visibilitychange"),
-        ] {
-            let captured = state.clone();
-            let visibility = document.clone();
-            let surface = canvas.clone();
-            listen(target, name, &mut listeners, move |_| {
-                if name == "visibilitychange" && !visibility.hidden() {
-                    return;
-                }
-                let pointers = {
-                    let mut state = captured.borrow_mut();
-                    let pointers = state.captured_ui_pointers();
-                    clear_input(&mut state);
-                    pointers
-                };
-                release_pointers(&surface, pointers);
-            })?;
-        }
-        Ok(Self {
-            window: window.clone(),
-            canvas,
-            hotbar,
-            state,
-            menu_requested: Cell::new(false),
-            _listeners: listeners,
-        })
+        let transport = platform::InputTransport::attach(surface, state.clone(), hotbar.clone())?;
+        Ok(Self { hotbar, state, menu_requested: Cell::new(false), transport, _keyboard: keyboard })
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn window_event(&self, event: &winit::event::WindowEvent) -> Result<(), String> {
+        self.transport.window_event(event)
     }
     pub fn set_ui_geometry(&self, diagnostics: &UiDiagnostics, belt: &[HudBeltHit]) {
         let pointers = {
@@ -438,7 +187,7 @@ impl MovementInput {
             }
             pointers
         };
-        release_pointers(&self.canvas, pointers);
+        self.transport.release_pointers(pointers);
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         joystick::paint(self, frame)
@@ -462,7 +211,7 @@ impl MovementInput {
                 Vec::new()
             }
         };
-        release_pointers(&self.canvas, pointers);
+        self.transport.release_pointers(pointers);
         Ok(())
     }
     pub fn set_controls(&self, controls: GameControlBindings) -> Result<(), String> {
@@ -473,7 +222,7 @@ impl MovementInput {
             clear_input(&mut state);
             pointers
         };
-        release_pointers(&self.canvas, pointers);
+        self.transport.release_pointers(pointers);
         Ok(())
     }
     pub fn set_primary_casting_enabled(&self, enabled: bool) -> Result<(), String> {
@@ -491,7 +240,7 @@ impl MovementInput {
                 state.primary_pointer.take()
             }
         };
-        release_pointers(&self.canvas, pointer.into_iter().collect());
+        self.transport.release_pointers(pointer.into_iter().collect());
         Ok(())
     }
     pub fn set_secondary_at_pointer(&self, enabled: bool) {
@@ -537,7 +286,7 @@ impl MovementInput {
                 belt_pressed: Vec::new(),
             });
         }
-        let pads = read_gamepads(&self.window)?;
+        let pads = crate::platform::gamepads()?;
         let controller = state.gamepad.sample(&pads);
         if controller.aim_active {
             state.aim_owner = Some(AimOwner::Gamepad);
@@ -646,7 +395,7 @@ impl MovementInput {
             state.touch_primary = Vec2::ZERO;
             pointers
         };
-        release_pointers(&self.canvas, pointers);
+        self.transport.release_pointers(pointers);
         Ok(())
     }
     pub fn resize(&self, width: i32, height: i32, ui_scale_percent: u16) -> Result<(), String> {
@@ -666,7 +415,7 @@ impl MovementInput {
             }
             state.touch_belt_pointers.drain().map(|(id, _)| id).collect()
         };
-        release_pointers(&self.canvas, pointers);
+        self.transport.release_pointers(pointers);
         Ok(())
     }
 }
@@ -685,71 +434,6 @@ fn keyboard_movement(state: &GameplayInputState) -> Vec2 {
     .movement()
 }
 
-fn read_gamepads(window: &Window) -> Result<Vec<StandardGamepadSnapshot>, String> {
-    let navigator = window.navigator();
-    let function = js_sys::Reflect::get(navigator.as_ref(), &JsValue::from_str("getGamepads"))
-        .map_err(|_| "cannot inspect gamepad support")?;
-    if !function.is_function() {
-        return Ok(Vec::new());
-    }
-    let values = navigator.get_gamepads().map_err(|_| "browser denied gamepad access")?;
-    let mut pads = Vec::new();
-    for value in values {
-        if value.is_null() || value.is_undefined() {
-            continue;
-        }
-        let pad: Gamepad = value.dyn_into().map_err(|_| "browser returned an invalid gamepad")?;
-        let axes = pad.axes();
-        let buttons = pad.buttons();
-        let mut pressed = [false; 16];
-        for (index, pressed) in pressed.iter_mut().enumerate() {
-            *pressed = buttons
-                .get(index as u32)
-                .dyn_into::<GamepadButton>()
-                .is_ok_and(|button| button.pressed() || button.value() > 0.5);
-        }
-        pads.push(StandardGamepadSnapshot {
-            index: pad.index(),
-            connected: pad.connected(),
-            standard: pad.mapping() == GamepadMappingType::Standard,
-            left: Vec2::new(
-                axes.get(0).as_f64().unwrap_or(0.0),
-                axes.get(1).as_f64().unwrap_or(0.0),
-            ),
-            right: Vec2::new(
-                axes.get(2).as_f64().unwrap_or(0.0),
-                axes.get(3).as_f64().unwrap_or(0.0),
-            ),
-            buttons: pressed,
-        });
-    }
-    Ok(pads)
-}
-
-fn canvas_point(canvas: &HtmlCanvasElement, x: i32, y: i32) -> Option<Vec2> {
-    let bounds = canvas.get_bounding_client_rect();
-    if bounds.width() <= 0.0 || bounds.height() <= 0.0 {
-        return None;
-    }
-    Some(Vec2::new(
-        (f64::from(x) - bounds.left()) / bounds.width(),
-        (f64::from(y) - bounds.top()) / bounds.height(),
-    ))
-}
-
-pub(crate) fn pointer_client_point(pointer: &PointerEvent) -> Result<Vec2, String> {
-    // PointerEvent refines MouseEvent's integer coordinates to doubles. Chrome
-    // preserves 50.5 here, while web-sys's inherited client_x() truncates it.
-    let x = js_sys::Reflect::get(pointer.as_ref(), &JsValue::from_str("clientX"))
-        .map_err(|_| "cannot read pointer clientX")?
-        .as_f64()
-        .ok_or("pointer clientX is not numeric")?;
-    let y = js_sys::Reflect::get(pointer.as_ref(), &JsValue::from_str("clientY"))
-        .map_err(|_| "cannot read pointer clientY")?
-        .as_f64()
-        .ok_or("pointer clientY is not numeric")?;
-    Ok(Vec2::new(x, y))
-}
 fn hold_belt(state: &mut GameplayInputState, source: BeltInputSource, slot: usize) {
     if state.belt.held_slot(source).is_none() && state.belt.hold(source, slot) {
         state.belt_pressed.push(slot);
@@ -776,11 +460,6 @@ fn clear_input(state: &mut GameplayInputState) {
     state.actions.clear();
     // A screen position is not held input: retain it for a fresh keyboard belt press.
 }
-fn report_input_error(result: Result<(), String>) {
-    if let Err(message) = result {
-        web_sys::console::error_1(&JsValue::from_str(&message));
-    }
-}
 fn belt_slot(controls: &GameControlBindings, code: &str) -> Option<usize> {
     controls.belt.iter().position(|binding| binding == code)
 }
@@ -791,57 +470,9 @@ fn is_movement_key(code: &str, controls: &GameControlBindings) -> bool {
             .into_iter()
             .any(|key| key == code)
 }
-fn editing_text(event: &KeyboardEvent) -> bool {
-    let Some(target) = event.target().and_then(|target| target.dyn_into::<HtmlElement>().ok())
-    else {
-        return false;
-    };
-    target.is_content_editable()
-        || ["INPUT", "TEXTAREA", "SELECT"].contains(&target.tag_name().as_str())
-}
-struct InputListener {
-    target: EventTarget,
-    name: &'static str,
-    callback: Closure<dyn FnMut(Event)>,
-}
-impl Drop for InputListener {
-    fn drop(&mut self) {
-        if let Err(error) = self.target.remove_event_listener_with_callback_and_bool(
-            self.name,
-            self.callback.as_ref().unchecked_ref(),
-            true,
-        ) {
-            web_sys::console::error_1(&error);
-        }
-    }
-}
-fn listen(
-    target: &EventTarget,
-    name: &'static str,
-    listeners: &mut Vec<InputListener>,
-    callback: impl FnMut(Event) + 'static,
-) -> Result<(), String> {
-    let callback = Closure::<dyn FnMut(Event)>::new(callback);
-    target
-        .add_event_listener_with_callback_and_bool(name, callback.as_ref().unchecked_ref(), true)
-        .map_err(|_| format!("cannot listen for {name}"))?;
-    listeners.push(InputListener { target: target.clone(), name, callback });
-    Ok(())
-}
-fn release_pointers(canvas: &HtmlCanvasElement, pointers: Vec<i32>) {
-    for id in pointers {
-        if canvas.has_pointer_capture(id) {
-            report_input_error(
-                canvas
-                    .release_pointer_capture(id)
-                    .map_err(|_| "cannot release gameplay pointer".to_owned()),
-            );
-        }
-    }
-}
 impl Drop for MovementInput {
     fn drop(&mut self) {
         let pointers = self.state.borrow().captured_ui_pointers();
-        release_pointers(&self.canvas, pointers);
+        self.transport.release_pointers(pointers);
     }
 }

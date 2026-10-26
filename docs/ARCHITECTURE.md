@@ -1,7 +1,7 @@
 # Architecture
 
-Solomon Darker shares one Rust simulation between its native authority and browser
-client. The website supplies accounts, storage, content publication, and editing.
+Solomon Darker shares one Rust simulation, game client and GPU interface across
+its native application and browser WASM embedding. The website supplies accounts, storage, content publication, and editing.
 
 ## Ownership
 
@@ -9,14 +9,15 @@ client. The website supplies accounts, storage, content publication, and editing
 | --- | --- |
 | `solomon-sim` | Game rules, sessions, players, enemies, spells, inventory, and deterministic state |
 | `solomon-assets` | Sprite bundles, scene decoding, navigation inputs, save formats, and validation |
-| `solomon-graphics` | Shared WebGL2 rendering, textures, blend modes, and asset decoding |
-| `solomon-web` | Browser input, GPU UI, world views, audio, and platform adapters |
-| `solomon-loader` | Startup splash using the shared graphics code |
+| `solomon-graphics` | Shared OpenGL/WebGL2 rendering, textures, blend modes, image decoding and text rasterization |
+| `solomon-web` | Shared Game, GPU UI, world presentation, audio director and native/browser platform adapters |
+| `solomon-loader` | Browser startup splash before the main WASM module loads |
 | `solomon-protocol` | Versioned messages, snapshots, commands, and acknowledgements |
 | `solomon-launcher` | Native authority, HTTP/WebSocket transport, persistence, and service integration |
 | `solomon-modding` | Definition compiler, native Lua execution, and authoring CLI |
 | `solomon-save-tools` | Independent WebAssembly entry for Account save import/export |
-| `desktop/` | Desktop shell, native process ownership, peer transport, and updates |
+| `solomon-desktop` | OS window, native session lifetime, encrypted peers, single-instance focus and updates |
+| `solomon-storage` | Locked atomic native documents for client saves/preferences and authority checkpoints |
 
 A rule that changes what the game does belongs in `sim`. Asset or save decoding
 belongs in `assets`. Drawing and platform I/O belong at the edge. Browser and
@@ -120,9 +121,9 @@ systems update their queried components in place.
 The [component-storage decision](DECISIONS.md#component-storage-and-simulation-order)
 explains the ordering and persistence constraints.
 
-### Browser frame
+### Client frame
 
-For each browser frame:
+For each client frame:
 
 1. Receive and validate host messages; retain their original receipt timestamps.
 2. Apply completed authoritative state and sample input once.
@@ -131,8 +132,11 @@ For each browser frame:
 5. Draw world geometry, actors, lights, and UI from their owning models.
 6. Drain accepted audio events and retire unused GPU resources.
 
-`crates/web/src/lib.rs` owns browser entry points.
-`crates/web/src/game.rs` composes the running game.
+`crates/web/src/game.rs` composes the running game. The native event loop in
+`crates/desktop/src/app.rs` owns windows and session retirement;
+`crates/web/src/bootstrap.rs` owns browser callbacks and embedding.
+Target-selected platform modules provide input, text, clipboard, files, storage,
+networking and clocks without a JavaScript runtime in desktop builds.
 [Client presentation](CLIENT-PRESENTATION.md) defines interpolation and prediction.
 
 ## Rendering and UI
@@ -183,14 +187,16 @@ Tracked assets include stock atlases, bundle records, scenes, fonts, and audio.
 `scripts/verify-client-assets.py` validates complete membership and SHA256 values.
 [Reference data](REFERENCE-DATA.md) owns input provenance.
 
-`sim::audio` defines cues and event rules. Browser `GameAudio` owns decoded buffers,
-loops, and music channels. Trusted user input resumes the AudioContext. Accepted
-actor events supply sounds.
+`sim::audio` defines cues and event rules. Shared `GameAudio` owns cues, delayed
+sounds, loops and music channels. Browser playback uses WebAudio and media elements;
+native playback uses Rodio/CPAL and streaming compressed music. Trusted browser
+input resumes the AudioContext. Accepted actor events supply sounds.
 Narration duration remains simulation state even when sound is muted.
 
-`GameAudio` owns one AudioContext, named loop sources, and six resident music
-channels. A loop combines requests using the loudest gain. Gain changes preserve
-its source, while rate changes recreate it. Accepted one-shot cursors prevent a
+The browser audio backend owns one AudioContext. The shared director owns named
+loop sources and six resident music channels. A loop combines requests using the
+loudest gain. Gain changes preserve its source, while rate changes recreate it.
+Accepted one-shot cursors prevent a
 repeated snapshot from replaying a sound; display interpolation cannot create a
 new audio event.
 

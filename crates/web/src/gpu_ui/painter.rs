@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use egui::{ClippedPrimitive, Rect, TextureId, Vec2, vec2};
-use web_sys::{HtmlImageElement, WebGl2RenderingContext};
+use solomon_graphics::{GraphicsContext, assets::Image};
 
 use solomon_graphics::assets;
 use solomon_graphics::{AlphaShadow, ColorFilter};
@@ -15,7 +15,7 @@ use super::material::{Material, Materials, TextureSource};
 
 enum ImageState {
     Loading,
-    Decoded(HtmlImageElement),
+    Decoded(Image),
     Ready(Texture),
     Failed(String),
 }
@@ -51,7 +51,7 @@ impl Images {
         self.0.borrow_mut().materials.clear();
     }
 
-    pub fn register(&self, path: &str, texture: &Texture, gl: &WebGl2RenderingContext) {
+    pub fn register(&self, path: &str, texture: &Texture, gl: &GraphicsContext) {
         self.forget(path, gl);
         let path = path_key(path);
         let mut cache = self.0.borrow_mut();
@@ -118,7 +118,7 @@ impl Images {
             id
         };
         let images = self.clone();
-        wasm_bindgen_futures::spawn_local(async move {
+        crate::platform::spawn_local(async move {
             let decoded = assets::load_image(&path).await;
             let mut cache = images.0.borrow_mut();
             let Some(entry) = cache.images.get_mut(&path) else { return };
@@ -141,12 +141,12 @@ impl Images {
         // These are presentation inputs, not world/death sprite banks. The inventory is
         // tracked beside the painter so missing files fail readiness before a menu opens.
         let paths = include_str!("stock-images.txt").lines().filter(|path| !path.is_empty());
-        let promises = js_sys::Array::new();
+        let mut loads = Vec::new();
         for path in paths {
             let images = self.clone();
             let path = path.to_owned();
-            promises.push(&wasm_bindgen_futures::future_to_promise(async move {
-                let image = assets::load_image(&path).await.map_err(wasm_bindgen::JsValue::from)?;
+            loads.push(async move {
+                let image = assets::load_image(&path).await?;
                 let mut cache = images.0.borrow_mut();
                 cache.next_id += 1;
                 let id = cache.next_id;
@@ -162,13 +162,13 @@ impl Images {
                     },
                 );
                 drop(cache);
-                crate::runtime_ui::completed(&path).map_err(wasm_bindgen::JsValue::from)?;
-                Ok(wasm_bindgen::JsValue::UNDEFINED)
-            }));
+                crate::runtime_ui::completed(&path)?;
+                Ok::<_, String>(())
+            });
         }
-        wasm_bindgen_futures::JsFuture::from(js_sys::Promise::all(&promises))
+        futures_util::future::try_join_all(loads)
             .await
-            .map_err(|error| format!("GPU UI stock art readiness: {error:?}"))?;
+            .map_err(|error| format!("GPU UI stock art readiness: {error}"))?;
         if let Err(error) = self.upload_decoded(renderer) {
             self.destroy(&renderer.graphics_context());
             return Err(error);
@@ -275,7 +275,7 @@ impl Images {
             .count()
     }
 
-    pub fn forget(&self, path: &str, gl: &WebGl2RenderingContext) {
+    pub fn forget(&self, path: &str, gl: &GraphicsContext) {
         let mut cache = self.0.borrow_mut();
         if let Some(entry) = cache.images.remove(&path_key(path)) {
             cache.paths.remove(&entry.id);
@@ -287,7 +287,7 @@ impl Images {
         }
     }
 
-    pub fn destroy(&self, gl: &WebGl2RenderingContext) {
+    pub fn destroy(&self, gl: &GraphicsContext) {
         let mut cache = self.0.borrow_mut();
         for entry in cache.images.values() {
             if entry.owned
@@ -320,7 +320,7 @@ pub fn clip_scissor(rect: Rect, physical: [i32; 2], logical: [f32; 2]) -> Option
 mod groups;
 
 pub(super) struct GpuPainter {
-    pub gl: WebGl2RenderingContext,
+    pub gl: GraphicsContext,
     textures: BTreeMap<TextureId, Texture>,
     groups: groups::Targets,
     vertices: Vec<Vertex>,

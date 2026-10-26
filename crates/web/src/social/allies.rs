@@ -91,13 +91,7 @@ impl SocialUi {
         if !visible {
             return Ok(());
         }
-        let reduced_motion = self
-            .document
-            .default_view()
-            .ok_or("ally window")?
-            .match_media("(prefers-reduced-motion: reduce)")
-            .map_err(|_| "ally motion preference")?
-            .is_some_and(|query| query.matches());
+        let reduced_motion = crate::platform::reduced_motion();
         self.ally_motion.motion_preference(reduced_motion, self.now);
         let ctx = frame.ctx.clone();
         let layer = Self::allies_layer();

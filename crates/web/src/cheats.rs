@@ -1,8 +1,9 @@
-//! GPU `CheatMenu.tsx`; host commands, catalog admission and VM request IDs remain canonical.
+//! Cheat controls and Lua console; the host admits commands and owns VM request results.
 
 mod console;
 mod controls;
 use crate::gpu_ui::UiFrame;
+use crate::platform::{KeyboardEffect, KeyboardListener, Surface};
 use console::ConsoleView;
 use controls::CheatControls;
 use egui::{Color32, FontFamily, FontId, Id, Rect, RichText, Stroke, pos2, vec2};
@@ -18,8 +19,6 @@ use solomon_sim::session::GameSession;
 use solomon_sim::social::GameSessionKind;
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasm_bindgen::{JsCast, prelude::*};
-use web_sys::{Document, Event, KeyboardEvent};
 
 /// Borrowed accepted state. `can_open` and `retain_open` are the source scene/modal
 /// admission predicates, supplied by the same owner that admits gameplay input.
@@ -73,7 +72,6 @@ struct PendingAction {
 }
 
 pub struct CheatUi {
-    document: Document,
     view: Option<OpenView>,
     frame: Option<CheatFrame>,
     events: Rc<RefCell<Vec<UiEvent>>>,
@@ -83,7 +81,7 @@ pub struct CheatUi {
     catalog_request: Option<u64>,
     action_request: Option<PendingAction>,
     catalogs: Option<CheatMenuCatalogs>,
-    key: Closure<dyn FnMut(Event)>,
+    _keyboard: KeyboardListener,
 }
 struct OpenView {
     controls: CheatControls,
@@ -98,37 +96,27 @@ impl CheatUi {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("cheats/dialog"))
     }
 
-    pub fn attach(document: &Document) -> Result<Self, String> {
+    pub fn attach(surface: &Surface) -> Result<Self, String> {
         let events = Rc::new(RefCell::new(Vec::new()));
         let key_admission = Rc::new(RefCell::new(KeyAdmission::default()));
         let pending = events.clone();
         let admission = key_admission.clone();
-        let key = Closure::new(move |event: Event| {
-            let Some(key) = event.dyn_ref::<KeyboardEvent>() else { return };
+        let keyboard = KeyboardListener::attach(surface, move |event| {
+            let key = event.stroke;
             let state = admission.borrow();
-            if key.repeat() || key.alt_key() || key.ctrl_key() || key.meta_key() {
-                return;
+            if !key.pressed || key.repeat || key.alt || key.ctrl || key.meta {
+                return KeyboardEffect::Pass;
             }
-            let closes = state.open && (key.code() == state.code || key.key() == "Escape");
-            let opens = !state.open && state.can_open && key.code() == state.code;
+            let closes = state.open && (key.code == state.code || key.key == "Escape");
+            let opens = !state.open && state.can_open && key.code == state.code;
             if !closes && !opens {
-                return;
+                return KeyboardEffect::Pass;
             }
-            event.prevent_default();
-            event.stop_immediate_propagation();
             pending.borrow_mut().push(if closes { UiEvent::Close } else { UiEvent::Open });
-        });
-        let window = document.default_view().ok_or("cheat window")?;
-        window
-            .add_event_listener_with_callback_and_bool(
-                "keydown",
-                key.as_ref().unchecked_ref(),
-                true,
-            )
-            .map_err(|_| "cheat binding listener")?;
+            KeyboardEffect::Stop
+        })?;
 
         Ok(Self {
-            document: document.clone(),
             view: None,
             frame: None,
             events,
@@ -138,7 +126,7 @@ impl CheatUi {
             catalog_request: None,
             action_request: None,
             catalogs: None,
-            key,
+            _keyboard: keyboard,
         })
     }
     #[must_use]
@@ -183,7 +171,7 @@ impl CheatUi {
             return Ok(false);
         }
         let Some(frame) = &self.frame else { return Ok(false) };
-        let view = OpenView::new(&self.document, frame)?;
+        let view = OpenView::new(frame)?;
         self.view = Some(view);
         self.key_admission.borrow_mut().open = true;
         let id = self.request(CHEAT_MENU_CATALOG_QUERY.to_owned());
@@ -191,8 +179,8 @@ impl CheatUi {
         Ok(true)
     }
 
-    /// Unmounting discards form drafts and console history, matching source React
-    /// lifetime. The request counter survives so late VM replies cannot reopen it.
+    /// Closing discards form drafts and console history. The request counter
+    /// survives so late VM replies cannot reopen the view.
     pub fn close(&mut self) {
         self.view = None;
         self.key_admission.borrow_mut().open = false;
@@ -232,7 +220,7 @@ impl CheatUi {
                     CheatMenuCatalogs::default()
                 }
             };
-            view.controls.set_catalogs(&self.document, &catalogs)?;
+            view.controls.set_catalogs(&catalogs)?;
             self.catalogs = Some(catalogs);
             return Ok(true);
         }
@@ -449,23 +437,10 @@ impl CheatUi {
         Ok(())
     }
 }
-impl Drop for CheatUi {
-    fn drop(&mut self) {
-        if let Some(window) = self.document.default_view()
-            && let Err(error) = window.remove_event_listener_with_callback_and_bool(
-                "keydown",
-                self.key.as_ref().unchecked_ref(),
-                true,
-            )
-        {
-            web_sys::console::error_1(&error);
-        }
-    }
-}
 impl OpenView {
-    fn new(document: &Document, frame: &CheatFrame) -> Result<Self, String> {
+    fn new(frame: &CheatFrame) -> Result<Self, String> {
         Ok(Self {
-            controls: CheatControls::new(document, frame)?,
+            controls: CheatControls::new(frame)?,
             console: ConsoleView::new(),
             console_tab: false,
             catalog_loading: true,
@@ -619,24 +594,16 @@ impl CheatFrame {
 }
 
 fn round(value: f64) -> f64 {
-    let rounded = js_sys::Math::round(value * 100.0) / 100.0;
+    let scaled = value * 100.0;
+    let floor = scaled.floor();
+    let rounded = if scaled - floor >= 0.5 { floor + 1.0 } else { floor } / 100.0;
     if rounded == 0.0 { 0.0 } else { rounded }
 }
 
-/// Keep the browser's JSON number formatting and insertion order, as in source
-/// `formatCheatConsoleValues`; LuaValue serialization is already the wire contract.
 fn format_values(values: &[LuaValue]) -> Result<String, String> {
-    let mut lines = Vec::new();
-    for value in values {
-        let json = serde_json::to_string(value).map_err(|error| format!("Lua result: {error}"))?;
-        let value = js_sys::JSON::parse(&json).map_err(|_| "parse Lua return value")?;
-        let formatted = js_sys::JSON::stringify_with_replacer_and_space(
-            &value,
-            &JsValue::UNDEFINED,
-            &JsValue::from_f64(2.0),
-        )
-        .map_err(|_| "format Lua return value")?;
-        lines.push(String::from(formatted));
-    }
-    Ok(lines.join("\n"))
+    values
+        .iter()
+        .map(solomon_assets::json_value::stringify_pretty)
+        .collect::<Result<Vec<_>, _>>()
+        .map(|lines| lines.join("\n"))
 }

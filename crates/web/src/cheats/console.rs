@@ -1,12 +1,11 @@
-//! GPU Lua console from `CheatMenu.tsx`; raw code executes only in the actual host VM.
-//! History and the last100 returned executions belong to this mounted view.
+//! Lua editor and results; code executes only in the authoritative host VM.
+//! History and the last 100 returned executions belong to this open view.
 
 use super::{button, copy, format_values};
 use crate::gpu_ui::UiFrame;
 use egui::{Color32, FontFamily, FontId, Id, RichText, Stroke, vec2};
 use solomon_sim::menu::cheats::{MAX_LUA_CONSOLE_CODE_LENGTH, append_cheat_console_history};
 use solomon_sim::modding::value::LuaValue;
-use wasm_bindgen::JsValue;
 
 struct PendingConsole {
     id: u64,
@@ -69,7 +68,7 @@ impl ConsoleView {
     }
     pub fn prepare(&mut self) -> Result<Option<String>, String> {
         let raw = self.editor.clone();
-        let code: String = js_sys::JsString::from(raw.as_str()).trim().into();
+        let code = crate::ui::trim_javascript(&raw).to_owned();
         if code.is_empty() || self.pending.is_some() || self.next_code.is_some() {
             return Ok(None);
         }
@@ -282,11 +281,5 @@ fn console_line(
     Ok(())
 }
 fn localized_count(count: usize) -> Result<String, String> {
-    let formatter = js_sys::Intl::NumberFormat::new(&js_sys::Array::new(), &js_sys::Object::new());
-    formatter
-        .format()
-        .call1(&JsValue::UNDEFINED, &JsValue::from_f64(count as f64))
-        .map_err(|_| "format Lua code length")?
-        .as_string()
-        .ok_or_else(|| "Lua code length is not text".into())
+    crate::platform::format::integer(count as u64)
 }

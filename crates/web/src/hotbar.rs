@@ -4,11 +4,10 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use crate::platform::{KeyboardEffect, KeyboardEvent, KeyboardListener, Surface};
 use solomon_sim::belt::{NATIVE_BELT_SLOT_COUNT, PLAYER_HOTBAR_COUNT};
 use solomon_sim::hud::HudRect;
 use solomon_sim::settings::GameSettings;
-use wasm_bindgen::{JsCast, closure::Closure};
-use web_sys::{Document, Event, HtmlElement, KeyboardEvent, Window};
 
 #[derive(Clone, Copy)]
 pub enum HotbarDirection {
@@ -29,19 +28,34 @@ struct SelectionState {
 
 struct SelectionOwner {
     state: Rc<SelectionState>,
-    window: Window,
-    listener: Closure<dyn FnMut(Event)>,
+    _keyboard: KeyboardListener,
 }
 
-impl Drop for SelectionOwner {
-    fn drop(&mut self) {
-        if let Err(error) = self.window.remove_event_listener_with_callback_and_bool(
-            "keydown",
-            self.listener.as_ref().unchecked_ref(),
-            true,
-        ) {
-            web_sys::console::error_1(&error);
+impl SelectionState {
+    fn keyboard(&self, event: &KeyboardEvent<'_>) -> KeyboardEffect {
+        let key = event.stroke;
+        let shortcut = self.shortcut.borrow();
+        if !key.pressed
+            || !shortcut.enabled
+            || key.code != shortcut.code
+            || key.repeat
+            || event.default_prevented
+            || event.editing
+            || key.alt
+            || key.ctrl
+            || key.meta
+        {
+            return KeyboardEffect::Pass;
         }
+        cycle_bank(
+            &self.bank,
+            if key.shift != shortcut.reverse {
+                HotbarDirection::Previous
+            } else {
+                HotbarDirection::Next
+            },
+        );
+        KeyboardEffect::Stop
     }
 }
 
@@ -51,7 +65,7 @@ impl Drop for SelectionOwner {
 pub struct HotbarSelection(Rc<SelectionOwner>);
 
 impl HotbarSelection {
-    pub fn attach(window: &Window) -> Result<Self, String> {
+    pub fn attach(surface: &Surface) -> Result<Self, String> {
         let state = Rc::new(SelectionState {
             bank: Cell::new(0),
             shortcut: RefCell::new(Shortcut {
@@ -61,49 +75,8 @@ impl HotbarSelection {
             }),
         });
         let keyed = state.clone();
-        let listener = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(key) = event.dyn_ref::<KeyboardEvent>() else { return };
-            let shortcut = keyed.shortcut.borrow();
-            if !shortcut.enabled
-                || key.code() != shortcut.code
-                || key.repeat()
-                || event.default_prevented()
-                || key.alt_key()
-                || key.ctrl_key()
-                || key.meta_key()
-            {
-                return;
-            }
-            let editing = event
-                .target()
-                .and_then(|target| target.dyn_into::<HtmlElement>().ok())
-                .is_some_and(|target| {
-                    target
-                        .closest("input,textarea,[contenteditable='true']")
-                        .ok()
-                        .flatten()
-                        .is_some()
-                });
-            if editing {
-                return;
-            }
-            event.prevent_default();
-            event.stop_immediate_propagation();
-            let direction = if key.shift_key() != shortcut.reverse {
-                HotbarDirection::Previous
-            } else {
-                HotbarDirection::Next
-            };
-            cycle_bank(&keyed.bank, direction);
-        });
-        window
-            .add_event_listener_with_callback_and_bool(
-                "keydown",
-                listener.as_ref().unchecked_ref(),
-                true,
-            )
-            .map_err(|_| "hotbar shortcut listener")?;
-        Ok(Self(Rc::new(SelectionOwner { state, window: window.clone(), listener })))
+        let keyboard = KeyboardListener::attach(surface, move |event| keyed.keyboard(event))?;
+        Ok(Self(Rc::new(SelectionOwner { state, _keyboard: keyboard })))
     }
 
     #[must_use]
@@ -155,7 +128,6 @@ pub(crate) struct HotbarControls {
 
 impl HotbarControls {
     pub fn new(
-        _document: &Document,
         selection: HotbarSelection,
         modal_rects: Option<&[HudRect; 8]>,
     ) -> Result<Self, String> {

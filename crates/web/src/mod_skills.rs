@@ -1,15 +1,12 @@
-//! GPU learned authored skills and mod choice offer from `mod-ui/ModSkillBook.tsx`.
+//! Learned authored skills and pending skill choices.
 //! Exact host offer/binding identities remain in typed actions.
 
 use crate::gpu_ui::UiFrame;
 use crate::mod_presentation_assets::ModPresentationAssets;
-use crate::ui::javascript_string;
 use egui::{Color32, FontFamily, FontId, Id, RichText, Stroke, vec2};
 use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::assets::GameModAsset;
 use solomon_sim::modding::ui::{ModSkillIcon, project_mod_skill_book, project_mod_skill_picker};
-use wasm_bindgen::JsValue;
-use web_sys::Document;
 
 pub struct ModSkillsSnapshot<'a> {
     pub runtime: Option<&'a LuaObject>,
@@ -63,7 +60,7 @@ pub struct ModSkillsUi {
     actions: Vec<ModSkillAction>,
 }
 impl ModSkillsUi {
-    pub fn new(_document: &Document) -> Result<Self, String> {
+    pub fn new() -> Result<Self, String> {
         Ok(Self { book: Vec::new(), choices: Vec::new(), actions: Vec::new() })
     }
     pub fn update(&mut self, snapshot: &ModSkillsSnapshot<'_>) -> Result<(), String> {
@@ -488,5 +485,5 @@ fn icon_url(
 }
 
 fn number(value: f64) -> String {
-    javascript_string(&JsValue::from_f64(value))
+    crate::ui::javascript_number(value)
 }

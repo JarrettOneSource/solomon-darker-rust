@@ -695,7 +695,7 @@ impl CloudView {
     }
 
     fn filtered_rows(&self) -> Vec<Row> {
-        let query: String = js_sys::JsString::from(self.query.as_str()).trim().into();
+        let query = crate::ui::trim_javascript(&self.query).to_owned();
         let query = format::lowercase(&query);
         let mut rows = Vec::new();
         if self.tab == Tab::Parties {
@@ -1017,9 +1017,7 @@ impl CloudView {
             self.paint_rows(frame, ui, content, view, admitted, actions)?;
             self.paint_footer(frame, ui, view, footer_height, admitted, actions)?;
         }
-        let coarse = web_sys::window()
-            .and_then(|window| window.match_media("(pointer: coarse)").ok().flatten())
-            .is_some_and(|query| query.matches());
+        let coarse = crate::platform::coarse_pointer();
         let skull = if coarse {
             Rect::from_min_size(view.min + Vec2::splat(4.0), Vec2::splat(44.0))
         } else {

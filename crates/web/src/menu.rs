@@ -13,6 +13,7 @@ mod title;
 pub(crate) mod widgets;
 
 use crate::gpu_ui::{StockAtlas, UiFrame};
+use crate::platform::Surface;
 use cloud::CloudView;
 use create::CreateView;
 use egui::{Color32, Id, Rect, Vec2};
@@ -39,7 +40,6 @@ use solomon_sim::profile::create::{
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::settings::GameSettings;
 use title::TitleView;
-use web_sys::Document;
 #[derive(Clone, Debug, PartialEq)]
 pub enum MenuAction {
     Start(NewGameSelection),
@@ -83,7 +83,7 @@ pub enum HostedMenuAction {
     ObserveMatch { request_id: u64, match_id: String },
     LoadMobileLayout { request_id: u64, code: String },
     PublishMobileLayout { request_id: u64 },
-    InspectSaveFiles { request_id: u64, files: Vec<web_sys::File> },
+    InspectSaveFiles { request_id: u64, files: Vec<crate::platform::files::SelectedFile> },
     ExportSave { request_id: u64 },
     ReplaceImportedSave { request_id: u64, document: String },
     SignIn,
@@ -176,7 +176,7 @@ pub struct MenuUi {
     pause_started: f64,
     viewport: (i32, i32),
     names: Vec<String>,
-    document: Document,
+    surface: Surface,
     navigation: MenuNavigation,
 }
 pub(crate) fn scene_layer() -> egui::LayerId {
@@ -251,7 +251,7 @@ impl MenuUi {
         }
         Ok(())
     }
-    pub async fn attach(document: &Document) -> Result<Self, String> {
+    pub async fn attach(surface: &Surface) -> Result<Self, String> {
         let names: Vec<String> = serde_json::from_slice(
             &assets::fetch_bytes("assets/stock/menu/wizard-names.json").await?,
         )
@@ -265,7 +265,7 @@ impl MenuUi {
             join: JoinView::new()?,
             cloud: CloudView::new().await?,
             create: CreateView::new().await?,
-            settings_view: SettingsView::new(document).await?,
+            settings_view: SettingsView::new(surface).await?,
             pause: PauseView::new().await?,
             prompt: TitlePrompt::new().await?,
             routing: RoutingView::new()?,
@@ -297,7 +297,7 @@ impl MenuUi {
             pause_started: 0.0,
             viewport: (0, 0),
             names,
-            document: document.clone(),
+            surface: surface.clone(),
             navigation: MenuNavigation::new(),
         };
         ui.show_title(false)?;
@@ -561,21 +561,22 @@ impl MenuUi {
     }
 
     fn desktop_action(&self, explore: bool) {
-        wasm_bindgen_futures::spawn_local(async move {
-            let Some(window) = web_sys::window() else { return };
-            let result = if explore {
-                crate::desktop::open_website(&window).await
-            } else {
-                crate::desktop::return_to_launcher(&window).await
-            };
-            if let Err(error) = result {
-                crate::set_status(&error);
-            }
-        });
+        let action = if explore {
+            crate::desktop::launcher::Action::Website
+        } else {
+            crate::desktop::launcher::Action::Launcher
+        };
+        if let Err(error) = crate::desktop::request(action) {
+            crate::set_status(&error);
+        }
     }
 
     pub fn set_desktop(&mut self, desktop: bool) {
         self.desktop = desktop;
+    }
+
+    pub(crate) fn desktop_controls_visible(&self) -> bool {
+        self.desktop && matches!(self.screen, Screen::Title | Screen::Pause)
     }
 
     pub fn set_global_hall_available(&mut self, available: bool) {
@@ -1009,7 +1010,7 @@ impl MenuUi {
         if let Some(name) = account_username.filter(|name| !name.is_empty()) {
             return solomon_sim::menu::create_name::initial_create_wizard_name(name);
         }
-        let index = (js_sys::Math::random() * self.names.len() as f64).floor() as usize;
+        let index = (crate::platform::random_unit() * self.names.len() as f64).floor() as usize;
         self.names[index].clone()
     }
 
@@ -1082,14 +1083,8 @@ impl MenuUi {
             self.title_started = now;
         }
         self.now = now;
-        self.orientation_blocked = !self.cloud_visible(self.screen)
-            && self
-                .document
-                .default_view()
-                .ok_or("orientation window")?
-                .match_media("(orientation: portrait) and (hover: none) and (pointer: coarse)")
-                .map_err(|_| "orientation media")?
-                .is_some_and(|query| query.matches());
+        self.orientation_blocked =
+            !self.cloud_visible(self.screen) && self.surface.portrait_touch()?;
         if self.viewport != (width, height) {
             self.viewport = (width, height);
             self.settings_view.resize(width, height);
@@ -1101,9 +1096,7 @@ impl MenuUi {
             }
         }
         if self.screen == Screen::Join {
-            let visible_height = web_sys::window()
-                .and_then(|window| window.visual_viewport())
-                .map_or(f64::from(height), |viewport| viewport.height());
+            let visible_height = self.surface.visible_height();
             self.join.update(now, visible_height)?;
         }
         if self.cloud_visible(self.screen) {
@@ -1376,7 +1369,8 @@ impl MenuUi {
                 self.create.focus_name = true;
             }
             "randomize-name" => {
-                let index = (js_sys::Math::random() * self.names.len() as f64).floor() as usize;
+                let index =
+                    (crate::platform::random_unit() * self.names.len() as f64).floor() as usize;
                 self.create.set_name(&self.names[index])?;
                 self.create.message = None;
             }
@@ -1511,13 +1505,7 @@ impl MenuUi {
             // Create owns this cosmetic-selection stream. It must not consume
             // the accepted player's gameplay, appearance or progression RNG.
             let mut bytes = [0_u8; 4];
-            self.document
-                .default_view()
-                .ok_or("Create window")?
-                .crypto()
-                .map_err(|_| "Create random source")?
-                .get_random_values_with_u8_array(&mut bytes)
-                .map_err(|_| "Create random seed")?;
+            crate::platform::random_bytes(&mut bytes)?;
             self.create_rng = Some(NativeRng::new(i64::from(u32::from_ne_bytes(bytes))));
         }
         let selection = finalize_native_create_loadout(

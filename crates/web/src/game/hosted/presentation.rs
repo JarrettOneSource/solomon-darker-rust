@@ -1,4 +1,4 @@
-//! Session content lifetime from `client/game-client-session.ts` and `mod-ui`.
+//! Session ownership of authored content and its presentation resources.
 //! Accepted snapshots wait for verified textures and audio before their renderer-ready ACK.
 
 use super::*;
@@ -324,8 +324,8 @@ impl Game {
         })
     }
 
-    /// The source DOM subscriptions read the most recently rendered scene metrics. Only
-    /// accepted notifications and viewport changes refresh their keyed elements.
+    /// Overlays use the most recently rendered scene metrics. Accepted notifications
+    /// and viewport changes refresh their keyed elements.
     pub(in crate::game) fn record_mod_scene_projection(&mut self) -> Result<(), String> {
         if self.hosted.is_none() || self.mod_assets.is_none() {
             return Ok(());
@@ -341,13 +341,13 @@ impl Game {
             ModWorldLocation::HubPrivate
         };
         let (camera, layout) = self.scene_view();
-        let rect = self.canvas.get_bounding_client_rect();
+        let [left, top] = self.surface.origin();
         let zoom = camera.scale * layout.display_scale;
         let projection = ModWorldProjection {
             location,
             screen_origin: Vec2::new(
-                rect.left() + (wizard.position.x - camera.origin.x) * zoom,
-                rect.top() + (wizard.position.y - camera.origin.y) * zoom,
+                left + (wizard.position.x - camera.origin.x) * zoom,
+                top + (wizard.position.y - camera.origin.y) * zoom,
             ),
             local_player_position: self
                 .session
@@ -358,7 +358,7 @@ impl Game {
                 .position,
             zoom,
         };
-        let size = (self.canvas.client_width(), self.canvas.client_height());
+        let size = (self.surface.logical_width(), self.surface.logical_height());
         let refresh = self.mod_projection.is_none_or(|last| last.location != location)
             || self.mod_viewport_size != Some(size);
         self.mod_projection = Some(projection);

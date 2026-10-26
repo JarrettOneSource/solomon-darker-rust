@@ -6,7 +6,6 @@ use solomon_sim::hub::college_intro::{
     NativeCollegeIntroPhase, NativeCollegeIntroState, native_college_title_presentation,
 };
 use solomon_sim::viewport::game_viewport;
-use web_sys::Document;
 
 pub struct CollegeIntroOverlay {
     atlas: StockAtlas,
@@ -18,7 +17,7 @@ impl CollegeIntroOverlay {
     pub fn layer_id(&self) -> egui::LayerId {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("college-intro"))
     }
-    pub async fn attach(_document: &Document) -> Result<Self, String> {
+    pub async fn attach() -> Result<Self, String> {
         Ok(Self { atlas: StockAtlas::load("Title").await?, view: None, viewport: [0.0; 2] })
     }
 

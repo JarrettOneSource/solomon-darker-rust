@@ -1,15 +1,16 @@
-//! The desktop close request uses the same source checkpoint and durable revision owner
-//! as ordinary Save and Leave. A transport-only timer also works while rAF is suspended.
+//! Save-before-close uses the same source checkpoint and durable revision owner
+//! as Save and Leave. The OS loop keeps polling it even when drawing is suspended.
 
-use std::cell::RefCell;
-use std::rc::{Rc, Weak};
+#[cfg(not(target_arch = "wasm32"))]
+use std::{cell::RefCell, rc::Rc};
 
-use js_sys::Promise;
-use wasm_bindgen::{JsCast, JsValue, closure::Closure};
-use wasm_bindgen_futures::{JsFuture, future_to_promise};
+#[cfg(not(target_arch = "wasm32"))]
+use solomon_graphics::Renderer;
 
 use super::Game;
 use crate::menu::MenuAction;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::{gpu_ui::GpuUi, storage};
 
 pub(super) enum DesktopClose {
     Saving,
@@ -17,39 +18,18 @@ pub(super) enum DesktopClose {
 }
 
 impl Game {
-    pub(crate) fn attach_desktop(
-        game: &Rc<RefCell<Self>>,
-        window: &web_sys::Window,
-    ) -> Result<(), String> {
-        if crate::desktop::configured(window)?.is_none() {
-            return Ok(());
+    pub fn cancel_desktop_close(&mut self, error: &str) -> Result<(), String> {
+        self.desktop_close = None;
+        if self.native.as_ref().is_some_and(|native| native.is_leaving()) {
+            // A timed-out write may still commit. Retire the leave receipt and
+            // request now so neither its completion nor a late server response
+            // can disconnect the game after the failure prompt is shown.
+            self.fail_hosted_leave(error.into())?;
         }
-        let owner = Rc::downgrade(game);
-        let pending = Rc::new(RefCell::new(None::<Promise>));
-        let callback = Closure::<dyn FnMut() -> Promise>::new(move || {
-            if let Some(promise) = pending.borrow().as_ref() {
-                return promise.clone();
-            }
-            let owner = owner.clone();
-            let completed = pending.clone();
-            let promise = future_to_promise(async move {
-                let result = save_before_close(owner).await;
-                completed.borrow_mut().take();
-                result
-                    .map(|()| JsValue::UNDEFINED)
-                    .map_err(|message| JsValue::from(js_sys::Error::new(&message)))
-            });
-            *pending.borrow_mut() = Some(promise.clone());
-            promise
-        });
-        let bridge = crate::desktop::attach(window, callback.as_ref().unchecked_ref())?;
-        let mut game = game.borrow_mut();
-        game.desktop_bridge = bridge;
-        game.desktop_close_callback = Some(callback);
         Ok(())
     }
 
-    fn begin_desktop_close(&mut self) -> Result<bool, String> {
+    pub fn begin_desktop_close(&mut self) -> Result<bool, String> {
         let Some(native) = &self.native else { return Ok(false) };
         if !native.is_playing() && !native.is_leaving() {
             return Ok(false);
@@ -67,7 +47,7 @@ impl Game {
         }
     }
 
-    fn poll_desktop_close(&mut self, now: f64) -> Result<bool, String> {
+    pub fn poll_desktop_close(&mut self, now: f64) -> Result<bool, String> {
         if matches!(self.desktop_close, Some(DesktopClose::Saving)) {
             self.poll_native(now)?;
             self.poll_hosted(now)?;
@@ -82,25 +62,49 @@ impl Game {
     }
 }
 
-async fn save_before_close(owner: Weak<RefCell<Game>>) -> Result<(), String> {
-    let game = owner.upgrade().ok_or("The game is no longer available to save.")?;
-    if !game.borrow_mut().begin_desktop_close()? {
-        return Ok(());
-    }
-    let window = web_sys::window().ok_or("The game window is unavailable.")?;
-    let clock = window.performance().ok_or("The game clock is unavailable.")?;
-    loop {
-        if game.borrow_mut().poll_desktop_close(clock.now())? {
-            return Ok(());
-        }
-        crate::run_hosted_work(&game);
-        let pause = Promise::new(&mut |resolve, reject| {
-            if let Err(error) =
-                window.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 20)
-            {
-                let _ = reject.call1(&JsValue::UNDEFINED, &error);
+#[cfg(not(target_arch = "wasm32"))]
+impl Game {
+    pub fn load_native(
+        surface: crate::platform::Surface,
+        renderer: Renderer,
+        endpoint: crate::desktop::DesktopEndpoint,
+        controls: crate::desktop::DesktopControls,
+    ) -> impl std::future::Future<Output = Result<Rc<RefCell<Self>>, String>> {
+        Box::pin(async move {
+            let playtime = Some(storage::PlaytimeRecorder::start());
+            let mut game = Self::load_resources(surface, renderer, playtime).await?;
+            game.initialize_settings()?;
+            match storage::read_hall() {
+                Ok(entries) => game.hall_entries = entries,
+                Err(error) => Self::show_storage_error(&error),
             }
-        });
-        JsFuture::from(pause).await.map_err(|_| "The game could not wait for its final save.")?;
+            game.desktop_ui = Some(crate::desktop::DesktopUi::new(controls));
+            game.load_hosted(crate::hosted::WebsiteMount::default(), Some(endpoint)).await?;
+            crate::runtime_ui::completed(crate::runtime_ui::RUNTIME)?;
+            Ok(Rc::new(RefCell::new(game)))
+        })
+    }
+
+    pub fn native_ui(&mut self) -> &mut GpuUi {
+        &mut self.gpu_ui
+    }
+
+    pub fn window_event(
+        &mut self,
+        event: &winit::event::WindowEvent,
+        time: f64,
+    ) -> Result<(), String> {
+        self.dispatch_ui_input(time)?;
+        self.gpu_ui.window_event(event)?;
+        self.input.window_event(event)
+    }
+
+    pub fn accesskit_action(
+        &mut self,
+        action: egui::accesskit::ActionRequest,
+        time: f64,
+    ) -> Result<(), String> {
+        self.dispatch_ui_input(time)?;
+        self.gpu_ui.accesskit_action(action)
     }
 }

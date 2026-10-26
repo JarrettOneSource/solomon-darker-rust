@@ -4,8 +4,8 @@
 #[cfg(target_arch = "wasm32")]
 mod browser {
     use solomon_graphics::{
-        AlphaShadow, BlendMode, Renderer, ShadowOutput, Texture, TextureColorMode, TextureSampling,
-        Vertex,
+        AlphaShadow, BlendMode, ColorFilter, Renderer, ShadowOutput, Texture, TextureColorMode,
+        TextureSampling, Vertex,
     };
     use wasm_bindgen::JsCast;
     use wasm_bindgen::prelude::*;
@@ -24,6 +24,88 @@ mod browser {
     #[wasm_bindgen]
     pub fn indexed_batch_probe(gl: Gl) -> Result<String, JsValue> {
         indexed_batch(gl).map_err(|error| JsValue::from_str(&error))
+    }
+
+    #[wasm_bindgen]
+    pub fn sprite_program_probe(gl: Gl) -> Result<String, JsValue> {
+        sprite_program(gl).map_err(|error| JsValue::from_str(&error))
+    }
+
+    fn sprite_program(gl: Gl) -> Result<String, String> {
+        let mut renderer = Renderer::new(gl.clone())?;
+        let target = renderer.create_render_target_size([64, 64])?;
+        let pixels: Vec<u8> = (0..16).flat_map(|i| [i * 9, i * 7, i * 5, i * 17]).collect();
+        let texture = renderer.upload_rgba(4, 4, &pixels)?;
+        let mut cases = Vec::new();
+        for centers in [false, true] {
+            renderer.set_native_world_pixel_centers(centers);
+            for mode in [TextureColorMode::Texture, TextureColorMode::Premultiplied] {
+                for blend in [BlendMode::Normal, BlendMode::Add, BlendMode::Multiply] {
+                    let mut observations = Vec::new();
+                    for full in [false, true, false] {
+                        let mut image = vec![0; 64 * 64 * 4];
+                        let mut read = Ok(());
+                        renderer.render_to_color(
+                            &target,
+                            [64.0; 2],
+                            [0.2, 0.4, 0.6, 1.0],
+                            |renderer| {
+                                let draw = |renderer: &mut Renderer| {
+                                    renderer.draw_quad_with_color_mode(
+                                        &texture,
+                                        [0.0, 0.0, 4.0, 4.0],
+                                        [[0.0, 0.0], [64.0, 0.0], [64.0, 64.0], [0.0, 64.0]],
+                                        [
+                                            [1.0, 0.5, 0.3, 0.2],
+                                            [0.5, 0.7, 1.0, 0.4],
+                                            [0.2, 1.0, 0.7, 0.8],
+                                            [1.0, 0.2, 0.5, 1.0],
+                                        ],
+                                        blend,
+                                        mode,
+                                    );
+                                };
+                                if full {
+                                    renderer.draw_color_filtered(ColorFilter::default(), draw);
+                                } else {
+                                    draw(renderer);
+                                }
+                                renderer.flush();
+                                read = gl
+                                    .read_pixels_with_opt_u8_array(
+                                        0,
+                                        0,
+                                        64,
+                                        64,
+                                        Gl::RGBA,
+                                        Gl::UNSIGNED_BYTE,
+                                        Some(&mut image),
+                                    )
+                                    .map_err(|error| format!("sprite program read: {error:?}"));
+                            },
+                        );
+                        read?;
+                        observations.push(image);
+                    }
+                    let max_difference = observations[0]
+                        .iter()
+                        .zip(&observations[1])
+                        .map(|(a, b)| a.abs_diff(*b))
+                        .max()
+                        .unwrap_or(0);
+                    let restored = observations[0] == observations[2];
+                    cases.push(format!(
+                        "{{\"pixelCenters\":{centers},\"mode\":\"{mode:?}\",\"blend\":\"{blend:?}\",\"maxChannelDifference\":{max_difference},\"restored\":{restored}}}"
+                    ));
+                }
+            }
+        }
+        renderer.destroy_texture(&texture);
+        renderer.destroy_render_target(&target);
+        if gl.get_error() != Gl::NO_ERROR {
+            return Err("sprite program proof produced a WebGL error".to_owned());
+        }
+        Ok(format!("[{}]", cases.join(",")))
     }
 
     fn indexed_batch(gl: Gl) -> Result<String, String> {

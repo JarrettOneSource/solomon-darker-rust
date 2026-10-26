@@ -1,5 +1,4 @@
-//! Social GPU surfaces from Website `GameChat.tsx`, `NativeUiPartyChip.tsx`,
-//! `NativeUiPartyMenu.tsx`, `PlayerCardDialog.tsx` and `AllyHud.tsx`.
+//! Chat, party controls, player cards and ally status in the shared GPU interface.
 //! Accepted messages, membership, profiles and health remain host-owned.
 
 mod allies;
@@ -24,7 +23,6 @@ use solomon_sim::social::{
     PartyActionRejection, SocialAction, SocialSnapshot, available_game_chat_channels,
     next_game_chat_channel, normalize_game_chat_text, should_increment_game_chat_unread,
 };
-use web_sys::Document;
 
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use crate::ui::portraits::StockPortraits;
@@ -62,7 +60,6 @@ enum Intent {
 }
 
 pub struct SocialUi {
-    document: Document,
     ui: StockAtlas,
     bonedit: StockAtlas,
     control_panel: StockAtlas,
@@ -112,11 +109,10 @@ pub struct SocialUi {
 }
 
 impl SocialUi {
-    pub async fn attach(document: &Document) -> Result<Self, String> {
+    pub async fn attach(surface: &crate::platform::Surface) -> Result<Self, String> {
         let intents = Rc::new(RefCell::new(Vec::new()));
-        let clipboard = party::PartyClipboard::new(document, intents.clone())?;
+        let clipboard = party::PartyClipboard::new(surface, intents.clone())?;
         Ok(Self {
-            document: document.clone(),
             ui: StockAtlas::load("UI").await?,
             bonedit: StockAtlas::load("Bonedit").await?,
             control_panel: StockAtlas::load("ControlPanel").await?,
@@ -250,13 +246,7 @@ impl SocialUi {
         }
         self.size = (width, height);
         self.party_ui.expire_copy(now_ms);
-        self.coarse = self
-            .document
-            .default_view()
-            .ok_or("social window")?
-            .match_media("(hover:none) and (pointer:coarse)")
-            .map_err(|_| "social pointer query")?
-            .is_some_and(|query| query.matches());
+        self.coarse = crate::platform::coarse_pointer();
         if self.snapshot.as_ref() != snapshot {
             self.accept_snapshot(snapshot);
         }

@@ -1,4 +1,4 @@
-//! GPU chat transcript/composer from Website `GameChat.tsx`.
+//! Chat transcript and composer.
 //! Drafts stay local; sending queues a host command and never inserts a message.
 
 mod announcements;
@@ -144,13 +144,7 @@ impl SocialUi {
             (screen.width() * 0.022).clamp(14.0, 34.0).max(self.context.gold_clear_left as f32)
         };
         let faded = solomon_sim::social::is_game_chat_faded(open, self.last_activity, self.now);
-        let reduced = self
-            .document
-            .default_view()
-            .ok_or("chat window")?
-            .match_media("(prefers-reduced-motion: reduce)")
-            .map_err(|_| "chat motion preference")?
-            .is_some_and(|query| query.matches());
+        let reduced = crate::platform::reduced_motion();
         let messages: Vec<_> = if open {
             snapshot
                 .chat_messages

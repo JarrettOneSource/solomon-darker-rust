@@ -60,7 +60,7 @@ pub(super) fn save(window: &Window, id: &str, doc: Value) -> Result<DraftMeta, S
     let meta = DraftMeta {
         id: id.to_owned(),
         name: doc["meta"]["name"].as_str().ok_or("Boneyard name is not text")?.to_owned(),
-        updated_at: js_sys::Date::now(),
+        updated_at: crate::platform::epoch_ms(),
         residents: ["objects", "sprites", "roads", "fences", "terrain"]
             .into_iter()
             .map(|key| doc[key].as_array().expect("validated editor array").len())
@@ -114,10 +114,10 @@ pub(super) fn validate_file(file: &Value) -> Result<(), String> {
     Ok(())
 }
 pub(super) fn new_id() -> Result<String, String> {
-    let time = js_sys::Number::from(js_sys::Date::now())
+    let time = js_sys::Number::from(crate::platform::epoch_ms())
         .to_string_with_radix(36)
         .map_err(|_| "Draft time could not be encoded")?;
-    let random = js_sys::Number::from((js_sys::Math::random() * 1296.0).floor())
+    let random = js_sys::Number::from((crate::platform::random_unit() * 1296.0).floor())
         .to_string_with_radix(36)
         .map_err(|_| "Draft identity could not be encoded")?;
     Ok(format!("d{time}{random}"))

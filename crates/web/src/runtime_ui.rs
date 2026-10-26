@@ -4,12 +4,14 @@
 use crate::gpu_ui::UiFrame;
 use egui::{Align2, Color32, FontFamily, FontId, Id, Order, pos2};
 use std::cell::RefCell;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 mod startup;
 pub(crate) use startup::{ACCOUNT, DESKTOP, FIRST_FRAME, RUNTIME, StartupResource};
 use startup::{Snapshot, StartupProgress};
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "solomonLoader"], js_name = progress, catch)]
@@ -38,6 +40,7 @@ thread_local! {
 pub(crate) fn begin(resources: impl IntoIterator<Item = StartupResource>) -> Result<(), String> {
     let progress = StartupProgress::new(resources)?;
     let snapshot = progress.snapshot();
+    ERROR.with(|error| *error.borrow_mut() = None);
     STARTUP.with(|state| *state.borrow_mut() = Some(progress));
     publish(snapshot)
 }
@@ -47,6 +50,7 @@ pub(crate) fn begin_desktop(
 ) -> Result<(), String> {
     let progress = StartupProgress::for_desktop(resources)?;
     let snapshot = progress.snapshot();
+    ERROR.with(|error| *error.borrow_mut() = None);
     STARTUP.with(|state| *state.borrow_mut() = Some(progress));
     publish(snapshot)
 }
@@ -75,20 +79,35 @@ fn update(change: impl FnOnce(&mut StartupProgress) -> Result<(), String>) -> Re
 }
 
 fn publish(snapshot: Snapshot) -> Result<(), String> {
-    loader_progress(snapshot.stage, &snapshot.source, snapshot.completed, snapshot.total)
-        .map_err(|error| format!("Startup progress: {error:?}"))
+    #[cfg(target_arch = "wasm32")]
+    {
+        loader_progress(snapshot.stage, &snapshot.source, snapshot.completed, snapshot.total)
+            .map_err(|error| format!("Startup progress: {error:?}"))
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if snapshot.source.is_empty() {
+            set_status("");
+        } else {
+            set_status(&format!("{} ({}/{})", snapshot.source, snapshot.completed, snapshot.total));
+        }
+        Ok(())
+    }
 }
 pub(crate) fn finish() -> Result<(), String> {
     STARTUP.with(|state| state.borrow().as_ref().map_or(Ok(()), StartupProgress::finish))?;
+    #[cfg(target_arch = "wasm32")]
     loader_finish().map_err(|error| format!("Startup handoff: {error:?}"))?;
     STARTUP.with(|progress| progress.borrow_mut().take());
     Ok(())
 }
+#[cfg(target_arch = "wasm32")]
 pub(crate) fn loading_snapshot() -> Option<String> {
     loader_active().then(loader_state)
 }
 pub(crate) fn startup_failed(message: &str) {
     set_error(message);
+    #[cfg(target_arch = "wasm32")]
     if let Err(error) = loader_error(message) {
         web_sys::console::error_1(&error);
     }
@@ -115,7 +134,8 @@ pub(crate) fn paint(frame: &mut UiFrame<'_>) {
         }
         let painter = frame.ctx.layer_painter(layer_id());
         let screen = frame.ctx.content_rect();
-        let position = pos2(screen.left() + 12.0, screen.bottom() - 10.0);
+        let bottom = if cfg!(target_arch = "wasm32") { 10.0 } else { 48.0 };
+        let position = pos2(screen.left() + 12.0, screen.bottom() - bottom);
         let color = if error().is_some() {
             Color32::from_rgb(255, 123, 123)
         } else {

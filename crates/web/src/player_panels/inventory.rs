@@ -574,10 +574,7 @@ impl PlayerPanels {
 }
 // Source uses Number.toFixed(1), including binary half cases and large authored values.
 fn inventory_stat_number(value: f64) -> Result<String, String> {
-    js_sys::Number::from(value)
-        .to_fixed(1)
-        .map(String::from)
-        .map_err(|_| "Inventory stat decimal formatting".to_owned())
+    Ok(ryu_js::Buffer::new().format_to_fixed(value, 1).to_owned())
 }
 
 // `nativeRoundedStat` uses JavaScript Math.round, whose half cases round toward +∞.

@@ -111,7 +111,7 @@ async function reveal(page, id) {
     await reveal(page, 'save-preview');
     const preview = await gpu.widget(page, 'save-preview');
     assert.equal(preview.label, expected.displayName);
-    assert.ok(preview.value.includes('Browser save: inventory, equipment, and the saved run will be restored.'));
+    assert.ok(preview.value.includes('Game save: inventory, equipment, and the saved run will be restored.'));
     assert.equal(await storedSave(), null);
     await reveal(page, 'save-cancel');
     await gpu.click(page, 'save-cancel');
@@ -153,7 +153,7 @@ async function reveal(page, id) {
     await choose(exportedArchive);
     await reveal(page, 'save-preview');
     assert.equal((await gpu.widget(page, 'save-preview')).label, expected.displayName);
-    assert.ok((await gpu.widget(page, 'save-preview')).value.includes('Browser save:'));
+    assert.ok((await gpu.widget(page, 'save-preview')).value.includes('Game save:'));
     await reveal(page, 'save-cancel');
     await gpu.click(page, 'save-cancel');
     assert.equal(JSON.parse(await storedSave()).revision, 1);

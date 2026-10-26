@@ -27,6 +27,19 @@ jobs:
           cache: npm
       - name: Install the pinned Rust and WASM toolchain
         run: rustup show
+      - name: Install native client build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libfontconfig1-dev libclang-dev cmake
+      - name: Restore game build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
+          restore-keys: |
+            game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+            game-${{ runner.os }}-${{ runner.arch }}-
       - run: cargo install trunk --locked --version 0.22.0
       - run: npm ci --no-audit --no-fund
       - run: npm run test:browser-support
@@ -73,6 +86,37 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - name: Resolve the accessibility driver's interpreter
+        run: python -c 'import os,sys; print("TCC_CLIENT=" + os.path.realpath(sys.executable))' >> "$GITHUB_ENV"
+      - name: Prepare native accessibility and display services
+        uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
+        with:
+          setup-window-manager: 'true'
+          extra-packages: libasound2-dev libasound2-plugins libudev-dev libfontconfig1-dev libclang-dev cmake libgl1-mesa-dev pulseaudio
+          macos-tcc-client: ${{ env.TCC_CLIENT }}
+      - name: Install the native acceptance driver
+        run: python -m pip install -r tools/desktop-smoke-requirements.txt
+      - name: Provide software OpenGL on the Windows runner
+        if: ${{ runner.os == 'Windows' }}
+        uses: ssciwr/setup-mesa-dist-win@2dfeaebfa514f74c2b8cd8d27108c31486d33e72
+        with:
+          version: '26.0.3'
+      - name: Select native Windows Perl for the bundled TLS library
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
+          if (!$nativePerl) { throw 'The runner has no Strawberry Perl installation.' }
+          & $nativePerl -MLocale::Maketext::Simple -e 1
+          if ($LASTEXITCODE) { throw 'The native Perl modules required by OpenSSL are unavailable.' }
+          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
+      - name: Provide a Linux audio output
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=acceptance
+          pactl set-default-sink acceptance
+          printf 'pcm.!default { type pulse }\nctl.!default { type pulse }\n' > ~/.asoundrc
       - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
@@ -82,27 +126,45 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Install the pinned Rust and WASM toolchain
         run: rustup show
-      - name: Install the client builder
-        run: cargo install trunk --locked --version 0.22.0
       - run: python scripts/verify-client-assets.py
       - run: npm run test:desktop
+      - name: Restore native build cache
+        id: native-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
+          restore-keys: |
+            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+            native-${{ runner.os }}-${{ runner.arch }}-
       - name: Build standalone app from this revision
+        id: native-build
         run: npm run package:desktop -- --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --release-repository "$GITHUB_REPOSITORY"
       - name: Archive and inspect the final standalone app
+        id: native-archive
         run: node tools/archive-desktop.mjs
-      - name: Verify the Windows native launcher contracts
+      - name: Verify the complete native workspace on Windows
         if: ${{ runner.os == 'Windows' }}
-        run: cargo test --release -p solomon-launcher --all-features
-      - name: Verify the Windows native host needs no external VC++ runtime
+        run: cargo test --workspace --all-features
+      - name: Verify the Windows app needs no external VC++ runtime
         if: ${{ runner.os == 'Windows' }}
-        run: python tools/inspect-windows-crt.py 'dist-desktop/Solomon Darker-win32-x64/resources/app/authority/solomon-darker.exe' reports/desktop-smoke/native-imports.json static
+        run: python tools/inspect-windows-crt.py 'dist-desktop/Solomon Darker-win32-x64/solomon-darker.exe' reports/desktop-smoke/native-imports.json static
+      - name: Save completed native build cache
+        if: always() && steps.native-build.outcome == 'success' && steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Verify packaged offline save and peer gameplay
-        run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            xvfb-run -a npm run smoke:desktop
-          else
-            npm run smoke:desktop
-          fi
+        if: always() && steps.native-archive.outcome == 'success'
+        timeout-minutes: 30
+        run: npm run smoke:desktop
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
@@ -118,11 +180,11 @@ jobs:
           name: desktop-evidence-${{ matrix.platform }}-${{ matrix.arch }}
           path: reports/desktop-smoke
           if-no-files-found: ignore
-      - name: Retain the unqualified Windows candidate on failure
-        if: failure() && matrix.platform == 'win32'
+      - name: Retain an unqualified candidate on failure
+        if: failure() && steps.native-build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: unqualified-desktop-win32-x64-${{ github.run_id }}-${{ github.run_attempt }}
+          name: unqualified-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             dist-desktop/*.zip
             dist-desktop/*.sha256
@@ -177,11 +239,13 @@ jobs:
           (cd release && sha256sum --check solomon-game-linux.tar.gz.sha256)
           tag="desktop-$GITHUB_SHA"
           cat > release-notes.md <<'NOTES'
-          Solomon Darker standalone app: offline solo play, local saves, encrypted direct peer hosting and update notifications.
+          Solomon Darker native Rust app: offline solo play, local saves, encrypted direct peer hosting and update notifications.
 
           Extract the ZIP and run the app. Keep the entire extracted folder together. Your saves live in the app's user-data folder, separate from the download. To update, save and close the game, then replace the extracted application with the new version.
 
-          For multiplayer, choose Host game, start a game, and use Game > Copy multiplayer invite. Friends choose Join a friend and paste it. Internet hosts need a reachable IP or VPN address and an allowed/forwarded TCP port (default 27843). Everyone must use the same build. Keep the host running.
+          For multiplayer, choose Host game, start a game, press Escape and choose Copy multiplayer invite. Friends choose Join a friend and paste it. Internet hosts need a reachable IP or VPN address and an allowed/forwarded TCP port (default 27843). Everyone must use the same build. Keep the host running.
+
+          To move a save from the previous Electron app, export its save ZIP from Settings > Online and account > Stock / browser save. In this app choose Play offline, then Settings > Online and account > Import / export save and import the ZIP. Keep the previous app until your wizard is restored.
 
           These builds are not publisher-signed or notarized. Windows or macOS may require an explicit first-launch confirmation. Cloud accounts and Dark Cloud content remain available in the web app.
           NOTES

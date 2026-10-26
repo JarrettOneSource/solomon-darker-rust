@@ -124,13 +124,12 @@ impl NativeGame {
         self.connection.as_ref().map(|connection| &connection.host)
     }
 
-    pub(super) fn inspect(window: &web_sys::Window) -> Result<Self, String> {
-        let resume = network::read_resume(window)?;
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn inspect() -> Result<Self, String> {
+        let resume = network::read_resume()?;
         let mut native = Self::idle();
-        native.connection = Some(NativeSession::connect(
-            window,
-            ClientMessage::InspectSession { resume: resume.clone() },
-        )?);
+        native.connection =
+            Some(NativeSession::connect(ClientMessage::InspectSession { resume: resume.clone() })?);
         native.phase = NativePhase::Inspecting;
         native.resume = resume;
         Ok(native)
@@ -214,8 +213,8 @@ impl Game {
                 }),
             },
             now,
-            self.canvas.client_width(),
-            self.canvas.client_height(),
+            self.surface.logical_width(),
+            self.surface.logical_height(),
         )
     }
 
@@ -319,11 +318,11 @@ impl Game {
                             Ok(observing) => observing,
                             Err(reason) => return self.native_disconnected(&reason),
                         };
-                        if !observing && !self.is_editor_test() {
-                            network::remember_resume(
-                                &web_sys::window().ok_or("no window")?,
-                                &credentials,
-                            )?;
+                        let keep_resume = !observing;
+                        #[cfg(target_arch = "wasm32")]
+                        let keep_resume = keep_resume && !self.is_editor_test();
+                        if keep_resume {
+                            network::remember_resume(&credentials)?;
                         }
                         let native = self.native.as_mut().unwrap();
                         native.resume = Some(credentials.clone());
@@ -413,14 +412,12 @@ impl Game {
                         }
                         let rejected_identity =
                             code == solomon_protocol::HostErrorCode::InvalidCredentials;
-                        if rejected_identity && !self.is_hosted_observer() && !self.is_editor_test()
-                        {
+                        #[cfg(target_arch = "wasm32")]
+                        let rejected_identity = rejected_identity && !self.is_editor_test();
+                        if rejected_identity && !self.is_hosted_observer() {
                             let native = self.native.as_mut().unwrap();
                             if let Some(rejected) = native.resume.take() {
-                                network::forget_rejected_resume(
-                                    &web_sys::window().ok_or("no window")?,
-                                    &rejected,
-                                )?;
+                                network::forget_rejected_resume(&rejected)?;
                             }
                             native.can_resume = false;
                             native.selection = None;
@@ -498,6 +495,7 @@ impl Game {
         } else {
             reason.to_owned()
         }));
+        #[cfg(target_arch = "wasm32")]
         if self.is_editor_test() {
             return self.editor_test_failed(reason);
         }
@@ -652,17 +650,14 @@ impl Game {
     ) -> Result<(), String> {
         let reset = resume.as_ref().and(reset);
         let begin_college_intro = resume.is_none() && !tutorial;
-        let connection = NativeSession::connect(
-            &web_sys::window().ok_or("no window")?,
-            ClientMessage::Hello {
-                version: solomon_protocol::PROTOCOL_VERSION,
-                enhanced_effects: self.menu.settings().enhanced_effects,
-                selection,
-                resume,
-                initial_save: None,
-                begin_college_intro,
-            },
-        )?;
+        let connection = NativeSession::connect(ClientMessage::Hello {
+            version: solomon_protocol::PROTOCOL_VERSION,
+            enhanced_effects: self.menu.settings().enhanced_effects,
+            selection,
+            resume,
+            initial_save: None,
+            begin_college_intro,
+        })?;
         self.begin_native_connection(connection, reset, tutorial)
     }
 
@@ -675,8 +670,7 @@ impl Game {
         self.reset_hosted_presentation()?;
         self.social.set_hosted_session(false);
         self.social.set_hosted_session(true);
-        let connection =
-            NativeSession::connect_to(&web_sys::window().ok_or("no window")?, endpoint, hello)?;
+        let connection = NativeSession::connect_to(endpoint, hello)?;
         self.begin_native_connection(connection, None, tutorial)
     }
 

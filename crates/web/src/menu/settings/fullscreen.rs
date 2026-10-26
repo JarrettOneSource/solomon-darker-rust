@@ -2,27 +2,26 @@
 //! adapter backs this row and the edge control.
 use super::widgets;
 use crate::fullscreen::{
-    ControlMode, error_message, fullscreen_active, game_fullscreen_control_mode, toggle_fullscreen,
+    ControlMode, fullscreen_active, game_fullscreen_control_mode, toggle_fullscreen,
 };
 use crate::gpu_ui::{StockAtlas, UiFrame};
+use crate::platform::Surface;
 use egui::{Ui, Vec2};
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasm_bindgen_futures::JsFuture;
-use web_sys::Document;
 pub(super) struct SettingsFullscreen {
-    document: Document,
+    surface: Surface,
     mode: ControlMode,
     show_install_help: bool,
     result: Rc<RefCell<Option<Result<(), String>>>>,
     error: Option<String>,
 }
 impl SettingsFullscreen {
-    pub fn new(document: &Document) -> Result<Option<Self>, String> {
-        let mode = game_fullscreen_control_mode(document)?;
+    pub fn new(surface: &Surface) -> Result<Option<Self>, String> {
+        let mode = game_fullscreen_control_mode(surface)?;
         Ok((mode != ControlMode::Hidden).then(|| Self {
-            document: document.clone(),
+            surface: surface.clone(),
             mode,
             show_install_help: false,
             result: Rc::new(RefCell::new(None)),
@@ -35,15 +34,10 @@ impl SettingsFullscreen {
             self.show_install_help = !self.show_install_help;
             return Ok(());
         }
-        let request = toggle_fullscreen(&self.document).map_err(error_message)?;
+        let request = toggle_fullscreen(&self.surface)?;
         let completed = self.result.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            *completed.borrow_mut() = Some(
-                JsFuture::from(js_sys::Promise::resolve(&request))
-                    .await
-                    .map(|_| ())
-                    .map_err(error_message),
-            );
+        crate::platform::spawn_local(async move {
+            *completed.borrow_mut() = Some(request.await);
         });
         Ok(())
     }
@@ -98,7 +92,7 @@ impl SettingsFullscreen {
                 ui,
                 atlas,
                 rect,
-                fullscreen_active(&self.document),
+                fullscreen_active(&self.surface),
                 egui::Color32::WHITE,
             )?;
         }

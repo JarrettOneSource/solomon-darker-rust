@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const root=path.resolve(__dirname,'../..');
-const fontProbePath='crates/web/src/gpu_ui/edit/font_run.rs';
+const fontProbePath='crates/web/src/gpu_ui/edit/font_run/browser.rs';
 function rustFiles(directory) {
   return fs.readdirSync(directory,{withFileTypes:true}).flatMap(entry=>{
     const filename=path.join(directory,entry.name);
@@ -12,7 +12,7 @@ function rustFiles(directory) {
   });
 }
 const sources=rustFiles(path.join(root,'crates')).map(filename=>({
-  filename:path.relative(root,filename),text:fs.readFileSync(filename,'utf8'),
+  filename:path.relative(root,filename).split(path.sep).join('/'),text:fs.readFileSync(filename,'utf8'),
 }));
 
 test('the game document installs only GPU canvases and bootstrap scripts',()=>{
@@ -50,7 +50,7 @@ test('Rust creates only platform adapter DOM elements',()=>{
   assert.deepEqual(forbidden,[],'no legacy visual DOM factory, SVG or iframe survives');
 });
 
-test('the native font probe stays hidden, noninteractive and transient',()=>{
+test('the browser font probe stays hidden, noninteractive and transient',()=>{
   const probe=sources.find(({filename})=>filename===fontProbePath);
   if(!probe)return;
   const {text}=probe;

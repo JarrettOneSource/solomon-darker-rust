@@ -3,11 +3,14 @@
 mod fullscreen;
 mod mobile;
 mod mobile_sharing;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests;
 mod transfer;
 
 use super::widgets;
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use crate::mobile_editor::{MobileEditorArt, MobileEditorPlayerPreview, MobileUiEditor};
+use crate::platform::Surface;
 use egui::{Color32, Pos2, Rect, Ui, Vec2};
 use fullscreen::SettingsFullscreen;
 use solomon_protocol::hosted::{EnhancedEffectsAuthority, EnhancedEffectsScope};
@@ -16,7 +19,6 @@ use solomon_sim::mobile_ui::{MobileUiLayout, MobileUiLayoutState};
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
 use solomon_sim::settings::{GameControlAction, GameSettings, game_binding_label};
 use std::rc::Rc;
-use web_sys::Document;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsContext {
     Title,
@@ -78,6 +80,47 @@ enum NumericSetting {
 }
 
 impl NumericSetting {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn accessible_value(self, ui: &Ui, response: &egui::Response, value: &mut u16) {
+        use egui::accesskit::{Action, ActionData};
+
+        let (_, _, min, max) = self.definition();
+        if response.enabled() {
+            ui.input_mut(|input| {
+                input.consume_accesskit_action_requests(response.id, |request| {
+                    match request.action {
+                        Action::SetValue => {
+                            if let Some(ActionData::NumericValue(next)) = request.data
+                                && next.is_finite()
+                            {
+                                *value = next.round().clamp(f64::from(min), f64::from(max)) as u16;
+                            }
+                        }
+                        Action::Increment => *value = value.saturating_add(1).min(max),
+                        Action::Decrement => *value = value.saturating_sub(1).max(min),
+                        _ => return false,
+                    }
+                    true
+                });
+            });
+        }
+        ui.ctx().accesskit_node_builder(response.id, |node| {
+            node.set_numeric_value(f64::from(*value));
+            node.set_min_numeric_value(f64::from(min));
+            node.set_max_numeric_value(f64::from(max));
+            node.set_numeric_value_step(1.0);
+            if response.enabled() {
+                node.add_action(Action::SetValue);
+                if *value < max {
+                    node.add_action(Action::Increment);
+                }
+                if min < *value {
+                    node.add_action(Action::Decrement);
+                }
+            }
+        });
+    }
+
     fn definition(self) -> (&'static str, &'static str, u16, u16) {
         match self {
             Self::Sound => ("sound", "SOUND VOL:", 0, 100),
@@ -207,7 +250,7 @@ pub(super) struct SettingsView {
     fullscreen: Option<SettingsFullscreen>,
     ui_atlas: StockAtlas,
     control_panel: StockAtlas,
-    document: Document,
+    surface: Surface,
     mobile_art: Rc<MobileEditorArt>,
     mobile_state: MobileUiLayoutState,
     mobile_preview: Option<MobileEditorPlayerPreview>,
@@ -226,7 +269,7 @@ pub(super) struct SettingsView {
     scroll_reset: bool,
 }
 impl SettingsView {
-    pub async fn new(document: &Document) -> Result<Self, String> {
+    pub async fn new(surface: &Surface) -> Result<Self, String> {
         Ok(Self {
             page: Page::Root,
             context: SettingsContext::Title,
@@ -234,10 +277,10 @@ impl SettingsView {
             enhanced_effects_authority: None,
             pending_binding: None,
             settings: GameSettings::default(),
-            fullscreen: SettingsFullscreen::new(document)?,
+            fullscreen: SettingsFullscreen::new(surface)?,
             ui_atlas: StockAtlas::load("UI").await?,
             control_panel: StockAtlas::load("ControlPanel").await?,
-            document: document.clone(),
+            surface: surface.clone(),
             mobile_art: Rc::new(MobileEditorArt::load().await?),
             mobile_state: MobileUiLayoutState::default(),
             mobile_preview: None,
@@ -411,7 +454,7 @@ impl SettingsView {
             }
             Page::SaveTransfer => {
                 self.save_transfer = Some(transfer::SaveTransferView::new(
-                    &self.document,
+                    &self.surface,
                     self.save_can_export,
                     self.save_request_sequence.clone(),
                 )?)
@@ -677,7 +720,7 @@ impl SettingsView {
                     self.action_row(
                         frame,
                         ui,
-                        "STOCK / BROWSER SAVE",
+                        "IMPORT / EXPORT SAVE",
                         "settings-page:save-transfer",
                         width,
                         true,
@@ -687,22 +730,18 @@ impl SettingsView {
                 group(frame, ui, "DEVELOPER", width);
                 self.toggle(frame, ui, ToggleSetting::Cheats, width, actions)?;
                 if self.settings.enable_cheats {
-                    flow(
-                        ui,
-                        &format!(
-                            "Debug menu: {}
-DevTools: solomonDark.lua.help()",
-                            game_binding_label(&self.settings.controls.open_cheats)
-                        ),
-                        width,
-                        12.0,
-                        widgets::color(0xb3a477),
+                    let hint = format!(
+                        "Debug menu: {}",
+                        game_binding_label(&self.settings.controls.open_cheats)
                     );
+                    #[cfg(target_arch = "wasm32")]
+                    let hint = format!("{hint}\nDevTools: solomonDark.lua.help()");
+                    flow(ui, &hint, width, 12.0, widgets::color(0xb3a477));
                 }
                 if self.context != SettingsContext::Title {
                     flow(
                         ui,
-                        "Display size follows the browser. Resolution is available automatically.",
+                        "Resolution follows the game window.",
                         width,
                         12.0,
                         widgets::color(0xb3a477),
@@ -987,6 +1026,8 @@ DevTools: solomonDark.lua.help()",
         if response.has_focus() {
             row_outline(&paint, ui, rect);
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        setting.accessible_value(ui, &response, &mut value);
         if value != before {
             setting.set(&mut self.settings, value);
             self.changed = true;

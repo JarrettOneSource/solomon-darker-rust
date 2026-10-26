@@ -2,9 +2,14 @@
 //! editor model in their native dispatch order, including earlier UI actions.
 
 use egui::{Key, Modifiers, Pos2, Rect, pos2};
+#[cfg(target_arch = "wasm32")]
 use web_sys::HtmlTextAreaElement;
 
-use super::model::{EditGroup, Intent, Model, Receipt, byte_index, replacement};
+#[cfg(any(target_arch = "wasm32", test))]
+use super::model::EditGroup;
+#[cfg(target_arch = "wasm32")]
+use super::model::replacement;
+use super::model::{Intent, Model, Receipt, byte_index};
 use super::{EditorDescriptor, TextSelection};
 
 pub(crate) struct Session {
@@ -89,6 +94,7 @@ impl Session {
         receipt
     }
 
+    #[cfg(target_arch = "wasm32")]
     pub fn input(
         &mut self,
         sequence: u64,
@@ -180,6 +186,7 @@ impl Session {
         })))
     }
 
+    #[cfg(target_arch = "wasm32")]
     pub fn sync(&self, textarea: &HtmlTextAreaElement) -> Result<(), String> {
         if textarea.value() != self.model.text() {
             textarea.set_value(self.model.text());
@@ -220,6 +227,7 @@ pub(crate) fn reconcile_session(
     true
 }
 
+#[cfg(target_arch = "wasm32")]
 pub fn selection(textarea: &HtmlTextAreaElement) -> TextSelection {
     let start = textarea.selection_start().ok().flatten().unwrap_or(0) as usize;
     let end = textarea.selection_end().ok().flatten().unwrap_or(start as u32) as usize;
@@ -236,12 +244,12 @@ pub fn selection(textarea: &HtmlTextAreaElement) -> TextSelection {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::super::{EditorFont, EditorRules, native_name_geometry};
     use super::*;
     use egui::{Pos2, Rect, Vec2};
 
-    fn descriptor(text: &str) -> EditorDescriptor {
+    pub(crate) fn descriptor(text: &str) -> EditorDescriptor {
         let field = Rect::from_min_size(Pos2::ZERO, Vec2::new(384.0, 49.0));
         let model = Model::new(text);
         EditorDescriptor {
@@ -263,6 +271,21 @@ mod tests {
             geometry: native_name_geometry(text, Pos2::ZERO, 1.0, field),
             font_options: super::super::FontRunOptions::default(),
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn text_descriptor(
+        text: &str,
+    ) -> (crate::gpu_ui::fonts::PlatformFonts, EditorDescriptor) {
+        let fonts = crate::gpu_ui::fonts::test_fonts();
+        let mut field = descriptor("A");
+        let font = egui::FontId::new(24.0, egui::FontFamily::Name("Alegreya".into()));
+        field.geometry = super::super::font_run::geometry(&font, text, field.font_options).unwrap();
+        field.font = EditorFont::Browser(font);
+        field.model = std::sync::Arc::new(Model::new(text));
+        field.text = text.into();
+        field.multiline = true;
+        (fonts, field)
     }
 
     #[test]

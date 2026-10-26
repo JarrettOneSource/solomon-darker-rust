@@ -1,20 +1,20 @@
-//! Source desktop launcher drafts and admission; the preload remains the process owner.
+//! Desktop launcher drafts and admission; the native application owns each session.
 
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Deserialize)]
-pub(super) struct Build {
+pub struct Build {
     pub revision: String,
 }
 
 #[derive(Clone, Deserialize)]
-pub(super) struct Update {
+pub struct Update {
     pub revision: String,
 }
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct DesktopState {
+pub struct DesktopState {
     pub build: Build,
     pub addresses: Vec<String>,
     pub update: Option<Update>,
@@ -23,21 +23,28 @@ pub(super) struct DesktopState {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "mode", rename_all = "lowercase")]
-pub(super) enum SessionOptions {
+pub enum SessionOptions {
     Solo,
     Host { host: String, port: u16 },
     Join { invite: String },
 }
 
 #[derive(Clone)]
-pub(super) enum Action {
+pub enum Action {
     Start(SessionOptions),
     Check,
     Download,
     Website,
+    Launcher,
+    ReloadGame,
+    OpenUrl(String),
+    CopyInvite,
+    KeepPlaying,
+    CloseWithoutSaving,
 }
 
 pub(super) struct Model {
+    pub previous_app_data: bool,
     pub state: DesktopState,
     pub host: String,
     pub port: String,
@@ -52,6 +59,7 @@ pub(super) struct Model {
 impl Model {
     pub fn new(state: DesktopState) -> Self {
         Self {
+            previous_app_data: false,
             host: state.addresses.first().cloned().unwrap_or_default(),
             state,
             port: "27843".into(),

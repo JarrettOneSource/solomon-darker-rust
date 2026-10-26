@@ -23,7 +23,7 @@ fn source_book_fixtures_import_owned_books_and_seed_their_retained_receipt() {
             bytes: document.as_bytes(),
         }])
         .unwrap_or_else(|error| panic!("{}: {error}", case["world"]));
-        assert_eq!(imported.source, GameSaveImportSource::Browser);
+        assert_eq!(imported.source, GameSaveImportSource::Game);
         let restored = website_save::restore(&imported.document).unwrap();
         assert_eq!(restored.session.boneyard.is_some(), case["world"] == "boneyard");
         if let Some(loaded) = &restored.loaded_boneyard {

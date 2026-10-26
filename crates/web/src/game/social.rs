@@ -99,8 +99,8 @@ impl Game {
                 gold_clear_left: 0.0,
             },
             now,
-            self.canvas.client_width(),
-            self.canvas.client_height(),
+            self.surface.logical_width(),
+            self.surface.logical_height(),
         )?;
         self.menu.set_input_suspended(self.social.input_active())?;
         self.panels.set_input_suspended(self.social.input_active())?;

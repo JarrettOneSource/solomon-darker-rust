@@ -1,4 +1,6 @@
 //! Complete font-run typography and the native GPU editing owner.
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::gpu_ui) mod accessibility;
 mod font_run;
 mod geometry;
 pub(super) mod model;
@@ -11,6 +13,8 @@ use egui::{Color32, FontId, Pos2, Rect, Response, Sense, Vec2};
 
 use super::UiFrame;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::gpu_ui) use font_run::native_shape;
 pub use font_run::{
     FontRunOptions, NativeFontRun, NativeFontStroke, OverflowWrap, font_run, font_run_with_options,
 };
@@ -283,11 +287,11 @@ pub(super) fn selects_all_on_native_tab(ctx: &egui::Context, id: egui::Id) -> bo
     })
 }
 
-fn native_tab(keys: &[super::BrowserKey]) -> bool {
+fn native_tab(keys: &[super::KeyStroke]) -> bool {
     keys.iter().any(|key| key.pressed && key.code == "Tab" && !key.ctrl && !key.alt && !key.meta)
 }
 
-pub(super) fn begin_native_focus(ctx: &egui::Context, keys: &[super::BrowserKey]) {
+pub(super) fn begin_native_focus(ctx: &egui::Context, keys: &[super::KeyStroke]) {
     if native_tab(keys) {
         let origin = ctx.memory(|memory| memory.focused());
         ctx.data_mut(|data| {
@@ -298,7 +302,7 @@ pub(super) fn begin_native_focus(ctx: &egui::Context, keys: &[super::BrowserKey]
 
 /// Only a genuine native Tab selects a singleline input's value on entry.
 /// Controller bumpers call focus directly in Source and retain its selection.
-pub(super) fn finish_native_focus(ctx: &egui::Context, keys: &[super::BrowserKey]) {
+pub(super) fn finish_native_focus(ctx: &egui::Context, keys: &[super::KeyStroke]) {
     // Egui intentionally applies Shift+Tab at the next pass's begin. Keep the
     // actual dispatch origin through that existing layout, then retire it.
     if !native_tab(keys) {

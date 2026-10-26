@@ -1,6 +1,6 @@
 //! Commit native input in dispatch order before painting the final GPU frame.
 
-use super::BrowserKey;
+use super::KeyStroke;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub(super) struct DispatchEnd {
@@ -19,7 +19,7 @@ impl DispatchEnd {
 
 pub(super) struct InputPass {
     pub raw: egui::RawInput,
-    pub codes: Vec<BrowserKey>,
+    pub codes: Vec<KeyStroke>,
     pub edits: Vec<super::edit::model::Receipt>,
     pub click_count: Option<u32>,
     pub controller: bool,
@@ -27,7 +27,7 @@ pub(super) struct InputPass {
 
 pub(super) fn into_passes(
     mut raw: egui::RawInput,
-    codes: Vec<BrowserKey>,
+    codes: Vec<KeyStroke>,
     edits: Vec<super::edit::model::Receipt>,
     boundaries: Vec<DispatchEnd>,
 ) -> Vec<InputPass> {

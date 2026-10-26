@@ -48,7 +48,6 @@ use solomon_sim::profile::{
 use solomon_sim::settings::GameControlBindings;
 use solomon_sim::tutorial_surface::NativeTutorialSurfaceAction;
 use viewport::PanelSection;
-use web_sys::Document;
 
 /// These are derived by the owning session, alongside the combat and spell snapshots.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -236,7 +235,6 @@ struct Press {
 }
 
 pub struct PlayerPanels {
-    document: Document,
     inventory_flybys: Vec<flyby::InventoryFlyby>,
     model: Option<model::PanelModel>,
     mod_icons: std::collections::BTreeMap<u64, Vec<crate::ui::mod_icon::ModIconLayer>>,
@@ -299,10 +297,9 @@ pub struct PlayerPanels {
 }
 
 impl PlayerPanels {
-    pub async fn attach(document: &Document, hotbar: HotbarSelection) -> Result<Self, String> {
+    pub async fn attach(hotbar: HotbarSelection) -> Result<Self, String> {
         let belt_rects = solomon_sim::hud::native_hud_control_layout(1600.0, 900.0, Some(1.0)).belt;
         Ok(Self {
-            document: document.clone(),
             inventory_flybys: Vec::new(),
             model: None,
             mod_icons: std::collections::BTreeMap::new(),
@@ -325,7 +322,7 @@ impl PlayerPanels {
             transfer_double_activation: false,
             controls: GameControlBindings::default(),
             navigation: crate::menu::navigation::MenuNavigation::new(),
-            hotbar_controls: HotbarControls::new(document, hotbar.clone(), Some(&belt_rects))?,
+            hotbar_controls: HotbarControls::new(hotbar.clone(), Some(&belt_rects))?,
             hotbar,
             panel: None,
             input_suspended: false,
@@ -565,7 +562,7 @@ impl PlayerPanels {
                     self.close_sack_rename();
                 }
                 Ok(false) => {}
-                Err(message) => web_sys::console::error_1(&message.into()),
+                Err(message) => crate::platform::error(&message),
             }
         }
         if self.dye_action_feedback(action, result) {
@@ -1571,7 +1568,7 @@ impl PlayerPanels {
 
 fn panel_keys(
     ctx: &egui::Context,
-    native: &[crate::gpu_ui::BrowserKey],
+    native: &[crate::gpu_ui::KeyStroke],
     open: bool,
 ) -> Vec<PanelKey> {
     let mut keys: Vec<_> = native
@@ -1663,7 +1660,7 @@ mod tests {
         for (physical, repeat) in [(false, false), (true, false), (true, true)] {
             let ctx = egui::Context::default();
             let native = if physical {
-                vec![crate::gpu_ui::BrowserKey {
+                vec![crate::gpu_ui::KeyStroke {
                     code: "Escape".into(),
                     key: "Escape".into(),
                     pressed: true,

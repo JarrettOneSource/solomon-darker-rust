@@ -1,5 +1,6 @@
 //! Publication observation and the durable-save/transport retirement barrier.
 
+#[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Debug)]
 pub(super) struct Publication {
     pub game_revision: String,
@@ -8,14 +9,42 @@ pub(super) struct Publication {
 }
 
 pub(super) struct DeploymentState {
+    #[cfg_attr(
+        all(not(target_arch = "wasm32"), not(test)),
+        expect(
+            dead_code,
+            reason = "Only the browser publication watcher observes this CPU-tested barrier"
+        )
+    )]
     current_revision: String,
+    #[cfg_attr(
+        all(not(target_arch = "wasm32"), not(test)),
+        expect(
+            dead_code,
+            reason = "Only the browser publication watcher observes this CPU-tested barrier"
+        )
+    )]
     observed_publication: Option<u64>,
     session_active: bool,
     restart: Option<RestartBarrier>,
 }
 
 struct RestartBarrier {
+    #[cfg_attr(
+        all(not(target_arch = "wasm32"), not(test)),
+        expect(
+            dead_code,
+            reason = "Only the browser publication watcher observes this CPU-tested barrier"
+        )
+    )]
     target_revision: String,
+    #[cfg_attr(
+        all(not(target_arch = "wasm32"), not(test)),
+        expect(
+            dead_code,
+            reason = "Only the browser publication watcher observes this CPU-tested barrier"
+        )
+    )]
     sequence: u64,
     saved: bool,
     transport_retired: bool,
@@ -51,6 +80,7 @@ impl DeploymentState {
         self.session_active = active;
     }
 
+    #[cfg(any(target_arch = "wasm32", test))]
     pub fn observe(&mut self, publication: &Publication) -> bool {
         if !publication.ready {
             return false;
