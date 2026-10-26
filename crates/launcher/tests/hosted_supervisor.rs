@@ -519,9 +519,12 @@ impl Client {
             .unwrap();
         request.headers_mut().insert("origin", origin.parse().unwrap());
         let stream = TcpStream::connect(host.address).unwrap();
-        stream.set_read_timeout(Some(Duration::from_millis(10))).unwrap();
+        stream.set_read_timeout(Some(Duration::from_secs(8))).unwrap();
         stream.set_write_timeout(Some(Duration::from_secs(8))).unwrap();
         let socket = tungstenite::client(request, stream).unwrap().0;
+        // Short reads let the established client poll commands; the handshake needs
+        // the same bounded wait as other authority operations on a busy CI runner.
+        socket.get_ref().set_read_timeout(Some(Duration::from_millis(10))).unwrap();
         let (writes, incoming_writes) = mpsc::channel();
         let (outgoing_observations, observations) = mpsc::channel();
         let worker = thread::spawn(move || {
