@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         budget: [120000]
-        attempt: [1, 2]
+        attempt: [3]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -46,6 +46,25 @@ jobs:
           $env:CAPTURE_TIMEOUT_MS = '${{ matrix.budget }}'
           $server = Start-Process -FilePath (Get-Command python).Source -ArgumentList @('scripts/serve-client.py', '4181', '--bind', '127.0.0.1', '--directory', 'web/dist') -PassThru -RedirectStandardOutput reports/capture/server.log -RedirectStandardError reports/capture/server-error.log
           try {
+            $startup = [Diagnostics.Stopwatch]::StartNew()
+            $ready = $false
+            while (!$ready -and $startup.Elapsed.TotalSeconds -lt 60) {
+              if ($server.HasExited) { throw "The owned server exited before listening (code $($server.ExitCode))." }
+              $response = $null
+              try {
+                $response = Invoke-WebRequest -Uri $env:URL -Method Head -TimeoutSec 2 -NoProxy -ErrorAction Stop
+              } catch {
+                if ($_.Exception.Response) { throw }
+                $lastStartupError = $_.Exception.Message
+              }
+              if ($response) {
+                if ($response.StatusCode -ne 200) { throw "Unexpected startup status: $($response.StatusCode)" }
+                $ready = $true
+              }
+              if (!$ready) { Start-Sleep -Milliseconds 200 }
+            }
+            if (!$ready) { throw "The owned server did not become ready: $lastStartupError" }
+            @{ elapsedMs = $startup.ElapsedMilliseconds; status = $response.StatusCode } | ConvertTo-Json | Set-Content reports/capture/server-ready.json
             $env:CAPTURE_JOURNEY = 'settings-parity'
             node tools/browser-smoke/diagnose-screenshot.cjs
             if ($LASTEXITCODE) { throw 'Settings journey failed; inspect retained timings.' }
