@@ -9,22 +9,25 @@ Current Website behavior, ownership and verification are mapped in
 complete release/deployment acceptance record. Earlier ticket receipts below retain their
 actual revisions and bounded scope.
 
-The complete game and launcher GPU migration is released at `4aa3a7b7` and live through
-Website `db9a9c98`. The [main workflow](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40170772878)
-passes 701 native tests, 45 browser-support tests, seven sdmod tests, strict formatting/
-native/WASM checks and all four complete packaged journeys. Each platform passes 33
-desktop contracts; Windows also passes 47 native launcher tests and static CRT inspection.
-All 32 final package screenshots, archive inspections and 28 safe child stops are reviewed,
-with zero raw resource/media failures. The launcher replaces its three HTML/CSS/JavaScript
-presentation files with `crates/web/src/desktop/launcher`.
+The complete game and launcher GPU migration and performance fixes are released at
+`92e3fe4c` and live through Website `db9a9c98`. The
+[canonical main workflow](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40248178185)
+passes all six jobs, 709 native tests, strict formatting/native/WASM checks, configured
+browser-support/sdmod tests and all four complete packaged journeys. Each platform passes
+33 desktop contracts; Windows also passes 48 native launcher tests and static CRT
+inspection. All 32 final package screenshots, archive inspections and 28 safe child stops
+are reviewed. The three Intel Mac guest music cancellations have complete ready-channel
+suspension and later-playback evidence; no unexpected package errors remain.
 
-The normal M5 worker deployed the exact release after both complete Website gates passed.
-Installed artifact/HTTP checks and live checkpoint persistence, automatic GPU reload,
-same-player Continue, saved Leave and fresh-document continuation are accepted. The
-[completion record](PORT-COMPLETION.md) identifies all receipts, retained observer failures,
-backup generations and cleanup records. The [migration matrix](RUST-UI-MIGRATION.md)
-owns every required surface and its exact accepted variants. Earlier DOM-era receipts
-below retain their original scope.
+The normal M5 worker deployed the verified release after the complete Website gate passed.
+All 5,710 installed game payload hashes and 12 public HTTP checks pass. Live acceptance
+covers checkpoint persistence before ACK, automatic GPU reload, exact fresh cloud-save
+identity, same-player movement, saved Leave and fresh-document continuation. The original
+cutover observer's unauthenticated final cloud read and transient publication-poll errors
+retain their scope in [PORT-COMPLETION.md](PORT-COMPLETION.md); the independent authenticated
+five-group continuation passes. That record owns current recovery and cleanup details.
+The [migration matrix](RUST-UI-MIGRATION.md) owns every required surface and its accepted
+variants. Earlier DOM-era receipts below retain their original scope.
 
 Scenery Puppet hits, Earthquake pivots, repaint/retirement metadata, dynamic scenes, trusted
 mod content, custom frame/wearable geometry and current shadow behavior are integrated.
@@ -33,7 +36,7 @@ record for their evidence.
 
 ## Working on a follow-up
 
-The post-release performance fixes are locally qualified on `perf/runtime-20261025`.
+The performance fixes are merged through PR 1 and released at `92e3fe4c`.
 [PERFORMANCE.md](PERFORMANCE.md) records the pinned PixiJS comparisons and their limits.
 Immutable scene/collision/skill/target tables share storage; display projection and GPU
 submission avoid redundant copies. Ordered protocol-2 updates preserve complete state
@@ -45,8 +48,9 @@ All 709 native tests, strict native/main-WASM linting, formatting, 54 browser-su
 locally. All 36 final Metal performance samples hold 60 FPS with no interval over 20 ms.
 Boneyard renderer plus host CPU and encoded traffic are lower than Pixi. Title/College
 browser CPU, College payload volume and the two smallest display microbenchmarks retain
-explicit parity limits. Windows/platform CI is recorded on the draft PR; production remains
-on the separately qualified release above.
+explicit parity limits. The canonical main workflow passes all six jobs, all four complete
+packaged journeys, 33 desktop contracts per platform and 48 Windows native launcher tests.
+The [release record](PORT-COMPLETION.md) owns installed and live acceptance separately.
 
 Follow-up performance work should profile the remaining title/College costs, small-scene
 display copies and College transport volume. Four-player, constrained-network, mobile and

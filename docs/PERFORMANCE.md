@@ -1,12 +1,12 @@
 # Performance audit and fixes
 
-Measured on 2026-10-25. The performance branch sustains 60 FPS in the tested Apple M2
-workloads. Ordered snapshot compaction removes the earlier Boneyard payload regression;
+Measured on 2026-10-25. The released performance implementation sustains 60 FPS in the
+tested Apple M2 workloads. Ordered snapshot compaction removes the earlier Boneyard payload regression;
 shared immutable scenery tables and retained GPU storage reduce repeated copying. The
 tables below keep browser and host costs visible. They do **not** establish general
 performance parity: title and College callback CPU, draw counts and the two smallest
-display microbenchmarks remain higher than PixiJS. These are local branch measurements,
-not an installed production result.
+display microbenchmarks remain higher than PixiJS. These are local measurements;
+production deployment does not establish production FPS or CPU performance.
 
 ## Versions and method
 
@@ -15,8 +15,12 @@ not an installed production result.
 - The first performance pass, Rust `a1cc71ca99006d8e483b6dca75ea5ffed6887f58`, for the
   repeated native comparison. Its [original report](https://github.com/JarrettOneSource/solomon-darker-rust/blob/a1cc71ca99006d8e483b6dca75ea5ffed6887f58/docs/PERFORMANCE.md)
   retains the released-Rust comparison and earlier browser measurements.
-- This `perf/runtime-20261025` host and WASM client, built from the same candidate source.
-  Source, executable and client checksums accompany the retained build receipts.
+- Qualified performance commit `ae8783f3ef18c8f452f6281ad8093dc4823b55e2`, merged through
+  [PR 1](https://github.com/JarrettOneSource/solomon-darker-rust/pull/1). Released
+  `92e3fe4c1bd7ca1eacff871ff79e604f904dfcf1` has the same runtime, assets and build
+  configuration; its only additional code change corrects an integration-test client's
+  WebSocket handshake timeout. Source, executable and client checksums accompany the
+  retained benchmark build receipts.
 
 One Apple M2, 16 GiB RAM, Google Chrome with actual ANGLE/Metal, headless, 1600×900,
 device scale 1, 60 Hz. Twelve fresh browser runs alternate engines and repeat in reverse
@@ -174,13 +178,20 @@ integers, nested size accounting, reconnects, controls and actual slow-socket re
 An independent JavaScript reader reconstructs the captured packet streams. Earlier GPU
 composition regressions remain applicable; the title atlas additionally has actual GPU
 readback and pixel comparison. Functional smoke uses software rendering; performance uses
-Metal. The Windows regression and packaged journeys run in the draft PR's platform CI;
-publication/CI receipts are recorded separately from local qualification.
+Metal. The [canonical main workflow](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40248178185)
+passes all six jobs, including the Windows regression and complete packaged journeys on
+Windows x64, Linux x64, Intel Mac and Apple silicon Mac. Each package passes 33 desktop
+contracts; Windows passes 48 native launcher tests and static CRT inspection. All 32
+final screenshots, archive inspections and 28 safe child stops are reviewed. The Intel
+Mac guest's three raw music cancellations have complete ready-channel suspension and
+subsequent-playback evidence; the other platforms have none. No unexpected browser
+errors remain. The release contains all eleven public assets, with their exact revision,
+checksums, metadata and anonymous availability verified.
 
 Title/College browser CPU and the smallest display copies remain follow-up work. Higher
 refresh rates, mobile hardware, four-player load, constrained networks, long-session
-allocation growth and GPU execution time were not measured. No new release or production
-deployment is part of this branch. The local LLVM helper required its existing toolchain
+allocation growth and GPU execution time were not measured. [PORT-COMPLETION.md](PORT-COMPLETION.md)
+owns release and installed acceptance. The local LLVM helper required its existing toolchain
 library path in `DYLD_LIBRARY_PATH`; no toolchain files were changed.
 
 ## Evidence and reproduction

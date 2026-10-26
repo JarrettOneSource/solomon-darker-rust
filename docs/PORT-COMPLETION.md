@@ -1,63 +1,99 @@
 # Rust game parity and release
 
-The complete Rust/WASM GPU game and desktop launcher are published at
-`4aa3a7b733a46788e7cb27b601f6bceb5e4f08b9`; the game is installed in production. The
-[release](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/desktop-4aa3a7b733a46788e7cb27b601f6bceb5e4f08b9)
-contains all 11 expected assets. Its
-[main workflow](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40170772878)
-passes every job: 701 native tests, formatting, strict native/main-WASM/loader checks,
-45 browser-support tests, seven sdmod tests and all four complete packaged journeys.
-Each platform passes 33 desktop contracts. Windows also passes 47 native launcher tests
-and static CRT inspection. All 32 final screenshots, archive inspections and 28 safe child
-stops are reviewed, with zero raw resource or media failures in these final packages.
-Software-renderer qualification establishes functionality, not GPU performance.
+The complete Rust/WASM GPU game and desktop launcher, including the performance fixes,
+are released at `92e3fe4c1bd7ca1eacff871ff79e604f904dfcf1` and installed in production.
+The [release](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/desktop-92e3fe4c1bd7ca1eacff871ff79e604f904dfcf1)
+contains all eleven public assets. Its
+[canonical main workflow](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40248178185)
+passes all six jobs: 709 native tests, formatting, strict native/main-WASM/loader checks,
+45 configured browser-support tests, seven sdmod tests and all four complete packaged
+journeys. Local qualification additionally ran nine checkpoint browser-support tests.
 
-[RUST-UI-MIGRATION.md](RUST-UI-MIGRATION.md) owns the complete surface matrix, platform
-adapter boundary and earlier receipts. The launcher shares the Rust GPU runtime and
-native text editor; its three HTML/CSS/JavaScript presentation files are removed.
-All required game-browser families retain acceptance at their recorded revisions.
-The final release qualification and anonymous asset verification are in
-`main-release-4aa3a7b/qualification.json` and `public-verification.json` under the M2/M5
-task `solomon-full-rust-ui-20261023T165939Z`.
+Windows x64, Linux x64, Intel Mac and Apple silicon Mac each pass 33 desktop contracts,
+archive inspection and complete save/reload, rejected-save, return-to-launcher and
+multiplayer journeys. Windows also passes 48 native launcher tests and static CRT
+inspection. All 32 final screenshots and 28 safe child stops are reviewed. The Intel Mac
+guest's three raw music cancellations have complete ready-channel suspension and later
+playback evidence, one unchanged load per channel and no media error; the other packages
+have no raw resource/media failures. Four warnings per platform belong to the intentional
+concurrent-save fault. No unexpected browser errors remain. Software-renderer acceptance
+establishes functionality; [PERFORMANCE.md](PERFORMANCE.md) owns the separate M2 measurements
+and remaining performance limits.
 
-Website `db9a9c98434aa5df56e3f9c402719209001f061b` consumes that exact Linux artifact,
-SHA256 `1f193ff9fbe82d357dbb30583955b5d578ae876aa576b6e94a607226ba9f9a64`.
-Its complete M5 gate and
-[Linux CI](https://github.com/JarrettOneSource/solomon-dark-website/actions/runs/40176502878)
-pass, covering all 78 backend/deployment contracts across both platforms and all 64
-frontend tests on each. The normal installer admits the complete four-component worker
-`7199590964dcb2f9f0a6467c0a6fea1d8cee8c28a8369cbfe2e908ce92559ff4`.
-Its ordinary scheduled invocation deploys the release at 08:40 UTC on October 25,
-draining one player with one acknowledged save and zero unacknowledged saves.
-The installed Linux runtime passes every one of its 5,710 payload hashes and complete
-membership checks. All 12 ordinary HTTPS identity/document/CSP/publication checks pass;
-independent staging, notifier and Caddy retain their processes.
+[PR 1](https://github.com/JarrettOneSource/solomon-darker-rust/pull/1) merged the qualified
+performance tree as `83c804e9d96fedbd6372d389cd3801e4a55958fb`. Release `92e3fe4c` changes
+only an integration-test client's handshake timeout after that merge: setup uses the
+existing eight-second operation limit before restoring 10 ms established-socket polling.
+The original failing case, three concurrent hosted suites and all 709 native tests pass.
+Windows initially hit a sharing violation starting wasm-bindgen; the single unchanged-head
+rerun passed. The holding process was not identified, and no build/runtime workaround
+was introduced.
 
-The live browser records the exact final PixiJS checkpoint, cloud persistence before its
-matching readiness ACK, and automatic loading of the exact GPU client. A fresh account
-read matches that entire checkpoint. Native Continue preserves Felix's loadout; ordinary
-Leave persists, and a fresh document continues the same player and saves again. The final
-four-group journey passes with no unexpected browser/API errors, reviewed title/College
-images and graceful browser exit. Four raw music cancellations have complete ready-channel
-suspension evidence recorded before Continue resumes playback.
+[RUST-UI-MIGRATION.md](RUST-UI-MIGRATION.md) owns the complete surface matrix and platform
+adapter boundary. The launcher shares the Rust GPU runtime and native text editor;
+its former three HTML/CSS/JavaScript presentation files are removed. Earlier game-browser
+families retain acceptance at their recorded revisions.
 
-The initial cutover observer remains failed: Playwright lost the final successful revision
-poll body during navigation, after the exact-revision/title checks passed. It also records
-five transient 502 polls during service exchange and two legacy media cancellations during
-document retirement. The first continuation observer used the wrong save-response envelope;
-the next observed audio too late, after playback resumed. All original receipts retain their
-outcomes. `live-acceptance-review.json` records the independent save/reload witnesses,
-these limits and the passing final `live-continuation-4aa-r3/` journey.
+Website `db9a9c98434aa5df56e3f9c402719209001f061b` consumes the exact Linux release archive,
+SHA256 `29a9a722dd0ba8d5b83ba11997a7b0fc527fdb13e75d64dda9ee37b60299ab87`.
+The complete download, manifest, payload hashes and membership were independently verified
+on M5 before admission. The manifest SHA256 is
+`4e1a633291c1aaa8ed67806957229e11877e9248cc67ad58d04db55204870aea`.
+Anonymous verification covers all eleven assets, their metadata/checksums and the latest
+release feed. M5's full Website gate runs 78 backend/deployment contracts: 76 pass and two
+Linux-only checks are skipped. All 64 frontend tests, formatting, lint, build and media
+policy pass. The
+unchanged Website's [Linux CI](https://github.com/JarrettOneSource/solomon-dark-website/actions/runs/40176502878)
+covers those native Linux contracts.
 
-The scheduler is enabled, with no task operator hold or compute lease. Original pre-Rust
-archives, later rollback generations and current persistent data are retained. The fresh
-pre-deployment runtime is `/opt/solomon-dark-revived.rollback-pre-db9a9c98434a-20261025T084009Z`;
-state/configuration backup is `/var/backups/solomon-dark-revived/pre-db9a9c98434a-20261025T084009Z/`.
-`release-admission-4aa/` owns installation, deployment, backup and postflight receipts.
-Task worktree/cache retirement is recorded in `final-cleanup-m2.json` and
-`final-cleanup-m5.json`; durable artifacts, receipts and rollback material stay outside
-removed source trees. The documentation-only completion commit retains this qualified
-product revision and does not republish unchanged binaries.
+The existing scheduled worker
+`7199590964dcb2f9f0a6467c0a6fea1d8cee8c28a8369cbfe2e908ce92559ff4` remains installed.
+Ordinary invocation `ac92acb2437947b39c648e9476a4189a` completed on October 26 at
+03:01:09 UTC, draining one player with one acknowledged save and zero unacknowledged saves.
+The installed release passes all 5,710 game payload hashes and exact membership, native
+ELF/supervisor identity and release-environment checks. All 12 public HTTPS
+identity/document/CSP/publication checks pass. Publication sequence 2, identity
+`9383bc2e8af646b29f1102575d48bf3d`, independently names Website db9 and game 92e3 and is ready.
+Production services have zero restarts; staging, notifier and Caddy retain their processes.
+Subsequent ordinary worker invocations correctly report production already current.
+
+The live browser held actual checkpoint 32 for over one second. The Saving UI remained
+visible without an ACK, socket close or document reload. Persistence returned HTTP 200
+at 03:01:00.343 UTC, the matching readiness ACK followed at .363, and the old host closed
+the connection at .455. The full checkpoint SHA256 is
+`4c59d0060aa1dd4d470ecf8b3aa60ca6ce2d660366b7518affc951b93d3150b8`.
+The Saved UI and automatic loading of the exact new GPU title were observed. A fresh
+normal account login returned that same complete checkpoint. The five-group continuation
+journey preserves the same wizard identity and loadout, accepts ordinary movement, saves
+through Leave, and continues/saves again after a fresh document. It passes with no
+unexpected browser/API errors. All seven live screenshots are individually reviewed,
+and both owned Chrome processes exit gracefully with status zero.
+
+The initial cutover observer is recorded as failed: its final cloud read used
+APIRequestContext without the bearer token held in local storage and received 401.
+This happened after the exact automatic-reload/title/publication checks passed. Its raw
+observations also include four transient 502 publication polls and four aborted publication
+requests during cutover. The independent normal-login read and passing continuation
+establish the saved outcome; no zero-error claim is made for the original observation.
+These observer limits do not change the original recorded result.
+
+The scheduler is enabled; the task compute lease and temporary download firewall grant
+are released. Current saved data remains in place. Fresh pre-deployment runtime:
+`/opt/solomon-dark-revived.rollback-pre-db9a9c98434a-20261026T030047Z`.
+Fresh database backup:
+`/var/backups/solomon-dark-revived/pre-db9a9c98434a-20261026T030047Z/sdr.db`, independently
+checked with SQLite integrity result `ok`. Caddy, game unit and game environment were
+unchanged. Original pre-Rust archives, the requested PixiJS rollback generation and all
+previous recovery material remain. Rollback must preserve newer database/save/content data.
+
+Performance and handshake source worktrees/caches and merged task branches are removed.
+The worker removed its own deployment checkout. Post-publication cleanup removes the
+completion-document worktree and disposable deployment observers, screenshots, logs,
+receipts and temporary files on M2, M5 and NFO after recording their results here and in
+the device wikis. Managed release inputs/artifacts and recovery generations remain with
+their existing owners. Shared checkouts, the pinned primary Website reference, unrelated
+M2 port 4180 and pre-existing M5 work are preserved. This documentation-only completion
+commit retains the qualified product revision and does not republish unchanged binaries.
 
 The older release receipts below retain their original scope.
 
