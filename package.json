@@ -13,6 +13,7 @@
     "package:desktop:linux": "node tools/package-desktop.mjs --platform linux --arch x64",
     "archive:desktop": "node tools/archive-desktop.mjs",
     "smoke:desktop": "node tools/smoke-desktop-runtime.mjs",
+    "test:browser-navigation": "node --test tools/browser-smoke/solomon-entrance.test.cjs",
     "test:browser-support": "node --test tools/browser-smoke/gpu-ui-contract.test.cjs tools/browser-smoke/browser-errors.test.cjs tools/browser-smoke/browser-lifecycle.test.cjs"
   },
   "devDependencies": {

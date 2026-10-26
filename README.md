@@ -198,6 +198,19 @@ This drives two browser contexts through shared play, saving, rejoining, and hos
 restart. It uses an isolated save and runs the host outside the source directory
 to check that the package supplies its own runtime inputs.
 
+Add `GAMEOVER=1` to exercise the entrance sequence, combat death, and post-run
+return. These checks use a read-only Rust helper to plan keyboard movement:
+
+```sh
+cargo build -p solomon-assets --example browser_navigation
+npm run test:browser-navigation
+```
+
+The helper reads this repository's tracked scenes and navigation meshes. Set
+`SOLOMON_NAVIGATION_BINARY` when using a build outside `target/debug/examples`.
+It supplies route predictions to the test driver; only ordinary keyboard events
+reach the game.
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)

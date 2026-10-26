@@ -49,6 +49,8 @@ jobs:
       - run: cargo clippy -p solomon-web --target wasm32-unknown-unknown -- -D warnings
       - run: cargo clippy -p solomon-loader --target wasm32-unknown-unknown -- -D warnings
       - run: cargo test --workspace --all-features
+      - run: cargo build -p solomon-assets --example browser_navigation
+      - run: npm run test:browser-navigation
       - run: cargo build -p solomon-modding --bin solomon-sdmod
       - run: npm run test:sdmod
         env:
