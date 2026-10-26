@@ -4,6 +4,8 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use solomon_storage::DocumentFile;
 
@@ -43,6 +45,16 @@ fn file(name: &str, limit: usize) -> Result<DocumentFile, String> {
 #[derive(Clone)]
 pub struct LocalSaveStore(DocumentFile);
 
+// Dropping the async operation revokes an unstarted commit and waits for any
+// atomic replacement already in progress. No old session can write after Drop.
+struct WriteLifetime(Arc<Mutex<bool>>);
+
+impl Drop for WriteLifetime {
+    fn drop(&mut self) {
+        *self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = false;
+    }
+}
+
 impl LocalSaveStore {
     pub async fn open(source: bool) -> Result<Self, String> {
         Ok(Self(file(
@@ -58,24 +70,37 @@ impl LocalSaveStore {
 
     pub async fn write(&self, document: String, expected_revision: u64) -> Result<u64, String> {
         let file = self.0.clone();
-        blocking::unblock(move || {
-            file.transaction(|locked| {
-                let current = decode(locked.load()?)?;
-                if current.as_ref().map_or(0, |record| record.revision) != expected_revision {
-                    return Err(
+        let revision = expected_revision.checked_add(1).ok_or("Saved-game revision overflow")?;
+        let text = serde_json::to_string(&StoredSave { revision, document })
+            .map_err(|error| format!("Could not encode the save slot: {error}"))?;
+        let lifetime = WriteLifetime(Arc::new(Mutex::new(true)));
+        let active = lifetime.0.clone();
+        let result = blocking::unblock(move || {
+            loop {
+                let permit = active.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                if !*permit {
+                    return Err("The save operation was cancelled.".into());
+                }
+                if let Some(revision) = file.try_transaction(|locked| {
+                    let current = decode(locked.load()?)?;
+                    if current.as_ref().map_or(0, |record| record.revision) != expected_revision {
+                        return Err(
                         "The saved game changed in another window. Reload to continue that save."
                             .into(),
                     );
+                    }
+                    locked.commit(&text)?;
+                    Ok(revision)
+                })? {
+                    return Ok(revision);
                 }
-                let revision =
-                    expected_revision.checked_add(1).ok_or("Saved-game revision overflow")?;
-                let text = serde_json::to_string(&StoredSave { revision, document })
-                    .map_err(|error| format!("Could not encode the save slot: {error}"))?;
-                locked.commit(&text)?;
-                Ok(revision)
-            })
+                drop(permit);
+                std::thread::sleep(Duration::from_millis(20));
+            }
         })
-        .await
+        .await;
+        drop(lifetime);
+        result
     }
 }
 

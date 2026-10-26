@@ -1137,7 +1137,7 @@ impl Game {
         Ok(())
     }
 
-    fn fail_hosted_leave(&mut self, error: String) -> Result<(), String> {
+    pub(super) fn fail_hosted_leave(&mut self, error: String) -> Result<(), String> {
         self.finish_desktop_close(Err(error.clone()));
         let hosted = self.hosted.as_mut().unwrap();
         hosted.leave_checkpoint = None;

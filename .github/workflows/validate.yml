@@ -117,7 +117,19 @@ jobs:
         run: rustup show
       - run: python scripts/verify-client-assets.py
       - run: npm run test:desktop
+      - name: Restore native build cache
+        id: native-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
+          restore-keys: |
+            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
       - name: Build standalone app from this revision
+        id: native-build
         run: npm run package:desktop -- --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --release-repository "$GITHUB_REPOSITORY"
       - name: Archive and inspect the final standalone app
         run: node tools/archive-desktop.mjs
@@ -144,16 +156,25 @@ jobs:
           name: desktop-evidence-${{ matrix.platform }}-${{ matrix.arch }}
           path: reports/desktop-smoke
           if-no-files-found: ignore
-      - name: Retain the unqualified Windows candidate on failure
-        if: failure() && matrix.platform == 'win32'
+      - name: Retain an unqualified candidate on failure
+        if: failure() && steps.native-build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: unqualified-desktop-win32-x64-${{ github.run_id }}-${{ github.run_attempt }}
+          name: unqualified-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             dist-desktop/*.zip
             dist-desktop/*.sha256
             dist-desktop/desktop-release.json
           if-no-files-found: ignore
+      - name: Save completed native build cache
+        if: always() && steps.native-build.outcome == 'success' && steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
 
   desktop-release:
     name: Publish standalone apps

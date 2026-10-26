@@ -22,6 +22,7 @@ struct ControlState {
     invite: Option<String>,
     close_error: Option<String>,
     message: Option<String>,
+    dismissed_update: Option<String>,
 }
 
 #[derive(Clone)]
@@ -40,6 +41,7 @@ impl DesktopControls {
             invite: None,
             close_error: None,
             message: None,
+            dismissed_update: None,
         }));
         CONTROLS.with_borrow_mut(|current| {
             assert!(current.upgrade().is_none(), "one desktop application per window thread");
@@ -55,7 +57,11 @@ impl DesktopControls {
         self.0.borrow_mut().state = state;
     }
     pub fn request(&self, action: launcher::Action) {
-        self.0.borrow_mut().pending.push(action);
+        let mut controls = self.0.borrow_mut();
+        if matches!(action, launcher::Action::Check) {
+            controls.dismissed_update = None;
+        }
+        controls.pending.push(action);
     }
     pub fn take_actions(&self) -> Vec<launcher::Action> {
         std::mem::take(&mut self.0.borrow_mut().pending)
@@ -72,40 +78,38 @@ impl DesktopControls {
     pub fn set_close_error(&self, error: Option<String>) {
         self.0.borrow_mut().close_error = error;
     }
+    fn visible_update(&self) -> Option<launcher::Update> {
+        let controls = self.0.borrow();
+        controls
+            .state
+            .update
+            .as_ref()
+            .filter(|update| controls.dismissed_update.as_ref() != Some(&update.revision))
+            .cloned()
+    }
+    fn dismiss_update(&self) {
+        let mut controls = self.0.borrow_mut();
+        controls.dismissed_update =
+            controls.state.update.as_ref().map(|update| update.revision.clone());
+    }
 }
 
 pub fn request(action: launcher::Action) -> Result<(), String> {
     CONTROLS.with_borrow(|controls| {
         let controls = controls.upgrade().ok_or("The desktop application is unavailable")?;
-        controls.borrow_mut().pending.push(action);
+        DesktopControls(controls).request(action);
         Ok(())
     })
 }
 
-struct Notice {
-    current_revision: Option<String>,
-    dismissed_revision: Option<String>,
-}
-
-impl Notice {
-    fn visible(&self) -> bool {
-        self.current_revision.is_some() && self.current_revision != self.dismissed_revision
-    }
-}
-
 pub struct DesktopUi {
     controls: DesktopControls,
-    notice: Notice,
     close_prompt_visible: bool,
 }
 
 impl DesktopUi {
     pub fn new(controls: DesktopControls) -> Self {
-        Self {
-            controls,
-            notice: Notice { current_revision: None, dismissed_revision: None },
-            close_prompt_visible: false,
-        }
+        Self { controls, close_prompt_visible: false }
     }
 }
 
@@ -125,8 +129,7 @@ impl DesktopUi {
         if show_controls {
             self.paint_controls(frame);
         }
-        self.notice.current_revision = self.controls.state().update.map(|update| update.revision);
-        if !self.notice.visible() {
+        if self.controls.visible_update().is_none() {
             return Ok(());
         }
         let ctx = frame.ctx.clone();
@@ -178,8 +181,7 @@ impl DesktopUi {
         );
         match action {
             Some("later") => {
-                let notice = &mut self.notice;
-                notice.dismissed_revision = notice.current_revision.clone();
+                self.controls.dismiss_update();
             }
             Some("download") => {
                 self.controls.request(launcher::Action::Download);
@@ -289,5 +291,29 @@ impl DesktopUi {
         if frame.key_codes().iter().any(|key| key.pressed && key.code == "Escape") {
             self.controls.request(launcher::Action::KeepPlaying);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_manual_update_check_offers_a_dismissed_download_again() {
+        let controls = DesktopControls::install(launcher::DesktopState {
+            build: launcher::Build { revision: "current".into() },
+            addresses: Vec::new(),
+            update: Some(launcher::Update { revision: "next".into() }),
+            update_error: None,
+        });
+        assert_eq!(controls.visible_update().unwrap().revision, "next");
+        controls.dismiss_update();
+        assert!(controls.visible_update().is_none());
+        // Background refreshes keep Later effective for the same revision.
+        controls.receive(controls.state());
+        assert!(controls.visible_update().is_none());
+        controls.request(launcher::Action::Check);
+        assert_eq!(controls.visible_update().unwrap().revision, "next");
+        assert!(matches!(controls.take_actions().as_slice(), [launcher::Action::Check]));
     }
 }

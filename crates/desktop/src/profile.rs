@@ -3,7 +3,7 @@
 
 use std::{
     fs::{File, OpenOptions, TryLockError},
-    io::{Read, Seek, SeekFrom, Write},
+    io::{Read, Write},
     net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream},
     path::{Path, PathBuf},
     time::{Duration, Instant},
@@ -65,13 +65,13 @@ impl Profile {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600);
         }
-        let mut lock = options
+        let lock = options
             .open(root.join("native-instance.lock"))
             .map_err(|error| format!("Cannot open the application lock: {error}"))?;
         match lock.try_lock() {
             Ok(()) => {}
             Err(TryLockError::WouldBlock) => {
-                focus_existing(&mut lock)?;
+                focus_existing(&root.join("native-instance.port"))?;
                 return Ok(OpenProfile::AlreadyRunning);
             }
             Err(TryLockError::Error(error)) => {
@@ -81,10 +81,15 @@ impl Profile {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
             .map_err(|error| format!("Cannot open the application focus channel: {error}"))?;
         listener.set_nonblocking(true).map_err(|error| error.to_string())?;
-        lock.set_len(0).map_err(|error| error.to_string())?;
-        writeln!(lock, "{}", listener.local_addr().map_err(|error| error.to_string())?.port())
+        // Windows exclusive file locks deny reads through another handle. Keep
+        // discoverable endpoint metadata separate from the lifetime lock.
+        let mut endpoint = options
+            .truncate(true)
+            .open(root.join("native-instance.port"))
+            .map_err(|error| format!("Cannot publish the application focus channel: {error}"))?;
+        writeln!(endpoint, "{}", listener.local_addr().map_err(|error| error.to_string())?.port())
             .map_err(|error| error.to_string())?;
-        lock.sync_all().map_err(|error| error.to_string())?;
+        endpoint.sync_all().map_err(|error| error.to_string())?;
         let documents = root.join("native-v1");
         Ok(OpenProfile::Primary(Self { root, documents, listener, _lock: lock }))
     }
@@ -103,13 +108,20 @@ impl Profile {
     }
 }
 
-fn focus_existing(lock: &mut File) -> Result<(), String> {
+fn focus_existing(endpoint: &Path) -> Result<(), String> {
     // A concurrent first launch can hold its lock just before publishing its port.
     let deadline = Instant::now() + Duration::from_secs(1);
     loop {
-        lock.seek(SeekFrom::Start(0)).map_err(|error| error.to_string())?;
         let mut port = String::new();
-        Read::by_ref(lock).take(32).read_to_string(&mut port).map_err(|error| error.to_string())?;
+        match File::open(endpoint) {
+            Ok(file) => {
+                file.take(32).read_to_string(&mut port).map_err(|error| error.to_string())?;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!("Cannot read the application focus channel: {error}"));
+            }
+        }
         if let Ok(port) = port.trim().parse::<u16>() {
             let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
             if TcpStream::connect_timeout(&address, Duration::from_millis(100)).is_ok() {

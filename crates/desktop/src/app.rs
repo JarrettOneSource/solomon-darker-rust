@@ -330,17 +330,21 @@ impl App {
                     deadline: Instant::now() + Duration::from_secs(20),
                 })
             }
-            Err(error) => self.close_failed(destination, error),
+            Err(error) => self.close_failed(destination, error)?,
         }
         Ok(())
     }
 
-    fn close_failed(&mut self, destination: Destination, error: String) {
+    fn close_failed(&mut self, destination: Destination, error: String) -> Result<(), String> {
+        if let Some(Screen::Game { game, .. }) = &self.screen {
+            game.borrow_mut().cancel_desktop_close(&error)?;
+        }
         self.controls.set_close_error(Some(error));
         self.closing = Some(Closing::Failed { destination });
         if let Some(screen) = &self.screen {
             screen.focus();
         }
+        Ok(())
     }
 
     fn poll_close(&mut self, event_loop: &ActiveEventLoop) -> Result<(), String> {
@@ -359,7 +363,7 @@ impl App {
         match result {
             Ok(true) => self.complete_transition(event_loop, destination)?,
             Ok(false) => {}
-            Err(error) => self.close_failed(destination, error),
+            Err(error) => self.close_failed(destination, error)?,
         }
         Ok(())
     }
@@ -453,9 +457,6 @@ impl App {
                     #[cfg(target_os = "macos")]
                     macos::reply(false);
                     self.controls.set_close_error(None);
-                    if let Some(Screen::Game { game, .. }) = &self.screen {
-                        game.borrow_mut().cancel_desktop_close();
-                    }
                 }
                 Ok(())
             }

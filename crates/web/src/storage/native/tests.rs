@@ -69,6 +69,32 @@ fn malformed_existing_saves_fail_without_being_replaced() {
 }
 
 #[test]
+fn dropping_a_write_waiting_for_the_os_lock_cannot_commit_after_its_session_retires() {
+    let directory = Directory::new();
+    block_on(async {
+        let store = LocalSaveStore::open(true).await.unwrap();
+        store.write("retained wizard".into(), 0).await.unwrap();
+        let lock = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(directory.0.join("game-save.json.lock"))
+            .unwrap();
+        lock.lock().unwrap();
+        let mut pending = Box::pin(store.write("discarded session".into(), 1));
+        assert!(futures_lite::future::poll_once(pending.as_mut()).await.is_none());
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        drop(pending);
+        lock.unlock().unwrap();
+        // Observe beyond the cancelled worker's lock-retry interval. The old
+        // blocking closure would acquire the released lock and replace this slot.
+        for _ in 0..20 {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+            assert_eq!(store.read().await.unwrap().unwrap().document, "retained wizard");
+        }
+    });
+}
+
+#[test]
 fn settings_and_preference_transactions_survive_reopening_and_abort_together() {
     let directory = Directory::new();
     let settings = solomon_sim::settings::GameSettings {

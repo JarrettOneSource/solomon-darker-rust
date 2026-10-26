@@ -1,4 +1,4 @@
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -58,6 +58,28 @@ impl DocumentFile {
         &self,
         operation: impl FnOnce(&LockedDocument<'_>) -> Result<T, String>,
     ) -> Result<T, String> {
+        let lock = self.open_lock()?;
+        lock.lock().map_err(|error| format!("Cannot lock {}: {error}", self.path.display()))?;
+        operation(&LockedDocument { document: self, _lock: lock })
+    }
+
+    /// A busy document returns None without invoking the operation. Callers that
+    /// own cancellable work can wait without leaving a thread inside an OS lock.
+    pub fn try_transaction<T>(
+        &self,
+        operation: impl FnOnce(&LockedDocument<'_>) -> Result<T, String>,
+    ) -> Result<Option<T>, String> {
+        let lock = self.open_lock()?;
+        match lock.try_lock() {
+            Ok(()) => operation(&LockedDocument { document: self, _lock: lock }).map(Some),
+            Err(TryLockError::WouldBlock) => Ok(None),
+            Err(TryLockError::Error(error)) => {
+                Err(format!("Cannot lock {}: {error}", self.path.display()))
+            }
+        }
+    }
+
+    fn open_lock(&self) -> Result<File, String> {
         let directory = self.directory();
         fs::create_dir_all(directory)
             .map_err(|error| format!("Cannot create {}: {error}", directory.display()))?;
@@ -70,11 +92,9 @@ impl DocumentFile {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600);
         }
-        let lock = options
+        options
             .open(Path::new(&lock_name))
-            .map_err(|error| format!("Cannot open the save lock: {error}"))?;
-        lock.lock().map_err(|error| format!("Cannot lock {}: {error}", self.path.display()))?;
-        operation(&LockedDocument { document: self, _lock: lock })
+            .map_err(|error| format!("Cannot open the save lock: {error}"))
     }
 
     fn directory(&self) -> &Path {

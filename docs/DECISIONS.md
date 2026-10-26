@@ -275,6 +275,13 @@ existing save-before-leave coordinator before releasing Game, its tasks, authori
 and GPU context, in that order. A failed save keeps the running game and offers
 Keep playing or Close without saving.
 
+A close deadline cancels the pending leave request and its disconnect receipt;
+a late successful checkpoint may persist while the player continues. Retiring a
+native session revokes any write still waiting for the document lock and waits for
+an atomic replacement already in progress. An abandoned session cannot commit
+after its replacement starts. Single-instance endpoint metadata is separate from
+the lifetime lock because Windows exclusive locks also deny reads from other handles.
+
 ## Native encrypted peers and macOS Quit
 
 Desktop peer invitations preserve the existing v1 capability grammar and HKDF-SHA256

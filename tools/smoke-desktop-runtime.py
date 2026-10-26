@@ -1,11 +1,12 @@
 """Run the packaged game through OS accessibility, keyboard and window APIs.
 
-The only deliberate storage mutation increments a saved record's revision to
+Storage fault checks hold the real save lock and increment a saved revision to
 represent a concurrent writer. The journey never injects game state or replaces
 application callbacks. Run in a dedicated desktop session.
 """
 
 import hashlib
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -96,8 +97,25 @@ class Application:
 
     def activate(self):
         self.app.locator("window").first().activate()
-        wait(lambda: xa11y.App.foreground(timeout=1).pid == self.process.pid,
-             f"{self.name} in the foreground", 10)
+        if PLATFORM == "darwin":
+            # macOS runners can expose the window tree while the system-wide
+            # AXFocusedApplication is empty. Claim and verify the native process
+            # slot as xa11y's own CI harness does before synthesizing key events.
+            def frontmost():
+                result = subprocess.run([
+                    "osascript", "-e",
+                    'tell application "System Events"\n'
+                    f'set frontmost of (first process whose unix id is {self.process.pid}) to true\n'
+                    'return unix id of first application process whose frontmost is true\n'
+                    'end tell',
+                ], capture_output=True, text=True, timeout=5)
+                if result.returncode:
+                    raise RuntimeError(f"Cannot activate {self.name}: {result.stderr.strip()}")
+                return result.stdout.strip() == str(self.process.pid)
+            wait(frontmost, f"{self.name} in the foreground", 10)
+        else:
+            wait(lambda: xa11y.App.foreground(timeout=1).pid == self.process.pid,
+                 f"{self.name} in the foreground", 10)
 
     def click(self, identifier):
         self.control(identifier).wait_enabled()
@@ -121,8 +139,9 @@ class Application:
         finally:
             INPUT.key_up(key)
 
-    def capture(self, name):
-        self.activate()
+    def capture(self, name, activate=True):
+        if activate:
+            self.activate()
         xa11y.screenshot(element=self.app.locator("window").first().element()).save_png(
             EVIDENCE / f"{name}.png"
         )
@@ -252,6 +271,63 @@ def check_failed_close(app):
     return {"retainedConcurrentRecord": True, "keepPlaying": True, "closeWithoutSaving": True}
 
 
+@contextmanager
+def held_save_lock(profile):
+    with (profile / "native-v1/game-save.json.lock").open("r+b") as lock:
+        if PLATFORM == "win32":
+            import msvcrt
+            msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if PLATFORM == "win32":
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def check_delayed_close(app):
+    with held_save_lock(app.profile):
+        before = save_record(app.profile)[0]["revision"]
+        app.hold("a", 0.8)
+        app.request_close()
+        app.control("desktop/keep-playing").wait_enabled(timeout=35)
+        app.capture("save-timeout")
+        app.click("desktop/keep-playing")
+        app.control("desktop/keep-playing").wait_detached()
+    wait(lambda: save_record(app.profile)[0]["revision"] > before,
+         "the delayed checkpoint finishing after Keep playing")
+    app.key("Escape")
+    app.control("hud:inventory").wait_enabled()
+    before_x = player(save_record(app.profile)[1])["locomotions"]["position"]["x"]
+    app.hold("d", 1.2)
+    final = app.close()[1]
+    after_x = player(final)["locomotions"]["position"]["x"]
+    assert after_x > before_x + 10, "Keep playing did not restore gameplay after the save timeout"
+    return {"lateSaveCommitted": True, "beforeX": before_x, "afterX": after_x}
+
+
+def check_discarded_session(app):
+    path = app.profile / "native-v1/game-save.json"
+    with held_save_lock(app.profile):
+        expected = path.read_bytes()
+        app.hold("a", 0.8)
+        app.key("Escape")
+        app.click("desktop/launcher")
+        app.control("desktop/close-unsaved").wait_enabled(timeout=35)
+        app.click("desktop/close-unsaved")
+        app.control("launcher/solo").wait_enabled()
+    # A discarded blocking write used to wake here and replace the durable slot.
+    for _ in range(20):
+        time.sleep(0.1)
+        assert path.read_bytes() == expected, "the retired session committed after returning"
+    app.capture("discarded-session-launcher")
+    return {"pendingWriteCancelled": True, "durableSavePreserved": True}
+
+
 def check_offline():
     profile = PROFILES / "solo"
     solo = Application("solo", profile)
@@ -284,7 +360,11 @@ def check_offline():
     resumed.capture("resumed")
     RECEIPT["offline"] = {"beforeX": start_x, "savedX": moved_x,
                           "character": identity(moved), "secondLaunchFocused": True}
-    RECEIPT["failedClose"] = check_failed_close(resumed)
+    RECEIPT["delayedClose"] = check_delayed_close(resumed)
+    conflicted = Application("conflicted", profile)
+    conflicted.click("launcher/solo")
+    conflicted.continue_game()
+    RECEIPT["failedClose"] = check_failed_close(conflicted)
     returned = Application("returned", profile)
     returned.click("launcher/solo")
     returned.continue_game()
@@ -292,8 +372,11 @@ def check_offline():
     returned.click("desktop/launcher")
     returned.control("launcher/solo").wait_enabled(timeout=120)
     returned.capture("returned-to-launcher")
-    returned.close()
     RECEIPT["savedReturnToLauncher"] = True
+    returned.click("launcher/solo")
+    returned.continue_game()
+    RECEIPT["discardedSession"] = check_discarded_session(returned)
+    returned.close()
 
 
 def check_peers():
@@ -377,7 +460,7 @@ except Exception:
             try:
                 tree = re.sub(r"solomondarker://[^\s\"']+", "", app.app.dump())
                 (EVIDENCE / f"{app.name}-failure.txt").write_text(tree)
-                app.capture(f"{app.name}-failure")
+                app.capture(f"{app.name}-failure", activate=False)
             except Exception as error:
                 RECEIPT.setdefault("diagnosticErrors", []).append(str(error))
     raise

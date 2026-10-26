@@ -18,8 +18,15 @@ pub(super) enum DesktopClose {
 }
 
 impl Game {
-    pub fn cancel_desktop_close(&mut self) {
+    pub fn cancel_desktop_close(&mut self, error: &str) -> Result<(), String> {
         self.desktop_close = None;
+        if self.native.as_ref().is_some_and(|native| native.is_leaving()) {
+            // A timed-out write may still commit. Retire the leave receipt and
+            // request now so neither its completion nor a late server response
+            // can disconnect the game after the failure prompt is shown.
+            self.fail_hosted_leave(error.into())?;
+        }
+        Ok(())
     }
 
     pub fn begin_desktop_close(&mut self) -> Result<bool, String> {
