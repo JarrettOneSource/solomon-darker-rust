@@ -40,7 +40,11 @@ pub(crate) async fn load(
 }
 
 fn install(fonts: FontSystem, ctx: &Context) -> PlatformFonts {
-    let owner = Rc::new(RefCell::new(fonts));
+    // Launcher and game windows overlap during loading. Both must retain the
+    // same font owner, including when the new window fails and is discarded.
+    let owner = FONTS
+        .with(|fonts| fonts.borrow().upgrade())
+        .unwrap_or_else(|| Rc::new(RefCell::new(fonts)));
     FONTS.with(|fonts| *fonts.borrow_mut() = Rc::downgrade(&owner));
     super::configure(ctx);
     PlatformFonts { _owner: owner }
@@ -102,4 +106,27 @@ pub(super) fn rasterize(request: &GlyphRasterizerRequest<'_>) -> Result<Rasteriz
             advance_px: advance,
         })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_fonts_survive_either_overlapping_window_retiring() {
+        for retire_newest in [true, false] {
+            let first = install(FontSystem::default(), &Context::default());
+            let second = install(FontSystem::default(), &Context::default());
+            let retained = if retire_newest {
+                drop(second);
+                first
+            } else {
+                drop(first);
+                second
+            };
+            assert!(with_fonts(|_| Ok(())).is_ok(), "a live window still owns native fonts");
+            drop(retained);
+            assert!(with_fonts(|_| Ok(())).is_err(), "fonts retire with their last window");
+        }
+    }
 }

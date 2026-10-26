@@ -89,6 +89,36 @@ fn frame_native_output(
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn native_loading_status_covers_the_transition_before_artwork_and_retires_with_it() {
+    use solomon_sim::menu::loading::{MatchLoadingFlow, MatchLoadingStage, MatchLoadingState};
+
+    let mut view = crate::match_loading::MatchLoadingView::default();
+    let loading = MatchLoadingState::begin(
+        MatchLoadingFlow::Hub,
+        MatchLoadingStage::ReceivingHostCheckpoint,
+        0.0,
+    );
+    for (state, now) in [(Some(&loading), 0.0), (Some(&loading), 200.0), (None, 201.0)] {
+        let ctx = Context::default();
+        ctx.enable_accesskit();
+        view.update(state, now).unwrap();
+        // Areas use an invisible sizing pass before their first presented frame.
+        frame_native_output(&ctx, Vec::new(), &[], &[], None, |frame| {
+            view.paint(frame).unwrap();
+        });
+        let (_, output) = frame_native_output(&ctx, Vec::new(), &[], &[], None, |frame| {
+            view.paint(frame).unwrap();
+        });
+        let update = output.accesskit_update.unwrap();
+        let status = update.nodes.iter().find(|(_, node)| {
+            node.role() == egui::accesskit::Role::Status && node.label() == Some("Loading game")
+        });
+        assert_eq!(status.is_some(), state.is_some(), "native loading status at {now} ms");
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn native_editor_exposes_complete_accessible_text_and_selection() {
     let _fonts = fonts::test_fonts();
     for source in [

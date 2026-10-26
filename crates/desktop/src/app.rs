@@ -245,6 +245,7 @@ impl App {
             }
             Err(error) => {
                 drop(loading);
+                solomon_web::platform::error(&error);
                 self.message(error);
             }
         }

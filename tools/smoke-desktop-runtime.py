@@ -58,6 +58,7 @@ LINUX_CONTROLS = {
     "panel:dialogue-choice:0": "button[name='Solomon Dark?']",
     "hud:inventory": "button[name^='Inventory,']",
     "hud:map": "button[name='Enter the Boneyard']",
+    "match-loading": "status[name='Loading game']",
     "settings": "button[name='Settings']",
     "settings-range:music": "slider[name='MUSIC VOL:']",
     "settings-page:controls": "button[name='CUSTOMIZE KEYBOARD']",
@@ -112,6 +113,7 @@ class Application:
     def __init__(self, name, profile):
         print(f"Launching {name}", flush=True)
         self.name, self.profile, self.closed = name, profile, False
+        self.sized_windows = set()
         self.log_path = EVIDENCE / f"{name}.log"
         self.log = self.log_path.open("wb")
         self.process = subprocess.Popen(
@@ -148,11 +150,17 @@ class Application:
 
     def activate(self):
         window = self.app.locator("window").first().element()
-        if PLATFORM == "linux":
+        if PLATFORM == "linux" and window.stable_id not in self.sized_windows:
             # The CI display is 1280x1024. Keep both launcher and game windows
             # fully visible for input and screenshots.
             window.resize_to(1180, 800)
             window.move_to(40, 40)
+            self.sized_windows.add(window.stable_id)
+        elif PLATFORM == "win32" and not window.maximized:
+            # The runner's desktop can be smaller than the initial game window.
+            window.maximize()
+            self.app.locator("window").first().wait_until(
+                lambda item: item is not None and item.maximized, timeout=10)
         window.activate()
         if PLATFORM == "darwin":
             # macOS runners can expose the window tree while the system-wide
@@ -219,6 +227,7 @@ class Application:
         self.click("play")
         self.click("continue")
         self.control("hud:inventory").wait_enabled(timeout=120)
+        self.control("match-loading").wait_detached(timeout=120)
 
     def new_game(self, name, element):
         print(f"{self.name}: creating {name}", flush=True)
@@ -251,6 +260,7 @@ class Application:
         self.click("discipline:arcane")
         self.control("create-name").wait_detached()
         self.control("hud:map").wait_attached(timeout=120)
+        self.control("match-loading").wait_detached(timeout=120)
         return wait(lambda: self.saved_as(name, element), f"saved {name}/{element}/arcane")
 
     def saved_as(self, name, element):

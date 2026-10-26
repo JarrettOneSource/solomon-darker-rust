@@ -150,6 +150,7 @@ pub(super) fn role(name: &str) -> egui::accesskit::Role {
         "radio" => Role::RadioButton,
         "tab" => Role::Tab,
         "menuitem" => Role::MenuItem,
+        "status" => Role::Status,
         _ => Role::Label,
     }
 }
