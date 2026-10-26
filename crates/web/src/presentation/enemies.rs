@@ -11,13 +11,16 @@ use solomon_sim::enemies::actor_presentation::{
     native_enemy_presentation_input, native_maggot_presentation_input,
 };
 use solomon_sim::enemies::model::{
-    EnemyActor, EnemyBrain, EnemyDeathEffect, EnemyEvent, SpiderPhase,
+    EnemyActorRead, EnemyActorRef, EnemyBrain, EnemyDeathEffect, EnemyEvent, MaggotRead,
+    SpiderPhase,
 };
 use solomon_sim::enemies::presentation::NativeEnemyEffectPresentationInput;
-use solomon_sim::enemies::projectiles::{EnemyProjectile, EnemyProjectileKind, MageLightningPulse};
+use solomon_sim::enemies::projectiles::{
+    EnemyProjectileKind, EnemyProjectileMotion, EnemyProjectileRead, MageLightningPulse,
+};
 use solomon_sim::enemies::world::EnemyWorld;
 
-use super::math::{interpolate_members, lerp, lerp_cycle, lerp_vec};
+use super::math::{interpolate_members, interpolate_projected_members, lerp, lerp_cycle, lerp_vec};
 
 // The source sample module imports these stock frame/lifetime counts.
 const IMP_UPPER_EFFECT_FRAME_COUNT: f64 = 10.0;
@@ -59,30 +62,30 @@ pub(super) fn from_world(
     world: &EnemyWorld,
     presentation_tick: f64,
     enemy_events: &[EnemyEvent],
-    actor_context: &dyn Fn(&EnemyActor) -> EnemyActorAppearanceContext,
+    actor_context: &dyn Fn(&EnemyActorRef<'_>) -> EnemyActorAppearanceContext,
 ) -> EnemyPresentationMetadata {
     let mut metadata = EnemyPresentationMetadata {
         presentation_tick,
         visible_event_ids: enemy_events.iter().map(|event| event.event_id).collect(),
         ..Default::default()
     };
-    for actor in world.actors.iter().filter(|actor| visible_actor(actor)) {
-        let mut sample = native_enemy_presentation_input(actor, actor_context(actor));
+    for actor in world.actors.iter().filter(visible_actor) {
+        let mut sample = native_enemy_presentation_input(&actor, actor_context(&actor));
         sample.presentation_tick = presentation_tick;
         metadata.actors.insert(actor.id, sample);
     }
     let tick = world.last_step_tick.unwrap_or(presentation_tick as u64);
-    for maggot in &world.maggots {
-        metadata.maggots.insert(maggot.id, native_maggot_presentation_input(maggot, tick));
+    for maggot in world.maggots.iter() {
+        metadata.maggots.insert(maggot.id, native_maggot_presentation_input(&maggot, tick));
     }
-    for projectile in &world.projectiles {
+    for projectile in world.projectiles.iter() {
         metadata
             .projectile_age_ticks
             .insert(projectile.state().id, projectile.state().age_ticks as f64);
     }
-    for projectile in &world.projectiles {
+    for projectile in world.projectiles.iter() {
         let id = projectile.state().id;
-        metadata.projectile_heading_deg.insert(id, projectile_heading(projectile));
+        metadata.projectile_heading_deg.insert(id, projectile_heading(&projectile));
         metadata
             .projectile_visual_phase_deg
             .insert(id, positive_phase(projectile.state().visual_phase_deg));
@@ -125,13 +128,14 @@ pub(super) fn interpolate(
     blend: f64,
     presentation_tick: f64,
 ) -> EnemyPresentationMetadata {
-    output.actors = interpolate_members(
-        older.actors.iter().filter(|actor| visible_actor(actor)),
-        newer.actors.iter().filter(|actor| visible_actor(actor)),
+    output.actors = interpolate_projected_members(
+        older.actors.iter().filter(visible_actor),
+        newer.actors.iter().filter(visible_actor),
         blend,
         |actor| actor.id,
+        |actor| actor.snapshot(),
         |first, second, blend| {
-            let mut actor = endpoint(first, second, blend).clone();
+            let mut actor = endpoint(first, second, blend).snapshot();
             actor.current_health = lerp(
                 first.current_health.min(first.config.maximum_health),
                 second.current_health.min(second.config.maximum_health),
@@ -163,7 +167,9 @@ pub(super) fn interpolate(
             }
             actor
         },
-    );
+    )
+    .into_iter()
+    .collect();
     let mut metadata = EnemyPresentationMetadata {
         presentation_tick,
         visible_event_ids: endpoint(older_metadata, newer_metadata, blend)
@@ -171,7 +177,7 @@ pub(super) fn interpolate(
             .clone(),
         ..Default::default()
     };
-    for actor in &output.actors {
+    for actor in output.actors.iter() {
         let mut sample =
             match (older_metadata.actors.get(&actor.id), newer_metadata.actors.get(&actor.id)) {
                 (Some(first), Some(second)) => {
@@ -184,13 +190,14 @@ pub(super) fn interpolate(
         sample.presentation_tick = presentation_tick;
         metadata.actors.insert(actor.id, sample);
     }
-    output.projectiles = interpolate_members(
-        &older.projectiles,
-        &newer.projectiles,
+    output.projectiles = interpolate_projected_members(
+        older.projectiles.iter(),
+        newer.projectiles.iter(),
         blend,
         |projectile| projectile.state().id,
+        |projectile| projectile.snapshot(),
         |first, second, blend| {
-            let mut projectile = endpoint(first, second, blend).clone();
+            let mut projectile = endpoint(first, second, blend).snapshot();
             let first_heading = projectile_heading(first);
             let second_heading = projectile_heading(second);
             let period = if first.kind() == EnemyProjectileKind::GuidedMissile {
@@ -214,8 +221,10 @@ pub(super) fn interpolate(
             state.visual_scale = lerp(first.visual_scale, second.visual_scale, blend);
             projectile
         },
-    );
-    for projectile in &output.projectiles {
+    )
+    .into_iter()
+    .collect();
+    for projectile in output.projectiles.iter() {
         let id = projectile.state().id;
         metadata.projectile_age_ticks.insert(
             id,
@@ -227,7 +236,7 @@ pub(super) fn interpolate(
             ),
         );
     }
-    for projectile in &output.projectiles {
+    for projectile in output.projectiles.iter() {
         let state = projectile.state();
         metadata.projectile_heading_deg.insert(state.id, state.heading_deg);
         metadata.projectile_visual_phase_deg.insert(state.id, state.visual_phase_deg);
@@ -251,7 +260,9 @@ pub(super) fn interpolate(
             effect.state.scale = lerp(first.state.scale, second.state.scale, blend);
             effect
         },
-    );
+    )
+    .into_iter()
+    .collect();
     for effect in &output.projectile_effects {
         let id = effect.state.id;
         let sample = match (
@@ -274,22 +285,23 @@ pub(super) fn interpolate(
     }
     let (effects, ages) =
         interpolate_death_effects(&older.death_effects, &newer.death_effects, blend);
-    output.death_effects = effects;
+    output.death_effects = effects.into_iter().collect();
     metadata.death_effects = ages;
-    output.maggots = interpolate_members(
-        &older.maggots,
-        &newer.maggots,
+    output.maggots = interpolate_projected_members(
+        older.maggots.iter(),
+        newer.maggots.iter(),
         blend,
         |maggot| maggot.id,
+        |maggot| maggot.snapshot(),
         |first, second, blend| {
-            let mut maggot = endpoint(first, second, blend).clone();
+            let mut maggot = endpoint(first, second, blend).snapshot();
             let sample = interpolate_maggot(
                 &older_metadata.maggots[&first.id],
                 &newer_metadata.maggots[&second.id],
                 blend,
             );
             maggot.current_health = sample.current_health;
-            maggot.emergence_phase = sample.emergence_phase;
+            maggot.controller.emergence_phase = sample.emergence_phase;
             maggot.heading_deg = sample.heading_deg;
             maggot.gait_pose = sample.pose;
             maggot.position = sample.position;
@@ -297,8 +309,10 @@ pub(super) fn interpolate(
             maggot.visual_scale = sample.visual_scale;
             maggot
         },
-    );
-    for maggot in &output.maggots {
+    )
+    .into_iter()
+    .collect();
+    for maggot in output.maggots.iter() {
         let sample = match (
             older_metadata.maggots.get(&maggot.id),
             newer_metadata.maggots.get(&maggot.id),
@@ -328,8 +342,8 @@ pub(super) fn interpolate(
     metadata
 }
 
-fn visible_actor(actor: &EnemyActor) -> bool {
-    !matches!(&actor.brain, EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured)
+fn visible_actor(actor: &impl EnemyActorRead) -> bool {
+    !matches!(actor.brain(), EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured)
 }
 
 fn endpoint<'a, T>(first: &'a T, second: &'a T, blend: f64) -> &'a T {
@@ -362,9 +376,9 @@ fn positive_phase(phase: f64) -> f64 {
     ((phase % 720.0) + 720.0) % 720.0
 }
 
-fn projectile_heading(projectile: &EnemyProjectile) -> f64 {
-    if let EnemyProjectile::Arrow { state, velocity } = projectile
-        && state.speed > 0.0
+fn projectile_heading(projectile: &impl EnemyProjectileRead) -> f64 {
+    if let EnemyProjectileMotion::Arrow { velocity } = projectile.motion()
+        && projectile.state().speed > 0.0
     {
         return solomon_sim::heading::heading_degrees_from_vector(velocity.x, velocity.y);
     }
@@ -372,9 +386,9 @@ fn projectile_heading(projectile: &EnemyProjectile) -> f64 {
 }
 
 #[must_use]
-pub(crate) fn interpolate_death_effects(
-    older: &[EnemyDeathEffect],
-    newer: &[EnemyDeathEffect],
+pub(crate) fn interpolate_death_effects<'a>(
+    older: impl IntoIterator<Item = &'a EnemyDeathEffect>,
+    newer: impl IntoIterator<Item = &'a EnemyDeathEffect> + Clone,
     blend: f64,
 ) -> (Vec<EnemyDeathEffect>, BTreeMap<usize, NativeEnemyEffectPresentationInput>) {
     let mut ages = BTreeMap::new();
@@ -546,13 +560,13 @@ fn interpolate_maggot(
     sample
 }
 
-fn merge_pulses(
-    older: &[MageLightningPulse],
-    newer: &[MageLightningPulse],
+fn merge_pulses<'a>(
+    older: impl IntoIterator<Item = &'a MageLightningPulse>,
+    newer: impl IntoIterator<Item = &'a MageLightningPulse>,
     tick: f64,
-) -> Vec<MageLightningPulse> {
+) -> solomon_sim::ComponentEntities<MageLightningPulse> {
     let mut pulses = BTreeMap::new();
-    for pulse in older.iter().chain(newer) {
+    for pulse in older.into_iter().chain(newer) {
         if pulse.tick as f64 > tick || tick - pulse.tick as f64 >= MAGE_LIGHTNING_MAX_PULSE_AGES {
             continue;
         }
@@ -560,7 +574,7 @@ fn merge_pulses(
     }
     let mut pulses: Vec<_> = pulses.into_values().collect();
     pulses.sort_by_key(|pulse| (pulse.tick, pulse.id));
-    pulses
+    pulses.into_iter().collect()
 }
 
 fn interpolate_spiders(
@@ -578,7 +592,7 @@ fn interpolate_spiders(
     } else {
         let by_id: BTreeMap<_, _> = newer.silks.iter().map(|silk| (silk.id, silk)).collect();
         output.silks = older.silks.clone();
-        for silk in &mut output.silks {
+        for silk in output.silks.iter_mut() {
             if let Some(second) = by_id.get(&silk.id) {
                 let first = &mut silk.state;
                 first.phase = lerp(first.phase, second.state.phase, blend);
@@ -592,7 +606,7 @@ fn interpolate_spiders(
         let by_id: BTreeMap<_, _> =
             newer.silk_fragments.iter().map(|fragment| (fragment.id, fragment)).collect();
         output.silk_fragments = older.silk_fragments.clone();
-        for fragment in &mut output.silk_fragments {
+        for fragment in output.silk_fragments.iter_mut() {
             if let Some(second) = by_id.get(&fragment.id) {
                 fragment.state.start = lerp_vec(fragment.state.start, second.state.start, blend);
                 fragment.state.middle = lerp_vec(fragment.state.middle, second.state.middle, blend);
@@ -603,7 +617,7 @@ fn interpolate_spiders(
         let by_id: BTreeMap<_, _> =
             newer.spider_remains.iter().map(|remains| (remains.id, remains)).collect();
         output.spider_remains = older.spider_remains.clone();
-        for remains in &mut output.spider_remains {
+        for remains in output.spider_remains.iter_mut() {
             if let Some(second) = by_id.get(&remains.id) {
                 remains.state.life = lerp(remains.state.life, second.state.life, blend);
                 remains.state.position =
@@ -645,7 +659,7 @@ fn crow_samples(world: &EnemyWorld) -> Vec<EnemyCrowPresentationInput> {
             tint: channel * 0x010101,
         });
     };
-    for actor in &world.actors {
+    for actor in world.actors.iter() {
         if let EnemyBrain::Heartmonger(brain) = &actor.brain {
             for crow in &brain.crows {
                 append(crow);

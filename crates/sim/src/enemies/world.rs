@@ -3,12 +3,13 @@
 
 use super::config::EnemyArenaScalars;
 use super::model::{
-    EnemyActor, EnemyDeathEffect, EnemyEvent, EnemyMaggotActor, EnemyPlayerDamage,
-    EnemyPlayerKnockback, EnemyTarget, WebbedState,
+    EnemyDeathEffect, EnemyEvent, EnemyPlayerDamage, EnemyPlayerKnockback, EnemyTarget,
+    MaggotActors, WebbedState,
 };
 use super::path::EnemyNavigation;
 use super::projectiles::{
-    EnemyProjectile, EnemyProjectileEffect, EnemyProjectileKnockback, MageLightningPulse,
+    EnemyProjectileEffect, EnemyProjectileKnockback, EnemyProjectileRead, EnemyProjectiles,
+    MageLightningPulse,
 };
 pub use super::step::EnemyLiveCounts;
 use super::voices::BossNarration;
@@ -211,9 +212,9 @@ pub struct EnemyWorld {
     #[cfg_attr(feature = "persistence", serde(skip))]
     pub(super) deferred_projectile_painters:
         Option<super::deferred_painters::DeferredEnemyPainterRegistrations>,
-    pub actors: Vec<EnemyActor>,
-    pub maggots: Vec<EnemyMaggotActor>,
-    pub webbed_players: BTreeMap<String, WebbedState>,
+    pub actors: super::model::EnemyActors,
+    pub maggots: MaggotActors,
+    pub webbed_players: crate::KeyedComponents<WebbedState>,
     pub rng_state: u32,
     pub steering_rng: NativeRng,
     pub locomotion_rng: NativeRng,
@@ -235,25 +236,25 @@ pub struct EnemyWorld {
     pub demon_skull_encounter: DemonSkullEncounter,
     pub spawned_actor_ids: Vec<usize>,
     pub events: Vec<EnemyEvent>,
-    pub death_effects: Vec<EnemyDeathEffect>,
+    pub death_effects: crate::ComponentEntities<EnemyDeathEffect>,
     pub player_damage: Vec<EnemyPlayerDamage>,
     pub player_knockbacks: Vec<EnemyPlayerKnockback>,
     pub player_positions: BTreeMap<String, Vec2>,
     pub pending_spawn_intents: Vec<EnemySpawnIntent>,
-    pub projectiles: Vec<EnemyProjectile>,
-    pub mage_lightning_pulses: Vec<MageLightningPulse>,
-    pub projectile_effects: Vec<EnemyProjectileEffect>,
-    pub projectile_knockbacks: Vec<EnemyProjectileKnockback>,
+    pub projectiles: EnemyProjectiles,
+    pub mage_lightning_pulses: crate::ComponentEntities<MageLightningPulse>,
+    pub projectile_effects: crate::ComponentEntities<EnemyProjectileEffect>,
+    pub projectile_knockbacks: crate::ComponentEntities<EnemyProjectileKnockback>,
     pub target_cell_bindings: BTreeMap<String, EnemyTargetCellBinding>,
     pub retired: Vec<super::model::EnemyRetirement>,
     pub rewards: Vec<super::model::EnemyReward>,
-    pub silks: Vec<super::silk::EnemySilkActor>,
-    pub silk_fragments: Vec<super::silk_force::NativeFadeLineActor>,
+    pub silks: crate::ComponentEntities<super::silk::EnemySilkActor>,
+    pub silk_fragments: crate::ComponentEntities<super::silk_force::NativeFadeLineActor>,
     pub spider_spit_ticks_remaining: u64,
-    pub spider_remains: Vec<super::spider_remains::SpiderRemains>,
-    pub detached_crows: Vec<super::heartmonger::DetachedCrow>,
-    pub boss_spells: Vec<super::boss_spell::NativeBossSpell>,
-    pub puppet_hits: Vec<super::puppet_hits::EnemyPuppetHit>,
+    pub spider_remains: crate::ComponentEntities<super::spider_remains::SpiderRemains>,
+    pub detached_crows: crate::ComponentEntities<super::heartmonger::DetachedCrow>,
+    pub boss_spells: super::boss_spell::BossSpells,
+    pub puppet_hits: crate::ComponentEntities<super::puppet_hits::EnemyPuppetHit>,
 }
 
 impl EnemyWorld {
@@ -261,9 +262,9 @@ impl EnemyWorld {
     pub fn new(seed: &str, native_registration_base: usize) -> Self {
         Self {
             deferred_projectile_painters: None,
-            actors: Vec::new(),
-            maggots: Vec::new(),
-            webbed_players: BTreeMap::new(),
+            actors: super::model::EnemyActors::default(),
+            maggots: MaggotActors::default(),
+            webbed_players: crate::KeyedComponents::default(),
             rng_state: seed_from_text(&format!("{seed}:enemy-actors")),
             steering_rng: NativeRng::new(i64::from(seed_from_text(&format!(
                 "{seed}:enemy-steering"
@@ -291,25 +292,25 @@ impl EnemyWorld {
             demon_skull_encounter: DemonSkullEncounter::default(),
             spawned_actor_ids: Vec::new(),
             events: Vec::new(),
-            death_effects: Vec::new(),
+            death_effects: crate::ComponentEntities::default(),
             player_damage: Vec::new(),
             player_knockbacks: Vec::new(),
             player_positions: BTreeMap::new(),
             pending_spawn_intents: Vec::new(),
-            projectiles: Vec::new(),
-            mage_lightning_pulses: Vec::new(),
-            projectile_effects: Vec::new(),
-            projectile_knockbacks: Vec::new(),
+            projectiles: EnemyProjectiles::default(),
+            mage_lightning_pulses: crate::ComponentEntities::default(),
+            projectile_effects: crate::ComponentEntities::default(),
+            projectile_knockbacks: crate::ComponentEntities::default(),
             target_cell_bindings: BTreeMap::new(),
             retired: Vec::new(),
             rewards: Vec::new(),
-            silks: Vec::new(),
-            silk_fragments: Vec::new(),
+            silks: crate::ComponentEntities::default(),
+            silk_fragments: crate::ComponentEntities::default(),
             spider_spit_ticks_remaining: 0,
-            spider_remains: Vec::new(),
-            detached_crows: Vec::new(),
-            boss_spells: Vec::new(),
-            puppet_hits: Vec::new(),
+            spider_remains: crate::ComponentEntities::default(),
+            detached_crows: crate::ComponentEntities::default(),
+            boss_spells: super::boss_spell::BossSpells::default(),
+            puppet_hits: crate::ComponentEntities::default(),
         }
     }
 
@@ -343,14 +344,14 @@ impl EnemyWorld {
     pub(super) fn standalone_painter_order(&self) -> WorldPainterOrder {
         self.assert_painter_registrations_committed();
         let mut order = WorldPainterOrder::default();
-        for actor in &self.actors {
+        for actor in self.actors.iter() {
             order.next_actor_ordinal = order.next_actor_ordinal.max(actor.registration_ordinal + 1);
         }
-        for maggot in &self.maggots {
+        for maggot in self.maggots.iter() {
             order.next_actor_ordinal =
                 order.next_actor_ordinal.max(maggot.registration_ordinal + 1);
         }
-        for projectile in &self.projectiles {
+        for projectile in self.projectiles.iter() {
             for registration in [
                 Some(projectile.state().painter_registration),
                 projectile.state().light_registration,
@@ -402,7 +403,7 @@ impl EnemyWorld {
             order.next_actor_ordinal =
                 order.next_actor_ordinal.max(silk.painter_registration.registration_ordinal + 1);
         }
-        for spell in &self.boss_spells {
+        for spell in self.boss_spells.iter() {
             let registration = spell.owner.painter_registration;
             let next = match registration.manager_lane {
                 WorldManagerLane::Actor => &mut order.next_actor_ordinal,

@@ -74,7 +74,7 @@ pub enum Intent {
     Redo,
     Submit,
     CompositionStart,
-    CompositionEnd,
+    CompositionEnd { cancelled: bool },
 }
 
 #[derive(Clone, Debug)]
@@ -258,10 +258,14 @@ impl Model {
                 self.composition_before = Some(self.value.clone());
                 self.composition = Some(self.value.selection);
             }
-            Intent::CompositionEnd => {
+            Intent::CompositionEnd { cancelled } => {
                 self.composition = None;
                 if let Some(initial) = self.composition_before.take() {
-                    self.history.record(&initial, &self.value, None);
+                    if *cancelled {
+                        self.value = initial;
+                    } else {
+                        self.history.record(&initial, &self.value, None);
+                    }
                 }
             }
             Intent::Replace { range, text, .. } if !readonly => {
@@ -289,7 +293,10 @@ impl Model {
         change.changed = self.value.text != before.text;
         if change.changed
             && self.composition_before.is_none()
-            && !matches!(receipt.intent, Intent::Undo | Intent::Redo | Intent::CompositionEnd)
+            && !matches!(
+                receipt.intent,
+                Intent::Undo | Intent::Redo | Intent::CompositionEnd { .. }
+            )
         {
             let group = if before.selection.range().is_empty() {
                 match receipt.intent {
@@ -370,6 +377,7 @@ pub fn slice_utf16(text: &str, range: std::ops::Range<usize>) -> &str {
 }
 
 /// Minimal scalar-safe replacement represented by an actual native input change.
+#[cfg(any(target_arch = "wasm32", test))]
 pub fn replacement(before: &str, after: &str) -> (Selection, String) {
     let mut prefix = 0;
     let mut prefix_bytes = 0;
@@ -557,7 +565,7 @@ mod tests {
         assert_eq!(model.text(), text);
         assert!(model.composition.is_some());
         receipt.sequence = 3;
-        receipt.intent = Intent::CompositionEnd;
+        receipt.intent = Intent::CompositionEnd { cancelled: false };
         model.apply(&receipt, Rules::default(), false);
         receipt.sequence = 4;
         receipt.intent = Intent::Undo;

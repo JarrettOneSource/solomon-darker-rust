@@ -161,7 +161,7 @@ fn advance_demon_articulation(actor: &mut EnemyActor, tick: u64) {
     let EnemyBrain::Demon(brain) = &mut actor.brain else {
         return;
     };
-    if brain.phase != DemonPhase::Approach || actor.config.scale <= 0.0 {
+    if brain.phase != DemonPhase::Approach || actor.body.config.scale <= 0.0 {
         return;
     }
     let state = &mut brain.articulation;
@@ -169,13 +169,23 @@ fn advance_demon_articulation(actor: &mut EnemyActor, tick: u64) {
     if phase_tick == 0 {
         replant_extremity(
             &mut state.front,
-            demon_extremity_target(actor.position, actor.heading_deg, actor.config.scale, true),
+            demon_extremity_target(
+                actor.body.position,
+                actor.body.heading_deg,
+                actor.body.config.scale,
+                true,
+            ),
         );
     }
     if phase_tick == state.step_interval_ticks / 2 {
         replant_extremity(
             &mut state.rear,
-            demon_extremity_target(actor.position, actor.heading_deg, actor.config.scale, false),
+            demon_extremity_target(
+                actor.body.position,
+                actor.body.heading_deg,
+                actor.body.config.scale,
+                false,
+            ),
         );
     }
     let front_completed = advance_extremity(&mut state.front);
@@ -185,8 +195,9 @@ fn advance_demon_articulation(actor: &mut EnemyActor, tick: u64) {
             continue;
         }
         let channel = 1 + state.completed_steps * 2;
-        let front = deterministic_unit(actor.id, actor.spawn_tick, channel) < 0.5;
-        let rotation = -20.0 + deterministic_unit(actor.id, actor.spawn_tick, channel + 1) * 30.0;
+        let front = deterministic_unit(actor.body.id, actor.body.spawn_tick, channel) < 0.5;
+        let rotation =
+            -20.0 + deterministic_unit(actor.body.id, actor.body.spawn_tick, channel + 1) * 30.0;
         if front {
             state.front_base_rotation_deg = rotation;
         } else {

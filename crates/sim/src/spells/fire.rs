@@ -121,7 +121,7 @@ pub enum NativeFireEmberRetirement {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NativeFireEmberStep {
-    pub ember: Option<PrimarySpellFireEmber>,
+    pub retained: bool,
     pub retirement: NativeFireEmberRetirement,
 }
 
@@ -171,9 +171,7 @@ pub struct NativeFireGoodImpStepContext<'a> {
 
 pub struct NativeFireGoodImpStep {
     pub contact: Option<FireTargetContact>,
-    pub good_imp: Option<PrimarySpellFireGoodImp>,
-    pub release_fire: bool,
-    pub release_position: Vec2,
+    pub retained: bool,
 }
 
 #[must_use]
@@ -235,11 +233,12 @@ pub fn spawn_native_fire_patch(
     create_native_fire_patch(options, phase, sign)
 }
 
+/// Returns retention and this tick's contact; a retiring patch can still deal damage.
 #[must_use]
 pub fn step_native_fire_patch(
-    mut patch: PrimarySpellFirePatch,
+    patch: &mut PrimarySpellFirePatch,
     global_tick: u64,
-) -> (Option<PrimarySpellFirePatch>, Option<FireRadialContact>) {
+) -> (bool, Option<FireRadialContact>) {
     patch.atlas_phase = positive_modulo(fround(patch.atlas_phase + patch.atlas_phase_step), 32.0);
     patch.life = fround(patch.life - 0.01_f32 as f64);
     patch.fade_alpha = fround(patch.fade_alpha + 0.05_f32 as f64).min(1.0);
@@ -258,7 +257,7 @@ pub fn step_native_fire_patch(
     };
     // The terminal native tick still publishes its contact before the patch retires.
     if patch.life <= 0.0 {
-        return (None, contact);
+        return (false, contact);
     }
     patch.position = Vec2::new(
         fround(patch.position.x + patch.velocity.x),
@@ -269,7 +268,7 @@ pub fn step_native_fire_patch(
         fround(patch.velocity.y * patch.velocity_multiplier.y),
     );
     patch.common.age_ticks += 1;
-    (Some(patch), contact)
+    (true, contact)
 }
 
 /// Native Badguy → Imp → GoodImp constructor order. Discarded draws remain authoritative.
@@ -328,11 +327,11 @@ pub fn spawn_native_fire_good_imp(
 
 #[must_use]
 pub fn step_native_fire_good_imp(
-    mut actor: PrimarySpellFireGoodImp,
+    actor: &mut PrimarySpellFireGoodImp,
     context: NativeFireGoodImpStepContext<'_>,
     rng: &mut NativeRng,
 ) -> NativeFireGoodImpStep {
-    let (target, next_refresh) = refresh_good_imp_target(&actor, context.targets);
+    let (target, next_refresh) = refresh_good_imp_target(actor, context.targets);
     if target.map(|target| target.id.as_str()) != actor.target_id.as_deref() {
         actor.path.clear_route();
     }
@@ -463,20 +462,14 @@ pub fn step_native_fire_good_imp(
     }
     actor.remaining_ticks =
         actor.remaining_ticks.saturating_sub(if target.is_none() { 2 } else { 1 });
-    let release_position = actor.position;
     if actor.remaining_ticks == 0 {
-        return NativeFireGoodImpStep {
-            contact,
-            good_imp: None,
-            release_fire: true,
-            release_position,
-        };
+        return NativeFireGoodImpStep { contact, retained: false };
     }
     actor.common.age_ticks += 1;
     actor.light_glow = fround(actor.light_glow + 0.01).min(1.0);
     actor.next_target_refresh_tick = next_refresh;
     actor.target_id = target.map(|target| target.id.clone());
-    NativeFireGoodImpStep { contact, good_imp: Some(actor), release_fire: false, release_position }
+    NativeFireGoodImpStep { contact, retained: true }
 }
 
 pub fn draw_native_fire_private_seed(rng: &mut NativeRng) -> i32 {
@@ -617,9 +610,10 @@ pub fn create_native_fire_detonation(
     let mut contacts = Vec::new();
     while let Some(mut ember) = birth.fan.next_ember(rng) {
         for _ in 0..10 {
-            ember = step_native_fire_ember(ember)
-                .ember
-                .expect("a newborn Ember survives its ten native pre-ticks");
+            assert!(
+                step_native_fire_ember(&mut ember).retained,
+                "a newborn Ember survives its ten native pre-ticks"
+            );
             if ember.contact_due {
                 contacts.push(native_fire_ember_contact(&ember));
             }
@@ -637,7 +631,7 @@ pub fn create_native_fire_detonation(
 }
 
 #[must_use]
-pub fn step_native_fire_ember(mut ember: PrimarySpellFireEmber) -> NativeFireEmberStep {
+pub fn step_native_fire_ember(ember: &mut PrimarySpellFireEmber) -> NativeFireEmberStep {
     if ember.vertical_velocity != 0.0 {
         let movement_factor = ember.vertical_velocity.abs().min(1.0);
         ember.position = Vec2::new(
@@ -670,10 +664,7 @@ pub fn step_native_fire_ember(mut ember: PrimarySpellFireEmber) -> NativeFireEmb
     }
     ember.common.age_ticks += 1;
     if ember.vertical_velocity != 0.0 || ember.life >= 1.0 {
-        return NativeFireEmberStep {
-            ember: Some(ember),
-            retirement: NativeFireEmberRetirement::None,
-        };
+        return NativeFireEmberStep { retained: true, retirement: NativeFireEmberRetirement::None };
     }
     let retirement = match ember.spent_ember {
         NativeSpentEmber::Immolate { damage } => {
@@ -699,7 +690,7 @@ pub fn step_native_fire_ember(mut ember: PrimarySpellFireEmber) -> NativeFireEmb
         NativeSpentEmber::None => NativeFireEmberRetirement::None,
     };
     let retired = !matches!(retirement, NativeFireEmberRetirement::None) || ember.life <= 0.0;
-    NativeFireEmberStep { ember: if retired { None } else { Some(ember) }, retirement }
+    NativeFireEmberStep { retained: !retired, retirement }
 }
 
 #[must_use]

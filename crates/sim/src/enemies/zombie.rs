@@ -187,7 +187,7 @@ fn advance_zombie_visual(source: &ZombieBrain, stepped: &mut ZombieBrain) {
 
 pub fn spawn_rotten_zombie_particle(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     order: &mut WorldPainterOrder,
 ) {

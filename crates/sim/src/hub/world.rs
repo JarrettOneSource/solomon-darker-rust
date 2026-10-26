@@ -142,7 +142,7 @@ pub fn step_hub_participants(
             15.0,
         );
     }
-    if let Some(skorcha) = &npcs.skorcha.skorcha {
+    if let Some(skorcha) = npcs.skorcha.skorcha.as_ref() {
         append_fixed(
             &mut bodies,
             &mut membership,

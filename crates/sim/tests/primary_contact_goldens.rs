@@ -1,10 +1,11 @@
 //! Source transactions through actual enemy acceptance, shared RNG and painter owners.
 use serde_json::{Map, Value, json};
 use solomon_sim::enemies::config::EnemyArenaScalars;
-use solomon_sim::enemies::model::EnemyLifeState;
+use solomon_sim::enemies::model::{EnemyActorRead, EnemyLifeState};
 use solomon_sim::enemies::path::EnemyNavigation;
 use solomon_sim::enemies::projectile_emission::{SpawnEnemyProjectileOptions, spawn_projectile};
 use solomon_sim::enemies::projectiles::EnemyProjectileKind;
+use solomon_sim::enemies::projectiles::EnemyProjectileRead;
 use solomon_sim::enemies::silk::{EnemySilkActor, create_native_silk, step_native_silk};
 use solomon_sim::enemies::world::{
     EnemyGeometry, EnemyMovementRequest, EnemyProjectileWorldQuery, EnemySpawnContext, EnemyWorld,
@@ -15,6 +16,7 @@ use solomon_sim::profile::primary::*;
 use solomon_sim::profile::weld::{NativeWeldCastKind, NativeWeldPrimaryVector};
 use solomon_sim::secondary::NativeSecondaryTargetEffectPatch;
 use solomon_sim::spells::contacts::*;
+use solomon_sim::spells::model::PrimaryTransientRef;
 use solomon_sim::spells::model::*;
 use solomon_sim::spells::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
@@ -120,40 +122,46 @@ fn projectile(value: &Value) -> PrimarySpellProjectile {
         "weld" => PrimarySpellProjectile::Weld(weld::projectile(value, common)),
         "earth" => PrimarySpellProjectile::Earth(PrimarySpellEarthProjectile {
             common,
-            assembly_charge: number(value, "assemblyCharge"),
-            hit_target_ids: values(value, "hitTargetIds")
-                .iter()
-                .map(|id| id.as_str().unwrap().into())
-                .collect(),
-            maximum_charge: number(value, "maximumCharge"),
-            orientation: std::array::from_fn(|i| value["orientation"][i].as_f64().unwrap()),
-            remaining_damage: number(value, "remainingDamage"),
-            shell_charge: number(value, "shellCharge"),
-            toughness: number(value, "toughness"),
+            program: EarthProjectileProgram {
+                assembly_charge: number(value, "assemblyCharge"),
+                hit_target_ids: values(value, "hitTargetIds")
+                    .iter()
+                    .map(|id| id.as_str().unwrap().into())
+                    .collect(),
+                maximum_charge: number(value, "maximumCharge"),
+                orientation: std::array::from_fn(|i| value["orientation"][i].as_f64().unwrap()),
+                remaining_damage: number(value, "remainingDamage"),
+                shell_charge: number(value, "shellCharge"),
+                toughness: number(value, "toughness"),
+            },
         }),
         "ether" => PrimarySpellProjectile::Ether(PrimarySpellEtherProjectile {
             common,
-            damage_retention: number(value, "damageRetention"),
-            heading_degrees: number(value, "headingDegrees"),
-            pierces_remaining: integer(value, "piercesRemaining") as u32,
-            reacquires_target: value["reacquiresTarget"].as_bool().unwrap(),
-            speed: number(value, "speed"),
-            target_id: value["targetId"].as_str().map(String::from),
-            turn_input: number(value, "turnInput"),
-            turn_accumulator: number(value, "turnAccumulator"),
-            underpowered: value["underpowered"].as_bool().unwrap(),
-            visual_scale: number(value, "visualScale"),
+            program: EtherProjectileProgram {
+                damage_retention: number(value, "damageRetention"),
+                heading_degrees: number(value, "headingDegrees"),
+                pierces_remaining: integer(value, "piercesRemaining") as u32,
+                reacquires_target: value["reacquiresTarget"].as_bool().unwrap(),
+                speed: number(value, "speed"),
+                target_id: value["targetId"].as_str().map(String::from),
+                turn_input: number(value, "turnInput"),
+                turn_accumulator: number(value, "turnAccumulator"),
+                underpowered: value["underpowered"].as_bool().unwrap(),
+                visual_scale: number(value, "visualScale"),
+            },
         }),
         "fire" => PrimarySpellProjectile::Fire(PrimarySpellFireProjectile {
             common,
-            burn_damage: number(value, "burnDamage"),
-            ember_damage: number(value, "emberDamage"),
-            ember_fragments: integer(value, "emberFragments") as u32,
-            explode_damage: number(value, "explodeDamage"),
-            explode_radius: number(value, "explodeRadius"),
-            private_seed: number(value, "privateSeed") as i32,
-            spent_ember: NativeSpentEmber::None,
-            underpowered: value["underpowered"].as_bool().unwrap(),
+            program: FireProjectileProgram {
+                burn_damage: number(value, "burnDamage"),
+                ember_damage: number(value, "emberDamage"),
+                ember_fragments: integer(value, "emberFragments") as u32,
+                explode_damage: number(value, "explodeDamage"),
+                explode_radius: number(value, "explodeRadius"),
+                private_seed: number(value, "privateSeed") as i32,
+                spent_ember: NativeSpentEmber::None,
+                underpowered: value["underpowered"].as_bool().unwrap(),
+            },
         }),
         other => panic!("unexpected contact fixture projectile {other}"),
     }
@@ -364,19 +372,19 @@ fn fire_contact(value: &Value) -> FireActorContact {
     }
 }
 
-fn projectile_row(spell: &PrimarySpellProjectile) -> Value {
-    if matches!(spell, PrimarySpellProjectile::Weld(_)) {
+fn projectile_row(spell: PrimaryProjectileRef<'_>) -> Value {
+    if matches!(spell, PrimaryProjectileRef::Weld(_)) {
         return weld_rows::projectile(spell);
     }
     let (kind, detail) = match spell {
-        PrimarySpellProjectile::Weld(spell) => (
+        PrimaryProjectileRef::Weld(spell) => (
             "weld",
             json!([spell.build_id, spell.contacts_remaining, spell.target_id, spell.vector]),
         ),
-        PrimarySpellProjectile::Earth(spell) => {
+        PrimaryProjectileRef::Earth(spell) => {
             ("earth", json!([spell.remaining_damage, spell.hit_target_ids, spell.shell_charge]))
         }
-        PrimarySpellProjectile::Ether(spell) => (
+        PrimaryProjectileRef::Ether(spell) => (
             "ether",
             json!([
                 spell.pierces_remaining,
@@ -386,7 +394,7 @@ fn projectile_row(spell: &PrimarySpellProjectile) -> Value {
                 spell.common.direction.y
             ]),
         ),
-        PrimarySpellProjectile::Fire(_) => ("fire", json!([])),
+        PrimaryProjectileRef::Fire(_) => ("fire", json!([])),
     };
     let common = spell.common();
     json!({"id": common.id,
@@ -397,53 +405,53 @@ fn projectile_row(spell: &PrimarySpellProjectile) -> Value {
         "velocity": point(common.velocity),
         "detail": detail})
 }
-fn transient_row(effect: &PrimarySpellTransient) -> Value {
-    if matches!(effect, PrimarySpellTransient::Weld(_)) {
+fn transient_row(effect: PrimaryTransientRef<'_>) -> Value {
+    if matches!(effect, PrimaryTransientRef::Weld(_)) {
         return weld_rows::transient(effect);
     }
     let (kind, detail) = match effect {
-        PrimarySpellTransient::AirHurricane(effect) => (
+        PrimaryTransientRef::AirHurricane(effect) => (
             "air-hurricane",
             json!({"birthTick":effect.birth_tick,"charge":effect.charge,"contactCharge":effect.contact_charge,
             "damageMinimum":effect.damage_minimum,"damageMaximum":effect.damage_maximum,"enhancedEffects":effect.enhanced_effects,"phaseDegrees":effect.phase_degrees,"position":point(effect.position)}),
         ),
-        PrimarySpellTransient::Air(effect) => (
+        PrimaryTransientRef::Air(effect) => (
             "air",
             json!({"birthTick": effect.birth_tick, "variant": effect.variant,
             "enhancedEffects": effect.enhanced_effects,
             "targetId": effect.target_id, "origin": point(effect.origin), "direction": point(effect.direction),
             "endpoint": point(effect.endpoint), "midpoint": point(effect.midpoint)}),
         ),
-        PrimarySpellTransient::EarthBoulderBit(effect) => (
+        PrimaryTransientRef::EarthBoulderBit(effect) => (
             "earth-boulder-bit",
             json!({"birthTick": effect.birth_tick, "origin": point(effect.origin), "position": point(effect.position)}),
         ),
-        PrimarySpellTransient::EarthImpact(effect) => (
+        PrimaryTransientRef::EarthImpact(effect) => (
             "earth-impact",
             json!({"birthTick": effect.birth_tick, "charge": effect.charge, "enhancedEffects": effect.enhanced_effects,
                 "lifetimeTicks": effect.lifetime_ticks, "origin": point(effect.origin)}),
         ),
-        PrimarySpellTransient::EtherBlast(effect) => (
+        PrimaryTransientRef::EtherBlast(effect) => (
             "ether-blast",
             json!({"birthTick": effect.birth_tick, "charges": effect.charges, "origin": point(effect.origin)}),
         ),
-        PrimarySpellTransient::EtherImpact(effect) => (
+        PrimaryTransientRef::EtherImpact(effect) => (
             "ether-impact",
             json!({"birthTick": effect.birth_tick, "visualScale": effect.visual_scale, "origin": point(effect.origin)}),
         ),
-        PrimarySpellTransient::EtherPierceStreak(effect) => (
+        PrimaryTransientRef::EtherPierceStreak(effect) => (
             "ether-pierce-streak",
             json!({"headingDegrees": effect.heading_degrees, "visualScale": effect.visual_scale, "origin": point(effect.origin)}),
         ),
-        PrimarySpellTransient::FireImpact(effect) => {
+        PrimaryTransientRef::FireImpact(effect) => {
             ("fire-impact", json!({"origin": point(effect.origin)}))
         }
-        PrimarySpellTransient::FireExplosion(effect) => (
+        PrimaryTransientRef::FireExplosion(effect) => (
             "fire-explosion",
             json!({"damage": effect.damage, "burnDamage": effect.burn_damage,
             "footprintDimension": effect.footprint_dimension, "visualScale": effect.visual_scale, "origin": point(effect.origin)}),
         ),
-        PrimarySpellTransient::FireEmber(effect) => (
+        PrimaryTransientRef::FireEmber(effect) => (
             "fire-ember",
             json!({"damage": effect.damage, "burnDamage": effect.burn_damage, "position": point(effect.position)}),
         ),
@@ -525,7 +533,7 @@ fn replay_contacts(fixture: &str) {
             &OpenGeometry,
             Some(&mut order),
         );
-        for (actor, spec) in enemies.actors.iter_mut().zip(values(case, "enemies")) {
+        for (mut actor, spec) in enemies.actors.iter_mut().zip(values(case, "enemies")) {
             if let Some(cooldown) = spec["hurricaneCooldown"].as_f64() {
                 actor.hurricane_contact_cooldown = cooldown;
             }
@@ -542,7 +550,7 @@ fn replay_contacts(fixture: &str) {
             }
         }
         if case["forces"] == true {
-            let owner = enemies.actors[0].clone();
+            let owner = enemies.actors.get(0).unwrap().snapshot();
             spawn_projectile(
                 &mut enemies,
                 &owner,
@@ -571,7 +579,7 @@ fn replay_contacts(fixture: &str) {
             )
             .state;
             for _ in 0..20 {
-                state = step_native_silk(state).unwrap();
+                assert!(step_native_silk(&mut state));
             }
             state.force_accumulator = 0.9;
             enemies.silks.push(EnemySilkActor {

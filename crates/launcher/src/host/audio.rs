@@ -9,8 +9,8 @@ use solomon_sim::audio::combat::{
 use solomon_sim::audio::{AudioCue, AudioEvent};
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::session::GameSession;
-use solomon_sim::spells::model::PrimarySpellTransient;
-use solomon_sim::spells::staff::NativePlayerStaffTransient;
+use solomon_sim::spells::model::PrimaryTransientRef;
+use solomon_sim::spells::staff::StaffTransientRef;
 
 use super::authority::{NativeAuthority, send_control};
 use super::connection::HostConnection;
@@ -91,7 +91,7 @@ pub(super) fn project_listener_audio(
     }
     let mut players = Vec::with_capacity(world_keys.len());
     for (player_id, world_key) in session.participant_order.iter().zip(&world_keys) {
-        let participant = &session.participants[player_id];
+        let participant = &session.participants.get(player_id).expect("participant exists");
         let wizard = &participant.wizard;
         players.push(CombatAudioPlayer {
             id: player_id,
@@ -105,10 +105,8 @@ pub(super) fn project_listener_audio(
         });
     }
     let mut staff_contacts = Vec::new();
-    for transient in &session.spells.transients {
-        if let PrimarySpellTransient::Staff(NativePlayerStaffTransient::Contact(contact)) =
-            transient
-        {
+    for transient in session.spells.transients.iter() {
+        if let PrimaryTransientRef::Staff(StaffTransientRef::Contact(contact)) = transient {
             staff_contacts.push(contact.clone());
         }
     }

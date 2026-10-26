@@ -13,7 +13,7 @@ use solomon_sim::enemies::death_presentation::native_enemy_death_effect_plan;
 use solomon_sim::enemies::lightning_presentation::{
     native_dark_lightning_body, native_mage_lightning_pulse_plan,
 };
-use solomon_sim::enemies::model::{EnemyActor, EnemyMaggotActor};
+use solomon_sim::enemies::model::{EnemyActorRead, MaggotRead};
 use solomon_sim::enemies::projectile_presentation::native_enemy_projectile_effect_plan;
 use solomon_sim::enemies::rain_presentation::NativeRainCloud;
 use solomon_sim::enemies::tendrils::HeartmongerTendrils;
@@ -161,12 +161,18 @@ impl EnemyPresentationGoldens {
         }
     }
 
-    pub(super) fn check_actor(&mut self, group: &str, name: &str, tick: u64, actor: &EnemyActor) {
+    pub(super) fn check_actor(
+        &mut self,
+        group: &str,
+        name: &str,
+        tick: u64,
+        actor: &impl EnemyActorRead,
+    ) {
         let record_key = key(group, name, tick, actor.id);
         let Some(records) = self.actor_index.get(&record_key) else { return };
         for index in records {
             let record = &self.source["actors"][index];
-            let mut actor = actor.clone();
+            let mut actor = actor.snapshot();
             if record["hitOverride"].as_bool() == Some(true) {
                 actor.hit_feedback.receive(tick, 1.0);
             }
@@ -238,7 +244,7 @@ impl EnemyPresentationGoldens {
                     .collect::<Vec<_>>()
             );
             assert_plan(&actual, &record["underlay"], &format!("{record_key}.underlay"));
-            if let solomon_sim::enemies::model::EnemyBrain::Heartmonger(brain) = &actor.brain {
+            if let solomon_sim::enemies::model::EnemyBrain::Heartmonger(brain) = actor.brain() {
                 let state_key = format!("{group}:{name}:{}", actor.id);
                 let state = self.tendrils.entry(state_key).or_insert_with(|| {
                     let mut rng =
@@ -263,11 +269,11 @@ impl EnemyPresentationGoldens {
     }
 
     pub(super) fn check_world(&mut self, name: &str, tick: u64, world: &EnemyWorld) {
-        for actor in &world.actors {
-            self.check_actor("ai", name, tick, actor);
+        for actor in world.actors.iter() {
+            self.check_actor("ai", name, tick, &actor);
         }
-        for maggot in &world.maggots {
-            self.check_maggot(name, tick, maggot);
+        for maggot in world.maggots.iter() {
+            self.check_maggot(name, tick, &maggot);
         }
         for effect in &world.projectile_effects {
             let record_key = key("projectile", name, tick, effect.state.id);
@@ -303,7 +309,7 @@ impl EnemyPresentationGoldens {
             assert_plan(&actual, &record["expected"], &record_key);
             self.checked_effects[1] += 1;
         }
-        for spell in &world.boss_spells {
+        for spell in world.boss_spells.iter() {
             let rain = if matches!(
                 spell.kind,
                 solomon_sim::enemies::boss_spell::BossSpellKind::RainOfBones { .. }
@@ -311,15 +317,15 @@ impl EnemyPresentationGoldens {
                 let state = self
                     .rain
                     .entry(format!("{name}:{}", spell.owner.id))
-                    .or_insert_with(|| NativeRainCloud::new(spell, tick));
-                Some(state.update(spell, tick))
+                    .or_insert_with(|| NativeRainCloud::new(&spell, tick));
+                Some(state.update(&spell, tick))
             } else {
                 None
             };
             let record_key = key("boss", name, tick, spell.owner.id);
             let Some(index) = self.effect_indices[2].get(&record_key) else { continue };
             let record = &self.source["effects"]["boss"][index];
-            let plan = native_boss_spell_plan(spell, tick, 900.0);
+            let plan = native_boss_spell_plan(&spell, tick, 900.0);
             let actual = json!({"gradients":plan.gradients.iter().map(gradient_json).collect::<Vec<_>>(),
                 "layers":plan.layers.iter().map(layer_json).collect::<Vec<_>>()});
             assert_plan(&actual, &record["expected"], &record_key);
@@ -382,12 +388,12 @@ impl EnemyPresentationGoldens {
                 self.checked_meshes += 1;
             }
         }
-        for spell in &world.boss_spells {
+        for spell in world.boss_spells.iter() {
             let record_key = key("dark", name, tick, spell.owner.id);
             let Some(indices) = self.mesh_indices.get(&record_key) else { continue };
             for index in indices {
                 let record = &self.source["meshes"][index];
-                let body = native_dark_lightning_body(spell);
+                let body = native_dark_lightning_body(&spell);
                 let actual = json!({"layers":body.iter().map(ribbon_json).collect::<Vec<_>>()});
                 assert_plan(&actual, &record["expected"], &record_key);
                 self.checked_meshes += 1;
@@ -395,7 +401,7 @@ impl EnemyPresentationGoldens {
         }
     }
 
-    fn check_maggot(&mut self, name: &str, tick: u64, maggot: &EnemyMaggotActor) {
+    fn check_maggot(&mut self, name: &str, tick: u64, maggot: &impl MaggotRead) {
         let record_key = key("ai", name, tick, maggot.id);
         let Some(index) = self.maggot_index.get(&record_key) else { return };
         let record = &self.source["maggots"][index];

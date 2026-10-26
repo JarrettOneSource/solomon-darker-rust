@@ -1,6 +1,7 @@
 //! Ordered terminal loot composition from `boneyard-world.ts:539–621`.
 
 use crate::Vec2;
+use crate::boneyard::loot::LootActorRead;
 use crate::boneyard::waves::programs::BossKind;
 use crate::economy::HubInventoryItem;
 use crate::enemies::EnemyToken;
@@ -27,10 +28,10 @@ pub(super) struct LootEnemySnapshot {
 impl LootEnemySnapshot {
     pub(super) fn new(enemies: &EnemyWorld) -> Self {
         let mut positions = Vec::with_capacity(enemies.actors.len() + enemies.maggots.len());
-        for actor in &enemies.actors {
+        for actor in enemies.actors.iter() {
             positions.push((actor.id, actor.position));
         }
-        for actor in &enemies.maggots {
+        for actor in enemies.maggots.iter() {
             positions.push((actor.id, actor.position));
         }
         Self { badguy_count: enemies.actors.len(), positions }
@@ -79,7 +80,7 @@ impl BoneyardWorld {
             };
             let world_has_health_potion_sack = self.loot.actors.iter().any(|actor| {
                 actor.kind == NativeLootDropKind::Sack
-                    && actor.item.as_ref().is_some_and(|item| {
+                    && actor.reward().item.as_ref().is_some_and(|item| {
                         item.native_type_id == 7001 && item.native_subtype == Some(0)
                     })
             });

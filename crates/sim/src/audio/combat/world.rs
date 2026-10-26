@@ -114,7 +114,7 @@ pub fn native_boneyard_enemy_ambient_requests(
     hit_gain: &dyn Fn(Vec2) -> f64,
 ) -> [BoneyardEnemyAmbientRequest; 10] {
     let mut gains = [0.0_f64; 10];
-    for actor in &world.actors {
+    for actor in world.actors.iter() {
         if actor.life_state == EnemyLifeState::Dying {
             if actor.config.enemy_token == EnemyToken::DemonSkull {
                 gains[0] = 1.0;
@@ -151,6 +151,7 @@ pub fn native_boneyard_enemy_ambient_requests(
                         // The source projector gives its six-tick bite precedence over death.
                         // A recently biting terminal row therefore still contributes here.
                         let biting = maggot
+                            .controller
                             .last_attack_tick
                             .is_some_and(|attack| tick.saturating_sub(attack) < 6);
                         maggot.owner_coffin_actor_id == actor.id
@@ -163,7 +164,7 @@ pub fn native_boneyard_enemy_ambient_requests(
             _ => {}
         }
     }
-    for spell in &world.boss_spells {
+    for spell in world.boss_spells.iter() {
         let position = spell.owner.position;
         match &spell.kind {
             BossSpellKind::GreenFire { .. } => gains[9] = gains[9].max(point_gain(position) / 3.0),

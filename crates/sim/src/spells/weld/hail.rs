@@ -1,5 +1,7 @@
 //! Native Hail terrain/contact children from `core-kernels/native-weld-hail-contact.ts`.
 
+use crate::spells::transient_storage::WeldHailChildMut;
+
 use super::model::{NativeWeldActorBase, NativeWeldActorBirth};
 use super::persistent::NativeWeldHailstonesState;
 use crate::float;
@@ -12,6 +14,7 @@ pub const NATIVE_WELD_HAIL_COLD_SLOW_TICKS: u64 = 250;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailTerrainParticleState {
     pub common: NativeWeldActorBase,
     pub alpha: f64,
@@ -27,6 +30,7 @@ pub struct NativeWeldHailTerrainParticleState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailTerrainBouncerState {
     pub common: NativeWeldActorBase,
     pub alpha: f64,
@@ -44,6 +48,7 @@ pub struct NativeWeldHailTerrainBouncerState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailLineState {
     pub common: NativeWeldActorBase,
     pub alpha: f64,
@@ -56,6 +61,7 @@ pub struct NativeWeldHailLineState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailFlashState {
     pub common: NativeWeldActorBase,
     pub alpha: f64,
@@ -66,6 +72,7 @@ pub struct NativeWeldHailFlashState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailKnockbackState {
     pub common: NativeWeldActorBase,
     pub delta: Vec2,
@@ -247,14 +254,11 @@ pub fn create_native_weld_hail_knockback(
     })
 }
 
-pub fn step_native_weld_hail_child(
-    actor: &mut NativeWeldHailChildActorState,
-    rng: &mut NativeRng,
-) -> bool {
+pub fn step_native_weld_hail_child(actor: &mut WeldHailChildMut<'_>, rng: &mut NativeRng) -> bool {
     match actor {
         // The contact transaction, rather than the visual epoch, owns knockback.
-        NativeWeldHailChildActorState::Knockback(_) => true,
-        NativeWeldHailChildActorState::Line(actor) => {
+        WeldHailChildMut::Knockback(_) => true,
+        WeldHailChildMut::Line(actor) => {
             actor.alpha = fround(actor.alpha - actor.alpha_step);
             if actor.alpha <= 0.0 {
                 return false;
@@ -262,7 +266,7 @@ pub fn step_native_weld_hail_child(
             actor.common.owner.age_ticks += 1;
             true
         }
-        NativeWeldHailChildActorState::Flash(actor) => {
+        WeldHailChildMut::Flash(actor) => {
             actor.alpha = fround(actor.alpha - actor.alpha_step);
             if actor.alpha <= 0.0 {
                 return false;
@@ -270,7 +274,7 @@ pub fn step_native_weld_hail_child(
             actor.common.owner.age_ticks += 1;
             true
         }
-        NativeWeldHailChildActorState::TerrainParticle(actor) => {
+        WeldHailChildMut::TerrainParticle(actor) => {
             actor.alpha = fround(actor.alpha - actor.alpha_step);
             if actor.alpha <= 0.0 {
                 return false;
@@ -286,7 +290,7 @@ pub fn step_native_weld_hail_child(
             );
             true
         }
-        NativeWeldHailChildActorState::TerrainBouncer(actor) => {
+        WeldHailChildMut::TerrainBouncer(actor) => {
             let global_tick = actor.common.birth_tick + actor.common.owner.age_ticks + 1;
             if actor.height != 0.0 && global_tick.is_multiple_of(3) {
                 actor.common.owner.age_ticks += 1;

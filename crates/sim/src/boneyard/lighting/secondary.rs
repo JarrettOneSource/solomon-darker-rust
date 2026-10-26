@@ -2,7 +2,7 @@
 
 use crate::float::fround;
 use crate::random_domain::native_random_float_from_word;
-use crate::secondary::{NativeSecondaryActorKind, NativeSecondaryActorState};
+use crate::secondary::{NativeSecondaryActorKind, SecondaryActorRead};
 
 use super::{
     NativeBoneyardLightSource, native_fire_patch_light_source, presentation_random,
@@ -11,7 +11,7 @@ use super::{
 
 #[must_use]
 pub fn native_secondary_provider_light_source(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     frame: u64,
     multiple_shadows: bool,
     point_gain: f64,
@@ -29,7 +29,7 @@ pub fn native_secondary_provider_light_source(
 /// queries. Ether Fade retains the source's explicit floor before decay steps.
 #[must_use]
 pub fn native_secondary_provider_light_source_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age_ticks: f64,
     frame: u64,
     multiple_shadows: bool,
@@ -102,7 +102,7 @@ pub fn native_secondary_provider_light_source_at_age(
 
 #[must_use]
 pub fn native_secondary_misc_light_source(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
 ) -> Option<NativeBoneyardLightSource> {
     native_secondary_misc_light_source_at_age(actor, actor.age_ticks as f64)
 }
@@ -111,7 +111,7 @@ pub fn native_secondary_misc_light_source(
 /// sample before the first complete tick. The source does not floor this test.
 #[must_use]
 pub fn native_secondary_misc_light_source_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age_ticks: f64,
 ) -> Option<NativeBoneyardLightSource> {
     use NativeSecondaryActorKind::*;

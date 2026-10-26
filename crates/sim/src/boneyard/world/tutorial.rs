@@ -36,14 +36,14 @@ impl BoneyardWorld {
             wizard.velocity = velocity;
         }
         let mut safety_bodies = Vec::new();
-        for actor in &self.enemies.actors {
-            safety_bodies.push((actor.position, boneyard_enemy_collision_radius(actor)));
+        for actor in self.enemies.actors.iter() {
+            safety_bodies.push((actor.position, boneyard_enemy_collision_radius(&actor)));
         }
-        for maggot in &self.enemies.maggots {
+        for maggot in self.enemies.maggots.iter() {
             safety_bodies.push((maggot.position, maggot.collision_radius));
         }
         let mut ground_sack_count = 0;
-        for actor in &self.loot.actors {
+        for actor in self.loot.actors.iter() {
             if actor.kind == NativeLootDropKind::Sack {
                 ground_sack_count += 1;
                 safety_bodies.push((actor.position, NATIVE_LOOT_CARRIER_PLACEMENT_RADIUS));

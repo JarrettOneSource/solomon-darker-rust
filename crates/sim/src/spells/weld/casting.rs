@@ -2,6 +2,8 @@
 //! constructors own their random programs; this phase owns only IDs, queue order
 //! and the player's shared cast clock.
 
+use crate::spells::transient_storage::{PrimaryTransientRef, WeldPersistentRef, WeldWorldRef};
+
 use super::*;
 use crate::float::fround;
 use crate::hub::HubWizard;
@@ -176,8 +178,7 @@ impl SpellState {
                 meteor_program = Some((center, damage));
             }
             let current = self.transients.iter().position(|effect| {
-                let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)) = effect
-                else {
+                let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(actor)) = effect else {
                     return false;
                 };
                 actor.common().owner.owner_id == context.owner_id
@@ -186,8 +187,11 @@ impl SpellState {
             });
             let mut update = NativeWeldPersistentUpdate::default();
             let actor = if let Some(index) = current {
-                let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(mut actor)) =
-                    self.transients[index].clone()
+                let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(mut actor)) = self
+                    .transients
+                    .get(index)
+                    .expect("selected persistent spell remains live")
+                    .snapshot()
                 else {
                     unreachable!()
                 };
@@ -216,8 +220,12 @@ impl SpellState {
                 actor
             };
             if let Some(index) = current {
-                self.transients[index] =
-                    PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor.clone()));
+                self.transients
+                    .get_mut(index)
+                    .expect("selected persistent spell remains live")
+                    .replace(PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
+                        actor.clone(),
+                    )));
             } else {
                 self.transients.push(PrimarySpellTransient::Weld(
                     NativeWeldWorldActor::Persistent(actor.clone()),
@@ -331,8 +339,8 @@ impl SpellState {
             .transients
             .iter()
             .filter_map(|effect| {
-                if let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
-                    NativeWeldPersistentActorState::Hailstones(hail),
+                if let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(
+                    WeldPersistentRef::Hailstones(hail),
                 )) = effect
                     && hail.common.owner.owner_id == owner_id
                     && hail.phase == crate::spells::model::PrimarySpellProjectilePhase::Held
@@ -343,34 +351,58 @@ impl SpellState {
                 }
             })
             .collect();
-        for effect in std::mem::take(&mut self.transients) {
-            if let PrimarySpellTransient::Weld(NativeWeldWorldActor::HailRockFade(fade)) = &effect
+        let mut population = std::mem::take(&mut self.transients);
+        population.advance(|effect| {
+            let mut step = crate::ecs::EntityStep {
+                retained: true,
+                births_before: Vec::new(),
+                births_after: Vec::new(),
+            };
+            if let PrimaryTransientRef::Weld(WeldWorldRef::HailRockFade(fade)) = effect.view()
                 && fade.common.owner.owner_id == owner_id
                 && releasing_hail.iter().any(|(world, birth)| {
                     fade.common.owner.world_key == *world && fade.common.birth_tick >= *birth
                 })
             {
-                continue;
+                step.retained = false;
+                return step;
             }
-            if let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)) = effect {
-                if actor.common().owner.owner_id == owner_id && actor.held() {
-                    let release = release_native_weld_persistent_actor(
-                        actor,
-                        self.next_id,
-                        tick,
-                        rng,
-                        Some(order),
-                    );
-                    self.next_id = release.next_id;
-                    self.append_weld_release(release);
-                } else {
-                    self.transients
-                        .push(PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)));
-                }
+            let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(actor)) = effect.view() else {
+                return step;
+            };
+            if actor.common().owner.owner_id != owner_id || !actor.held() {
+                return step;
+            }
+            let parent_id = actor.common().owner.id;
+            let release = release_native_weld_persistent_actor(
+                actor.snapshot(),
+                self.next_id,
+                tick,
+                rng,
+                Some(order),
+            );
+            self.next_id = release.next_id;
+            let mut actors = release.actors.into_iter();
+            if let Some(parent) = actors.next() {
+                // Boulder and Hail retain their first released body and its painter identity.
+                assert_eq!(parent.common().owner.id, parent_id);
+                effect
+                    .replace(PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(parent)));
             } else {
-                self.transients.push(effect);
+                step.retained = false;
             }
-        }
+            step.births_after.extend(
+                actors.map(|actor| {
+                    PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor))
+                }),
+            );
+            if let Some(fade) = release.frost_fade {
+                step.births_after
+                    .push(PrimarySpellTransient::Weld(NativeWeldWorldActor::FrostFade(fade)));
+            }
+            step
+        });
+        self.transients = population;
     }
 
     fn append_weld_release(&mut self, release: NativeWeldPersistentRelease) {

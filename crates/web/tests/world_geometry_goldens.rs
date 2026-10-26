@@ -152,9 +152,16 @@ fn actual_world_births_use_reachable_native_policy_placement_and_current_world_l
         );
         assert_eq!(ids, [1]);
         let expected = &case["expected"];
-        assert_eq!(enemies.actors[0].position, point(&expected["position"]), "world {index} birth");
+        assert_eq!(
+            enemies.actors.get(0).unwrap().position,
+            point(&expected["position"]),
+            "world {index} birth"
+        );
         assert_eq!(enemies.rng_state, expected["actorRngState"].as_u64().unwrap() as u32);
-        assert_eq!(enemies.actors[0].loot_seed, expected["lootSeed"].as_u64().unwrap() as u32);
+        assert_eq!(
+            enemies.actors.get(0).unwrap().loot_seed,
+            expected["lootSeed"].as_u64().unwrap() as u32
+        );
         assert_eq!(
             shared_rng.index_a,
             expected["sharedRngState"]["indexA"].as_u64().unwrap() as usize

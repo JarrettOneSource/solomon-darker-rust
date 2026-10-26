@@ -11,11 +11,11 @@ use super::support;
 pub fn state_snapshot(state: &NativeSecondarySimulationState) -> Value {
     let mut value = support::state_snapshot(state);
     for (actor, value) in state.actors.iter().zip(value["actors"].as_array_mut().unwrap()) {
-        if let Some(animation) = &actor.golem_death {
+        if let Some(animation) = actor.golem_death() {
             value["golemDeath"] = serde_json::to_value(animation).unwrap();
         }
-        if actor.kind == NativeSecondaryActorKind::EtherDrain || actor.ether_drain.is_some() {
-            value["etherDrain"] = serde_json::to_value(&actor.ether_drain).unwrap();
+        if actor.kind == NativeSecondaryActorKind::EtherDrain || actor.ether_drain().is_some() {
+            value["etherDrain"] = serde_json::to_value(actor.ether_drain()).unwrap();
         }
     }
     value["cameraDisplacements"] = serde_json::to_value(&state.camera_displacements).unwrap();

@@ -1,6 +1,8 @@
 //! Held growth, native split/release and flight of the three persistent builds
 //! from `core-kernels/native-weld-primary-runtime.ts`.
 
+use crate::spells::transient_storage::{WeldPersistentMut, WeldPersistentRef};
+
 use super::model::{NativeWeldActorBase, NativeWeldActorBirth};
 use crate::float::{fround, hypot, hypot3};
 use crate::heading::heading_degrees_from_vector;
@@ -22,6 +24,7 @@ pub const NATIVE_WELD_HAIL_LOOKAHEAD_DISTANCE: f64 = 30.0;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldEtherealBoulderState {
     pub common: NativeWeldActorBase,
     pub assembly_scale: f64,
@@ -66,6 +69,7 @@ pub struct NativeWeldHailstoneRockState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailstonesState {
     pub common: NativeWeldActorBase,
     pub collision_radius: f64,
@@ -84,6 +88,7 @@ pub struct NativeWeldHailstonesState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldMeteorFieldState {
     pub common: NativeWeldActorBase,
     pub pulse_sequence: u64,
@@ -283,6 +288,7 @@ pub fn update_native_weld_persistent_actor(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldFrostFadeActorState {
     pub common: NativeWeldActorBase,
     pub scale: f64,
@@ -419,18 +425,17 @@ pub fn retain_native_weld_hailstone_damage(
     !actor.rocks.is_empty()
 }
 
-pub type NativeWeldPersistentTraversal<'a> =
-    dyn Fn(&NativeWeldPersistentActorState, Vec2, Vec2) -> bool + 'a;
+pub type NativeWeldPersistentTraversal<'a> = dyn Fn(WeldPersistentRef<'_>, Vec2, Vec2) -> bool + 'a;
 
 /// Returns a terminal Boulder separately so terrain contact uses its moved pose.
 pub fn step_native_weld_persistent_actor(
-    actor: &mut NativeWeldPersistentActorState,
+    actor: &mut WeldPersistentMut<'_>,
     can_advance: &NativeWeldPersistentTraversal<'_>,
 ) -> (bool, Option<NativeWeldEtherealBoulderState>) {
     if actor.held() {
         return (true, None);
     }
-    if let NativeWeldPersistentActorState::EtherealBoulder(boulder) = actor {
+    if let WeldPersistentMut::EtherealBoulder(boulder) = actor {
         boulder.lifetime_ticks_remaining -= 1;
         if boulder.lifetime_ticks_remaining == 0 {
             return (false, None);
@@ -450,23 +455,21 @@ pub fn step_native_weld_persistent_actor(
         let from = boulder.common.origin;
         let to =
             Vec2::new(fround(from.x + boulder.velocity.x), fround(from.y + boulder.velocity.y));
-        if can_advance(actor, from, to) {
+        if can_advance(actor.view(), from, to) {
             return (true, None);
         }
-        let NativeWeldPersistentActorState::EtherealBoulder(boulder) = actor else {
-            unreachable!()
-        };
-        return (false, Some(boulder.clone()));
+        let WeldPersistentMut::EtherealBoulder(boulder) = actor else { unreachable!() };
+        return (false, Some((**boulder).clone()));
     }
     let common = actor.common();
     let lookahead = Vec2::new(
         fround(common.origin.x + common.direction.x * NATIVE_WELD_HAIL_LOOKAHEAD_DISTANCE),
         fround(common.origin.y + common.direction.y * NATIVE_WELD_HAIL_LOOKAHEAD_DISTANCE),
     );
-    if !can_advance(actor, common.origin, lookahead) {
+    if !can_advance(actor.view(), common.origin, lookahead) {
         return (false, None);
     }
-    let NativeWeldPersistentActorState::Hailstones(hail) = actor else { unreachable!() };
+    let WeldPersistentMut::Hailstones(hail) = actor else { unreachable!() };
     for _ in 0..NATIVE_WELD_HAIL_FLIGHT_SUBSTEPS {
         hail.common.origin = Vec2::new(
             fround(

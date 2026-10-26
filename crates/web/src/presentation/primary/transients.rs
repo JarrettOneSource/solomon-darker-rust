@@ -1,21 +1,22 @@
 //! Field selection from `client/primary-spell-transient-interpolation.ts`.
 
 use solomon_sim::harden_effects::NativeHardenEffect;
-use solomon_sim::spells::model::PrimarySpellTransient;
+use solomon_sim::spells::model::{PrimarySpellTransient, PrimaryTransientRef};
 use solomon_sim::spells::staff::{
-    NativePlayerStaffAction, NativePlayerStaffTransient, NativePlayerStaffVfx,
+    NativePlayerStaffAction, NativePlayerStaffTransient, NativePlayerStaffVfx, StaffActionRef,
+    StaffTransientRef, StaffVfxRef,
 };
 
 use crate::presentation::PresentationClocks;
 use crate::presentation::math::{lerp, lerp_degrees, lerp_forward_cycle, lerp_vec};
 
 pub(super) fn project(
-    first: &PrimarySpellTransient,
-    next: &PrimarySpellTransient,
+    first: PrimaryTransientRef<'_>,
+    next: PrimaryTransientRef<'_>,
     blend: f64,
     clocks: &mut PresentationClocks,
 ) -> PrimarySpellTransient {
-    let mut output = if blend < 1.0 { first.clone() } else { next.clone() };
+    let mut output = if blend < 1.0 { first.snapshot() } else { next.snapshot() };
     if !same_kind(first, next) {
         return output;
     }
@@ -25,21 +26,21 @@ pub(super) fn project(
     match (&mut output, first, next) {
         (
             PrimarySpellTransient::EarthBoulderBit(out),
-            PrimarySpellTransient::EarthBoulderBit(first),
-            PrimarySpellTransient::EarthBoulderBit(next),
+            PrimaryTransientRef::EarthBoulderBit(first),
+            PrimaryTransientRef::EarthBoulderBit(next),
         ) => {
             out.origin = lerp_vec(first.origin, next.origin, blend);
             out.position = lerp_vec(first.position, next.position, blend);
         }
         (
             PrimarySpellTransient::EarthImpact(out),
-            PrimarySpellTransient::EarthImpact(first),
-            PrimarySpellTransient::EarthImpact(next),
+            PrimaryTransientRef::EarthImpact(first),
+            PrimaryTransientRef::EarthImpact(next),
         ) => out.origin = lerp_vec(first.origin, next.origin, blend),
         (
             PrimarySpellTransient::EarthCalledRock(out),
-            PrimarySpellTransient::EarthCalledRock(first),
-            PrimarySpellTransient::EarthCalledRock(next),
+            PrimaryTransientRef::EarthCalledRock(first),
+            PrimaryTransientRef::EarthCalledRock(next),
         ) => {
             out.fall_velocity = lerp(first.fall_velocity, next.fall_velocity, blend);
             out.height = lerp(first.height, next.height, blend);
@@ -49,13 +50,13 @@ pub(super) fn project(
         }
         (
             PrimarySpellTransient::EtherBlast(out),
-            PrimarySpellTransient::EtherBlast(first),
-            PrimarySpellTransient::EtherBlast(next),
+            PrimaryTransientRef::EtherBlast(first),
+            PrimaryTransientRef::EtherBlast(next),
         ) => out.origin = lerp_vec(first.origin, next.origin, blend),
         (
             PrimarySpellTransient::FireEmber(out),
-            PrimarySpellTransient::FireEmber(first),
-            PrimarySpellTransient::FireEmber(next),
+            PrimaryTransientRef::FireEmber(first),
+            PrimaryTransientRef::FireEmber(next),
         ) => {
             out.height = lerp(first.height, next.height, blend);
             out.horizontal_velocity =
@@ -67,8 +68,8 @@ pub(super) fn project(
         }
         (
             PrimarySpellTransient::FireGoodImp(out),
-            PrimarySpellTransient::FireGoodImp(first),
-            PrimarySpellTransient::FireGoodImp(next),
+            PrimaryTransientRef::FireGoodImp(first),
+            PrimaryTransientRef::FireGoodImp(next),
         ) => {
             out.body_rotation_degrees =
                 lerp(first.body_rotation_degrees, next.body_rotation_degrees, blend);
@@ -93,8 +94,8 @@ pub(super) fn project(
         }
         (
             PrimarySpellTransient::AirHurricane(out),
-            PrimarySpellTransient::AirHurricane(first),
-            PrimarySpellTransient::AirHurricane(next),
+            PrimaryTransientRef::AirHurricane(first),
+            PrimaryTransientRef::AirHurricane(next),
         ) => {
             out.charge = lerp(first.charge, next.charge, blend);
             out.contact_charge = lerp(first.contact_charge, next.contact_charge, blend);
@@ -107,16 +108,16 @@ pub(super) fn project(
         }
         (
             PrimarySpellTransient::Water(out),
-            PrimarySpellTransient::Water(first),
-            PrimarySpellTransient::Water(next),
+            PrimaryTransientRef::Water(first),
+            PrimaryTransientRef::Water(next),
         ) => {
             out.direction = lerp_vec(first.direction, next.direction, blend);
             out.origin = lerp_vec(first.origin, next.origin, blend);
         }
         (
             PrimarySpellTransient::WaterHail(out),
-            PrimarySpellTransient::WaterHail(first),
-            PrimarySpellTransient::WaterHail(next),
+            PrimaryTransientRef::WaterHail(first),
+            PrimaryTransientRef::WaterHail(next),
         ) => {
             out.height = lerp(first.height, next.height, blend);
             out.horizontal_velocity =
@@ -128,41 +129,41 @@ pub(super) fn project(
         }
         (
             PrimarySpellTransient::WaterAura(out),
-            PrimarySpellTransient::WaterAura(first),
-            PrimarySpellTransient::WaterAura(next),
+            PrimaryTransientRef::WaterAura(first),
+            PrimaryTransientRef::WaterAura(next),
         ) => out.origin = lerp_vec(first.origin, next.origin, blend),
         (
             PrimarySpellTransient::Harden(out),
-            PrimarySpellTransient::Harden(first),
-            PrimarySpellTransient::Harden(next),
+            PrimaryTransientRef::Harden(first),
+            PrimaryTransientRef::Harden(next),
         ) => harden(out, first, next, blend),
         (
             PrimarySpellTransient::Staff(out),
-            PrimarySpellTransient::Staff(first),
-            PrimarySpellTransient::Staff(next),
+            PrimaryTransientRef::Staff(first),
+            PrimaryTransientRef::Staff(next),
         ) => staff(out, first, next, blend),
         (
             PrimarySpellTransient::Weld(out),
-            PrimarySpellTransient::Weld(first),
-            PrimarySpellTransient::Weld(next),
+            PrimaryTransientRef::Weld(first),
+            PrimaryTransientRef::Weld(next),
         ) => super::weld::project(out, first, next, blend, clocks),
         _ => {}
     }
     output
 }
 
-fn same_kind(first: &PrimarySpellTransient, next: &PrimarySpellTransient) -> bool {
-    if std::mem::discriminant(first) != std::mem::discriminant(next) {
+fn same_kind(first: PrimaryTransientRef<'_>, next: PrimaryTransientRef<'_>) -> bool {
+    if std::mem::discriminant(&first) != std::mem::discriminant(&next) {
         return false;
     }
     match (first, next) {
-        (PrimarySpellTransient::Weld(first), PrimarySpellTransient::Weld(next)) => {
+        (PrimaryTransientRef::Weld(first), PrimaryTransientRef::Weld(next)) => {
             super::weld::same_kind(first, next)
         }
-        (PrimarySpellTransient::Staff(first), PrimarySpellTransient::Staff(next)) => {
+        (PrimaryTransientRef::Staff(first), PrimaryTransientRef::Staff(next)) => {
             first.kind() == next.kind()
         }
-        (PrimarySpellTransient::Harden(first), PrimarySpellTransient::Harden(next)) => {
+        (PrimaryTransientRef::Harden(first), PrimaryTransientRef::Harden(next)) => {
             std::mem::discriminant(first) == std::mem::discriminant(next)
         }
         _ => true,
@@ -202,15 +203,15 @@ fn harden(
 
 fn staff(
     output: &mut NativePlayerStaffTransient,
-    first: &NativePlayerStaffTransient,
-    next: &NativePlayerStaffTransient,
+    first: StaffTransientRef<'_>,
+    next: StaffTransientRef<'_>,
     blend: f64,
 ) {
     match (output, first, next) {
         (
             NativePlayerStaffTransient::Action(NativePlayerStaffAction::Melee(out)),
-            NativePlayerStaffTransient::Action(NativePlayerStaffAction::Melee(first)),
-            NativePlayerStaffTransient::Action(NativePlayerStaffAction::Melee(next)),
+            StaffTransientRef::Action(StaffActionRef::Melee(first)),
+            StaffTransientRef::Action(StaffActionRef::Melee(next)),
         ) => {
             out.base.heading_degrees =
                 lerp_degrees(first.base.heading_degrees, next.base.heading_degrees, blend);
@@ -219,8 +220,8 @@ fn staff(
         }
         (
             NativePlayerStaffTransient::Action(NativePlayerStaffAction::Spin(out)),
-            NativePlayerStaffTransient::Action(NativePlayerStaffAction::Spin(first)),
-            NativePlayerStaffTransient::Action(NativePlayerStaffAction::Spin(next)),
+            StaffTransientRef::Action(StaffActionRef::Spin(first)),
+            StaffTransientRef::Action(StaffActionRef::Spin(next)),
         ) => {
             out.base.heading_degrees =
                 lerp_degrees(first.base.heading_degrees, next.base.heading_degrees, blend);
@@ -229,20 +230,20 @@ fn staff(
         }
         (
             NativePlayerStaffTransient::Contact(out),
-            NativePlayerStaffTransient::Contact(first),
-            NativePlayerStaffTransient::Contact(next),
+            StaffTransientRef::Contact(first),
+            StaffTransientRef::Contact(next),
         ) => out.origin = lerp_vec(first.origin, next.origin, blend),
         (
             NativePlayerStaffTransient::Knockback(out),
-            NativePlayerStaffTransient::Knockback(first),
-            NativePlayerStaffTransient::Knockback(next),
+            StaffTransientRef::Knockback(first),
+            StaffTransientRef::Knockback(next),
         ) => {
             out.remaining_distance = lerp(first.remaining_distance, next.remaining_distance, blend)
         }
         (
             NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::Smoke(out)),
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::Smoke(first)),
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::Smoke(next)),
+            StaffTransientRef::Vfx(StaffVfxRef::Smoke(first)),
+            StaffTransientRef::Vfx(StaffVfxRef::Smoke(next)),
         ) => {
             out.alpha = lerp(first.alpha, next.alpha, blend);
             out.position = lerp_vec(first.position, next.position, blend);
@@ -251,8 +252,8 @@ fn staff(
         }
         (
             NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::MoveFade(out)),
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::MoveFade(first)),
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::MoveFade(next)),
+            StaffTransientRef::Vfx(StaffVfxRef::MoveFade(first)),
+            StaffTransientRef::Vfx(StaffVfxRef::MoveFade(next)),
         ) => {
             out.alpha = lerp(first.alpha, next.alpha, blend);
             out.position = lerp_vec(first.position, next.position, blend);
@@ -260,8 +261,8 @@ fn staff(
         }
         (
             NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::PerspectiveFade(out)),
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::PerspectiveFade(first)),
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::PerspectiveFade(next)),
+            StaffTransientRef::Vfx(StaffVfxRef::PerspectiveFade(first)),
+            StaffTransientRef::Vfx(StaffVfxRef::PerspectiveFade(next)),
         ) => out.alpha = lerp(first.alpha, next.alpha, blend),
         _ => {}
     }

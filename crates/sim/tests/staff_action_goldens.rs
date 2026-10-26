@@ -57,7 +57,7 @@ fn staff_birth_rng_marker_crossing_spin_and_both_pose_lanes_replay_the_source() 
         let mut active = Some(action);
         for (tick, sample) in case["steps"].as_array().unwrap().iter().enumerate() {
             let result = step_native_player_staff_action(
-                active.as_ref().unwrap(),
+                active.as_ref().unwrap().view(),
                 point(&sample["ownerPosition"]),
             );
             assert_snapshot(
@@ -67,7 +67,7 @@ fn staff_birth_rng_marker_crossing_spin_and_both_pose_lanes_replay_the_source() 
                 &format!("action {index} tick {tick}"),
             );
             assert_eq!(
-                native_player_staff_action_pose(&result.sample),
+                native_player_staff_action_pose(result.sample.view()),
                 sample["pose"].as_u64().unwrap() as usize
             );
             active = result.action;
@@ -213,7 +213,7 @@ fn every_staff_proc_sound_particle_and_contact_lifetime_replays_the_source() {
                     sample,
                     &format!("presentation {index} particle lifetime"),
                 );
-                actor = actor.as_ref().and_then(step_native_player_staff_vfx);
+                actor = actor.as_ref().and_then(|actor| step_native_player_staff_vfx(actor.view()));
             }
             assert!(actor.is_none());
         }
@@ -321,7 +321,7 @@ fn staff_effect_plans_and_private_pike_bounces_match_every_source_draw() {
             .unwrap();
     for (index, case) in presentation["effects"].as_array().unwrap().iter().enumerate() {
         let state = read_vfx(&case["actor"]);
-        let plan = native_player_staff_vfx_render_plan(&state);
+        let plan = native_player_staff_vfx_render_plan(state.view());
         assert_snapshot(
             &json!({ "alpha": plan.alpha, "blendMode": "add", "entry": plan.entry,
             "light": null, "position": position(plan.position), "rotationRadians": plan.rotation_radians,

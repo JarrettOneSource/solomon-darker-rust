@@ -43,7 +43,7 @@ pub struct WorldOverlayFrame<'a> {
     pub renderable: bool,
 }
 
-#[derive(Default)]
+#[derive(Default, serde::Serialize)]
 pub struct WorldOverlayDiagnostics {
     pub activity_player_ids: Vec<String>,
     pub activity_states: Vec<HubActivity>,
@@ -54,6 +54,7 @@ pub struct WorldOverlayDiagnostics {
 }
 
 impl WorldOverlayDiagnostics {
+    #[cfg(target_arch = "wasm32")]
     pub fn apply(&self, canvas: &web_sys::HtmlCanvasElement) -> Result<(), String> {
         let attributes = [
             ("data-hub-activity-count", self.activity_player_ids.len().to_string()),

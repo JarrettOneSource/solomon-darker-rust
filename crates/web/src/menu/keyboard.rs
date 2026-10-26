@@ -1,6 +1,6 @@
 //! Native menu key admission from the current scene and Source input transitions.
 
-use crate::gpu_ui::BrowserKey;
+use crate::gpu_ui::KeyStroke;
 
 #[derive(Default)]
 pub(super) struct MenuKeyboard {
@@ -17,7 +17,7 @@ impl MenuKeyboard {
         self.discard = true;
     }
 
-    pub(super) fn take(&mut self, keys: &[BrowserKey], gameplay: bool) -> Vec<BrowserKey> {
+    pub(super) fn take(&mut self, keys: &[KeyStroke], gameplay: bool) -> Vec<KeyStroke> {
         if std::mem::take(&mut self.discard) || gameplay && self.gameplay_blocked {
             return Vec::new();
         }
@@ -32,8 +32,8 @@ impl MenuKeyboard {
 mod tests {
     use super::*;
 
-    fn key(code: &str) -> BrowserKey {
-        BrowserKey {
+    fn key(code: &str) -> KeyStroke {
+        KeyStroke {
             code: code.to_owned(),
             key: code.to_owned(),
             pressed: true,

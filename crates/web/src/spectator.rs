@@ -1,4 +1,4 @@
-//! GPU native spectator rails/text from `NativeSpectatorStatus.tsx`.
+//! Spectator status and viewport rails.
 
 use crate::gpu_ui::{self, StockAtlas, UiFrame};
 use egui::{Color32, Rect, pos2, vec2};
@@ -7,7 +7,6 @@ use solomon_sim::boneyard::spectator::{
 };
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
 use solomon_sim::viewport::GameViewport;
-use web_sys::Document;
 
 pub struct SpectatorStatusView {
     atlas: StockAtlas,
@@ -18,7 +17,7 @@ impl SpectatorStatusView {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("spectator/status"))
     }
 
-    pub async fn attach(_document: &Document) -> Result<Self, String> {
+    pub async fn attach() -> Result<Self, String> {
         Ok(Self { atlas: StockAtlas::load("UI").await?, previous: None })
     }
     pub fn hide(&mut self) {

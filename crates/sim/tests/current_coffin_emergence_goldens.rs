@@ -155,7 +155,7 @@ fn actual_coffin_hidden_to_rising_birth_keeps_particle_rng_and_shared_registrati
             if frames.get(index).is_none_or(|frame| frame["tick"].as_u64() != Some(tick)) {
                 continue;
             }
-            let EnemyBrain::Coffin(brain) = &world.actors[0].brain else {
+            let EnemyBrain::Coffin(brain) = world.actors.get(0).unwrap().brain else {
                 panic!("actual Coffin constructor")
             };
             let phase = match brain.phase {

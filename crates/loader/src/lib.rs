@@ -1,6 +1,8 @@
 //! Source `loader-render-contract.ts`, `loader-renderer.ts` and `NativeLoader.tsx`.
 //! The stock four-image splash is decoded and drawn before main WASM is requested.
 
+#![cfg(target_arch = "wasm32")]
+
 use solomon_graphics::{BlendMode, Quad, Renderer, Texture, TextureColorMode, assets};
 use solomon_sim::native_ui_text::{
     NativeUiFontName, NativeUiTextSpec, layout_native_ui_text, measure_native_ui_text,

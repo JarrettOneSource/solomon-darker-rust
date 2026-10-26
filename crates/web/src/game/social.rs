@@ -4,6 +4,7 @@
 use super::*;
 use crate::social::SocialUiContext;
 use solomon_sim::secondary::NativeSecondaryActorKind;
+use solomon_sim::secondary::SecondaryActorRead;
 use solomon_sim::social::{
     AllyGolemProjection, HubPlayerSelection, PartyRosterPlayer, derive_golem_ally_hud_rows,
     derive_player_ally_hud_rows, nearest_hub_player, select_hub_player_at_point,
@@ -24,7 +25,7 @@ impl Game {
             .participant_order
             .iter()
             .map(|id| {
-                let player = &self.session.participants[id].player;
+                let player = &self.session.participants.get(id).expect("participant exists").player;
                 PartyRosterPlayer {
                     connected: host.is_some_and(|host| host.connected_player_ids.contains(id)),
                     current_health: player.combat.current_health,
@@ -50,9 +51,9 @@ impl Game {
             .iter()
             .filter(|actor| actor.kind == NativeSecondaryActorKind::Golem)
             .filter_map(|actor| {
-                actor.golem.as_ref().map(|golem| AllyGolemProjection {
+                actor.golem().map(|golem| AllyGolemProjection {
                     id: actor.id,
-                    world_key: &actor.world_key,
+                    world_key: &actor.common.world_key,
                     current_health: golem.current_health,
                     maximum_health: golem.maximum_health,
                 })
@@ -62,7 +63,11 @@ impl Game {
         allies.extend(derive_golem_ally_hud_rows(&golems, &world_key));
         let tutorial = self.session.boneyard.as_ref().is_some_and(|world| world.tutorial.is_some());
         let college_admission = self.session.boneyard.is_none()
-            && self.session.participants[&self.local_player_id]
+            && self
+                .session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
                 .player
                 .economy
                 .college_intro_pending;
@@ -94,8 +99,8 @@ impl Game {
                 gold_clear_left: 0.0,
             },
             now,
-            self.canvas.client_width(),
-            self.canvas.client_height(),
+            self.surface.logical_width(),
+            self.surface.logical_height(),
         )?;
         self.menu.set_input_suspended(self.social.input_active())?;
         self.panels.set_input_suspended(self.social.input_active())?;
@@ -112,7 +117,7 @@ impl Game {
         if !self.has_game || session.boneyard.is_some() {
             return false;
         }
-        let local = &session.participants[&self.local_player_id];
+        let local = &session.participants.get(&self.local_player_id).expect("participant exists");
         if local.wizard.transition.is_some() || local.player.economy.college_intro_pending {
             return false;
         }
@@ -120,7 +125,7 @@ impl Game {
             .participant_order
             .iter()
             .map(|id| {
-                let wizard = &session.participants[id].wizard;
+                let wizard = &session.participants.get(id).expect("participant exists").wizard;
                 HubPlayerSelection {
                     player_id: id,
                     position: wizard.position,

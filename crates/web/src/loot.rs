@@ -8,8 +8,8 @@ pub use messages::WorldNotifications;
 use std::collections::{BTreeMap, BTreeSet};
 
 use solomon_sim::Vec2;
-use solomon_sim::boneyard::loot::BoneyardLootStore;
 use solomon_sim::boneyard::loot::presentation::*;
+use solomon_sim::boneyard::loot::{BoneyardLootStore, LootActorRead};
 use solomon_sim::enemies::puppet_hits::{EnemyPuppetHit, EnemyPuppetHitKind};
 use solomon_sim::hub::painter::PainterLayer;
 use solomon_sim::modding::inventory::ModConsumableCatalogEntry;
@@ -64,7 +64,7 @@ impl LootView {
         &mut self,
         store: &BoneyardLootStore,
         tick: f64,
-        hits: &[EnemyPuppetHit],
+        hits: &solomon_sim::ComponentEntities<EnemyPuppetHit>,
         hit_alphas: Option<&BTreeMap<String, f64>>,
         complex_lighting: bool,
         mod_catalog: &[ModConsumableCatalogEntry],
@@ -72,7 +72,7 @@ impl LootView {
     ) -> Result<(), String> {
         self.prepared.clear();
         let mut live_ids = BTreeSet::new();
-        for actor in &store.actors {
+        for actor in store.actors.iter() {
             live_ids.insert(actor.id);
             let scatter = self.scatter.entry(actor.id).or_insert(GoldScatter {
                 initial_seed: actor.scatter_seed,
@@ -82,7 +82,7 @@ impl LootView {
                 scatter.initial_seed = actor.scatter_seed;
                 scatter.seed = actor.scatter_seed;
             }
-            let item_content_id = actor.item.as_ref().and_then(|item| {
+            let item_content_id = actor.reward().item.as_ref().and_then(|item| {
                 item.mod_content.as_ref().map(|content| content.content_id.as_str()).or_else(|| {
                     item.mod_item_content.as_ref().map(|content| content.content_id.as_str())
                 })
@@ -99,14 +99,14 @@ impl LootView {
                     bounce_height: actor.bounce_height,
                 }
             } else {
-                let plan = native_loot_presentation_plan(actor, scatter.seed);
+                let plan = native_loot_presentation_plan(&actor, scatter.seed);
                 scatter.seed = plan.next_scatter_seed;
                 LootLayers::Native(plan.layers)
             };
             self.prepared.push(PreparedLoot {
                 painter: LootPainter {
                     id: LootPainterId::Loot(actor.id),
-                    layer: native_loot_painter_layer(actor),
+                    layer: native_loot_painter_layer(&actor),
                     position: actor.position,
                 },
                 layers,

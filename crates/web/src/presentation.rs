@@ -44,23 +44,23 @@ impl PresentationClocks {
     #[must_use]
     pub fn from_session(session: &GameSession) -> Self {
         let mut clocks = Self::default();
-        for projectile in &session.spells.projectiles {
+        for projectile in session.spells.projectiles.iter() {
             let common = projectile.common();
             clocks.primary.insert(common.id, common.age_ticks as f64);
         }
-        for transient in &session.spells.transients {
+        for transient in session.spells.transients.iter() {
             let common = transient.common();
             clocks.primary.insert(common.id, common.age_ticks as f64);
-            if let solomon_sim::spells::model::PrimarySpellTransient::FireGoodImp(imp) = transient
+            if let solomon_sim::spells::model::PrimaryTransientRef::FireGoodImp(imp) = transient
                 && let Some(age) = imp.contact_age_ticks
             {
                 clocks.primary_contact.insert(common.id, age as f64);
             }
         }
-        for actor in &session.secondary.actors {
+        for actor in session.secondary.actors.iter() {
             clocks.secondary.insert(actor.id, actor.age_ticks as f64);
         }
-        for (id, participant) in &session.participants {
+        for (id, participant) in session.participants.iter() {
             clocks.player_damage_x4.insert(
                 id.clone(),
                 participant.player.progression.damage_x4_ticks_remaining as f64,
@@ -385,7 +385,7 @@ impl NativePresentationTimeline {
             .chain(output.spells.transients.iter().map(|actor| actor.common().id))
             .collect();
         clocks.primary.retain(|id, _| live_primary_ids.contains(id));
-        for effect in &output.spells.transients {
+        for effect in output.spells.transients.iter() {
             if solomon_protocol::flame_presentation::flame_presentation_birth(effect)?.is_some() {
                 clocks.primary.insert(effect.common().id, effect.common().age_ticks as f64);
             }

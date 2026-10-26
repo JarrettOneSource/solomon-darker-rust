@@ -16,7 +16,7 @@ use solomon_protocol::{
 use solomon_sim::boneyard::navigation::NavigationSet;
 use solomon_sim::game_run::GameRunPhase;
 use solomon_sim::session::{
-    GameSession, GameSessionOptions, GameSessionTickContext, SessionParticipant,
+    GameSession, GameSessionOptions, GameSessionTickContext, ParticipantRead, ParticipantRef,
 };
 
 use super::checkpoint::CheckpointFile;
@@ -519,15 +519,15 @@ impl NativeAuthority {
         ControlFacts { active_run, skill_barrier, materialized, connected: self.connected_ids() }
     }
 
-    pub(super) fn retained_participant(&self, id: &str) -> Option<&SessionParticipant> {
+    pub(super) fn retained_participant(&self, id: &str) -> Option<ParticipantRef<'_>> {
         if let Some(participant) = self.session.as_ref().and_then(|session| session.participant(id))
         {
             return Some(participant);
         }
         match self.metadata.resume_slots.get(id)?.saved.as_ref()? {
-            SavedParticipant::Hub { participant } => Some(participant),
-            SavedParticipant::Run { detached } => Some(&detached.participant),
-            SavedParticipant::Retired { participant, .. } => Some(participant),
+            SavedParticipant::Hub { participant } => Some(participant.view()),
+            SavedParticipant::Run { detached } => Some(detached.participant.view()),
+            SavedParticipant::Retired { participant, .. } => Some(participant.view()),
         }
     }
 

@@ -2,6 +2,12 @@
 use super::model::EnemyPainterRegistration;
 use crate::Vec2;
 
+mod storage;
+pub use storage::{
+    EnemyProjectileMotion, EnemyProjectileMut, EnemyProjectileRead, EnemyProjectileRef,
+    EnemyProjectiles,
+};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnemyProjectileKind {
     Arrow,
@@ -56,6 +62,7 @@ impl EnemyProjectilePayload {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct EnemyProjectileState {
     pub age_ticks: u64,
     pub bounce_velocity: f64,
@@ -141,6 +148,7 @@ pub enum MageLightningContact {
 }
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct MageLightningPulse {
     #[cfg_attr(feature = "persistence", serde(default = "super::model::default_enhanced_effects"))]
     pub enhanced_effects: bool,
@@ -216,6 +224,7 @@ impl EnemyProjectileEffectKind {
 }
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct EnemyProjectileEffect {
     pub state: EnemyProjectileEffectState,
     pub kind: EnemyProjectileEffectKind,
@@ -223,6 +232,7 @@ pub struct EnemyProjectileEffect {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct EnemyProjectileKnockback {
     pub actor_id: usize,
     pub event_id: usize,

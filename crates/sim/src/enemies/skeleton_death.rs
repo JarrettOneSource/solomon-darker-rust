@@ -26,7 +26,7 @@ pub fn skeleton_death_fragment_entries(enhanced_effects: bool) -> &'static [usiz
 impl EnemyWorld {
     pub(super) fn spawn_skeleton_shatter(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         enhanced_effects: bool,
         order: &mut WorldPainterOrder,
@@ -135,7 +135,7 @@ impl EnemyWorld {
 
     pub(super) fn spawn_heartmonger_shatter(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         enhanced_effects: bool,
         order: &mut WorldPainterOrder,
@@ -269,7 +269,7 @@ impl EnemyWorld {
     }
     pub(super) fn spawn_skeleton_armor_break(
         &mut self,
-        actor: &EnemyActor,
+        actor: &impl EnemyActorRead,
         tick: u64,
         enhanced_effects: bool,
         order: &mut WorldPainterOrder,

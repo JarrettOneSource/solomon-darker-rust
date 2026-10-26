@@ -207,7 +207,12 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
             let expected_tick = frame["tick"].as_u64().unwrap();
             while tick < expected_tick {
                 tick += 1;
-                (patch, contact) = step_native_fire_patch(patch.take().unwrap(), tick);
+                let (retained, next_contact) =
+                    step_native_fire_patch(patch.as_mut().unwrap(), tick);
+                contact = next_contact;
+                if !retained {
+                    patch = None;
+                }
             }
             compare(
                 &patch.as_ref().map(patch_row).unwrap_or(Value::Null),
@@ -267,8 +272,10 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
         for frame in case["frames"].as_array().unwrap() {
             while tick < frame["tick"].as_u64().unwrap() {
                 tick += 1;
-                let step = step_native_fire_ember(ember.take().unwrap());
-                ember = step.ember;
+                let step = step_native_fire_ember(ember.as_mut().unwrap());
+                if !step.retained {
+                    ember = None;
+                }
                 retirement = step.retirement;
             }
             compare(
@@ -309,7 +316,7 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
                     actors[0].active = false;
                 }
                 let step = step_native_fire_good_imp(
-                    imp.take().unwrap(),
+                    imp.as_mut().unwrap(),
                     NativeFireGoodImpStepContext {
                         can_occupy: &can_occupy,
                         navigation: None,
@@ -317,10 +324,12 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
                     },
                     &mut rng,
                 );
-                imp = step.good_imp;
+                release_position = imp.as_ref().unwrap().position;
+                if !step.retained {
+                    imp = None;
+                }
                 contact = step.contact;
-                release_fire = step.release_fire;
-                release_position = step.release_position;
+                release_fire = !step.retained;
                 if let Some(value) = &contact {
                     let mut row = target_contact(value);
                     row["tick"] = json!(tick);

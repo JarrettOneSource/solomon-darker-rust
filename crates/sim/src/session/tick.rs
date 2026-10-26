@@ -102,7 +102,7 @@ impl GameSession {
         let inputs = self.admit_inputs(inputs);
         for participant in ordered_participants_mut(&mut self.participants, &self.participant_order)
         {
-            participant.world_aim = inputs[&participant.id].aim;
+            *participant.world_aim = inputs[participant.id.as_str()].aim;
         }
         let (world_result, mut unstepped_secondary) = self.step_world(
             &inputs,
@@ -140,10 +140,10 @@ impl GameSession {
                     ordered_participants_mut(&mut self.participants, &self.participant_order)
                         .into_iter()
                         .map(|participant| super::player_contacts::PlayerContactPlayer {
-                            player_id: &participant.id,
-                            player: &mut participant.player,
-                            wizard: &mut participant.wizard,
-                            lighting: &mut participant.lighting,
+                            player_id: participant.id,
+                            player: participant.player,
+                            wizard: participant.wizard,
+                            lighting: participant.lighting,
                         })
                         .collect();
                 super::player_contacts::apply_player_contacts_with_extensions(
@@ -261,11 +261,12 @@ impl GameSession {
         for participant in ordered_participants_mut(&mut self.participants, &self.participant_order)
         {
             if tick.is_multiple_of(25)
-                && previous_walk_cycles[&participant.id] != participant.wizard.walk_cycle_primary
+                && previous_walk_cycles[participant.id.as_str()]
+                    != participant.wizard.walk_cycle_primary
             {
                 participant.wizard.footstep_tick = tick;
             }
-            if secondary.staff_cast_pulse_player_ids.contains(&participant.id) {
+            if secondary.staff_cast_pulse_player_ids.contains(participant.id) {
                 participant.wizard.primary_cast.weapon_pulse = 0.45_f32 as f64;
             }
         }
@@ -283,8 +284,8 @@ impl GameSession {
             super::harden::synchronize_player_harden_effects(
                 super::harden::PlayerHardenContext {
                     enhanced_effects: self.enhanced_effects,
-                    player_id: &participant.id,
-                    before: before_runtime.get(&participant.id),
+                    player_id: participant.id,
+                    before: before_runtime.get(participant.id.as_str()),
                     after: &participant.player.skill_runtime,
                     position: participant.wizard.position,
                     world_key: &world_key,

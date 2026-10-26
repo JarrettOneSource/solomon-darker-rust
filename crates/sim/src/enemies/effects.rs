@@ -20,8 +20,8 @@ pub struct DeathEffectOwner {
     pub position: Vec2,
 }
 
-impl From<&EnemyActor> for DeathEffectOwner {
-    fn from(actor: &EnemyActor) -> Self {
+impl<T: EnemyActorRead> From<&T> for DeathEffectOwner {
+    fn from(actor: &T) -> Self {
         Self { id: actor.id, position: actor.position }
     }
 }
@@ -190,7 +190,7 @@ impl EnemyWorld {
             BouncerKind::Smoky => EnemyDeathEffectKind::SmokyBouncer,
             BouncerKind::BlackSmoky => EnemyDeathEffectKind::BlackSmokyBouncer,
         };
-        let effect = EnemyDeathEffect {
+        let mut effect = EnemyDeathEffect {
             age_ticks: 0,
             alpha: 1.0,
             alpha_multiplier: 1.0,
@@ -234,11 +234,11 @@ impl EnemyWorld {
             scrap_oscillation: None,
         };
         self.next_death_effect_id += 1;
-        if let Some(stepped) = self.step_death_effect(effect, tick, true) {
+        if self.step_death_effect(&mut effect, tick, true) {
             let smoke = self
-                .bouncer_emits_smoke(&stepped)
-                .then(|| self.smoky_bouncer_birth(&stepped, tick, order));
-            self.death_effects.push(stepped);
+                .bouncer_emits_smoke(&effect)
+                .then(|| self.smoky_bouncer_birth(&effect, tick, order));
+            self.death_effects.push(effect);
             if let Some(smoke) = smoke {
                 self.death_effects.push(smoke);
             }
@@ -256,49 +256,45 @@ impl EnemyWorld {
             return;
         };
         for step_tick in first..=tick {
-            let mut retained = Vec::with_capacity(effects.len());
             let mut births = Vec::new();
-            for effect in effects {
+            effects.retain_mut(|effect| {
                 if effect.last_step_tick.is_some_and(|last| last >= step_tick) {
-                    retained.push(effect);
-                    continue;
+                    return true;
                 }
-                let Some(stepped) = self.step_death_effect(effect, step_tick, false) else {
-                    continue;
-                };
-                if self.bouncer_emits_smoke(&stepped) {
-                    births.push(self.smoky_bouncer_birth(&stepped, step_tick, order));
+                if !self.step_death_effect(effect, step_tick, false) {
+                    return false;
                 }
-                retained.push(stepped);
-            }
-            retained.extend(births);
-            effects = retained;
+                if self.bouncer_emits_smoke(effect) {
+                    births.push(self.smoky_bouncer_birth(effect, step_tick, order));
+                }
+                true
+            });
+            effects.extend(births);
         }
         self.death_effects = effects;
     }
 
     pub fn step_pre_world_effect_births(&mut self, tick: u64) {
-        let effects = std::mem::take(&mut self.death_effects);
-        for effect in effects {
+        let mut effects = std::mem::take(&mut self.death_effects);
+        effects.retain_mut(|effect| {
             if effect.presentation_owner == DeathPresentationOwner::PreWorldQueue
                 && effect.spawn_tick == tick
                 && effect.last_step_tick.is_none_or(|last| last < tick)
             {
-                if let Some(stepped) = self.step_death_effect(effect, tick, true) {
-                    self.death_effects.push(stepped);
-                }
+                self.step_death_effect(effect, tick, true)
             } else {
-                self.death_effects.push(effect);
+                true
             }
-        }
+        });
+        self.death_effects = effects;
     }
 
     fn step_death_effect(
         &mut self,
-        mut effect: EnemyDeathEffect,
+        effect: &mut EnemyDeathEffect,
         tick: u64,
         update_at_birth: bool,
-    ) -> Option<EnemyDeathEffect> {
+    ) -> bool {
         if tick < effect.spawn_tick
             || (tick == effect.spawn_tick
                 && !update_at_birth
@@ -306,11 +302,11 @@ impl EnemyWorld {
         {
             effect.age_ticks = 0;
             effect.last_step_tick = Some(tick);
-            return Some(effect);
+            return true;
         }
         let age = tick.saturating_sub(effect.spawn_tick);
         if age >= effect.lifetime_ticks {
-            return None;
+            return false;
         }
         if effect.kind == EnemyDeathEffectKind::BoulderBit {
             return super::coffin_emergence::step_coffin_emergence(
@@ -322,7 +318,7 @@ impl EnemyWorld {
         if effect.kind == EnemyDeathEffectKind::MoveFadeSin {
             let phase = fround(effect.frame_phase + effect.frame_velocity);
             if phase >= 180.0 {
-                return None;
+                return false;
             }
             effect.age_ticks = age;
             effect.frame_phase = phase;
@@ -336,7 +332,7 @@ impl EnemyWorld {
                 fround(effect.position.x + effect.velocity.x),
                 fround(effect.position.y + effect.velocity.y),
             );
-            return Some(effect);
+            return true;
         }
         if matches!(
             effect.kind,
@@ -368,12 +364,12 @@ impl EnemyWorld {
             if effect.opacity_timer <= 0.0
                 || (effect.kind == EnemyDeathEffectKind::BlackSmokyBouncer && effect.height >= 0.0)
             {
-                return None;
+                return false;
             }
             effect.age_ticks = age;
             effect.alpha = effect.opacity_timer.min(1.0);
             effect.last_step_tick = Some(tick);
-            return Some(effect);
+            return true;
         }
         if effect.kind == EnemyDeathEffectKind::Scrap {
             let oscillation =
@@ -392,7 +388,7 @@ impl EnemyWorld {
                 effect.opacity_timer = fround(effect.opacity_timer - (0.01_f32 as f64));
             }
             if effect.opacity_timer <= 0.0 {
-                return None;
+                return false;
             }
             oscillation.phase_deg = fround(oscillation.phase_deg + oscillation.step_deg);
             effect.age_ticks = age;
@@ -404,11 +400,11 @@ impl EnemyWorld {
                 float::sin(oscillation.phase_deg * std::f64::consts::PI / 180.0)
                     * oscillation.amplitude_deg,
             );
-            return Some(effect);
+            return true;
         }
         effect.opacity_timer = fround(effect.opacity_timer - effect.alpha_loss_per_tick);
         if effect.opacity_timer <= 0.0 {
-            return None;
+            return false;
         }
         match effect.kind {
             EnemyDeathEffectKind::MoveFadePerspective => {
@@ -430,7 +426,7 @@ impl EnemyWorld {
             EnemyDeathEffectKind::SpriteArray => {
                 effect.frame_phase = fround(effect.frame_phase + effect.frame_velocity);
                 if effect.frame_phase > effect.frame_count as f64 {
-                    return None;
+                    return false;
                 }
                 effect.frame_velocity =
                     fround(effect.frame_velocity * effect.frame_velocity_damping);
@@ -486,7 +482,7 @@ impl EnemyWorld {
         ) {
             effect.scale_y = fround(fround(effect.scale_y) * fround(effect.scale_multiplier));
         }
-        Some(effect)
+        true
     }
 
     fn bouncer_emits_smoke(&mut self, effect: &EnemyDeathEffect) -> bool {

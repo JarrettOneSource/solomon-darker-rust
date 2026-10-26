@@ -4,7 +4,8 @@ use super::actor_update::{step_damage_presentation_timers, step_living_actor};
 use super::boss_spell::BossSpellKind;
 use super::config::{EnemyClassification, EnemyFamilyConfig};
 use super::dampen::spawn_dampened_mage_smoke;
-use super::model::{EnemyBrain, EnemyLifeState, EnemyTarget};
+use super::model::{EnemyActorRead, EnemyBrain, EnemyLifeState, EnemyTarget};
+use super::projectiles::EnemyProjectileRead;
 use super::targeting::primary_cell_changed;
 use super::world::{EnemyStepContext, EnemyWorld};
 use super::{EnemySpawnIntent, EnemyToken};
@@ -23,7 +24,7 @@ impl EnemyWorld {
     #[must_use]
     pub fn live_counts(&self) -> EnemyLiveCounts {
         let mut counts = EnemyLiveCounts::default();
-        for actor in &self.actors {
+        for actor in self.actors.iter() {
             counts.enemies += usize::from(actor.config.enemy_token != EnemyToken::Cocoon);
             counts.zombies += usize::from(actor.config.enemy_token == EnemyToken::Zombie);
             counts.bosses +=
@@ -133,7 +134,7 @@ impl EnemyWorld {
 
         let mut index = 0;
         while index < self.actors.len() {
-            let mut actor = self.actors[index].clone();
+            let mut actor = self.actors.get(index).expect("enemy index is live").snapshot();
             let before = actor.position;
             let authored_config = actor.config.clone();
             if let EnemyBrain::DemonSkull(brain) = &mut actor.brain {
@@ -157,12 +158,12 @@ impl EnemyWorld {
                     self.next_native_cell_binding_order += 1;
                 }
                 actor.config = authored_config;
-                self.actors[index] = actor;
+                self.actors.replace(index, actor);
                 index += 1;
             } else {
                 self.actors.remove(index);
             }
-            // Terminal children append to this same vector and receive their first
+            // Terminal children join the same admission order and receive their first
             // epoch in this pass. Do not replace this with an iterator over old rows.
             self.apply_working_player_positions(&mut players);
         }
@@ -173,7 +174,7 @@ impl EnemyWorld {
         let maggot_positions: Vec<_> =
             self.maggots.iter().map(|actor| (actor.id, actor.position)).collect();
         self.step_maggots(&context, elapsed, order);
-        for actor in &mut self.maggots {
+        for mut actor in self.maggots.iter_mut() {
             if maggot_positions.iter().any(|(id, position)| {
                 *id == actor.id && primary_cell_changed(*position, actor.position)
             }) {
@@ -189,7 +190,7 @@ impl EnemyWorld {
         self.step_projectiles(&context, order);
         self.step_silks(&context, order);
         self.step_boss_spells(&mut context, order);
-        for projectile in &mut self.projectiles {
+        for mut projectile in self.projectiles.iter_mut() {
             let state = projectile.state_mut();
             if projectile_positions.iter().any(|(id, position)| {
                 *id == state.id && primary_cell_changed(*position, state.position)
@@ -212,7 +213,7 @@ impl EnemyWorld {
         self.boss_narration.step(context.tick, context.dialogue_busy);
         let Some(voice) = self.faculty_voice_controller else { return };
         let mut members = Vec::new();
-        for actor in &self.actors {
+        for actor in self.actors.iter() {
             if actor.life_state != EnemyLifeState::Alive {
                 continue;
             }
@@ -229,26 +230,26 @@ impl EnemyWorld {
     }
 
     fn step_paused_timestamps(&mut self, tick: u64) {
-        for actor in &mut self.actors {
+        for mut actor in self.actors.iter_mut() {
             if actor.hit_feedback.timer != 0.0 {
                 actor.hit_feedback.tick = tick;
             }
         }
-        for actor in &mut self.maggots {
+        for mut actor in self.maggots.iter_mut() {
             if actor.hit_feedback.timer != 0.0 {
                 actor.hit_feedback.tick = tick;
             }
         }
-        for hit in &mut self.puppet_hits {
+        for hit in self.puppet_hits.iter_mut() {
             hit.feedback.tick = tick;
         }
-        for knockback in &mut self.projectile_knockbacks {
+        for knockback in self.projectile_knockbacks.iter_mut() {
             knockback.last_step_tick = tick;
         }
-        for projectile in &mut self.projectiles {
+        for mut projectile in self.projectiles.iter_mut() {
             projectile.state_mut().last_step_tick = tick;
         }
-        for effect in &mut self.projectile_effects {
+        for effect in self.projectile_effects.iter_mut() {
             effect.state.last_step_tick = tick;
         }
     }

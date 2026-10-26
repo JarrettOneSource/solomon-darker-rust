@@ -18,6 +18,7 @@ pub struct NativeFadeLineState {
 }
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeFadeLineActor {
     pub id: usize,
     pub spawn_tick: u64,
@@ -77,16 +78,16 @@ fn fragment_point(silk: &NativeSilkState, phase: f64) -> Vec2 {
         fround(center.y + fround(wave.y * silk.wave_scale) - silk.height),
     )
 }
-pub fn step_native_fade_line(mut source: NativeFadeLineState) -> Option<NativeFadeLineState> {
+pub fn step_native_fade_line(source: &mut NativeFadeLineState) -> bool {
     source.opacity = fround(source.opacity - source.opacity_loss_per_tick);
     if source.opacity <= 0.0 {
-        return None;
+        return false;
     }
     for point in [&mut source.start, &mut source.middle, &mut source.end] {
         *point =
             Vec2::new(fround(point.x + source.velocity.x), fround(point.y + source.velocity.y));
     }
-    Some(source)
+    true
 }
 
 impl EnemyWorld {
@@ -120,13 +121,6 @@ impl EnemyWorld {
         }
     }
     pub fn step_silk_fragments(&mut self) {
-        self.silk_fragments.retain_mut(|actor| {
-            if let Some(state) = step_native_fade_line(actor.state.clone()) {
-                actor.state = state;
-                true
-            } else {
-                false
-            }
-        });
+        self.silk_fragments.retain_mut(|actor| step_native_fade_line(&mut actor.state));
     }
 }

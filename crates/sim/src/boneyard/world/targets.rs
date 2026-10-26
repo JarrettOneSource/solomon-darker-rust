@@ -6,9 +6,9 @@ use crate::Vec2;
 use crate::enemies::puppet_hits::{EnemyPuppetHitKind, EnemyPuppetTarget, boneyard_puppet_target};
 use crate::secondary::NativeSecondaryActorKind;
 use crate::spells::boneyard::boneyard_primary_scenery_targets;
-use crate::spells::model::PrimarySpellTransient;
+use crate::spells::model::PrimaryTransientRef;
 use crate::spells::targeting::{PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind};
-use crate::spells::weld::NativeWeldWorldActor;
+use crate::spells::weld::WeldWorldRef;
 
 use super::super::world_light::BoneyardLightEnvironment;
 use super::BoneyardWorld;
@@ -133,8 +133,8 @@ pub fn boneyard_mouth_world_targets(
     }
     let world_key = format!("boneyard:{}", world.loaded.run_id);
     if let Some(primary) = environment.primary_spells {
-        for actor in &primary.transients {
-            let PrimarySpellTransient::Weld(NativeWeldWorldActor::Meteor(actor)) = actor else {
+        for actor in primary.transients.iter() {
+            let PrimaryTransientRef::Weld(WeldWorldRef::Meteor(actor)) = actor else {
                 continue;
             };
             if actor.common.owner.world_key != world_key {
@@ -160,7 +160,7 @@ pub fn boneyard_mouth_world_targets(
         }
     }
     if let Some(secondary) = environment.secondary_abilities {
-        for actor in &secondary.actors {
+        for actor in secondary.actors.iter() {
             if actor.kind != NativeSecondaryActorKind::Leviathan || actor.world_key != world_key {
                 continue;
             }

@@ -13,12 +13,12 @@ use crate::float::fround;
 use crate::loot::{NativeLootDropKind, NativeLootPlacement};
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 
-use super::{BoneyardGoodieState, BoneyardLootActor, BoneyardLootStore};
+use super::{BoneyardGoodieState, BoneyardLootStore, LootActorRead};
 
 impl BoneyardLootStore {
     pub(super) fn spawn_pickup_effects(
         &mut self,
-        actor: &BoneyardLootActor,
+        actor: &impl LootActorRead,
         tick: u64,
         painter_order: &mut WorldPainterOrder,
     ) {
@@ -197,33 +197,29 @@ impl BoneyardLootStore {
     }
 
     pub(super) fn step_effects(&mut self, placement: &dyn NativeLootPlacement, tick: u64) {
-        let mut retained = Vec::with_capacity(self.effects.len());
-        for effect in std::mem::take(&mut self.effects) {
-            if let Some(effect) = self.step_effect(effect, placement, tick) {
-                retained.push(effect);
-            }
-        }
-        self.effects = retained;
+        let mut effects = std::mem::take(&mut self.effects);
+        effects.retain_mut(|effect| self.step_effect(effect, placement, tick));
+        self.effects = effects;
     }
 
     fn step_effect(
         &mut self,
-        mut effect: EnemyDeathEffect,
+        effect: &mut EnemyDeathEffect,
         placement: &dyn NativeLootPlacement,
         tick: u64,
-    ) -> Option<EnemyDeathEffect> {
+    ) -> bool {
         effect.age_ticks += 1;
         effect.last_step_tick = Some(tick);
         if effect.kind != EnemyDeathEffectKind::Bouncer {
             effect.opacity_timer = fround(effect.opacity_timer - effect.alpha_loss_per_tick);
             if effect.opacity_timer <= 0.0 {
-                return None;
+                return false;
             }
             effect.alpha = effect.opacity_timer.min(1.0);
-            return Some(effect);
+            return true;
         }
         if effect.height != 0.0 && tick.is_multiple_of(3) {
-            return Some(effect);
+            return true;
         }
         if effect.height != 0.0 {
             effect.position.x = fround(effect.position.x + effect.velocity.x);
@@ -232,7 +228,7 @@ impl BoneyardLootStore {
             effect.vertical_velocity = fround(effect.vertical_velocity + (0.4_f32 as f64));
             if effect.height > 0.0 {
                 if !placement.can_place(effect.position, 0.01) {
-                    return None;
+                    return false;
                 }
                 effect.angular_velocity_deg =
                     fround(self.shared_rng.draw_scaled_float(10.0, false) + 1.0);
@@ -254,10 +250,10 @@ impl BoneyardLootStore {
         }
         effect.opacity_timer = fround(effect.opacity_timer - effect.alpha_loss_per_tick);
         if effect.opacity_timer <= 0.0 {
-            return None;
+            return false;
         }
         effect.alpha = effect.opacity_timer.min(1.0);
-        Some(effect)
+        true
     }
 }
 

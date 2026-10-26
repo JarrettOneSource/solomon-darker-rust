@@ -2,15 +2,33 @@
 //! Platform requests run inside the original trusted canvas click.
 
 use crate::gpu_ui::UiFrame;
-use egui::{Color32, Id, Order, PointerButton, Stroke, pos2, vec2};
-use js_sys::{Function, Object, Promise, Reflect};
+use crate::platform::Surface;
+#[cfg(target_arch = "wasm32")]
+use egui::PointerButton;
+use egui::{Color32, Id, Order, Stroke, pos2, vec2};
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasm_bindgen::{JsCast, prelude::*};
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{Document, Element, Event, MouseEvent, Window};
 
-const CHANGE_EVENTS: [&str; 2] = ["fullscreenchange", "webkitfullscreenchange"];
+#[cfg(target_arch = "wasm32")]
+mod browser;
+#[cfg(not(target_arch = "wasm32"))]
+mod native;
+#[cfg(target_arch = "wasm32")]
+use browser as platform;
+#[cfg(not(target_arch = "wasm32"))]
+use native as platform;
+
+pub(crate) type FullscreenRequest =
+    futures_util::future::LocalBoxFuture<'static, Result<(), String>>;
+pub(crate) fn game_fullscreen_control_mode(surface: &Surface) -> Result<ControlMode, String> {
+    platform::mode(surface)
+}
+pub(crate) fn fullscreen_active(surface: &Surface) -> bool {
+    platform::active(surface)
+}
+pub(crate) fn toggle_fullscreen(surface: &Surface) -> Result<FullscreenRequest, String> {
+    platform::toggle(surface)
+}
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FullscreenPlacement {
     Hidden,
@@ -33,63 +51,28 @@ struct FullscreenState {
     target: Option<egui::Response>,
 }
 pub struct FullscreenControl {
-    document: Document,
+    surface: Surface,
     state: Rc<RefCell<FullscreenState>>,
-    click: Closure<dyn FnMut(Event)>,
-    change: Closure<dyn FnMut(Event)>,
+    #[cfg(target_arch = "wasm32")]
+    _binding: browser::Binding,
     placement: FullscreenPlacement,
 }
 impl FullscreenControl {
-    pub fn attach(document: &Document) -> Result<Self, String> {
+    pub fn attach(surface: &Surface) -> Result<Self, String> {
         let state = Rc::new(RefCell::new(FullscreenState {
-            mode: game_fullscreen_control_mode(document)?,
-            active: fullscreen_active(document),
+            mode: game_fullscreen_control_mode(surface)?,
+            active: fullscreen_active(surface),
             show_help: false,
             error: None,
             target: None,
         }));
-        let clicked = state.clone();
-        let clicked_document = document.clone();
-        let click = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            let Some(mouse) = event.dyn_ref::<MouseEvent>() else { return };
-            let point = pos2(mouse.client_x() as f32, mouse.client_y() as f32);
-            if !clicked
-                .borrow()
-                .target
-                .as_ref()
-                .is_some_and(|target| crate::ui::trusted_gesture::owns_point(target, point))
-            {
-                return;
-            }
-            event.prevent_default();
-            event.stop_propagation();
-            activate(&clicked_document, &clicked);
-        });
-        document
-            .add_event_listener_with_callback_and_bool(
-                "click",
-                click.as_ref().unchecked_ref(),
-                true,
-            )
-            .map_err(|_| "fullscreen trusted click")?;
-        let changed = state.clone();
-        let changed_document = document.clone();
-        let change = Closure::<dyn FnMut(Event)>::new(move |_| {
-            let mut state = changed.borrow_mut();
-            state.active = fullscreen_active(&changed_document);
-            state.error = None;
-            state.show_help = false;
-        });
-        for name in CHANGE_EVENTS {
-            document
-                .add_event_listener_with_callback(name, change.as_ref().unchecked_ref())
-                .map_err(|_| "fullscreen change listener")?;
-        }
+        #[cfg(target_arch = "wasm32")]
+        let binding = browser::Binding::attach(surface, &state)?;
         Ok(Self {
-            document: document.clone(),
+            surface: surface.clone(),
             state,
-            click,
-            change,
+            #[cfg(target_arch = "wasm32")]
+            _binding: binding,
             placement: FullscreenPlacement::Hidden,
         })
     }
@@ -102,12 +85,7 @@ impl FullscreenControl {
     }
     /// Source menu.css raises this body root only for the native coarse portrait query.
     pub fn above_orientation_guidance(&self) -> Result<bool, String> {
-        self.document
-            .default_view()
-            .ok_or("fullscreen window")?
-            .match_media("(orientation:portrait) and (hover:none) and (pointer:coarse)")
-            .map_err(|_| "fullscreen orientation query".to_owned())
-            .map(|query| query.is_some_and(|query| query.matches()))
+        self.surface.portrait_touch()
     }
     pub fn fixed_layers() -> [egui::LayerId; 2] {
         [Self::control_layer(), Self::help_layer()]
@@ -119,6 +97,7 @@ impl FullscreenControl {
         egui::LayerId::new(Order::Tooltip, Id::unique("fullscreen/help"))
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
+        self.state.borrow_mut().active = fullscreen_active(&self.surface);
         let (mode, active, show_help, error) = {
             let state = self.state.borrow();
             (state.mode, state.active, state.show_help, state.error.clone())
@@ -194,11 +173,18 @@ impl FullscreenControl {
                 // Pointer/touch clicks already invoked the browser capability in
                 // their trusted DOM event. Intermediate paints cannot consume
                 // that ownership; only non-pointer activation belongs here.
-                keyboard_activation =
-                    response.clicked() && !response.clicked_by(PointerButton::Primary);
+                #[cfg(target_arch = "wasm32")]
+                {
+                    keyboard_activation =
+                        response.clicked() && !response.clicked_by(PointerButton::Primary);
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    keyboard_activation = response.clicked();
+                }
             });
         if keyboard_activation {
-            activate(&self.document, &self.state);
+            activate(&self.surface, &self.state);
         }
         if show_help || error.is_some() {
             let message=error.unwrap_or_else(||"Fullscreen on iPhone or iPad\nTap Share, Add to Home Screen, keep Open as Web App enabled if shown, then launch Solomon Darker from its icon.\nOtherwise, open the game in a browser that supports fullscreen.".into());
@@ -228,7 +214,7 @@ impl FullscreenControl {
         Ok(())
     }
 }
-fn activate(document: &Document, state: &Rc<RefCell<FullscreenState>>) {
+fn activate(surface: &Surface, state: &Rc<RefCell<FullscreenState>>) {
     {
         let mut state = state.borrow_mut();
         state.error = None;
@@ -237,134 +223,15 @@ fn activate(document: &Document, state: &Rc<RefCell<FullscreenState>>) {
             return;
         }
     }
-    let request = toggle_fullscreen(document);
+    let request = toggle_fullscreen(surface);
     let completed = state.clone();
-    wasm_bindgen_futures::spawn_local(async move {
+    crate::platform::spawn_local(async move {
         let result = match request {
-            Ok(value) => JsFuture::from(Promise::resolve(&value)).await,
+            Ok(request) => request.await,
             Err(error) => Err(error),
         };
         if let Err(error) = result {
-            completed.borrow_mut().error = Some(error_message(error));
+            completed.borrow_mut().error = Some(error);
         }
     });
-}
-
-fn property(target: &JsValue, name: &str) -> JsValue {
-    Reflect::get(target, &JsValue::from_str(name)).unwrap_or(JsValue::UNDEFINED)
-}
-
-fn method(target: &JsValue, name: &str) -> Option<Function> {
-    property(target, name).dyn_into().ok()
-}
-
-fn standard_supported(document: &Document, target: &Element) -> bool {
-    property(document, "fullscreenEnabled").as_bool() != Some(false)
-        && method(target, "requestFullscreen").is_some()
-        && method(document, "exitFullscreen").is_some()
-}
-
-fn webkit_supported(document: &Document, target: &Element) -> bool {
-    property(document, "webkitFullscreenEnabled").as_bool() != Some(false)
-        && method(target, "webkitRequestFullscreen").is_some()
-        && method(document, "webkitExitFullscreen").is_some()
-}
-
-pub(crate) fn game_fullscreen_control_mode(document: &Document) -> Result<ControlMode, String> {
-    let window = document.default_view().ok_or("fullscreen window")?;
-    let target = document.document_element().ok_or("fullscreen document root")?;
-    if standard_supported(document, &target) || webkit_supported(document, &target) {
-        return Ok(ControlMode::Fullscreen);
-    }
-    Ok(if installed_display_mode(&window)? { ControlMode::Hidden } else { ControlMode::Install })
-}
-
-fn current_fullscreen_element(document: &Document) -> JsValue {
-    let standard = property(document, "fullscreenElement");
-    if standard.is_null_or_undefined() {
-        property(document, "webkitFullscreenElement")
-    } else {
-        standard
-    }
-}
-
-pub(crate) fn fullscreen_active(document: &Document) -> bool {
-    document
-        .document_element()
-        .is_some_and(|target| current_fullscreen_element(document) == JsValue::from(target))
-}
-
-fn installed_display_mode(window: &Window) -> Result<bool, String> {
-    if property(&window.navigator(), "standalone").as_bool() == Some(true) {
-        return Ok(true);
-    }
-    for query in ["(display-mode: standalone)", "(display-mode: fullscreen)"] {
-        if window
-            .match_media(query)
-            .map_err(|_| "fullscreen display mode query")?
-            .is_some_and(|query| query.matches())
-        {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-pub(crate) fn toggle_fullscreen(document: &Document) -> Result<JsValue, JsValue> {
-    let target = document
-        .document_element()
-        .ok_or_else(|| JsValue::from_str("Fullscreen document root is unavailable."))?;
-    if !current_fullscreen_element(document).is_null_or_undefined() {
-        let standard = property(document, "fullscreenElement");
-        let exit = if !standard.is_null_or_undefined() {
-            method(document, "exitFullscreen")
-        } else {
-            method(document, "webkitExitFullscreen")
-        };
-        let exit = exit
-            .or_else(|| method(document, "exitFullscreen"))
-            .or_else(|| method(document, "webkitExitFullscreen"));
-        return exit
-            .ok_or_else(|| JsValue::from_str("Fullscreen is not available in this browser."))?
-            .call0(document);
-    }
-    if standard_supported(document, &target) {
-        let options = Object::new();
-        Reflect::set(&options, &JsValue::from_str("navigationUI"), &JsValue::from_str("hide"))?;
-        return method(&target, "requestFullscreen")
-            .expect("supported fullscreen request")
-            .call1(&target, &options);
-    }
-    if webkit_supported(document, &target) {
-        return method(&target, "webkitRequestFullscreen")
-            .expect("supported WebKit fullscreen request")
-            .call0(&target);
-    }
-    Err(JsValue::from_str("Fullscreen is not available in this browser."))
-}
-
-pub(crate) fn error_message(error: JsValue) -> String {
-    property(&error, "message")
-        .as_string()
-        .unwrap_or_else(|| "Fullscreen could not be changed.".to_owned())
-}
-
-impl Drop for FullscreenControl {
-    fn drop(&mut self) {
-        if let Err(error) = self.document.remove_event_listener_with_callback_and_bool(
-            "click",
-            self.click.as_ref().unchecked_ref(),
-            true,
-        ) {
-            web_sys::console::error_1(&error);
-        }
-        for name in CHANGE_EVENTS {
-            if let Err(error) = self
-                .document
-                .remove_event_listener_with_callback(name, self.change.as_ref().unchecked_ref())
-            {
-                web_sys::console::error_1(&error);
-            }
-        }
-    }
 }

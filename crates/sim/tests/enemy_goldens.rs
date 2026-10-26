@@ -6,6 +6,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::enemies::config::*;
+use solomon_sim::enemies::model::EnemyActorRead;
 use solomon_sim::enemies::{EnemyFlag, EnemySpawnIntent, EnemyToken};
 
 #[path = "support/mod.rs"]
@@ -1086,7 +1087,7 @@ fn path_json(state: &solomon_sim::enemies::path::NativeEnemyPathState) -> Value 
     })
 }
 
-fn actor_json(value: &solomon_sim::enemies::model::EnemyActor) -> Value {
+fn actor_json(value: &impl EnemyActorRead) -> Value {
     use solomon_sim::enemies::model::*;
     let mut record = json!({
         "hitFeedback":puppet_hit_json(&value.hit_feedback),
@@ -1095,7 +1096,7 @@ fn actor_json(value: &solomon_sim::enemies::model::EnemyActor) -> Value {
         "blizzardPushLastTick":value.blizzard_push_last_tick,
         "bodyGaitPhase":value.body_gait_phase,
         "bodyPose":value.body_pose,
-        "brain":brain_json(&value.brain),
+        "brain":brain_json(value.brain()),
         "config":config_json(&value.config),
         "currentHealth":value.current_health,
         "deathEpoch":value.death_epoch,
@@ -1143,23 +1144,23 @@ fn actor_json(value: &solomon_sim::enemies::model::EnemyActor) -> Value {
     record
 }
 
-fn maggot_json(value: &solomon_sim::enemies::model::EnemyMaggotActor) -> Value {
+fn maggot_json(value: solomon_sim::enemies::model::MaggotRef<'_>) -> Value {
     use solomon_sim::enemies::model::*;
     let mut record = json!({
         "hitFeedback":puppet_hit_json(&value.hit_feedback),"blizzardPushAccumulator":value.blizzard_push_accumulator,"blizzardPushLastTick":value.blizzard_push_last_tick,
         "combatActive":value.combat_active,"nativeTreeQueryMember":value.native_tree_query_member,"collisionRadius":value.collision_radius,"currentHealth":value.current_health,
         "deathOffsets":value.death_offsets.iter().copied().map(point_json).collect::<Vec<_>>(),"damage":value.damage,"deathEpoch":value.death_epoch,
         "deathStartedTick":value.death_started_tick,"deathTick":value.death_tick,"gaitPose":value.gait_pose,"headingDeg":value.heading_deg,
-        "hurricaneContactCooldown":value.hurricane_contact_cooldown,"id":value.id,"emergenceTick":value.emergence_tick,"emergencePhase":value.emergence_phase,
-        "launchTrajectory":match value.launch_trajectory {MaggotLaunchTrajectory::Edge=>"edge",MaggotLaunchTrajectory::Lid=>"lid"},"launchVelocity":point_json(value.launch_velocity),
-        "landingBounceVelocity":value.landing_bounce_velocity,"lastAttackTick":value.last_attack_tick,"lastDamagedByPlayerId":value.last_damaged_by_player_id,
-        "lastDamageTick":value.last_damage_tick,"lastMovementTick":value.last_movement_tick,"lifeState":match value.life_state {EnemyLifeState::Alive=>"alive",EnemyLifeState::Dying=>"dying"},
+        "hurricaneContactCooldown":value.hurricane_contact_cooldown,"id":value.id,"emergenceTick":value.controller.emergence_tick,"emergencePhase":value.controller.emergence_phase,
+        "launchTrajectory":match value.controller.launch_trajectory {MaggotLaunchTrajectory::Edge=>"edge",MaggotLaunchTrajectory::Lid=>"lid"},"launchVelocity":point_json(value.controller.launch_velocity),
+        "landingBounceVelocity":value.controller.landing_bounce_velocity,"lastAttackTick":value.controller.last_attack_tick,"lastDamagedByPlayerId":value.last_damaged_by_player_id,
+        "lastDamageTick":value.last_damage_tick,"lastMovementTick":value.controller.last_movement_tick,"lifeState":match value.life_state {EnemyLifeState::Alive=>"alive",EnemyLifeState::Dying=>"dying"},
         "lightRegistration":{"managerLane":"actor","registrationOrdinal":value.registration_ordinal},"maximumHealth":value.maximum_health,
-        "nextAttackTick":value.next_attack_tick,"nextMovementTick":value.next_movement_tick,"nextTargetRefreshTick":value.next_target_refresh_tick,
+        "nextAttackTick":value.controller.next_attack_tick,"nextMovementTick":value.controller.next_movement_tick,"nextTargetRefreshTick":value.controller.next_target_refresh_tick,
         "nativeCellBindingOrder":value.native_cell_binding_order,"nativeRegistrationOrder":value.native_registration_order,"ownerCoffinActorId":value.owner_coffin_actor_id,
-        "path":path_json(&value.path),"poisonDamage":value.poison_damage,"poisonDuration":value.poison_duration,"position":point_json(value.position),
-        "movementPhase":match value.movement_phase {MaggotMovementPhase::Crawl=>"crawl",MaggotMovementPhase::Emerging=>"emerging"},"spawnTick":value.spawn_tick,
-        "staffActionFactor":value.staff_action_factor,"staffMovementFactor":value.staff_movement_factor,"targetPlayerId":value.target_player_id,
+        "path":path_json(&value.controller.path),"poisonDamage":value.poison_damage,"poisonDuration":value.poison_duration,"position":point_json(value.position),
+        "movementPhase":match value.controller.movement_phase {MaggotMovementPhase::Crawl=>"crawl",MaggotMovementPhase::Emerging=>"emerging"},"spawnTick":value.spawn_tick,
+        "staffActionFactor":value.staff_action_factor,"staffMovementFactor":value.staff_movement_factor,"targetPlayerId":value.controller.target_player_id,
         "terminalEmitted":value.terminal_emitted,"verticalOffset":value.vertical_offset,"verticalVelocity":value.vertical_velocity,"visualScale":value.visual_scale,
     });
     if value.ether_drain_captured {
@@ -1334,14 +1335,14 @@ fn all_native_enemy_family_constructors_caps_and_payloads_match_the_website() {
         }
         assert_eq!(spawned, case.spawned, "{} returned actor IDs", case.name);
         assert_eq!(world.actors.len(), case.actors.len(), "{} accepted count", case.name);
-        for actor in &world.actors {
-            presentations.check_actor("construction", &case.name, 10, actor);
+        for actor in world.actors.iter() {
+            presentations.check_actor("construction", &case.name, 10, &actor);
         }
         for (actual, expected) in world.actors.iter().zip(&case.actors) {
             let mut expected = expected.clone();
             expected["config"] = source_config_record(&expected["config"]);
             assert_json_equal(
-                &actor_json(actual),
+                &actor_json(&actual),
                 &expected,
                 &format!("{} actor {}", case.name, actual.id),
             );
@@ -1858,8 +1859,10 @@ impl solomon_sim::enemies::world::EnemyGeometry for GroundEnemyGeometry {
     }
 }
 
-fn enemy_projectile_json(projectile: &solomon_sim::enemies::projectiles::EnemyProjectile) -> Value {
-    use solomon_sim::enemies::projectiles::EnemyProjectile;
+fn enemy_projectile_json(
+    projectile: solomon_sim::enemies::projectiles::EnemyProjectileRef<'_>,
+) -> Value {
+    use solomon_sim::enemies::projectiles::{EnemyProjectileMotion, EnemyProjectileRead};
     let state = projectile.state();
     let mut record = json!({
         "ageTicks":state.age_ticks,"bounceVelocity":state.bounce_velocity,"chillTumbleAccumulator":state.chill_tumble_accumulator,
@@ -1873,8 +1876,8 @@ fn enemy_projectile_json(projectile: &solomon_sim::enemies::projectiles::EnemyPr
         "verticalOffset":state.vertical_offset,"verticalVelocity":state.vertical_velocity,"visualPhaseDeg":state.visual_phase_deg,"visualScale":state.visual_scale,
         "kind":projectile.kind().id(),
     });
-    if let EnemyProjectile::Arrow { velocity, .. } = projectile {
-        record["velocity"] = point_json(*velocity);
+    if let EnemyProjectileMotion::Arrow { velocity } = projectile.motion() {
+        record["velocity"] = point_json(velocity);
     }
     record
 }
@@ -1965,7 +1968,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
                 _ => panic!("recorded Faculty action"),
             };
             let action = create_native_faculty_action(kind, &mut world.steering_rng);
-            let EnemyBrain::Faculty(brain) = &mut world.actors[0].brain else {
+            let EnemyBrain::Faculty(brain) = world.actors.get_mut(0).unwrap().brain else {
                 panic!("Faculty action setup")
             };
             brain.hand_mask = action.hand_mask;
@@ -1974,7 +1977,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
             brain.secondary_cooldown = 10000;
         }
         if case["megaDeath"].as_bool() == Some(true) {
-            let EnemyBrain::DemonSkull(brain) = &mut world.actors[0].brain else {
+            let EnemyBrain::DemonSkull(brain) = world.actors.get_mut(0).unwrap().brain else {
                 panic!("mega-death setup")
             };
             brain.capabilities |= 16;
@@ -1989,7 +1992,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
                 "spit" => DemonSkullActionKind::Spit,
                 _ => panic!("recorded DemonSkull action"),
             };
-            let mut actor = world.actors[0].clone();
+            let mut actor = world.actors.get(0).unwrap().snapshot();
             let speed = actor.config.attack_speed;
             begin_demon_skull_action(
                 &mut world,
@@ -2014,7 +2017,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
                 },
                 speed,
             );
-            world.actors[0] = actor;
+            world.actors.replace(0, actor);
         }
         if case["webbed"].as_bool() == Some(true) {
             world.webbed_players.insert(
@@ -2033,7 +2036,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
             );
         }
         if case["opening"].as_bool() == Some(true) {
-            let EnemyBrain::Coffin(brain) = &mut world.actors[0].brain else {
+            let EnemyBrain::Coffin(brain) = world.actors.get_mut(0).unwrap().brain else {
                 panic!("Coffin opening setup");
             };
             brain.phase = CoffinPhase::Opening;
@@ -2190,8 +2193,12 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
                 }),
             };
             if case["killAt"].as_u64() == Some(tick) {
-                let mut damage =
-                    EnemyDamageRequest::new(world.actors[0].id, 1e9, tick, Some("hero".to_owned()));
+                let mut damage = EnemyDamageRequest::new(
+                    world.actors.get(0).unwrap().id,
+                    1e9,
+                    tick,
+                    Some("hero".to_owned()),
+                );
                 damage.ether_drain_capture = case["etherCapture"].as_bool().unwrap_or(false);
                 world.damage(damage, Some(&mut order));
             }
@@ -2218,7 +2225,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
             }
             world.pending_spawn_intents.clear();
             if case["detachAt"].as_u64() == Some(tick) {
-                let actor = world.actors[0].clone();
+                let actor = world.actors.get(0).unwrap().snapshot();
                 world.detach_heartmonger_crows(&actor, tick);
                 world.actors.clear();
             }
@@ -2366,7 +2373,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
             {
                 let mut expected_actor = expected_actor.clone();
                 expected_actor["config"] = source_config_record(&expected_actor["config"]);
-                assert_current_enemy_json(&actor_json(actor), &expected_actor, &label);
+                assert_current_enemy_json(&actor_json(&actor), &expected_actor, &label);
             }
             assert_eq!(
                 world.maggots.len(),
@@ -2594,7 +2601,7 @@ fn damage_absorption_armor_breaks_restraints_and_terminal_brains_match_the_websi
             Some(&mut order),
         );
         let setup = &case["setup"];
-        let actor = &mut world.actors[0];
+        let mut actor = world.actors.get_mut(0).unwrap();
         if let Some(shield) = setup["shield"].as_f64() {
             actor.shield_health = shield;
             actor.shield_maximum_health = shield;
@@ -2603,7 +2610,7 @@ fn damage_absorption_armor_breaks_restraints_and_terminal_brains_match_the_websi
             let EnemyBrain::Skeleton(brain) = &mut actor.brain else { panic!("skeleton setup") };
             brain.phase = SkeletonPhase::Attack;
             brain.action_progress = 5.0;
-            actor.body_pose = 2.0;
+            actor.body.body_pose = 2.0;
             brain.pike = Some(SkeletonPike {
                 player_id: "hero".to_owned(),
                 position: Vec2::new(180.0, 260.0),
@@ -2660,7 +2667,7 @@ fn damage_absorption_armor_breaks_restraints_and_terminal_brains_match_the_websi
                 let mut expected = expected.clone();
                 expected["config"] = source_config_record(&expected["config"]);
                 assert_json_equal(
-                    &actor_json(actual),
+                    &actor_json(&actual),
                     &expected,
                     &format!("{context} actor {}", actual.id),
                 );

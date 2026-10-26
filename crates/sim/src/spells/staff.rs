@@ -93,10 +93,10 @@ pub fn create_native_player_staff_action(
 
 #[must_use]
 pub fn step_native_player_staff_action(
-    source: &NativePlayerStaffAction,
+    source: StaffActionRef<'_>,
     owner_position: Vec2,
 ) -> NativePlayerStaffActionStep {
-    let mut sample = source.clone();
+    let mut sample = source.snapshot();
     sample.common_mut().age_ticks += 1;
     sample.base_mut().origin = owner_position;
     let (contact, retired) = match &mut sample {
@@ -130,10 +130,10 @@ pub fn step_native_player_staff_action(
 }
 
 #[must_use]
-pub fn native_player_staff_action_pose(source: &NativePlayerStaffAction) -> usize {
+pub fn native_player_staff_action_pose(source: StaffActionRef<'_>) -> usize {
     match source {
-        NativePlayerStaffAction::Spin(_) => 3,
-        NativePlayerStaffAction::Melee(action) => {
+        StaffActionRef::Spin(_) => 3,
+        StaffActionRef::Melee(action) => {
             let program = match action.lane {
                 PlayerStaffDamageLane::Primary => [0, 4, 5, 6, 6, 6, 6, 6, 6],
                 PlayerStaffDamageLane::Secondary => [0, 1, 2, 3, 3, 3, 3, 3, 3],
@@ -160,3 +160,7 @@ pub(super) fn new_common(id: u64, action: &NativePlayerStaffAction) -> PrimarySp
         world_key: action.common().world_key.clone(),
     }
 }
+
+pub use crate::spells::transient_storage::{
+    StaffActionMut, StaffActionRef, StaffTransientMut, StaffTransientRef, StaffVfxMut, StaffVfxRef,
+};

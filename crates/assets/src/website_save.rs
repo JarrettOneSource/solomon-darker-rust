@@ -208,7 +208,13 @@ mod tests {
                 case["accepted"].as_bool().unwrap(),
                 "{command}"
             );
-            let economy = &restored.session.participants[owner].player.economy;
+            let economy = &restored
+                .session
+                .participants
+                .get(owner)
+                .expect("participant exists")
+                .player
+                .economy;
             super::support::assert_website_json(
                 &encode(&economy.action_feedback).unwrap(),
                 &case["feedback"],
@@ -347,7 +353,11 @@ mod tests {
                 "combatRng",
                 &[],
             );
-            let player = &restored.session.participants[&restored.player_id];
+            let player = &restored
+                .session
+                .participants
+                .get(&restored.player_id)
+                .expect("participant exists");
             super::support::assert_website_json(
                 &encode(&player.player.economy).unwrap(),
                 &expected["playerEntities"]["economies"][0],

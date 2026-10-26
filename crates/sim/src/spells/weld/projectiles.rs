@@ -6,7 +6,9 @@ use crate::heading::heading_degrees_from_vector;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use crate::profile::primary::NativeWeldPrimarySkillProfile;
 use crate::profile::weld::NativeWeldCastKind;
-use crate::spells::model::{PrimarySpellProjectileBase, PrimarySpellProjectilePhase};
+use crate::spells::model::{
+    PrimarySpellProjectileBase, PrimarySpellProjectilePhase, ProjectileMut,
+};
 use crate::spells::targeting::{
     ETHER_PRIMARY_INITIAL_TURN, EtherPrimaryTrackingInput, PrimarySpellTarget,
     advance_ether_primary_tracking, direction_from_heading, native_missile_fan_heading,
@@ -22,10 +24,19 @@ pub struct NativeWeldFrostPresentationLane {
     pub scale: f64,
 }
 
-#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "persistence",
+    derive(serde::Deserialize),
+    serde(from = "NativeWeldProjectileStateFields")
+)]
 pub struct NativeWeldProjectileState {
     pub common: PrimarySpellProjectileBase,
+    pub program: WeldProjectileProgram,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct WeldProjectileProgram {
     pub ball_lightning_acceleration: Option<f64>,
     pub base_presentation_phase_degrees: Option<f64>,
     pub build_id: u32,
@@ -49,6 +60,70 @@ pub struct NativeWeldProjectileState {
     pub turn_input: f64,
     pub underpowered: bool,
     pub vector: Vec<f64>,
+}
+
+#[cfg(feature = "persistence")]
+#[derive(serde::Deserialize)]
+#[serde(rename = "NativeWeldProjectileState")]
+struct NativeWeldProjectileStateFields {
+    common: PrimarySpellProjectileBase,
+    ball_lightning_acceleration: Option<f64>,
+    base_presentation_phase_degrees: Option<f64>,
+    build_id: u32,
+    cast_playback_rate: f64,
+    cast_sound_variant: Option<u32>,
+    contacts_remaining: u32,
+    heading_degrees: f64,
+    hit_target_ids: Vec<String>,
+    frost_pulse_aspect: Option<f64>,
+    frost_presentation_lanes: Option<[NativeWeldFrostPresentationLane; 2]>,
+    frost_turn_degrees: Option<f64>,
+    ground_spark_native_age_ticks: Option<u64>,
+    ground_spark_turn_ticks_remaining: Option<i64>,
+    presentation_seed: Option<u32>,
+    projectile_index: usize,
+    reacquires_target: bool,
+    secondary_presentation_phase_degrees: Option<f64>,
+    speed: f64,
+    target_id: Option<String>,
+    turn_accumulator: f64,
+    turn_input: f64,
+    underpowered: bool,
+    vector: Vec<f64>,
+}
+
+#[cfg(feature = "persistence")]
+impl From<NativeWeldProjectileStateFields> for NativeWeldProjectileState {
+    fn from(row: NativeWeldProjectileStateFields) -> Self {
+        Self {
+            common: row.common,
+            program: WeldProjectileProgram {
+                ball_lightning_acceleration: row.ball_lightning_acceleration,
+                base_presentation_phase_degrees: row.base_presentation_phase_degrees,
+                build_id: row.build_id,
+                cast_playback_rate: row.cast_playback_rate,
+                cast_sound_variant: row.cast_sound_variant,
+                contacts_remaining: row.contacts_remaining,
+                heading_degrees: row.heading_degrees,
+                hit_target_ids: row.hit_target_ids,
+                frost_pulse_aspect: row.frost_pulse_aspect,
+                frost_presentation_lanes: row.frost_presentation_lanes,
+                frost_turn_degrees: row.frost_turn_degrees,
+                ground_spark_native_age_ticks: row.ground_spark_native_age_ticks,
+                ground_spark_turn_ticks_remaining: row.ground_spark_turn_ticks_remaining,
+                presentation_seed: row.presentation_seed,
+                projectile_index: row.projectile_index,
+                reacquires_target: row.reacquires_target,
+                secondary_presentation_phase_degrees: row.secondary_presentation_phase_degrees,
+                speed: row.speed,
+                target_id: row.target_id,
+                turn_accumulator: row.turn_accumulator,
+                turn_input: row.turn_input,
+                underpowered: row.underpowered,
+                vector: row.vector,
+            },
+        }
+    }
 }
 
 pub struct SpawnNativeWeldOneShotInput<'a> {
@@ -206,59 +281,61 @@ pub fn spawn_native_weld_one_shot(
                 ),
                 world_key: input.world_key.into(),
             },
-            ball_lightning_acceleration: acceleration,
-            base_presentation_phase_degrees: base_phase,
-            build_id,
-            cast_playback_rate: playback,
-            cast_sound_variant,
-            contacts_remaining: if build_id == 1009 { vector[4].round() as u32 + 1 } else { 1 },
-            heading_degrees: heading,
-            hit_target_ids: Vec::new(),
-            frost_pulse_aspect: frost_aspect,
-            frost_presentation_lanes: if build_id == 1001 {
-                Some([
-                    NativeWeldFrostPresentationLane {
-                        aspect: 0.0,
-                        rotation_degrees: 0.0,
-                        scale: 0.0,
-                    },
-                    NativeWeldFrostPresentationLane {
-                        aspect: frost_aspect.unwrap(),
-                        rotation_degrees: secondary_phase.unwrap(),
-                        scale: 0.0,
-                    },
-                ])
-            } else {
-                None
+            program: WeldProjectileProgram {
+                ball_lightning_acceleration: acceleration,
+                base_presentation_phase_degrees: base_phase,
+                build_id,
+                cast_playback_rate: playback,
+                cast_sound_variant,
+                contacts_remaining: if build_id == 1009 { vector[4].round() as u32 + 1 } else { 1 },
+                heading_degrees: heading,
+                hit_target_ids: Vec::new(),
+                frost_pulse_aspect: frost_aspect,
+                frost_presentation_lanes: if build_id == 1001 {
+                    Some([
+                        NativeWeldFrostPresentationLane {
+                            aspect: 0.0,
+                            rotation_degrees: 0.0,
+                            scale: 0.0,
+                        },
+                        NativeWeldFrostPresentationLane {
+                            aspect: frost_aspect.unwrap(),
+                            rotation_degrees: secondary_phase.unwrap(),
+                            scale: 0.0,
+                        },
+                    ])
+                } else {
+                    None
+                },
+                frost_turn_degrees: (build_id == 1001).then_some(0.0),
+                ground_spark_native_age_ticks: native_age,
+                ground_spark_turn_ticks_remaining: (build_id == 1009).then_some(0),
+                presentation_seed: private_seed,
+                projectile_index: index,
+                reacquires_target: missile_reacquires(build_id, speed_factor, input.underpowered),
+                secondary_presentation_phase_degrees: secondary_phase,
+                speed,
+                target_id: target.map(|target| target.id.clone()),
+                turn_accumulator: ETHER_PRIMARY_INITIAL_TURN,
+                turn_input: if build_id == 1009 {
+                    0.0
+                } else {
+                    fround(
+                        2.0 * speed_factor
+                            * if build_id == 1002 { ball_turn_scale } else { 1.0 }
+                            * native_missile_fan_turn_scale(index),
+                    )
+                },
+                underpowered: input.underpowered,
+                vector,
             },
-            frost_turn_degrees: (build_id == 1001).then_some(0.0),
-            ground_spark_native_age_ticks: native_age,
-            ground_spark_turn_ticks_remaining: (build_id == 1009).then_some(0),
-            presentation_seed: private_seed,
-            projectile_index: index,
-            reacquires_target: missile_reacquires(build_id, speed_factor, input.underpowered),
-            secondary_presentation_phase_degrees: secondary_phase,
-            speed,
-            target_id: target.map(|target| target.id.clone()),
-            turn_accumulator: ETHER_PRIMARY_INITIAL_TURN,
-            turn_input: if build_id == 1009 {
-                0.0
-            } else {
-                fround(
-                    2.0 * speed_factor
-                        * if build_id == 1002 { ball_turn_scale } else { 1.0 }
-                        * native_missile_fan_turn_scale(index),
-                )
-            },
-            underpowered: input.underpowered,
-            vector,
         });
     }
     projectiles
 }
 
 pub fn step_native_weld_projectile_presentation(
-    projectile: &mut NativeWeldProjectileState,
+    projectile: &mut ProjectileMut<'_, WeldProjectileProgram>,
     rng: &mut NativeRng,
 ) {
     if projectile.build_id != 1001 {
@@ -279,7 +356,7 @@ pub fn step_native_weld_projectile_presentation(
 }
 
 pub fn step_native_weld_projectile(
-    projectile: &mut NativeWeldProjectileState,
+    projectile: &mut ProjectileMut<'_, WeldProjectileProgram>,
     targets: &[PrimarySpellTarget],
 ) {
     if projectile.build_id == 1009 {
@@ -335,10 +412,11 @@ pub fn step_native_weld_projectile(
         projectile.ball_lightning_acceleration.map_or(projectile.speed, |acceleration| {
             ball_lightning_movement_speed(projectile.speed, acceleration)
         });
-    if let Some(turn) = &mut projectile.frost_turn_degrees {
+    if let Some(turn) = &mut projectile.program.frost_turn_degrees {
         *turn = fround(*turn * 0.949999988079071);
-        if advanced.movement.heading_degrees != projectile.heading_degrees {
-            let delta = ((advanced.movement.heading_degrees - projectile.heading_degrees + 540.0)
+        if advanced.movement.heading_degrees != projectile.program.heading_degrees {
+            let delta = ((advanced.movement.heading_degrees - projectile.program.heading_degrees
+                + 540.0)
                 % 360.0)
                 - 180.0;
             *turn = fround(delta + *turn).clamp(-35.0, 35.0);

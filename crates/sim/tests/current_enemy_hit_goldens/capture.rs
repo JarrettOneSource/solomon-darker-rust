@@ -74,9 +74,14 @@ fn current_captures_suppress_family_death_children_and_effects_but_retain_reward
             "{} damage admission",
             case.seed
         );
-        assert_eq!(world.actors[0].ether_drain_captured, case.captured, "{} captured", case.seed);
+        assert_eq!(
+            world.actors.get(0).unwrap().ether_drain_captured,
+            case.captured,
+            "{} captured",
+            case.seed
+        );
         let spider_captured = matches!(
-            &world.actors[0].brain,
+            world.actors.get(0).unwrap().brain,
             EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured
         );
         assert_eq!(spider_captured, case.spider_phase_captured, "{} Spider phase", case.seed);

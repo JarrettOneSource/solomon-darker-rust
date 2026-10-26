@@ -77,6 +77,42 @@ remaining rounds and packet averages exclude the first full publication.
 Preparation and compression are host costs and remain included in the browser-suite
 host measurements.
 
+## Component storage
+
+Native session measurements compare component storage at `c1017a5` with the
+pre-cutover `dc16cfca` implementation on an Apple M5 Pro. Both use Rust 1.98.1,
+optimization level 3, no LTO and 16 codegen units. The table contains medians from
+five alternating runs after a paired warm-up. Benchmark builds completed before
+timing; ordinary background services remained running.
+
+College cases advance 1,000 movement ticks. Boneyard cases advance 300 ticks with
+held primary casting and 32 or 128 mixed Skeleton, Skeleton Archer, Zombie and Imp
+actors. Players have additional health for this benchmark so hits still resolve
+and combat continues throughout the measurement. Every requested tick advances
+in the expected run phase; all players remain alive. Seeds, inputs and navigation
+are identical, and all final checkpoints match byte for byte. The first admission
+tick is measured separately and excluded from the retained-tick timings below.
+
+| Scene | Previous tick, µs | ECS tick, µs | Previous clone, µs | ECS clone, µs |
+| --- | ---: | ---: | ---: | ---: |
+| College, one player | 24.72 | 29.09 | 4.36 | 30.34 |
+| College, four players | 45.87 | 52.40 | 10.54 | 37.80 |
+| 32 enemies, one player | 190.29 | 195.68 | 35.10 | 61.64 |
+| 128 enemies, four players | 471.04 | 494.45 | 48.47 | 92.73 |
+
+Tick costs increase by 3–18% in these workloads. Clone timings cover construction
+and destruction of 500 complete session copies per run. Serialized snapshots cost
+98–641 µs before the cutover and 99–650 µs with components. Process peak RSS rises
+by 1.4–2.4 MiB; it includes asset loading, setup and temporary copies. The inline
+`GameSession` grows from 11,064 to 12,080 bytes. Component ownership improves
+structural consistency but does not produce an overall speedup in these cases.
+
+These measurements establish the cost of the tested native simulation workloads.
+They do not establish browser frame rate, GPU cost or long-session memory use.
+The reproducible driver, raw samples and checkpoint checksums are retained in
+`~/codex-runs/solomon-ecs-cutover-20261026/`: `session-bench.rs`,
+`session-benchmark.py`, `session-benchmark.json` and `REPORT.md`.
+
 ## Implementation constraints
 
 Immutable scene, collision, skill, and unchanged scenery-target data share storage.
@@ -94,7 +130,7 @@ change numeric precision, acknowledgements, or reliable results.
 ## Open measurements
 
 Title and idle College browser cost, small-scene display copies, and College
-snapshot volume remain profiling targets. Four-player, mobile, high-refresh,
+snapshot volume remain profiling targets. Four-player browser, mobile, high-refresh,
 constrained-network, and long-session workloads are unmeasured.
 
 Future measurements should record the exact source and artifact identities, GPU,

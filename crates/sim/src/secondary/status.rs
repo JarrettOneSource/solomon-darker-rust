@@ -39,6 +39,7 @@ pub struct NativeSecondarySteamedEffectState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeSecondaryTargetEffectState {
     pub circle_slow_factor: f64,
     pub circle_slow_ticks: u64,
@@ -345,7 +346,7 @@ impl NativeSecondaryTargetEffectState {
 }
 
 pub fn apply_native_secondary_target_effect(
-    effects: &mut Vec<NativeSecondaryTargetEffectState>,
+    effects: &mut crate::ComponentEntities<NativeSecondaryTargetEffectState>,
     world_key: &str,
     target_id: usize,
     patch: NativeSecondaryTargetEffectPatch,
@@ -363,7 +364,7 @@ pub fn apply_native_secondary_target_effect(
 }
 
 pub fn apply_native_secondary_dazzle(
-    effects: &mut Vec<NativeSecondaryTargetEffectState>,
+    effects: &mut crate::ComponentEntities<NativeSecondaryTargetEffectState>,
     world_key: &str,
     target_id: usize,
     duration_ticks: u64,
@@ -383,11 +384,13 @@ pub fn apply_native_secondary_dazzle(
 
 #[must_use]
 pub fn native_secondary_target_effect<'a>(
-    effects: &'a [NativeSecondaryTargetEffectState],
+    effects: impl IntoIterator<Item = &'a NativeSecondaryTargetEffectState>,
     world_key: &str,
     target_id: usize,
 ) -> Option<&'a NativeSecondaryTargetEffectState> {
-    effects.iter().find(|effect| effect.world_key == world_key && effect.target_id == target_id)
+    effects
+        .into_iter()
+        .find(|effect| effect.world_key == world_key && effect.target_id == target_id)
 }
 
 #[must_use]

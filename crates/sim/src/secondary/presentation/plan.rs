@@ -18,10 +18,11 @@ use crate::enemies::presentation::{
 };
 use crate::float;
 use crate::float::{fround, hypot};
+use crate::secondary::NativeSecondaryActorKind as Kind;
+use crate::secondary::SecondaryActorRead;
 use crate::secondary::leviathan::{
     native_leviathan_appendage_local_root, native_leviathan_appendage_record,
 };
-use crate::secondary::{NativeSecondaryActorKind as Kind, NativeSecondaryActorState as Actor};
 use crate::spells::ether_presentation::ether_primary_compositor_plan;
 use crate::spells::fire_presentation::{native_fire_ember_plan, native_fire_explosion_plan};
 use crate::spells::model::FireExplosionPresentation;
@@ -30,7 +31,7 @@ use crate::{NativeRng, Vec2};
 
 #[must_use]
 pub fn native_secondary_presentation_plan(
-    actor: &Actor,
+    actor: &impl SecondaryActorRead,
     frame: f64,
     point_gain: f64,
 ) -> NativeSecondaryPresentationPlan {
@@ -50,7 +51,7 @@ pub fn native_secondary_presentation_plan(
 /// the ordinary snapshot wrapper uses Source's `actor.enhanced` default.
 #[must_use]
 pub fn native_secondary_presentation_plan_at_age(
-    actor: &Actor,
+    actor: &impl SecondaryActorRead,
     age_ticks: f64,
     frame: f64,
     point_gain: f64,
@@ -628,7 +629,10 @@ fn spell_draw(draw: NativeSpellSprite, role: String) -> NativeSecondarySpriteDra
     }
 }
 
-fn dampened_projectile_draws(actor: &Actor, age_ticks: f64) -> Vec<NativeSecondarySpriteDraw> {
+fn dampened_projectile_draws(
+    actor: &impl SecondaryActorRead,
+    age_ticks: f64,
+) -> Vec<NativeSecondarySpriteDraw> {
     let layers = if actor.variant == 3 {
         native_death_magic_layers(
             Vec2::ZERO,
@@ -690,7 +694,10 @@ fn dampened_projectile_draws(actor: &Actor, age_ticks: f64) -> Vec<NativeSeconda
     draws
 }
 
-fn magic_trap_draws(actor: &Actor, age_ticks: f64) -> Vec<NativeSecondarySpriteDraw> {
+fn magic_trap_draws(
+    actor: &impl SecondaryActorRead,
+    age_ticks: f64,
+) -> Vec<NativeSecondarySpriteDraw> {
     let radians = degrees_to_radians(age_ticks);
     let sine = float::sin(radians);
     let bob = fround(5.0 * sine - 12.0);
@@ -736,7 +743,10 @@ fn magic_trap_draws(actor: &Actor, age_ticks: f64) -> Vec<NativeSecondarySpriteD
     draws
 }
 
-fn acid_rain_plan(actor: &Actor, age_ticks: f64) -> NativeSecondaryPresentationPlan {
+fn acid_rain_plan(
+    actor: &impl SecondaryActorRead,
+    age_ticks: f64,
+) -> NativeSecondaryPresentationPlan {
     let scale = fround(actor.scale);
     let alpha = fround(actor.phase).clamp(0.0, 1.0);
     let phase = fround(actor.rotation_radians);
@@ -782,7 +792,10 @@ fn acid_rain_plan(actor: &Actor, age_ticks: f64) -> NativeSecondaryPresentationP
     plan
 }
 
-fn ether_drain_draws(actor: &Actor, frame: f64) -> Vec<NativeSecondarySpriteDraw> {
+fn ether_drain_draws(
+    actor: &impl SecondaryActorRead,
+    frame: f64,
+) -> Vec<NativeSecondarySpriteDraw> {
     let mut draws = Vec::new();
     for (role, alpha, y, rotation, x_scale, y_scale, tint) in [
         (

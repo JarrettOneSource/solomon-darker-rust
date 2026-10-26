@@ -92,9 +92,10 @@ impl ContactWork<'_, '_> {
             ember.common.painter_registrations.push(registration);
             let mut consumed = false;
             for _ in 0..10 {
-                ember = step_native_fire_ember(ember)
-                    .ember
-                    .expect("newborn Ember survives its ten native pre-ticks");
+                assert!(
+                    step_native_fire_ember(&mut ember).retained,
+                    "newborn Ember survives its ten native pre-ticks"
+                );
                 if ember.contact_due {
                     self.resolve_fire_actor_contacts(vec![FireActorContact::Ember(
                         native_fire_ember_contact(&ember),

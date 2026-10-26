@@ -1,10 +1,10 @@
 //! Secondary actor and articulated Golem projection from
 //! `client/native-secondary-presentation.ts`.
 
-use solomon_sim::secondary::NativeSecondarySimulationState;
+use solomon_sim::secondary::{NativeSecondarySimulationState, SecondaryActorRead};
 
 use super::PresentationClocks;
-use super::math::{interpolate_members, lerp, lerp_vec};
+use super::math::{interpolate_projected_members, lerp, lerp_vec};
 
 pub(super) fn project(
     output: &mut NativeSecondarySimulationState,
@@ -14,18 +14,19 @@ pub(super) fn project(
     clocks: &mut PresentationClocks,
 ) {
     clocks.secondary.clear();
-    output.actors = interpolate_members(
-        &older.actors,
-        &newer.actors,
+    output.actors = interpolate_projected_members(
+        older.actors.iter(),
+        newer.actors.iter(),
         blend,
         |actor| actor.id,
+        |actor| actor.snapshot(),
         |first, next, blend| {
             // Source keeps the older row when an ID changes kind; no invented
             // halfway actor may cross that discrete presentation boundary.
             if first.kind != next.kind {
-                return first.clone();
+                return first.snapshot();
             }
-            let mut actor = if blend < 1.0 { first.clone() } else { next.clone() };
+            let mut actor = if blend < 1.0 { first.snapshot() } else { next.snapshot() };
             let age = lerp(first.age_ticks as f64, next.age_ticks as f64, blend);
             clocks.secondary.insert(actor.id, age);
             actor.age_ticks = age.floor() as u64;
@@ -45,7 +46,7 @@ pub(super) fn project(
             actor.scale = lerp(first.scale, next.scale, blend);
             actor.velocity = lerp_vec(first.velocity, next.velocity, blend);
             if let (Some(first), Some(next), Some(golem)) =
-                (&first.golem, &next.golem, &mut actor.golem)
+                (first.golem(), next.golem(), &mut actor.golem)
             {
                 golem.left_connector_offset =
                     lerp_vec(first.left_connector_offset, next.left_connector_offset, blend);
@@ -76,9 +77,11 @@ pub(super) fn project(
             }
             actor
         },
-    );
+    )
+    .into_iter()
+    .collect();
     clocks.secondary.retain(|id, _| output.actors.iter().any(|actor| actor.id == *id));
-    for actor in &output.actors {
+    for actor in output.actors.iter() {
         clocks.secondary.entry(actor.id).or_insert(actor.age_ticks as f64);
     }
 }

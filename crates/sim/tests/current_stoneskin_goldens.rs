@@ -60,7 +60,7 @@ fn snapshot(
         .iter()
         .take(2)
         .map(|actor| {
-            let plan = native_secondary_presentation_plan(actor, actor.age_ticks as f64, 1.0);
+            let plan = native_secondary_presentation_plan(&actor, actor.age_ticks as f64, 1.0);
             json!({"id":actor.id,"root":plan.root,"worldY":plan.world_y,
             "queueFamily":if plan.queue_family == NativeSecondaryQueueFamily::OrdinaryDynamic {
                 "ordinary-dynamic"
@@ -71,7 +71,7 @@ fn snapshot(
         .collect();
     native_bits::source_value(&json!({
         "plans":plans,
-        "actors": state.actors.iter().map(support::actor_snapshot).collect::<Vec<_>>(),
+        "actors": state.actors.iter().map(|actor| support::actor_snapshot(&actor)).collect::<Vec<_>>(),
         "events": state.events.iter().map(support::event_snapshot).collect::<Vec<_>>(),
         "rng": support::rng_snapshot(&state.rng), "nextActorId": state.next_actor_id,
         "nextEventId": state.next_event_id, "received": received,
@@ -129,7 +129,7 @@ fn current_stoneskin_retains_cast_and_hit_chips_through_actual_expiry() {
                         enhanced_effects: case["enhanced"].as_bool().unwrap(),
                     },
                 );
-                enroll_native_secondary_painter_owners(&mut state.actors, &mut order);
+                enroll_native_secondary_painter_owners(state.actors.iter_mut(), &mut order);
                 received = json!({"absorbedDamage": result.absorbed_damage,
                     "healthDamage": result.health_damage});
             }

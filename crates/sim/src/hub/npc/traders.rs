@@ -133,6 +133,7 @@ impl HubPotionTraderClock {
 /// One native Hagatha crossfade sprite, with its independently sampled fade and lifetime.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct HubHagathaParticle {
     pub frame: usize,
     pub id: u64,
@@ -155,7 +156,7 @@ impl HubHagathaParticle {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubHagathaClock {
     pub next_particle_id: u64,
-    pub particles: Vec<HubHagathaParticle>,
+    pub particles: crate::ComponentEntities<HubHagathaParticle>,
     pub phase: f64,
     pub rng: NativeRng,
     pub velocity: f64,
@@ -166,7 +167,7 @@ impl HubHagathaClock {
     pub fn new(seed: u32) -> Self {
         Self {
             next_particle_id: 0,
-            particles: Vec::new(),
+            particles: crate::ComponentEntities::default(),
             phase: 0.0,
             rng: NativeRng::new(i64::from(seed)),
             velocity: 0.05_f32 as f64,
@@ -174,7 +175,7 @@ impl HubHagathaClock {
     }
 
     pub fn step(&mut self) {
-        for particle in &mut self.particles {
+        for particle in self.particles.iter_mut() {
             particle.progress = fround(particle.progress + particle.progress_step);
         }
         self.particles.retain(|particle| particle.progress <= 1.0);
@@ -221,6 +222,7 @@ impl HubHagathaClock {
 /// A present Skorcha, with native variant, gesture and independently pulsing hat.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct HubSkorcha {
     pub dismissal_index: usize,
     pub gesture: usize,
@@ -297,7 +299,7 @@ impl HubSkorcha {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubSkorchaSchedule {
     pub rng: NativeRng,
-    pub skorcha: Option<HubSkorcha>,
+    pub skorcha: crate::OptionalEntity<HubSkorcha>,
     pub transition_ticks_remaining: u64,
     hidden_ticks: Option<u64>,
     visible_ticks: Option<u64>,
@@ -331,8 +333,13 @@ impl HubSkorchaSchedule {
         } else {
             None
         };
-        let mut schedule =
-            Self { rng, skorcha, transition_ticks_remaining: 0, hidden_ticks, visible_ticks };
+        let mut schedule = Self {
+            rng,
+            skorcha: skorcha.into(),
+            transition_ticks_remaining: 0,
+            hidden_ticks,
+            visible_ticks,
+        };
         schedule.schedule_window();
         schedule
     }
@@ -340,18 +347,18 @@ impl HubSkorchaSchedule {
     pub fn step(&mut self) {
         if self.transition_ticks_remaining > 1 {
             self.transition_ticks_remaining -= 1;
-            if let Some(skorcha) = &mut self.skorcha {
+            if let Some(skorcha) = self.skorcha.as_mut() {
                 skorcha.step();
             }
             return;
         }
         if self.skorcha.is_some() {
-            self.skorcha = None;
+            self.skorcha.set(None);
         } else {
             let variant = self.rng.draw_integer(3) as usize;
             let skorcha = HubSkorcha::at_variant(self.rng.clone(), variant);
             self.rng = skorcha.rng.clone();
-            self.skorcha = Some(skorcha);
+            self.skorcha.set(Some(skorcha));
         }
         self.schedule_window();
     }

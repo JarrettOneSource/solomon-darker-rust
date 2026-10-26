@@ -1,7 +1,6 @@
-//! The enemy actor, family brains and combat messages from Website `enemies/model.ts`.
-//!
-//! Rules live in the family modules. Public fields retain the reference's names so the
-//! renderer, wave director and spell contacts can consume one actor row without adapters.
+//! Enemy body and controller components, their checkpoint record, and combat messages.
+//! Family modules own behavior; the entity store provides borrowed views to targeting
+//! and presentation without copying controller state.
 
 use super::config::EnemyConfig;
 use super::path::NativeEnemyPathState;
@@ -496,6 +495,7 @@ pub struct CocoonBrain {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub enum EnemyBrain {
     Skeleton(SkeletonBrain),
     Archer(ArcherBrain),
@@ -523,7 +523,8 @@ pub struct EnemyLighting {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct EnemyActor {
+#[derive(bevy_ecs::component::Component)]
+pub struct EnemyBody {
     pub ether_drain_captured: bool,
     pub hit_feedback: PuppetHit,
     /// Native +0x80 controls movement independently of visible feedback +0x78.
@@ -532,7 +533,6 @@ pub struct EnemyActor {
     pub blizzard_push_last_tick: Option<u64>,
     pub body_gait_phase: f64,
     pub body_pose: f64,
-    pub brain: EnemyBrain,
     pub config: EnemyConfig,
     pub current_health: f64,
     pub death_epoch: Option<u64>,
@@ -574,6 +574,18 @@ pub struct EnemyActor {
     pub terminal_emitted: bool,
     pub wave_ordinal: u64,
 }
+
+/// Owned constructor, checkpoint and controller-update record. A live enemy keeps
+/// its body and brain as separate components; an action commits them together.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "persistence", derive(serde::Deserialize))]
+#[cfg_attr(feature = "persistence", serde(from = "super::storage::EnemyActorFields"))]
+pub struct EnemyActor {
+    pub body: EnemyBody,
+    pub brain: EnemyBrain,
+}
+
+pub use super::storage::{EnemyActorMut, EnemyActorRead, EnemyActorRef, EnemyActors};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyTarget {
@@ -1235,6 +1247,7 @@ impl EnemyEvent {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct EnemyDeathEffect {
     pub age_ticks: u64,
     pub alpha: f64,
@@ -1292,6 +1305,7 @@ pub enum MaggotMovementPhase {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct WebbedState {
     pub severity: f64,
     pub strength: f64,
@@ -1323,9 +1337,10 @@ impl EnemyDamageResult {
         Self { accepted: false, health_damage: 0.0, killed: false, special_death_accepted: false };
 }
 
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct EnemyMaggotActor {
+pub use super::maggots::{MaggotActors, MaggotMut, MaggotRead, MaggotRef};
+
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
+pub struct MaggotBody {
     pub ether_drain_captured: bool,
     pub hit_feedback: PuppetHit,
     pub blizzard_push_accumulator: f64,
@@ -1344,35 +1359,161 @@ pub struct EnemyMaggotActor {
     pub heading_deg: f64,
     pub hurricane_contact_cooldown: f64,
     pub id: usize,
+    pub last_damaged_by_player_id: Option<String>,
+    pub last_damage_tick: Option<u64>,
+    pub life_state: EnemyLifeState,
+    pub registration_ordinal: usize,
+    pub maximum_health: f64,
+    pub native_cell_binding_order: usize,
+    pub native_registration_order: usize,
+    pub owner_coffin_actor_id: usize,
+    pub poison_damage: f64,
+    pub poison_duration: f64,
+    pub position: Vec2,
+    pub spawn_tick: u64,
+    pub staff_action_factor: f64,
+    pub staff_movement_factor: f64,
+    pub terminal_emitted: bool,
+    pub vertical_offset: f64,
+    pub vertical_velocity: f64,
+    pub visual_scale: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
+pub struct MaggotController {
     pub emergence_tick: u64,
     pub emergence_phase: f64,
     pub launch_trajectory: MaggotLaunchTrajectory,
     pub launch_velocity: Vec2,
     pub landing_bounce_velocity: f64,
     pub last_attack_tick: Option<u64>,
-    pub last_damaged_by_player_id: Option<String>,
-    pub last_damage_tick: Option<u64>,
     pub last_movement_tick: Option<u64>,
-    pub life_state: EnemyLifeState,
-    pub registration_ordinal: usize,
-    pub maximum_health: f64,
     pub next_attack_tick: u64,
     pub next_movement_tick: u64,
     pub next_target_refresh_tick: u64,
-    pub native_cell_binding_order: usize,
-    pub native_registration_order: usize,
-    pub owner_coffin_actor_id: usize,
     pub path: NativeEnemyPathState,
-    pub poison_damage: f64,
-    pub poison_duration: f64,
-    pub position: Vec2,
     pub movement_phase: MaggotMovementPhase,
-    pub spawn_tick: u64,
-    pub staff_action_factor: f64,
-    pub staff_movement_factor: f64,
     pub target_player_id: Option<String>,
-    pub terminal_emitted: bool,
-    pub vertical_offset: f64,
-    pub vertical_velocity: f64,
-    pub visual_scale: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "persistence", derive(serde::Deserialize), serde(from = "MaggotActorFields"))]
+pub struct EnemyMaggotActor {
+    pub body: MaggotBody,
+    pub controller: MaggotController,
+}
+
+// The typed save importer uses the original record name and flat field list.
+#[cfg(feature = "persistence")]
+#[derive(serde::Deserialize)]
+#[serde(rename = "EnemyMaggotActor")]
+struct MaggotActorFields {
+    ether_drain_captured: bool,
+    hit_feedback: PuppetHit,
+    blizzard_push_accumulator: f64,
+    blizzard_push_last_tick: Option<u64>,
+    combat_active: bool,
+    native_tree_query_member: bool,
+    collision_radius: f64,
+    current_health: f64,
+    death_offsets: Vec<Vec2>,
+    damage: f64,
+    death_epoch: Option<u64>,
+    death_started_tick: Option<u64>,
+    death_tick: u64,
+    gait_pose: f64,
+    heading_deg: f64,
+    hurricane_contact_cooldown: f64,
+    id: usize,
+    emergence_tick: u64,
+    emergence_phase: f64,
+    launch_trajectory: MaggotLaunchTrajectory,
+    launch_velocity: Vec2,
+    landing_bounce_velocity: f64,
+    last_attack_tick: Option<u64>,
+    last_damaged_by_player_id: Option<String>,
+    last_damage_tick: Option<u64>,
+    last_movement_tick: Option<u64>,
+    life_state: EnemyLifeState,
+    registration_ordinal: usize,
+    maximum_health: f64,
+    next_attack_tick: u64,
+    next_movement_tick: u64,
+    next_target_refresh_tick: u64,
+    native_cell_binding_order: usize,
+    native_registration_order: usize,
+    owner_coffin_actor_id: usize,
+    path: NativeEnemyPathState,
+    poison_damage: f64,
+    poison_duration: f64,
+    position: Vec2,
+    movement_phase: MaggotMovementPhase,
+    spawn_tick: u64,
+    staff_action_factor: f64,
+    staff_movement_factor: f64,
+    target_player_id: Option<String>,
+    terminal_emitted: bool,
+    vertical_offset: f64,
+    vertical_velocity: f64,
+    visual_scale: f64,
+}
+
+#[cfg(feature = "persistence")]
+impl From<MaggotActorFields> for EnemyMaggotActor {
+    fn from(row: MaggotActorFields) -> Self {
+        Self {
+            body: MaggotBody {
+                ether_drain_captured: row.ether_drain_captured,
+                hit_feedback: row.hit_feedback,
+                blizzard_push_accumulator: row.blizzard_push_accumulator,
+                blizzard_push_last_tick: row.blizzard_push_last_tick,
+                combat_active: row.combat_active,
+                native_tree_query_member: row.native_tree_query_member,
+                collision_radius: row.collision_radius,
+                current_health: row.current_health,
+                death_offsets: row.death_offsets,
+                damage: row.damage,
+                death_epoch: row.death_epoch,
+                death_started_tick: row.death_started_tick,
+                death_tick: row.death_tick,
+                gait_pose: row.gait_pose,
+                heading_deg: row.heading_deg,
+                hurricane_contact_cooldown: row.hurricane_contact_cooldown,
+                id: row.id,
+                last_damaged_by_player_id: row.last_damaged_by_player_id,
+                last_damage_tick: row.last_damage_tick,
+                life_state: row.life_state,
+                registration_ordinal: row.registration_ordinal,
+                maximum_health: row.maximum_health,
+                native_cell_binding_order: row.native_cell_binding_order,
+                native_registration_order: row.native_registration_order,
+                owner_coffin_actor_id: row.owner_coffin_actor_id,
+                poison_damage: row.poison_damage,
+                poison_duration: row.poison_duration,
+                position: row.position,
+                spawn_tick: row.spawn_tick,
+                staff_action_factor: row.staff_action_factor,
+                staff_movement_factor: row.staff_movement_factor,
+                terminal_emitted: row.terminal_emitted,
+                vertical_offset: row.vertical_offset,
+                vertical_velocity: row.vertical_velocity,
+                visual_scale: row.visual_scale,
+            },
+            controller: MaggotController {
+                emergence_tick: row.emergence_tick,
+                emergence_phase: row.emergence_phase,
+                launch_trajectory: row.launch_trajectory,
+                launch_velocity: row.launch_velocity,
+                landing_bounce_velocity: row.landing_bounce_velocity,
+                last_attack_tick: row.last_attack_tick,
+                last_movement_tick: row.last_movement_tick,
+                next_attack_tick: row.next_attack_tick,
+                next_movement_tick: row.next_movement_tick,
+                next_target_refresh_tick: row.next_target_refresh_tick,
+                path: row.path,
+                movement_phase: row.movement_phase,
+                target_player_id: row.target_player_id,
+            },
+        }
+    }
 }

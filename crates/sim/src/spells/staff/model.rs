@@ -16,7 +16,7 @@ pub struct NativePlayerStaffActionBase {
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
 pub struct NativePlayerStaffMeleeAction {
     pub base: NativePlayerStaffActionBase,
     pub action_timing_factor: f64,
@@ -26,7 +26,7 @@ pub struct NativePlayerStaffMeleeAction {
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
 pub struct NativePlayerStaffSpinAction {
     pub base: NativePlayerStaffActionBase,
     pub countdown: f64,
@@ -88,7 +88,7 @@ impl NativeStaffProcSound {
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
 pub struct NativePlayerStaffContactEvent {
     pub common: PrimarySpellTransientBase,
     pub impact_sound_pitches: Vec<f64>,
@@ -102,7 +102,7 @@ pub struct NativePlayerStaffContactEvent {
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
 pub struct NativePlayerStaffContactKnockback {
     pub common: PrimarySpellTransientBase,
     pub delta: Vec2,
@@ -111,7 +111,7 @@ pub struct NativePlayerStaffContactKnockback {
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
 pub struct NativePlayerStaffPikeBreakVfx {
     pub common: PrimarySpellTransientBase,
     #[cfg_attr(feature = "persistence", serde(default = "pike_break_shadow_default"))]
@@ -128,7 +128,7 @@ fn pike_break_shadow_default() -> bool {
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
 pub struct NativePlayerStaffSmokeVfx {
     pub common: PrimarySpellTransientBase,
     pub alpha: f64,
@@ -141,7 +141,7 @@ pub struct NativePlayerStaffSmokeVfx {
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
 pub struct NativePlayerStaffMoveFadeVfx {
     pub common: PrimarySpellTransientBase,
     pub alpha: f64,
@@ -156,7 +156,7 @@ pub struct NativePlayerStaffMoveFadeVfx {
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
 pub struct NativePlayerStaffPerspectiveVfx {
     pub common: PrimarySpellTransientBase,
     pub alpha: f64,
@@ -196,7 +196,7 @@ impl NativePlayerStaffVfx {
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
 pub struct NativeStaffKnockbackActor {
     pub common: PrimarySpellTransientBase,
     pub arc_degrees: f64,

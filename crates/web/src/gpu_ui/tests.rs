@@ -11,7 +11,7 @@ fn frame(
 fn frame_codes(
     ctx: &Context,
     events: Vec<egui::Event>,
-    codes: &[BrowserKey],
+    codes: &[KeyStroke],
     paint: impl FnMut(&mut UiFrame<'_>),
 ) -> BTreeMap<String, WidgetGeometry> {
     frame_native(ctx, events, codes, &[], None, paint)
@@ -20,11 +20,22 @@ fn frame_codes(
 fn frame_native(
     ctx: &Context,
     events: Vec<egui::Event>,
-    codes: &[BrowserKey],
+    codes: &[KeyStroke],
     receipts: &[edit::model::Receipt],
     click_count: Option<u32>,
     paint: impl FnMut(&mut UiFrame<'_>),
 ) -> BTreeMap<String, WidgetGeometry> {
+    frame_native_output(ctx, events, codes, receipts, click_count, paint).0
+}
+
+fn frame_native_output(
+    ctx: &Context,
+    events: Vec<egui::Event>,
+    codes: &[KeyStroke],
+    receipts: &[edit::model::Receipt],
+    click_count: Option<u32>,
+    paint: impl FnMut(&mut UiFrame<'_>),
+) -> (BTreeMap<String, WidgetGeometry>, egui::PlatformOutput) {
     let images = painter::Images::default();
     let widgets = RefCell::new(BTreeMap::new());
     let announcements = RefCell::new(Vec::new());
@@ -40,7 +51,7 @@ fn frame_native(
         ..Default::default()
     };
     edit::begin_native_focus(ctx, codes);
-    ctx.run_pass(raw, |ctx| {
+    let output = ctx.run_pass(raw, |ctx| {
         paint(&mut UiFrame {
             ctx,
             images: &images,
@@ -60,14 +71,115 @@ fn frame_native(
             editor_errors: &editor_errors,
             native_click_count: click_count,
         })
-    })
-    .drop_without_applying_deltas();
+    });
+    #[allow(unused_mut)]
+    let mut platform_output = output.platform_output.clone();
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(update) = &mut platform_output.accesskit_update {
+        edit::accessibility::update(update, &editors.borrow());
+    }
+    output.drop_without_applying_deltas();
     edit::finish_native_focus(ctx, codes);
     edit::set_focus(ctx, &editors.into_inner());
     assert!(editor_errors.into_inner().is_empty());
     let mut widgets = widgets.into_inner();
     rank_widgets(ctx, &mut widgets);
-    widgets
+    (widgets, platform_output)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn native_loading_status_covers_the_transition_before_artwork_and_retires_with_it() {
+    use solomon_sim::menu::loading::{MatchLoadingFlow, MatchLoadingStage, MatchLoadingState};
+
+    let mut view = crate::match_loading::MatchLoadingView::default();
+    let loading = MatchLoadingState::begin(
+        MatchLoadingFlow::Hub,
+        MatchLoadingStage::ReceivingHostCheckpoint,
+        0.0,
+    );
+    for (state, now) in [(Some(&loading), 0.0), (Some(&loading), 200.0), (None, 201.0)] {
+        let ctx = Context::default();
+        ctx.enable_accesskit();
+        view.update(state, now).unwrap();
+        // Areas use an invisible sizing pass before their first presented frame.
+        frame_native_output(&ctx, Vec::new(), &[], &[], None, |frame| {
+            view.paint(frame).unwrap();
+        });
+        let (_, output) = frame_native_output(&ctx, Vec::new(), &[], &[], None, |frame| {
+            view.paint(frame).unwrap();
+        });
+        let update = output.accesskit_update.unwrap();
+        let status = update.nodes.iter().find(|(_, node)| {
+            node.role() == egui::accesskit::Role::Status && node.label() == Some("Loading game")
+        });
+        assert_eq!(status.is_some(), state.is_some(), "native loading status at {now} ms");
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn native_editor_exposes_complete_accessible_text_and_selection() {
+    let _fonts = fonts::test_fonts();
+    for source in [
+        "".to_owned(),
+        "A😀 e\u{301} אב\nsecond line\n".into(),
+        "e\u{301}👩‍🚀fi".into(),
+        "word ".repeat(80),
+        "\u{200b}".into(),
+        "Windows\r\ntext\r\n".into(),
+    ] {
+        let ctx = Context::default();
+        ctx.enable_accesskit();
+        let mut text = source.clone();
+        let (_, output) = frame_native_output(&ctx, Vec::new(), &[], &[], None, |frame| {
+            frame.ctx.root_ui(|ui| {
+                let editor = if source.contains('\n') {
+                    NativeTextEdit::multiline(&mut text, "accessible-editor", "Text")
+                } else {
+                    NativeTextEdit::singleline(&mut text, "accessible-editor", "Text")
+                };
+                editor
+                    .font(egui::FontId::new(24.0, egui::FontFamily::Name("Alegreya".into())))
+                    .request_focus(true)
+                    .select_all(true)
+                    .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(250.0, 200.0)));
+            });
+        });
+        let tree = accesskit_consumer::Tree::new(output.accesskit_update.unwrap(), true);
+        let editor = tree
+            .state()
+            .node_by_tree_local_id(
+                egui::Id::unique("accessible-editor").accesskit_id(),
+                egui::accesskit::TreeId::ROOT,
+            )
+            .unwrap();
+        assert!(editor.supports_text_ranges(), "native text APIs require a text subtree");
+        assert_eq!(editor.document_range().text(), source);
+        assert_eq!(editor.text_selection().unwrap().text(), source);
+        let mut cursor = editor.document_range().start();
+        let expected = unicode_segmentation::UnicodeSegmentation::graphemes(source.as_str(), true)
+            .collect::<Vec<_>>();
+        let mut characters = Vec::new();
+        for _ in &expected {
+            let next = cursor.forward_to_character_end();
+            let mut range = cursor.to_degenerate_range();
+            range.set_end(next);
+            characters.push(range.text());
+            cursor = next;
+        }
+        assert_eq!(
+            characters, expected,
+            "assistive character navigation follows the editor's grapheme boundaries"
+        );
+        for run in editor.children() {
+            let bounds = run.bounding_box().unwrap();
+            assert!(
+                [bounds.x0, bounds.y0, bounds.x1, bounds.y1].iter().all(|v| v.is_finite()),
+                "zero-width text must retain finite accessible caret bounds"
+            );
+        }
+    }
 }
 
 #[test]
@@ -399,8 +511,8 @@ fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_onc
     assert_eq!(style.effect.opacity, 0.0);
 }
 
-fn browser_key(code: &str, key: &str) -> BrowserKey {
-    BrowserKey {
+fn browser_key(code: &str, key: &str) -> KeyStroke {
+    KeyStroke {
         code: code.to_owned(),
         key: key.to_owned(),
         pressed: true,

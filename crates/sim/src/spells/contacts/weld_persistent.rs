@@ -6,7 +6,8 @@ use super::*;
 
 impl ContactWork<'_, '_> {
     pub(super) fn resolve_weld_persistent_contacts(&mut self) {
-        let mut effects = self.source.transients.clone();
+        let mut effects: Vec<_> =
+            self.source.transients.iter().map(|effect| effect.snapshot()).collect();
         effects.sort_by_key(|effect| effect.common().id);
         for effect in effects {
             let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)) = effect
@@ -236,7 +237,8 @@ impl ContactWork<'_, '_> {
     }
 
     pub(super) fn resolve_weld_meteor_contacts(&mut self) {
-        let mut effects = self.source.transients.clone();
+        let mut effects: Vec<_> =
+            self.source.transients.iter().map(|effect| effect.snapshot()).collect();
         effects.sort_by_key(|effect| effect.common().id);
         for effect in effects {
             let PrimarySpellTransient::Weld(NativeWeldWorldActor::Meteor(meteor)) = effect else {

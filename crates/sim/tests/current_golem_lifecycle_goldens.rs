@@ -10,6 +10,7 @@ mod support;
 use serde_json::{Value, json};
 use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
 use solomon_sim::painter::WorldPainterOrder;
+use solomon_sim::secondary::SecondaryActorRead;
 use solomon_sim::secondary::golem::NativeGolemIncomingDamage;
 use solomon_sim::secondary::presentation::{
     NativeGolemDeathMember, NativeSecondaryBlend, NativeSecondaryPresentationPlan,
@@ -60,16 +61,16 @@ fn snapshot(
     received: Value,
 ) -> Value {
     let mut death_plans = Vec::new();
-    for actor in &state.actors {
+    for actor in state.actors.iter() {
         if actor.kind != NativeSecondaryActorKind::GolemDeath {
             continue;
         }
         for (member, plan) in [
-            (json!("all"), native_golem_death_presentation_plan(actor)),
+            (json!("all"), native_golem_death_presentation_plan(&actor)),
             (
                 json!(0),
                 native_golem_death_member_plan(
-                    actor,
+                    &actor,
                     actor.age_ticks as f64,
                     NativeGolemDeathMember::Fragment(0),
                 ),
@@ -77,7 +78,7 @@ fn snapshot(
             (
                 json!("star"),
                 native_golem_death_member_plan(
-                    actor,
+                    &actor,
                     actor.age_ticks as f64,
                     NativeGolemDeathMember::Star,
                 ),
@@ -91,8 +92,8 @@ fn snapshot(
         .actors
         .iter()
         .map(|actor| {
-            let mut value = support::actor_snapshot(actor);
-            if let Some(animation) = &actor.golem_death {
+            let mut value = support::actor_snapshot(&actor);
+            if let Some(animation) = actor.golem_death() {
                 value["golemDeath"] = serde_json::to_value(animation).unwrap();
             }
             value

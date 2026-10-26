@@ -5,12 +5,12 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+use solomon_graphics::assets::Image;
 use solomon_sim::Vec2;
 use solomon_sim::modding::assets::{GameModAsset, ModSpriteFrame};
 use solomon_sim::modding::inventory::{
     ModConsumableContent, ModItemContent, ModItemIcon, ModWearableSlot,
 };
-use web_sys::HtmlImageElement;
 
 use crate::mod_content::{GameModContentLoadError, ModContentCache, ModContentUrl};
 use solomon_graphics::assets;
@@ -26,7 +26,7 @@ pub struct PreparedModPresentationAssets {
 /// UI consumers use the same verified URL, dimensions and uploaded texture as world frames.
 pub struct ModPresentationImage {
     url: ModContentUrl,
-    image: HtmlImageElement,
+    image: Image,
 }
 
 impl ModPresentationImage {

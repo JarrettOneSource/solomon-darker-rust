@@ -21,7 +21,7 @@ use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::session::{GameSession, GameSessionInput, GameSessionOptions};
 use solomon_sim::spells::model::{
     PrimarySpellFireEmber, PrimarySpellFireParticle, PrimarySpellTransient,
-    PrimarySpellTransientBase, PrimarySpellWaterHail,
+    PrimarySpellTransientBase, PrimarySpellWaterHail, PrimaryTransientRef,
 };
 use solomon_web::presentation::NativePresentationTimeline;
 
@@ -122,7 +122,7 @@ fn endpoint(base: &GameSession, tick: u64, shift: f64) -> GameSession {
     session.ticks = tick;
     for (index, id) in session.participant_order.clone().iter().enumerate() {
         let participant = session.participants.get_mut(id).unwrap();
-        let wizard = &mut participant.wizard;
+        let wizard = &mut *participant.wizard;
         let tick = tick as f64;
         wizard.position = Vec2::new(
             100.0 + index as f64 * 200.0 + tick * 2.0 + shift,
@@ -176,7 +176,8 @@ fn client_clock_and_player_poses_follow_receipt_time_without_extrapolating() {
                     .participant_order
                     .iter()
                     .map(|id| {
-                        let participant = &frame.session.participants[id];
+                        let participant =
+                            &frame.session.participants.get(id).expect("participant exists");
                         let wizard = &participant.wizard;
                         (
                             id.clone(),
@@ -202,10 +203,10 @@ fn client_clock_and_player_poses_follow_receipt_time_without_extrapolating() {
                         let common = effect.common();
                         let age = frame.clocks.primary[&common.id];
                         match effect {
-                            PrimarySpellTransient::FireParticle(effect) => {
+                            PrimaryTransientRef::FireParticle(effect) => {
                                 vec![0.0, common.id as f64, age, effect.origin.x, effect.origin.y]
                             }
-                            PrimarySpellTransient::FireEmber(effect) => vec![
+                            PrimaryTransientRef::FireEmber(effect) => vec![
                                 1.0,
                                 common.id as f64,
                                 age,
@@ -218,7 +219,7 @@ fn client_clock_and_player_poses_follow_receipt_time_without_extrapolating() {
                                 effect.phase,
                                 effect.vertical_velocity,
                             ],
-                            PrimarySpellTransient::WaterHail(effect) => vec![
+                            PrimaryTransientRef::WaterHail(effect) => vec![
                                 2.0,
                                 common.id as f64,
                                 age,
@@ -271,7 +272,8 @@ fn college_prediction_stops_after_one_snapshot_interval() {
             [0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 200.0].into_iter().enumerate()
         {
             let frame = timeline.sample(milliseconds, "local", input, false).unwrap().unwrap();
-            let wizard = &frame.session.participants["local"].wizard;
+            let wizard =
+                &frame.session.participants.get("local").expect("participant exists").wizard;
             let actual = (
                 wizard.position.x,
                 wizard.position.y,

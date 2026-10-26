@@ -203,7 +203,8 @@ fn world_missing_player_terminal_and_rewound_snapshots_never_replay_old_events()
     session.participants.insert("local".into(), local);
     notifications.update(&session, "local", true).unwrap();
     assert!(keys(&notifications).is_empty());
-    let selection = session.participants["local"].player.selection.clone();
+    let selection =
+        session.participants.get("local").expect("participant exists").player.selection.clone();
     assert!(session.add_participant("remote".into(), selection));
     session.participants.get_mut("remote").unwrap().player.economy.action_feedback = Some(book(9));
     notifications.update(&session, "remote", true).unwrap();

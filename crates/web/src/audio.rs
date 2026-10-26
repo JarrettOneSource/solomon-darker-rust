@@ -1,5 +1,5 @@
-//! Browser audio edge: decoded stock buffers, native WebAudio sources and owned HTML
-//! music channels. Gameplay supplies cues/rates; this module never rolls random values.
+//! Shared audio director: cue admission, owned loops, narration mixing and music fades.
+//! Browser WebAudio and native device playback supply the samples and playback clock.
 
 mod custom;
 pub use custom::GameAssetAudio;
@@ -8,75 +8,41 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+use futures_util::future::{LocalBoxFuture, Shared};
+use solomon_graphics::assets;
 use solomon_sim::audio::{
     AUDIO_CATALOG, AudioCue, AudioEvent, AudioKind, AudioOptions, MusicScene,
 };
-use wasm_bindgen::{JsCast, JsValue, prelude::*};
-use wasm_bindgen_futures::{JsFuture, future_to_promise, spawn_local};
-use web_sys::{
-    AudioBuffer, AudioBufferSourceNode, AudioContext, AudioContextState, Document, Event, GainNode,
-    HtmlAudioElement,
-};
 
-use solomon_graphics::assets;
+#[cfg(target_arch = "wasm32")]
+mod browser;
+#[cfg(target_arch = "wasm32")]
+use browser as platform;
+#[cfg(not(target_arch = "wasm32"))]
+mod native;
+#[cfg(not(target_arch = "wasm32"))]
+use native as platform;
+use platform::{AudioBuffer, AudioEngine, Music, Voice, play_music, play_stock_music};
 
-/// Source `game-audio-browser.ts::loadMusicChannel` admits a channel on loadeddata.
-/// A failed resident music fetch is a startup error, just like a failed effect buffer.
-async fn ready_music(media: &HtmlAudioElement, path: &str) -> Result<(), String> {
-    if media.ready_state() >= 2 {
-        return Ok(());
-    }
-    let mut settle = None;
-    let ready = js_sys::Promise::new(&mut |resolve, reject| settle = Some((resolve, reject)));
-    let (resolve, reject) = settle.expect("Promise installs its resolvers synchronously");
-    let loaded = Closure::<dyn FnMut(Event)>::new(move |_| {
-        let _ = resolve.call0(&JsValue::UNDEFINED);
-    });
-    let failed = Closure::<dyn FnMut(Event)>::new(move |_| {
-        let _ = reject.call1(&JsValue::UNDEFINED, &JsValue::from_str("could not load game music"));
-    });
-    media
-        .add_event_listener_with_callback("loadeddata", loaded.as_ref().unchecked_ref())
-        .map_err(|error| audio_error("music readiness listener", error))?;
-    if let Err(error) =
-        media.add_event_listener_with_callback("error", failed.as_ref().unchecked_ref())
-    {
-        media
-            .remove_event_listener_with_callback("loadeddata", loaded.as_ref().unchecked_ref())
-            .map_err(|error| audio_error("music readiness cleanup", error))?;
-        return Err(audio_error("music error listener", error));
-    }
-    // Install readiness handlers before starting the resource selection. Setting src
-    // earlier and loading again in this async task aborts an already-started request.
-    media.set_src(&format!("assets/stock/audio/{path}"));
-    media.load();
-    let result = JsFuture::from(ready).await;
-    media
-        .remove_event_listener_with_callback("loadeddata", loaded.as_ref().unchecked_ref())
-        .map_err(|error| audio_error("music readiness cleanup", error))?;
-    media
-        .remove_event_listener_with_callback("error", failed.as_ref().unchecked_ref())
-        .map_err(|error| audio_error("music error cleanup", error))?;
-    result.map(|_| ()).map_err(|error| audio_error(path, error))
+type AssetDecode = Shared<LocalBoxFuture<'static, Result<AudioBuffer, String>>>;
+
+#[derive(Clone, Copy)]
+enum AudioBus {
+    Effects,
+    Narration,
 }
 
 struct PlayingVoice {
     cue: Option<AudioCue>,
-    source: AudioBufferSourceNode,
-    gain: GainNode,
+    handle: Voice,
     ends_at: Option<f64>,
 }
 impl PlayingVoice {
     fn disconnect(&self) -> Result<(), String> {
-        self.source.disconnect().map_err(|error| audio_error("source disconnect", error))?;
-        self.gain.disconnect().map_err(|error| audio_error("gain disconnect", error))
+        self.handle.disconnect()
     }
     fn stop(&self) -> Result<(), String> {
-        self.source
-            .unchecked_ref::<web_sys::AudioScheduledSourceNode>()
-            .stop()
-            .map_err(|error| audio_error("source stop", error))?;
-        self.disconnect()
+        self.handle.stop()
     }
 }
 struct LoopRequest {
@@ -86,9 +52,11 @@ struct LoopRequest {
 }
 struct MusicChannel {
     cue: AudioCue,
-    media: HtmlAudioElement,
+    media: Music,
     envelope: f64,
+    #[cfg(target_arch = "wasm32")]
     priming: bool,
+    #[cfg(target_arch = "wasm32")]
     primed: bool,
 }
 struct MusicFade {
@@ -98,11 +66,9 @@ struct MusicFade {
     outgoing_start: f64,
 }
 struct AudioState {
-    context: AudioContext,
-    master: GainNode,
-    sound_mix: GainNode,
+    context: AudioEngine,
     buffers: BTreeMap<String, AudioBuffer>,
-    asset_loads: BTreeMap<String, js_sys::Promise>,
+    asset_loads: BTreeMap<String, AssetDecode>,
     asset_loops: BTreeMap<String, PlayingVoice>,
     asset_music: BTreeMap<String, custom::AssetMusicChannel>,
     one_shots: Vec<PlayingVoice>,
@@ -122,12 +88,28 @@ struct AudioState {
 
 pub struct GameAudio {
     state: Rc<RefCell<AudioState>>,
-    // The document owns these listeners for the game's lifetime. Resume is invoked directly
-    // inside a trusted pointer/key event, before any asynchronous fetch or UI transition.
-    _listeners: Vec<Closure<dyn FnMut(Event)>>,
+    #[cfg(target_arch = "wasm32")]
+    _activation: platform::ActivationListeners,
 }
 
 impl GameAudio {
+    /// Playback diagnostics report the real director and device clock.
+    pub fn snapshot(&self) -> serde_json::Value {
+        let state = self.state.borrow();
+        serde_json::json!({
+            "clockSeconds": state.context.current_time(),
+            "buffers": state.buffers.len(),
+            "oneShots": state.one_shots.len(),
+            "streams": state.streams.keys().map(|cue| cue.as_str()).collect::<Vec<_>>(),
+            "loops": state.loops.iter().filter(|request| request.current.is_some()).map(|request| request.cue.as_str()).collect::<Vec<_>>(),
+            "soundVolume": state.sound_volume, "musicVolume": state.music_volume,
+            "narrationMix": state.narration_mix, "musicPaused": state.music_paused,
+            "music": state.music.iter().map(|channel| serde_json::json!({
+                "cue": channel.cue.as_str(), "envelope": channel.envelope, "paused": channel.media.paused(),
+            })).collect::<Vec<_>>(),
+        })
+    }
+
     pub(crate) fn startup_resources() -> Vec<crate::runtime_ui::StartupResource> {
         AUDIO_CATALOG
             .iter()
@@ -140,46 +122,11 @@ impl GameAudio {
             .collect()
     }
 
-    pub async fn load(document: &Document) -> Result<Self, String> {
+    pub async fn load(surface: &crate::platform::Surface) -> Result<Self, String> {
         crate::runtime_ui::enter_phase("audio")?;
-        let context = AudioContext::new().map_err(|error| audio_error("create context", error))?;
-        let master = context.create_gain().map_err(|error| audio_error("master gain", error))?;
-        master
-            .connect_with_audio_node(&context.destination())
-            .map_err(|error| audio_error("master output", error))?;
-        let sound_mix = context.create_gain().map_err(|error| audio_error("sound mix", error))?;
-        sound_mix
-            .connect_with_audio_node(&master)
-            .map_err(|error| audio_error("sound mix output", error))?;
-        let mut music = Vec::new();
-        for definition in AUDIO_CATALOG {
-            if definition.kind != AudioKind::Music {
-                continue;
-            }
-            let media =
-                HtmlAudioElement::new().map_err(|error| audio_error("music channel", error))?;
-            media.set_preload("auto");
-            media.set_loop(true);
-            media.set_volume(0.0);
-            media.set_attribute("hidden", "").map_err(|_| "hide music channel")?;
-            media.set_attribute("data-audio-cue", definition.id).map_err(|_| "music cue")?;
-            document
-                .body()
-                .ok_or("audio document body")?
-                .append_child(&media)
-                .map_err(|_| "music channel attach")?;
-            music.push(MusicChannel {
-                cue: definition.cue,
-                media,
-                envelope: 0.0,
-                priming: false,
-                primed: false,
-            });
-        }
+        let context = AudioEngine::new(surface)?;
         let state = Rc::new(RefCell::new(AudioState {
             context: context.clone(),
-            master,
-            sound_mix,
             buffers: BTreeMap::new(),
             asset_loads: BTreeMap::new(),
             asset_loops: BTreeMap::new(),
@@ -187,7 +134,7 @@ impl GameAudio {
             one_shots: Vec::new(),
             streams: BTreeMap::new(),
             loops: Vec::new(),
-            music,
+            music: Vec::new(),
             scene: None,
             incoming: None,
             outgoing: None,
@@ -195,67 +142,47 @@ impl GameAudio {
             sound_volume: 1.0,
             music_volume: 1.0,
             narration_mix: 1.0,
-            unlocked: false,
+            unlocked: cfg!(not(target_arch = "wasm32")),
             music_paused: false,
         }));
-        let mut paths = Vec::new();
+        let mut paths = std::collections::BTreeSet::new();
+        let mut work = Vec::new();
         for definition in AUDIO_CATALOG {
-            if definition.kind != AudioKind::Music && !paths.contains(&definition.path) {
-                paths.push(definition.path);
+            if !paths.insert(definition.path) {
+                continue;
             }
-        }
-        let promises = js_sys::Array::new();
-        for channel in &state.borrow().music {
-            let media = channel.media.clone();
-            let path = channel.cue.definition().path;
-            promises.push(&future_to_promise(async move {
-                ready_music(&media, path).await.map_err(JsValue::from)?;
-                crate::runtime_ui::completed(&format!("assets/stock/audio/{path}"))
-                    .map_err(JsValue::from)?;
-                Ok(JsValue::UNDEFINED)
-            }));
-        }
-        for path in paths {
             let state = state.clone();
             let context = context.clone();
-            let promise = future_to_promise(async move {
-                let bytes = assets::fetch_bytes(&format!("assets/stock/audio/{path}"))
-                    .await
-                    .map_err(|error| JsValue::from_str(&error))?;
-                let encoded = js_sys::Uint8Array::from(bytes.as_slice());
-                let decoded = context.decode_audio_data(&encoded.buffer())?;
-                let buffer = JsFuture::from(decoded).await?.dyn_into::<AudioBuffer>()?;
-                state.borrow_mut().buffers.insert(path.to_owned(), buffer);
-                crate::runtime_ui::completed(&format!("assets/stock/audio/{path}"))
-                    .map_err(JsValue::from)?;
-                Ok(JsValue::UNDEFINED)
-            });
-            promises.push(&promise);
-        }
-        JsFuture::from(js_sys::Promise::all(&promises))
-            .await
-            .map_err(|error| audio_error("load stock audio", error))?;
-        let mut listeners = Vec::new();
-        let window = document.default_view().ok_or("audio activation window")?;
-        for name in ["pointerdown", "keydown"] {
-            let state = state.clone();
-            let listener = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
-                if let Err(error) = unlock(&state) {
-                    web_sys::console::error_1(&JsValue::from_str(&error));
+            work.push(async move {
+                if definition.kind == AudioKind::Music {
+                    let media = context.load_music(definition.cue).await?;
+                    state.borrow_mut().music.push(MusicChannel {
+                        cue: definition.cue,
+                        media,
+                        envelope: 0.0,
+                        #[cfg(target_arch = "wasm32")]
+                        priming: false,
+                        #[cfg(target_arch = "wasm32")]
+                        primed: false,
+                    });
+                } else {
+                    let bytes =
+                        assets::fetch_bytes(&format!("assets/stock/audio/{}", definition.path))
+                            .await?;
+                    let buffer = context.decode(bytes).await?;
+                    state.borrow_mut().buffers.insert(definition.path.to_owned(), buffer);
                 }
+                crate::runtime_ui::completed(&format!("assets/stock/audio/{}", definition.path))
             });
-            // Source MainMenuScene captures before a focused canvas/control owns
-            // the event and stops propagation. Resume must run in that gesture.
-            window
-                .add_event_listener_with_callback_and_bool(
-                    name,
-                    listener.as_ref().unchecked_ref(),
-                    true,
-                )
-                .map_err(|_| "audio activation listener")?;
-            listeners.push(listener);
         }
-        Ok(Self { state, _listeners: listeners })
+        futures_util::future::try_join_all(work).await?;
+        #[cfg(target_arch = "wasm32")]
+        let activation = platform::ActivationListeners::attach(surface, &state)?;
+        Ok(Self {
+            state,
+            #[cfg(target_arch = "wasm32")]
+            _activation: activation,
+        })
     }
 
     /// Custom content shares the one context, mixer and buffer cache. The document's
@@ -269,7 +196,7 @@ impl GameAudio {
         let mut state = self.state.borrow_mut();
         state.sound_volume = f64::from(sound_percent.min(100)) / 100.0;
         state.music_volume = f64::from(music_percent.min(100)) / 100.0;
-        state.master.gain().set_value(state.sound_volume as f32);
+        state.context.set_sound_volume(state.sound_volume as f32);
         for channel in &state.music {
             channel.media.set_volume(channel.envelope * state.music_volume * state.narration_mix);
         }
@@ -281,7 +208,7 @@ impl GameAudio {
     pub fn set_narration_mix(&self, mix: f64) {
         let mut state = self.state.borrow_mut();
         state.narration_mix = solomon_sim::hud::clamp_unit(mix);
-        state.sound_mix.gain().set_value(state.narration_mix as f32);
+        state.context.set_narration_mix(state.narration_mix as f32);
         for channel in &state.music {
             channel.media.set_volume(channel.envelope * state.music_volume * state.narration_mix);
         }
@@ -304,7 +231,7 @@ impl GameAudio {
             .expect("stock scene music");
         state.incoming = Some(index);
         state.scene = Some(scene);
-        state.music[index].media.set_current_time(0.0);
+        state.music[index].media.rewind();
         state.music[index].envelope = 0.0;
         state.music[index].media.set_volume(0.0);
         let outgoing_start = state.outgoing.map_or(0.0, |outgoing| state.music[outgoing].envelope);
@@ -315,7 +242,7 @@ impl GameAudio {
             outgoing_start,
         });
         if state.unlocked && !state.music_paused {
-            play_stock_music(&self.state, index, &mut state.music[index], false)?;
+            play_stock_music(&self.state, index, &mut state.music[index])?;
         }
         Ok(())
     }
@@ -324,6 +251,7 @@ impl GameAudio {
     /// admission and music fading cannot expire before an actual browser audio sample plays.
     pub fn update(&self) -> Result<(), String> {
         let mut state = self.state.borrow_mut();
+        state.context.check()?;
         let now = state.context.current_time();
         let mut index = 0;
         while index < state.one_shots.len() {
@@ -541,18 +469,18 @@ impl GameAudio {
         state.music_paused = paused;
         if paused {
             for channel in &state.music {
-                channel.media.pause().map_err(|error| audio_error("pause music", error))?;
+                channel.media.pause()?;
             }
         } else if state.unlocked {
             for index in [state.incoming, state.outgoing].into_iter().flatten() {
-                play_stock_music(&self.state, index, &mut state.music[index], false)?;
+                play_stock_music(&self.state, index, &mut state.music[index])?;
             }
         }
         for channel in state.asset_music.values() {
             if paused {
-                channel.media.pause().map_err(|error| audio_error("pause custom music", error))?;
+                channel.media.pause()?;
             } else if state.unlocked {
-                play_music(&channel.media);
+                play_music(&channel.media)?;
             }
         }
         Ok(())
@@ -570,8 +498,11 @@ fn make_voice(
         .buffers
         .get(cue.definition().path)
         .ok_or_else(|| format!("{} buffer was not loaded", cue.as_str()))?;
-    let output =
-        if cue.definition().kind == AudioKind::Stream { &state.master } else { &state.sound_mix };
+    let output = if cue.definition().kind == AudioKind::Stream {
+        AudioBus::Narration
+    } else {
+        AudioBus::Effects
+    };
     make_buffer_voice(state, Some(cue), buffer, options, looping, delay_seconds, output)
 }
 
@@ -582,31 +513,12 @@ fn make_buffer_voice(
     options: AudioOptions,
     looping: bool,
     delay_seconds: f64,
-    output: &GainNode,
+    bus: AudioBus,
 ) -> Result<PlayingVoice, String> {
-    let source = state
-        .context
-        .create_buffer_source()
-        .map_err(|error| audio_error("buffer source", error))?;
-    source.set_buffer(Some(buffer));
-    source.set_loop(looping);
-    source.playback_rate().set_value(options.playback_rate as f32);
-    let gain = state.context.create_gain().map_err(|error| audio_error("voice gain", error))?;
-    gain.gain().set_value(options.volume.clamp(0.0, 1.0) as f32);
-    source
-        .connect_with_audio_node(&gain)
-        .map_err(|error| audio_error("voice gain connection", error))?;
-    gain.connect_with_audio_node(output).map_err(|error| audio_error("voice output", error))?;
-    source
-        .start_with_when_and_grain_offset(
-            state.context.current_time() + delay_seconds,
-            options.offset_seconds,
-        )
-        .map_err(|error| audio_error("voice start", error))?;
+    let handle = state.context.voice(buffer, options, looping, delay_seconds, bus)?;
     Ok(PlayingVoice {
         cue,
-        source,
-        gain,
+        handle,
         ends_at: if looping {
             None
         } else {
@@ -637,7 +549,7 @@ fn sync_loop(state: &mut AudioState, index: usize) -> Result<(), String> {
     {
         let current = request.current.as_mut().expect("retained loop");
         current.0 = next;
-        current.1.gain.gain().set_value(next.volume as f32);
+        current.1.handle.set_volume(next.volume as f32);
         return Ok(());
     }
     if let Some((_, voice)) = request.current.take() {
@@ -651,128 +563,17 @@ fn sync_loop(state: &mut AudioState, index: usize) -> Result<(), String> {
     Ok(())
 }
 
-fn unlock(state: &Rc<RefCell<AudioState>>) -> Result<(), String> {
-    let mut inner = state.borrow_mut();
-    inner.unlocked = true;
-    if inner.context.state() != AudioContextState::Running {
-        let resume = inner.context.resume().map_err(|error| audio_error("resume audio", error))?;
-        spawn_local(async move {
-            if let Err(error) = JsFuture::from(resume).await {
-                web_sys::console::error_1(&error);
-            }
-        });
-    }
-    if !inner.music_paused {
-        for index in [inner.incoming, inner.outgoing].into_iter().flatten() {
-            if inner.music[index].media.paused() {
-                play_stock_music(state, index, &mut inner.music[index], false)?;
-            }
-        }
-        for index in 0..inner.music.len() {
-            if inner.incoming == Some(index)
-                || inner.outgoing == Some(index)
-                || inner.music[index].primed
-                || inner.music[index].priming
-            {
-                continue;
-            }
-            let channel = &mut inner.music[index];
-            channel.media.set_current_time(0.0);
-            channel.media.set_loop(true);
-            channel.media.set_muted(false);
-            channel.media.set_volume(0.0);
-            play_stock_music(state, index, channel, true)?;
-        }
-        for channel in inner.asset_music.values() {
-            if channel.media.paused() {
-                play_music(&channel.media);
-            }
-        }
-    }
-    Ok(())
-}
-/// Source primes the resident songs in the trusted gesture. The native play call
-/// stays synchronous; completion only touches this still-owned channel and checks
-/// whether a scene/pause transition changed its role while the promise was pending.
-fn play_stock_music(
-    state: &Rc<RefCell<AudioState>>,
-    index: usize,
-    channel: &mut MusicChannel,
-    prime: bool,
-) -> Result<(), String> {
-    let promise = channel.media.play().map_err(|error| audio_error("play music", error))?;
-    if prime {
-        channel.priming = true;
-    }
-    let state = Rc::downgrade(state);
-    spawn_local(async move {
-        let result = JsFuture::from(promise).await;
-        let Some(state) = state.upgrade() else { return };
-        let mut inner = state.borrow_mut();
-        let owned = inner.incoming == Some(index) || inner.outgoing == Some(index);
-        let paused = inner.music_paused;
-        let channel = &mut inner.music[index];
-        if prime {
-            channel.priming = false;
-        }
-        channel.primed |= result.is_ok();
-        let cleanup = if !owned {
-            reset_music(channel)
-        } else if paused {
-            channel.media.pause().map_err(|error| audio_error("pause music", error))
-        } else {
-            Ok(())
-        };
-        if let Err(error) = cleanup {
-            web_sys::console::error_1(&JsValue::from_str(&error));
-        }
-        if let Err(error) = result {
-            let name = js_sys::Reflect::get(&error, &JsValue::from_str("name"))
-                .ok()
-                .and_then(|name| name.as_string());
-            // The actual pause/retirement may interrupt its pending play promise.
-            // This does not excuse a media error/abort event or a resource reload.
-            if name.as_deref() != Some("AbortError") || (owned && !paused) {
-                report_music_rejection(&error);
-            }
-        }
-    });
-    Ok(())
-}
-
-fn report_music_rejection(error: &JsValue) {
-    // A fresh trusted gesture retries browser autoplay rejection. Other playback
-    // errors are defects and remain visible to the browser acceptance observer.
-    if js_sys::Reflect::get(error, &JsValue::from_str("name"))
-        .ok()
-        .and_then(|name| name.as_string())
-        .as_deref()
-        != Some("NotAllowedError")
-    {
-        web_sys::console::error_1(error);
-    }
-}
-
-fn play_music(media: &HtmlAudioElement) {
-    match media.play() {
-        Ok(promise) => spawn_local(async move {
-            if let Err(error) = JsFuture::from(promise).await {
-                report_music_rejection(&error);
-            }
-        }),
-        Err(error) => web_sys::console::error_1(&error),
-    }
-}
 fn reset_music(channel: &mut MusicChannel) -> Result<(), String> {
-    channel.media.pause().map_err(|error| audio_error("reset music", error))?;
-    channel.media.set_current_time(0.0);
+    channel.media.pause()?;
+    channel.media.rewind();
     channel.media.set_volume(0.0);
     channel.envelope = 0.0;
     Ok(())
 }
 fn validate_options(options: AudioOptions) -> Result<(), String> {
     if !options.playback_rate.is_finite()
-        || options.playback_rate <= 0.0
+        || !(options.playback_rate as f32).is_finite()
+        || options.playback_rate as f32 <= 0.0
         || !options.volume.is_finite()
         || !options.offset_seconds.is_finite()
         || options.offset_seconds < 0.0
@@ -780,7 +581,4 @@ fn validate_options(options: AudioOptions) -> Result<(), String> {
         return Err("audio rate/gain/offset are invalid".into());
     }
     Ok(())
-}
-fn audio_error(operation: &str, error: JsValue) -> String {
-    format!("{operation}: {}", error.as_string().unwrap_or_else(|| format!("{error:?}")))
 }

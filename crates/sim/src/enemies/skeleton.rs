@@ -220,11 +220,11 @@ pub fn step_latched_skeleton(
     let effect = context.ability_effect(actor.id);
     let target = target_by_id(Some(&pike.player_id), context.players);
     let Some(target) = target.filter(|target| target_eligible(target) && !target.summoned) else {
-        detach_skeleton_pike(actor);
+        detach_skeleton_pike(&mut actor.body, &mut actor.brain);
         return;
     };
     if actor.target_player_id.is_none() || effect.dazzle_ticks > 0 || effect.disrupted_ticks > 0 {
-        detach_skeleton_pike(actor);
+        detach_skeleton_pike(&mut actor.body, &mut actor.brain);
         return;
     }
     let dx = fround(target.position.x - actor.position.x);
@@ -232,7 +232,7 @@ pub fn step_latched_skeleton(
     let distance = fround(hypot(dx, dy));
     actor.heading_deg = heading_degrees_from_vector(dx, dy);
     if distance >= fround(pike.distance * 1.5) {
-        detach_skeleton_pike(actor);
+        detach_skeleton_pike(&mut actor.body, &mut actor.brain);
         return;
     }
     // Native pike restraint writes the player root directly, bypassing world collision.

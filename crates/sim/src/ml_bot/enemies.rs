@@ -111,7 +111,7 @@ pub fn observe_ml_bot_policy_enemies(
             id: actor.id,
             maximum_health: actor.config.maximum_health,
             position: actor.position,
-            radius: boneyard_enemy_collision_radius(actor),
+            radius: boneyard_enemy_collision_radius(&actor),
             source: EnemySource::Actor(index),
             species: species(actor.config.enemy_token),
             target_player_id: actor.target_player_id.clone(),
@@ -131,7 +131,7 @@ pub fn observe_ml_bot_policy_enemies(
             radius: actor.collision_radius,
             source: EnemySource::Maggot(index),
             species: MlBotPolicyEnemySpecies::Maggot,
-            target_player_id: actor.target_player_id.clone(),
+            target_player_id: actor.controller.target_player_id.clone(),
             velocity: Vec2::ZERO,
         });
     }

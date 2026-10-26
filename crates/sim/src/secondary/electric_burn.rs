@@ -3,11 +3,11 @@
 
 use super::program::actor;
 use super::{
-    NativeSecondaryActorKind as Kind, NativeSecondaryActorState as Actor,
-    NativeSecondarySimulationState, NativeSecondaryTarget,
+    NativeSecondaryActorKind as Kind, NativeSecondarySimulationState, NativeSecondaryTarget,
 };
 use crate::Vec2;
 use crate::float::{cos, fround, sin};
+use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 use crate::spells::air::{
     NativeAirLightningInput, NativeAirPresentationRandom, NativeAirRibbonLayer,
     build_native_air_lightning_body,
@@ -79,7 +79,11 @@ pub(super) fn spawn_flare(
     state.spawn_actor(child);
 }
 
-pub(super) fn step_flare(source: &Actor, actor: &mut Actor, retain: &mut bool) {
+pub(super) fn step_flare(
+    source: &impl SecondaryActorRead,
+    actor: &mut impl SecondaryActorWrite,
+    retain: &mut bool,
+) {
     let alpha = fround(source.alpha - source.phase);
     actor.alpha = alpha.max(0.0);
     actor.rotation_radians = source.rotation_radians + std::f64::consts::PI / 180.0;
@@ -104,7 +108,7 @@ pub struct NativeElectricBurnArcPlan {
 /// quality changes only its ordinary ZAnimSplit masks. No glow belongs here.
 #[must_use]
 pub fn native_electric_burn_arc_plan(
-    actor: &Actor,
+    actor: &impl SecondaryActorRead,
     age_ticks: f64,
     enhanced_effects: bool,
 ) -> Option<NativeElectricBurnArcPlan> {

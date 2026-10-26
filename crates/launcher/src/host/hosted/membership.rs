@@ -5,7 +5,7 @@ use solomon_assets::website_save::SaveIntegrity;
 use solomon_protocol::ResumeGraceReason;
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::game_run::GameRunPhase;
-use solomon_sim::session::SessionParticipant;
+use solomon_sim::session::{ParticipantRead, ParticipantRef};
 use solomon_sim::social::{PartyIdentity, broker::GameSocialConnection};
 
 use super::{HostedGameHost, HostedRecoveryLineage, HostedRejoinSlot, HostedWorlds};
@@ -14,12 +14,12 @@ use crate::host::recovery::PartyRecoveryRosterMember;
 use crate::host::signing::random_token;
 
 impl HostedGameHost {
-    pub(in crate::host) fn retained_participant(&self, id: &str) -> Option<&SessionParticipant> {
+    pub(in crate::host) fn retained_participant(&self, id: &str) -> Option<ParticipantRef<'_>> {
         self.worlds.state_for_player(id).and_then(|state| state.participant(id)).or_else(|| {
             self.rejoin_slots.iter().find_map(|slot| {
                 (slot.player_id == id)
                     .then_some(slot.detached.as_ref()?)
-                    .map(|detached| &detached.participant)
+                    .map(|detached| detached.participant.view())
             })
         })
     }
@@ -215,7 +215,14 @@ impl HostedGameHost {
                 participant.player.combat.life_state == PlayerLifeState::Alive
             }) && !state.participant_order.iter().any(|other| {
                 other != &id
-                    && state.participants[other].player.combat.life_state == PlayerLifeState::Alive
+                    && state
+                        .participants
+                        .get(other)
+                        .expect("participant exists")
+                        .player
+                        .combat
+                        .life_state
+                        == PlayerLifeState::Alive
             })
         });
         let slot = self

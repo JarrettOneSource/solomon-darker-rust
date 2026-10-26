@@ -11,7 +11,6 @@ use solomon_sim::hud::{
 };
 use solomon_sim::mobile_ui::{MobileUiElementId, MobileUiLayoutState, default_mobile_ui_geometry};
 use std::cell::{Cell, RefCell};
-use web_sys::Document;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HudAction {
@@ -65,7 +64,6 @@ impl HudBeltHit {
 }
 
 pub struct Hud {
-    document: Document,
     visible: Cell<bool>,
     frame_intervals: u64,
     frame_sample_started_at: Option<f64>,
@@ -101,16 +99,15 @@ impl Hud {
     pub fn layer_id(&self) -> egui::LayerId {
         egui::LayerId::new(egui::Order::Middle, egui::Id::unique("game-hud"))
     }
-    pub async fn attach(document: &Document, hotbar: HotbarSelection) -> Result<Self, String> {
+    pub async fn attach(hotbar: HotbarSelection) -> Result<Self, String> {
         let bank = hotbar.bank();
         Ok(Self {
-            document: document.clone(),
             visible: Cell::new(true),
             frame_intervals: 0,
             frame_sample_started_at: None,
             fps: "-- FPS".into(),
             ping: "-- ms".into(),
-            hotbar_controls: HotbarControls::new(document, hotbar.clone(), None)?,
+            hotbar_controls: HotbarControls::new(hotbar.clone(), None)?,
             hotbar,
             ui: StockAtlas::load("UI").await?,
             skills: StockAtlas::load("Skills").await?,
@@ -242,12 +239,7 @@ impl Hud {
         Ok(())
     }
     fn coarse(&self) -> bool {
-        self.document
-            .default_view()
-            .and_then(|window| {
-                window.match_media("(hover:none) and (pointer:coarse)").ok().flatten()
-            })
-            .is_some_and(|query| query.matches())
+        crate::platform::coarse_pointer()
     }
     fn action(
         &self,

@@ -1,4 +1,4 @@
-//! GPU authored minimap from `mod-ui/ModMinimap.tsx`.
+//! Authored minimap rendered from accepted world projections.
 //! The accepted projection supplies every marker and the exact displayed action center.
 
 use crate::gpu_ui::{UiFrame, clip_polygon_ellipse};
@@ -10,8 +10,6 @@ use solomon_sim::modding::projection::ModContentProjection;
 use solomon_sim::modding::ui::{
     ModMinimapMarkerId, ModMinimapMarkerKind, ModMinimapSnapshot, project_mod_minimap,
 };
-use wasm_bindgen::JsValue;
-use web_sys::Document;
 
 pub struct ModMinimapAction {
     pub content_id: String,
@@ -43,7 +41,7 @@ impl ModMinimapView {
         egui::LayerId::new(egui::Order::Middle, egui::Id::unique("mod/minimap"))
     }
 
-    pub fn new(_document: &Document) -> Result<Self, String> {
+    pub fn new() -> Result<Self, String> {
         Ok(Self { model: None, actions: Vec::new() })
     }
     pub fn update(
@@ -59,10 +57,7 @@ impl ModMinimapView {
             let binding = if let Some((name, value)) =
                 model.bindings.and_then(|bindings| bindings.iter().next())
             {
-                let json = serde_json::to_string(value).map_err(|error| error.to_string())?;
-                let value = js_sys::JSON::parse(&json)
-                    .map_err(|_| "Could not read authored minimap binding")?;
-                Some(format!("{name}: {}", javascript_string(&value)))
+                Some(format!("{name}: {}", javascript_string(value)))
             } else {
                 None
             };
@@ -240,13 +235,13 @@ fn marker_id(id: ModMinimapMarkerId<'_>) -> String {
     match id {
         ModMinimapMarkerId::Player(id) => id.to_owned(),
         ModMinimapMarkerId::Enemy(id) => {
-            format!("enemy-{}", javascript_string(&JsValue::from_f64(id)))
+            format!("enemy-{}", crate::ui::javascript_number(id))
         }
         ModMinimapMarkerId::ModEnemy(id) => {
-            format!("mod-enemy-{}", javascript_string(&JsValue::from_f64(id)))
+            format!("mod-enemy-{}", crate::ui::javascript_number(id))
         }
         ModMinimapMarkerId::Powerup(id) => {
-            format!("powerup-{}", javascript_string(&JsValue::from_f64(id)))
+            format!("powerup-{}", crate::ui::javascript_number(id))
         }
     }
 }

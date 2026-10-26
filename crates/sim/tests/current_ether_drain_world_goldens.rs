@@ -95,7 +95,7 @@ fn player_pairs_loose_sweeps_and_registration_reuse_follow_the_source_transactio
                     collision_enabled: id != "owner" || !case["inactiveOwner"].as_bool().unwrap(),
                     movement_scale: 1.0,
                 },
-                position: session.participants[id].wizard.position,
+                position: session.participants.get(id).expect("participant exists").wizard.position,
             })
             .collect();
         let contacts: Vec<NativeEtherDrainContact> = native_bits::input(&case["contacts"]);
@@ -111,7 +111,7 @@ fn player_pairs_loose_sweeps_and_registration_reuse_follow_the_source_transactio
         let players: Vec<_> = session
             .participant_order
             .iter()
-            .map(|id| json!({"id":id,"position":session.participants[id].wizard.position}))
+            .map(|id| json!({"id":id,"position":session.participants.get(id).expect("participant exists").wizard.position}))
             .collect();
         let actors: Vec<_> = world
             .loot

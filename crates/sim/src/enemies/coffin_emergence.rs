@@ -2,10 +2,9 @@
 //! `core-server/enemies/coffin-emergence.ts`. Births and bounces share steering RNG.
 
 use super::effects::{DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec};
-use super::model::{
-    EnemyActor, EnemyDeathEffect, EnemyDeathEffectKind, EnemyEffectAtlas, EnemyEffectBlend,
-};
+use super::model::{EnemyDeathEffect, EnemyDeathEffectKind, EnemyEffectAtlas, EnemyEffectBlend};
 use super::world::EnemyWorld;
+use crate::enemies::model::EnemyActorRead;
 use crate::float::{self, fround};
 use crate::painter::WorldPainterOrder;
 use crate::spells::earth_debris::{NativeBoulderDebrisMotion, step_native_boulder_debris_motion};
@@ -81,7 +80,7 @@ pub fn create_native_coffin_emergence(
 
 pub(super) fn spawn_coffin_emergence(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     enhanced: bool,
     order: &mut WorldPainterOrder,
@@ -129,11 +128,11 @@ pub(super) fn spawn_coffin_emergence(
 }
 
 pub(super) fn step_coffin_emergence(
-    mut effect: EnemyDeathEffect,
+    effect: &mut EnemyDeathEffect,
     tick: u64,
     rng: &mut NativeRng,
-) -> Option<EnemyDeathEffect> {
-    let motion = step_native_boulder_debris_motion(
+) -> bool {
+    let Some(motion) = step_native_boulder_debris_motion(
         NativeBoulderDebrisMotion {
             alpha: effect.opacity_timer,
             bounce_velocity: effect.bounce_velocity,
@@ -146,7 +145,9 @@ pub(super) fn step_coffin_emergence(
         },
         tick,
         rng,
-    )?;
+    ) else {
+        return false;
+    };
     effect.age_ticks = tick - effect.spawn_tick;
     effect.last_step_tick = Some(tick);
     effect.alpha = motion.alpha.min(1.0);
@@ -158,5 +159,5 @@ pub(super) fn step_coffin_emergence(
     effect.angular_velocity_deg = motion.rotation_step_degrees;
     effect.velocity = motion.velocity;
     effect.vertical_velocity = motion.vertical_velocity;
-    Some(effect)
+    true
 }

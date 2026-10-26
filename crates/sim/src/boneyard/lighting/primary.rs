@@ -2,7 +2,7 @@
 //! authoritative actor values; presentation draws never advance combat randomness.
 
 use super::NativeBoneyardLightSource;
-use crate::enemies::boss_spell::{BossSpellKind, NativeBossSpell};
+use crate::enemies::boss_spell::{BossSpellKind, BossSpellRead};
 use crate::float::fround;
 use crate::spells::fire::{
     native_fire_presentation_random, native_fire_presentation_random_int,
@@ -108,13 +108,14 @@ pub fn ether_primary_impact_light_source(
 /// presentation generator for each spell and frame; it never consumes combat RNG.
 #[must_use]
 pub fn native_boss_spell_light(
-    spell: &NativeBossSpell,
+    spell: &impl BossSpellRead,
     presentation_frame: u64,
     multiple_shadows: bool,
 ) -> Option<NativeBoneyardLightSource> {
-    let mut rng = NativeRng::new(spell.owner.id as i64 + presentation_frame as i64);
-    let position = spell.owner.position;
-    let source = match &spell.kind {
+    let spell_view = spell.view();
+    let mut rng = NativeRng::new(spell_view.owner.id as i64 + presentation_frame as i64);
+    let position = spell_view.owner.position;
+    let source = match spell_view.kind {
         BossSpellKind::UltraBanish { alpha, light_radius, .. } => {
             NativeBoneyardLightSource::new(position, *light_radius, *alpha, multiple_shadows)
         }
@@ -148,7 +149,7 @@ pub fn native_boss_spell_light(
         BossSpellKind::HeartmongerSoul { .. } => NativeBoneyardLightSource::new(
             position,
             1.0,
-            fround(1.0 - spell.owner.age_ticks as f64 * 0.04_f32 as f64).max(0.0),
+            fround(1.0 - spell_view.owner.age_ticks as f64 * 0.04_f32 as f64).max(0.0),
             multiple_shadows,
         ),
         BossSpellKind::DeathMagic { light, .. } => {

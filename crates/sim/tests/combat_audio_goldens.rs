@@ -256,13 +256,15 @@ fn primary(value: &Value) -> (SpellState, Vec<NativePlayerStaffContactEvent>) {
         };
         state.projectiles.push(PrimarySpellProjectile::Earth(PrimarySpellEarthProjectile {
             common,
-            assembly_charge: 0.5,
-            hit_target_ids: Vec::new(),
-            maximum_charge: 1.0,
-            orientation: [0.0; 9],
-            remaining_damage: 1.0,
-            shell_charge: 0.5,
-            toughness: 1.0,
+            program: EarthProjectileProgram {
+                assembly_charge: 0.5,
+                hit_target_ids: Vec::new(),
+                maximum_charge: 1.0,
+                orientation: [0.0; 9],
+                remaining_damage: 1.0,
+                shell_charge: 0.5,
+                toughness: 1.0,
+            },
         }));
     }
     (state, contacts)

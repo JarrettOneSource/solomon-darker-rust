@@ -1,6 +1,6 @@
 [package]
 name = "solomon-web"
-description = "Browser client for the Rust Solomon Dark rebuild (WebAssembly + WebGL2)"
+description = "Shared Rust game client and GPU UI for native desktop and browser WASM"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
@@ -16,15 +16,20 @@ solomon-graphics = { workspace = true }
 solomon-sim = { workspace = true, features = ["persistence"] }
 solomon-assets = { workspace = true }
 solomon-protocol = { workspace = true }
-wasm-bindgen = { workspace = true }
-wasm-bindgen-futures = { workspace = true }
-js-sys = { workspace = true }
-console_error_panic_hook = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 unicode-segmentation = "=1.13.3"
 unicode-linebreak = "=0.1.5"
+ryu-js = "1.0.3"
+url = "2.5"
+percent-encoding = "2.3"
+futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
 egui = { version = "=0.37.0", default-features = false, features = ["default_fonts"] }
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+console_error_panic_hook = { workspace = true }
 web-sys = { workspace = true, features = [
   "AbortController", "AbortSignal", "AnimationTimeline", "Window", "VisualViewport", "MediaQueryList", "Document", "DocumentTimeline", "Element", "HtmlElement", "Node", "HtmlCanvasElement", "HtmlImageElement",
   "CanvasRenderingContext2d", "CanvasPattern", "ImageData", "TextMetrics",
@@ -44,3 +49,43 @@ web-sys = { workspace = true, features = [
   "Cache", "CacheStorage", "RequestCache", "SubtleCrypto", "Blob", "BlobPropertyBag",
   "ReadableStream", "ReadableStreamDefaultReader",
 ] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+solomon-storage = { workspace = true }
+async-executor = "1.14.0"
+winit = "0.30.13"
+fastrand = "2.5.0"
+getrandom = "0.4.3"
+egui-winit = { version = "=0.37.0", features = ["accesskit"] }
+arboard = "3.7.0"
+gilrs = "0.11.2"
+rfd = "=0.17.2"
+icu_collator = "=2.3.1"
+icu_locale = "=2.3.1"
+icu_decimal = "=2.3.0"
+# The component API preserves Intl's explicit abbreviated-month choice.
+icu_datetime = { version = "=1.5.1", features = ["experimental"] }
+icu_calendar = "=1.5.2"
+icu_casemap = "=2.3.0"
+sys-locale = "0.3.2"
+writeable = "0.6.3"
+rodio = { version = "=0.22.2", default-features = false, features = ["playback", "mp3", "vorbis", "wav"] }
+ogg = "=0.9.2"
+opus-codec = "=0.2.0"
+blocking = "1.7.0"
+futures-lite = "2.6"
+tokio = { version = "1.54", features = ["rt", "net", "time", "sync", "macros"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+ureq = { version = "3.4", default-features = false, features = ["rustls", "gzip"] }
+sha2 = "0.11"
+time = { version = "0.3.55", features = ["formatting", "macros", "parsing", "local-offset"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSWorkspace", "NSAccessibility"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+accesskit_consumer = "=0.39.1"
+futures-lite = "2.6"

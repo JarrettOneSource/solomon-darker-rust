@@ -214,7 +214,7 @@ fn authored_services_and_complete_client_projections_match_the_source_host() {
             }
             Err(error) => assert_eq!(Some(error), case.error, "{path}.error"),
         }
-        let player = &game.participants["player-1"].player;
+        let player = &game.participants.get("player-1").expect("participant exists").player;
         let state = json!({"health":player.combat.current_health,"mana":player.combat.current_mana,"gold":player.economy.gold,"experience":player.progression.experience,"level":player.progression.level,"backpack":player.economy.backpack.iter().map(inventory::item_value).collect::<Vec<_>>()});
         common::assert_json_values(&state, &case.game, &format!("{path}.game"));
         common::assert_json_values(

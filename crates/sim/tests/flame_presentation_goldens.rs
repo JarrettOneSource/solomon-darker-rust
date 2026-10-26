@@ -132,7 +132,7 @@ fn current_flame_draws_keep_birth_geometry_native_colors_and_region_bands() {
     for case in fixture["cases"].as_array().unwrap() {
         let state = actor(&case["state"]);
         weld_visual_rows::compare(
-            [NativeWeldPresentationState::World(&state)],
+            [NativeWeldPresentationState::World(state.view())],
             weld_visual_rows::sample(case, 0).unwrap(),
             case["name"].as_str().unwrap(),
         );

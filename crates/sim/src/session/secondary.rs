@@ -8,6 +8,7 @@ use crate::boneyard::projectile_world::BoneyardProjectileViewport;
 use crate::boneyard::world::{BoneyardPlayerBody, BoneyardPlayerStatus};
 use crate::combat::PlayerLifeState;
 use crate::enemies::model::EnemyDamageRequest;
+use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::float::fround;
 use crate::hub::interaction::BoastFailureProducer;
 use crate::player::PlayerState;
@@ -36,8 +37,11 @@ impl GameSession {
             .filter(|(_, player)| player.mindstar)
             .map(|(id, _)| id.clone())
             .collect();
-        let positions: Vec<_> =
-            self.participant_order.iter().map(|id| self.participants[id].wizard.position).collect();
+        let positions: Vec<_> = self
+            .participant_order
+            .iter()
+            .map(|id| self.participants.get(id).expect("participant exists").wizard.position)
+            .collect();
         let key = self.world_key(id).expect("an admitted secondary owner has its actual world");
         let teleport_bodies = SessionSecondaryWorld::collect_teleport_bodies(
             self.boneyard.as_ref(),
@@ -57,7 +61,7 @@ impl GameSession {
             // Source supplies null secondaryProjectileVisible for this operation.
             viewports: Vec::new(),
         };
-        let participant = &self.participants[id];
+        let participant = &self.participants.get(id).expect("participant exists");
         let player = &participant.player;
         let derived = player.derived_stats();
         let mut authority = NativeSecondaryPlayerAuthority::from_snapshot_with_stat_book(
@@ -65,7 +69,7 @@ impl GameSession {
                 alive: player.combat.life_state == PlayerLifeState::Alive,
                 weapon_kind: player_weapon(player),
                 belt: &player.belt,
-                character: &participant.wizard,
+                character: participant.wizard,
                 current_mana: player.combat.current_mana,
                 maximum_mana: player.combat.maximum_mana,
                 eligible: player.combat.can_cast() && player.progression.pending_offer.is_none(),
@@ -127,14 +131,7 @@ impl GameSession {
         unstepped_ids: &[u64],
         extensions: Option<&dyn GameSimulationExtensions>,
     ) -> Result<NativeSecondaryTickResult, String> {
-        let mut unstepped = Vec::new();
-        for actor in std::mem::take(&mut self.secondary.actors) {
-            if unstepped_ids.contains(&actor.id) {
-                unstepped.push(actor);
-            } else {
-                self.secondary.actors.push(actor);
-            }
-        }
+        let unstepped = self.secondary.actors.extract_if(|actor| unstepped_ids.contains(&actor.id));
         let previous_mindstars: std::collections::BTreeSet<_> = self
             .secondary
             .players
@@ -142,8 +139,11 @@ impl GameSession {
             .filter(|(_, player)| player.mindstar)
             .map(|(id, _)| id.clone())
             .collect();
-        let positions: Vec<_> =
-            self.participant_order.iter().map(|id| self.participants[id].wizard.position).collect();
+        let positions: Vec<_> = self
+            .participant_order
+            .iter()
+            .map(|id| self.participants.get(id).expect("participant exists").wizard.position)
+            .collect();
         let ether_drain = super::ether_drain::SessionEtherDrainSnapshot::capture(self);
         let teleport_bodies = SessionSecondaryWorld::collect_teleport_bodies(
             self.boneyard.as_ref(),
@@ -157,7 +157,7 @@ impl GameSession {
             .collect();
         let mut players = BTreeMap::new();
         for id in &self.participant_order {
-            let participant = &self.participants[id];
+            let participant = &self.participants.get(id).expect("participant exists");
             let player = &participant.player;
             let derived = player.derived_stats();
             let input = inputs[id];
@@ -165,7 +165,7 @@ impl GameSession {
                 alive: player.combat.life_state == PlayerLifeState::Alive,
                 weapon_kind: player_weapon(player),
                 belt: &player.belt,
-                character: &participant.wizard,
+                character: participant.wizard,
                 current_mana: player.combat.current_mana,
                 maximum_mana: player.combat.maximum_mana,
                 eligible: player.combat.can_cast() && player.progression.pending_offer.is_none(),
@@ -200,7 +200,12 @@ impl GameSession {
                 .participant_order
                 .iter()
                 .map(|id| BoneyardProjectileViewport {
-                    position: self.participants[id].wizard.position,
+                    position: self
+                        .participants
+                        .get(id)
+                        .expect("participant exists")
+                        .wizard
+                        .position,
                     viewport: inputs[id].viewport,
                     alternate_player: false,
                 })
@@ -264,7 +269,7 @@ impl GameSession {
                 && let Some(participant) = self.participants.get_mut(id)
             {
                 super::extensions::apply_filtered_mana_delta(
-                    &mut participant.player,
+                    participant.player,
                     id,
                     -*amount,
                     crate::modding::extensions::GameSimulationManaSource::SecondaryCast,
@@ -281,7 +286,7 @@ impl GameSession {
             if let Some(participant) = self.participants.get_mut(id) {
                 let cost = participant.player.combat.current_mana;
                 super::extensions::apply_filtered_mana_delta(
-                    &mut participant.player,
+                    participant.player,
                     id,
                     -cost,
                     crate::modding::extensions::GameSimulationManaSource::Overload,
@@ -438,7 +443,7 @@ impl GameSession {
         self.apply_ether_drain_enemy_contacts(&result.ether_drain_contacts, tick);
         let world = self.boneyard.as_mut().unwrap();
         for change in &result.target_heading_changes {
-            if let Some(actor) =
+            if let Some(mut actor) =
                 world.enemies.actors.iter_mut().find(|actor| actor.id == change.target_id)
             {
                 let heading = if change.mode == NativeSecondaryHeadingMode::Absolute {
@@ -450,7 +455,7 @@ impl GameSession {
                 if change.mode == NativeSecondaryHeadingMode::Absolute {
                     actor.path.wander_heading_deg = actor.heading_deg;
                 }
-            } else if let Some(actor) =
+            } else if let Some(mut actor) =
                 world.enemies.maggots.iter_mut().find(|actor| actor.id == change.target_id)
             {
                 let heading = if change.mode == NativeSecondaryHeadingMode::Absolute {
@@ -480,7 +485,7 @@ impl GameSession {
                 .actors
                 .iter()
                 .find(|actor| actor.id == knockback.source_actor_id)
-                .map(|actor| &actor.owner_id)
+                .map(|actor| &actor.common.owner_id)
                 .or_else(|| {
                     previous_owners
                         .iter()
@@ -515,7 +520,7 @@ impl GameSession {
         let Some(participant) = self.participants.get_mut(id) else {
             return;
         };
-        super::extensions::fail_player_boast(&mut participant.player, producer, extensions);
+        super::extensions::fail_player_boast(participant.player, producer, extensions);
     }
 }
 
@@ -528,17 +533,17 @@ pub(super) fn player_weapon(player: &PlayerState) -> Option<NativePlayerWeaponKi
 }
 
 pub(super) fn boneyard_player_bodies<'a>(
-    participants: &'a BTreeMap<String, SessionParticipant>,
+    participants: &'a Participants,
     order: &[String],
     run: &crate::game_run::GameRunLifecycle,
 ) -> Vec<BoneyardPlayerBody<'a>> {
     order
         .iter()
         .map(|id| {
-            let participant = &participants[id];
+            let participant = participants.get(id).expect("participant exists");
             BoneyardPlayerBody {
                 status: BoneyardPlayerStatus {
-                    id: &participant.id,
+                    id: participant.id,
                     alive: participant.player.combat.life_state == PlayerLifeState::Alive,
                     eligible: run.eligible_player_ids.contains(id),
                     collision_enabled: participant.player.combat.collision_enabled_after_tick(),

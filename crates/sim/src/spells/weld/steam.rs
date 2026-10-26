@@ -17,6 +17,7 @@ pub enum NativeWeldSteamVariant {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldSteamActorState {
     pub common: NativeWeldActorBase,
     pub alpha_multiplier: f64,

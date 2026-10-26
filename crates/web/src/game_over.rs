@@ -9,7 +9,6 @@ use solomon_sim::game_run::presentation::{
 };
 use solomon_sim::game_run::{GameRunLifecycle, GameRunPhase};
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec};
-use web_sys::Document;
 
 #[derive(Clone, Debug)]
 pub struct ContinueGameOver {
@@ -35,7 +34,7 @@ impl GameOverOverlay {
     pub fn layer_id(&self) -> egui::LayerId {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("game-over"))
     }
-    pub fn attach(_document: &Document) -> Result<Self, String> {
+    pub fn attach() -> Result<Self, String> {
         Ok(Self { view: None, accepted: None, actions: Vec::new(), focus_next: false })
     }
 

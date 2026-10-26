@@ -4,16 +4,16 @@ use super::dampened::{NativeDampenedSpellState, step_native_dampened_spell};
 use super::program::*;
 use super::step::StepEngine;
 use super::{
-    NativeSecondaryActorKind as Kind, NativeSecondaryActorState as Actor,
-    NativeSecondaryDamageKind as Damage, NativeSecondaryWorld,
+    NativeSecondaryActorKind as Kind, NativeSecondaryDamageKind as Damage, NativeSecondaryWorld,
 };
 use crate::Vec2;
 use crate::float::fround;
+use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 
 pub(super) fn step<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &Actor,
-    actor: &mut Actor,
+    source: &impl SecondaryActorRead,
+    actor: &mut impl SecondaryActorWrite,
     retain: &mut bool,
 ) {
     match actor.kind {

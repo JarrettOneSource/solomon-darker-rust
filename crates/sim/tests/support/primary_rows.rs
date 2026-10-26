@@ -2,6 +2,7 @@
 use serde_json::{Value, json};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::profile::primary::NativeSpentEmber;
+use solomon_sim::spells::model::PrimaryTransientRef;
 use solomon_sim::spells::model::*;
 use solomon_sim::{NativeRng, Vec2};
 
@@ -18,10 +19,10 @@ pub fn registration(value: PainterRegistration) -> Value {
 pub fn random_state(rng: &NativeRng) -> Value {
     json!({ "indexA": rng.index_a, "indexB": rng.index_b, "words": rng.words.as_slice() })
 }
-pub fn projectile_row(projectile: &PrimarySpellProjectile) -> Value {
+pub fn projectile_row(projectile: PrimaryProjectileRef<'_>) -> Value {
     let (kind, detail) = match projectile {
-        PrimarySpellProjectile::Weld(_) => unreachable!("this fixture casts the five elements"),
-        PrimarySpellProjectile::Ether(spell) => (
+        PrimaryProjectileRef::Weld(_) => unreachable!("this fixture casts the five elements"),
+        PrimaryProjectileRef::Ether(spell) => (
             "ether",
             json!([
                 spell.damage_retention,
@@ -36,7 +37,7 @@ pub fn projectile_row(projectile: &PrimarySpellProjectile) -> Value {
                 spell.visual_scale,
             ]),
         ),
-        PrimarySpellProjectile::Fire(spell) => {
+        PrimaryProjectileRef::Fire(spell) => {
             let spent = match spell.spent_ember {
                 NativeSpentEmber::None => json!({ "kind": "none" }),
                 NativeSpentEmber::Immolate { damage } => {
@@ -60,7 +61,7 @@ pub fn projectile_row(projectile: &PrimarySpellProjectile) -> Value {
                 ]),
             )
         }
-        PrimarySpellProjectile::Earth(spell) => (
+        PrimaryProjectileRef::Earth(spell) => (
             "earth",
             json!([
                 spell.assembly_charge,
@@ -80,9 +81,9 @@ pub fn projectile_row(projectile: &PrimarySpellProjectile) -> Value {
         "direction": point(common.direction), "charge": common.charge, "damage": common.damage,
         "flight": common.flight_ticks, "registration": registration(common.registration), "detail": detail })
 }
-pub fn transient_row(effect: &PrimarySpellTransient) -> Value {
+pub fn transient_row(effect: PrimaryTransientRef<'_>) -> Value {
     let (kind, detail) = match effect {
-        PrimarySpellTransient::Air(spell) => (
+        PrimaryTransientRef::Air(spell) => (
             "air",
             json!([
                 spell.birth_tick,
@@ -96,7 +97,7 @@ pub fn transient_row(effect: &PrimarySpellTransient) -> Value {
                 spell.variant,
             ]),
         ),
-        PrimarySpellTransient::Water(spell) => (
+        PrimaryTransientRef::Water(spell) => (
             "water",
             json!([
                 point(spell.direction),
@@ -108,7 +109,7 @@ pub fn transient_row(effect: &PrimarySpellTransient) -> Value {
                 spell.variant,
             ]),
         ),
-        PrimarySpellTransient::EarthCalledRock(spell) => (
+        PrimaryTransientRef::EarthCalledRock(spell) => (
             "earth-called-rock",
             json!([
                 spell.fall_velocity,
@@ -125,14 +126,14 @@ pub fn transient_row(effect: &PrimarySpellTransient) -> Value {
                 spell.variant,
             ]),
         ),
-        PrimarySpellTransient::EarthImpact(spell) => (
+        PrimaryTransientRef::EarthImpact(spell) => (
             "earth-impact",
             json!([spell.birth_tick, spell.charge, spell.lifetime_ticks, point(spell.origin)]),
         ),
-        PrimarySpellTransient::EtherImpact(spell) => {
+        PrimaryTransientRef::EtherImpact(spell) => {
             ("ether-impact", json!([spell.birth_tick, point(spell.origin), spell.visual_scale]))
         }
-        PrimarySpellTransient::EtherBlast(spell) => (
+        PrimaryTransientRef::EtherBlast(spell) => (
             "ether-blast",
             json!([
                 spell.birth_tick,
@@ -141,10 +142,10 @@ pub fn transient_row(effect: &PrimarySpellTransient) -> Value {
                 random_state(&spell.presentation_rng)
             ]),
         ),
-        PrimarySpellTransient::FireParticle(spell) => {
+        PrimaryTransientRef::FireParticle(spell) => {
             ("fire", json!([point(spell.direction), point(spell.origin), spell.variant]))
         }
-        PrimarySpellTransient::FireImpact(spell) => ("fire-impact", json!([point(spell.origin)])),
+        PrimaryTransientRef::FireImpact(spell) => ("fire-impact", json!([point(spell.origin)])),
         _ => panic!("fixture must include the actual actor contract"),
     };
     let common = effect.common();

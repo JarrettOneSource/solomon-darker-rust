@@ -147,8 +147,15 @@ fn lua_controller_admission_leases_expiry_observation_and_skill_choices_match_so
         }
         let leases:Vec<_>=controller.checkpoint().iter().map(|(player_id,lease)|json!({"playerId":player_id,"expiresAtMs":lease.expires_at_ms,"input":input_value(lease.input),"modId":lease.mod_id,"owner":lease.owner})).collect();
         common::assert_json_values(&json!(leases), &case.leases, &format!("{path}.leases"));
-        let offer =
-            game.participants["local"].player.progression.pending_offer.as_ref().map(|offer| {
+        let offer = game
+            .participants
+            .get("local")
+            .expect("participant exists")
+            .player
+            .progression
+            .pending_offer
+            .as_ref()
+            .map(|offer| {
                 let options: Vec<_> = offer
                     .options
                     .iter()

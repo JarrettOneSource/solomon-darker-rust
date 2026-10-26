@@ -89,18 +89,20 @@ pub(super) fn create_one_shot_projectiles(
         };
         return vec![PrimarySpellProjectile::Fire(PrimarySpellFireProjectile {
             common,
-            burn_damage: if birth.underpowered { 0.0 } else { profile.burn_damage },
-            ember_damage: if birth.underpowered { 0.0 } else { profile.ember_damage },
-            ember_fragments: if birth.underpowered { 0 } else { profile.ember_fragments },
-            explode_damage: if birth.underpowered { 0.0 } else { profile.explode_damage },
-            explode_radius: if birth.underpowered { 0.0 } else { profile.explode_radius },
-            private_seed,
-            spent_ember: if birth.underpowered {
-                NativeSpentEmber::None
-            } else {
-                profile.spent_ember
+            program: FireProjectileProgram {
+                burn_damage: if birth.underpowered { 0.0 } else { profile.burn_damage },
+                ember_damage: if birth.underpowered { 0.0 } else { profile.ember_damage },
+                ember_fragments: if birth.underpowered { 0 } else { profile.ember_fragments },
+                explode_damage: if birth.underpowered { 0.0 } else { profile.explode_damage },
+                explode_radius: if birth.underpowered { 0.0 } else { profile.explode_radius },
+                private_seed,
+                spent_ember: if birth.underpowered {
+                    NativeSpentEmber::None
+                } else {
+                    profile.spent_ember
+                },
+                underpowered: birth.underpowered,
             },
-            underpowered: birth.underpowered,
         })];
     }
     let NativePrimarySkillProfile::Ether(profile) = birth.profile else {
@@ -133,20 +135,22 @@ pub(super) fn create_one_shot_projectiles(
         };
         projectiles.push(PrimarySpellProjectile::Ether(PrimarySpellEtherProjectile {
             common,
-            damage_retention: if birth.underpowered { 1.0 } else { profile.damage_retention },
-            heading_degrees,
-            pierces_remaining: if birth.underpowered { 0 } else { profile.pierces },
-            reacquires_target: !birth.underpowered && profile.reacquires_target,
-            speed,
-            target_id: target.map(|target| target.id.clone()),
-            turn_input: if birth.underpowered {
-                1.2_f32 as f64
-            } else {
-                fround(2.0 * profile.speed_factor * native_missile_fan_turn_scale(index))
+            program: EtherProjectileProgram {
+                damage_retention: if birth.underpowered { 1.0 } else { profile.damage_retention },
+                heading_degrees,
+                pierces_remaining: if birth.underpowered { 0 } else { profile.pierces },
+                reacquires_target: !birth.underpowered && profile.reacquires_target,
+                speed,
+                target_id: target.map(|target| target.id.clone()),
+                turn_input: if birth.underpowered {
+                    1.2_f32 as f64
+                } else {
+                    fround(2.0 * profile.speed_factor * native_missile_fan_turn_scale(index))
+                },
+                turn_accumulator: ETHER_PRIMARY_INITIAL_TURN,
+                underpowered: birth.underpowered,
+                visual_scale: 1.0,
             },
-            turn_accumulator: ETHER_PRIMARY_INITIAL_TURN,
-            underpowered: birth.underpowered,
-            visual_scale: 1.0,
         }));
     }
     projectiles
@@ -167,19 +171,19 @@ fn draw_inclusive_damage(profile: &NativePrimarySkillProfileBase, rng: &mut Nati
 }
 
 pub(super) fn advance_projectile(
-    mut spell: PrimarySpellProjectile,
+    spell: &mut PrimaryProjectilePartsMut<'_>,
     targets: &[PrimarySpellTarget],
-) -> PrimarySpellProjectile {
+) {
     if spell.common().phase == PrimarySpellProjectilePhase::Held {
         spell.common_mut().age_ticks += 1;
-        return spell;
+        return;
     }
-    match &mut spell {
-        PrimarySpellProjectile::Weld(projectile) => {
+    match spell {
+        PrimaryProjectilePartsMut::Weld(projectile) => {
             super::weld::step_native_weld_projectile(projectile, targets);
-            return spell;
+            return;
         }
-        PrimarySpellProjectile::Ether(spell) => {
+        PrimaryProjectilePartsMut::Ether(spell) => {
             let advanced = advance_ether_primary_tracking(EtherPrimaryTrackingInput {
                 heading_degrees: spell.heading_degrees,
                 movement_scalar: 1.0,
@@ -202,7 +206,7 @@ pub(super) fn advance_projectile(
                 fround(spell.common.direction.y * spell.speed),
             );
         }
-        PrimarySpellProjectile::Earth(spell) => {
+        PrimaryProjectilePartsMut::Earth(spell) => {
             let position = Vec2::new(
                 fround(spell.common.position.x + spell.common.velocity.x),
                 fround(spell.common.position.y + spell.common.velocity.y),
@@ -219,7 +223,7 @@ pub(super) fn advance_projectile(
             );
             spell.common.position = position;
         }
-        PrimarySpellProjectile::Fire(spell) => {
+        PrimaryProjectilePartsMut::Fire(spell) => {
             // Unlike Earth and Ether, the Website keeps this position in doubles.
             spell.common.position.x += spell.common.velocity.x;
             spell.common.position.y += spell.common.velocity.y;
@@ -227,5 +231,4 @@ pub(super) fn advance_projectile(
     }
     spell.common_mut().age_ticks += 1;
     spell.common_mut().flight_ticks += 1;
-    spell
 }

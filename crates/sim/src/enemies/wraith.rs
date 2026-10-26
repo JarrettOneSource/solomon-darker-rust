@@ -114,7 +114,7 @@ fn move_wraith(
         .map(|target| target.position);
     if actor.path.reorientation_ticks_remaining > 0 {
         actor.heading_deg =
-            actor.path.step_reorientation(actor.heading_deg, actor.position, target);
+            actor.body.path.step_reorientation(actor.body.heading_deg, actor.body.position, target);
         return;
     }
     let (delta, heading) = if clock.full {
@@ -140,10 +140,10 @@ fn move_wraith(
     actor.path.flank_ticks_remaining =
         actor.path.flank_ticks_remaining.saturating_sub(clock.cadence);
     let distance = hypot(delta.x, delta.y);
-    actor.path.step_recovery(
+    actor.body.path.step_recovery(
         &mut world.steering_rng,
         PathRecoveryRequest {
-            flanking_enabled: actor.config.flanking,
+            flanking_enabled: actor.body.config.flanking,
             requested_distance: distance,
             status_factor: status,
             tick: context.tick,
@@ -187,7 +187,7 @@ pub fn step_wraith_flight_clock(brain: &mut WraithBrain, admitted: bool) {
 
 #[must_use]
 pub fn native_wraith_movement(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     brain: &WraithBrain,
     cadence: u64,
     status: f64,
@@ -221,7 +221,7 @@ pub fn native_wraith_movement(
 
 #[must_use]
 pub fn native_wraith_degraded_movement(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     brain: &WraithBrain,
     cadence: u64,
     status: f64,
@@ -278,11 +278,11 @@ fn wraith_turn_direction(current: f64, target: f64) -> f64 {
 
 pub fn spawn_wraith_wisp(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) {
-    let EnemyBrain::Wraith(brain) = &actor.brain else {
+    let EnemyBrain::Wraith(brain) = actor.brain() else {
         return;
     };
     if actor.life_state != EnemyLifeState::Alive

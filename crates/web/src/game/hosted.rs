@@ -18,6 +18,7 @@ use solomon_sim::modding::{LuaObject, LuaValue};
 use solomon_sim::settings::{game_online_preferences, game_shared_hub_enabled};
 use solomon_sim::social::PlayerSocialProfile;
 
+#[cfg(target_arch = "wasm32")]
 mod boneyards;
 mod cloud;
 mod observer;
@@ -68,10 +69,12 @@ pub(super) struct HostedGame {
     progress: Rc<RefCell<Vec<HostedDownloadProgress>>>,
     subscription_updates: Rc<RefCell<Vec<SubscriptionUpdate>>>,
     pub(super) observer: Option<HostedObserver>,
+    #[cfg(target_arch = "wasm32")]
     boneyard_library: Option<boneyards::BoneyardLibrary>,
 }
 
 impl HostedGame {
+    #[cfg(target_arch = "wasm32")]
     pub(super) fn paint_boneyard_library(
         &mut self,
         menu: &MenuUi,
@@ -334,6 +337,7 @@ impl PendingHostedWork {
 }
 
 impl Game {
+    #[cfg(target_arch = "wasm32")]
     fn update_boneyard_library(&mut self) -> Result<(), String> {
         let Some(hosted) = &mut self.hosted else { return Ok(()) };
         if hosted.desktop_endpoint.is_some() || !self.menu.dark_cloud_boneyards_selected() {
@@ -355,12 +359,11 @@ impl Game {
     }
     pub(super) async fn load_hosted(
         &mut self,
-        window: &web_sys::Window,
         mount: WebsiteMount,
         desktop_endpoint: Option<crate::desktop::DesktopEndpoint>,
     ) -> Result<(), String> {
         let desktop = desktop_endpoint.is_some();
-        let api = WebsiteApi::new(window.clone(), mount);
+        let api = WebsiteApi::new(crate::platform::location()?.as_str(), mount)?;
         let account = if desktop {
             None
         } else {
@@ -447,20 +450,10 @@ impl Game {
         let party_requester = (
             self.menu
                 .initial_wizard_name(account.as_ref().map(|account| account.username.as_str())),
-            format!(
-                "guest-{}",
-                window
-                    .crypto()
-                    .map_err(|_| "Browser identity is unavailable")?
-                    .random_uuid()
-                    .replace('-', "")
-            ),
+            format!("guest-{}", crate::platform::random_uuid()?.replace('-', "")),
         );
-        let deployment_update = crate::deployment::DeploymentUpdate::new(
-            &window.document().ok_or("The game has no document")?,
-            api.mount().clone(),
-            !desktop,
-        )?;
+        let deployment_update =
+            crate::deployment::DeploymentUpdate::new(api.mount().clone(), !desktop)?;
         self.hosted = Some(HostedGame {
             api,
             desktop_endpoint,
@@ -498,20 +491,13 @@ impl Game {
             progress: Rc::new(RefCell::new(Vec::new())),
             subscription_updates: Rc::new(RefCell::new(Vec::new())),
             observer: None,
+            #[cfg(target_arch = "wasm32")]
             boneyard_library: None,
         });
         self.menu.show_title(can_resume)?;
-        let url = web_sys::Url::new(&window.location().href().map_err(|_| "Game location")?)
-            .map_err(|_| "Game location URL")?;
-        if !desktop && url.search_params().get("dark-cloud").as_deref() == Some("boneyards") {
+        if !desktop && crate::platform::take_query_parameter("dark-cloud", "boneyards")? {
             self.menu
                 .show_dark_cloud_tab(solomon_sim::menu::dark_cloud::DarkCloudTab::Boneyards)?;
-            url.search_params().delete("dark-cloud");
-            window
-                .history()
-                .map_err(|_| "Game navigation history")?
-                .replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&url.href()))
-                .map_err(|_| "Could not finish returning from the Boneyard workshop")?;
         } else if missing && !self.hosted.as_ref().unwrap().tutorial_declined {
             self.menu.offer_tutorial()?;
         }
@@ -610,6 +596,7 @@ impl Game {
         &self,
         settings: &solomon_sim::settings::GameSettings,
     ) -> Result<(), String> {
+        #[cfg(target_arch = "wasm32")]
         if self.is_editor_test() {
             let mut preferences = game_online_preferences(settings);
             preferences.submit_runs = false;
@@ -724,7 +711,7 @@ impl Game {
             Admission::PrivateCollege
         };
         let resume_token = if resume {
-            crate::network::read_resume(&web_sys::window().ok_or("no window")?)?
+            crate::network::read_resume()?
                 .filter(|credentials| {
                     summary.is_some_and(|summary| credentials.player_id == summary.player_id)
                 })
@@ -780,6 +767,7 @@ impl Game {
 
     pub(super) fn poll_hosted(&mut self, now: f64) -> Result<(), String> {
         self.apply_hosted_subscription_updates()?;
+        #[cfg(target_arch = "wasm32")]
         self.update_boneyard_library()?;
         let Some(hosted) = &mut self.hosted else { return Ok(()) };
         for progress in std::mem::take(&mut *hosted.progress.borrow_mut()) {
@@ -1149,7 +1137,7 @@ impl Game {
         Ok(())
     }
 
-    fn fail_hosted_leave(&mut self, error: String) -> Result<(), String> {
+    pub(super) fn fail_hosted_leave(&mut self, error: String) -> Result<(), String> {
         self.finish_desktop_close(Err(error.clone()));
         let hosted = self.hosted.as_mut().unwrap();
         hosted.leave_checkpoint = None;

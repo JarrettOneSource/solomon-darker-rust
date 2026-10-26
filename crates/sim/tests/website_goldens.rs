@@ -1201,18 +1201,18 @@ fn npc_point(actual: Vec2, expected: NpcPoint, context: &str) {
     npc_close(actual.y, expected.y, context);
 }
 
-fn npc_student(actual: &solomon_sim::hub::npc::HubStudentState, expected: &NpcStudent) {
+fn npc_student(actual: &impl solomon_sim::hub::npc::StudentRead, expected: &NpcStudent) {
     let context = format!("student {} tick {}", expected.id, expected.tick);
     assert_eq!(actual.id, expected.id, "{context}");
     assert_eq!(actual.current_speed, expected.current_speed, "{context}");
-    assert_eq!(actual.desired_speed, expected.desired_speed, "{context}");
+    assert_eq!(actual.controller().desired_speed, expected.desired_speed, "{context}");
     npc_close(actual.frame_phase, expected.frame_phase, &context);
     npc_close(actual.gait_degrees, expected.gait_degrees, &context);
     npc_close(actual.heading, expected.heading, &context);
     assert_eq!(actual.heading_index, expected.heading_index, "{context}");
-    assert_eq!(actual.path_cursor, expected.path_cursor, "{context}");
-    assert_eq!(actual.path_id, expected.path_id, "{context}");
-    assert_eq!(actual.path_step, expected.path_step, "{context}");
+    assert_eq!(actual.controller().path_cursor, expected.path_cursor, "{context}");
+    assert_eq!(actual.controller().path_id, expected.path_id, "{context}");
+    assert_eq!(actual.controller().path_step, expected.path_step, "{context}");
     assert_eq!(
         actual.registration_ordinal, expected.painter_registration.registration_ordinal,
         "{context}"
@@ -1229,11 +1229,11 @@ fn npc_student(actual: &solomon_sim::hub::npc::HubStudentState, expected: &NpcSt
     }
     assert_eq!(actual.reading, expected.reading, "{context}");
     assert_eq!(actual.retired, expected.retired, "{context}");
-    assert_eq!(actual.rng_state, expected.rng_state, "{context}");
+    assert_eq!(actual.controller().rng_state, expected.rng_state, "{context}");
     assert_eq!(actual.scale, expected.scale, "{context}");
     assert_eq!(actual.static_collision_enabled, expected.static_collision_enabled, "{context}");
-    assert_eq!(actual.tick, expected.tick, "{context}");
-    npc_point(actual.wander, expected.wander, &context);
+    assert_eq!(actual.controller().tick, expected.tick, "{context}");
+    npc_point(actual.controller().wander, expected.wander, &context);
 }
 
 fn npc_population(
@@ -1247,7 +1247,7 @@ fn npc_population(
     assert_eq!(actual.spawn_ticker_counter, expected.spawn_ticker_counter);
     assert_eq!(actual.students.len(), expected.students.len());
     for (actual, expected) in actual.students.iter().zip(&expected.students) {
-        npc_student(actual, expected);
+        npc_student(&actual, expected);
     }
 }
 
@@ -1348,7 +1348,7 @@ fn students_actor_contacts_and_trader_clocks_replay_the_website() {
             }
             assert_eq!(skorcha.transition_ticks_remaining, expected.transition_ticks_remaining);
             assert_eq!(skorcha.skorcha.is_some(), expected.skorcha.is_some());
-            if let (Some(actual), Some(expected)) = (&skorcha.skorcha, &expected.skorcha) {
+            if let (Some(actual), Some(expected)) = (skorcha.skorcha.as_ref(), &expected.skorcha) {
                 assert_eq!(actual.variant, expected.variant);
                 assert_eq!(
                     [actual.position.x, actual.position.y],
@@ -1368,7 +1368,7 @@ fn students_actor_contacts_and_trader_clocks_replay_the_website() {
             .iter()
             .position(|student| student.id == expected.student.id)
             .unwrap();
-        let actual = &population.students[student];
+        let actual = &population.students.get(student).unwrap();
         npc_point(hub_student_head_offset(actual), expected.head, "student head offset");
         for (index, prop) in actual.props.iter().enumerate() {
             npc_point(

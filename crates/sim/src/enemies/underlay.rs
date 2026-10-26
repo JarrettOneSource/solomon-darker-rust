@@ -2,9 +2,10 @@
 
 use super::EnemyToken;
 use super::actor_presentation::{EnemyArtAtlas, EnemyArtBlend, EnemyArtRecords};
-use super::model::{CoffinPhase, EnemyActor, EnemyBrain, SpiderPhase};
+use super::model::{CoffinPhase, EnemyBrain, SpiderPhase};
 use crate::Vec2;
 use crate::boneyard::shadows::NativeShadowRecord;
+use crate::enemies::model::EnemyActorRead;
 use crate::float;
 use crate::float::fround;
 
@@ -36,7 +37,7 @@ pub fn native_enemy_directional_shadow_family(token: EnemyToken) -> bool {
 
 #[must_use]
 pub fn native_enemy_underlay_plan(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     records: &[NativeShadowRecord],
     light_scalar: f64,
@@ -67,7 +68,7 @@ pub fn native_enemy_underlay_plan(
 
 #[must_use]
 pub fn native_enemy_underlay_plan_with_input(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     records: &[NativeShadowRecord],
     light_scalar: f64,
@@ -77,11 +78,11 @@ pub fn native_enemy_underlay_plan_with_input(
 ) -> Vec<EnemyUnderlayLayer> {
     let token = actor.config.enemy_token;
     if matches!(token, EnemyToken::Imp | EnemyToken::Cocoon | EnemyToken::Wraith)
-        || matches!(&actor.brain, EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured)
+        || matches!(actor.brain(), EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured)
     {
         return Vec::new();
     }
-    if let EnemyBrain::DemonSkull(brain) = &actor.brain {
+    if let EnemyBrain::DemonSkull(brain) = actor.brain() {
         return vec![sprite_quad(
             art,
             EnemyArtAtlas::BadGuys,
@@ -95,7 +96,7 @@ pub fn native_enemy_underlay_plan_with_input(
             EnemyArtBlend::Normal,
         )];
     }
-    if let EnemyBrain::Demon(_) = &actor.brain {
+    if let EnemyBrain::Demon(_) = actor.brain() {
         let offset = sample.demon_shadow_offset;
         return vec![sprite_quad(
             art,
@@ -110,7 +111,7 @@ pub fn native_enemy_underlay_plan_with_input(
             EnemyArtBlend::Normal,
         )];
     }
-    if let EnemyBrain::Coffin(brain) = &actor.brain {
+    if let EnemyBrain::Coffin(brain) = actor.brain() {
         if complex_shadows || brain.phase == CoffinPhase::Hidden {
             return Vec::new();
         }
@@ -144,7 +145,7 @@ pub fn native_enemy_underlay_plan_with_input(
         }
         return vec![layer];
     }
-    if let EnemyBrain::Portal(_) = &actor.brain {
+    if let EnemyBrain::Portal(_) = actor.brain() {
         if sample.alpha <= 0.0 {
             return Vec::new();
         }
@@ -198,7 +199,7 @@ pub fn native_enemy_underlay_plan_with_input(
         ];
     }
     let size = if token == EnemyToken::Heartmonger { 2.0 } else { 1.0 };
-    let heading = match &actor.brain {
+    let heading = match actor.brain() {
         EnemyBrain::Archer(brain) => brain.strafe.limb_heading_deg,
         _ => actor.heading_deg,
     } * std::f64::consts::PI

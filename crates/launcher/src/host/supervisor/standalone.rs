@@ -1,6 +1,6 @@
-//! The desktop `run-game-host.ts` scope: one ordinary standalone authority, a
+//! One standalone desktop authority, a
 //! reusable shared credential and a fresh simulation after its last human leaves.
-//! The supervisor's existing dispatcher retains Console, mods and source saves.
+//! The supervisor's dispatcher owns Console, mods and saves.
 
 use std::sync::Arc;
 

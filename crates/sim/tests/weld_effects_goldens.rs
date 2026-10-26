@@ -172,7 +172,8 @@ fn weld_channels_native_fades_and_blizzard_contact_geometry_match_the_source() {
         for tick in 0..=50 {
             if tick > 0 {
                 actors.retain_mut(|actor| {
-                    step_native_weld_world_actor(actor, &mut rng, &|_, _, _| true).alive
+                    step_native_weld_world_actor(&mut actor.view_mut(), &mut rng, &|_, _, _| true)
+                        .alive
                 });
             }
             if let Some(expected) =
@@ -182,7 +183,7 @@ fn weld_channels_native_fades_and_blizzard_contact_geometry_match_the_source() {
                 website_rows::compare(&actual, expected, &format!("{} tick{tick}", case["name"]));
                 if let Some(sample) = weld_visual_rows::sample(case, tick) {
                     weld_visual_rows::compare(
-                        actors.iter().map(NativeWeldPresentationState::World),
+                        actors.iter().map(|actor| NativeWeldPresentationState::World(actor.view())),
                         sample,
                         "Weld channel and fade compositor",
                     );

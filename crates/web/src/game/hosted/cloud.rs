@@ -217,20 +217,13 @@ impl Game {
         let hosted = self.hosted.as_mut().unwrap();
         match action {
             HostedMenuAction::SignIn => {
-                web_sys::window()
-                    .ok_or("no window")?
-                    .location()
-                    .assign(&hosted.api.mount().path("/login"))
-                    .map_err(|_| "Could not open account sign-in")?;
+                crate::platform::navigate(&hosted.api.mount().path("/login"))?;
             }
             HostedMenuAction::SignOut => {
                 hosted.api.logout().map_err(|e| e.to_string())?;
-                web_sys::window()
-                    .ok_or("no window")?
-                    .location()
-                    .reload()
-                    .map_err(|_| "Could not return to guest play")?;
+                crate::platform::reload()?;
             }
+
             HostedMenuAction::LoadDarkCloudCatalog { .. }
             | HostedMenuAction::LoadModDetail { .. }
             | HostedMenuAction::LoadModComments { .. }

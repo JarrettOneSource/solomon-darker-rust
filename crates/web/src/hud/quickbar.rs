@@ -145,10 +145,9 @@ impl Hud {
                     label.push_str(&format!(", {} available", potion.count));
                 }
                 if cooldown.remaining > 0.0 {
-                    let seconds = js_sys::Number::from(cooldown.remaining / 100.0)
-                        .to_fixed(2)
-                        .map(String::from)
-                        .map_err(|_| "Cooldown label formatting")?;
+                    let seconds = ryu_js::Buffer::new()
+                        .format_to_fixed(cooldown.remaining / 100.0, 2)
+                        .to_owned();
                     label.push_str(&format!(", {seconds} seconds cooldown remaining"));
                 }
                 if active {

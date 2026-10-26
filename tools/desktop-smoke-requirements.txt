@@ -1,0 +1,2 @@
+# Test driver only; neither Python nor xa11y ships with the application.
+xa11y==0.15.2

@@ -22,7 +22,7 @@ impl LeaderboardRunSnapshot {
     fn capture(state: &GameSession) -> Option<Self> {
         let world = state.boneyard.as_ref()?;
         let mut scores = BTreeMap::new();
-        for (id, participant) in &state.participants {
+        for (id, participant) in state.participants.iter() {
             scores.insert(id.clone(), participant.score.elapsed_ticks);
         }
         Some(Self { run_id: world.loaded.run_id.clone(), scores })
@@ -173,8 +173,8 @@ impl HostedGameHost {
                         let Some(entry) = completed_hall_of_fame_entry(
                             &world.loaded.run_id,
                             state.run.phase,
-                            &participant.score,
-                            &participant.player,
+                            participant.score,
+                            participant.player,
                             wave,
                             completed_at,
                         ) else {

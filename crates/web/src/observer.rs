@@ -1,4 +1,4 @@
-//! GPU readonly match panel from `DeveloperObserverScene.tsx`.
+//! Read-only match observer panel.
 //! Camera selection leaves through the connection owner; this panel creates no participant.
 
 use crate::gpu_ui::UiFrame;
@@ -10,7 +10,6 @@ use solomon_sim::observer_activity::{
 use solomon_sim::profile::PlayerSkillOffer;
 use solomon_sim::session::GameSession;
 use solomon_sim::social::GameChatMessage;
-use web_sys::Document;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObserverAction {
@@ -67,7 +66,7 @@ impl ObserverUi {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("observer/panel"))
     }
 
-    pub fn attach(_document: &Document) -> Result<Self, String> {
+    pub fn attach() -> Result<Self, String> {
         Ok(Self {
             previous: None,
             events: Vec::new(),
@@ -91,7 +90,7 @@ impl ObserverUi {
         let mut players = Vec::new();
         let mut current = Vec::new();
         for id in &snapshot.session.participant_order {
-            let participant = &snapshot.session.participants[id];
+            let participant = &snapshot.session.participants.get(id).expect("participant exists");
             let player = &participant.player;
             players.push(ObserverSkillPlayer {
                 id,

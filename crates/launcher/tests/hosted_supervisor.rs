@@ -176,6 +176,7 @@ enum ClientWrite {
 
 enum ClientObservation {
     Message(Box<ServerMessage<Value>>),
+    SaveProgress { sequence: u64, received: usize, total: usize },
     Closed,
     Failed(String),
 }
@@ -186,6 +187,7 @@ struct Client {
     pending: VecDeque<ServerMessage<Value>>,
     worker: Option<JoinHandle<()>>,
     closed: bool,
+    save_progress: Option<(u64, usize, usize)>,
 }
 
 // Source connect() keeps a live message listener on every socket. Waiting for one
@@ -292,6 +294,11 @@ fn drive_client(
                 } = message
                 {
                     let next_offset = offset + data.len();
+                    let _ = observations.send(ClientObservation::SaveProgress {
+                        sequence,
+                        received: next_offset,
+                        total: total_length,
+                    });
                     let mut complete = None;
                     if sequence > saved && saving.is_none_or(|current| sequence >= current) {
                         if saving != Some(sequence) {
@@ -519,6 +526,8 @@ impl Client {
             .unwrap();
         request.headers_mut().insert("origin", origin.parse().unwrap());
         let stream = TcpStream::connect(host.address).unwrap();
+        // Match the live native client's immediate commands and checkpoint ACKs.
+        stream.set_nodelay(true).unwrap();
         stream.set_read_timeout(Some(Duration::from_secs(8))).unwrap();
         stream.set_write_timeout(Some(Duration::from_secs(8))).unwrap();
         let socket = tungstenite::client(request, stream).unwrap().0;
@@ -534,7 +543,14 @@ impl Client {
             };
             let _ = outgoing_observations.send(observation);
         });
-        Self { writes, observations, pending: VecDeque::new(), worker: Some(worker), closed: false }
+        Self {
+            writes,
+            observations,
+            pending: VecDeque::new(),
+            worker: Some(worker),
+            closed: false,
+            save_progress: None,
+        }
     }
     fn join(host: &Host, endpoint: &Value, name: &str) -> (Self, String, GameSessionKind) {
         let (client, welcome) = Self::join_with_welcome(host, endpoint, name);
@@ -558,7 +574,14 @@ impl Client {
     ) -> (Self, ServerMessage<Value>) {
         let selection = if let Some(save) = &save {
             let saved = solomon_assets::website_save::restore(save).unwrap();
-            saved.session.participants[&saved.player_id].player.selection.clone()
+            saved
+                .session
+                .participants
+                .get(&saved.player_id)
+                .expect("participant exists")
+                .player
+                .selection
+                .clone()
         } else {
             NewGameSelection {
                 name: name.into(),
@@ -611,6 +634,7 @@ impl Client {
         if let Some(index) = self.pending.iter().position(&accept) {
             return self.pending.remove(index).unwrap();
         }
+        let progress_before = self.save_progress;
         let deadline = Instant::now() + Duration::from_secs(8);
         while Instant::now() < deadline {
             match self.observations.recv_timeout(deadline.saturating_duration_since(Instant::now()))
@@ -623,6 +647,9 @@ impl Client {
                     // waiting for Loaded cannot consume the run's only checkpoint.
                     self.pending.push_back(*message);
                 }
+                Ok(ClientObservation::SaveProgress { sequence, received, total }) => {
+                    self.save_progress = Some((sequence, received, total));
+                }
                 Ok(ClientObservation::Closed) => {
                     self.closed = true;
                     panic!("the hosted socket closed before its requested observation");
@@ -634,7 +661,43 @@ impl Client {
                 Err(mpsc::RecvTimeoutError::Disconnected) => panic!("the socket listener stopped"),
             }
         }
-        panic!("the real hosted authority did not reach the requested state")
+        let errors: Vec<_> = self
+            .pending
+            .iter()
+            .filter_map(|message| match message {
+                ServerMessage::Error { code, reason } => Some((code, reason)),
+                _ => None,
+            })
+            .collect();
+        let latest = self.pending.iter().rev().find_map(|message| match message {
+            ServerMessage::Snapshot { frame } => {
+                Some((&frame.host, &frame.snapshot["run"], &frame.snapshot["ticks"]))
+            }
+            _ => None,
+        });
+        let completed_saves: Vec<_> =
+            self.pending
+                .iter()
+                .filter_map(|message| match message {
+                    ServerMessage::Hosted {
+                        message: HostedServerMessage::SaveCheckpoint { sequence, save, .. },
+                    } => {
+                        Some((
+                            *sequence,
+                            serde_json::from_str::<Value>(save).unwrap()["continuation"]["summary"]
+                                ["worldKind"]
+                                .clone(),
+                        ))
+                    }
+                    _ => None,
+                })
+                .collect();
+        panic!(
+            "the real hosted authority did not reach the requested state; \
+             pending errors: {errors:?}; latest host/run/tick: {latest:?}; \
+             save transfer before/after: {progress_before:?}/{:?}; completed saves: {completed_saves:?}",
+            self.save_progress
+        )
     }
 
     #[track_caller]
@@ -653,7 +716,7 @@ impl Client {
                 Ok(ClientObservation::Failed(reason)) => {
                     panic!("deployment close failed: {reason}")
                 }
-                Ok(ClientObservation::Message(_)) => {}
+                Ok(ClientObservation::Message(_) | ClientObservation::SaveProgress { .. }) => {}
                 Err(mpsc::RecvTimeoutError::Timeout) => break,
                 Err(mpsc::RecvTimeoutError::Disconnected) => panic!("the socket listener stopped"),
             }
@@ -698,7 +761,15 @@ fn restored_hosted_boneyards_advance_after_the_actual_renderer_and_resume_admiss
     let run_id = source.loaded_boneyard.as_ref().unwrap().run_id.clone();
     let saved_tick = source.session.ticks;
     let id = source.player_id;
-    let name = source.session.participants[&id].player.selection.name.clone();
+    let name = source
+        .session
+        .participants
+        .get(&id)
+        .expect("participant exists")
+        .player
+        .selection
+        .name
+        .clone();
     let routes =
         if source.metadata.integrity == solomon_assets::website_save::SaveIntegrity::GlobalClean {
             vec!["/admin/hub/tickets", "/admin/sessions"]
@@ -1113,6 +1184,7 @@ fn supervisor_replays_source_http_colleges_broker_and_party_membership() {
     h1.send(ClientMessage::Hosted {
         command: HostedCommand::StartMatch { boneyard_id: "default-random".into() },
     });
+    h1.until(|message| matches!(message, ServerMessage::BoneyardLoaded { .. }));
     let message = h2.until(|message| matches!(message, ServerMessage::BoneyardLoaded { .. }));
     let ServerMessage::BoneyardLoaded { boneyard: party_world } = message else { unreachable!() };
     let message = h2.until(|message| {

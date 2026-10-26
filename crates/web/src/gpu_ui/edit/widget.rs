@@ -162,7 +162,7 @@ impl<'a> NativeTextEdit<'a> {
             child.disable();
         }
         let mut response = child.interact(rect, id, Sense::click_and_drag());
-        if self.request_focus && enabled {
+        if (self.request_focus || response.clicked()) && enabled {
             response.request_focus();
         }
         let has_focus = response.has_focus() && enabled;
@@ -422,7 +422,7 @@ impl<'a> NativeTextEdit<'a> {
             }) {
                 state.transport = Some(Arc::new(state.model.clone()));
             }
-            frame.editors.borrow_mut().push(EditorDescriptor {
+            let editor = EditorDescriptor {
                 layer_id: response.layer_id,
                 owner: state.owner,
                 text: self.text.as_str().into(),
@@ -447,7 +447,8 @@ impl<'a> NativeTextEdit<'a> {
                     stroke: None,
                     ..Default::default()
                 },
-            });
+            };
+            frame.editors.borrow_mut().push(editor);
         }
         Ok(())
     }

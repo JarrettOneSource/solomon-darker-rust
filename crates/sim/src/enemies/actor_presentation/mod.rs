@@ -20,7 +20,7 @@ use crate::enemies::model::*;
 
 #[must_use]
 pub fn native_enemy_actor_plan(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     context: EnemyActorAppearanceContext,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyActorPresentationPlan {
@@ -31,7 +31,7 @@ pub fn native_enemy_actor_plan(
 /// Draw an already sampled/interpolated animation without resampling brain state.
 #[must_use]
 pub fn native_enemy_actor_plan_with_input(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     context: EnemyActorAppearanceContext,
     sample: &NativeEnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
@@ -45,14 +45,14 @@ pub fn native_enemy_actor_plan_with_input(
         | EnemyToken::DireFaculty => 1.0,
         _ => actor.config.scale,
     };
-    let heading = match &actor.brain {
+    let heading = match actor.brain() {
         EnemyBrain::Zombie(_) => actor.heading_deg + sample.zombie_angular_offset_deg,
         EnemyBrain::Faculty(brain) => brain.body_heading_deg,
         _ => actor.heading_deg,
     };
     let facing = layers::facing(token, heading);
     let spawn_age_ticks = context.tick.saturating_sub(actor.spawn_tick);
-    let family = if matches!(&actor.brain, EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured)
+    let family = if matches!(actor.brain(), EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured)
     {
         EnemyFamilyPresentation::default()
     } else if actor.life_state == EnemyLifeState::Dying {
@@ -150,7 +150,7 @@ pub fn native_enemy_actor_plan_with_input(
 }
 
 fn attack_effect_origin(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     layers: &[EnemySpriteLayer],
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> Option<Vec2> {
@@ -186,7 +186,7 @@ pub(super) fn puppet_hit_tint(complex_lighting: bool, tint: u32) -> u32 {
 /// Coffin children register and paint independently from the parent body.
 #[must_use]
 pub fn native_maggot_plan(
-    maggot: &EnemyMaggotActor,
+    maggot: &impl MaggotRead,
     tick: u64,
     complex_lighting: bool,
 ) -> Vec<EnemySpriteLayer> {
@@ -196,7 +196,7 @@ pub fn native_maggot_plan(
 
 #[must_use]
 pub fn native_maggot_plan_with_input(
-    maggot: &EnemyMaggotActor,
+    maggot: &impl MaggotRead,
     sample: &NativeMaggotPresentationInput,
     complex_lighting: bool,
 ) -> Vec<EnemySpriteLayer> {
@@ -211,8 +211,8 @@ pub fn native_maggot_plan_with_input(
         (EnemyArtAtlas::DeadHawg, 28)
     } else if emerging {
         let heading = crate::heading::heading_degrees_from_vector(
-            maggot.launch_velocity.x,
-            maggot.launch_velocity.y,
+            maggot.controller().launch_velocity.x,
+            maggot.controller().launch_velocity.y,
         );
         let orientation = (((heading + 18.0) / 36.0).floor() as i64).rem_euclid(10) as usize;
         (
@@ -229,7 +229,7 @@ pub fn native_maggot_plan_with_input(
     let role = if emerging {
         format!(
             "maggot-body-emerging-{}",
-            match maggot.launch_trajectory {
+            match maggot.controller().launch_trajectory {
                 MaggotLaunchTrajectory::Edge => "edge",
                 MaggotLaunchTrajectory::Lid => "lid",
             }
@@ -261,7 +261,7 @@ pub fn native_maggot_plan_with_input(
 /// dispatch. Families without a capturable image still flush the field manager.
 #[must_use]
 pub fn native_ether_drain_captured_image(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
 ) -> Option<crate::secondary::ether_drain::NativeEtherDrainCapturedImage> {
     use crate::enemies::config::EnemyFamilyConfig;
@@ -285,7 +285,7 @@ pub fn native_ether_drain_captured_image(
             )
         }
         EnemyToken::Zombie => {
-            let EnemyBrain::Zombie(brain) = &actor.brain else { return None };
+            let EnemyBrain::Zombie(brain) = actor.brain() else { return None };
             if brain.head_type > 2 {
                 return None;
             }

@@ -199,7 +199,9 @@ fn current_flame_factory_births_preserve_native_words_roots_and_light_samples() 
                 &frame["light"],
                 "Flame fade wrapper light",
             );
-            let alive = step_native_weld_world_actor(&mut actor, &mut rng, &|_, _, _| true).alive;
+            let alive =
+                step_native_weld_world_actor(&mut actor.view_mut(), &mut rng, &|_, _, _| true)
+                    .alive;
             assert_eq!(alive, frame != case["frames"].as_array().unwrap().last().unwrap());
         }
         assert_tail(&rng, order, case);

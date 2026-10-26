@@ -63,7 +63,7 @@ impl GameSession {
         // Contacts and direct commands instead finish one receiver at a time.
         for cheat_death_phase in [false, true] {
             for (id, result) in results {
-                let participant = &self.participants[id];
+                let participant = &self.participants.get(id).expect("participant exists");
                 events.extend(super::player_feedback::materialize_player_rescue_feedback(
                     world,
                     &mut self.secondary,

@@ -1,5 +1,4 @@
-//! Source SDK installation. Tables remain ordinary Lua tables, as Wasmoon
-//! `enableProxy:false` does; each callback reads the current borrowed provider.
+//! Console SDK installation. Ordinary Lua tables expose the current borrowed provider.
 
 mod mutations;
 mod reads;
@@ -191,21 +190,6 @@ fn invoke(
 }
 
 fn reply(lua: &Lua, value: LuaValue) -> Result<MultiValue, String> {
-    // The installed Wasmoon Promise extension probes `target.then` before
-    // the table extension can reject null. This also happens recursively for
-    // ordinary API object/array children. Only event callback payloads have
-    // Source's explicit omit-null transform before entering the bridge.
-    fn contains_null(value: &LuaValue) -> bool {
-        match value {
-            LuaValue::Null => true,
-            LuaValue::Array(values) => values.iter().any(contains_null),
-            LuaValue::Object(values) => values.iter().any(|(_, value)| contains_null(value)),
-            _ => false,
-        }
-    }
-    if contains_null(&value) {
-        return Err("Cannot read properties of null (reading 'then')".into());
-    }
     let value = lua_payload(lua, &value).map_err(|error| bounded_error(&error))?;
     Ok(MultiValue::from_vec(vec![value]))
 }

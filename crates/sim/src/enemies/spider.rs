@@ -177,14 +177,17 @@ pub fn step_spider(
         radius,
         requested_position: Vec2::new(actor.position.x + delta.x, actor.position.y + delta.y),
     });
-    actor.path.step_recovery(
+    actor.body.path.step_recovery(
         &mut world.steering_rng,
         PathRecoveryRequest {
-            flanking_enabled: actor.config.flanking,
+            flanking_enabled: actor.body.config.flanking,
             requested_distance: hypot(delta.x, delta.y),
             status_factor: status,
             tick: context.tick,
-            traveled_distance: hypot(position.x - actor.position.x, position.y - actor.position.y),
+            traveled_distance: hypot(
+                position.x - actor.body.position.x,
+                position.y - actor.body.position.y,
+            ),
         },
     );
     actor.body_pose = brain.frame;
@@ -255,12 +258,12 @@ pub fn step_cocoon_actor(
     if !owner.is_some_and(|owner| owner.alive && owner.connected)
         || !web.is_some_and(|web| web.severity >= 3.0)
     {
-        actor.life_state = EnemyLifeState::Dying;
+        actor.body.life_state = EnemyLifeState::Dying;
         brain.phase = CocoonPhase::Death;
         return;
     }
     let owner = owner.unwrap();
-    actor.position = native_cocoon_position(owner.position, owner.heading_deg.unwrap_or(0.0));
+    actor.body.position = native_cocoon_position(owner.position, owner.heading_deg.unwrap_or(0.0));
     brain.owner_position = owner.position;
 }
 
@@ -268,13 +271,13 @@ impl EnemyWorld {
     pub fn step_spider_webs(&mut self, context: &EnemyStepContext<'_>) {
         self.spider_spit_ticks_remaining = self.spider_spit_ticks_remaining.saturating_sub(1);
         let actors = &self.actors;
-        self.webbed_players.retain(|id, web| {
+        self.webbed_players.retain_mut(|id, web| {
             // Full restraint belongs to a live Cocoon, unlike partial Silk webs.
             let restraint_valid = web.severity < 3.0
                 || actors.iter().any(|actor| {
                     actor.life_state == EnemyLifeState::Alive
                         && matches!(&actor.brain, EnemyBrain::Cocoon(brain)
-                            if brain.owner_player_id.as_deref() == Some(id.as_str()))
+                            if brain.owner_player_id.as_deref() == Some(id))
                 });
             if !restraint_valid {
                 return false;
@@ -293,17 +296,17 @@ impl EnemyWorld {
         });
     }
     pub fn step_silks(&mut self, context: &EnemyStepContext<'_>, order: &mut WorldPainterOrder) {
-        let actors = std::mem::take(&mut self.silks);
-        for actor in actors {
+        let mut actors = std::mem::take(&mut self.silks);
+        actors.retain_mut(|actor| {
             if actor.spawn_tick == context.tick {
-                self.silks.push(actor);
-                continue;
+                return true;
             }
             let ended = actor.state.ended;
             let previous = actor.state.position;
-            let Some(state) = step_native_silk(actor.state) else {
-                continue;
-            };
+            if !step_native_silk(&mut actor.state) {
+                return false;
+            }
+            let state = &mut actor.state;
             let mut hit = false;
             if !ended && !state.age_ticks.is_multiple_of(4) {
                 for player in context.players {
@@ -351,13 +354,11 @@ impl EnemyWorld {
                     binding = self.next_native_cell_binding_order;
                     self.next_native_cell_binding_order += 1;
                 }
-                self.silks.push(EnemySilkActor {
-                    state,
-                    native_cell_binding_order: binding,
-                    ..actor
-                });
+                actor.native_cell_binding_order = binding;
             }
-        }
+            !hit
+        });
+        self.silks = actors;
     }
 }
 

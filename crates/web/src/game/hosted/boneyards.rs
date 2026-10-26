@@ -265,7 +265,7 @@ impl BoneyardLibrary {
                 {
                     self.row_request = None;
                     self.busy = None;
-                    match result.and_then(|draft|{store::validate_file(&draft.document)?;let id=store::new_id()?;store::set_cloud_id(&self.window,&id,item.id,&mut self.cloud_map_fallback);Ok((id,draft.document))}){Ok((id,document))=>self.workshop(json!({"kind":"open","document":document,"draftId":id,"savedAt":js_sys::Date::now(),"test":test})),Err(error)=>self.error=Some(format!("{}: {error}",item.name))}
+                    match result.and_then(|draft|{store::validate_file(&draft.document)?;let id=store::new_id()?;store::set_cloud_id(&self.window,&id,item.id,&mut self.cloud_map_fallback);Ok((id,draft.document))}){Ok((id,document))=>self.workshop(json!({"kind":"open","document":document,"draftId":id,"savedAt":crate::platform::epoch_ms(),"test":test})),Err(error)=>self.error=Some(format!("{}: {error}",item.name))}
                 }
                 Completion::Delete { request, item, result }
                     if self.row_request == Some(request) =>

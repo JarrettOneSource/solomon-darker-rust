@@ -142,8 +142,8 @@ pub fn step_native_staff_contact_event(
 }
 
 #[must_use]
-pub fn step_native_player_staff_vfx(source: &NativePlayerStaffVfx) -> Option<NativePlayerStaffVfx> {
-    let mut actor = source.clone();
+pub fn step_native_player_staff_vfx(source: StaffVfxRef<'_>) -> Option<NativePlayerStaffVfx> {
+    let mut actor = source.snapshot();
     match &mut actor {
         NativePlayerStaffVfx::Smoke(vfx) => {
             vfx.alpha = fround(vfx.alpha - vfx.alpha_loss);

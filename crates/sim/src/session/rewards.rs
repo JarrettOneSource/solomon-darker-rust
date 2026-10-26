@@ -29,7 +29,7 @@ impl GameSession {
             if !cohort.iter().any(|participant| participant == id) {
                 continue;
             }
-            let player = &self.participants[id].player;
+            let player = &self.participants.get(id).expect("participant exists").player;
             let amount = boneyard_enemy_experience_award(
                 reward.experience,
                 cohort.len() as u32,
@@ -46,7 +46,7 @@ impl GameSession {
             let Some(participant) = self.participants.get_mut(&pickup.player_id) else {
                 continue;
             };
-            let player = &mut participant.player;
+            let player = participant.player;
             match pickup.kind {
                 NativeLootDropKind::Gold => player.economy.credit_loot_gold(pickup.amount),
                 NativeLootDropKind::Sack => {

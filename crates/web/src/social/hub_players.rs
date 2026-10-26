@@ -32,7 +32,7 @@ impl SocialUi {
             && let Some(local) = session.participants.get(local_player_id)
         {
             for id in &session.participant_order {
-                let participant = &session.participants[id];
+                let participant = &session.participants.get(id).expect("participant exists");
                 if participant.wizard.region != local.wizard.region {
                     continue;
                 }

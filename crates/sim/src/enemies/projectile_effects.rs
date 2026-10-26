@@ -132,20 +132,18 @@ pub fn spawn_demon_bomb_particle(
         .push(EnemyProjectileEffect { state, kind: EnemyProjectileEffectKind::DemonBombParticle });
 }
 
-pub fn spawn_projectile_trails(
+pub fn spawn_firebolt_trail(
     world: &mut EnemyWorld,
-    source: &EnemyProjectile,
-    end: Vec2,
+    projectile: &EnemyProjectileState,
+    previous_tick: u64,
     order: &mut WorldPainterOrder,
 ) {
-    if !matches!(source, EnemyProjectile::Firebolt(_)) {
-        return;
-    }
-    let projectile = source.state();
-    let tick = projectile.last_step_tick + 1;
+    // Trails use the preceding clock even when a projectile is catching up several ticks.
+    let tick = previous_tick + 1;
     if !tick.is_multiple_of(2) {
         return;
     }
+    let end = projectile.position;
     let magnitude = world.steering_rng.draw_scaled_float(5.0, false);
     let angle = world.steering_rng.draw_scaled_float(360.0, false) * std::f64::consts::PI / 180.0;
     let loss = fround(fround(0.1) * (1.5 + world.steering_rng.draw_scaled_float(0.5, false)));
@@ -159,7 +157,7 @@ pub fn spawn_projectile_trails(
             end.y - 15.0 - float::cos(angle) * magnitude,
         ),
         ProjectileEffectSpec {
-            entry: 255 + ((projectile.age_ticks + 1) % 12) as usize,
+            entry: 255 + ((projectile.age_ticks) % 12) as usize,
             lifetime_ticks: 8,
             registration_lane: WorldManagerLane::Actor,
         },
@@ -167,7 +165,7 @@ pub fn spawn_projectile_trails(
             painter_registration: Some(projectile.painter_registration),
             blend_mode: Some(EnemyEffectBlend::Add),
             alpha_loss_per_tick: Some(loss),
-            phase_origin_ticks: Some(projectile.age_ticks + 1),
+            phase_origin_ticks: Some(projectile.age_ticks),
             rotation_deg: Some(projectile.heading_deg + 180.0),
             scale: Some(scale),
             ..ProjectileEffectOverrides::default()
@@ -229,13 +227,13 @@ pub fn spawn_fire_burst(
 
 pub fn spawn_projectile_impact_effects(
     world: &mut EnemyWorld,
-    projectile: &EnemyProjectile,
+    projectile: &impl EnemyProjectileRead,
     tick: u64,
     order: &mut WorldPainterOrder,
 ) {
     let state = projectile.state();
-    match projectile {
-        EnemyProjectile::Arrow { .. } => {
+    match projectile.kind() {
+        EnemyProjectileKind::Arrow => {
             if state.payload == EnemyProjectilePayload::Fire {
                 spawn_fire_burst(
                     world,
@@ -248,7 +246,7 @@ pub fn spawn_projectile_impact_effects(
                 );
             }
         }
-        EnemyProjectile::Firebolt(_) => spawn_fire_burst(
+        EnemyProjectileKind::Firebolt => spawn_fire_burst(
             world,
             ProjectileEffectOwner::from(state),
             tick,
@@ -257,7 +255,7 @@ pub fn spawn_projectile_impact_effects(
             0.1,
             order,
         ),
-        EnemyProjectile::GuidedMissile(_) => {
+        EnemyProjectileKind::GuidedMissile => {
             let pitch = fround(1.0 + world.steering_rng.draw_scaled_float(0.1, false));
             world.emit_action_sound(
                 DeathEffectOwner { id: state.owner_actor_id, position: state.position },
@@ -297,7 +295,7 @@ pub fn spawn_projectile_impact_effects(
                 kind: EnemyProjectileEffectKind::GuidedImpact,
             });
         }
-        EnemyProjectile::DemonBomb(_) | EnemyProjectile::PoisonPool(_) => {}
+        EnemyProjectileKind::DemonBomb | EnemyProjectileKind::PoisonPool => {}
     }
 }
 
@@ -307,12 +305,12 @@ impl EnemyWorld {
             accumulator.is_finite() && (0.0..=1.0).contains(&accumulator),
             "Arrow Chill accumulator must be finite and within [0,1]"
         );
-        let Some(EnemyProjectile::Arrow { state, .. }) =
-            self.projectiles.iter_mut().find(|projectile| projectile.state().id == id)
-        else {
+        let Some(projectile) = self.projectiles.iter_mut().find(|projectile| {
+            projectile.state.id == id && projectile.kind() == EnemyProjectileKind::Arrow
+        }) else {
             return false;
         };
-        state.chill_tumble_accumulator = accumulator;
+        projectile.state.chill_tumble_accumulator = accumulator;
         true
     }
 
@@ -335,7 +333,7 @@ impl EnemyWorld {
         let length = hypot(direction.x, direction.y);
         assert!(length > 0.0, "Arrow tumble direction must be nonzero");
         let Some(index) = self.projectiles.iter().position(|projectile| {
-            projectile.state().id == id && matches!(projectile, EnemyProjectile::Arrow { .. })
+            projectile.state().id == id && projectile.kind() == EnemyProjectileKind::Arrow
         }) else {
             return false;
         };

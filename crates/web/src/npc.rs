@@ -5,7 +5,7 @@ use solomon_assets::SpriteRecord;
 use solomon_sim::Vec2;
 use solomon_sim::hub::interaction::HubNpcMarkerFrame;
 use solomon_sim::hub::npc::{
-    HubNpcState, HubStudentState, hub_student_head_offset, hub_student_prop_offset,
+    HubNpcState, StudentRead, hub_student_head_offset, hub_student_prop_offset,
 };
 use solomon_sim::hub::painter::{PainterLane, PainterLayer};
 use solomon_sim::hub::regions::HubRegion;
@@ -97,7 +97,7 @@ impl NpcView {
                 actor,
             ));
         }
-        if let Some(skorcha) = &state.skorcha.skorcha {
+        if let Some(skorcha) = state.skorcha.skorcha.as_ref() {
             painters.push((
                 PainterLayer {
                     visible: true,
@@ -206,9 +206,11 @@ impl NpcView {
                     self.college_cell(renderer, camera, 513 + hat, cell);
                 }
             }
-            HubNpcActor::Student(index) => {
-                self.draw_student(renderer, camera, &state.students.students[index])
-            }
+            HubNpcActor::Student(index) => self.draw_student(
+                renderer,
+                camera,
+                &state.students.students.get(index).expect("student painter has a live owner"),
+            ),
         }
     }
 
@@ -244,7 +246,7 @@ impl NpcView {
         );
     }
 
-    fn draw_student(&self, renderer: &mut Renderer, camera: &Camera, student: &HubStudentState) {
+    fn draw_student(&self, renderer: &mut Renderer, camera: &Camera, student: &impl StudentRead) {
         self.draw_shadow(renderer, camera, student.position, 1.1);
         let heading = student.heading_index;
         let pose = student.frame_phase.floor() as usize % 5;

@@ -1,130 +1,107 @@
-// Source tools/package-desktop.mjs, staging the Rust host and WASM client instead
-// of Website wwwroot and the former TypeScript authority bundle.
+// Package the native Rust application and its data. Node is a build tool only.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { chmod, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { packager } from '@electron/packager';
-import { stagePinnedNodeRuntime } from './stage-node-runtime.mjs';
-import { desktopArtifacts, repositoryRoot } from './desktop-build.mjs';
-const platform = argument('--platform');
-const arch = argument('--arch');
-const [toolPackage, desktopPackage] = await Promise.all([readJson(join(repositoryRoot, 'package.json')), readJson(join(repositoryRoot, 'desktop/package.json'))]);
-const releaseRepository = argument('--release-repository', false) || process.env.SDR_DESKTOP_RELEASE_REPOSITORY;
-if (!releaseRepository || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(releaseRepository)) {
-  throw new Error('Set --release-repository OWNER/REPOSITORY for the Rust desktop update owner.');
-}
-const artifacts = await desktopArtifacts({
-  platform,
-  arch,
-  release: true,
-  skipBuild: process.argv.includes('--skip-build'),
-  nativeHost: argument('--native-host', false),
-  clientRoot: argument('--client-root', false)
-});
-const build = {
-  schemaVersion: 1,
-  revision: execFileSync('git', ['rev-parse', 'HEAD'], {
-    cwd: repositoryRoot,
-    encoding: 'utf8'
-  }).trim(),
-  sourceTimestamp: Number(execFileSync('git', ['show', '-s', '--format=%ct', 'HEAD'], {
-    cwd: repositoryRoot,
-    encoding: 'utf8'
-  }).trim()),
-  releaseRepository
-};
-const electronVersion = toolPackage.devDependencies.electron;
-const stage = join(repositoryRoot, '.desktop-stage', `${platform}-${arch}`);
-const output = join(repositoryRoot, 'dist-desktop');
-await rm(stage, {
-  force: true,
-  recursive: true
-});
-await mkdir(join(stage, 'client'), {
-  recursive: true
-});
-await mkdir(join(stage, 'authority'), {
-  recursive: true
-});
-const authorityFile = platform === 'win32' ? 'solomon-darker.exe' : 'solomon-darker';
-await Promise.all([...['main.mjs', 'preload.cjs', 'static-client-server.mjs', 'local-game-host.mjs', 'runtime-service.mjs', 'local-peer.mjs', 'run-peer-service.mjs', 'peer-network.mjs', 'updates.mjs', 'package.json'].map(file => cp(join(repositoryRoot, 'desktop', file), join(stage, file))), cp(artifacts.client, join(stage, 'client'), {
-  recursive: true
-}), cp(artifacts.executable, join(stage, 'authority', authorityFile)), writeFile(join(stage, 'desktop-build.json'), `${JSON.stringify(build, null, 2)}\n`)]);
-if (platform !== 'win32') await chmod(join(stage, 'authority', authorityFile), 0o755);
-const runtime = await stagePinnedNodeRuntime({
-  platform,
-  arch,
-  destination: join(stage, 'runtime')
-});
-const applicationPaths = await packager({
-  appVersion: desktopPackage.version,
-  appBundleId: 'com.jarrett.solomondarker',
-  arch,
-  asar: false,
-  dir: stage,
-  electronVersion,
-  executableName: 'solomon-darker',
-  name: 'Solomon Darker',
-  out: output,
-  overwrite: true,
-  platform,
-  ...(platform === 'darwin' ? {
-    osxSign: {
-      identity: '-',
-      identityValidation: false,
-      preAutoEntitlements: false,
-      preEmbedProvisioningProfile: false,
-      optionsForFile: () => ({
-        hardenedRuntime: false,
-        timestamp: 'none'
-      })
-    }
-  } : {}),
-  prune: false
-});
-if (applicationPaths.length !== 1) throw new Error('Desktop packager produced an unexpected output set');
-const applicationPath = applicationPaths[0];
-const applicationResources = join(applicationPath, platform === 'darwin'
-  ? 'Solomon Darker.app/Contents/Resources/app' : 'resources/app');
-const executable = platform === 'darwin' ? 'Solomon Darker.app/Contents/MacOS/solomon-darker' : platform === 'win32' ? 'solomon-darker.exe' : 'solomon-darker';
-const manifest = {
-  ...build,
-  arch,
-  electronVersion,
-  executable,
-  platform,
-  nativeAuthority: {
-    // macOS signing changes the copied Mach-O after staging.
-    sha256: await fileHash(join(applicationResources, 'authority', authorityFile)),
-    executable: `authority/${authorityFile}`
-  },
-  nodeRuntime: {
-    sha256: runtime.sha256,
-    version: runtime.version
+import { chmod, cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { desktopArtifacts, desktopLayout, repositoryRoot, run } from './desktop-build.mjs';
+
+export async function packageDesktop({platform, arch, executable, assets, build, version,
+  output = join(repositoryRoot, 'dist-desktop')}) {
+  const layout = desktopLayout(platform, arch);
+  if (platform === 'darwin' && process.platform !== 'darwin') {
+    throw new Error('macOS packages must be signed on macOS.');
   }
-};
-await writeFile(join(applicationPath, 'desktop-package-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-await writeFile(join(output, 'desktop-release.json'), `${JSON.stringify(build, null, 2)}\n`);
-process.stdout.write(`${JSON.stringify({
-  ...manifest,
-  applicationPath
-})}\n`);
-async function readJson(path) {
-  return JSON.parse(await readFile(path, 'utf8'));
+  const applicationPath = join(output, layout.directory);
+  const resources = join(applicationPath, layout.resources);
+  const destination = join(applicationPath, layout.executable);
+  await rm(applicationPath, {recursive: true, force: true});
+  await mkdir(dirname(destination), {recursive: true});
+  await mkdir(join(resources, 'game'), {recursive: true});
+  await cp(executable, destination);
+  if (platform !== 'win32') await chmod(destination, 0o755);
+  await cp(join(assets, 'assets'), join(resources, 'game', 'assets'), {recursive: true});
+  await cp(join(repositoryRoot, 'docs', 'third-party'), join(resources, 'licenses'), {recursive: true});
+  await writeJson(join(resources, 'desktop-build.json'), build);
+  if (platform === 'darwin') {
+    if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('The application version must have three numeric components.');
+    const bundle = join(applicationPath, 'Solomon Darker.app');
+    await writeFile(join(bundle, 'Contents', 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleExecutable</key><string>solomon-darker</string>
+<key>CFBundleIdentifier</key><string>com.jarrett.solomondarker</string>
+<key>CFBundleName</key><string>Solomon Darker</string>
+<key>CFBundleDisplayName</key><string>Solomon Darker</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>${version}</string>
+<key>CFBundleVersion</key><string>${version}</string>
+<key>NSHighResolutionCapable</key><true/>
+<key>NSPrincipalClass</key><string>NSApplication</string>
+</dict></plist>
+`);
+    await run('codesign', ['--force', '--sign', '-', bundle]);
+    await run('codesign', ['--verify', '--strict', bundle]);
+  }
+  // Signing changes the Mach-O and creates CodeResources. Hash only final bytes.
+  const manifest = {...build, schemaVersion: 2, runtime: 'native', platform, arch,
+    executable: layout.executable, resources: layout.resources, files: await hashes(applicationPath)};
+  await writeJson(join(applicationPath, 'desktop-package-manifest.json'), manifest);
+  await writeJson(join(output, 'desktop-release.json'), build);
+  return {...manifest, applicationPath};
 }
-function argument(name, required = true) {
+
+async function hashes(directory, prefix = '') {
+  const result = {};
+  for (const entry of (await readdir(directory, {withFileTypes: true})).sort((a, b) => a.name.localeCompare(b.name))) {
+    const name = prefix + entry.name;
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) Object.assign(result, await hashes(path, name + '/'));
+    else if (entry.isFile()) {
+      const hash = createHash('sha256');
+      for await (const chunk of createReadStream(path)) hash.update(chunk);
+      result[name] = hash.digest('hex');
+    } else throw new Error(`Native packages require regular files: ${name}`);
+  }
+  return result;
+}
+
+async function writeJson(path, value) {
+  await writeFile(path, JSON.stringify(value, null, 2) + '\n');
+}
+
+function argument(name) {
   const index = process.argv.indexOf(name);
-  const value = index < 0 ? undefined : process.argv[index + 1];
-  if (!value || value.startsWith('--')) {
-    if (required || index >= 0) throw new Error(`${name} requires a value`);
-    return undefined;
+  if (index < 0) return undefined;
+  const value = process.argv[index + 1];
+  if (!value || value.startsWith('--')) throw new Error(`${name} requires a value`);
+  return value;
+}
+
+async function main() {
+  const platform = argument('--platform') || process.platform;
+  const arch = argument('--arch') || process.arch;
+  const releaseRepository = argument('--release-repository') || process.env.SDR_DESKTOP_RELEASE_REPOSITORY;
+  if (!releaseRepository || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(releaseRepository)) {
+    throw new Error('Set --release-repository OWNER/REPOSITORY for the Rust desktop update owner.');
   }
-  return name === '--native-host' || name === '--client-root' ? resolve(value) : value;
+  const artifacts = await desktopArtifacts({platform, arch, release: true,
+    skipBuild: process.argv.includes('--skip-build'), nativeApp: argument('--native-app'),
+    assetsRoot: argument('--assets-root')});
+  const build = {
+    schemaVersion: 1,
+    revision: execFileSync('git', ['rev-parse', 'HEAD'], {cwd: repositoryRoot, encoding: 'utf8'}).trim(),
+    sourceTimestamp: Number(execFileSync('git', ['show', '-s', '--format=%ct', 'HEAD'],
+      {cwd: repositoryRoot, encoding: 'utf8'}).trim()),
+    releaseRepository
+  };
+  const cargo = await readFile(join(repositoryRoot, 'Cargo.toml'), 'utf8');
+  const version = /^version = "(\d+\.\d+\.\d+)"$/m.exec(cargo)?.[1];
+  if (!version) throw new Error('Cargo.toml has no application version.');
+  const result = await packageDesktop({platform, arch, ...artifacts, build, version});
+  process.stdout.write(JSON.stringify({applicationPath: result.applicationPath, executable: result.executable,
+    revision: result.revision, files: Object.keys(result.files).length}) + '\n');
 }
-async function fileHash(path) {
-  const hash = createHash('sha256');
-  for await (const chunk of createReadStream(path)) hash.update(chunk);
-  return hash.digest('hex');
-}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await main();

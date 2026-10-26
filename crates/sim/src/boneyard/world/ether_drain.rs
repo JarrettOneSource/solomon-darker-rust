@@ -45,22 +45,26 @@ impl BoneyardWorld {
                     });
                 }
                 NativeEtherDrainTargetRef::Golem { id } => {
-                    let Some(actor) = secondary.actors.iter_mut().find(|actor| {
+                    let Some(mut actor) = secondary.actors.iter_mut().find(|actor| {
                         actor.id == *id && actor.kind == NativeSecondaryActorKind::Golem
                     }) else {
                         continue;
                     };
-                    let Some(golem) = &mut actor.golem else { continue };
-                    let position =
-                        physics.move_body("", actor.position, contact.delta, actor.radius);
+                    let Some(golem) = actor.golem.as_deref_mut() else { continue };
+                    let position = physics.move_body(
+                        "",
+                        actor.common.position,
+                        contact.delta,
+                        actor.common.radius,
+                    );
                     let delta = Vec2::new(
-                        fround(position.x - actor.position.x),
-                        fround(position.y - actor.position.y),
+                        fround(position.x - actor.common.position.x),
+                        fround(position.y - actor.common.position.y),
                     );
                     let shift = |point: &mut Vec2| {
                         *point = Vec2::new(fround(point.x + delta.x), fround(point.y + delta.y));
                     };
-                    actor.position = position;
+                    actor.common.position = position;
                     shift(&mut golem.left_foot);
                     shift(&mut golem.left_foot_next);
                     shift(&mut golem.left_foot_previous);
@@ -96,11 +100,13 @@ impl BoneyardWorld {
             .map(|actor| (actor.id, actor.position))
             .collect();
         self.commit_enemy_positions(&bodies);
-        for actor in &mut self.enemies.actors {
+        for mut actor in self.enemies.actors.iter_mut() {
             let EnemyBrain::Demon(brain) = &mut actor.brain else { continue };
-            let before = demon_positions.iter().find(|(id, _)| *id == actor.id).unwrap().1;
-            let delta =
-                Vec2::new(fround(actor.position.x - before.x), fround(actor.position.y - before.y));
+            let before = demon_positions.iter().find(|(id, _)| *id == actor.body.id).unwrap().1;
+            let delta = Vec2::new(
+                fround(actor.body.position.x - before.x),
+                fround(actor.body.position.y - before.y),
+            );
             if delta == Vec2::ZERO {
                 continue;
             }

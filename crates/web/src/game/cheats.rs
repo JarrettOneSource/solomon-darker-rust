@@ -19,7 +19,11 @@ impl Game {
             });
         self.menu.set_cheat_menu_available(available)?;
         let admission_hidden = self.session.boneyard.is_none()
-            && self.session.participants[&self.local_player_id]
+            && self
+                .session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
                 .player
                 .economy
                 .college_intro_pending;

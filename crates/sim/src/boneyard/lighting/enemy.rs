@@ -3,7 +3,8 @@
 
 use crate::Vec2;
 use crate::enemies::EnemyToken;
-use crate::enemies::model::{EnemyActor, EnemyBrain, EnemyLifeState, EnemyLighting};
+use crate::enemies::model::EnemyActorRead;
+use crate::enemies::model::{EnemyBrain, EnemyLifeState, EnemyLighting};
 use crate::enemies::projectiles::{EnemyProjectileKind, EnemyProjectilePayload};
 use crate::float::fround;
 use crate::painter::WorldManagerLane;
@@ -28,12 +29,12 @@ pub struct NativeEnemyLightOwner {
     pub lighting: EnemyLighting,
 }
 
-impl From<&EnemyActor> for NativeEnemyLightOwner {
-    fn from(actor: &EnemyActor) -> Self {
+impl<T: EnemyActorRead> From<&T> for NativeEnemyLightOwner {
+    fn from(actor: &T) -> Self {
         Self {
             burning: actor.config.burning,
             scale: actor.config.scale,
-            demon_skull_body_offset: match &actor.brain {
+            demon_skull_body_offset: match actor.brain() {
                 EnemyBrain::DemonSkull(brain) => brain.body_offset,
                 _ => Vec2::ZERO,
             },
@@ -41,7 +42,7 @@ impl From<&EnemyActor> for NativeEnemyLightOwner {
             enemy_token: actor.config.enemy_token,
             position: actor.position,
             dying: actor.life_state == EnemyLifeState::Dying,
-            alpha: match &actor.brain {
+            alpha: match actor.brain() {
                 EnemyBrain::Portal(brain) => brain.alpha,
                 _ => 1.0,
             },

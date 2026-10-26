@@ -87,6 +87,26 @@ impl Client {
         self.0.send(Message::Text(serde_json::to_string(&message).unwrap().into())).unwrap();
     }
 
+    fn receive(&mut self) -> Option<ServerMessage<Value>> {
+        match self.0.read() {
+            Ok(Message::Text(text)) => Some(self.1.decode::<Value>(&text).unwrap()),
+            Ok(Message::Ping(_)) => {
+                self.0.flush().unwrap();
+                None
+            }
+            Ok(other) => panic!("unexpected native transport output: {other:?}"),
+            Err(Error::Io(error))
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                None
+            }
+            Err(error) => panic!("native authority closed during the journey: {error}"),
+        }
+    }
+
     fn until(&mut self, accept: impl Fn(&ServerMessage<Value>) -> bool) -> ServerMessage<Value> {
         let mut welcome = solomon_protocol::transfer::GameStringReceiver::new(
             solomon_protocol::GAME_WEBSOCKET_MAX_PAYLOAD_BYTES,
@@ -94,23 +114,7 @@ impl Client {
         );
         let deadline = Instant::now() + Duration::from_secs(8);
         while Instant::now() < deadline {
-            let mut message = match self.0.read() {
-                Ok(Message::Text(text)) => self.1.decode::<Value>(&text).unwrap(),
-                Ok(Message::Ping(_)) => {
-                    self.0.flush().unwrap();
-                    continue;
-                }
-                Ok(other) => panic!("unexpected native transport output: {other:?}"),
-                Err(Error::Io(error))
-                    if matches!(
-                        error.kind(),
-                        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
-                    ) =>
-                {
-                    continue;
-                }
-                Err(error) => panic!("native authority closed during the journey: {error}"),
-            };
+            let Some(mut message) = self.receive() else { continue };
             if let ServerMessage::WelcomeChunk { data, offset, total_length } = message {
                 let next_offset = offset + data.len();
                 let complete = welcome
@@ -213,6 +217,75 @@ fn ready(client: &mut Client, frame: &SnapshotFrame<Value>) {
     client.send(ClientMessage::ResumeReady {
         sequence: frame.host.resume_grace.as_ref().unwrap().sequence,
     });
+}
+
+#[test]
+fn interrupted_reconnect_keeps_the_last_received_credential_until_admission_is_acknowledged() {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+    let directory = std::env::temp_dir()
+        .join(format!("solomon-interrupted-resume-{}-{unique}", std::process::id()));
+    let checkpoint = directory.join("host.json");
+    let mut host = HostThread::start(checkpoint.clone());
+    let mut first = Client::connect(&host);
+    let (received, first_frame) = first.hello("Retained", None);
+    first.save(1);
+    drop(first);
+
+    for _ in 0..2 {
+        let mut interrupted = Client::connect(&host);
+        interrupted.send(ClientMessage::Hello {
+            version: PROTOCOL_VERSION,
+            selection: selection("Retained"),
+            resume: Some(received.clone()),
+            initial_save: None,
+            begin_college_intro: false,
+            enhanced_effects: true,
+        });
+        let deadline = Instant::now() + Duration::from_secs(8);
+        let admission = loop {
+            assert!(Instant::now() < deadline, "the host must start its Welcome");
+            if let Some(message) = interrupted.receive() {
+                break message;
+            }
+        };
+        assert!(matches!(
+            admission,
+            ServerMessage::Welcome { .. } | ServerMessage::WelcomeChunk { .. }
+        ));
+        // The transport receives bytes, but the client never accepts or ACKs them.
+        drop(interrupted);
+        assert_eq!(
+            Client::connect(&host).inspect(Some(received.clone())),
+            (true, true),
+            "a lost Welcome must not consume the only credential the client received"
+        );
+        host.finish();
+        host = HostThread::start(checkpoint.clone());
+        assert_eq!(
+            Client::connect(&host).inspect(Some(received.clone())),
+            (true, true),
+            "interrupted admission remains recoverable after a host restart"
+        );
+    }
+
+    let mut resumed = Client::connect(&host);
+    let (rotated, frame) = resumed.hello("Retained", Some(received.clone()));
+    assert_eq!(rotated.player_id, received.player_id);
+    assert_ne!(rotated.token, received.token);
+    assert_eq!(
+        frame.snapshot["participants"][&received.player_id]["player"],
+        first_frame.snapshot["participants"][&received.player_id]["player"]
+    );
+    resumed.save(2);
+    assert_eq!(Client::connect(&host).inspect(Some(received.clone())), (false, true));
+    assert_eq!(Client::connect(&host).inspect(Some(rotated.clone())), (true, true));
+    host.finish();
+    drop(resumed);
+    host = HostThread::start(checkpoint);
+    assert_eq!(Client::connect(&host).inspect(Some(received)), (false, true));
+    assert_eq!(Client::connect(&host).inspect(Some(rotated)), (true, true));
+    host.finish();
+    fs::remove_dir_all(directory).unwrap();
 }
 
 #[test]
@@ -428,7 +501,16 @@ fn pending_rejoin_choices_and_the_single_player_tutorial_survive_socket_loss_and
         };
         session.install_boneyard(loaded).unwrap();
         session.grant_experience("saved", 91.0);
-        assert!(session.participants["saved"].player.progression.pending_offer.is_some());
+        assert!(
+            session
+                .participants
+                .get("saved")
+                .expect("participant exists")
+                .player
+                .progression
+                .pending_offer
+                .is_some()
+        );
         let initial_save = solomon_assets::save_document::encode(&session.checkpoint()).unwrap();
         let mut host = HostThread::start(checkpoint_path.clone());
         let mut client = Client::connect(&host);

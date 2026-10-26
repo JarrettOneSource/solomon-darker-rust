@@ -26,7 +26,7 @@ impl EnemyWorld {
 
 pub fn spawn_demon_skull_warmup(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     eyes: bool,
     order: &mut WorldPainterOrder,
@@ -212,7 +212,7 @@ pub fn spawn_unholy_impact_ground(
 
 pub fn spawn_demon_skull_beam_segments(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     length: f64,
     power: f64,

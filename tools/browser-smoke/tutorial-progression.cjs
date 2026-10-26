@@ -33,6 +33,7 @@ const stage=()=>world()?.tutorial?.stage;
 const living=()=>world()?.enemies.actors.filter(actor=>actor.life_state==='Alive')||[];
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const point=value=>({x:value.x,y:value.y});
+const waypointTolerance=1;
 
 async function until(predicate,label,timeout=30000) {
   const deadline=Date.now()+timeout;
@@ -95,18 +96,16 @@ async function moveTo(target) {
   if(route.length){
     const current={x:route[waypoint].x-position.x,y:route[waypoint].y-position.y};
     const passed=previousWaypointVector&&current.x*previousWaypointVector.x+current.y*previousWaypointVector.y<=0;
-    if(distance(position,route[waypoint])<=navigation.navigation.NATIVE_NAVMESH_PORTAL_INSET||passed){
+    if(distance(position,route[waypoint])<=waypointTolerance||passed){
       waypoint++;previousWaypointVector=null;
     }
   }
   if(route.length<2||waypoint>=route.length){
-    // The unchanged Source query returns a short route prefix. Replan from
+    // The Rust query returns a short route prefix. Replan from
     // accepted positions after consuming its portals, never midway through a
     // triangle attachment. Only keyboard events move the game.
-    route=navigation.navigation.findBoneyardEnemyRoute({bodyRadius:navigation.bodyRadius,
-      bounds:navigation.scene.bounds,clearance:navigation.bodyRadius,start:position,end:target,
-      endBodyRadius:0,world:navigation.geometry});
-    assert.ok(route&&route.length>1,'Source navigation reaches the actual loot or enemy target');
+    route=await navigation.findRoute(position,target,navigation.scene.bounds);
+    assert.ok(route&&route.length>1,'Rust navigation reaches the actual loot or enemy target');
     routeTarget=point(target);waypoint=1;previousWaypointVector=null;
     receipt.navigation.push({tick:accepted.frame.snapshot.ticks,stage:stage(),position:point(position),target:point(target),route});
   }
@@ -428,6 +427,8 @@ async function modal(kind) {
     try{await release();await ui.settleErrors(page);}
     catch(error){receipt.passed=false;receipt.failure??=error.stack;process.exitCode=1;}
     receipt.errors=observed.errors;
+    try{if(navigation)assert.equal(await navigation.close(),0,'navigation helper exits cleanly');}
+    catch(error){receipt.passed=false;receipt.failure??=error.stack;process.exitCode=1;}
     try{receipt.cleanup=await owned.close();}
     catch(error){receipt.passed=false;receipt.cleanup=error.cleanup||{error:error.stack};process.exitCode=1;}
     fs.writeFileSync(path.join(output,'receipt.json'),JSON.stringify(receipt,null,2));

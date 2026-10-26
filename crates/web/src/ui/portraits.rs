@@ -1,4 +1,4 @@
-//! GPU stock starter-element portraits from `HallOfFamePrimitives.tsx` / `AllyHud.tsx`.
+//! Stock starter-element portraits for scores and ally status.
 //! Packed first poses and staff sockets retain their authored registration and order.
 
 use std::collections::BTreeMap;

@@ -56,7 +56,14 @@ fn current_profile_envelopes_preserve_advanced_unlocks_and_hydrate_historical_sa
         .unwrap();
         support::assert_website_json(&actual, &case["reencoded"], name, &[]);
         assert_eq!(
-            session.participants[player_id].player.book.advanced_unlocks.as_slice(),
+            session
+                .participants
+                .get(player_id)
+                .expect("participant exists")
+                .player
+                .book
+                .advanced_unlocks
+                .as_slice(),
             serde_json::from_value::<Vec<bool>>(case["advancedUnlocks"].clone()).unwrap(),
             "{name} permanent unlocks"
         );

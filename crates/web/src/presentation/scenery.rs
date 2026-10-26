@@ -23,7 +23,7 @@ pub fn scenery_actor_poses(
 ) -> NativeTreeActorPoses {
     let mut poses =
         NativeTreeActorPoses { players: players.into_iter().collect(), ..Default::default() };
-    for actor in &world.enemies.actors {
+    for actor in world.enemies.actors.iter() {
         if matches!(&actor.brain, EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured)
         {
             continue;
@@ -34,7 +34,7 @@ pub fn scenery_actor_poses(
                 sample
             } else {
                 fallback = native_enemy_presentation_input(
-                    actor,
+                    &actor,
                     EnemyActorAppearanceContext {
                         tick: world.ticks,
                         application_tick: world.ticks,
@@ -55,7 +55,7 @@ pub fn scenery_actor_poses(
             coffin_state: sample.coffin_state,
         });
     }
-    for maggot in &world.enemies.maggots {
+    for maggot in world.enemies.maggots.iter() {
         poses.maggots.push(NativeTreeMaggotPose {
             id: maggot.id,
             position: maggot.position,
@@ -73,7 +73,7 @@ fn from_endpoint(endpoint: &TimedSession) -> NativeTreeActorPoses {
         session.boneyard.as_ref().expect("retained Boneyard endpoint"),
         session.participant_order.iter().map(|id| NativeTreePlayerPose {
             id: id.clone(),
-            position: session.participants[id].wizard.position,
+            position: session.participants.get(id).expect("participant exists").wizard.position,
         }),
         endpoint.enemies.as_ref(),
     )

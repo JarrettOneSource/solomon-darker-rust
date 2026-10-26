@@ -4,15 +4,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use futures_util::FutureExt;
 use solomon_sim::audio::AudioOptions;
-use wasm_bindgen::{JsCast, JsValue};
-use wasm_bindgen_futures::{JsFuture, future_to_promise};
-use web_sys::{AudioBuffer, HtmlAudioElement};
+use std::sync::Arc;
 
-use super::{AudioState, audio_error, make_buffer_voice, play_music, validate_options};
+use super::{AudioBus, AudioState, Music, make_buffer_voice, play_music, validate_options};
 
 pub(super) struct AssetMusicChannel {
-    pub media: HtmlAudioElement,
+    pub media: Music,
     volume: f64,
 }
 
@@ -28,27 +27,18 @@ impl GameAssetAudio {
     /// key still shares one fulfilled or rejected promise across session changes.
     pub async fn load_asset(&self, key: &str, bytes: &[u8]) -> Result<(), String> {
         let existing = self.state.borrow().asset_loads.get(key).cloned();
-        let promise = if let Some(existing) = existing {
+        let decode = if let Some(existing) = existing {
             existing
         } else {
-            let state = self.state.clone();
-            let buffer_key = key.to_owned();
-            let encoded = js_sys::Uint8Array::from(bytes);
-            let context = state.borrow().context.clone();
-            let promise = future_to_promise(async move {
-                let decoded = JsFuture::from(context.decode_audio_data(&encoded.buffer())?)
-                    .await?
-                    .dyn_into::<AudioBuffer>()?;
-                state.borrow_mut().buffers.insert(buffer_key, decoded);
-                Ok(JsValue::UNDEFINED)
-            });
-            self.state.borrow_mut().asset_loads.insert(key.to_owned(), promise.clone());
-            promise
+            let context = self.state.borrow().context.clone();
+            let bytes = bytes.to_vec();
+            let decode = async move { context.decode(bytes).await }.boxed_local().shared();
+            self.state.borrow_mut().asset_loads.insert(key.to_owned(), decode.clone());
+            decode
         };
-        JsFuture::from(promise)
-            .await
-            .map(|_| ())
-            .map_err(|error| audio_error("load custom audio", error))
+        let buffer = decode.await?;
+        self.state.borrow_mut().buffers.entry(key.to_owned()).or_insert(buffer);
+        Ok(())
     }
 
     pub fn play_asset(&self, key: &str, options: AudioOptions) -> Result<(), String> {
@@ -58,7 +48,8 @@ impl GameAssetAudio {
             .buffers
             .get(key)
             .ok_or_else(|| format!("custom audio buffer is not loaded: {key}"))?;
-        let voice = make_buffer_voice(&state, None, buffer, options, false, 0.0, &state.sound_mix)?;
+        let voice =
+            make_buffer_voice(&state, None, buffer, options, false, 0.0, AudioBus::Effects)?;
         state.one_shots.push(voice);
         Ok(())
     }
@@ -78,7 +69,7 @@ impl GameAssetAudio {
             .buffers
             .get(key)
             .ok_or_else(|| format!("custom audio buffer is not loaded: {key}"))?;
-        let voice = make_buffer_voice(&state, None, buffer, options, true, 0.0, &state.sound_mix)?;
+        let voice = make_buffer_voice(&state, None, buffer, options, true, 0.0, AudioBus::Effects)?;
         state.asset_loops.insert(owner.to_owned(), voice);
         Ok(())
     }
@@ -90,18 +81,21 @@ impl GameAssetAudio {
         Ok(())
     }
 
-    pub fn start_asset_music(&self, owner: &str, url: &str, volume: f64) -> Result<(), String> {
+    pub fn start_asset_music(
+        &self,
+        owner: &str,
+        url: &str,
+        bytes: Arc<[u8]>,
+        volume: f64,
+    ) -> Result<(), String> {
         self.stop_asset_music(owner)?;
         let mut state = self.state.borrow_mut();
-        let media = HtmlAudioElement::new_with_src(url)
-            .map_err(|error| audio_error("custom music", error))?;
+        let media = state.context.asset_music(url, bytes)?;
         let volume = solomon_sim::hud::clamp_unit(volume);
-        media.set_current_time(0.0);
-        media.set_loop(true);
-        media.set_preload("auto");
+        media.rewind();
         media.set_volume(volume * state.music_volume * state.narration_mix);
         if state.unlocked && !state.music_paused {
-            play_music(&media);
+            play_music(&media)?;
         }
         state.asset_music.insert(owner.to_owned(), AssetMusicChannel { media, volume });
         Ok(())
@@ -109,8 +103,8 @@ impl GameAssetAudio {
 
     pub fn stop_asset_music(&self, owner: &str) -> Result<(), String> {
         if let Some(previous) = self.state.borrow_mut().asset_music.remove(owner) {
-            previous.media.pause().map_err(|error| audio_error("stop custom music", error))?;
-            previous.media.set_current_time(0.0);
+            previous.media.pause()?;
+            previous.media.rewind();
             previous.media.set_volume(0.0);
         }
         Ok(())

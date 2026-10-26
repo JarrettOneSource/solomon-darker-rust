@@ -147,7 +147,7 @@ fn console_catalogs_and_queued_commands_preserve_source_game_components_and_rng(
             &case.frame,
             &format!("{path}.frame"),
         );
-        let participant = &game.participants["player-1"];
+        let participant = &game.participants.get("player-1").expect("participant exists");
         let player = &participant.player;
         let backpack: Vec<_> = player.economy.backpack.iter().map(inventory::item_value).collect();
         common::assert_json_values(&json!(backpack), &case.backpack, &format!("{path}.backpack"));

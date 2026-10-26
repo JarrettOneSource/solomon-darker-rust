@@ -315,7 +315,7 @@ impl NativeAuthority {
 
     fn depart_party_member(&mut self, id: &str, reason: &str, now_ms: f64) -> Result<(), String> {
         let participant =
-            self.retained_participant(id).ok_or("The departing wizard is absent")?.clone();
+            self.retained_participant(id).ok_or("The departing wizard is absent")?.snapshot();
         let session = self.session.as_mut().expect("the native party has a shared session");
         let profile = if let Some(profile) = session.retired_participant_profile(id) {
             profile

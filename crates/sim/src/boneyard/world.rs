@@ -129,7 +129,7 @@ pub struct BoneyardWorld {
     /// that cannot be reconstructed from one cleanup rectangle. `None` keeps all targets.
     pub scenery_target_retention: Option<Arc<targets::BoneyardSceneryTargetRetention>>,
     pub enemies: EnemyWorld,
-    pub death_weapons: Vec<crate::death_animations::NativeDeathWeaponActor>,
+    pub death_weapons: crate::ComponentEntities<crate::death_animations::NativeDeathWeaponActor>,
     pub next_death_weapon_id: u64,
     pub loot: BoneyardLootStore,
     pub enemy_world_feedback: NativeEnemyWorldFeedback,
@@ -166,7 +166,7 @@ pub struct BoneyardCheckpoint {
     #[cfg_attr(feature = "persistence", serde(default, skip_serializing_if = "Option::is_none"))]
     pub scenery_target_retention: Option<Arc<targets::BoneyardSceneryTargetRetention>>,
     pub enemies: EnemyWorld,
-    pub death_weapons: Vec<crate::death_animations::NativeDeathWeaponActor>,
+    pub death_weapons: crate::ComponentEntities<crate::death_animations::NativeDeathWeaponActor>,
     pub next_death_weapon_id: u64,
     pub loot: BoneyardLootStore,
     pub enemy_world_feedback: NativeEnemyWorldFeedback,
@@ -238,7 +238,7 @@ impl BoneyardWorld {
             scenery_retained_bounds: None,
             scenery_target_retention: None,
             enemies,
-            death_weapons: Vec::new(),
+            death_weapons: crate::ComponentEntities::default(),
             next_death_weapon_id: 1,
             loot,
             enemy_world_feedback: NativeEnemyWorldFeedback::default(),
@@ -463,15 +463,15 @@ impl BoneyardWorld {
                     safety_bodies.push((player.position, PLAYER_CHARACTER_RADIUS));
                 }
             }
-            for actor in &self.enemies.actors {
-                if boneyard_enemy_actor_flags(actor) != 0 {
-                    safety_bodies.push((actor.position, boneyard_enemy_collision_radius(actor)));
+            for actor in self.enemies.actors.iter() {
+                if boneyard_enemy_actor_flags(&actor) != 0 {
+                    safety_bodies.push((actor.position, boneyard_enemy_collision_radius(&actor)));
                 }
             }
-            for maggot in &self.enemies.maggots {
+            for maggot in self.enemies.maggots.iter() {
                 safety_bodies.push((maggot.position, maggot.collision_radius));
             }
-            for actor in &self.loot.actors {
+            for actor in self.loot.actors.iter() {
                 if actor.kind == NativeLootDropKind::Sack {
                     safety_bodies.push((actor.position, NATIVE_LOOT_CARRIER_PLACEMENT_RADIUS));
                 }
@@ -659,14 +659,14 @@ impl BoneyardWorld {
     #[must_use]
     pub fn enemy_bodies(&self) -> Vec<ActorPhysicsBody> {
         let mut bodies = Vec::new();
-        for actor in &self.enemies.actors {
+        for actor in self.enemies.actors.iter() {
             if !matches!(actor.brain, EnemyBrain::Cocoon(_))
-                && boneyard_enemy_actor_flags(actor) != 0
+                && boneyard_enemy_actor_flags(&actor) != 0
             {
                 let mut body = enemy_collision_body(
                     format!("enemy-{}", actor.id),
                     actor.position,
-                    boneyard_enemy_collision_radius(actor),
+                    boneyard_enemy_collision_radius(&actor),
                 );
                 body.collision_recipient = match &actor.brain {
                     EnemyBrain::Wraith(brain) => brain.collision_recipient,
@@ -680,7 +680,7 @@ impl BoneyardWorld {
                 bodies.push(body);
             }
         }
-        for maggot in &self.enemies.maggots {
+        for maggot in self.enemies.maggots.iter() {
             if maggot.life_state == EnemyLifeState::Alive {
                 let mut body = enemy_collision_body(
                     format!("enemy-{}", maggot.id),
@@ -718,13 +718,13 @@ impl BoneyardWorld {
     }
 
     fn commit_enemy_positions(&mut self, bodies: &[ActorPhysicsBody]) {
-        for actor in &mut self.enemies.actors {
+        for mut actor in self.enemies.actors.iter_mut() {
             let id = format!("enemy-{}", actor.id);
             if let Some(body) = bodies.iter().find(|body| body.id == id) {
                 actor.position = body.position;
             }
         }
-        for maggot in &mut self.enemies.maggots {
+        for mut maggot in self.enemies.maggots.iter_mut() {
             let id = format!("enemy-{}", maggot.id);
             if let Some(body) = bodies.iter().find(|body| body.id == id) {
                 maggot.position = body.position;
@@ -734,7 +734,8 @@ impl BoneyardWorld {
 
     fn staff_hostile_body(&self, body_id: &str) -> bool {
         self.enemies.actors.iter().any(|actor| {
-            body_id == format!("enemy-{}", actor.id) && boneyard_enemy_actor_flags(actor) & 0x2 != 0
+            body_id == format!("enemy-{}", actor.id)
+                && boneyard_enemy_actor_flags(&actor) & 0x2 != 0
         }) || self.enemies.maggots.iter().any(|maggot| {
             body_id == format!("enemy-{}", maggot.id)
                 && maggot.life_state == EnemyLifeState::Alive

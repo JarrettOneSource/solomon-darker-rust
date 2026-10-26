@@ -1,8 +1,8 @@
 // Natural combat/loot/picker/first Dowse. No save/seed or prerequisite funds are
-// installed; Source navigation plans real keys and every game action comes from
+// installed; Rust navigation plans real keys and every game action comes from
 // visible UI. The separate private-dowsing driver covers controlled UI funding.
 // Run against an owned native host with its matched client assets. Set PW, URL,
-// OUT and SOLOMON_WEBSITE_DIR; Node needs --experimental-strip-types for Source.
+// OUT and SOLOMON_NAVIGATION_BINARY (see the README navigation helper build).
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -11,7 +11,7 @@ const {chromium} = require(path.resolve(process.env.PW));
 const {startNewGame} = require('./menu-journey.cjs');
 const {createNativeMessageReader} = require('./native-wire.cjs');
 const {launchOwnedBrowser} = require('./browser-lifecycle.cjs');
-const {prepareBoneyardNavigation, walkSolomonEntrance, boneyardKeyboardDirection} = require('./solomon-entrance.cjs');
+const {prepareBoneyardNavigation, walkSolomonEntrance} = require('./solomon-entrance.cjs');
 const {assertWorldNotification} = require('./world-notifications.cjs');
 const ui = require('./gpu-ui.cjs');
 
@@ -137,13 +137,10 @@ async function gameplayReady() {
     && !state.capture.text && ui.findWidget(state, 'hud:health'), 'genuine gameplay input admission');
 }
 
-function screenPoint(position, plan) {
-  const bounds = world().arena_transition.camera_bounds;
-  const camera = plan.camera.boneyardCamera(participant().wizard.position,
-    {x:bounds.x,y:bounds.y,w:bounds.width,h:bounds.height});
-  const origin = plan.camera.boneyardWorldPosition(camera);
-  return [Math.max(50,Math.min(1450,origin.x+position.x*camera.zoom)),
-    Math.max(80,Math.min(750,origin.y+position.y*camera.zoom))];
+async function screenPoint(position, plan) {
+  const screen = await plan.screenPoint(position, participant().wizard.position,
+    world().arena_transition.camera_bounds, {x: 1600, y: 900});
+  return [Math.max(50, Math.min(1450, screen.x)), Math.max(80, Math.min(750, screen.y))];
 }
 
 async function chooseOffer(offer) {
@@ -190,7 +187,7 @@ async function combat(plan, run) {
       if (player().combat.current_health < 25 && available('HealthPotion')) await page.keyboard.press('Digit3');
       if (player().combat.current_mana < 20 && available('ManaPotion')) await page.keyboard.press('Digit4');
       if (enemy) {
-        await page.mouse.move(...screenPoint(enemy.position, plan));
+        await page.mouse.move(...await screenPoint(enemy.position, plan));
         if (Date.now()-lastPrimaryPulse > 1000) { await fire(false); lastPrimaryPulse = Date.now(); }
         await fire(true);
         if (living.length >= 4 && distance < 300 && player().combat.current_mana >= 40
@@ -203,18 +200,15 @@ async function combat(plan, run) {
         && actor.activation_delay_ticks < 1)
         .sort((a,b) => Math.hypot(a.position.x-at.x,a.position.y-at.y)-Math.hypot(b.position.x-at.x,b.position.y-at.y))[0];
       if (loot && (distance > 105 || !enemy)) {
-        const bounds = world().arena_transition.combat_bounds;
-        const area = {x:bounds.x,y:bounds.y,w:bounds.width,h:bounds.height};
+        const area = world().arena_transition.combat_bounds;
         if (lootId !== loot.id || frame.snapshot.ticks-lootRouteTick >= 100) {
-          lootRoute = plan.navigation.findBoneyardEnemyRoute({bodyRadius:plan.bodyRadius,
-            bounds:area,clearance:plan.bodyRadius,start:at,end:loot.position,endBodyRadius:0,
-            world:plan.geometry}) || [];
+          lootRoute = await plan.findRoute(at, loot.position, area) || [];
           lootId = loot.id; lootRouteTick = frame.snapshot.ticks; waypoint = 1;
         }
         while (waypoint < lootRoute.length-1
           && Math.hypot(at.x-lootRoute[waypoint].x,at.y-lootRoute[waypoint].y) <= 12) waypoint++;
         const target = lootRoute[waypoint] || loot.position;
-        const direction = boneyardKeyboardDirection(plan,at,target,area);
+        const direction = await plan.direction(at,target,area);
         await movement(direction.x,direction.y);
       } else if (enemy && distance < 160) {
         const dx = at.x-enemy.position.x, dy = at.y-enemy.position.y, length = Math.hypot(dx,dy) || 1;
@@ -295,9 +289,11 @@ async function combat(plan, run) {
       const plan = await prepareBoneyardNavigation(world());
       const runOutput = path.join(output, `run-${attempt+1}`);
       fs.mkdirSync(runOutput, {recursive:true});
-      run.approach = await walkSolomonEntrance(page, {snapshot:() => frame.snapshot,
-        playerId:() => playerId, output:runOutput, plan});
-      await combat(plan,run);
+      try {
+        run.approach = await walkSolomonEntrance(page, {snapshot:() => frame.snapshot,
+          playerId:() => playerId, output:runOutput, plan});
+        await combat(plan,run);
+      } finally { assert.equal(await plan.close(), 0, 'navigation helper exits cleanly'); }
       await shot(`earned-run-${attempt}`);
       await until(async () => {
         if (player().progression.pending_offer) await chooseOffer(player().progression.pending_offer);

@@ -3,6 +3,7 @@
 use serde_json::{Value, json};
 use solomon_sim::region_feedback::*;
 use solomon_sim::screen_feedback::*;
+use solomon_sim::secondary::SecondaryActorRead;
 use solomon_sim::secondary::{
     NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryEventKind,
     NativeSecondaryEventState, NativeSecondaryScreenFlashState,
@@ -261,8 +262,11 @@ fn screen_overwrites_late_events_camera_arbitration_and_attenuation_replay_the_s
                 actor
             })
             .collect::<Vec<_>>();
-        let actual =
-            native_secondary_world_shake(&actors, "boneyard:test", point(&case["current"]));
+        let actual = native_secondary_world_shake(
+            actors.iter().map(|actor| actor.view()),
+            "boneyard:test",
+            point(&case["current"]),
+        );
         assert_snapshot(&point_snapshot(actual), &case["result"], "earthquake arbitration");
     }
 }

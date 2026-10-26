@@ -1,4 +1,6 @@
 //! Hurricane's early orbit/contact phase from `spell-combat/forces.ts`.
+use crate::spells::transient_storage::PrimaryTransientRef;
+
 use super::*;
 use crate::hurricane::{
     NATIVE_HURRICANE_CONTACT_COOLDOWN, NATIVE_HURRICANE_DEFAULT_MOVEMENT_STEP,
@@ -12,7 +14,7 @@ impl ContactWork<'_, '_> {
             .transients
             .iter()
             .filter_map(|effect| {
-                let PrimarySpellTransient::AirHurricane(actor) = effect else {
+                let PrimaryTransientRef::AirHurricane(actor) = effect else {
                     return None;
                 };
                 (actor.common.world_key == self.context.world_key && actor.contact_charge > 0.0)
@@ -117,8 +119,8 @@ impl ContactWork<'_, '_> {
             self.enemies
                 .set_hurricane_contact_cooldown(row.actor_id, NATIVE_HURRICANE_CONTACT_COOLDOWN);
         }
-        for effect in &self.source.transients {
-            let PrimarySpellTransient::FireGoodImp(actor) = effect else {
+        for effect in self.source.transients.iter() {
+            let PrimaryTransientRef::FireGoodImp(actor) = effect else {
                 continue;
             };
             if actor.common.world_key != self.context.world_key

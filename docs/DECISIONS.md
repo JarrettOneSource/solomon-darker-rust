@@ -3,11 +3,144 @@
 These decisions preserve deterministic gameplay, save compatibility, and consistent
 behavior across native and WebAssembly builds.
 
+## Native desktop platform
+
+Native client saves and authority checkpoints share `solomon-storage`'s existing
+fsync/rename implementation. A separate persistent OS lock file covers every
+revision check and replacement; renaming the data file cannot release the lock.
+The client keeps complete schema51 documents and the established preference
+formats. Save I/O runs off the window thread; malformed or stale records fail
+without replacing the prior save. Browser storage still uses its original
+IndexedDB transaction. The previous Electron profile stays intact; the existing
+save ZIP export/import route moves complete supported saves into the native profile.
+
+Native file selection and export use [RFD 0.17.2](https://docs.rs/rfd/0.17.2/rfd/)
+with the actual parent window. Validation, inspection, replacement choices and
+export warnings remain in the shared controller. Fullscreen uses winit; browser
+fullscreen retains its trusted-click and WebKit paths. Clipboard operations share
+one retained native owner with text editing, which keeps Linux clipboard ownership
+alive while the client runs.
+
+Display-only number conversion reuses the installed `ryu-js` implementation of
+ECMAScript `toFixed`. Native locale collation, casing, counts and dates use the
+ICU4X data and the system locale. Collation, casing and counts retain the 2.3
+family and the existing mod compiler's collation data. Dates pin the 1.5.1
+component formatter because 2.3 semantic `medium` chooses numeric months in
+locales such as German; the source explicitly requests abbreviated month names.
+The component API preserves that choice, local field order, localized digits and
+locale calendar selection without handwritten locale patterns. Six locale
+fixtures cover those distinctions. The installed
+`time` crate supplies date parsing and the operating system's local UTC offset.
+Browser metadata keeps its actual Intl and Date APIs.
+
+Website account, admission and save controllers share one HTTP client over browser
+fetch and native `ureq`. Requests validate their origin before attaching account
+or session headers, native account tokens retain the browser's per-origin storage
+boundary, and response bodies enforce explicit size limits while reporting bytes
+actually received. Native HTTP and SHA-256 work run off the window thread.
+Immutable mod content uses the same descriptor length/digest checks over browser
+CacheStorage or atomic native files. Invalid cache bytes are discarded and only
+verified downloads are committed. A view-owned resource URL retains in-memory
+native bytes or a browser Blob until the image/media consumer retires; native
+resources remain on their owning window thread.
+
+The shared audio director retains cue limits, delay, owned loop arbitration,
+narration mixing and music transitions. Browser playback uses its actual WebAudio
+and HTML media APIs; native playback uses [Rodio 0.22.2](https://docs.rs/rodio/0.22.2/rodio/)
+and CPAL. Resident native music loops by seeking its encoded stream. PCM effect
+buffers are shared, and the playback clock comes from samples consumed by the
+native mixer. Browser activation listeners are removed with their owner. Native
+keyboard capture subscribers retain registration order and cancellation ownership
+before the shared GPU editor receives an event.
+
+Desktop compiles the same Game and GPU UI as the browser WASM embedding.
+[Desktop runtime](DESKTOP-RUNTIME.md) defines application lifetime and packaging.
+
+The existing renderer's shaders, blend modes, clipping, captures and draw order
+stay canonical. `glow` supplies typed OpenGL/WebGL2 driver bindings instead of a
+second renderer. `winit`/`glutin` own the native window/context and `egui-winit`
+supplies the native integration for the already pinned egui version. The native
+shader changes only its GLSL version/precision declarations. Browser image
+uploads retain their fallible WebGL image API; native decoding uses `image` and
+uploads the resulting RGBA pixels. `blocking` keeps native file/HTTP work off the
+window thread, and the existing `ureq` family supplies HTTPS with certificate
+validation. Packaged paths reject traversal and symlink escape.
+
+The client has target-selected clocks, entropy, local futures and window geometry.
+The native event loop owns its local executor and cancels remaining futures before
+retiring the graphics context. `Surface` represents a real canvas or native window;
+it supplies drawing sizes and pointer projection rather than emulating DOM nodes.
+Source Lua display values reuse `ryu-js` and the existing ordered JSON serializer.
+
+Native typography uses [Parley](https://docs.rs/parley/0.11.1/parley/) for shaping,
+bidirectional text, system fallbacks and selection geometry. The installed egui
+text engine does not yet cover bidirectional runs, so using it alone would lose
+existing editor behavior. [Wuff](https://docs.rs/wuff/0.2.9/wuff/) decodes the same
+licensed stock WOFF2 files; system fonts remain on their host. Vello CPU, Skrifa
+and HarfRust already belong to the egui font stack and supply native text tiles.
+Wrapping, tab stops, line heights, caching, clipping, effects and GPU submission
+remain shared with the browser font-run owner. Native text tests cover stock decoding, kerning, ligatures, combining marks,
+Arabic visual order, raster pixels and invalid inputs.
+
+Platform interoperation is a narrow exception to the usual no-unsafe rule: glutin
+requires validated OS handles, and glow requires a current live graphics context.
+Those unsafe calls remain in graphics/window ownership, with explicit safety
+contracts and initialization, upload and readback checks. No gameplay, UI layout,
+save parsing or network protocol depends on unsafe code. Windows motion-preference
+reading also uses its documented BOOL output buffer at the platform boundary.
+The window must outlive
+its renderer and caches, including failure/close paths. Native and WASM both run
+the renderer acceptance; compilation alone does not establish pixel equivalence.
+
+Ordinary textured draws use a small sprite shader; shadows, blur, color filters
+and alpha masks retain the effect shader. Apple Software Renderer spends substantial
+time executing the effect shader even with its effect uniforms disabled. Separate
+programs remove that instruction cost without changing draw order, texture
+sampling, vertex layout, projection or blend equations. Both consume the same
+batch buffer. Native and browser pixel checks compare straight and premultiplied
+textures across normal, additive and multiply blending, and verify state restoration
+when draws alternate between the programs.
+
 ## One simulation
 
 Game rules live in `solomon-sim`. Browser, native, hosted, and modded play use the
-same session types and update order. Typed contiguous collections keep actor
-iteration stable, preserving the order of contacts and random-number consumption.
+same session types and update order. Contacts, actor admission, and random-number
+consumption retain their defined order on both targets.
+
+## Component storage and simulation order
+
+`bevy_ecs` supplies component storage and typed queries. Domain stores own their
+entity handles, admission order, and checkpoint conversion. Enemy bodies and
+controller brains are separate components; ground loot separates its body from
+the reward collected by a player. A small particle keeps its related fields together.
+
+Removing an entity can move another entity within an ECS table. The ordered
+handle index preserves survivor order, which determines contact selection, RNG
+draws, and painter registration. Births enter at the owning system's boundary:
+secondary effects wait for the next actor pass, while terminal enemy children
+can advance later in the same pass. Boss spell children enter before their retained
+parent and receive their first update on the next pass. Primary transient children
+follow their retained parent, or occupy its position when it retires, and also
+wait until the next pass. These rules keep Meteor debris, spent Embers and boss
+spells from receiving an extra update on their birth tick.
+
+Tick functions run in their declared sequence. Damage accepted by one phase can
+retire a target or create an effect before the next phase runs, and several phases
+consume the same random stream. Parallel work must preserve those dependencies
+and demonstrate a benefit on an equivalent workload before changing that sequence.
+
+Enemy controllers use a working record and commit its components together. Peer
+queries during the action observe the previous committed record. Mutating the
+live body throughout an action would change those queries. Read-only targeting
+and rendering borrow components; they do not need working copies. Student route
+plans similarly read the preceding population before any movement commits, so
+crowd following and collision responses do not depend on table layout.
+
+Save and snapshot fields retain their supported layout and game identities.
+ECS handles stay local to the store. The flat deserialization records also retain
+their declared struct names: supported save-import decoders use typed field and
+enum visitors to translate values. `serde(flatten)` buffers untyped values and
+would bypass those conversions.
 
 ## Numeric contract
 
@@ -107,7 +240,7 @@ transactions retain text and selection, including the browser adapter's UTF-16
 positions. Copy/cut/paste and focus changes commit inside native input dispatch,
 so a clipboard event immediately after Tab sees the newly focused editor.
 
-Native UI dispatch and drawing read the same document timeline. Mixing
+Browser input dispatch and drawing read the same document timeline. Mixing
 `performance.now()` at dispatch with an earlier requestAnimationFrame timestamp
 can move egui's history clock backward. An inactive document has no UI time to
 commit. This constraint belongs to the browser adapter; it does not change the
@@ -127,6 +260,14 @@ futures and parsing frames do not overlap the WebAssembly stack.
 Persistence uses revision checks and atomic synced replacement. Encoding and disk
 I/O run outside the tick deadline. Welcome waits for a reconnect credential to be
 durable; SaveCommitted follows actual file completion.
+
+Direct-host reconnect rotates its credential while retaining the credential the
+client presented until that connection acknowledges the Welcome snapshot. Both
+are durable during admission, so losing the final Welcome bytes or restarting
+the host does not strand the wizard. Only the current connection can retire the
+previous credential; stale snapshot acknowledgements cannot confirm admission.
+The optional previous credential is omitted after confirmation, and existing
+host saves without that field remain readable.
 
 ### Save conversion
 
@@ -240,6 +381,13 @@ system Lua installation. Execution hooks, memory limits, allowed globals, and
 accepted includes bound the VM. Filesystem, process, and module loading are not
 exposed. VM randomness does not consume gameplay RNG.
 
+Console API values use the same Rust-to-Lua conversion as event payloads:
+missing optional values become Lua `nil`, including fields in frame snapshots.
+The retired JavaScript bridge's null exception is not a supported contract; it
+prevented the default Console query from reading a normal College frame. Frozen
+recordings remain intact, with explicit corrected expectations for the affected
+queries, subsequent commands and callbacks, plus a real College-frame regression.
+
 The VM memory limit is 16 MiB. Registry borrows must be released before invoking
 Lua callbacks, which can re-enter the bridge and need that registry. Stable
 definition/function identities are saved as values; restore reconstructs executable
@@ -289,11 +437,81 @@ millisecond digits; the simulation itself does not read wall-clock time.
 
 ## Desktop packaging
 
-The released shell owns the window, native menus, child processes, peer transport,
-and optional updates. The Rust authority owns gameplay. Desktop startup serves
-root-mounted WebAssembly with an external initializer and a narrow CSP that
-permits WASM compilation.
+Native packages contain the Rust executable, tracked game assets, licenses and
+build metadata. Desktop compiles the shared client directly. The separately
+packaged browser artifact keeps its mounted WASM initializer and content policy.
 
 A package records its release repository and immutable revision. Release archives
 are inspected and exercised through the [packaged journey](RELEASE.md#qualification)
 before publication. Optional update failures leave offline play available.
+
+## Native client sockets and application ownership
+
+Desktop compiles the same Game, rendering, menu and session protocol owners as
+WASM. `network::ConnectionCore` owns Welcome deadlines, transfer reassembly,
+snapshot deltas and nonce pings. Browser WebSocket events and an owned native
+Tokio/tokio-tungstenite thread feed it; no JavaScript transport bridge remains in
+the native path. Rustls validates remote TLS certificates. Reliable messages are
+bounded, snapshots coalesce after decoding, and queued sends retain byte credits
+until sent or dropped. Dropping the native connection cancels and joins its owner
+without waiting indefinitely for a stalled handshake or DNS worker.
+
+The native desktop authority embeds the established standalone supervisor on an
+owned thread, with an ephemeral loopback listener and private generated credential.
+Its accepted Origin remains `solomon-darker://app` for compatibility with the
+existing authenticated peer contract. HTTP asset/API location is independently
+configured from the local authority URL. The OS application must complete the
+existing save-before-leave coordinator before releasing Game, its tasks, authority
+and GPU context, in that order. A failed save keeps the running game and offers
+Keep playing or Close without saving.
+
+Hardware-accelerated windows use V-sync to pace presentation. An unaccelerated
+graphics context leaves a 16 ms event-dispatch interval after presentation before
+requesting another draw. Unconditionally requesting redraw before `WaitUntil`
+prevented the Mac software renderer from yielding and delayed accessibility
+requests by tens of seconds. The window supplies its next redraw deadline, which
+the application respects while continuing to process native events and client work.
+
+A close deadline cancels the pending leave request and its disconnect receipt;
+a late successful checkpoint may persist while the player continues. Retiring a
+native session revokes any write still waiting for the document lock and waits for
+an atomic replacement already in progress. An abandoned session cannot commit
+after its replacement starts. Single-instance endpoint metadata is separate from
+the lifetime lock because Windows exclusive locks also deny reads from other handles.
+
+## Native encrypted peers and macOS Quit
+
+Desktop peer invitations preserve the existing v1 capability grammar and HKDF-SHA256
+key derivation. Tokio owns cancellation and byte forwarding; vendored OpenSSL owns
+TLS 1.3 PSK authentication with TLS_AES_128_GCM_SHA256, matching the qualified Node
+transport. Native/Rust and Node/Rust exchanges are checked in both directions. The
+host requests no X.509 client certificate; the invite key authenticates the peer.
+Each service cancels its sockets and joins its worker before its session retires.
+
+Winit retains its macOS NSApplication delegate. Its absent optional
+applicationShouldTerminate selector is supplied through objc2 with the documented
+NSUInteger ABI. The callback only requests deferred termination; the ordinary Rust
+event loop runs the shared save coordinator and replies to Cocoa. Keep playing
+cancels the pending Cocoa termination. GPU owners and cancelled tasks retire with
+their window context current.
+
+## Native Opus decoding
+
+Browser audio accepts Ogg Opus in custom content. Rodio 0.22.2's installed
+Symphonia decoder rejects the real Opus fixture, so the native audio edge adds
+`ogg` 0.9.2 for container packets and `opus-codec` 0.2.0 for bundled static libopus.
+Neither changes the WASM dependencies. CMake and libclang are build dependencies;
+the application needs no system codec, JavaScript runtime or codec download.
+
+The adapter implements the Ogg Opus timing contract in RFC 7845: header gain,
+pre-skip across packets/pages, initial granule offsets and final-page trimming.
+Only one encoded page and one decoded packet are buffered in addition to the
+resident compressed song. Looping reopens the encoded stream and resets decoder
+state. Chained streams may change channel count; the output stays stereo through
+the Xiph libopusfile downmix table, whose license is retained under `third-party`.
+Midstream decoding errors reach the existing audio error owner. Sound decoding
+checks the same error before accepting the collected PCM.
+
+Synthesized mono, stereo, 5.1 and multi-page fixtures exercise these contracts,
+including malformed input and errors after playback starts. The surround fixture
+also compares sampled frames against an independent FFmpeg/libopus decode.

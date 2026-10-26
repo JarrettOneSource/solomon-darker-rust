@@ -11,6 +11,7 @@ pub const NATIVE_SCORE_ARCHIVE_DEATH_TICK: u64 = 300;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeHallOfFameRunState {
     pub awesomeness: u64,
     pub awesomest_kill: Option<String>,

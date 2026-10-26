@@ -17,9 +17,9 @@ fn item_identity(item: &HubInventoryItem) -> Value {
         "contents":item.contents.as_ref().map(|contents|contents.iter().map(item_identity).collect::<Vec<_>>())})
 }
 fn snapshot(store: &BoneyardLootStore, order: WorldPainterOrder) -> Value {
-    let items: Vec<_> = store.actors.iter().map(|actor|json!({"id":actor.id,"nativeTypeId":actor.native_type_id,
-        "item":actor.item.as_ref().map(item_identity),"itemId":actor.item.as_ref().map(|item|item.id),"recipeIndex":actor.item.as_ref().and_then(|item|item.recipe_index),
-        "amount":actor.amount,"source":match actor.source {NativeLootDropSource::Enemy=>"enemy",NativeLootDropSource::Goodie=>"goodie",NativeLootDropSource::Script=>"script"}})).collect();
+    let items: Vec<_> = store.actors.iter().map(|actor|json!({"id":actor.id,"nativeTypeId":actor.reward().native_type_id,
+        "item":actor.reward().item.as_ref().map(item_identity),"itemId":actor.reward().item.as_ref().map(|item|item.id),"recipeIndex":actor.reward().item.as_ref().and_then(|item|item.recipe_index),
+        "amount":actor.reward().amount,"source":match actor.reward().source {NativeLootDropSource::Enemy=>"enemy",NativeLootDropSource::Goodie=>"goodie",NativeLootDropSource::Script=>"script"}})).collect();
     json!({"items":items,"rng":{"indexA":store.shared_rng.index_a,"indexB":store.shared_rng.index_b,"words":store.shared_rng.words.as_slice()},
         "nextActorId":store.next_actor_id,"nextItemId":store.next_item_id,"lastSuccessfulItemLevel":store.last_successful_item_level,
         "nextKeyDropLevel":store.next_key_drop_level,"order":{"nextRegistrationOrdinal":{"actor":order.next_actor_ordinal,"transient":order.next_transient_ordinal}}})

@@ -36,6 +36,7 @@ pub fn step_native_secondary_cast_action(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeSecondaryPlayerState {
     pub cast_action: Option<NativeSecondaryCastAction>,
     pub cast_sequence: u64,

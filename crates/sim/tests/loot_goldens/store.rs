@@ -65,18 +65,18 @@ fn orb_name(value: NativeOrbKind) -> &'static str {
     }
 }
 
-fn actor_snapshot(value: &BoneyardLootActor) -> Value {
+fn actor_snapshot(value: &impl LootActorRead) -> Value {
     json!({
         "activationDelayTicks":value.activation_delay_ticks,"ageTicks":value.age_ticks,"alpha":value.alpha,
-        "amount":value.amount,"animationPhase":value.animation_phase,"bonusKind":value.bonus_kind.map(bonus_id),
+        "amount":value.reward().amount,"animationPhase":value.animation_phase,"bonusKind":value.reward().bonus_kind.map(bonus_id),
         "bounceHeight":value.bounce_height,"bounceVelocity":value.bounce_velocity,"framePhase":value.frame_phase,
-        "id":value.id,"item":value.item.as_ref().map(item_snapshot),"kind":kind_name(value.kind),
+        "id":value.id,"item":value.reward().item.as_ref().map(item_snapshot),"kind":kind_name(value.kind),
         "lastStepTick":value.last_step_tick.map_or(-1,|tick|tick as i64),"lifetimeTicksRemaining":value.lifetime_ticks_remaining,
-        "nativeTypeId":value.native_type_id,"orbKind":value.orb_kind.map(orb_name),"orbValue":value.orb_value,
+        "nativeTypeId":value.reward().native_type_id,"orbKind":value.reward().orb_kind.map(orb_name),"orbValue":value.reward().orb_value,
         "painterRegistration":registration(value.painter_registration),"position":point_snapshot(value.position),
         "rotationDeg":value.rotation_deg,"scatterSeed":value.scatter_seed,"scatterActive":value.scatter_active,
-        "scatterProgress":value.scatter_progress,"settledSoundEmitted":value.settled_sound_emitted,"source":source_name(value.source),
-        "spawnTick":value.spawn_tick,"tier":value.tier,
+        "scatterProgress":value.scatter_progress,"settledSoundEmitted":value.settled_sound_emitted,"source":source_name(value.reward().source),
+        "spawnTick":value.spawn_tick,"tier":value.reward().tier,
     })
 }
 
@@ -104,7 +104,7 @@ fn goodie_snapshot(value: &BoneyardGoodieState) -> Value {
 }
 
 fn store_snapshot(value: &BoneyardLootStore) -> Value {
-    json!({"actors":value.actors.iter().map(actor_snapshot).collect::<Vec<_>>(),
+    json!({"actors":value.actors.iter().map(|actor| actor_snapshot(&actor)).collect::<Vec<_>>(),
         "effects":value.effects.iter().map(effect_snapshot).collect::<Vec<_>>(),
         "goodies":value.goodies.iter().map(goodie_snapshot).collect::<Vec<_>>(),
         "lastStepTick":value.last_step_tick.map_or(-1,|tick|tick as i64),"lastKeyNeededTick":value.last_key_needed_tick,

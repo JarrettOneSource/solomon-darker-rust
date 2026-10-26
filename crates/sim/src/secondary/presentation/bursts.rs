@@ -5,7 +5,7 @@ use super::draws::*;
 use super::types::*;
 use crate::float;
 use crate::float::fround;
-use crate::secondary::NativeSecondaryActorState;
+use crate::secondary::SecondaryActorRead;
 use crate::{NativeRng, Vec2};
 
 pub(super) const MAGIC_TRAP_FULL_DRAW_THRESHOLD: f64 = 0.99_f32 as f64;
@@ -20,12 +20,12 @@ pub(super) fn native_ether_fade_scalar(initial: f64, decrement: f64, age: f64) -
 }
 
 #[must_use]
-pub fn dampen_draws(actor: &NativeSecondaryActorState) -> Vec<NativeSecondarySpriteDraw> {
+pub fn dampen_draws(actor: &impl SecondaryActorRead) -> Vec<NativeSecondarySpriteDraw> {
     dampen_draws_at_age(actor, actor.age_ticks)
 }
 
 pub(super) fn dampen_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age: u64,
 ) -> Vec<NativeSecondarySpriteDraw> {
     let mut rng = actor
@@ -98,12 +98,12 @@ pub(super) fn dampen_draws_at_age(
 }
 
 #[must_use]
-pub fn shield_explosion_draws(actor: &NativeSecondaryActorState) -> Vec<NativeSecondarySpriteDraw> {
+pub fn shield_explosion_draws(actor: &impl SecondaryActorRead) -> Vec<NativeSecondarySpriteDraw> {
     shield_explosion_draws_at_age(actor, actor.age_ticks)
 }
 
 pub(super) fn shield_explosion_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age: u64,
 ) -> Vec<NativeSecondarySpriteDraw> {
     let rng = actor
@@ -138,12 +138,12 @@ pub(super) fn shield_explosion_draws_at_age(
 }
 
 #[must_use]
-pub fn magic_trap_burst_draws(actor: &NativeSecondaryActorState) -> Vec<NativeSecondarySpriteDraw> {
+pub fn magic_trap_burst_draws(actor: &impl SecondaryActorRead) -> Vec<NativeSecondarySpriteDraw> {
     magic_trap_burst_draws_at_age(actor, actor.age_ticks)
 }
 
 pub(super) fn magic_trap_burst_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age: u64,
 ) -> Vec<NativeSecondarySpriteDraw> {
     let rng = actor
@@ -166,12 +166,12 @@ pub(super) fn magic_trap_burst_draws_at_age(
 }
 
 #[must_use]
-pub fn mindblast_burst_draws(actor: &NativeSecondaryActorState) -> Vec<NativeSecondarySpriteDraw> {
+pub fn mindblast_burst_draws(actor: &impl SecondaryActorRead) -> Vec<NativeSecondarySpriteDraw> {
     mindblast_burst_draws_at_age(actor, actor.age_ticks)
 }
 
 pub(super) fn mindblast_burst_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age: u64,
 ) -> Vec<NativeSecondarySpriteDraw> {
     let rng = actor
@@ -209,7 +209,7 @@ pub(super) fn mindblast_burst_draws_at_age(
 }
 
 fn fuzzy_spear_burst_draws(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age: u64,
     source: &NativeRng,
     prefix: &str,

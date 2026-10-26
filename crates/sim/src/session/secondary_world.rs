@@ -8,6 +8,7 @@ use crate::boneyard::{BoneyardBounds, BoneyardWorld};
 use crate::enemies::EnemyToken;
 use crate::enemies::boss_spell::BossSpellKind;
 use crate::enemies::model::EnemyLifeState;
+use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::enemies::projectiles::{EnemyProjectileKind, EnemyProjectilePayload};
 use crate::enemies::targeting::{boneyard_enemy_actor_flags, boneyard_enemy_collision_radius};
 use crate::enemies::world::EnemyProjectileWorldQuery;
@@ -33,7 +34,7 @@ impl SessionSecondaryWorld<'_> {
     pub fn collect_teleport_bodies(
         world: Option<&BoneyardWorld>,
         positions: &[Vec2],
-        actors: &[NativeSecondaryActorState],
+        actors: &crate::secondary::SecondaryActors,
     ) -> Vec<BoneyardNativeTeleportBody> {
         let mut bodies: Vec<_> = positions
             .iter()
@@ -42,15 +43,15 @@ impl SessionSecondaryWorld<'_> {
         let Some(world) = world else {
             return bodies;
         };
-        for actor in &world.enemies.actors {
-            if boneyard_enemy_actor_flags(actor) != 0 {
+        for actor in world.enemies.actors.iter() {
+            if boneyard_enemy_actor_flags(&actor) != 0 {
                 bodies.push(BoneyardNativeTeleportBody {
                     position: actor.position,
-                    radius: boneyard_enemy_collision_radius(actor),
+                    radius: boneyard_enemy_collision_radius(&actor),
                 });
             }
         }
-        for maggot in &world.enemies.maggots {
+        for maggot in world.enemies.maggots.iter() {
             if maggot.life_state == EnemyLifeState::Alive {
                 bodies.push(BoneyardNativeTeleportBody {
                     position: maggot.position,
@@ -59,7 +60,7 @@ impl SessionSecondaryWorld<'_> {
             }
         }
         let key = format!("boneyard:{}", world.loaded.run_id);
-        for actor in actors {
+        for actor in actors.iter() {
             if actor.kind == NativeSecondaryActorKind::Golem && actor.world_key == key {
                 bodies.push(BoneyardNativeTeleportBody {
                     position: actor.position,
@@ -153,7 +154,7 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
             (position.x - origin.x).abs() <= 400.0 && (position.y - origin.y).abs() <= 400.0
         };
         let mut result = NativeSecondaryDampenCandidates::default();
-        for actor in &world.enemies.actors {
+        for actor in world.enemies.actors.iter() {
             if actor.life_state != EnemyLifeState::Alive || !inside(actor.position) {
                 continue;
             }
@@ -209,7 +210,7 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
                 },
             });
         }
-        for spell in &world.enemies.boss_spells {
+        for spell in world.enemies.boss_spells.iter() {
             if !inside(spell.owner.position) {
                 continue;
             }

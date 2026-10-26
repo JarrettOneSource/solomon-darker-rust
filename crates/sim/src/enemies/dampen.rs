@@ -29,7 +29,7 @@ impl EnemyWorld {
             &mut standalone_order
         };
         for index in 0..self.actors.len() {
-            let mut actor = self.actors[index].clone();
+            let mut actor = self.actors.get(index).expect("enemy index is live").snapshot();
             if !target_ids.contains(&actor.id)
                 || actor.life_state != EnemyLifeState::Alive
                 || !matches!(actor.brain, EnemyBrain::Mage(_) | EnemyBrain::Faculty(_))
@@ -107,7 +107,7 @@ impl EnemyWorld {
             }
             match &mut actor.brain {
                 EnemyBrain::Faculty(brain) => {
-                    actor.body_pose = 0.0;
+                    actor.body.body_pose = 0.0;
                     brain.action = None;
                     brain.body_pose = 0.0;
                     brain.disabled_primary_ticks = 500;
@@ -116,7 +116,7 @@ impl EnemyWorld {
                     brain.phase = BossPhase::RangeControl;
                 }
                 EnemyBrain::Mage(brain) => {
-                    actor.head_facing_offset = 0;
+                    actor.body.head_facing_offset = 0;
                     brain.action_progress = 0.0;
                     brain.disabled_primary_ticks = 600;
                     brain.marker_emitted = false;
@@ -124,18 +124,18 @@ impl EnemyWorld {
                 }
                 _ => unreachable!("Dampen admits only caster rows"),
             }
-            self.actors[index] = actor;
+            self.actors.replace(index, actor);
         }
     }
 }
 
 pub fn spawn_dampened_mage_smoke(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     order: &mut WorldPainterOrder,
 ) {
-    let EnemyBrain::Mage(brain) = &actor.brain else { return };
+    let EnemyBrain::Mage(brain) = actor.brain() else { return };
     if brain.disabled_primary_ticks == 0
         || actor.life_state != EnemyLifeState::Alive
         || actor.config.base_speed * actor.staff_movement_factor == 0.0

@@ -57,7 +57,9 @@ impl NativeAuthority {
             }
         }
         for (id, slot) in &self.metadata.resume_slots {
-            if slot.token.len() != 64 || !slot.token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            if std::iter::once(slot.token.as_str()).chain(slot.previous_token.as_deref()).any(
+                |token| token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()),
+            ) {
                 return Err("A saved native resume credential is invalid".into());
             }
             let retained_id = match &slot.saved {
@@ -74,7 +76,7 @@ impl NativeAuthority {
                 ));
             }
             solomon_assets::save_document::validate_participant(
-                self.retained_participant(id).expect("the slot identity was validated above"),
+                &self.retained_participant(id).expect("the slot identity was validated above"),
             )?;
             if !members.contains(id)
                 && !matches!(slot.saved, Some(SavedParticipant::Retired { .. }))
@@ -146,21 +148,20 @@ impl NativeAuthority {
         let participant =
             session.participant(id).ok_or("The disconnecting participant is absent")?;
         if session.boneyard.as_ref().is_some_and(|world| world.tutorial.is_some()) {
-            // Tutorial authority/checkpoints require its one real participant. Removing
-            // the final socket's actor produces the pinned JS host's zero-player
-            // assertion. Retain this private actor and freeze its world until resume.
+            // Tutorial checkpoints require one participant. Retain this private actor
+            // and freeze its world until the player resumes.
             return Ok(());
         }
         let saved = if session.run.phase == GameRunPhase::Active && session.boneyard.is_some() {
             SavedParticipant::Run { detached: Box::new(session.detach_participant(id)?) }
         } else if session.run.phase == GameRunPhase::Hub && session.boneyard.is_none() {
-            SavedParticipant::Hub { participant: Box::new(participant.clone()) }
+            SavedParticipant::Hub { participant: Box::new(participant.snapshot()) }
         } else {
             let profile = session
                 .retired_participant_profile(id)
                 .ok_or("The retired participant has no durable profile")?;
             SavedParticipant::Retired {
-                participant: Box::new(participant.clone()),
+                participant: Box::new(participant.snapshot()),
                 economy: Box::new(profile.economy),
                 hagatha_runtime: profile.hagatha_runtime,
             }

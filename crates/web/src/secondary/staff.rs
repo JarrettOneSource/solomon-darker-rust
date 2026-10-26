@@ -5,9 +5,7 @@ use solomon_sim::secondary::presentation::{NativeSecondaryAtlas, NativeSecondary
 use solomon_sim::spells::staff::presentation::{
     native_player_staff_pike_break_draws, native_player_staff_vfx_render_plan,
 };
-use solomon_sim::spells::staff::{
-    NativePlayerStaffPikeBreakVfx, NativePlayerStaffTransient, NativePlayerStaffVfx,
-};
+use solomon_sim::spells::staff::{NativePlayerStaffPikeBreakVfx, StaffTransientRef, StaffVfxRef};
 
 use super::{SecondaryPainter, SecondaryView};
 use crate::courtyard::Camera;
@@ -17,16 +15,14 @@ impl SecondaryView {
     /// Joins visible children directly from PrimarySpellTransient::Staff. Action
     /// and contact owners have no source painter; their emitted VFX own the rows.
     #[must_use]
-    pub fn staff_painter(state: &NativePlayerStaffTransient) -> Option<SecondaryPainter> {
+    pub fn staff_painter(state: StaffTransientRef<'_>) -> Option<SecondaryPainter> {
         let position = match state {
-            NativePlayerStaffTransient::Vfx(state) => {
-                native_player_staff_vfx_render_plan(state).position
-            }
-            NativePlayerStaffTransient::PikeBreak(state) => state.position,
-            NativePlayerStaffTransient::Action(_)
-            | NativePlayerStaffTransient::Contact(_)
-            | NativePlayerStaffTransient::ContactKnockback(_)
-            | NativePlayerStaffTransient::Knockback(_) => return None,
+            StaffTransientRef::Vfx(state) => native_player_staff_vfx_render_plan(state).position,
+            StaffTransientRef::PikeBreak(state) => state.position,
+            StaffTransientRef::Action(_)
+            | StaffTransientRef::Contact(_)
+            | StaffTransientRef::ContactKnockback(_)
+            | StaffTransientRef::Knockback(_) => return None,
         };
         let registration = state
             .common()
@@ -43,21 +39,21 @@ impl SecondaryView {
         &self,
         renderer: &mut Renderer,
         camera: &Camera,
-        state: &NativePlayerStaffTransient,
+        state: StaffTransientRef<'_>,
         world_tint: u32,
     ) {
         match state {
-            NativePlayerStaffTransient::Vfx(state) => {
+            StaffTransientRef::Vfx(state) => {
                 self.draw_staff_vfx(renderer, camera, state, world_tint)
             }
-            NativePlayerStaffTransient::PikeBreak(state) => {
+            StaffTransientRef::PikeBreak(state) => {
                 self.draw_staff_pike_break(renderer, camera, state, world_tint)
             }
             // These source owners perform combat work and have no visual root.
-            NativePlayerStaffTransient::Action(_)
-            | NativePlayerStaffTransient::Contact(_)
-            | NativePlayerStaffTransient::ContactKnockback(_)
-            | NativePlayerStaffTransient::Knockback(_) => {}
+            StaffTransientRef::Action(_)
+            | StaffTransientRef::Contact(_)
+            | StaffTransientRef::ContactKnockback(_)
+            | StaffTransientRef::Knockback(_) => {}
         }
     }
 
@@ -65,7 +61,7 @@ impl SecondaryView {
         &self,
         renderer: &mut Renderer,
         camera: &Camera,
-        state: &NativePlayerStaffVfx,
+        state: StaffVfxRef<'_>,
         world_tint: u32,
     ) {
         let plan = native_player_staff_vfx_render_plan(state);

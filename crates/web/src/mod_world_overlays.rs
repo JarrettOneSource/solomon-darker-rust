@@ -12,7 +12,6 @@ use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::assets::GameModAsset;
 use solomon_sim::modding::presentation::*;
 use std::collections::{BTreeMap, BTreeSet};
-use web_sys::Document;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModWorldProjection {
@@ -74,7 +73,6 @@ struct Shop {
     center: Pos2,
 }
 pub struct ModWorldOverlays {
-    document: Document,
     enemies: Vec<Enemy>,
     effects: Vec<Effect>,
     powerups: Vec<Powerup>,
@@ -84,16 +82,15 @@ pub struct ModWorldOverlays {
     pub scene: ModSceneOverlay,
 }
 impl ModWorldOverlays {
-    pub fn new(document: &Document) -> Result<Self, String> {
+    pub fn new() -> Result<Self, String> {
         Ok(Self {
-            document: document.clone(),
             enemies: Vec::new(),
             effects: Vec::new(),
             powerups: Vec::new(),
             pickups: Vec::new(),
             shops: Vec::new(),
             births: BTreeMap::new(),
-            scene: ModSceneOverlay::new(document)?,
+            scene: ModSceneOverlay::new()?,
         })
     }
     pub fn reset(&mut self) {
@@ -233,13 +230,7 @@ impl ModWorldOverlays {
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let ctx = frame.ctx.clone();
         let now = ctx.input(|input| input.time);
-        let reduced = self
-            .document
-            .default_view()
-            .ok_or("mod overlay window")?
-            .match_media("(prefers-reduced-motion: reduce)")
-            .map_err(|_| "mod motion preference")?
-            .is_some_and(|query| query.matches());
+        let reduced = crate::platform::reduced_motion();
         let painter = ctx.layer_painter(Self::powerup_layer()).with_clip_rect(ctx.content_rect());
         for powerup in &self.powerups {
             let born = *self.births.entry((1, powerup.id, 0)).or_insert(now);

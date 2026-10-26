@@ -7,6 +7,7 @@ use serde_json::json;
 use solomon_protocol::hosted::{HostedCommand, HostedHello, HostedServerMessage};
 use solomon_sim::settings::game_online_preferences;
 use solomon_sim::social::PlayerSocialProfile;
+use wasm_bindgen::JsValue;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -91,7 +92,10 @@ impl Game {
         }
         let mount = crate::hosted::WebsiteMount::configured(window)?
             .ok_or("The private test has no Website configuration")?;
-        let api = crate::hosted::WebsiteApi::new(window.clone(), mount);
+        let api = crate::hosted::WebsiteApi::new(
+            &window.location().href().map_err(|_| "Game location")?,
+            mount,
+        )?;
         post(
             json!({"type":"solomon-editor-test-state","state":"loading","message":"Starting a private test"}),
         )?;

@@ -134,16 +134,19 @@ fn stock_compositor_records_transforms_and_passes_match_the_website() {
                 let mut common = projectile(17);
                 common.charge = charge;
                 earth_boulder_sprite_plan(
-                    &PrimarySpellEarthProjectile {
+                    PrimarySpellEarthProjectile {
                         common,
-                        assembly_charge: charge - 0.001,
-                        hit_target_ids: Vec::new(),
-                        maximum_charge: 2.0,
-                        orientation: EARTH_BOULDER_IDENTITY_ORIENTATION,
-                        remaining_damage: 0.0,
-                        shell_charge: charge - 0.002,
-                        toughness: 1.0,
-                    },
+                        program: EarthProjectileProgram {
+                            assembly_charge: charge - 0.001,
+                            hit_target_ids: Vec::new(),
+                            maximum_charge: 2.0,
+                            orientation: EARTH_BOULDER_IDENTITY_ORIENTATION,
+                            remaining_damage: 0.0,
+                            shell_charge: charge - 0.002,
+                            toughness: 1.0,
+                        },
+                    }
+                    .view(),
                     17.0,
                 )
             }

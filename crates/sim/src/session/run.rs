@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::audio::{AudioEvent, AudioOptions};
+use crate::boneyard::loot::LootActorRead;
 use crate::economy::CompletedRunEconomyArchive;
 use crate::economy::HubEconomyState;
 use crate::enemies::model::EnemyDamageRequest;
@@ -39,12 +40,12 @@ impl GameSession {
         let mut ground_gold = 0;
         let mut ground_items = Vec::new();
         if last_word && let Some(world) = &self.boneyard {
-            for actor in &world.loot.actors {
+            for actor in world.loot.actors.iter() {
                 if actor.kind == NativeLootDropKind::Gold {
-                    ground_gold += actor.amount;
+                    ground_gold += actor.reward().amount;
                 }
                 if actor.kind == NativeLootDropKind::Sack
-                    && let Some(item) = &actor.item
+                    && let Some(item) = &actor.reward().item
                 {
                     ground_items.push(item.clone());
                 }
@@ -106,7 +107,13 @@ impl GameSession {
         self.hall_of_fame_clock_started_at_tick = self.ticks;
         if tutorial
             && let Some(id) = self.participant_order.first()
-            && self.participants[id].player.economy.college_intro_pending
+            && self
+                .participants
+                .get(id)
+                .expect("participant exists")
+                .player
+                .economy
+                .college_intro_pending
         {
             assert!(self.run.continue_post_run_to_college_intro());
             return Some(id.clone());
@@ -164,7 +171,7 @@ impl GameSession {
 
     pub(super) fn trigger_last_word(&mut self, id: &str, tick: u64, record_score: bool) {
         let world = self.boneyard.as_ref().expect("Last Word belongs to the current Boneyard");
-        let participant = &self.participants[id];
+        let participant = &self.participants.get(id).expect("participant exists");
         let position = participant.wizard.position;
         let key = format!("boneyard:{}", world.loaded.run_id);
         let registration = self.painter_order.register(WorldManagerLane::Actor);
@@ -197,7 +204,13 @@ impl GameSession {
                     1.0,
                     |actor| {
                         native_hagatha_boss_damage_factor(
-                            &self.participants[id].player.economy.owned_perk_selectors,
+                            &self
+                                .participants
+                                .get(id)
+                                .expect("participant exists")
+                                .player
+                                .economy
+                                .owned_perk_selectors,
                             u32::from(actor.config.native_type_id),
                         )
                     },
@@ -236,8 +249,8 @@ impl GameSession {
             return;
         }
         let mut remove = Vec::new();
-        for actor in &world.loot.actors {
-            if actor.native_type_id == 2012 {
+        for actor in world.loot.actors.iter() {
+            if actor.reward().native_type_id == 2012 {
                 remove.push(actor.id);
             }
         }
@@ -252,8 +265,8 @@ impl GameSession {
                 crate::economy::NATIVE_RETAINED_SACK_SUFFIXES[suffix]
             );
             if participant.player.economy.archive_hagatha_last_word_items(&retained.items, &name) {
-                for actor in &world.loot.actors {
-                    if actor.native_type_id == 2013 {
+                for actor in world.loot.actors.iter() {
+                    if actor.reward().native_type_id == 2013 {
                         remove.push(actor.id);
                     }
                 }

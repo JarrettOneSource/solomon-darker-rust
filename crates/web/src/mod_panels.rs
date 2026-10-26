@@ -1,14 +1,11 @@
-//! GPU `mod-ui/ModPanels.tsx`; mounted actions use accepted host IDs and positions.
+//! Authored panels; their actions use accepted host IDs and positions.
 
 use crate::gpu_ui::UiFrame;
-use crate::ui::javascript_string;
 use egui::{Color32, FontFamily, FontId, Stroke, vec2};
 use solomon_sim::Vec2;
 use solomon_sim::economy::{HubInventoryItem, HubItemKind};
 use solomon_sim::hub::regions::HubRegion;
 use solomon_sim::modding::{LuaObject, LuaValue};
-use wasm_bindgen::JsValue;
-use web_sys::Document;
 
 #[derive(Clone, Copy)]
 pub enum ModPanelsWorld {
@@ -58,7 +55,7 @@ impl ModPanelsView {
         egui::LayerId::new(egui::Order::Middle, egui::Id::unique("mod/panels"))
     }
 
-    pub fn new(_document: &Document) -> Result<Self, String> {
+    pub fn new() -> Result<Self, String> {
         Ok(Self { rows: Vec::new(), actions: Vec::new() })
     }
     pub fn update(&mut self, snapshot: &ModPanelsSnapshot<'_>) -> Result<(), String> {
@@ -272,5 +269,5 @@ fn number(value: Option<&LuaValue>) -> f64 {
 }
 
 fn number_text(number: f64) -> String {
-    javascript_string(&JsValue::from_f64(number))
+    crate::ui::javascript_number(number)
 }

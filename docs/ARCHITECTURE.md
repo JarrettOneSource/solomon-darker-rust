@@ -1,7 +1,7 @@
 # Architecture
 
-Solomon Darker shares one Rust simulation between its native authority and browser
-client. The website supplies accounts, storage, content publication, and editing.
+Solomon Darker shares one Rust simulation, game client and GPU interface across
+its native application and browser WASM embedding. The website supplies accounts, storage, content publication, and editing.
 
 ## Ownership
 
@@ -9,14 +9,15 @@ client. The website supplies accounts, storage, content publication, and editing
 | --- | --- |
 | `solomon-sim` | Game rules, sessions, players, enemies, spells, inventory, and deterministic state |
 | `solomon-assets` | Sprite bundles, scene decoding, navigation inputs, save formats, and validation |
-| `solomon-graphics` | Shared WebGL2 rendering, textures, blend modes, and asset decoding |
-| `solomon-web` | Browser input, GPU UI, world views, audio, and platform adapters |
-| `solomon-loader` | Startup splash using the shared graphics code |
+| `solomon-graphics` | Shared OpenGL/WebGL2 rendering, textures, blend modes, image decoding and text rasterization |
+| `solomon-web` | Shared Game, GPU UI, world presentation, audio director and native/browser platform adapters |
+| `solomon-loader` | Browser startup splash before the main WASM module loads |
 | `solomon-protocol` | Versioned messages, snapshots, commands, and acknowledgements |
 | `solomon-launcher` | Native authority, HTTP/WebSocket transport, persistence, and service integration |
 | `solomon-modding` | Definition compiler, native Lua execution, and authoring CLI |
 | `solomon-save-tools` | Independent WebAssembly entry for Account save import/export |
-| `desktop/` | Desktop shell, native process ownership, peer transport, and updates |
+| `solomon-desktop` | OS window, native session lifetime, encrypted peers, single-instance focus and updates |
+| `solomon-storage` | Locked atomic native documents for client saves/preferences and authority checkpoints |
 
 A rule that changes what the game does belongs in `sim`. Asset or save decoding
 belongs in `assets`. Drawing and platform I/O belong at the edge. Browser and
@@ -51,8 +52,8 @@ Static browser mode advances the same rules locally with a 250 ms catch-up cap.
 ### Tick ordering
 
 The [session tick](../crates/sim/src/session/tick.rs) owns the sequence across
-systems. Participants have a map for lookup and an explicit `participant_order`
-for ordered work. Map key order is not a substitute for admission order. Level-up
+systems. Participant components have a keyed entity index and an explicit
+`participant_order` for ordered work. Key order is not a substitute for admission order. Level-up
 cohorts and secondary-spell player order have their own sorting rules.
 
 Existing actors advance once per global tick, with participant phases between
@@ -71,9 +72,58 @@ borrow the actual participant bodies so a second position store cannot diverge
 from canonical players. Checkpoints retain the loaded world's identity so restore
 can rebuild immutable geometry and navigation inputs consistently.
 
-### Browser frame
+### Runtime entity storage
 
-For each browser frame:
+[`sim::ecs`](../crates/sim/src/ecs.rs) owns admission-ordered component queries.
+Domain stores define the components and expose borrowed views to their callers.
+Enemy views combine body and controller state; Maggots separate their body from
+the controller that owns emergence, admission and navigation. Secondary views include the
+ability-specific components present on that entity; loot views combine the body
+and pickup reward. Enemy projectiles pair flight and contact state with their motion
+program; boss spells pair identity and lifetime with their spell program. Small
+particle and effect lifecycles, including authored consumable effects, use
+`ComponentEntities`. Spider web modifiers use keyed components for each affected player.
+
+Player-fired projectiles pair common flight state with an Earth, Ether, Fire or
+Weld program. Motion updates those components directly. The contact transaction
+reads the completed motion state, then commits retained projectile changes after
+resolving contacts in game-ID order.
+
+Primary transients use one concrete effect component per entity, so a short fade
+does not reserve the space of a persistent spell. Their shared ordered store
+preserves the mixed Staff, Weld, Harden and elemental queue. Lifecycle systems
+update retained components and admit children at their original position in that
+queue; renderers borrow the same components.
+
+Secondary ability clocks and mana reserves are keyed player components; their
+iteration follows sorted player IDs. Target modifier components retain their
+application order. A tick reads the previous modifier values before applying
+expiry and damage, and commits player ability transactions to the same entities.
+
+Participants separate identity, character transactions, movement and aim, Hub
+state, lighting, run score, and screen feedback. `PlayerState` keeps inventory,
+skill choices, derived combat values and their transaction rules together.
+`ParticipantRef` and `ParticipantMut` borrow the live components; an owned
+`SessionParticipant` carries saves, detach transactions and private prediction.
+
+Courtyard students separate body and route/wander components. All routes read
+the preceding population, then collision resolution commits the planned bodies
+to their existing entities. Skorcha is an optional actor component; its appearance
+schedule remains a world resource. Fixed scenery animation clocks remain resources.
+
+The store's private ECS handles identify live component allocations. Game IDs
+and painter registrations remain the identities used by contacts, saves, and
+network snapshots. Constructing or restoring an owned record enrolls its
+components; serialization reads them in admission order. Enemy controller working
+copies commit back to the same entity after each action. Projectile and effect
+systems update their queried components in place.
+
+The [component-storage decision](DECISIONS.md#component-storage-and-simulation-order)
+explains the ordering and persistence constraints.
+
+### Client frame
+
+For each client frame:
 
 1. Receive and validate host messages; retain their original receipt timestamps.
 2. Apply completed authoritative state and sample input once.
@@ -82,8 +132,11 @@ For each browser frame:
 5. Draw world geometry, actors, lights, and UI from their owning models.
 6. Drain accepted audio events and retire unused GPU resources.
 
-`crates/web/src/lib.rs` owns browser entry points.
-`crates/web/src/game.rs` composes the running game.
+`crates/web/src/game.rs` composes the running game. The native event loop in
+`crates/desktop/src/app.rs` owns windows and session retirement;
+`crates/web/src/bootstrap.rs` owns browser callbacks and embedding.
+Target-selected platform modules provide input, text, clipboard, files, storage,
+networking and clocks without a JavaScript runtime in desktop builds.
 [Client presentation](CLIENT-PRESENTATION.md) defines interpolation and prediction.
 
 ## Rendering and UI
@@ -134,14 +187,20 @@ Tracked assets include stock atlases, bundle records, scenes, fonts, and audio.
 `scripts/verify-client-assets.py` validates complete membership and SHA256 values.
 [Reference data](REFERENCE-DATA.md) owns input provenance.
 
-`sim::audio` defines cues and event rules. Browser `GameAudio` owns decoded buffers,
-loops, and music channels. Trusted user input resumes the AudioContext. Accepted
-actor events supply sounds.
+`sim::audio` defines cues and event rules. Shared `GameAudio` owns cues, delayed
+sounds, loops and music channels. Browser playback uses WebAudio and media elements;
+native playback uses Rodio/CPAL and streaming compressed music. Trusted browser
+input resumes the AudioContext. Accepted actor events supply sounds.
 Narration duration remains simulation state even when sound is muted.
+If the OS reports no output device at startup, native play uses an elapsed-time
+audio clock and inactive playback controls. It creates no mixer or audio worker.
+Device initialization and decoding failures still propagate; an audio device
+connected later is picked up on the next game launch.
 
-`GameAudio` owns one AudioContext, named loop sources, and six resident music
-channels. A loop combines requests using the loudest gain. Gain changes preserve
-its source, while rate changes recreate it. Accepted one-shot cursors prevent a
+The browser audio backend owns one AudioContext. The shared director owns named
+loop sources and six resident music channels. A loop combines requests using the
+loudest gain. Gain changes preserve its source, while rate changes recreate it.
+Accepted one-shot cursors prevent a
 repeated snapshot from replaying a sound; display interpolation cannot create a
 new audio event.
 

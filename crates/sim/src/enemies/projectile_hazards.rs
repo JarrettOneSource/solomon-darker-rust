@@ -97,17 +97,14 @@ fn create_enemy_fire_patch(
 }
 
 pub fn step_demon_fires(world: &mut EnemyWorld, context: &EnemyStepContext<'_>, tick: u64) {
-    let source = std::mem::take(&mut world.projectile_effects);
-    for mut effect in source {
+    world.projectile_effects.retain_mut(|effect| {
         if effect.state.last_step_tick >= tick {
-            world.projectile_effects.push(effect);
-            continue;
+            return true;
         }
-        let EnemyProjectileEffectKind::DemonFire { fire } = effect.kind else {
-            world.projectile_effects.push(effect);
-            continue;
+        let EnemyProjectileEffectKind::DemonFire { fire } = &mut effect.kind else {
+            return true;
         };
-        let (patch, contact) = step_native_fire_patch(*fire, tick);
+        let (retained, contact) = step_native_fire_patch(fire, tick);
         if let Some(contact) = contact {
             for player in context.players {
                 if !target_eligible(player) {
@@ -131,14 +128,13 @@ pub fn step_demon_fires(world: &mut EnemyWorld, context: &EnemyStepContext<'_>, 
                 world.player_damage.push(damage);
             }
         }
-        if let Some(fire) = patch {
+        if retained {
             effect.state.age_ticks = fire.common.age_ticks;
             effect.state.alpha = fire.life.min(1.0);
             effect.state.last_step_tick = tick;
-            effect.kind = EnemyProjectileEffectKind::DemonFire { fire: Box::new(fire) };
-            world.projectile_effects.push(effect);
         }
-    }
+        retained
+    });
 }
 
 pub fn spawn_poison_pool_bubble(
@@ -277,7 +273,7 @@ pub fn step_projectile_knockbacks(
 
 pub fn spawn_burning_skeleton_fire(
     world: &mut EnemyWorld,
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     tick: u64,
     order: &mut WorldPainterOrder,
 ) {
@@ -293,7 +289,7 @@ pub fn spawn_burning_skeleton_fire(
     {
         return;
     }
-    let copies = if matches!(actor.brain, EnemyBrain::Mage(_)) { 2 } else { 1 };
+    let copies = if matches!(actor.brain(), EnemyBrain::Mage(_)) { 2 } else { 1 };
     for _ in 0..copies {
         if world.steering_rng.draw_integer(5) != 3 {
             continue;

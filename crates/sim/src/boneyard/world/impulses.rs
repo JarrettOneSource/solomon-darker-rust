@@ -76,7 +76,8 @@ impl BoneyardWorld {
                     let id = id.parse::<usize>().expect("enemy bodies retain their numeric ID");
                     let hostile = self.enemies.actors.iter().any(|actor| {
                         actor.id == id
-                            && crate::enemies::targeting::boneyard_enemy_actor_flags(actor) & 2 != 0
+                            && crate::enemies::targeting::boneyard_enemy_actor_flags(&actor) & 2
+                                != 0
                     }) || self
                         .enemies
                         .maggots

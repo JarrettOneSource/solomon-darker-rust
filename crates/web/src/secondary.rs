@@ -17,7 +17,7 @@ use solomon_sim::secondary::electric_burn::{
 };
 use solomon_sim::secondary::presentation::*;
 use solomon_sim::secondary::{
-    NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryPlayerState,
+    NativeSecondaryActorKind, NativeSecondaryPlayerState, SecondaryActorRef,
 };
 use solomon_sim::spells::air::{
     NativeAirLightningInput, NativeAirLightningPlan, build_native_air_lightning_plan,
@@ -119,10 +119,10 @@ impl SecondaryView {
     /// Call after begin_frame and before world submission. State remains read-only;
     /// render-target updates happen here, so draw() is a small painter callback.
     #[allow(clippy::too_many_arguments)] // One actual world frame, retained clocks and current render quality.
-    pub fn prepare(
+    pub fn prepare<'a>(
         &mut self,
         renderer: &mut Renderer,
-        actors: &[NativeSecondaryActorState],
+        actors: impl Iterator<Item = SecondaryActorRef<'a>> + Clone,
         world_key: &str,
         presentation_frame: Option<f64>,
         presentation_ages: Option<&BTreeMap<u64, f64>>,
@@ -137,7 +137,7 @@ impl SecondaryView {
         self.puppet_hits.clear();
         let mut indexes = BTreeMap::new();
         let mut live_ids = BTreeSet::new();
-        for actor in actors {
+        for actor in actors.clone() {
             if actor.world_key != world_key
                 || actor.kind == NativeSecondaryActorKind::EarthquakeSceneryWobble
             {
@@ -172,7 +172,7 @@ impl SecondaryView {
                     self.actors.push(ActorPlan {
                         id: actor.id,
                         kind: actor.kind,
-                        plan: native_golem_death_member_plan(actor, age_ticks, member),
+                        plan: native_golem_death_member_plan(&actor, age_ticks, member),
                         scale: actor.scale,
                         lightning: None,
                         electric_arc: None,
@@ -181,7 +181,7 @@ impl SecondaryView {
                 continue;
             }
             let plan = native_secondary_presentation_plan_at_age(
-                actor,
+                &actor,
                 age_ticks,
                 presentation_frame.unwrap_or(age_ticks),
                 gain,
@@ -210,7 +210,7 @@ impl SecondaryView {
             };
             indexes.insert(actor.id, self.actors.len());
             let electric_arc = if actor.kind == NativeSecondaryActorKind::ElectricBurnArc {
-                native_electric_burn_arc_plan(actor, age_ticks, enhanced_effects)
+                native_electric_burn_arc_plan(&actor, age_ticks, enhanced_effects)
             } else {
                 None
             };
@@ -228,7 +228,7 @@ impl SecondaryView {
         retire_targets(renderer, &mut self.storm_targets, &live_ids);
         retire_targets(renderer, &mut self.hit_targets, &live_ids);
         let mut composite_owner = BTreeMap::new();
-        for (child, parent) in native_secondary_composite_owner_entries(actors, world_key) {
+        for (child, parent) in native_secondary_composite_owner_entries(actors.clone(), world_key) {
             if let (Some(&child_index), Some(_)) = (indexes.get(&child), indexes.get(&parent)) {
                 composite_owner.insert(child, parent);
                 self.composite_children.entry(parent).or_default().push(child_index);
@@ -246,7 +246,7 @@ impl SecondaryView {
                 (first.world_y + first.sort_bias).total_cmp(&(second.world_y + second.sort_bias))
             });
         }
-        for actor in actors {
+        for actor in actors.clone() {
             let Some(&index) = indexes.get(&actor.id) else {
                 continue;
             };

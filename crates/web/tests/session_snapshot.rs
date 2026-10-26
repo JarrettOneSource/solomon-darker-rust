@@ -148,10 +148,11 @@ fn entity_ids_reject_corrupt_continuations_and_hydrate_earlier_standalone_docume
     let before = serde_json::to_value(source.snapshot()).unwrap();
     let mut duplicate = source.checkpoint();
     duplicate.participants.get_mut("alpha").unwrap().entity_id =
-        duplicate.participants["zeta"].entity_id;
+        duplicate.participants.get("zeta").expect("participant exists").entity_id;
     assert!(source.apply_checkpoint(duplicate, None).is_err());
     let mut stale_counter = source.checkpoint();
-    stale_counter.next_entity_id = source.participants["alpha"].entity_id;
+    stale_counter.next_entity_id =
+        source.participants.get("alpha").expect("participant exists").entity_id;
     assert!(source.apply_checkpoint(stale_counter, None).is_err());
     assert_eq!(serde_json::to_value(source.snapshot()).unwrap(), before);
 
@@ -162,7 +163,7 @@ fn entity_ids_reject_corrupt_continuations_and_hydrate_earlier_standalone_docume
     }
     let checkpoint: GameCheckpoint = serde_json::from_value(earlier_document).unwrap();
     let restored = GameSession::restore(checkpoint, None).unwrap();
-    assert_eq!(restored.participants["zeta"].entity_id, 1);
-    assert_eq!(restored.participants["alpha"].entity_id, 2);
+    assert_eq!(restored.participants.get("zeta").expect("participant exists").entity_id, 1);
+    assert_eq!(restored.participants.get("alpha").expect("participant exists").entity_id, 2);
     assert_eq!(restored.next_entity_id, 3);
 }

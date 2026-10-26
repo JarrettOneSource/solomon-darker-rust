@@ -4,7 +4,5 @@
 /room-smoke/
 
 /node_modules/
-/.desktop-stage/
 /dist-desktop/
 /scripts/__pycache__/
-/.cache/node-runtime/

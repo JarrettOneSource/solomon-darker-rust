@@ -81,14 +81,14 @@ impl EnemyWorld {
                 *registration = *resolved;
             }
         };
-        for projectile in &mut self.projectiles {
+        for mut projectile in self.projectiles.iter_mut() {
             let state = projectile.state_mut();
             resolve(&mut state.painter_registration);
             if let Some(registration) = &mut state.light_registration {
                 resolve(registration);
             }
         }
-        for effect in &mut self.projectile_effects {
+        for effect in self.projectile_effects.iter_mut() {
             resolve(&mut effect.state.painter_registration);
             if let Some(registration) = &mut effect.state.light_registration {
                 resolve(registration);
@@ -104,7 +104,7 @@ impl EnemyWorld {
                 }
             }
         }
-        for silk in &mut self.silks {
+        for silk in self.silks.iter_mut() {
             resolve(&mut silk.painter_registration);
         }
         for event in &mut self.events {
@@ -115,20 +115,20 @@ impl EnemyWorld {
         // Effect constructors can retain the same registration as their light. Patch
         // every retained registration-bearing row, rather than relying on the current
         // set of projectile producers never copying into another presentation lane.
-        for effect in &mut self.death_effects {
+        for effect in self.death_effects.iter_mut() {
             if let Some(registration) = &mut effect.painter_registration {
                 resolve(registration);
             }
         }
-        for pulse in &mut self.mage_lightning_pulses {
+        for pulse in self.mage_lightning_pulses.iter_mut() {
             resolve(&mut pulse.light_registration);
             for registration in &mut pulse.painter_registrations {
                 resolve(registration);
             }
         }
-        for spell in &mut self.boss_spells {
+        for spell in self.boss_spells.iter_mut() {
             resolve(&mut spell.owner.painter_registration);
-            if let super::boss_spell::BossSpellKind::GreenFire { fire, .. } = &mut spell.kind {
+            if let super::boss_spell::BossSpellKind::GreenFire { fire, .. } = &mut *spell.kind {
                 for registration in &mut fire.common.painter_registrations {
                     resolve(registration);
                 }

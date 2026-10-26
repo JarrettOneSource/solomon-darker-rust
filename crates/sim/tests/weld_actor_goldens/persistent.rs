@@ -113,7 +113,7 @@ fn held_growth_native_rock_assembly_split_and_flight_keep_source_state_and_rng()
                 if let Some(sample) = weld_visual_rows::sample(case, tick) {
                     let actor = NativeWeldWorldActor::Persistent(actor.clone());
                     weld_visual_rows::compare(
-                        [NativeWeldPresentationState::World(&actor)],
+                        [NativeWeldPresentationState::World(actor.view())],
                         sample,
                         "Held Weld compositor",
                     );
@@ -150,7 +150,7 @@ fn held_growth_native_rock_assembly_split_and_flight_keep_source_state_and_rng()
             let mut terrain_contacts = Vec::new();
             for mut actor in actors {
                 let (alive, terrain_contact) =
-                    step_native_weld_persistent_actor(&mut actor, &|_, _, _| {
+                    step_native_weld_persistent_actor(&mut actor.view_mut(), &|_, _, _| {
                         tick != case["blockTick"].as_u64().unwrap()
                     });
                 if let Some(actor) = terrain_contact {
@@ -199,7 +199,7 @@ fn held_growth_native_rock_assembly_split_and_flight_keep_source_state_and_rng()
                     let actors: Vec<_> =
                         actors.iter().cloned().map(NativeWeldWorldActor::Persistent).collect();
                     weld_visual_rows::compare(
-                        actors.iter().map(NativeWeldPresentationState::World),
+                        actors.iter().map(|actor| NativeWeldPresentationState::World(actor.view())),
                         sample,
                         "Released Weld compositor",
                     );

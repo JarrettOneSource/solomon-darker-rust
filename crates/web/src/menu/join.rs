@@ -1,5 +1,4 @@
-//! GPU Join Party preserves `JoinPartyScene.tsx`, `party-directory.ts` and
-//! `party-join.ts`. Only the Website coordinator admits actual sessions.
+//! Party directory and join requests. The Website coordinator admits hosted sessions.
 use super::HostedMenuAction;
 use crate::gpu_ui::UiFrame;
 use crate::hosted::{PartyActivity, PublicGameParty};

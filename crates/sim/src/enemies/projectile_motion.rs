@@ -1,6 +1,6 @@
 //! Enemy projectile fixed ticks and contact ordering from `enemies/projectiles.ts`.
 use super::model::*;
-use super::projectile_effects::{spawn_projectile_impact_effects, spawn_projectile_trails};
+use super::projectile_effects::{spawn_firebolt_trail, spawn_projectile_impact_effects};
 use super::projectile_hazards::{
     spawn_demon_explosion, spawn_demon_fire_handoff, spawn_poison_pool_bubble, step_demon_fires,
     step_projectile_knockbacks,
@@ -47,7 +47,7 @@ impl EnemyWorld {
         order: &mut WorldPainterOrder,
     ) {
         let mut first_tick = context.tick;
-        for projectile in &self.projectiles {
+        for projectile in self.projectiles.iter() {
             first_tick = first_tick.min(projectile.state().last_step_tick + 1);
         }
         for effect in &self.projectile_effects {
@@ -61,17 +61,12 @@ impl EnemyWorld {
         for tick in first_tick..=context.tick {
             step_projectile_knockbacks(self, context, tick);
             step_demon_fires(self, context, tick);
-            let source = std::mem::take(&mut self.projectiles);
-            for projectile in source {
-                let retained = if projectile.state().last_step_tick >= tick {
-                    Some(projectile)
-                } else {
-                    step_projectile(self, projectile, context, tick, order)
-                };
-                if let Some(projectile) = retained {
-                    self.projectiles.push(projectile);
-                }
-            }
+            let mut projectiles = std::mem::take(&mut self.projectiles);
+            projectiles.retain_mut(|projectile| {
+                projectile.state.last_step_tick >= tick
+                    || step_projectile(self, projectile, context, tick, order)
+            });
+            self.projectiles = projectiles;
         }
         self.step_projectile_effects(context.tick);
     }
@@ -79,21 +74,22 @@ impl EnemyWorld {
 
 fn step_projectile(
     world: &mut EnemyWorld,
-    source: EnemyProjectile,
+    projectile: &mut EnemyProjectileMut<'_>,
     context: &EnemyStepContext<'_>,
     tick: u64,
     order: &mut WorldPainterOrder,
-) -> Option<EnemyProjectile> {
-    match source {
-        EnemyProjectile::Arrow { state, velocity } => {
+) -> bool {
+    let state = &mut *projectile.state;
+    match projectile.motion {
+        EnemyProjectileMotion::Arrow { velocity } => {
             step_arrow(world, state, velocity, context, tick, order)
         }
-        EnemyProjectile::Firebolt(state) => step_firebolt(world, state, context, tick, order),
-        EnemyProjectile::GuidedMissile(state) => {
+        EnemyProjectileMotion::Firebolt => step_firebolt(world, state, context, tick, order),
+        EnemyProjectileMotion::GuidedMissile => {
             step_guided_missile(world, state, context, tick, order)
         }
-        EnemyProjectile::DemonBomb(state) => step_demon_bomb(world, state, context, tick, order),
-        EnemyProjectile::PoisonPool(state) => step_poison_pool(world, state, context, tick, order),
+        EnemyProjectileMotion::DemonBomb => step_demon_bomb(world, state, context, tick, order),
+        EnemyProjectileMotion::PoisonPool => step_poison_pool(world, state, context, tick, order),
     }
 }
 
@@ -125,12 +121,12 @@ fn terrain_blocked(
 
 fn step_arrow(
     world: &mut EnemyWorld,
-    mut state: EnemyProjectileState,
-    mut velocity: Vec2,
+    state: &mut EnemyProjectileState,
+    velocity: &mut Vec2,
     context: &EnemyStepContext<'_>,
     tick: u64,
     order: &mut WorldPainterOrder,
-) -> Option<EnemyProjectile> {
+) -> bool {
     state.age_ticks += 1;
     state.last_step_tick = tick;
     state.position =
@@ -142,11 +138,14 @@ fn step_arrow(
     }) {
         retire_projectile(
             world,
-            &EnemyProjectile::Arrow { state: state.clone(), velocity },
+            &EnemyProjectileRef {
+                state,
+                motion: EnemyProjectileMotion::Arrow { velocity: *velocity },
+            },
             tick,
             state.target_player_id.as_deref(),
         );
-        return None;
+        return false;
     }
     let player = if state.vertical_offset == 0.0 {
         None
@@ -156,18 +155,24 @@ fn step_arrow(
     if let Some(player) = player {
         emit_projectile_impact(
             world,
-            &EnemyProjectile::Arrow { state: state.clone(), velocity },
+            &EnemyProjectileRef {
+                state,
+                motion: EnemyProjectileMotion::Arrow { velocity: *velocity },
+            },
             tick,
             Some(&player.id),
             order,
         );
     }
     let blocked =
-        state.age_ticks.is_multiple_of(5) && terrain_blocked(&state, velocity, context, 5.0, 0x380);
+        state.age_ticks.is_multiple_of(5) && terrain_blocked(state, *velocity, context, 5.0, 0x380);
     if blocked {
         emit_projectile_impact(
             world,
-            &EnemyProjectile::Arrow { state: state.clone(), velocity },
+            &EnemyProjectileRef {
+                state,
+                motion: EnemyProjectileMotion::Arrow { velocity: *velocity },
+            },
             tick,
             None,
             order,
@@ -176,102 +181,108 @@ fn step_arrow(
     if player.is_some() || blocked {
         retire_projectile(
             world,
-            &EnemyProjectile::Arrow { state, velocity },
+            &EnemyProjectileRef {
+                state,
+                motion: EnemyProjectileMotion::Arrow { velocity: *velocity },
+            },
             tick,
             player.map(|player| player.id.as_str()),
         );
-        return None;
+        return false;
     }
     state.settled_ticks_remaining = (state.settled_ticks_remaining - 1).max(0);
     if state.settled_ticks_remaining > 0 {
         state.visual_phase_deg = state.heading_deg;
-        return Some(EnemyProjectile::Arrow { state, velocity });
+        return true;
     }
     if state.vertical_offset >= -3.0 {
         state.visual_scale = fround(state.visual_scale - 0.05000000074505806);
         if state.visual_scale <= 0.0 {
             retire_projectile(
                 world,
-                &EnemyProjectile::Arrow { state: state.clone(), velocity },
+                &EnemyProjectileRef {
+                    state,
+                    motion: EnemyProjectileMotion::Arrow { velocity: *velocity },
+                },
                 tick,
                 state.target_player_id.as_deref(),
             );
-            return None;
+            return false;
         }
         state.speed = 0.0;
-        velocity = Vec2::ZERO;
+        *velocity = Vec2::ZERO;
         state.vertical_offset = 0.0;
-        return Some(EnemyProjectile::Arrow { state, velocity });
+        return true;
     }
     state.vertical_offset = fround(state.vertical_offset + 0.75);
     let launch = native_enemy_projectile_velocity(state.heading_deg, state.minimum_speed);
     let launch_speed = fround(fround(launch.x * launch.x + launch.y * launch.y).sqrt());
     let vertical_term = fround((-25.0 / state.vertical_offset) * launch_speed * 0.25);
-    velocity =
+    *velocity =
         Vec2::new(fround(velocity.x * 0.9900000095367432), fround(velocity.y * 0.9900000095367432));
     state.speed = fround(hypot(velocity.x, velocity.y));
     state.visual_phase_deg =
         fround(heading_degrees_from_vector(launch.x, fround(launch.y + vertical_term)));
-    Some(EnemyProjectile::Arrow { state, velocity })
+    true
 }
 
 fn step_firebolt(
     world: &mut EnemyWorld,
-    mut state: EnemyProjectileState,
+    state: &mut EnemyProjectileState,
     context: &EnemyStepContext<'_>,
     tick: u64,
     order: &mut WorldPainterOrder,
-) -> Option<EnemyProjectile> {
+) -> bool {
     let velocity = native_enemy_projectile_velocity(state.heading_deg, state.speed);
     if (state.age_ticks + 1).is_multiple_of(10)
-        && terrain_blocked(&state, velocity, context, 10.0, 0x700)
+        && terrain_blocked(state, velocity, context, 10.0, 0x700)
     {
-        let projectile = EnemyProjectile::Firebolt(state);
+        let projectile = EnemyProjectileRef { state, motion: EnemyProjectileMotion::Firebolt };
         emit_projectile_impact(world, &projectile, tick, None, order);
         retire_projectile(world, &projectile, tick, None);
-        return None;
+        return false;
     }
-    let source = state.clone();
-    move_projectile(&mut state, tick);
+    let previous_tick = state.last_step_tick;
+    move_projectile(state, tick);
     let outside = context.geometry.projectile_world_blocked(EnemyProjectileWorldQuery::View {
         projectile_id: state.id,
         position: state.position,
         margin: 50.0,
     });
-    spawn_projectile_trails(world, &EnemyProjectile::Firebolt(source), state.position, order);
+    spawn_firebolt_trail(world, state, previous_tick, order);
     let player = first_player_center_contact(state.position, context.players, 30.0);
     let expired = state.age_ticks >= state.lifetime_ticks;
-    let projectile = EnemyProjectile::Firebolt(state);
+    let projectile = EnemyProjectileRef { state, motion: EnemyProjectileMotion::Firebolt };
     if let Some(player) = player {
         emit_projectile_impact(world, &projectile, tick, Some(&player.id), order);
     }
     if player.is_some() || outside || expired {
         retire_projectile(world, &projectile, tick, player.map(|player| player.id.as_str()));
-        None
+        false
     } else {
-        Some(projectile)
+        true
     }
 }
 
 fn step_guided_missile(
     world: &mut EnemyWorld,
-    mut state: EnemyProjectileState,
+    state: &mut EnemyProjectileState,
     context: &EnemyStepContext<'_>,
     tick: u64,
     order: &mut WorldPainterOrder,
-) -> Option<EnemyProjectile> {
+) -> bool {
     let old_heading = state.heading_deg;
     let old_speed = state.speed;
     let old_phase = state.visual_phase_deg;
-    move_projectile(&mut state, tick);
+    move_projectile(state, tick);
     if context.geometry.projectile_world_blocked(EnemyProjectileWorldQuery::Bounds {
         projectile_id: state.id,
         position: state.position,
         margin: 500.0,
     }) {
-        let projectile = EnemyProjectile::GuidedMissile(state);
+        let projectile = EnemyProjectileRef { state, motion: EnemyProjectileMotion::GuidedMissile };
         retire_projectile(world, &projectile, tick, projectile.state().target_player_id.as_deref());
-        return None;
+        return false;
     }
     let target = target_by_id(state.target_player_id.as_deref(), context.players)
         .filter(|target| target_eligible(target));
@@ -295,7 +306,7 @@ fn step_guided_missile(
         state.target_player_id.as_deref(),
         context.players,
     );
-    let projectile = EnemyProjectile::GuidedMissile(state);
+    let projectile = EnemyProjectileRef { state, motion: EnemyProjectileMotion::GuidedMissile };
     if let Some(player) = player {
         emit_projectile_impact(world, &projectile, tick, Some(&player.id), order);
     }
@@ -313,16 +324,14 @@ fn step_guided_missile(
     }
     if player.is_some() || blocked {
         retire_projectile(world, &projectile, tick, player.map(|player| player.id.as_str()));
-        return None;
+        return false;
     }
     if projectile.state().age_ticks >= projectile.state().lifetime_ticks {
         retire_projectile(world, &projectile, tick, projectile.state().target_player_id.as_deref());
-        return None;
+        return false;
     }
-    let mut projectile = projectile;
-    projectile.state_mut().speed =
-        fround((old_speed - 0.07500000298023224).max(projectile.state().minimum_speed));
-    Some(projectile)
+    state.speed = fround((old_speed - 0.07500000298023224).max(state.minimum_speed));
+    true
 }
 
 pub(super) fn first_guided_missile_contact<'a>(
@@ -364,11 +373,11 @@ pub(super) fn first_guided_missile_contact<'a>(
 
 fn step_demon_bomb(
     world: &mut EnemyWorld,
-    mut state: EnemyProjectileState,
+    state: &mut EnemyProjectileState,
     context: &EnemyStepContext<'_>,
     tick: u64,
     order: &mut WorldPainterOrder,
-) -> Option<EnemyProjectile> {
+) -> bool {
     let blocked = context.geometry.projectile_world_blocked(EnemyProjectileWorldQuery::Point {
         projectile_id: state.id,
         position: state.position,
@@ -378,7 +387,7 @@ fn step_demon_bomb(
     if blocked {
         state.speed = 0.0;
     }
-    move_projectile(&mut state, tick);
+    move_projectile(state, tick);
     let player = first_player_center_contact(state.position, context.players, 35.0);
     state.speed = fround(state.speed * 0.9950000047683716);
     state.vertical_offset = fround(state.vertical_offset + state.vertical_velocity);
@@ -402,13 +411,13 @@ fn step_demon_bomb(
     }
     if state.settled_ticks_remaining > 0 {
         if state.speed >= 1.0 && context.enhanced_effects {
-            super::projectile_effects::spawn_demon_bomb_particle(world, &state, tick, order);
+            super::projectile_effects::spawn_demon_bomb_particle(world, state, tick, order);
         }
-        return Some(EnemyProjectile::DemonBomb(state));
+        return true;
     }
     context.geometry.on_projectile_explosion(state.position);
-    spawn_demon_explosion(world, &state, tick, order);
-    spawn_demon_fire_handoff(world, &state, tick, state.position, order);
+    spawn_demon_explosion(world, state, tick, order);
+    spawn_demon_fire_handoff(world, state, tick, state.position, order);
     let mut event = EnemyEvent::new(EnemyEventKind::ProjectileImpact, state.owner_actor_id, tick);
     event.projectile_id = Some(state.id);
     event.target_player_id = Some(None);
@@ -437,22 +446,27 @@ fn step_demon_bomb(
         damage.magic_damage = fround(source_damage * 0.5);
         world.player_damage.push(damage);
     }
-    retire_projectile(world, &EnemyProjectile::DemonBomb(state), tick, None);
-    None
+    retire_projectile(
+        world,
+        &EnemyProjectileRef { state, motion: EnemyProjectileMotion::DemonBomb },
+        tick,
+        None,
+    );
+    false
 }
 
 fn step_poison_pool(
     world: &mut EnemyWorld,
-    mut state: EnemyProjectileState,
+    state: &mut EnemyProjectileState,
     context: &EnemyStepContext<'_>,
     tick: u64,
     order: &mut WorldPainterOrder,
-) -> Option<EnemyProjectile> {
+) -> bool {
     state.age_ticks += 1;
     state.last_step_tick = tick;
     state.visual_scale = fround(state.visual_scale + fround(0.025)).min(fround(1.6));
-    spawn_poison_pool_bubble(world, &state, tick, order);
-    let projectile = EnemyProjectile::PoisonPool(state);
+    spawn_poison_pool_bubble(world, state, tick, order);
+    let projectile = EnemyProjectileRef { state, motion: EnemyProjectileMotion::PoisonPool };
     for player in context.players {
         if !player.summoned
             && target_eligible(player)
@@ -465,9 +479,9 @@ fn step_poison_pool(
     }
     if native_poison_pool_alpha(projectile.state().age_ticks) == 0.0 {
         retire_projectile(world, &projectile, tick, projectile.state().target_player_id.as_deref());
-        None
+        false
     } else {
-        Some(projectile)
+        true
     }
 }
 
@@ -490,7 +504,7 @@ fn squared_distance(left: Vec2, right: Vec2) -> f64 {
 
 fn emit_projectile_impact(
     world: &mut EnemyWorld,
-    projectile: &EnemyProjectile,
+    projectile: &impl EnemyProjectileRead,
     tick: u64,
     player: Option<&str>,
     order: &mut WorldPainterOrder,
@@ -504,7 +518,7 @@ fn emit_projectile_impact(
     let Some(player) = player else {
         return;
     };
-    if matches!(projectile, EnemyProjectile::GuidedMissile(_)) {
+    if projectile.kind() == EnemyProjectileKind::GuidedMissile {
         let mut event =
             EnemyEvent::new(EnemyEventKind::PlayerStatusSound, state.owner_actor_id, tick);
         event.gain_scale = Some(1.0);
@@ -518,47 +532,47 @@ fn emit_projectile_impact(
 }
 fn apply_projectile_contact(
     world: &mut EnemyWorld,
-    projectile: &EnemyProjectile,
+    projectile: &impl EnemyProjectileRead,
     player: &str,
     event_id: usize,
 ) {
     let state = projectile.state();
-    let fire = fround(if matches!(projectile, EnemyProjectile::Firebolt(_)) {
+    let fire = fround(if projectile.kind() == EnemyProjectileKind::Firebolt {
         state.damage * 0.5
     } else {
         state.secondary_damage * 0.5
     });
     let mut damage = EnemyPlayerDamage::new(state.owner_actor_id, event_id, player.to_owned());
-    damage.physical_damage = if matches!(projectile, EnemyProjectile::Arrow { .. }) {
+    damage.physical_damage = if projectile.kind() == EnemyProjectileKind::Arrow {
         fround(state.damage + fire)
     } else {
         fire
     };
-    damage.magic_damage = match projectile {
-        EnemyProjectile::Arrow { .. } | EnemyProjectile::Firebolt(_) => fire,
+    damage.magic_damage = match projectile.kind() {
+        EnemyProjectileKind::Arrow | EnemyProjectileKind::Firebolt => fire,
         _ => state.damage,
     };
     damage.cold_slow_ticks = state.cold_slow_ticks;
     damage.poison_damage = state.poison_damage;
     damage.poison_duration = state.poison_duration;
-    if matches!(projectile, EnemyProjectile::GuidedMissile(_)) {
+    if projectile.kind() == EnemyProjectileKind::GuidedMissile {
         damage.poison_contact_damage =
             Some(if state.payload == EnemyProjectilePayload::Poison { 1.0 } else { 0.0 });
         damage.suppress_hit_response = true;
     }
-    if matches!(projectile, EnemyProjectile::PoisonPool(_)) {
+    if projectile.kind() == EnemyProjectileKind::PoisonPool {
         damage.suppress_flash = true;
     }
     world.player_damage.push(damage);
 }
 fn retire_projectile(
     world: &mut EnemyWorld,
-    projectile: &EnemyProjectile,
+    projectile: &impl EnemyProjectileRead,
     tick: u64,
     target: Option<&str>,
 ) {
     let state = projectile.state();
-    if matches!(projectile, EnemyProjectile::Firebolt(_)) {
+    if projectile.kind() == EnemyProjectileKind::Firebolt {
         world.projectile_effects.retain(|effect| {
             !matches!(effect.kind, EnemyProjectileEffectKind::FireboltTrail)
                 || effect.state.owner_projectile_id != state.id

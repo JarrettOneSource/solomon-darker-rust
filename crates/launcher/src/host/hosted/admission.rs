@@ -116,8 +116,13 @@ impl HostedGameHost {
             }
             if intent == GameSaveIntent::Resume {
                 let mut restored = website_save::restore(document).map_err(invalid_owned)?;
-                let character =
-                    &restored.session.participants[&restored.player_id].player.selection;
+                let character = &restored
+                    .session
+                    .participants
+                    .get(&restored.player_id)
+                    .expect("participant exists")
+                    .player
+                    .selection;
                 if character != &hello.selection {
                     return Err(invalid(
                         "The game save character does not match the resume request.",
@@ -158,7 +163,9 @@ impl HostedGameHost {
                 {
                     return Err(invalid("This wizard is already active in another browser."));
                 }
-                if live.participants[&id].player.selection != hello.selection {
+                if live.participants.get(&id).expect("participant exists").player.selection
+                    != hello.selection
+                {
                     return Err(invalid("The active wizard does not match the resume request."));
                 }
                 previous_peer = Some(current.peer_id);

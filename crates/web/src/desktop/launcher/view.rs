@@ -57,6 +57,22 @@ fn content(model: &mut Model, frame: &UiFrame<'_>, ui: &mut Ui, compact: bool) {
         ui.label(copy("Play offline. Bring your friends.", 19.0, MUTED));
     });
     ui.add_space(30.0);
+    if model.previous_app_data {
+        egui::Frame::new()
+            .fill(Color32::from_rgb(31, 29, 42))
+            .inner_margin(18)
+            .show(ui, |ui| {
+                ui.label(copy("Bring your saved game from the previous app", 18.0, GOLD));
+                let instructions = "Your previous desktop data is still on this device. In the previous app's title screen, open Settings → Online and account → Stock / browser save and choose Download save archive. Then choose Play offline here and open Settings → Online and account → Import / export save to import that ZIP. Keep the previous app until your wizard is restored.";
+                let label = ui.label(copy(instructions, 14.0, TEXT));
+                frame.record_rect("launcher/previous-save", instructions, "status", label.rect, true);
+                if button(frame, ui, "launcher/previous-version", "Get the previous version",
+                    !model.launching && model.pending.is_none(), false, vec2(210.0, 36.0)) {
+                    model.pending = Some(Action::OpenUrl("https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/desktop-92e3fe4c1bd7ca1eacff871ff79e604f904dfcf1".into()));
+                }
+            });
+        ui.add_space(22.0);
+    }
     if let Some(update) = &model.state.update {
         egui::Frame::new()
             .fill(Color32::from_rgb(43, 37, 22))
@@ -219,7 +235,7 @@ fn help(model: &mut Model, frame: &UiFrame<'_>, ui: &mut Ui) {
     if model.help_open {
         ui.label(copy("On the same network, use your local IP. Over the internet, use a public IP or VPN address. Allow Solomon Darker through your firewall and forward the chosen TCP port to the host when needed.", 14.0, MUTED));
         ui.add_space(8.0);
-        ui.label(copy("After starting a game, choose Game → Copy multiplayer invite and send it to your friends. Keep the host app open. To switch modes, choose Game → Save and return to launcher.", 14.0, MUTED));
+        ui.label(copy("After starting a game, open the game menu and choose Copy multiplayer invite. Keep the host app open. To switch modes, choose Save and return to launcher.", 14.0, MUTED));
     }
 }
 

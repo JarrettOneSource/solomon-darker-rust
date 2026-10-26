@@ -4,17 +4,17 @@ use super::layers::*;
 use super::model::*;
 use super::sample::*;
 use crate::enemies::config::EnemyFamilyConfig;
-use crate::enemies::model::{EnemyActor, EnemyBrain};
+use crate::enemies::model::{EnemyActorRead, EnemyBrain};
 use crate::float;
 use crate::{NativeRng, Vec2};
 
 pub(super) fn zombie_presentation(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     facing: usize,
     sample: &NativeEnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyFamilyPresentation {
-    let EnemyBrain::Zombie(brain) = &actor.brain else { unreachable!("Zombie brain") };
+    let EnemyBrain::Zombie(brain) = actor.brain() else { unreachable!("Zombie brain") };
     let rear_pose = sample.zombie_rear_arm_pose.floor() as usize;
     let front_pose = sample.zombie_front_arm_pose.floor() as usize;
     let body_rotation = sample.zombie_body_rotation_radians;

@@ -167,7 +167,7 @@ fn steam_native_update_gate_obstruction_contacts_and_private_fragment_fan_match_
                 if let Some(sample) = weld_visual_rows::sample(case, tick) {
                     let actor = NativeWeldWorldActor::Steam(actor.clone());
                     weld_visual_rows::compare(
-                        alive.then_some(NativeWeldPresentationState::World(&actor)),
+                        alive.then_some(NativeWeldPresentationState::World(actor.view())),
                         sample,
                         "Steam compositor",
                     );
@@ -273,7 +273,7 @@ fn meteor_marker_fall_impact_pulses_and_retirement_match_the_native_program() {
             {
                 let actor = NativeWeldWorldActor::MeteorMarker(marker.clone());
                 weld_visual_rows::compare(
-                    alive.then_some(NativeWeldPresentationState::World(&actor)),
+                    alive.then_some(NativeWeldPresentationState::World(actor.view())),
                     sample,
                     "Meteor marker compositor",
                 );
@@ -318,7 +318,7 @@ fn meteor_marker_fall_impact_pulses_and_retirement_match_the_native_program() {
                 if let Some(sample) = weld_visual_rows::sample(case, tick) {
                     let actor = NativeWeldWorldActor::Meteor(actor.clone());
                     weld_visual_rows::compare(
-                        alive.then_some(NativeWeldPresentationState::World(&actor)),
+                        alive.then_some(NativeWeldPresentationState::World(actor.view())),
                         sample,
                         "Meteor compositor",
                     );

@@ -3,7 +3,7 @@
 use super::model::*;
 use crate::Vec2;
 use crate::enemies::EnemyToken;
-use crate::enemies::model::EnemyActor;
+use crate::enemies::model::EnemyActorRead;
 use crate::float;
 
 pub(super) fn facing(token: EnemyToken, heading: f64) -> usize {
@@ -62,7 +62,7 @@ pub(super) fn pack_rgb(red: f64, green: f64, blue: f64) -> u32 {
     (channel(red) << 16) | (channel(green) << 8) | channel(blue)
 }
 
-fn visual_word(actor: &EnemyActor, channel: u32, epoch: u32) -> u32 {
+fn visual_word(actor: &impl EnemyActorRead, channel: u32, epoch: u32) -> u32 {
     let mut word = actor.id as u32
         ^ (actor.spawn_tick as u32).wrapping_add(1).wrapping_mul(0x9e3779b1)
         ^ channel.wrapping_add(1).wrapping_mul(0x85ebca6b)
@@ -74,10 +74,10 @@ fn visual_word(actor: &EnemyActor, channel: u32, epoch: u32) -> u32 {
     word ^ (word >> 16)
 }
 
-pub(super) fn stable_unit(actor: &EnemyActor, channel: u32, epoch: u32) -> f64 {
+pub(super) fn stable_unit(actor: &impl EnemyActorRead, channel: u32, epoch: u32) -> f64 {
     f64::from(visual_word(actor, channel, epoch)) / 4_294_967_296.0
 }
 
-pub(super) fn stable_inclusive_unit(actor: &EnemyActor, channel: u32, epoch: u32) -> f64 {
+pub(super) fn stable_inclusive_unit(actor: &impl EnemyActorRead, channel: u32, epoch: u32) -> f64 {
     f64::from(visual_word(actor, channel, epoch)) / 4_294_967_295.0
 }

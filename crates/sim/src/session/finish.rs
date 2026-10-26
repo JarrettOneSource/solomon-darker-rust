@@ -25,15 +25,15 @@ impl GameSession {
             let ceiling = self
                 .secondary
                 .players
-                .get(&participant.id)
+                .get(participant.id)
                 .map(|player| player.mana_ceiling(participant.player.combat.maximum_mana));
             let result = super::player_combat::step_player_combat_with_extensions(
                 super::player_combat::PlayerCombatContext {
-                    player_id: &participant.id,
-                    player: &mut participant.player,
-                    wizard: &participant.wizard,
+                    player_id: participant.id,
+                    player: participant.player,
+                    wizard: participant.wizard,
                     primary_cast: &participant.wizard.primary_cast,
-                    acting_staff: acting_staff.contains(&participant.id),
+                    acting_staff: acting_staff.contains(participant.id.as_str()),
                     blindness_ticks_remaining: participant.lighting.blindness_ticks_remaining,
                     tick,
                     mana_ceiling: ceiling,
@@ -105,7 +105,8 @@ impl GameSession {
                     }
                 }
                 super::player_combat::PlayerPoisonResponse::Flash { response } => {
-                    let position = self.participants[id].wizard.position;
+                    let position =
+                        self.participants.get(id).expect("participant exists").wizard.position;
                     let world_key = self.world_key(id).unwrap();
                     let targets: Vec<_> = self.boneyard.as_ref().map_or_else(Vec::new, |world| {
                         boneyard_native_secondary_targets(
@@ -156,7 +157,7 @@ impl GameSession {
                             death_epoch: participant.player.combat.death_epoch,
                             heading_index: participant.wizard.heading_index,
                             id: world.next_death_weapon_id,
-                            owner_id: &participant.id,
+                            owner_id: participant.id,
                             painter_registration: registration,
                             position: participant.wizard.position,
                             tick,

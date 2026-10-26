@@ -90,6 +90,7 @@ pub struct NativeDeathFragment {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeGolemDeathAnimation {
     pub fragments: Vec<Option<NativeDeathFragment>>,
     pub star_rotation_degrees: f64,
@@ -165,6 +166,7 @@ pub fn step_native_golem_death_animation(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeDeathWeaponActor {
     pub age_ticks: u64,
     pub birth_tick: u64,
@@ -226,7 +228,7 @@ pub fn create_native_death_weapon_actor(
 }
 
 pub fn step_native_death_weapon_actors(
-    actors: &mut Vec<NativeDeathWeaponActor>,
+    actors: &mut crate::ComponentEntities<NativeDeathWeaponActor>,
     tick: u64,
     rng: &mut NativeRng,
 ) {

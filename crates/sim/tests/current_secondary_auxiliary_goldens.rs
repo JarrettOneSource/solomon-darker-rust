@@ -50,12 +50,12 @@ impl NativeSecondaryWorld for OpenWorld {
 
 fn snapshot(state: &NativeSecondarySimulationState, order: WorldPainterOrder) -> Value {
     let plans:Vec<_>=state.actors.iter().take(2).map(|actor| {
-        let plan=native_secondary_presentation_plan(actor,actor.age_ticks as f64,1.0);
+        let plan=native_secondary_presentation_plan(&actor,actor.age_ticks as f64,1.0);
         json!({"id":actor.id,"root":plan.root,"draws":plan.draws.iter().map(draw_snapshot).collect::<Vec<_>>()})
     }).collect();
     native_bits::source_value(&json!({
         "plans":plans,
-        "actors":state.actors.iter().map(support::actor_snapshot).collect::<Vec<_>>(),
+        "actors":state.actors.iter().map(|actor| support::actor_snapshot(&actor)).collect::<Vec<_>>(),
         "events":state.events.iter().map(support::event_snapshot).collect::<Vec<_>>(),
         "player":support::player_snapshot(state.players.get("player").unwrap()),
         "rng":support::rng_snapshot(&state.rng),"nextActorId":state.next_actor_id,

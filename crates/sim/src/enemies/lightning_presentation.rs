@@ -1,7 +1,7 @@
 //! Mage pulse factories and Faculty ribbons from `native-mage-lightning-pulse-presentation.ts`
 //! and `native-dark-lightning.ts`, reusing the canonical Air meshes and corona factories.
 
-use super::boss_spell::{BossSpellKind, NativeBossSpell};
+use super::boss_spell::{BossSpellKind, BossSpellRead};
 use super::projectiles::{MageLightningContact, MageLightningPulse};
 use crate::Vec2;
 use crate::spells::air::{
@@ -92,11 +92,13 @@ pub fn native_mage_lightning_pulse_plan(
 
 /// The two dark ribbons are independent meshes with different native taper widths.
 #[must_use]
-pub fn native_dark_lightning_body(spell: &NativeBossSpell) -> Vec<NativeAirRibbonLayer> {
-    let BossSpellKind::Blightning { endpoint, midpoint, enhanced_effects } = spell.kind else {
+pub fn native_dark_lightning_body(spell: &impl BossSpellRead) -> Vec<NativeAirRibbonLayer> {
+    let spell_view = spell.view();
+    let BossSpellKind::Blightning { endpoint, midpoint, enhanced_effects } = *spell_view.kind
+    else {
         panic!("Dark Lightning presentation requires Blightning");
     };
-    let origin = spell.owner.position;
+    let origin = spell_view.owner.position;
     let points = [
         Vec2::ZERO,
         Vec2::new(midpoint.x - origin.x, midpoint.y - origin.y),
@@ -106,10 +108,10 @@ pub fn native_dark_lightning_body(spell: &NativeBossSpell) -> Vec<NativeAirRibbo
         enhanced_effects,
         ribbon_family: crate::spells::air::NativeAirRibbonFamily::Air,
         points,
-        id: spell.owner.id as u64,
-        birth_tick: spell.owner.spawn_tick,
+        id: spell_view.owner.id as u64,
+        birth_tick: spell_view.owner.spawn_tick,
         width: 1.0,
-        base_phase_degrees: -3.0 * spell.owner.spawn_tick as f64,
+        base_phase_degrees: -3.0 * spell_view.owner.spawn_tick as f64,
         phase_offset: 0.0,
         tint: 0xffffff,
         alpha: 1.0,

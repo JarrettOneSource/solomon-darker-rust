@@ -67,7 +67,7 @@ fn weapon(actor: &NativeDeathWeaponActor) -> Value {
 fn snapshot(state: &GameSession) -> Value {
     assert_eq!(state.secondary.rng.divisor, 100000, "native float divisor is fixed in Source");
     let players:Vec<_>=state.participant_order.iter().map(|id|{
-        let row=&state.participants[id]; let p=&row.player.combat;
+        let row=&state.participants.get(id).expect("participant exists"); let p=&row.player.combat;
         json!({"id":id,"health":p.current_health,"life":match p.life_state {
             PlayerLifeState::Alive=>"alive",PlayerLifeState::LethalPending=>"lethal-pending",
             PlayerLifeState::Dying=>"dying",PlayerLifeState::Spectating=>"spectating",

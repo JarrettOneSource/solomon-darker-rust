@@ -7,14 +7,14 @@ mod types;
 pub use boneyards::{BoneyardDraft, BoneyardDraftSummary};
 pub use types::*;
 
+use crate::platform::http::{CachePolicy, Client, Response};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use solomon_sim::hall_of_fame::HallOfFameBoard;
 use solomon_sim::social::GameSessionKind;
-use wasm_bindgen::{JsCast, JsValue};
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, Response, Window};
+#[cfg(target_arch = "wasm32")]
+use web_sys::Window;
 
 const TOKEN_KEY: &str = "sdr.token";
 
@@ -38,6 +38,7 @@ impl WebsiteMount {
         Ok(Self { prefix: prefix.to_owned() })
     }
 
+    #[cfg(target_arch = "wasm32")]
     pub fn configured(window: &Window) -> Result<Option<Self>, String> {
         let document = window.document().ok_or("The game has no document")?;
         let Some(configuration) = document
@@ -61,20 +62,20 @@ impl WebsiteMount {
 
     /// C# builds root-absolute supervisor URLs. A staging deployment routes those same
     /// paths below its mount; an explicitly separate endpoint origin keeps its own path.
-    pub fn endpoint_url(&self, window: &Window, endpoint: &str) -> Result<String, String> {
-        let url = web_sys::Url::new(endpoint)
+    pub fn endpoint_url(&self, base: &url::Url, endpoint: &str) -> Result<String, String> {
+        let mut url = url::Url::parse(endpoint)
             .map_err(|_| "The game session provisioner returned an invalid endpoint")?;
-        if url.protocol() != "wss:" || !url.username().is_empty() || !url.password().is_empty() {
+        if url.scheme() != "wss" || !url.username().is_empty() || url.password().is_some() {
             return Err("The game session provisioner returned an invalid endpoint".into());
         }
-        let host = window.location().host().map_err(|_| "Could not read the game host")?;
-        if url.host() == host && !self.prefix.is_empty() {
-            let path = url.pathname();
+        if url.host_str() == base.host_str() && url.port() == base.port() && !self.prefix.is_empty()
+        {
+            let path = url.path();
             if !path.starts_with(&format!("{}/", self.prefix)) {
-                url.set_pathname(&self.path(&path));
+                url.set_path(&self.path(path));
             }
         }
-        Ok(url.href())
+        Ok(url.into())
     }
 }
 
@@ -98,25 +99,25 @@ impl From<String> for ApiError {
     }
 }
 
+impl From<crate::platform::http::ReadError> for ApiError {
+    fn from(error: crate::platform::http::ReadError) -> Self {
+        error.to_string().into()
+    }
+}
+
 #[derive(Clone)]
 pub struct WebsiteApi {
-    window: Window,
+    client: Client,
     mount: WebsiteMount,
 }
 
-/// A gallery image retains its browser Blob URL until its owning view is removed.
-pub struct OwnedImageUrl(String);
+/// A gallery view retains the fetched bytes until its image consumer retires.
+pub struct OwnedImageUrl(solomon_graphics::assets::ResourceUrl);
 
 impl OwnedImageUrl {
     #[must_use]
     pub fn url(&self) -> &str {
-        &self.0
-    }
-}
-
-impl Drop for OwnedImageUrl {
-    fn drop(&mut self) {
-        let _ = web_sys::Url::revoke_object_url(&self.0);
+        self.0.as_str()
     }
 }
 
@@ -138,9 +139,8 @@ pub enum BrowserAdmission<'a> {
 }
 
 impl WebsiteApi {
-    #[must_use]
-    pub fn new(window: Window, mount: WebsiteMount) -> Self {
-        Self { window, mount }
+    pub fn new(base_url: &str, mount: WebsiteMount) -> Result<Self, String> {
+        Ok(Self { client: Client::new(base_url)?, mount })
     }
 
     #[must_use]
@@ -149,12 +149,16 @@ impl WebsiteApi {
     }
 
     pub fn token(&self) -> Result<Option<String>, ApiError> {
-        self.window
-            .local_storage()
-            .map_err(|_| String::from("The browser blocked account storage"))?
-            .ok_or_else(|| String::from("The browser has no account storage"))?
-            .get_item(&self.mount.storage_key(TOKEN_KEY))
-            .map_err(|_| String::from("Could not read the account sign-in").into())
+        crate::storage::read_preference(&self.token_key()).map_err(Into::into)
+    }
+
+    fn token_key(&self) -> String {
+        let key = self.mount.storage_key(TOKEN_KEY);
+        // Browser storage already belongs to an origin. The native preference file
+        // must preserve that boundary when a different Website is configured.
+        #[cfg(not(target_arch = "wasm32"))]
+        let key = format!("{key}@{}", self.client.base().origin().ascii_serialization());
+        key
     }
 
     pub fn logout(&self) -> Result<(), ApiError> {
@@ -162,16 +166,7 @@ impl WebsiteApi {
     }
 
     fn set_token(&self, token: Option<&str>) -> Result<(), ApiError> {
-        let storage = self
-            .window
-            .local_storage()
-            .map_err(|_| String::from("The browser blocked account storage"))?
-            .ok_or_else(|| String::from("The browser has no account storage"))?;
-        match token {
-            Some(token) => storage.set_item(&self.mount.storage_key(TOKEN_KEY), token),
-            None => storage.remove_item(&self.mount.storage_key(TOKEN_KEY)),
-        }
-        .map_err(|_| String::from("Could not save the account sign-in").into())
+        crate::storage::write_preference(&self.token_key(), token).map_err(Into::into)
     }
 
     pub async fn account(&self) -> Result<Option<Account>, ApiError> {
@@ -218,67 +213,55 @@ impl WebsiteApi {
     }
 
     pub async fn mods(&self, query: &ModQuery) -> Result<ModList, ApiError> {
-        let parameters = web_sys::UrlSearchParams::new()
-            .map_err(|_| String::from("Could not create the Library search"))?;
+        let mut parameters = url::form_urlencoded::Serializer::new(String::new());
         if query.mine {
-            parameters.set("mine", "true");
+            parameters.append_pair("mine", "true");
         }
         if !query.search.is_empty() {
-            parameters.set("search", &query.search);
+            parameters.append_pair("search", &query.search);
         }
         for tag in &query.tags {
-            parameters.append("tag", tag);
+            parameters.append_pair("tag", tag);
         }
         if let Some(sort) = query.sort {
-            parameters.set("sort", sort.as_str());
+            parameters.append_pair("sort", sort.as_str());
         }
         if let Some(page) = query.page {
-            parameters.set("page", &page.to_string());
+            parameters.append_pair("page", &page.to_string());
         }
         if let Some(size) = query.page_size {
-            parameters.set("pageSize", &size.to_string());
+            parameters.append_pair("pageSize", &size.to_string());
         }
-        self.get(&format!("/api/mods?{}", String::from(parameters.to_string()))).await
+        self.get(&format!("/api/mods?{}", parameters.finish())).await
     }
 
     pub async fn mod_detail(&self, slug: &str) -> Result<ModDetail, ApiError> {
         self.get(&format!("/api/mods/{}", component(slug))).await
     }
 
-    /// `AuthenticatedImage.tsx`: protected thumbnails and screenshots carry the
-    /// account header, then become view-owned Blob URLs.
+    /// `AuthenticatedImage.tsx`: protected gallery images carry the account header.
     pub async fn image(&self, source: &str) -> Result<OwnedImageUrl, ApiError> {
-        let location = self.window.location();
-        let base =
-            location.href().map_err(|_| String::from("Could not read the Website address"))?;
-        let url = web_sys::Url::new_with_base(source, &base)
-            .map_err(|_| String::from("The Website returned an invalid image address"))?;
-        if url.origin()
-            != location.origin().map_err(|_| String::from("Could not read the Website address"))?
-        {
-            return Err(String::from("The image does not belong to this Website").into());
+        let url = self.client.resolve(source)?;
+        let mut path = url.path().to_owned();
+        if let Some(query) = url.query() {
+            path.push('?');
+            path.push_str(query);
         }
-        let mut path = format!("{}{}", url.pathname(), url.search());
         if !self.mount.prefix.is_empty() && path.starts_with(&format!("{}/", self.mount.prefix)) {
             path = path[self.mount.prefix.len()..].to_owned();
         }
-        let response =
-            self.request("GET", &path, None, None, web_sys::RequestCache::Default).await?;
+        let response = self.request("GET", &path, None, None, CachePolicy::Default).await?;
         if !response.ok() {
             return Err(ApiError {
                 status: response.status(),
                 message: format!("Image request failed ({})", response.status()),
             });
         }
-        let blob =
-            JsFuture::from(response.blob().map_err(|_| String::from("Could not read the image"))?)
-                .await
-                .map_err(|_| String::from("Could not read the image"))?
-                .dyn_into::<web_sys::Blob>()
-                .map_err(|_| String::from("The image response was not a Blob"))?;
-        let url = web_sys::Url::create_object_url_with_blob(&blob)
-            .map_err(|_| String::from("Could not display the image"))?;
-        Ok(OwnedImageUrl(url))
+        let content_type = response.header("content-type").unwrap_or_default();
+        let bytes = response.bytes(128 * 1024 * 1024, |_| {}).await?;
+        solomon_graphics::assets::ResourceUrl::new(bytes, &content_type)
+            .map(OwnedImageUrl)
+            .map_err(Into::into)
     }
 
     pub async fn mod_comments(&self, slug: &str) -> Result<ModComments, ApiError> {
@@ -337,7 +320,7 @@ impl WebsiteApi {
                 &format!("/api/game/content/{sha256}"),
                 None,
                 None,
-                web_sys::RequestCache::ForceCache,
+                CachePolicy::Immutable,
             )
             .await?;
         if !response.ok() {
@@ -538,7 +521,7 @@ impl WebsiteApi {
                 String::from("The game session provisioner returned an invalid endpoint").into()
             );
         }
-        endpoint.url = self.mount.endpoint_url(&self.window, &endpoint.url)?;
+        endpoint.url = self.mount.endpoint_url(self.client.base(), &endpoint.url)?;
         Ok(endpoint)
     }
 
@@ -606,18 +589,14 @@ impl WebsiteApi {
         body: Option<Value>,
         session_header: Option<&str>,
     ) -> Result<T, ApiError> {
-        let response = self
-            .request(method, path, body, session_header, web_sys::RequestCache::Default)
-            .await?;
+        let response =
+            self.request(method, path, body, session_header, CachePolicy::Default).await?;
         let status = response.status();
-        let text = JsFuture::from(
-            response.text().map_err(|_| String::from("Could not read the Website response"))?,
-        )
-        .await
-        .map_err(|_| String::from("Could not read the Website response"))?
-        .as_string()
-        .ok_or_else(|| String::from("The Website response was not text"))?;
-        decode_response(status, &text)
+        // The JSON envelope can escape every byte of an otherwise valid schema51 document.
+        let bytes = response
+            .bytes((solomon_protocol::MAX_SAVE_BYTES * 6 + 64 * 1024) as u64, |_| {})
+            .await?;
+        decode_response(status, &String::from_utf8_lossy(&bytes))
     }
 
     async fn request(
@@ -626,46 +605,43 @@ impl WebsiteApi {
         path: &str,
         body: Option<Value>,
         session_header: Option<&str>,
-        cache: web_sys::RequestCache,
+        cache: CachePolicy,
     ) -> Result<Response, ApiError> {
-        let options = RequestInit::new();
-        options.set_method(method);
-        options.set_cache(cache);
-        options.set_credentials(web_sys::RequestCredentials::SameOrigin);
-        if let Some(body) = body.as_ref() {
-            options.set_body(&JsValue::from_str(&body.to_string()));
-        }
-        let request = Request::new_with_str_and_init(&self.mount.path(path), &options)
-            .map_err(|_| String::from("Could not create the Website request"))?;
-        let headers = request.headers();
-        headers
-            .set("Accept", "application/json")
-            .map_err(|_| String::from("Could not set request headers"))?;
+        let mut headers = vec![("Accept".into(), "application/json".into())];
         if body.is_some() {
-            headers
-                .set("Content-Type", "application/json")
-                .map_err(|_| String::from("Could not set request headers"))?;
+            headers.push(("Content-Type".into(), "application/json".into()));
         }
         if let Some(token) = self.token()? {
-            headers
-                .set("Authorization", &format!("Bearer {token}"))
-                .map_err(|_| String::from("Could not set account authorization"))?;
+            headers.push(("Authorization".into(), format!("Bearer {token}")));
         }
         if let Some(value) = session_header {
-            headers
-                .set("X-Solomon-Dark-Session", value)
-                .map_err(|_| String::from("Could not set game admission headers"))?;
+            headers.push(("X-Solomon-Dark-Session".into(), value.into()));
         }
-        JsFuture::from(self.window.fetch_with_request(&request))
+        self.client
+            .request(
+                method,
+                &self.mount.path(path),
+                headers,
+                body.map(|value| value.to_string()),
+                cache,
+            )
             .await
-            .map_err(|_| String::from("Cannot reach the server. Check your connection."))?
-            .dyn_into()
-            .map_err(|_| String::from("The Website returned an invalid response").into())
+            .map_err(Into::into)
     }
 }
 
 fn component(text: &str) -> String {
-    js_sys::encode_uri_component(text).into()
+    const ENCODE: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
+        .remove(b'-')
+        .remove(b'_')
+        .remove(b'.')
+        .remove(b'!')
+        .remove(b'~')
+        .remove(b'*')
+        .remove(b'\'')
+        .remove(b'(')
+        .remove(b')');
+    percent_encoding::utf8_percent_encode(text, ENCODE).to_string()
 }
 
 fn decode_response<T: DeserializeOwned>(status: u16, text: &str) -> Result<T, ApiError> {
@@ -697,6 +673,18 @@ mod tests {
         for invalid in ["game-stg", "//other.example", "/../game", "/game?host=1"] {
             assert!(WebsiteMount::new(invalid).is_err(), "accepted {invalid}");
         }
+        let base = url::Url::parse("https://example.test/game-stg/game/").unwrap();
+        assert_eq!(
+            staging.endpoint_url(&base, "wss://example.test/api/game/socket").unwrap(),
+            "wss://example.test/game-stg/api/game/socket"
+        );
+        assert_eq!(
+            staging.endpoint_url(&base, "wss://other.test/api/game/socket").unwrap(),
+            "wss://other.test/api/game/socket"
+        );
+        assert!(staging.endpoint_url(&base, "ws://example.test/api/game/socket").is_err());
+        assert!(staging.endpoint_url(&base, "wss://user@example.test/api/game/socket").is_err());
+        assert_eq!(component("a/é ?#'!*()~"), "a%2F%C3%A9%20%3F%23'!*()~");
     }
 
     #[test]

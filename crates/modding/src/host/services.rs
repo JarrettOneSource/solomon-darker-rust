@@ -37,7 +37,8 @@ impl PreparedModHost {
             if !game.replace_skill_with_mod(player_id, native_offer_sequence) {
                 return Err("native skill offer is stale".into());
             }
-            let progression = &game.participants[player_id].player.progression;
+            let progression =
+                &game.participants.get(player_id).expect("participant exists").player.progression;
             if let Some(offer) = &progression.pending_offer {
                 self.runtime.skills.offer(
                     player_id,

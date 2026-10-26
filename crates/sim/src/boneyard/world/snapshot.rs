@@ -25,7 +25,8 @@ pub struct BoneyardSnapshot<'a> {
     #[cfg_attr(feature = "persistence", serde(skip_serializing_if = "Option::is_none"))]
     pub scenery_target_retention: &'a Option<Arc<targets::BoneyardSceneryTargetRetention>>,
     pub enemies: &'a EnemyWorld,
-    pub death_weapons: &'a Vec<crate::death_animations::NativeDeathWeaponActor>,
+    pub death_weapons:
+        &'a crate::ComponentEntities<crate::death_animations::NativeDeathWeaponActor>,
     pub next_death_weapon_id: &'a u64,
     pub loot: &'a BoneyardLootStore,
     pub enemy_world_feedback: &'a NativeEnemyWorldFeedback,

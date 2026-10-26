@@ -1,4 +1,4 @@
-//! GPU catalog, directory and developer presence rows from `DarkCloudRows.tsx`.
+//! Content catalog, party directory and developer presence rows.
 use super::{super::widgets, images::CloudImages};
 use crate::gpu_ui::UiFrame;
 use crate::hosted::{

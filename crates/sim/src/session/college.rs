@@ -21,7 +21,7 @@ impl GameSession {
         let selected =
             participant.wizard.primary_cast.selected_primary_id.map_or(-1, |id| id as i32);
         let Some(plan) = plan_hub_college_intro_arm(
-            &participant.wizard,
+            participant.wizard,
             participant.college_intro.as_ref(),
             participant.player.economy.college_intro_pending,
             participant.player.progression.offer_seed,
@@ -33,9 +33,9 @@ impl GameSession {
             participant.player.refresh_economy();
         }
         if let Some(spawn) = plan.spawn {
-            participant.wizard = HubWizard::at(spawn.position);
+            *participant.wizard = HubWizard::at(spawn.position);
             participant.wizard.set_facing(spawn.heading_degrees);
-            participant.college_intro = Some(NativeCollegeIntroState::new());
+            *participant.college_intro = Some(NativeCollegeIntroState::new());
         }
         if plan.reset_primary_cast {
             participant.wizard.primary_cast = Default::default();
@@ -53,7 +53,7 @@ impl GameSession {
         if participant.wizard.transition.is_some() {
             return false;
         }
-        acknowledge_hub_college_intro_dialogue(&mut participant.college_intro)
+        acknowledge_hub_college_intro_dialogue(participant.college_intro)
     }
 
     pub fn decline_tutorial(&mut self, id: &str) -> bool {
@@ -81,7 +81,7 @@ impl GameSession {
         self.boneyard.is_none()
             && self.participants.get(id).is_some_and(|participant| {
                 hub_college_admission_primary_unset(
-                    &participant.wizard,
+                    participant.wizard,
                     participant.college_intro.as_ref(),
                     participant.player.economy.college_intro_pending,
                 )
@@ -107,7 +107,7 @@ impl GameSession {
             reset_loadout_character(participant);
             return true;
         }
-        if !confirm_hub_college_intro_loadout(&mut participant.wizard) {
+        if !confirm_hub_college_intro_loadout(participant.wizard) {
             return false;
         }
         let seed = crate::profile::draw_native_player_creation_offer_seed(&mut self.gameplay_rng);
@@ -121,12 +121,12 @@ impl GameSession {
     }
 }
 
-fn reset_loadout_character(participant: &mut SessionParticipant) {
-    participant.wizard = HubWizard {
+fn reset_loadout_character(participant: ParticipantMut<'_>) {
+    *participant.wizard = HubWizard {
         region: participant.wizard.region,
         transition: participant.wizard.transition,
         ..HubWizard::at(participant.wizard.position)
     };
     // replacePlayerLoadout installs its selected primary before the next cast epoch.
-    super::lifecycle::reset_selected_primary(&mut participant.wizard, &participant.player);
+    super::lifecycle::reset_selected_primary(participant.wizard, participant.player);
 }

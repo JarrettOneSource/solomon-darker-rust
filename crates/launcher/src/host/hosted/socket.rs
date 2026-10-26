@@ -32,7 +32,7 @@ impl HostedGameHost {
                     .worlds
                     .state_for_player(id)
                     .ok_or_else(|| invalid("This wizard is not materialized."))?;
-                let participant = &state.participants[id];
+                let participant = &state.participants.get(id).expect("participant exists");
                 let blocked =
                     self.controls.get(&party_id).is_some_and(|control| control.blocks_tick())
                         || state.level_up_barrier.is_some()
@@ -76,8 +76,19 @@ impl HostedGameHost {
             ClientMessage::CollegeIntroReady => {
                 if self.worlds.state_for_player(id).is_some_and(|state| {
                     state.boneyard.is_none()
-                        && state.participants[id].college_intro.is_some()
-                        && state.participants[id].player.economy.college_intro_pending
+                        && state
+                            .participants
+                            .get(id)
+                            .expect("participant exists")
+                            .college_intro
+                            .is_some()
+                        && state
+                            .participants
+                            .get(id)
+                            .expect("participant exists")
+                            .player
+                            .economy
+                            .college_intro_pending
                 }) {
                     self.college_intro_ready.insert(id.into());
                 }
@@ -93,7 +104,13 @@ impl HostedGameHost {
             }
             ClientMessage::GameplayPause { paused, source } => {
                 let facts = self.control_facts(&party_id);
-                let name = self.worlds.state_for_player(id).unwrap().participants[id]
+                let name = self
+                    .worlds
+                    .state_for_player(id)
+                    .unwrap()
+                    .participants
+                    .get(id)
+                    .expect("participant exists")
                     .player
                     .selection
                     .name

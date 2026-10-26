@@ -6,6 +6,8 @@ use super::path::native_enemy_target_refresh_ticks;
 use super::world::EnemyStepContext;
 use super::world::EnemyWorld;
 use crate::Vec2;
+use crate::enemies::model::EnemyActorRead;
+use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::float::hypot;
 use crate::heading::heading_degrees_from_vector;
 use crate::spells::targeting::{
@@ -42,7 +44,7 @@ pub fn target_eligible(target: &EnemyTarget) -> bool {
 
 #[must_use]
 pub fn target_player_within_attack_reach(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     id: Option<&str>,
     players: &[EnemyTarget],
     center_reach: f64,
@@ -57,7 +59,7 @@ pub fn target_player_within_attack_reach(
 
 #[must_use]
 pub fn target_within_attack_reach(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     players: &[EnemyTarget],
     center_reach: f64,
 ) -> bool {
@@ -81,12 +83,12 @@ pub fn track_enemy_action_heading(actor: &mut EnemyActor, players: &[EnemyTarget
 }
 
 #[must_use]
-pub fn enemy_navigation_clearance(actor: &EnemyActor) -> f64 {
+pub fn enemy_navigation_clearance(actor: &impl EnemyActorRead) -> f64 {
     if actor.config.enemy_token == super::EnemyToken::Demon { 50.0 } else { 25.0 }
 }
 
 #[must_use]
-pub fn target_distance(actor: &EnemyActor, players: &[EnemyTarget]) -> f64 {
+pub fn target_distance(actor: &impl EnemyActorRead, players: &[EnemyTarget]) -> f64 {
     target_by_id(actor.target_player_id.as_deref(), players).map_or(f64::INFINITY, |target| {
         hypot(target.position.x - actor.position.x, target.position.y - actor.position.y)
     })
@@ -94,7 +96,7 @@ pub fn target_distance(actor: &EnemyActor, players: &[EnemyTarget]) -> f64 {
 
 #[must_use]
 pub fn enemy_target_line_of_sight_is_clear(
-    actor: &EnemyActor,
+    actor: &impl EnemyActorRead,
     context: &EnemyStepContext<'_>,
 ) -> bool {
     let Some(target) = target_by_id(actor.target_player_id.as_deref(), context.players) else {
@@ -131,11 +133,11 @@ pub fn nearest_eligible_target(position: Vec2, players: &[EnemyTarget]) -> Optio
 /// `boneyardEnemyActorFlags`: hidden Coffins reserve their row but do not enter hostile
 /// queries. Every dying family has already left the hostile lane.
 #[must_use]
-pub fn boneyard_enemy_actor_flags(actor: &EnemyActor) -> u32 {
+pub fn boneyard_enemy_actor_flags(actor: &impl EnemyActorRead) -> u32 {
     if actor.life_state != EnemyLifeState::Alive {
         return 0;
     }
-    if matches!(&actor.brain,EnemyBrain::Coffin(brain) if matches!(brain.phase,CoffinPhase::Hidden|CoffinPhase::Death))
+    if matches!(actor.brain(),EnemyBrain::Coffin(brain) if matches!(brain.phase,CoffinPhase::Hidden|CoffinPhase::Death))
     {
         return 0;
     }
@@ -145,8 +147,8 @@ pub fn boneyard_enemy_actor_flags(actor: &EnemyActor) -> u32 {
 /// `boneyardEnemyCollisionRadius`: Spider attachment and Portal materialization use
 /// their active body radius, rather than the constructor's persistent config radius.
 #[must_use]
-pub fn boneyard_enemy_collision_radius(actor: &EnemyActor) -> f64 {
-    match &actor.brain {
+pub fn boneyard_enemy_collision_radius(actor: &impl EnemyActorRead) -> f64 {
+    match actor.brain() {
         EnemyBrain::Spider(brain) => {
             if brain.attached {
                 5.0
@@ -171,10 +173,11 @@ impl EnemyWorld {
     #[must_use]
     pub fn projectile_force_targets(&self) -> Vec<PrimarySpellTarget> {
         let mut targets = Vec::new();
-        for projectile in &self.projectiles {
-            let super::projectiles::EnemyProjectile::Arrow { state, .. } = projectile else {
+        for projectile in self.projectiles.iter() {
+            if projectile.kind() != super::projectiles::EnemyProjectileKind::Arrow {
                 continue;
-            };
+            }
+            let state = projectile.state();
             targets.push(PrimarySpellTarget {
                 active: state.age_ticks < state.lifetime_ticks,
                 actor_flags: 0x80,
@@ -218,12 +221,12 @@ impl EnemyWorld {
     #[must_use]
     pub fn spell_targets(&self) -> Vec<PrimarySpellTarget> {
         let mut targets = Vec::with_capacity(self.actors.len() + self.maggots.len());
-        for actor in &self.actors {
+        for actor in self.actors.iter() {
             targets.push(PrimarySpellTarget {
                 active: actor.life_state == EnemyLifeState::Alive,
-                actor_flags: boneyard_enemy_actor_flags(actor),
+                actor_flags: boneyard_enemy_actor_flags(&actor),
                 attachment: Vec2::ZERO,
-                body_radius: boneyard_enemy_collision_radius(actor),
+                body_radius: boneyard_enemy_collision_radius(&actor),
                 cell_binding_order: actor.native_cell_binding_order,
                 heading_degrees: Some(actor.heading_deg),
                 grid_position: None,
@@ -236,7 +239,7 @@ impl EnemyWorld {
                 registration_order: actor.native_registration_order,
             });
         }
-        for maggot in &self.maggots {
+        for maggot in self.maggots.iter() {
             targets.push(PrimarySpellTarget {
                 active: maggot.life_state == EnemyLifeState::Alive && maggot.combat_active,
                 actor_flags: 0x2,
@@ -264,7 +267,7 @@ impl EnemyWorld {
             position.x.is_finite() && position.y.is_finite(),
             "enemy spell-impulse position must be finite"
         );
-        if let Some(actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) {
+        if let Some(mut actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) {
             if actor.life_state != EnemyLifeState::Alive {
                 return false;
             }
@@ -275,7 +278,7 @@ impl EnemyWorld {
             actor.position = position;
             return true;
         }
-        let Some(maggot) = self.maggots.iter_mut().find(|maggot| maggot.id == actor_id) else {
+        let Some(mut maggot) = self.maggots.iter_mut().find(|maggot| maggot.id == actor_id) else {
             return false;
         };
         if maggot.life_state != EnemyLifeState::Alive || !maggot.combat_active {

@@ -219,7 +219,7 @@ impl ContactWork<'_, '_> {
         &mut self,
         mut actor: NativeWeldWorldActor,
     ) -> PrimarySpellTransient {
-        enroll_native_weld_actor_painter(&mut actor, self.order);
+        enroll_native_weld_actor_painter(actor.common_mut(), self.order);
         PrimarySpellTransient::Weld(actor)
     }
 

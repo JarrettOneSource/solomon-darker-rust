@@ -260,7 +260,9 @@ fn remember_living(run: &mut ActiveRun, checkpoint: RunArchiveCheckpoint) {
         return;
     }
     for id in &state.participant_order {
-        if state.participants[id].player.combat.life_state != PlayerLifeState::Alive {
+        if state.participants.get(id).expect("participant exists").player.combat.life_state
+            != PlayerLifeState::Alive
+        {
             continue;
         }
         run.last_alive = Some(checkpoint.clone());

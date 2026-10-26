@@ -73,7 +73,7 @@ impl GameSession {
     }
 
     pub fn choose_skill(&mut self, id: &str, choice: PlayerSkillChoice) -> bool {
-        let Some(participant) = self.participants.get_mut(id) else {
+        let Some(mut participant) = self.participants.get_mut(id) else {
             return false;
         };
         let previous = participant.selected_primary_id();
@@ -129,7 +129,7 @@ impl GameSession {
             self.run
                 .eligible_player_ids
                 .iter()
-                .filter(|id| self.participants.contains_key(*id))
+                .filter(|id| self.participants.contains_key(id))
                 .cloned()
                 .collect()
         } else {
@@ -174,7 +174,7 @@ impl GameSession {
         cohort
             .iter()
             .filter(|id| {
-                self.participants.get(*id).is_some_and(|participant| {
+                self.participants.get(id).is_some_and(|participant| {
                     participant.player.progression.pending_offer.is_some()
                         || !participant.player.progression.pending_levels.is_empty()
                 })
@@ -186,7 +186,8 @@ impl GameSession {
     pub(super) fn refresh_level_up_barrier(&mut self, id: &str, cohort: &[String]) {
         let pending = self.pending_offer_ids(cohort);
         assert!(!pending.is_empty(), "shared milestone creates at least one pending choice");
-        let progression = &self.participants[id].player.progression;
+        let progression =
+            &self.participants.get(id).expect("participant exists").player.progression;
         if let Some(barrier) = &mut self.level_up_barrier {
             barrier.milestone_experience = progression.experience;
             barrier.milestone_level = progression.level;
@@ -223,7 +224,7 @@ impl GameSession {
     }
 
     fn trigger_level_up_mindblast(&mut self, id: &str, tick: u64) -> Vec<u64> {
-        let participant = &self.participants[id];
+        let participant = &self.participants.get(id).expect("participant exists");
         if participant.player.skill_runtime.equipment_modifiers.feature_bits & 0x0400 == 0 {
             return Vec::new();
         }

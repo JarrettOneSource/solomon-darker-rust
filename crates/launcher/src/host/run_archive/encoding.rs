@@ -181,7 +181,12 @@ pub fn archive_players(archive: &RunArchive) -> Vec<ArchivePlayer> {
     for (id, checkpoint) in &archive.last_alive_by_player {
         players.push(ArchivePlayer {
             player_id: id.clone(),
-            display_name: checkpoint.state.checkpoint.participants[id]
+            display_name: checkpoint
+                .state
+                .checkpoint
+                .participants
+                .get(id)
+                .expect("participant exists")
                 .player
                 .selection
                 .name
@@ -190,7 +195,16 @@ pub fn archive_players(archive: &RunArchive) -> Vec<ArchivePlayer> {
         });
     }
     for id in &archive.final_state.checkpoint.participant_order {
-        let name = archive.final_state.checkpoint.participants[id].player.selection.name.clone();
+        let name = archive
+            .final_state
+            .checkpoint
+            .participants
+            .get(id)
+            .expect("participant exists")
+            .player
+            .selection
+            .name
+            .clone();
         if let Some(player) = players.iter_mut().find(|player| player.player_id == *id) {
             player.display_name = name;
         } else {

@@ -22,7 +22,7 @@ pub(super) fn loaded_boneyard(loaded: &LoadedBoneyard) -> Result<Value, String> 
 }
 
 pub(super) fn simulation(state: &GameSession, owner_id: &str) -> Result<Value, String> {
-    let participant = &state.participants[owner_id];
+    let participant = &state.participants.get(owner_id).expect("participant exists");
     let player = &participant.player;
     let mut progression = encode(&player.progression)?;
     progression

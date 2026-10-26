@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use solomon_sim::boneyard::{BoneyardWorld, LoadedBoneyard};
 use solomon_sim::heading::HEADING_COUNT;
 use solomon_sim::profile::{NATIVE_SKILL_ROW_COUNT, native_weld_build};
-use solomon_sim::session::{GameCheckpoint, SessionParticipant};
+use solomon_sim::session::{GameCheckpoint, ParticipantRead};
 
 // Schema 2 replaces the single local player and world-owned wizard with ordered
 // participants. Earlier candidate saves cannot identify that ownership reliably.
@@ -61,7 +61,8 @@ pub fn decode(text: &str) -> Result<GameCheckpoint, String> {
 
 /// Host files also retain detached records outside the live map. Apply the same
 /// constructor/index preconditions before either kind of participant is admitted.
-pub fn validate_participant(participant: &SessionParticipant) -> Result<(), String> {
+pub fn validate_participant(participant: &impl ParticipantRead) -> Result<(), String> {
+    let participant = participant.view();
     let book = &participant.player.book;
     if book.primary_skill_id >= NATIVE_SKILL_ROW_COUNT
         || book.element_root >= 8
@@ -131,7 +132,7 @@ mod tests {
             .secondary
             .players
             .insert("local".into(), solomon_sim::secondary::NativeSecondaryPlayerState::default());
-        session.participants.get_mut("local").unwrap().world_aim = Some(Vec2::new(230.5, 510.75));
+        *session.participants.get_mut("local").unwrap().world_aim = Some(Vec2::new(230.5, 510.75));
         session
     }
 

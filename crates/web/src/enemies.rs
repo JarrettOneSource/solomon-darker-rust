@@ -15,7 +15,7 @@ use solomon_sim::enemies::actor_presentation::{
     EnemyArtAtlas, EnemyArtBlend, EnemySegmentLayer, EnemySpriteLayer,
 };
 use solomon_sim::enemies::death_presentation::EnemyBanishGradient;
-use solomon_sim::enemies::model::{EnemyActor, EnemyDeathEffect, EnemyEvent};
+use solomon_sim::enemies::model::{EnemyActorRef, EnemyDeathEffect, EnemyEvent};
 use solomon_sim::enemies::rain_presentation::NativeRainCloud;
 use solomon_sim::enemies::tendrils::HeartmongerTendrils;
 use solomon_sim::enemies::underlay::EnemyUnderlayLayer;
@@ -44,7 +44,7 @@ pub struct EnemyViewFrame<'a> {
     /// Already sampled at the fractional display tick; do not age these values again.
     pub puppet_hit_alphas: Option<&'a BTreeMap<String, f64>>,
     /// Loot deaths use the same source effect presenter and painter ownership as enemy deaths.
-    pub extra_death_effects: &'a [EnemyDeathEffect],
+    pub extra_death_effects: &'a solomon_sim::ComponentEntities<EnemyDeathEffect>,
     pub tick: u64,
     pub application_tick: u64,
     pub complex_lighting: bool,
@@ -53,8 +53,8 @@ pub struct EnemyViewFrame<'a> {
     pub players: &'a [EnemyViewPlayer<'a>],
     pub light_at: &'a dyn Fn(Vec2) -> f64,
     pub point_gain: &'a dyn Fn(Vec2) -> f64,
-    pub actor_shadows: &'a dyn Fn(&EnemyActor) -> EnemyViewShadow,
-    pub actor_tint: &'a dyn Fn(&EnemyActor) -> u32,
+    pub actor_shadows: &'a dyn Fn(&EnemyActorRef<'_>) -> EnemyViewShadow,
+    pub actor_tint: &'a dyn Fn(&EnemyActorRef<'_>) -> u32,
 }
 
 pub struct EnemyPainter {

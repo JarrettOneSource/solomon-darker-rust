@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use solomon_sim::boneyard::BoneyardBounds;
+use solomon_sim::boneyard::loot::LootActorRead;
 use solomon_sim::boneyard::world_light::{
     BoneyardLightEnvironment, WorldLightPlayer, WorldLightScene, boneyard_world_light_query,
 };
@@ -10,7 +11,7 @@ use solomon_sim::combat::PuppetHitState;
 use solomon_sim::enemies::actor_presentation::{
     EnemyActorAppearanceContext, EnemySpiderOutlineTarget,
 };
-use solomon_sim::enemies::boss_spell::{BossSpellKind, NativeBossSpell};
+use solomon_sim::enemies::boss_spell::{BossSpellKind, BossSpellRead, BossSpells};
 use solomon_sim::enemies::model::EnemyBrain;
 use solomon_sim::enemies::puppet_hits::{EnemyPuppetHit, EnemyPuppetHitKind};
 use solomon_sim::float::fround;
@@ -19,7 +20,7 @@ use solomon_sim::session::GameSession;
 
 use super::PresentationClocks;
 use super::enemies::{self, EnemyPresentationMetadata};
-use super::math::{interpolate_members, lerp, lerp_cycle, lerp_vec};
+use super::math::{interpolate_members, interpolate_projected_members, lerp, lerp_cycle, lerp_vec};
 
 /// `host/game-snapshot.ts` samples Spider appearance with the host's logical
 /// light query and fixed stock viewport, before any client camera projection.
@@ -29,7 +30,7 @@ pub(super) fn capture_enemies(session: &GameSession) -> Option<EnemyPresentation
         .participant_order
         .iter()
         .map(|id| {
-            let participant = &session.participants[id];
+            let participant = &session.participants.get(id).expect("participant exists");
             WorldLightPlayer {
                 id,
                 position: participant.wizard.position,
@@ -57,7 +58,7 @@ pub(super) fn capture_enemies(session: &GameSession) -> Option<EnemyPresentation
             secondary_abilities: Some(&session.secondary),
         },
     );
-    let actor_context = |actor: &solomon_sim::enemies::model::EnemyActor| {
+    let actor_context = |actor: &solomon_sim::enemies::model::EnemyActorRef<'_>| {
         let target = actor.target_player_id.as_ref().and_then(|id| session.participants.get(id));
         let pike_target_position = match &actor.brain {
             EnemyBrain::Skeleton(brain) => brain.pike.as_ref().map(|pike| {
@@ -171,16 +172,17 @@ pub(super) fn project(
         tutorial.camera_lock_age_ticks =
             lerp(first.camera_lock_age_ticks, next.camera_lock_age_ticks, blend);
     }
-    world.loot.actors = interpolate_members(
-        &first.loot.actors,
-        &next.loot.actors,
+    world.loot.actors = interpolate_projected_members(
+        first.loot.actors.iter(),
+        next.loot.actors.iter(),
         blend,
         |actor| actor.id,
+        |actor| actor.snapshot(),
         |first, next, blend| {
             if first.kind != next.kind {
-                return first.clone();
+                return first.snapshot();
             }
-            let mut actor = if blend < 1.0 { first.clone() } else { next.clone() };
+            let mut actor = if blend < 1.0 { first.snapshot() } else { next.snapshot() };
             actor.alpha = lerp(first.alpha, next.alpha, blend);
             actor.animation_phase =
                 lerp_cycle(first.animation_phase, next.animation_phase, blend, 360.0);
@@ -191,10 +193,12 @@ pub(super) fn project(
             actor.scatter_progress = lerp(first.scatter_progress, next.scatter_progress, blend);
             actor
         },
-    );
+    )
+    .into_iter()
+    .collect();
     let (effects, ages) =
         enemies::interpolate_death_effects(&first.loot.effects, &next.loot.effects, blend);
-    world.loot.effects = effects;
+    world.loot.effects = effects.into_iter().collect();
     metadata.death_effects.extend(ages);
     if older.run.phase == GameRunPhase::GameOver
         && newer.run.phase == GameRunPhase::GameOver
@@ -214,21 +218,17 @@ pub(super) fn project(
     metadata
 }
 
-fn project_boss_spells(
-    older: &[NativeBossSpell],
-    newer: &[NativeBossSpell],
-    blend: f64,
-) -> Vec<NativeBossSpell> {
+fn project_boss_spells(older: &BossSpells, newer: &BossSpells, blend: f64) -> BossSpells {
     if blend >= 1.0 {
-        return newer.to_vec();
+        return newer.clone();
     }
     let by_id: BTreeMap<_, _> = newer.iter().map(|spell| (spell.owner.id, spell)).collect();
     older
         .iter()
         .map(|first| {
-            let mut spell = first.clone();
+            let mut spell = first.snapshot();
             let Some(next) = by_id.get(&first.owner.id) else { return spell };
-            if std::mem::discriminant(&first.kind) != std::mem::discriminant(&next.kind)
+            if std::mem::discriminant(first.kind) != std::mem::discriminant(next.kind)
                 || matches!(first.kind, BossSpellKind::MouthBeamSegment { .. })
             {
                 return spell;
@@ -287,17 +287,17 @@ fn project_boss_spells(
 }
 
 fn project_puppet_hits(
-    older: &[EnemyPuppetHit],
-    newer: &[EnemyPuppetHit],
+    older: &solomon_sim::ComponentEntities<EnemyPuppetHit>,
+    newer: &solomon_sim::ComponentEntities<EnemyPuppetHit>,
     blend: f64,
     tick: f64,
     clocks: &mut PresentationClocks,
-) -> Vec<EnemyPuppetHit> {
+) -> solomon_sim::ComponentEntities<EnemyPuppetHit> {
     clocks.puppet_hits.clear();
     clocks.puppet_hit_timers.clear();
     let mut previous: BTreeMap<_, _> =
         older.iter().map(|hit| (hit.target_id.as_str(), hit)).collect();
-    let mut output = Vec::new();
+    let mut output = solomon_sim::ComponentEntities::default();
     for next in newer {
         let before = previous.remove(next.target_id.as_str());
         if next.hit_tick as f64 > tick {

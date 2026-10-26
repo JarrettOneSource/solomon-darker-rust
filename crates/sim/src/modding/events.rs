@@ -83,7 +83,7 @@ impl GameSimulationEventSnapshot {
     pub fn capture(state: &GameSession) -> Self {
         let mut players = Vec::with_capacity(state.participant_order.len());
         for id in &state.participant_order {
-            let player = &state.participants[id].player;
+            let player = &state.participants.get(id).expect("participant exists").player;
             players.push(PlayerEventSnapshot {
                 id: id.clone(),
                 gold: player.economy.gold,
@@ -93,7 +93,7 @@ impl GameSimulationEventSnapshot {
         }
         let world = state.boneyard.as_ref().map(|world| {
             let mut actors = Vec::with_capacity(world.enemies.actors.len());
-            for actor in &world.enemies.actors {
+            for actor in world.enemies.actors.iter() {
                 actors.push(NativeEnemyActorEventSnapshot {
                     id: actor.id,
                     native_type_id: actor.config.native_type_id,

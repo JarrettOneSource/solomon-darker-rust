@@ -79,7 +79,7 @@ impl RetainedFlamePresentation {
         for birth in self.replay.history_at(stopped_world_tick) {
             known.insert(birth.id, birth.clone());
         }
-        for actor in &spells.transients {
+        for actor in spells.transients.iter() {
             if let Some(birth) = flame_presentation_birth(actor)? {
                 known.entry(birth.id).or_insert(birth);
             }
@@ -117,12 +117,14 @@ impl RetainedFlamePresentation {
         for birth in self.replay.sample(stopped_world_tick)? {
             retained.insert(birth.id, birth.clone());
         }
-        let mut ordinary = Vec::new();
-        for actor in std::mem::take(&mut spells.transients) {
-            let Some(birth) = flame_presentation_birth(&actor)? else {
-                ordinary.push(actor);
-                continue;
-            };
+        let births = spells
+            .transients
+            .iter()
+            .map(flame_presentation_birth)
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut replaced_ids = std::collections::BTreeSet::new();
+        for birth in births.into_iter().flatten() {
+            replaced_ids.insert(birth.id);
             let admitted = self.replay.retained(&birth).unwrap_or(&birth);
             if stopped_world_tick >= self.reset_tick as f64
                 && admitted.birth_tick as f64 <= stopped_world_tick
@@ -131,15 +133,15 @@ impl RetainedFlamePresentation {
                 retained.entry(admitted.id).or_insert_with(|| admitted.clone());
             }
         }
+        spells.transients.retain(|actor| !replaced_ids.contains(&actor.common().id));
         if stopped_world_tick >= self.reset_tick as f64 {
             for birth in retained.values() {
                 if let Some(actor) = materialize_flame_presentation(birth, stopped_world_tick) {
-                    ordinary.push(actor);
+                    spells.transients.push(actor);
                 }
             }
         }
-        ordinary.sort_by_key(|actor| actor.common().id);
-        spells.transients = ordinary;
+        spells.transients.sort_by_key(|actor| actor.common().id);
         Ok(())
     }
 }

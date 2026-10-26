@@ -23,7 +23,7 @@ fn registration(value: PainterRegistration) -> Value {
 }
 fn snapshot(state: &GameSession) -> Value {
     let players:Vec<_>=state.participant_order.iter().map(|id|{
-        let row=&state.participants[id]; let p=&row.player.combat;let h=row.player.progression.hagatha_runtime;
+        let row=&state.participants.get(id).expect("participant exists"); let p=&row.player.combat;let h=row.player.progression.hagatha_runtime;
         let particles:Vec<_>=p.rescue_protection.particles.iter().map(|v|json!({"id":v.id,"alpha":v.alpha,
             "decay":v.decay,"position":point(v.position),"painterRegistration":v.painter_registration.map(registration),
             "rotationDegrees":v.rotation_degrees,"timer":v.timer,"worldKey":v.world_key})).collect();

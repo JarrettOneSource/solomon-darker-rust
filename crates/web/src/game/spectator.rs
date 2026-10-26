@@ -15,7 +15,7 @@ fn players(session: &GameSession) -> Vec<BoneyardSpectatorPlayer<'_>> {
         .participant_order
         .iter()
         .map(|id| {
-            let participant = &session.participants[id];
+            let participant = &session.participants.get(id).expect("participant exists");
             BoneyardSpectatorPlayer {
                 id,
                 display_name: &participant.player.selection.name,
@@ -71,7 +71,8 @@ pub(super) fn status(
 impl Game {
     pub(super) fn configure_spectator_input(&self) {
         let session = self.display_session();
-        let player = &session.participants[&self.local_player_id].player;
+        let player =
+            &session.participants.get(&self.local_player_id).expect("participant exists").player;
         let active = session.boneyard.is_some()
             && session.run.phase == GameRunPhase::Active
             && session.run.run_id.is_some()

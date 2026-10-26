@@ -3,8 +3,8 @@
 
 use super::model::PrimarySpellTransientBase;
 use super::model::{
-    EarthBoulderOrientation, PrimarySpellEarthCalledRock, PrimarySpellEarthProjectile,
-    PrimarySpellProjectilePhase,
+    EarthBoulderOrientation, EarthProjectileProgram, PrimarySpellEarthCalledRock,
+    PrimarySpellProjectilePhase, ProjectileRef,
 };
 use super::visual::visual_unit_random;
 use crate::float;
@@ -212,7 +212,10 @@ fn rotate_orientation(
 }
 
 #[must_use]
-pub fn earth_called_rock_emits(boulder: &PrimarySpellEarthProjectile, tick: u64) -> bool {
+pub fn earth_called_rock_emits(
+    boulder: ProjectileRef<'_, EarthProjectileProgram>,
+    tick: u64,
+) -> bool {
     boulder.common.charge < 0.25
         || earth_visual_random_int(boulder.common.id, 0x3000_u32.wrapping_add(tick as u32), 3) == 1
 }
@@ -220,7 +223,7 @@ pub fn earth_called_rock_emits(boulder: &PrimarySpellEarthProjectile, tick: u64)
 #[must_use]
 pub fn create_earth_called_rock(
     id: u64,
-    boulder: &PrimarySpellEarthProjectile,
+    boulder: ProjectileRef<'_, EarthProjectileProgram>,
     registration: PainterRegistration,
 ) -> PrimarySpellEarthCalledRock {
     let angle = visual_unit_random(id, 0x4000) * std::f64::consts::PI * 2.0;
@@ -256,19 +259,19 @@ pub fn create_earth_called_rock(
 }
 
 pub fn advance_earth_called_rock(
-    mut rock: PrimarySpellEarthCalledRock,
-    parent: Option<&PrimarySpellEarthProjectile>,
-) -> Option<PrimarySpellEarthCalledRock> {
+    rock: &mut PrimarySpellEarthCalledRock,
+    parent: Option<ProjectileRef<'_, EarthProjectileProgram>>,
+) -> bool {
     if rock.falling {
         let height = fround(rock.height + rock.fall_velocity);
         let accelerated = fround(rock.fall_velocity + 1.0);
         if height > 10.0 {
-            return None;
+            return false;
         }
         rock.common.age_ticks += 1;
         rock.fall_velocity = if height > 0.0 { 0.25_f32 as f64 } else { accelerated };
         rock.height = height;
-        return Some(rock);
+        return true;
     }
     rock.speed = fround(rock.speed * 1.1_f32 as f64).min(5.0);
     rock.falling =
@@ -280,7 +283,7 @@ pub fn advance_earth_called_rock(
         let dy = parent.common.position.y - rock.position.y;
         let distance = hypot(dx, dy);
         if distance < 5.0 {
-            return None;
+            return false;
         }
         let toward =
             if distance > 0.0 { Vec2::new(dx / distance, dy / distance) } else { Vec2::ZERO };
@@ -304,7 +307,7 @@ pub fn advance_earth_called_rock(
     }
     rock.common.age_ticks += 1;
     rock.rotation = fround(rock.rotation + rock.rotation_step);
-    Some(rock)
+    true
 }
 
 #[must_use]

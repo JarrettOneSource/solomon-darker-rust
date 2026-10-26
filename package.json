@@ -6,18 +6,17 @@
     "sdmod": "node tools/sdmod/cli.mjs",
     "test:sdmod": "node --test tools/sdmod/cli.test.mjs",
     "dev:desktop": "node tools/run-desktop.mjs",
-    "test:desktop": "node --test desktop/*.test.mjs tools/stage-node-runtime.test.mjs tools/desktop-build.test.mjs tools/bootstrap.test.mjs tools/editor-test-boot.test.mjs tools/desktop-archive.test.mjs tools/browser-smoke/native-child.test.cjs tools/browser-smoke/desktop-failure.test.cjs",
+    "test:desktop": "node --test tools/desktop-build.test.mjs tools/desktop-archive.test.mjs tools/trunk-build.test.mjs tools/bootstrap.test.mjs tools/editor-test-boot.test.mjs",
     "package:desktop": "node tools/package-desktop.mjs",
     "package:desktop:windows": "node tools/package-desktop.mjs --platform win32 --arch x64",
     "package:desktop:mac": "node tools/package-desktop.mjs --platform darwin --arch arm64",
     "package:desktop:linux": "node tools/package-desktop.mjs --platform linux --arch x64",
     "archive:desktop": "node tools/archive-desktop.mjs",
     "smoke:desktop": "node tools/smoke-desktop-runtime.mjs",
+    "test:browser-navigation": "node --test tools/browser-smoke/solomon-entrance.test.cjs",
     "test:browser-support": "node --test tools/browser-smoke/gpu-ui-contract.test.cjs tools/browser-smoke/browser-errors.test.cjs tools/browser-smoke/browser-lifecycle.test.cjs"
   },
   "devDependencies": {
-    "@electron/packager": "20.3.0",
-    "electron": "43.4.0",
     "playwright-core": "1.61.1"
   }
 }
