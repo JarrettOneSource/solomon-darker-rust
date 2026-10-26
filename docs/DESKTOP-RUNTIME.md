@@ -58,8 +58,9 @@ An OS file lock gives one process ownership; a second launch requests focus from
 that owner and exits without opening another game.
 
 `solomon-storage` holds a separate OS lock across each revision check and atomic,
-synced document replacement. Client saves preserve the complete supported schema51
-document. Browser builds use IndexedDB through their own storage adapter.
+synced document replacement. Client saves preserve the complete supported schema 51
+document, separate from the direct launcher's schema 2 server file. Browser builds
+use IndexedDB through their own storage adapter.
 
 Close, macOS Quit and return to launcher request the shared SaveBeforeLeave flow.
 The app waits for persistence before retiring Game, tasks, peer/authority workers
@@ -78,6 +79,12 @@ the native slot. Keep the previous app until the wizard is restored.
 The local authority owns accepted commands, inventory, mods, readiness, audio and
 world state. The client owns its durable player document. A generated capability
 authenticates loopback admission; credentials stay out of arguments and logs.
+
+`HostedSupervisor::new_standalone` creates a `HostedGameHost` with
+`GameSessionKind::Standalone`. The client sends its normal hosted Hello to that
+local endpoint; startup does not provision a website party. When the last human
+leaves, a fresh owner resets participant and run state while retaining pending
+sockets and catalog identity.
 
 Host game opens a revision-checked v1 invitation. Press Escape and choose
 **Copy multiplayer invite**; friends paste it into **Join a friend**. The host

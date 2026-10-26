@@ -81,7 +81,8 @@ npm run package:desktop -- --release-repository JarrettOneSource/solomon-darker-
 npm run archive:desktop
 ```
 
-See [Desktop runtime](docs/DESKTOP-RUNTIME.md) for platform options and package checks.
+See [Desktop runtime](docs/DESKTOP-RUNTIME.md) for platform options, prebuilt
+inputs and package contracts.
 
 ### Native authoritative host
 
@@ -105,6 +106,11 @@ To package the host and browser client together:
 python3 scripts/package-game.py --output artifacts/solomon-darker
 ```
 
+Run the packaged executable with its sibling `game/` directory intact; it needs
+no development toolchain. The browser profile retains preferences and the resume
+credential for that host origin. Packaging accepts `--profile debug`,
+`--web-dist PATH` to reuse verified client output, and `--no-archive` for a directory.
+
 ### Website integration
 
 This repository owns the game, Rust host, WebAssembly client, save tools, and
@@ -119,6 +125,10 @@ python3 scripts/package-hosted-game.py --output artifacts/hosted-game \
 
 The directory and its `.tar.gz` include the host, client, editor entry, save-tools
 module, and a manifest of file hashes.
+
+The consumer verifies complete payload membership and hashes before installation.
+Mounts are build inputs: rebuilding with `/game-stg` for both prefixes creates a
+staging artifact. `--profile debug` selects an unoptimized development build.
 
 ## Repository layout
 
@@ -155,6 +165,8 @@ npm run test:desktop
 The simulation tests replay recorded fixtures. Browser checks exercise the running
 client, and desktop checks cover native platform services and packaging. The
 packaged journey additionally launches the actual executable through ordinary OS input.
+The [full game gate](AGENTS.md#checks) adds strict all-feature linting, the separate
+loader target, asset verification, and feature-specific checks.
 
 ### Browser smoke
 
@@ -167,6 +179,24 @@ PW="$PWD/node_modules/playwright-core" URL=http://127.0.0.1:4181/ \
 
 This check requires Google Chrome. It creates a wizard, checks movement and
 rendering, and captures screenshots.
+
+Use `CHROME` to select the browser and `OUT` to retain the journey's screenshots
+and receipt. [The UI surface map](docs/GPU-UI.md#surface-map) lists focused journeys
+for menus, panels, input, social behavior, and saved continuation.
+
+For the native multiplayer journey, supply either a complete `PACKAGE` directory
+or the executable and client assets separately:
+
+```sh
+PW="$PWD/node_modules/playwright-core" \
+BINARY=/absolute/path/to/solomon-darker ASSETS=/absolute/path/to/wasm-client \
+OUT=/absolute/path/to/native-session-report \
+  node tools/browser-smoke/native-session.cjs
+```
+
+This drives two browser contexts through shared play, saving, rejoining, and host
+restart. It uses an isolated save and runs the host outside the source directory
+to check that the package supplies its own runtime inputs.
 
 ## Documentation
 

@@ -11,6 +11,14 @@ three seconds. Title, idle, and College movement samples last fifteen seconds;
 held casting lasts three seconds. The tables use medians of repeated run means;
 p95 values are medians of run p95s.
 
+Each run uses a fresh browser and authority, with graceful shutdown recorded.
+Samples exclude compiler and other acceptance workloads, though ordinary user
+applications remain running. The crowd fixtures fix initial geometry, player
+identity, and positions; the evolving frames need not remain identical. Runs
+wait for tick 300 before warming. Title prompts are dismissed, and College uses
+ordinary new-game admission and the default HUD. These details affect comparisons
+between builds even on the same machine.
+
 Crowd cases start from retained saves with 100 or 300 skeletons, increased enemy
 health, and damage/rewards disabled to retain the population. Casting must advance
 the authoritative cast sequence. These cases measure sustained crowds, not a full
@@ -93,3 +101,14 @@ Future measurements should record the exact source and artifact identities, GPU,
 viewport, actor population, warm-up, input sequence, sample length, raw intervals,
 CPU boundaries, application bytes, and process cleanup. Compare Rust revisions
 under the same workload and keep raw evidence with the measured build.
+
+## Reproduction records
+
+The measured runtime, assets, and build configuration are those of `ae8783f3`,
+included in release `92e3fe4c`. The retained local evidence is
+`~/codex-runs/solomon-performance-fixes-20261025/`: `REPORT.md` records commands,
+`candidate-artifacts.json` identifies the build, and `browser-suite-r3.json`,
+`cpu-suite.json`, and `codec-result-r3.json` describe the measured runs.
+Receipts, raw frame intervals, encoded packets, screenshots, and shutdown results
+support the tables. These records live outside temporary worktrees and are not
+inputs to the normal game build.

@@ -7,8 +7,8 @@ and encrypted peers while sharing Game and GPU UI with the browser. Electron and
 its Node peer runtime have been removed from desktop packaging. The published
 release has not yet changed.
 
-Remaining work is final four-platform package execution, update and Console/mod
-journeys, browser regression acceptance, review and publication/cleanup. The
+Remaining work is final four-platform package execution, resolution of platform
+acceptance failures, final review and publication/cleanup. The
 [qualification checklist](NATIVE-DESKTOP.md) distinguishes established behavior
 from unfinished release checks.
 

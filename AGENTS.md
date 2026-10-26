@@ -8,6 +8,9 @@ content, and editing.
 
 - [Architecture](docs/ARCHITECTURE.md) for module ownership and state flow.
 - [Coding standards](docs/CODING-STANDARDS.md) for implementation and testing rules.
+  Its [spirit](docs/CODING-STANDARDS.md#the-spirit) and
+  [deep-module guidance](docs/CODING-STANDARDS.md#deep-modules-small-interfaces)
+  guide coding choices and ownership changes.
 - [Decisions](docs/DECISIONS.md) when changing a numeric, persistence, rendering,
   protocol, or dependency contract.
 - [Glossary](CONTEXT.md) for game terms.
@@ -75,6 +78,10 @@ historical execution details in Git history or external test artifacts.
 
 Write for readers who have not seen the development conversations. A design decision
 should explain the concrete problem and the reason for the chosen behavior.
+
+When cleaning up prose, preserve useful principles, worked examples, technical
+constraints, and operating instructions. Check deleted material against the
+implementation before removing it; brevity alone is not a reason to discard it.
 
 Record consequential tradeoffs in `docs/DECISIONS.md`; keep `CONTEXT.md` a glossary.
 Do not add task assignments, attempt logs, chronological receipts, or repeated test
