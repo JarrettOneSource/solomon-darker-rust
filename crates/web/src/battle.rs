@@ -266,7 +266,7 @@ impl BattleViews {
         );
         self.secondary.prepare(
             renderer,
-            &frame.secondary.actors,
+            frame.secondary.actors.iter(),
             &world_key,
             Some(compact_frame as f64),
             frame.clocks.map(|clocks| &clocks.secondary),
@@ -517,7 +517,7 @@ impl BattleViews {
             },
         );
         let mut puppet_hits = BTreeMap::new();
-        for actor in &frame.secondary.actors {
+        for actor in frame.secondary.actors.iter() {
             if actor.world_key != world_key || actor.kind != NativeSecondaryActorKind::Leviathan {
                 continue;
             }
@@ -678,7 +678,7 @@ impl BattleViews {
         };
         let displacement = if frame.settings.zoom_effects {
             native_secondary_world_shake(
-                &frame.secondary.actors,
+                frame.secondary.actors.iter(),
                 &world_key,
                 frame.screen_feedback.camera_displacement,
             )
@@ -705,7 +705,7 @@ impl BattleViews {
             frame.settings.complex_lighting,
         );
         let mut tree_wobbles = BTreeMap::new();
-        for actor in &frame.secondary.actors {
+        for actor in frame.secondary.actors.iter() {
             if actor.kind != NativeSecondaryActorKind::EarthquakeSceneryWobble
                 || actor.world_key != world_key
             {

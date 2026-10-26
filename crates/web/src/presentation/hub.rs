@@ -174,7 +174,9 @@ pub(super) fn project_world(
             particle.scale = lerp(first.scale, next.scale, blend);
             particle
         },
-    );
+    )
+    .into_iter()
+    .collect();
     output.npcs.students.students = interpolate_members(
         &older.npcs.students.students,
         &newer.npcs.students.students,

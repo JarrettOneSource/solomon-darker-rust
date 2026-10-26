@@ -107,7 +107,7 @@ impl PrimarySoundMemory {
         for actor in frame.staff_contacts {
             memory.staff_contacts.insert(key(&actor.common));
         }
-        for actor in &frame.secondary.actors {
+        for actor in frame.secondary.actors.iter() {
             if actor.kind == NativeSecondaryActorKind::MindblastBurst {
                 memory.mindblasts.insert((actor.world_key.clone(), actor.id));
             }
@@ -459,7 +459,7 @@ impl CombatAudioCursor {
                 );
             }
         }
-        for actor in &frame.secondary.actors {
+        for actor in frame.secondary.actors.iter() {
             if actor.kind == NativeSecondaryActorKind::MindblastBurst
                 && actor.world_key == listener.world_key
                 && !self.primary.mindblasts.contains(&(actor.world_key.clone(), actor.id))

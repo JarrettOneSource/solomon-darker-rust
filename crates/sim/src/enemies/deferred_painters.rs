@@ -115,7 +115,7 @@ impl EnemyWorld {
         // Effect constructors can retain the same registration as their light. Patch
         // every retained registration-bearing row, rather than relying on the current
         // set of projectile producers never copying into another presentation lane.
-        for effect in &mut self.death_effects {
+        for effect in self.death_effects.iter_mut() {
             if let Some(registration) = &mut effect.painter_registration {
                 resolve(registration);
             }

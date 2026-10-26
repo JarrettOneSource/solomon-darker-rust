@@ -31,7 +31,7 @@ impl GameSession {
             live_bindings.insert(id.clone());
             world.enemies.bind_native_query_target(id, self.participants[id].wizard.position);
         }
-        for actor in &self.secondary.actors {
+        for actor in self.secondary.actors.iter() {
             if actor.kind != NativeSecondaryActorKind::Golem || actor.world_key != world_key {
                 continue;
             }

@@ -161,7 +161,7 @@ fn rescue_wave_contacts_follow_native_cells_and_registration_order() {
             let mut actual = snapshot(&state);
             actual["actorKinds"] =
                 json!(state.actors.iter().map(|actor| actor.kind.as_str()).collect::<Vec<_>>());
-            actual["hitTargetIds"] = json!(state.actors[0].hit_target_ids);
+            actual["hitTargetIds"] = json!(state.actors.get(0).unwrap().hit_target_ids);
             actual["damagedTargetIds"] =
                 json!(result.damage.iter().map(|contact| contact.target_id).collect::<Vec<_>>());
             native_bits::compare(

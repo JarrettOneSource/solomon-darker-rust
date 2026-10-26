@@ -4,6 +4,7 @@ use super::{player_combat, player_snapshot, secondary_state, session_snapshot, t
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::loot::BoneyardLootEventType;
+use solomon_sim::boneyard::loot::LootActorRead;
 use solomon_sim::enemies::model::EnemyLifeState;
 use solomon_sim::harden_effects::NativeHardenEffect;
 use solomon_sim::loot::NativeLootDropKind;
@@ -158,8 +159,8 @@ fn world_snapshot(session: &GameSession, id: &str) -> Value {
                 kind,
                 point(actor.position),
                 actor.age_ticks,
-                actor.amount,
-                actor.item.as_ref().map(|item| item.native_type_id)
+                actor.reward().amount,
+                actor.reward().item.as_ref().map(|item| item.native_type_id)
             ])
         })
         .collect();

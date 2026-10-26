@@ -43,7 +43,7 @@ impl BoneyardWorld {
             safety_bodies.push((maggot.position, maggot.collision_radius));
         }
         let mut ground_sack_count = 0;
-        for actor in &self.loot.actors {
+        for actor in self.loot.actors.iter() {
             if actor.kind == NativeLootDropKind::Sack {
                 ground_sack_count += 1;
                 safety_bodies.push((actor.position, NATIVE_LOOT_CARRIER_PLACEMENT_RADIUS));

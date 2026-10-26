@@ -33,7 +33,7 @@ impl SessionSecondaryWorld<'_> {
     pub fn collect_teleport_bodies(
         world: Option<&BoneyardWorld>,
         positions: &[Vec2],
-        actors: &[NativeSecondaryActorState],
+        actors: &crate::secondary::SecondaryActors,
     ) -> Vec<BoneyardNativeTeleportBody> {
         let mut bodies: Vec<_> = positions
             .iter()
@@ -59,7 +59,7 @@ impl SessionSecondaryWorld<'_> {
             }
         }
         let key = format!("boneyard:{}", world.loaded.run_id);
-        for actor in actors {
+        for actor in actors.iter() {
             if actor.kind == NativeSecondaryActorKind::Golem && actor.world_key == key {
                 bodies.push(BoneyardNativeTeleportBody {
                     position: actor.position,

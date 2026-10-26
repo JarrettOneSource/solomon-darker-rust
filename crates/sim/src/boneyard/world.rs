@@ -471,7 +471,7 @@ impl BoneyardWorld {
             for maggot in &self.enemies.maggots {
                 safety_bodies.push((maggot.position, maggot.collision_radius));
             }
-            for actor in &self.loot.actors {
+            for actor in self.loot.actors.iter() {
                 if actor.kind == NativeLootDropKind::Sack {
                     safety_bodies.push((actor.position, NATIVE_LOOT_CARRIER_PLACEMENT_RADIUS));
                 }

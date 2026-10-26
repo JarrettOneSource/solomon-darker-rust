@@ -129,11 +129,11 @@ pub(super) fn spawn_coffin_emergence(
 }
 
 pub(super) fn step_coffin_emergence(
-    mut effect: EnemyDeathEffect,
+    effect: &mut EnemyDeathEffect,
     tick: u64,
     rng: &mut NativeRng,
-) -> Option<EnemyDeathEffect> {
-    let motion = step_native_boulder_debris_motion(
+) -> bool {
+    let Some(motion) = step_native_boulder_debris_motion(
         NativeBoulderDebrisMotion {
             alpha: effect.opacity_timer,
             bounce_velocity: effect.bounce_velocity,
@@ -146,7 +146,9 @@ pub(super) fn step_coffin_emergence(
         },
         tick,
         rng,
-    )?;
+    ) else {
+        return false;
+    };
     effect.age_ticks = tick - effect.spawn_tick;
     effect.last_step_tick = Some(tick);
     effect.alpha = motion.alpha.min(1.0);
@@ -158,5 +160,5 @@ pub(super) fn step_coffin_emergence(
     effect.angular_velocity_deg = motion.rotation_step_degrees;
     effect.velocity = motion.velocity;
     effect.vertical_velocity = motion.vertical_velocity;
-    Some(effect)
+    true
 }

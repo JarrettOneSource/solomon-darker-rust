@@ -160,7 +160,7 @@ pub fn boneyard_mouth_world_targets(
         }
     }
     if let Some(secondary) = environment.secondary_abilities {
-        for actor in &secondary.actors {
+        for actor in secondary.actors.iter() {
             if actor.kind != NativeSecondaryActorKind::Leviathan || actor.world_key != world_key {
                 continue;
             }

@@ -57,7 +57,7 @@ impl PresentationClocks {
                 clocks.primary_contact.insert(common.id, age as f64);
             }
         }
-        for actor in &session.secondary.actors {
+        for actor in session.secondary.actors.iter() {
             clocks.secondary.insert(actor.id, actor.age_ticks as f64);
         }
         for (id, participant) in &session.participants {

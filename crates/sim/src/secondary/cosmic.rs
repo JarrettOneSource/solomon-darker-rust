@@ -5,18 +5,19 @@ use super::program::*;
 use super::spawns;
 use super::step::StepEngine;
 use super::{
-    NativeSecondaryActorKind as Kind, NativeSecondaryActorState as Actor,
-    NativeSecondaryDamageKind as Damage, NativeSecondaryEventKind as Event, NativeSecondaryWorld,
+    NativeSecondaryActorKind as Kind, NativeSecondaryDamageKind as Damage,
+    NativeSecondaryEventKind as Event, NativeSecondaryWorld,
 };
 use crate::Vec2;
 use crate::float;
 use crate::float::{fround, hypot};
 use crate::profile::offensive::resolve_native_skill_damage_value;
+use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 
 pub(super) fn step<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &Actor,
-    actor: &mut Actor,
+    source: &impl SecondaryActorRead,
+    actor: &mut impl SecondaryActorWrite,
     retain: &mut bool,
 ) {
     match actor.kind {
@@ -158,8 +159,8 @@ pub(super) fn step<W: NativeSecondaryWorld>(
 
 fn appendage<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &Actor,
-    actor: &mut Actor,
+    source: &impl SecondaryActorRead,
+    actor: &mut impl SecondaryActorWrite,
     retain: &mut bool,
 ) {
     let Some(parent_id) = source.hit_target_ids.first().copied() else {

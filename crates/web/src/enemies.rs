@@ -44,7 +44,7 @@ pub struct EnemyViewFrame<'a> {
     /// Already sampled at the fractional display tick; do not age these values again.
     pub puppet_hit_alphas: Option<&'a BTreeMap<String, f64>>,
     /// Loot deaths use the same source effect presenter and painter ownership as enemy deaths.
-    pub extra_death_effects: &'a [EnemyDeathEffect],
+    pub extra_death_effects: &'a solomon_sim::ComponentEntities<EnemyDeathEffect>,
     pub tick: u64,
     pub application_tick: u64,
     pub complex_lighting: bool,

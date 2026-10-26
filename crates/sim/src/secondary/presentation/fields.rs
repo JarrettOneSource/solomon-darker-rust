@@ -5,17 +5,16 @@ use super::types::*;
 use crate::Vec2;
 use crate::float;
 use crate::float::fround;
-use crate::secondary::{
-    NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryPlayerState,
-};
+use crate::secondary::SecondaryActorRead;
+use crate::secondary::{NativeSecondaryActorKind, NativeSecondaryPlayerState};
 
 #[must_use]
 pub fn native_secondary_composite_owner_entries(
-    actors: &[NativeSecondaryActorState],
+    actors: impl Iterator<Item = impl SecondaryActorRead> + Clone,
     world_key: &str,
 ) -> Vec<(u64, u64)> {
     let mut owners = Vec::new();
-    for actor in actors {
+    for actor in actors.clone() {
         if actor.world_key != world_key
             || actor.kind != NativeSecondaryActorKind::LeviathanAppendage
         {
@@ -23,7 +22,7 @@ pub fn native_secondary_composite_owner_entries(
         }
         if let Some(parent) = actor.hit_target_ids.first()
             && actors
-                .iter()
+                .clone()
                 .any(|candidate| candidate.id == *parent && candidate.world_key == world_key)
         {
             owners.push((actor.id, *parent));
@@ -84,7 +83,7 @@ pub fn native_player_magic_shield_plan(
 
 #[must_use]
 pub fn plane_orb_mesh(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     frame: f64,
     enhanced_effects: bool,
 ) -> NativeSecondaryMeshDraw {
@@ -130,14 +129,14 @@ pub fn plane_orb_mesh(
 
 #[must_use]
 pub fn prismatic_wave_draws(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     frame: f64,
 ) -> Vec<NativeSecondarySpriteDraw> {
     prismatic_wave_draws_at_age(actor, actor.age_ticks, frame)
 }
 
 pub(super) fn prismatic_wave_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age: u64,
     frame: f64,
 ) -> Vec<NativeSecondarySpriteDraw> {
@@ -243,14 +242,12 @@ pub(super) fn prismatic_wave_draws_at_age(
 }
 
 #[must_use]
-pub fn magic_circle_ring_draws(
-    actor: &NativeSecondaryActorState,
-) -> Vec<NativeSecondarySpriteDraw> {
+pub fn magic_circle_ring_draws(actor: &impl SecondaryActorRead) -> Vec<NativeSecondarySpriteDraw> {
     magic_circle_ring_draws_at_age(actor, actor.age_ticks)
 }
 
 pub(super) fn magic_circle_ring_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age: u64,
 ) -> Vec<NativeSecondarySpriteDraw> {
     let mut rng = actor

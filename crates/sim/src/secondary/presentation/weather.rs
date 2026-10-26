@@ -6,18 +6,18 @@ use super::types::*;
 use crate::Vec2;
 use crate::float;
 use crate::float::fround;
-use crate::secondary::NativeSecondaryActorState;
+use crate::secondary::SecondaryActorRead;
 
 #[must_use]
 pub fn storm_cloud_draws(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     frame: f64,
 ) -> Vec<NativeSecondarySpriteDraw> {
     storm_cloud_draws_at_age(actor, actor.age_ticks as f64, frame, actor.enhanced)
 }
 
 pub(super) fn storm_cloud_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age_ticks: f64,
     frame: f64,
     enhanced_effects: bool,
@@ -71,12 +71,12 @@ pub(super) fn storm_cloud_draws_at_age(
 }
 
 #[must_use]
-pub fn storm_auxiliary_draws(actor: &NativeSecondaryActorState) -> Vec<NativeSecondarySpriteDraw> {
+pub fn storm_auxiliary_draws(actor: &impl SecondaryActorRead) -> Vec<NativeSecondarySpriteDraw> {
     storm_auxiliary_draws_at_age(actor, actor.age_ticks as f64)
 }
 
 pub(super) fn storm_auxiliary_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age_ticks: f64,
 ) -> Vec<NativeSecondarySpriteDraw> {
     let phase = storm_visual_phase(actor);
@@ -110,13 +110,13 @@ pub(super) fn storm_auxiliary_draws_at_age(
 
 #[must_use]
 pub fn storm_weather_composite(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
 ) -> Option<NativeStormWeatherComposite> {
     storm_weather_composite_at_age(actor, actor.age_ticks as f64)
 }
 
 pub(super) fn storm_weather_composite_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age: f64,
 ) -> Option<NativeStormWeatherComposite> {
     if actor.variant == 1 {
@@ -153,7 +153,7 @@ pub(super) fn storm_weather_composite_at_age(
         scale: 5.0,
     })
 }
-fn storm_visual_phase(actor: &NativeSecondaryActorState) -> f64 {
+fn storm_visual_phase(actor: &impl SecondaryActorRead) -> f64 {
     let mut rng = actor
         .presentation_rng
         .clone()
@@ -163,12 +163,12 @@ fn storm_visual_phase(actor: &NativeSecondaryActorState) -> f64 {
 }
 
 #[must_use]
-pub fn freeze_wave_visual_draws(actor: &NativeSecondaryActorState) -> NativeFreezeWaveVisualDraws {
+pub fn freeze_wave_visual_draws(actor: &impl SecondaryActorRead) -> NativeFreezeWaveVisualDraws {
     freeze_wave_visual_draws_at_age(actor, actor.age_ticks)
 }
 
 pub(super) fn freeze_wave_visual_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     age: u64,
 ) -> NativeFreezeWaveVisualDraws {
     const PERSPECTIVE: f64 = 0.8_f32 as f64;
@@ -257,7 +257,7 @@ pub(super) fn freeze_wave_visual_draws_at_age(
 
 #[must_use]
 pub fn raindrop_gradient(
-    actor: &NativeSecondaryActorState,
+    actor: &impl SecondaryActorRead,
     acid: bool,
 ) -> NativeSecondaryGradientDraw {
     NativeSecondaryGradientDraw {

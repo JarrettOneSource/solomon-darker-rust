@@ -60,24 +60,52 @@ pub(super) fn interpolate_members<'a, T: Clone + 'a, K: Clone + Ord>(
     id: impl Fn(&T) -> K,
     mut project: impl FnMut(&T, &T, f64) -> T,
 ) -> Vec<T> {
+    interpolate_projected_members(
+        older,
+        newer,
+        blend,
+        |member| id(member),
+        |member| (*member).clone(),
+        |first, next, blend| project(first, next, blend),
+    )
+}
+
+/// Projects borrowed component views into owned display state. Source views do
+/// not need to use the same representation as the output.
+pub(super) fn interpolate_projected_members<V, T, K: Clone + Ord>(
+    older: impl IntoIterator<Item = V>,
+    newer: impl IntoIterator<Item = V> + Clone,
+    blend: f64,
+    id: impl Fn(&V) -> K,
+    snapshot: impl Fn(&V) -> T,
+    mut project: impl FnMut(&V, &V, f64) -> T,
+) -> Vec<T> {
     let newer_by_id: BTreeMap<_, _> =
-        newer.clone().into_iter().map(|member| (id(member), member)).collect();
+        newer.clone().into_iter().map(|member| (id(&member), member)).collect();
     let older = older.into_iter();
     let mut result = Vec::with_capacity(older.size_hint().1.unwrap_or(0));
+    let at_newer_endpoint = blend >= 1.0;
+    let mut known = BTreeSet::new();
     for member in older {
-        result.push(match newer_by_id.get(&id(member)) {
-            Some(next) => project(member, next, blend),
-            None => member.clone(),
-        });
+        let key = id(&member);
+        let projected = match newer_by_id.get(&key) {
+            Some(next) => project(&member, next, blend),
+            None => snapshot(&member),
+        };
+        if !at_newer_endpoint || newer_by_id.contains_key(&key) {
+            result.push(projected);
+        }
+        if at_newer_endpoint {
+            known.insert(key);
+        }
     }
-    if blend >= 1.0 {
-        let known: BTreeSet<_> = result.iter().map(&id).collect();
+    if at_newer_endpoint {
         for member in newer {
-            if !known.contains(&id(member)) {
-                result.push(member.clone());
+            let key = id(&member);
+            if !known.contains(&key) {
+                result.push(snapshot(&member));
             }
         }
-        result.retain(|member| newer_by_id.contains_key(&id(member)));
     }
     result
 }

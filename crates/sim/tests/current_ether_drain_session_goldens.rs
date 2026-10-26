@@ -20,6 +20,7 @@ use solomon_sim::enemies::{EnemyFlag, EnemySpawnIntent, EnemyToken};
 use solomon_sim::loot::{NativeLootDropKind, NativeLootDropSource, NativeLootDropSpec};
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::secondary::NativeSecondaryActorKind;
+use solomon_sim::secondary::SecondaryActorRead;
 use solomon_sim::session::{
     GameSession, GameSessionInput, GameSessionOptions, GameSessionTickContext,
 };
@@ -77,9 +78,9 @@ fn snapshot(state: &GameSession) -> Value {
         .actors
         .iter()
         .map(|actor| {
-            let mut value = secondary::actor_snapshot(actor);
-            if actor.kind == NativeSecondaryActorKind::EtherDrain || actor.ether_drain.is_some() {
-                value["etherDrain"] = serde_json::to_value(&actor.ether_drain).unwrap();
+            let mut value = secondary::actor_snapshot(&actor);
+            if actor.kind == NativeSecondaryActorKind::EtherDrain || actor.ether_drain().is_some() {
+                value["etherDrain"] = serde_json::to_value(actor.ether_drain()).unwrap();
             }
             value
         })

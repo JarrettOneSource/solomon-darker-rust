@@ -1,7 +1,7 @@
 //! Typed counterparts of `native-secondary-presentation-types.ts`.
 
 use crate::Vec2;
-use crate::secondary::NativeSecondaryActorState;
+use crate::secondary::SecondaryActorRead;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeSecondaryAtlas {
@@ -55,11 +55,7 @@ pub struct NativeSecondarySpriteDraw {
 
 impl NativeSecondarySpriteDraw {
     #[must_use]
-    pub fn new(
-        actor: &NativeSecondaryActorState,
-        atlas: NativeSecondaryAtlas,
-        entry: usize,
-    ) -> Self {
+    pub fn new(actor: &impl SecondaryActorRead, atlas: NativeSecondaryAtlas, entry: usize) -> Self {
         Self {
             alpha: actor.alpha,
             atlas,

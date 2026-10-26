@@ -274,7 +274,7 @@ pub(super) fn interpolate(
     }
     let (effects, ages) =
         interpolate_death_effects(&older.death_effects, &newer.death_effects, blend);
-    output.death_effects = effects;
+    output.death_effects = effects.into_iter().collect();
     metadata.death_effects = ages;
     output.maggots = interpolate_members(
         &older.maggots,
@@ -372,9 +372,9 @@ fn projectile_heading(projectile: &EnemyProjectile) -> f64 {
 }
 
 #[must_use]
-pub(crate) fn interpolate_death_effects(
-    older: &[EnemyDeathEffect],
-    newer: &[EnemyDeathEffect],
+pub(crate) fn interpolate_death_effects<'a>(
+    older: impl IntoIterator<Item = &'a EnemyDeathEffect>,
+    newer: impl IntoIterator<Item = &'a EnemyDeathEffect> + Clone,
     blend: f64,
 ) -> (Vec<EnemyDeathEffect>, BTreeMap<usize, NativeEnemyEffectPresentationInput>) {
     let mut ages = BTreeMap::new();

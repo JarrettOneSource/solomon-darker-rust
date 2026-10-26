@@ -5,6 +5,7 @@ mod support;
 #[path = "../../sim/tests/support/tutorial_snapshot.rs"]
 mod tutorial_snapshot;
 
+use solomon_sim::boneyard::loot::LootActorRead;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -197,8 +198,8 @@ fn snapshot(
             "nextItemId": world.loot.next_item_id, "lastSuccessfulItemLevel": world.loot.last_successful_item_level,
             "nextKeyDropLevel": world.loot.next_key_drop_level,
             "actors": world.loot.actors.iter().map(|actor| json!([actor.id, loot_kind(actor.kind),
-                point(actor.position), actor.age_ticks, actor.amount, actor.orb_value,
-                actor.item.as_ref().map(|item|item.native_type_id), actor.item.as_ref().map(|item|&item.name),
+                point(actor.position), actor.age_ticks, actor.reward().amount, actor.reward().orb_value,
+                actor.reward().item.as_ref().map(|item|item.native_type_id), actor.reward().item.as_ref().map(|item|&item.name),
                 actor.spawn_tick, registration(actor.painter_registration)])).collect::<Vec<_>>(),
             "effects": world.loot.effects.iter().map(|effect| json!([effect.id, effect.age_ticks,
                 effect.entry, effect.alpha])).collect::<Vec<_>>() },

@@ -1,5 +1,6 @@
 //! Source `ml-bot-policy/minions.ts`: own and allied Golems in retained actor order.
 
+use crate::secondary::SecondaryActorRead;
 use std::collections::BTreeSet;
 
 use crate::Vec2;
@@ -29,7 +30,7 @@ pub fn observe_ml_bot_policy_minions(
         .iter()
         .filter(|actor| {
             actor.kind == NativeSecondaryActorKind::Golem
-                && actor.golem.is_some()
+                && actor.golem().is_some()
                 && actor.world_key == world_key
         })
         .collect::<Vec<_>>();
@@ -44,7 +45,7 @@ pub fn observe_ml_bot_policy_minions(
     });
     let mut block_s = vec![0.0; 4 * 15 + 2];
     for (slot, actor) in golems.iter().take(4).enumerate() {
-        let golem = actor.golem.as_ref().expect("the Source minion filter requires a Golem");
+        let golem = actor.golem().expect("the Source minion filter requires a Golem");
         let relative = Vec2::new(actor.position.x - position.x, actor.position.y - position.y);
         let direction = normalized(relative.x, relative.y);
         write(

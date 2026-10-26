@@ -63,7 +63,7 @@ pub fn observe_ml_bot_policy_own_effects(
             rows.push(row);
         }
     }
-    for actor in &secondary.actors {
+    for actor in secondary.actors.iter() {
         if actor.owner_id != player_id
             || actor.world_key != world_key
             || !secondary_effect(actor.kind)

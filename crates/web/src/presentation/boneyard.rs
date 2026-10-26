@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use solomon_sim::boneyard::BoneyardBounds;
+use solomon_sim::boneyard::loot::LootActorRead;
 use solomon_sim::boneyard::world_light::{
     BoneyardLightEnvironment, WorldLightPlayer, WorldLightScene, boneyard_world_light_query,
 };
@@ -19,7 +20,7 @@ use solomon_sim::session::GameSession;
 
 use super::PresentationClocks;
 use super::enemies::{self, EnemyPresentationMetadata};
-use super::math::{interpolate_members, lerp, lerp_cycle, lerp_vec};
+use super::math::{interpolate_members, interpolate_projected_members, lerp, lerp_cycle, lerp_vec};
 
 /// `host/game-snapshot.ts` samples Spider appearance with the host's logical
 /// light query and fixed stock viewport, before any client camera projection.
@@ -171,16 +172,17 @@ pub(super) fn project(
         tutorial.camera_lock_age_ticks =
             lerp(first.camera_lock_age_ticks, next.camera_lock_age_ticks, blend);
     }
-    world.loot.actors = interpolate_members(
-        &first.loot.actors,
-        &next.loot.actors,
+    world.loot.actors = interpolate_projected_members(
+        first.loot.actors.iter(),
+        next.loot.actors.iter(),
         blend,
         |actor| actor.id,
+        |actor| actor.snapshot(),
         |first, next, blend| {
             if first.kind != next.kind {
-                return first.clone();
+                return first.snapshot();
             }
-            let mut actor = if blend < 1.0 { first.clone() } else { next.clone() };
+            let mut actor = if blend < 1.0 { first.snapshot() } else { next.snapshot() };
             actor.alpha = lerp(first.alpha, next.alpha, blend);
             actor.animation_phase =
                 lerp_cycle(first.animation_phase, next.animation_phase, blend, 360.0);
@@ -191,10 +193,12 @@ pub(super) fn project(
             actor.scatter_progress = lerp(first.scatter_progress, next.scatter_progress, blend);
             actor
         },
-    );
+    )
+    .into_iter()
+    .collect();
     let (effects, ages) =
         enemies::interpolate_death_effects(&first.loot.effects, &next.loot.effects, blend);
-    world.loot.effects = effects;
+    world.loot.effects = effects.into_iter().collect();
     metadata.death_effects.extend(ages);
     if older.run.phase == GameRunPhase::GameOver
         && newer.run.phase == GameRunPhase::GameOver

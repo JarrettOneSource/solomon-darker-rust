@@ -53,6 +53,7 @@ fn random_integer(state: u32, maximum_exclusive: u32) -> (u32, u32) {
 /// One drop of spray above the fountain.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct HubFountainParticle {
     pub id: u32,
     /// Seconds of life left; it is also the drop's brightness before the alpha limit.
@@ -64,7 +65,7 @@ pub struct HubFountainParticle {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubAmbientState {
-    pub fountain_particles: Vec<HubFountainParticle>,
+    pub fountain_particles: crate::ComponentEntities<HubFountainParticle>,
     pub next_fountain_particle_id: u32,
     pub rng_state: u32,
     /// Position along the seal core's three-colour track, in `[0, 3)`.
@@ -88,7 +89,7 @@ impl HubAmbientState {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            fountain_particles: Vec::new(),
+            fountain_particles: crate::ComponentEntities::default(),
             next_fountain_particle_id: 0,
             rng_state: HUB_AMBIENT_RNG_SEED,
             seal_core_phase: 0.0,
@@ -107,7 +108,7 @@ impl HubAmbientState {
     pub fn step(&mut self, painter_order: Option<&mut WorldPainterOrder>) {
         let (state, roll) = random_integer(self.rng_state, FOUNTAIN_ROLL_RANGE);
         self.rng_state = state;
-        for particle in &mut self.fountain_particles {
+        for particle in self.fountain_particles.iter_mut() {
             particle.remaining -= FOUNTAIN_LIFETIME_DECREMENT;
             particle.scale *= FOUNTAIN_SCALE_MULTIPLIER;
         }

@@ -2,6 +2,7 @@
 //! Reflections and adjusted status rows are returned for the session's later
 //! source phases. Immediate resources, facing, web ownership and births live here.
 
+use crate::secondary::SecondaryActorWrite;
 use std::collections::BTreeMap;
 
 use super::PlayerLightingState;
@@ -169,9 +170,9 @@ fn apply_golem_contact(
     else {
         return;
     };
-    let actor = &mut context.secondary.actors[index];
+    let mut actor = context.secondary.actors.get_mut(index).expect("Golem index is live");
     if damage.tragic_circle
-        && let Some(golem) = &mut actor.golem
+        && let Some(golem) = actor.golem_mut()
     {
         golem.circle_slow_ticks = 20;
         return;

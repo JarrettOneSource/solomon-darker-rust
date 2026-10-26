@@ -45,22 +45,26 @@ impl BoneyardWorld {
                     });
                 }
                 NativeEtherDrainTargetRef::Golem { id } => {
-                    let Some(actor) = secondary.actors.iter_mut().find(|actor| {
+                    let Some(mut actor) = secondary.actors.iter_mut().find(|actor| {
                         actor.id == *id && actor.kind == NativeSecondaryActorKind::Golem
                     }) else {
                         continue;
                     };
-                    let Some(golem) = &mut actor.golem else { continue };
-                    let position =
-                        physics.move_body("", actor.position, contact.delta, actor.radius);
+                    let Some(golem) = actor.golem.as_deref_mut() else { continue };
+                    let position = physics.move_body(
+                        "",
+                        actor.common.position,
+                        contact.delta,
+                        actor.common.radius,
+                    );
                     let delta = Vec2::new(
-                        fround(position.x - actor.position.x),
-                        fround(position.y - actor.position.y),
+                        fround(position.x - actor.common.position.x),
+                        fround(position.y - actor.common.position.y),
                     );
                     let shift = |point: &mut Vec2| {
                         *point = Vec2::new(fround(point.x + delta.x), fround(point.y + delta.y));
                     };
-                    actor.position = position;
+                    actor.common.position = position;
                     shift(&mut golem.left_foot);
                     shift(&mut golem.left_foot_next);
                     shift(&mut golem.left_foot_previous);

@@ -133,6 +133,7 @@ impl HubPotionTraderClock {
 /// One native Hagatha crossfade sprite, with its independently sampled fade and lifetime.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct HubHagathaParticle {
     pub frame: usize,
     pub id: u64,
@@ -155,7 +156,7 @@ impl HubHagathaParticle {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubHagathaClock {
     pub next_particle_id: u64,
-    pub particles: Vec<HubHagathaParticle>,
+    pub particles: crate::ComponentEntities<HubHagathaParticle>,
     pub phase: f64,
     pub rng: NativeRng,
     pub velocity: f64,
@@ -166,7 +167,7 @@ impl HubHagathaClock {
     pub fn new(seed: u32) -> Self {
         Self {
             next_particle_id: 0,
-            particles: Vec::new(),
+            particles: crate::ComponentEntities::default(),
             phase: 0.0,
             rng: NativeRng::new(i64::from(seed)),
             velocity: 0.05_f32 as f64,
@@ -174,7 +175,7 @@ impl HubHagathaClock {
     }
 
     pub fn step(&mut self) {
-        for particle in &mut self.particles {
+        for particle in self.particles.iter_mut() {
             particle.progress = fround(particle.progress + particle.progress_step);
         }
         self.particles.retain(|particle| particle.progress <= 1.0);

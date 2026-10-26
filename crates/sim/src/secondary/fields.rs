@@ -4,18 +4,18 @@ use super::casting::magic_trap_screen_flash;
 use super::program::*;
 use super::step::{BurnRequest, StepEngine};
 use super::{
-    NativeSecondaryActorKind as Kind, NativeSecondaryActorState as Actor,
-    NativeSecondaryAudioCue as Cue, NativeSecondaryDamageKind as Damage,
-    NativeSecondaryEventKind as Event, NativeSecondaryTargetEffectPatch as Patch,
-    NativeSecondaryWorld,
+    NativeSecondaryActorKind as Kind, NativeSecondaryAudioCue as Cue,
+    NativeSecondaryDamageKind as Damage, NativeSecondaryEventKind as Event,
+    NativeSecondaryTargetEffectPatch as Patch, NativeSecondaryWorld,
 };
 use crate::Vec2;
 use crate::float::{fround, hypot};
+use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 
 pub(super) fn step<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &Actor,
-    actor: &mut Actor,
+    source: &impl SecondaryActorRead,
+    actor: &mut impl SecondaryActorWrite,
     retain: &mut bool,
 ) {
     let owner = &engine.context.players[&actor.owner_id];
@@ -106,7 +106,7 @@ pub(super) fn step<W: NativeSecondaryWorld>(
                         }
                         if actor.variant == 2 {
                             engine.electric_burns.push(BurnRequest {
-                                actor: actor.clone(),
+                                actor: actor.snapshot(),
                                 damage: amount,
                                 target,
                             });
@@ -123,7 +123,7 @@ pub(super) fn step<W: NativeSecondaryWorld>(
                         }
                         if actor.variant == 1 {
                             engine.fire_burns.push(BurnRequest {
-                                actor: actor.clone(),
+                                actor: actor.snapshot(),
                                 damage: owner.fire_burn_damage,
                                 target,
                             });

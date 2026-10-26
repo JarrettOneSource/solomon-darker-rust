@@ -21,6 +21,7 @@ pub enum NativeGolemPhase {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeSecondaryGolemState {
     pub action_heading_offset_degrees: f64,
     pub action_duration_ticks: u64,

@@ -221,7 +221,7 @@ impl CombatAudioCursor {
                 );
             }
         }
-        for actor in &frame.secondary.actors {
+        for actor in frame.secondary.actors.iter() {
             if actor.world_key != listener.world_key {
                 continue;
             }

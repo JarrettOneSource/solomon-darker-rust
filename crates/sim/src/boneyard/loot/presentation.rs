@@ -1,7 +1,7 @@
 //! Stock ground loot and Goodie layers from `renderer/native-loot-presentation.ts`.
 //! Scatter seeds belong to the view; planning never advances the loot store's RNG.
 
-use super::{BoneyardGoodiePhase, BoneyardGoodieState, BoneyardLootActor};
+use super::{BoneyardGoodiePhase, BoneyardGoodieState, LootActorRead};
 use crate::Vec2;
 use crate::float;
 use crate::hub::painter::{PainterLane, PainterLayer};
@@ -49,7 +49,7 @@ pub struct NativeLootPresentationPlan {
 
 #[must_use]
 pub fn native_loot_presentation_plan(
-    actor: &BoneyardLootActor,
+    actor: &impl LootActorRead,
     scatter_seed: u32,
 ) -> NativeLootPresentationPlan {
     let mut next_scatter_seed = scatter_seed;
@@ -97,7 +97,7 @@ pub fn native_goodie_presentation_plan(
 }
 
 #[must_use]
-pub fn native_loot_painter_layer(actor: &BoneyardLootActor) -> PainterLayer {
+pub fn native_loot_painter_layer(actor: &impl LootActorRead) -> PainterLayer {
     actor.painter_registration.layer(actor.position.y, 0.0)
 }
 
@@ -129,17 +129,17 @@ fn radians(degrees: f64) -> f64 {
     degrees * std::f64::consts::PI / 180.0
 }
 
-fn orb_layers(actor: &BoneyardLootActor) -> Vec<NativeLootVisualLayer> {
+fn orb_layers(actor: &impl LootActorRead) -> Vec<NativeLootVisualLayer> {
     let angle = radians(actor.animation_phase);
-    let entry = if actor.orb_kind == Some(NativeOrbKind::Health) { 434 } else { 435 };
+    let entry = if actor.reward().orb_kind == Some(NativeOrbKind::Health) { 434 } else { 435 };
     if actor.alpha < 1.0 {
-        let scale = actor.orb_value * actor.alpha * 2.0;
+        let scale = actor.reward().orb_value * actor.alpha * 2.0;
         let mut draw = NativeLootVisualLayer::new("orb-fade-in", SpellAtlas::BadGuys, entry);
         draw.offset.y = float::sin(angle) * 3.0 - 5.0 + float::cos(angle) * 15.0;
         draw.scale = Vec2::new(scale, scale);
         return vec![draw];
     }
-    let scale = actor.orb_value * actor.alpha * (float::cos(angle) * 0.2 + 2.0);
+    let scale = actor.reward().orb_value * actor.alpha * (float::cos(angle) * 0.2 + 2.0);
     let mut core = NativeLootVisualLayer::new("orb-core", SpellAtlas::BadGuys, entry);
     core.offset.y = float::sin(angle) * 3.0 - 5.0;
     core.scale = Vec2::new(scale, scale);
@@ -150,12 +150,12 @@ fn orb_layers(actor: &BoneyardLootActor) -> Vec<NativeLootVisualLayer> {
     vec![core, shimmer]
 }
 
-fn gold_layers(actor: &BoneyardLootActor, seed: &mut u32) -> Vec<NativeLootVisualLayer> {
+fn gold_layers(actor: &impl LootActorRead, seed: &mut u32) -> Vec<NativeLootVisualLayer> {
     if !actor.scatter_active {
         let mut gold = NativeLootVisualLayer::new(
             "gold-settled",
             SpellAtlas::BadGuys,
-            198 + actor.tier as usize,
+            198 + actor.reward().tier as usize,
         );
         gold.rotation_radians = radians(actor.rotation_deg);
         let mut layers = vec![gold];
@@ -173,7 +173,7 @@ fn gold_layers(actor: &BoneyardLootActor, seed: &mut u32) -> Vec<NativeLootVisua
     let frame = actor.scatter_progress.trunc().clamp(0.0, 9.0) as usize;
     let mut layers =
         vec![NativeLootVisualLayer::new("gold-scatter-base", SpellAtlas::BadGuys, 188 + frame)];
-    let copies = match actor.tier {
+    let copies = match actor.reward().tier {
         0 => 0,
         1 => 1,
         2 => 2,
@@ -185,7 +185,7 @@ fn gold_layers(actor: &BoneyardLootActor, seed: &mut u32) -> Vec<NativeLootVisua
         let mut draw = NativeLootVisualLayer::new(
             &format!("gold-scatter-copy-{index}"),
             SpellAtlas::BadGuys,
-            188 + actor.tier as usize,
+            188 + actor.reward().tier as usize,
         );
         draw.offset = Vec2::new(float::sin(angle) * 8.0, -float::cos(angle) * 8.0);
         layers.push(draw);
@@ -193,8 +193,8 @@ fn gold_layers(actor: &BoneyardLootActor, seed: &mut u32) -> Vec<NativeLootVisua
     layers
 }
 
-fn sack_layers(actor: &BoneyardLootActor) -> Vec<NativeLootVisualLayer> {
-    let item = actor.item.as_ref();
+fn sack_layers(actor: &impl LootActorRead) -> Vec<NativeLootVisualLayer> {
+    let item = actor.reward().item.as_ref();
     let mut layers = match item.map(|item| item.native_type_id) {
         Some(7001) => vec![NativeLootVisualLayer::new(
             "potion-sack",
@@ -207,7 +207,7 @@ fn sack_layers(actor: &BoneyardLootActor) -> Vec<NativeLootVisualLayer> {
             NativeLootVisualLayer::new(
                 "equipment-sack-shell",
                 SpellAtlas::BadGuys,
-                442 + actor.tier as usize,
+                442 + actor.reward().tier as usize,
             ),
         ],
     };
@@ -217,9 +217,9 @@ fn sack_layers(actor: &BoneyardLootActor) -> Vec<NativeLootVisualLayer> {
     layers
 }
 
-fn bonus_layers(actor: &BoneyardLootActor) -> Vec<NativeLootVisualLayer> {
+fn bonus_layers(actor: &impl LootActorRead) -> Vec<NativeLootVisualLayer> {
     let frame = actor.frame_phase.trunc().clamp(0.0, 17.0) as usize;
-    let (tint, entry) = match actor.bonus_kind {
+    let (tint, entry) = match actor.reward().bonus_kind {
         Some(NativeBonusKind::SkillChoice) => (0xffbfbf, 140 + frame),
         Some(NativeBonusKind::SkillRank) => (0xbfffff, 122 + frame),
         _ => (0xd9ba70, 61),

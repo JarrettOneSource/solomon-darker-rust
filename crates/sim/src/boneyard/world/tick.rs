@@ -189,7 +189,7 @@ impl BoneyardWorld {
             .collect();
         let mut ability_effects = Vec::new();
         if let Some(secondary) = environment.secondary_abilities {
-            for actor in &secondary.actors {
+            for actor in secondary.actors.iter() {
                 if actor.kind == NativeSecondaryActorKind::Golem && actor.world_key == world_key {
                     players.push(EnemyTarget {
                         id: format!("golem:{}", actor.id),

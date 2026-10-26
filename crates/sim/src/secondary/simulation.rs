@@ -1,5 +1,6 @@
 //! Secondary actor ownership, burn replacement and shield/Golem damage contracts.
 
+use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 use std::collections::BTreeMap;
 
 use super::golem::{
@@ -18,7 +19,11 @@ use crate::{NativeRng, Vec2};
 pub struct NativeSecondarySimulationState {
     pub camera_displacements: Vec<NativeSecondaryCameraDisplacement>,
     pub stoneskin_warp: Option<Vec<f64>>,
-    pub actors: Vec<NativeSecondaryActorState>,
+    pub actors: super::SecondaryActors,
+    /// Birth commands collected while existing entities advance. They become live
+    /// together after that phase, so children cannot advance on their birth tick.
+    #[cfg_attr(feature = "persistence", serde(skip))]
+    pub(super) deferred_births: Option<Vec<NativeSecondaryActorState>>,
     pub events: Vec<NativeSecondaryEventState>,
     pub firewalker_geometry_sequence: u32,
     pub next_actor_id: u64,
@@ -86,7 +91,8 @@ impl NativeSecondarySimulationState {
         Self {
             camera_displacements: Vec::new(),
             stoneskin_warp: None,
-            actors: Vec::new(),
+            actors: super::SecondaryActors::default(),
+            deferred_births: None,
             events: Vec::new(),
             firewalker_geometry_sequence: 0,
             next_actor_id: 1,
@@ -100,20 +106,7 @@ impl NativeSecondarySimulationState {
     /// Retain the strongest proposal per world. A replacement moves to the tail;
     /// equal magnitudes keep the earlier proposal, as in the Source Region queue.
     pub fn record_camera_displacement(&mut self, world_key: &str, displacement: Vec2, tick: u64) {
-        if let Some(current) =
-            self.camera_displacements.iter().find(|row| row.world_key == world_key)
-            && displacement.x * displacement.x + displacement.y * displacement.y
-                <= current.displacement.x * current.displacement.x
-                    + current.displacement.y * current.displacement.y
-        {
-            return;
-        }
-        self.camera_displacements.retain(|row| row.world_key != world_key);
-        self.camera_displacements.push(NativeSecondaryCameraDisplacement {
-            displacement,
-            tick,
-            world_key: world_key.to_owned(),
-        });
+        record_camera_displacement(&mut self.camera_displacements, world_key, displacement, tick);
     }
 
     pub fn emit_event(&mut self, mut event: NativeSecondaryEventState) {
@@ -149,7 +142,11 @@ impl NativeSecondarySimulationState {
         actor.id = self.next_actor_id;
         self.next_actor_id += 1;
         let id = actor.id;
-        self.actors.push(actor);
+        if let Some(births) = &mut self.deferred_births {
+            births.push(actor);
+        } else {
+            self.actors.push(actor);
+        }
         id
     }
 
@@ -256,46 +253,40 @@ impl NativeSecondarySimulationState {
     /// Last Word continues its common Mindblast presentation after the run is over.
     pub fn step_mindblast_presentation(&mut self, tick: u64) {
         self.camera_displacements.clear();
-        let sources = std::mem::take(&mut self.actors);
-        for mut actor in sources {
+        let proposals = &mut self.camera_displacements;
+        let rng = &mut self.rng;
+        self.actors.retain_mut(|actor| {
             if !matches!(
                 actor.kind,
                 NativeSecondaryActorKind::MindblastBurst
                     | NativeSecondaryActorKind::MindblastShockwave
                     | NativeSecondaryActorKind::RescueShockwave
             ) {
-                self.actors.push(actor);
-                continue;
+                return true;
             }
-            let previous = actor.clone();
-            super::program::advance_actor(&mut actor);
+            let before = super::motion::NativeExpandingWave {
+                radius: actor.radius,
+                growth: actor.quantity,
+                scalar: actor.alpha,
+                life: actor.phase,
+                fade_threshold: actor.slow_factor,
+            };
+            super::program::advance_actor(actor);
             if actor.kind == NativeSecondaryActorKind::MindblastBurst {
-                if actor.age_ticks < actor.lifetime_ticks {
-                    self.actors.push(actor);
-                }
-                continue;
+                return actor.age_ticks < actor.lifetime_ticks;
             }
-            let wave = super::motion::step_native_expanding_wave(
-                super::motion::NativeExpandingWave {
-                    radius: previous.radius,
-                    growth: previous.quantity,
-                    scalar: previous.alpha,
-                    life: previous.phase,
-                    fade_threshold: previous.slow_factor,
-                },
-                &mut self.rng,
-            );
-            self.record_camera_displacement(&actor.world_key, wave.displacement, tick);
+            let wave = super::motion::step_native_expanding_wave(before, rng);
+            record_camera_displacement(proposals, &actor.world_key, wave.displacement, tick);
             if !wave.retain {
-                continue;
+                return false;
             }
             actor.alpha = wave.scalar;
             actor.phase = wave.life;
             actor.radius = wave.radius;
             actor.velocity = Vec2::ZERO;
             actor.scale = fround(1.0 + actor.age_ticks as f64 * 0.08);
-            self.actors.push(actor);
-        }
+            true
+        });
     }
 
     pub fn cooldown_rejuvenation(&mut self, player_id: &str) {
@@ -353,7 +344,7 @@ impl NativeSecondarySimulationState {
             return;
         }
         let damage = fround(input.damage / 200.0);
-        if let Some(existing) = self.actors.iter_mut().find(|actor| {
+        if let Some(mut existing) = self.actors.iter_mut().find(|actor| {
             actor.kind == NativeSecondaryActorKind::FireBurn
                 && actor.world_key == input.world_key
                 && actor.target_id == Some(input.target.id)
@@ -387,7 +378,7 @@ impl NativeSecondarySimulationState {
     }
 
     pub fn apply_ether_burn(&mut self, input: NativeSecondaryEtherBurnInput) {
-        if let Some(existing) = self.actors.iter_mut().find(|actor| {
+        if let Some(mut existing) = self.actors.iter_mut().find(|actor| {
             actor.kind == NativeSecondaryActorKind::EtherBurn
                 && actor.world_key == input.world_key
                 && actor.target_id == Some(input.target.id)
@@ -579,7 +570,7 @@ impl NativeSecondarySimulationState {
         }) else {
             return missing;
         };
-        let actor = self.actors[index].clone();
+        let actor = self.actors.get(index).expect("Golem index is live").snapshot();
         let Some(golem) = actor.golem else {
             return missing;
         };
@@ -606,8 +597,9 @@ impl NativeSecondarySimulationState {
             return result;
         }
         if let Some(remaining) = received.actor {
-            self.actors[index].golem = Some(remaining.golem);
-            self.actors[index].quantity = remaining.golem.current_health;
+            let mut actor = self.actors.get_mut(index).expect("Golem index is live");
+            *actor.golem_mut().expect("Golem retains its articulation") = remaining.golem;
+            actor.quantity = remaining.golem.current_health;
             return result;
         }
         let animation = crate::death_animations::create_native_golem_death_animation(
@@ -619,8 +611,8 @@ impl NativeSecondarySimulationState {
         let mut death = NativeSecondaryActorState::new(
             0,
             NativeSecondaryActorKind::GolemDeath,
-            actor.owner_id,
-            actor.world_key,
+            actor.owner_id.clone(),
+            actor.world_key.clone(),
             Some(45),
         );
         death.enhanced = enhanced_effects;
@@ -639,7 +631,7 @@ impl NativeSecondarySimulationState {
         }
         death.variant = i32::from(golem.iron);
         self.spawn_actor(death);
-        let death = self.actors.last().expect("Golem death presentation was spawned").clone();
+        let death = self.actors.last().expect("Golem death presentation was spawned").snapshot();
         for cue in [
             NativeSecondaryAudioCue::StoneBreak,
             NativeSecondaryAudioCue::FlameLashStart,
@@ -656,4 +648,25 @@ impl NativeSecondarySimulationState {
         }
         result
     }
+}
+
+fn record_camera_displacement(
+    proposals: &mut Vec<NativeSecondaryCameraDisplacement>,
+    world_key: &str,
+    displacement: Vec2,
+    tick: u64,
+) {
+    if let Some(current) = proposals.iter().find(|row| row.world_key == world_key)
+        && displacement.x * displacement.x + displacement.y * displacement.y
+            <= current.displacement.x * current.displacement.x
+                + current.displacement.y * current.displacement.y
+    {
+        return;
+    }
+    proposals.retain(|row| row.world_key != world_key);
+    proposals.push(NativeSecondaryCameraDisplacement {
+        displacement,
+        tick,
+        world_key: world_key.to_owned(),
+    });
 }

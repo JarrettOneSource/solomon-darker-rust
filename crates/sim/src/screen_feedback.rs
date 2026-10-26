@@ -18,8 +18,7 @@ use crate::secondary::presentation::draws::{
     pack_normalized_rgb, repeated_float_decay, repeated_float_multiply,
 };
 use crate::secondary::{
-    NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryEventState,
-    NativeSecondaryScreenFlashState,
+    NativeSecondaryActorKind, NativeSecondaryEventState, NativeSecondaryScreenFlashState,
 };
 use crate::spells::model::PrimarySpellEtherBlast;
 
@@ -86,7 +85,7 @@ pub fn present_native_secondary_screen_overlay(
 
 #[must_use]
 pub fn native_secondary_world_shake(
-    actors: &[NativeSecondaryActorState],
+    actors: impl IntoIterator<Item = impl crate::secondary::SecondaryActorRead>,
     world_key: &str,
     current: Vec2,
 ) -> Vec2 {

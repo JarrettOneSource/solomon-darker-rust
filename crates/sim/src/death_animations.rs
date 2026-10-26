@@ -90,6 +90,7 @@ pub struct NativeDeathFragment {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct NativeGolemDeathAnimation {
     pub fragments: Vec<Option<NativeDeathFragment>>,
     pub star_rotation_degrees: f64,

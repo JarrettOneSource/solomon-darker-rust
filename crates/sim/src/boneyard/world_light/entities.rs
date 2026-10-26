@@ -362,7 +362,7 @@ pub fn collect_boneyard_entity_lights(
     let secondary_actors: Vec<_> = environment
         .secondary_abilities
         .into_iter()
-        .flat_map(|secondary| &secondary.actors)
+        .flat_map(|secondary| secondary.actors.iter())
         .filter(|actor| actor.world_key == world_key)
         .collect();
     for actor in &secondary_actors {

@@ -161,7 +161,7 @@ fn current_source_status_contacts_and_private_electric_births() {
                 &mut World { targets },
                 Some(&mut order),
             );
-            let actual = json!({"actors":state.actors.iter().map(support::actor_snapshot).collect::<Vec<_>>(),
+            let actual = json!({"actors":state.actors.iter().map(|actor| support::actor_snapshot(&actor)).collect::<Vec<_>>(),
                 "damage":output.damage.iter().map(damage).collect::<Vec<_>>(),
                 "effects":state.target_effects.iter().map(support::effect_snapshot).collect::<Vec<_>>(),
                 "events":state.events.iter().map(support::event_snapshot).collect::<Vec<_>>(),

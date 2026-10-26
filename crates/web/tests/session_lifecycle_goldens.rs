@@ -52,7 +52,7 @@ fn snapshot(session: &GameSession) -> Value {
         "combatRng":player_snapshot::rng_snapshot(&session.combat_rng),
         "character":session_snapshot::character(&session.participants["local"]),
         "lighting":session_snapshot::lighting(&session.participants["local"].lighting),
-        "secondary":{"actors":secondary.actors.iter().map(secondary_snapshot::actor_snapshot).collect::<Vec<_>>(),
+        "secondary":{"actors":secondary.actors.iter().map(|actor| secondary_snapshot::actor_snapshot(&actor)).collect::<Vec<_>>(),
             "nextActorId":secondary.next_actor_id,"nextEventId":secondary.next_event_id,"players":players,"rng":player_snapshot::rng_snapshot(&secondary.rng)},
         "run":session_snapshot::run(&session.run),
         "order":{"nextRegistrationOrdinal":{"actor":session.painter_order.next_actor_ordinal,"transient":session.painter_order.next_transient_ordinal}},"world":world})

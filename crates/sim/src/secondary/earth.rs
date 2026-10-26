@@ -6,20 +6,20 @@ use super::program::*;
 use super::spawns;
 use super::step::StepEngine;
 use super::{
-    NativeSecondaryActorKind as Kind, NativeSecondaryActorState as Actor,
-    NativeSecondaryAudioCue as Cue, NativeSecondaryDamageKind as Damage,
-    NativeSecondaryEventKind as Event, NativeSecondaryHeadingMode,
-    NativeSecondaryTargetEffectPatch as Patch, NativeSecondaryTargetHeadingChange,
-    NativeSecondaryWorld,
+    NativeSecondaryActorKind as Kind, NativeSecondaryAudioCue as Cue,
+    NativeSecondaryDamageKind as Damage, NativeSecondaryEventKind as Event,
+    NativeSecondaryHeadingMode, NativeSecondaryTargetEffectPatch as Patch,
+    NativeSecondaryTargetHeadingChange, NativeSecondaryWorld,
 };
 use crate::Vec2;
 use crate::float;
 use crate::float::fround;
+use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 
 pub(super) fn step<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &Actor,
-    actor: &mut Actor,
+    source: &impl SecondaryActorRead,
+    actor: &mut impl SecondaryActorWrite,
     retain: &mut bool,
 ) {
     match actor.kind {
@@ -59,8 +59,8 @@ pub(super) fn step<W: NativeSecondaryWorld>(
 
 fn quake<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &Actor,
-    actor: &mut Actor,
+    source: &impl SecondaryActorRead,
+    actor: &mut impl SecondaryActorWrite,
 ) {
     let before = source.lifetime_ticks.saturating_sub(source.age_ticks);
     let after = before.saturating_sub(1);
@@ -154,8 +154,8 @@ fn quake<W: NativeSecondaryWorld>(
 
 fn debris<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &Actor,
-    actor: &mut Actor,
+    source: &impl SecondaryActorRead,
+    actor: &mut impl SecondaryActorWrite,
     retain: &mut bool,
 ) {
     let mut alpha = source.alpha;
@@ -210,14 +210,14 @@ fn debris<W: NativeSecondaryWorld>(
 
 fn golem<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &Actor,
-    actor: &mut Actor,
+    source: &impl SecondaryActorRead,
+    actor: &mut impl SecondaryActorWrite,
     retain: &mut bool,
 ) {
     let mut kernel = NativeGolemKernelActor {
         age_ticks: source.age_ticks,
         damage_minimum: source.damage,
-        golem: source.golem.expect("Golem actor retains its articulated state"),
+        golem: source.golem().copied().expect("Golem actor retains its articulated state"),
         id: source.id,
         owner_id: source.owner_id.clone(),
         position: source.position,
@@ -250,7 +250,7 @@ fn golem<W: NativeSecondaryWorld>(
     );
     actor.age_ticks = kernel.age_ticks;
     actor.frame = source.frame + 1.0;
-    actor.golem = Some(kernel.golem);
+    *actor.golem_mut().expect("Golem retains its articulation") = kernel.golem;
     actor.position = kernel.position;
     actor.rotation_radians = kernel.rotation_radians;
     actor.target_id = kernel.target_id;
@@ -326,8 +326,8 @@ fn golem<W: NativeSecondaryWorld>(
 
 fn assembly_debris<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &Actor,
-    actor: &mut Actor,
+    source: &impl SecondaryActorRead,
+    actor: &mut impl SecondaryActorWrite,
     retain: &mut bool,
 ) {
     use crate::spells::earth_debris::{
@@ -363,8 +363,8 @@ fn assembly_debris<W: NativeSecondaryWorld>(
 /// A target reached through body contact joins this same five-update area.
 fn golem_knockback<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &Actor,
-    actor: &mut Actor,
+    source: &impl SecondaryActorRead,
+    actor: &mut impl SecondaryActorWrite,
     retain: &mut bool,
 ) {
     use crate::knockback::{

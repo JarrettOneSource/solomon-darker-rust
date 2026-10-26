@@ -1,5 +1,5 @@
 //! One ordered secondary tick. Births wait until the next tick, and all families
-//! consume the same RNG stream in actor registration order, as in the Website.
+//! consume the same RNG stream in actor registration order.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -38,7 +38,7 @@ pub(super) struct StepEngine<'state, 'context, 'player, W> {
 impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
     pub fn candidates(
         &self,
-        actor: &NativeSecondaryActorState,
+        actor: &impl SecondaryActorRead,
         radius: f64,
     ) -> Vec<NativeSecondaryTarget> {
         let targets = self.world.targets(&actor.world_key, actor.position, radius);
@@ -93,7 +93,7 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
 
     pub fn merge(
         &mut self,
-        actor: &NativeSecondaryActorState,
+        actor: &impl SecondaryActorRead,
         target_id: usize,
         patch: NativeSecondaryTargetEffectPatch,
     ) {
@@ -107,7 +107,7 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
 
     pub fn damage(
         &mut self,
-        actor: &NativeSecondaryActorState,
+        actor: &impl SecondaryActorRead,
         target: &NativeSecondaryTarget,
         amount: f64,
         kind: NativeSecondaryDamageKind,
@@ -156,35 +156,35 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
 
     pub fn event(
         &mut self,
-        actor: &NativeSecondaryActorState,
+        actor: &impl SecondaryActorRead,
         cue: Option<NativeSecondaryAudioCue>,
         kind: NativeSecondaryEventKind,
     ) {
         self.state.emit_event(actor_event(actor, self.context.tick, kind, cue));
     }
 
-    fn advance(&mut self, source: &NativeSecondaryActorState) -> Option<NativeSecondaryActorState> {
-        if source.kind == NativeSecondaryActorKind::GolemDeath {
-            let mut actor = source.clone();
+    fn advance(&mut self, actor: &mut impl SecondaryActorWrite) -> bool {
+        if actor.kind == NativeSecondaryActorKind::GolemDeath {
             let animation =
-                actor.golem_death.as_mut().expect("Golem death retains its mutable fragments");
+                actor.golem_death_mut().expect("Golem death retains its mutable fragments");
             crate::death_animations::step_native_golem_death_animation(
                 animation,
                 self.context.tick,
                 &mut self.state.rng,
             );
             let retained_fragments = animation.fragments.iter().any(Option::is_some);
-            advance_actor(&mut actor);
-            return (actor.age_ticks < crate::death_animations::NATIVE_GOLEM_DEATH_STAR_TICKS
-                || retained_fragments)
-                .then_some(actor);
+            advance_actor(actor);
+            return actor.age_ticks < crate::death_animations::NATIVE_GOLEM_DEATH_STAR_TICKS
+                || retained_fragments;
         }
-        let owner = self.context.players.get(&source.owner_id)?;
-        if owner.world_key != source.world_key {
-            return None;
+        let Some(owner) = self.context.players.get(&actor.owner_id) else {
+            return false;
+        };
+        if owner.world_key != actor.world_key {
+            return false;
         }
-        let mut actor = source.clone();
-        advance_actor(&mut actor);
+        let source = actor.snapshot();
+        advance_actor(actor);
         let mut retain = actor.age_ticks < actor.lifetime_ticks;
         use NativeSecondaryActorKind::*;
         match actor.kind {
@@ -198,13 +198,13 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
             | EtherDrainCloud
             | EtherDrainDebris
             | EtherDrainCaptureFlare => {
-                super::cosmic::step(self, source, &mut actor, &mut retain);
+                super::cosmic::step(self, &source, actor, &mut retain);
             }
             MovingFire | FirePatch | Shockwave | MindblastShockwave | RescueShockwave
             | FreezeWave | FrostBurnFlare | RingFireFragment | FireBurn | FireBurnFlame
             | EtherBurn | EtherBurnFlare | StormCloud | AcidRain | StormDrop | AcidDrop
             | AcidSplash | Comet | CometTrail | CometDebris | StoneskinChip => {
-                super::elemental::step(self, source, &mut actor, &mut retain);
+                super::elemental::step(self, &source, actor, &mut retain);
             }
             Earthquake
             | EarthquakeSceneryWobble
@@ -214,21 +214,21 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
             | GolemAssemblyDebris
             | Golem
             | GolemKnockback => {
-                super::earth::step(self, source, &mut actor, &mut retain);
+                super::earth::step(self, &source, actor, &mut retain);
             }
             MagicCircle | MagicCirclePlayerFlash | MagicTrap | MagicTrapShimmer | ElectricBurn => {
-                super::fields::step(self, source, &mut actor, &mut retain);
+                super::fields::step(self, &source, actor, &mut retain);
             }
-            ElectricBurnFlare => super::electric_burn::step_flare(source, &mut actor, &mut retain),
+            ElectricBurnFlare => super::electric_burn::step_flare(&source, actor, &mut retain),
             PrismaticWave | PhaseBurst | IceBlast | StormStrike | TurnUndead
             | DampenedProjectile | DampenedSmoke | FlashResponseGrow | FlashResponseFade
             | ShieldBreak | TeleportBurst | ShieldExplosion | PlanewalkerMote => {
-                super::local_tick::step(self, source, &mut actor, &mut retain);
+                super::local_tick::step(self, &source, actor, &mut retain);
             }
             EtherFade | FreezeWaveVisual | RingFireExplosion | GolemDeath | MagicTrapBurst
             | ElectricBurnArc | DampenWave | MindblastBurst | CometImpact => {}
         }
-        retain.then_some(actor)
+        retain
     }
 }
 
@@ -255,7 +255,8 @@ impl NativeSecondarySimulationState {
             effect.step();
         }
         self.target_effects.retain(NativeSecondaryTargetEffectState::is_active);
-        let sources = std::mem::take(&mut self.actors);
+        let mut actors = std::mem::take(&mut self.actors);
+        self.deferred_births = Some(Vec::new());
         let mut engine = StepEngine {
             state: self,
             context,
@@ -269,8 +270,16 @@ impl NativeSecondarySimulationState {
             fire_burns: Vec::new(),
             electric_burns: Vec::new(),
         };
-        for source in &sources {
-            engine.sources.insert(source.id, source.clone());
+        for source in actors.iter() {
+            // Linked effects read their parent or scenery carrier before it advances.
+            // Other actors never participate in these cross-actor reads.
+            if matches!(
+                source.kind,
+                NativeSecondaryActorKind::Leviathan
+                    | NativeSecondaryActorKind::EarthquakeSceneryWobble
+            ) {
+                engine.sources.insert(source.id, source.snapshot());
+            }
             if source.kind == NativeSecondaryActorKind::LeviathanAppendage
                 && let Some(parent) = source.hit_target_ids.first()
             {
@@ -283,16 +292,12 @@ impl NativeSecondarySimulationState {
             }
         }
         super::elemental::step_status_pulses(&mut engine, &old_effects);
-        let mut retained = Vec::with_capacity(sources.len());
-        for source in &sources {
-            if let Some(actor) = engine.advance(source) {
-                retained.push(actor);
-            }
-        }
+        actors.retain_mut(|actor| engine.advance(actor));
         // New effects are born during the actor loop; none advances on its birth tick.
-        retained.append(&mut engine.state.actors);
-        engine.state.actors = retained;
-        for actor in &mut engine.state.actors {
+        actors
+            .extend(engine.state.deferred_births.take().expect("actor phase owns birth commands"));
+        engine.state.actors = actors;
+        for mut actor in engine.state.actors.iter_mut() {
             if let Some(phase) = engine.wobble_phases.get(&actor.id) {
                 actor.phase = *phase;
             }
@@ -305,11 +310,15 @@ impl NativeSecondarySimulationState {
         for request in std::mem::take(&mut engine.fire_burns) {
             engine.state.apply_fire_burn(NativeSecondaryFireBurnInput {
                 damage: request.damage,
-                owner_id: request.actor.owner_id,
-                rank: request.actor.rank,
-                skill_id: request.actor.skill_id.expect("fire contact retains its source skill"),
+                owner_id: request.actor.common.owner_id,
+                rank: request.actor.common.rank,
+                skill_id: request
+                    .actor
+                    .common
+                    .skill_id
+                    .expect("fire contact retains its source skill"),
                 target: request.target,
-                world_key: request.actor.world_key,
+                world_key: request.actor.common.world_key,
             });
         }
         for request in std::mem::take(&mut engine.electric_burns) {
@@ -332,7 +341,7 @@ fn apply_electric_burn(state: &mut NativeSecondarySimulationState, request: Burn
         return;
     }
     let damage = fround(request.damage / 100.0);
-    if let Some(actor) = state.actors.iter_mut().find(|actor| {
+    if let Some(mut actor) = state.actors.iter_mut().find(|actor| {
         actor.kind == NativeSecondaryActorKind::ElectricBurn
             && actor.world_key == request.actor.world_key
             && actor.target_id == Some(request.target.id)
@@ -343,10 +352,10 @@ fn apply_electric_burn(state: &mut NativeSecondarySimulationState, request: Burn
         actor.damage = damage;
         actor.phase = 0.0;
         actor.light_registration = Some(request.target.light_registration);
-        actor.owner_id = request.actor.owner_id;
+        actor.owner_id = request.actor.common.owner_id;
         actor.position = request.target.position;
-        actor.rank = request.actor.rank;
-        actor.skill_id = request.actor.skill_id;
+        actor.rank = request.actor.common.rank;
+        actor.skill_id = request.actor.common.skill_id;
         return;
     }
     let mut actor = actor(

@@ -9,6 +9,7 @@ publish.workspace = true
 persistence = ["dep:serde"]
 
 [dependencies]
+bevy_ecs = { version = "0.20.0", default-features = false, features = ["std"] }
 ryu-js = "1.0.3"
 serde = { workspace = true, optional = true, features = ["rc"] }
 

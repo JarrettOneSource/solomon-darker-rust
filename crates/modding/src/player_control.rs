@@ -2,6 +2,7 @@
 //! Entrance guidance reuses the canonical Source navigator; observations borrow
 //! real Session rows and never advance a player, enemy, RNG or clock.
 
+use solomon_sim::boneyard::loot::LootActorRead;
 use std::collections::BTreeMap;
 
 use solomon_sim::Vec2;
@@ -373,7 +374,7 @@ pub fn mod_player_control_observation(
                             ),
                             (
                                 "orb_kind",
-                                actor.orb_kind.map_or(LuaValue::Null, |kind| {
+                                actor.reward().orb_kind.map_or(LuaValue::Null, |kind| {
                                     LuaValue::String(
                                         match kind {
                                             NativeOrbKind::Health => "health",

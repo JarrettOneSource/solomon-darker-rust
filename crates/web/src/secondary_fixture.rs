@@ -11,6 +11,7 @@ use solomon_sim::boneyard::loot::{BoneyardGoodieState, BoneyardLootActor, Boneya
 use solomon_sim::enemies::puppet_hits::EnemyPuppetHit;
 use solomon_sim::hub::painter::hub_painter_order;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
+use solomon_sim::secondary::SecondaryActorRead;
 use solomon_sim::secondary::golem::{NativeGolemPhase, NativeSecondaryGolemState};
 use solomon_sim::secondary::{NativeSecondaryActorKind, NativeSecondaryActorState};
 use solomon_sim::spells::model::PrimarySpellTransientBase;
@@ -100,7 +101,7 @@ pub fn render_secondary_fixture(input: &str) -> Result<String, JsValue> {
         view.secondary
             .prepare(
                 &mut view.renderer,
-                &actors,
+                actors.iter().map(|actor| actor.view()),
                 input["worldKey"].as_str().unwrap(),
                 input["frame"].as_f64(),
                 None,
@@ -354,8 +355,8 @@ pub fn render_loot_fixture(input: &str) -> Result<String, JsValue> {
             [31.0 / 255.0, 31.0 / 255.0, 31.0 / 255.0, 1.0],
         );
         let mut store = BoneyardLootStore::new("fixture", &[]);
-        store.actors = actors;
-        store.goodies = goodies;
+        store.actors = actors.into_iter().collect();
+        store.goodies = goodies.into_iter().collect();
         if input["reset"].as_bool().unwrap() {
             view.loot.reset();
         }

@@ -64,9 +64,9 @@ fn snapshot(
         .actors
         .iter()
         .map(|actor| {
-            let mut value = support::actor_snapshot(actor);
-            if actor.kind == NativeSecondaryActorKind::EtherDrain || actor.ether_drain.is_some() {
-                value["etherDrain"] = serde_json::to_value(&actor.ether_drain).unwrap();
+            let mut value = support::actor_snapshot(&actor);
+            if actor.kind == NativeSecondaryActorKind::EtherDrain || actor.ether_drain().is_some() {
+                value["etherDrain"] = serde_json::to_value(actor.ether_drain()).unwrap();
             }
             value
         })

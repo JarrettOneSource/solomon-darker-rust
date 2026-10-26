@@ -346,7 +346,7 @@ pub fn resolve_boneyard_primary_contacts_for_players(
         }
     }
     if secondary.next_actor_id != previous_actor_id {
-        enroll_native_secondary_painter_owners(&mut secondary.actors, painters);
+        enroll_native_secondary_painter_owners(secondary.actors.iter_mut(), painters);
     }
     for effect in secondary_deaths
         .iter()

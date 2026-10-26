@@ -54,7 +54,7 @@ fn active_secondary_births_follow_current_global_quality_and_retained_owner_fall
             if frames.get(next_frame).is_none_or(|frame| frame["tick"].as_u64() != Some(tick)) {
                 continue;
             }
-            let actual = json!({"actors":state.actors.iter().map(support::actor_snapshot).collect::<Vec<_>>(),
+            let actual = json!({"actors":state.actors.iter().map(|actor| support::actor_snapshot(&actor)).collect::<Vec<_>>(),
                 "player":support::player_snapshot(&state.players["player"]),
                 "events":state.events.iter().map(support::event_snapshot).collect::<Vec<_>>(),
                 "rng":support::rng_snapshot(&state.rng),"nextActorId":state.next_actor_id,"nextEventId":state.next_event_id,

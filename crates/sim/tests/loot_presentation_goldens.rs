@@ -23,48 +23,54 @@ fn actor(value: &Value) -> BoneyardLootActor {
         item
     });
     BoneyardLootActor {
-        activation_delay_ticks: 0,
-        age_ticks: 0,
-        alpha: value["alpha"].as_f64().unwrap(),
-        amount: 0,
-        animation_phase: value["animationPhase"].as_f64().unwrap(),
-        bonus_kind: value["bonusKind"].as_u64().and_then(|id| NativeBonusKind::from_id(id as u32)),
-        bounce_height: value["bounceHeight"].as_f64().unwrap(),
-        bounce_velocity: 0.0,
-        frame_phase: value["framePhase"].as_f64().unwrap(),
-        id: value["id"].as_u64().unwrap() as usize,
-        item,
-        kind: match value["kind"].as_str().unwrap() {
-            "orb" => NativeLootDropKind::Orb,
-            "gold" => NativeLootDropKind::Gold,
-            "sack" => NativeLootDropKind::Sack,
-            "bonus" => NativeLootDropKind::Bonus,
-            kind => panic!("unknown loot kind {kind}"),
+        body: LootBody {
+            activation_delay_ticks: 0,
+            age_ticks: 0,
+            alpha: value["alpha"].as_f64().unwrap(),
+            animation_phase: value["animationPhase"].as_f64().unwrap(),
+            bounce_height: value["bounceHeight"].as_f64().unwrap(),
+            bounce_velocity: 0.0,
+            frame_phase: value["framePhase"].as_f64().unwrap(),
+            id: value["id"].as_u64().unwrap() as usize,
+            kind: match value["kind"].as_str().unwrap() {
+                "orb" => NativeLootDropKind::Orb,
+                "gold" => NativeLootDropKind::Gold,
+                "sack" => NativeLootDropKind::Sack,
+                "bonus" => NativeLootDropKind::Bonus,
+                kind => panic!("unknown loot kind {kind}"),
+            },
+            last_step_tick: None,
+            lifetime_ticks_remaining: None,
+            painter_registration: PainterRegistration {
+                manager_lane: WorldManagerLane::Actor,
+                registration_ordinal: value["painterRegistration"]["registrationOrdinal"]
+                    .as_u64()
+                    .unwrap() as usize,
+            },
+            position: point(&value["position"]),
+            rotation_deg: value["rotationDeg"].as_f64().unwrap(),
+            scatter_seed: value["scatterSeed"].as_u64().unwrap() as u32,
+            scatter_active: value["scatterActive"].as_bool().unwrap(),
+            scatter_progress: value["scatterProgress"].as_f64().unwrap(),
+            settled_sound_emitted: false,
+            spawn_tick: 0,
         },
-        last_step_tick: None,
-        lifetime_ticks_remaining: None,
-        native_type_id: 0,
-        orb_kind: Some(if value["orbKind"] == "health" {
-            NativeOrbKind::Health
-        } else {
-            NativeOrbKind::Mana
-        }),
-        orb_value: value["orbValue"].as_f64().unwrap(),
-        painter_registration: PainterRegistration {
-            manager_lane: WorldManagerLane::Actor,
-            registration_ordinal: value["painterRegistration"]["registrationOrdinal"]
+        reward: LootReward {
+            amount: 0,
+            bonus_kind: value["bonusKind"]
                 .as_u64()
-                .unwrap() as usize,
+                .and_then(|id| NativeBonusKind::from_id(id as u32)),
+            item,
+            native_type_id: 0,
+            orb_kind: Some(if value["orbKind"] == "health" {
+                NativeOrbKind::Health
+            } else {
+                NativeOrbKind::Mana
+            }),
+            orb_value: value["orbValue"].as_f64().unwrap(),
+            source: NativeLootDropSource::Script,
+            tier: value["tier"].as_u64().unwrap() as u32,
         },
-        position: point(&value["position"]),
-        rotation_deg: value["rotationDeg"].as_f64().unwrap(),
-        scatter_seed: value["scatterSeed"].as_u64().unwrap() as u32,
-        scatter_active: value["scatterActive"].as_bool().unwrap(),
-        scatter_progress: value["scatterProgress"].as_f64().unwrap(),
-        settled_sound_emitted: false,
-        source: NativeLootDropSource::Script,
-        spawn_tick: 0,
-        tier: value["tier"].as_u64().unwrap() as u32,
     }
 }
 

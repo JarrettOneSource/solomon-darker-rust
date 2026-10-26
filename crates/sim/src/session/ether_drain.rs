@@ -10,6 +10,7 @@ use crate::float::fround;
 use crate::loot::NativeLootDropKind;
 use crate::secondary::ether_drain::*;
 use crate::secondary::{NativeSecondaryActorKind as Kind, NativeSecondarySimulationState};
+use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 use crate::spells::boneyard::boneyard_native_secondary_targets;
 use crate::spells::model::PrimarySpellTransient;
 use crate::spells::weld::{NativeWeldHailChildActorState, NativeWeldWorldActor};
@@ -66,7 +67,7 @@ impl SessionEtherDrainSnapshot {
                 reference: NativeEtherDrainTargetRef::Player { id: id.clone() },
             });
         }
-        for actor in &world.loot.actors {
+        for actor in world.loot.actors.iter() {
             if !matches!(actor.kind, NativeLootDropKind::Gold | NativeLootDropKind::Sack) {
                 continue;
             }
@@ -81,8 +82,8 @@ impl SessionEtherDrainSnapshot {
                 },
             });
         }
-        for actor in &session.secondary.actors {
-            if actor.kind == Kind::Golem && actor.world_key == key && actor.golem.is_some() {
+        for actor in session.secondary.actors.iter() {
+            if actor.kind == Kind::Golem && actor.world_key == key && actor.golem().is_some() {
                 targets.push(NativeEtherDrainTarget {
                     activation_delay_ticks: 0,
                     force_factor: 0.25,
@@ -154,12 +155,12 @@ fn capture_world_animations(
             _ => {}
         }
     }
-    for actor in &secondary.actors {
+    for actor in secondary.actors.iter() {
         if actor.world_key != key {
             continue;
         }
         if actor.kind == Kind::GolemDeath
-            && let Some(death) = &actor.golem_death
+            && let Some(death) = actor.golem_death()
         {
             for (index, fragment) in death.fragments.iter().enumerate() {
                 if let Some(fragment) = fragment {
@@ -222,12 +223,12 @@ impl GameSession {
                     })
                 }
                 NativeEtherDrainWorldAnimationRef::GolemFragment { id, index } => {
-                    if let Some(death) = self
+                    if let Some(mut actor) = self
                         .secondary
                         .actors
                         .iter_mut()
                         .find(|actor| actor.id == id && actor.kind == Kind::GolemDeath)
-                        .and_then(|actor| actor.golem_death.as_mut())
+                        && let Some(death) = actor.golem_death_mut()
                         && let Some(fragment) = death.fragments.get_mut(index)
                     {
                         if contact.consume {
