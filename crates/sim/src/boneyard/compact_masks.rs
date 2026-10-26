@@ -94,10 +94,10 @@ impl NativeCompactGroundSurface {
     }
 
     #[must_use]
-    pub fn contains(
+    pub fn contains<'a>(
         &self,
         point: Vec2,
-        remains: &[SpiderRemains],
+        remains: impl IntoIterator<Item = &'a SpiderRemains>,
         record_size: &dyn Fn(usize) -> Vec2,
     ) -> bool {
         let point = stored_point(point);
@@ -274,10 +274,10 @@ impl NativeCompactMasks {
 
     /// Record dimensions come from the already-loaded DeadHawg stock atlas.
     #[must_use]
-    pub fn plan(
+    pub fn plan<'a>(
         &self,
         players: &[Vec2],
-        remains: &[SpiderRemains],
+        remains: impl IntoIterator<Item = &'a SpiderRemains>,
         world_bounds: BoneyardBounds,
         presentation_frame: f64,
         record_size: &dyn Fn(usize) -> Vec2,

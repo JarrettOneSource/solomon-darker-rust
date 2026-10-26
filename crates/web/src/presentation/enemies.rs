@@ -255,7 +255,9 @@ pub(super) fn interpolate(
             effect.state.scale = lerp(first.state.scale, second.state.scale, blend);
             effect
         },
-    );
+    )
+    .into_iter()
+    .collect();
     for effect in &output.projectile_effects {
         let id = effect.state.id;
         let sample = match (
@@ -550,13 +552,13 @@ fn interpolate_maggot(
     sample
 }
 
-fn merge_pulses(
-    older: &[MageLightningPulse],
-    newer: &[MageLightningPulse],
+fn merge_pulses<'a>(
+    older: impl IntoIterator<Item = &'a MageLightningPulse>,
+    newer: impl IntoIterator<Item = &'a MageLightningPulse>,
     tick: f64,
-) -> Vec<MageLightningPulse> {
+) -> solomon_sim::ComponentEntities<MageLightningPulse> {
     let mut pulses = BTreeMap::new();
-    for pulse in older.iter().chain(newer) {
+    for pulse in older.into_iter().chain(newer) {
         if pulse.tick as f64 > tick || tick - pulse.tick as f64 >= MAGE_LIGHTNING_MAX_PULSE_AGES {
             continue;
         }
@@ -564,7 +566,7 @@ fn merge_pulses(
     }
     let mut pulses: Vec<_> = pulses.into_values().collect();
     pulses.sort_by_key(|pulse| (pulse.tick, pulse.id));
-    pulses
+    pulses.into_iter().collect()
 }
 
 fn interpolate_spiders(
@@ -582,7 +584,7 @@ fn interpolate_spiders(
     } else {
         let by_id: BTreeMap<_, _> = newer.silks.iter().map(|silk| (silk.id, silk)).collect();
         output.silks = older.silks.clone();
-        for silk in &mut output.silks {
+        for silk in output.silks.iter_mut() {
             if let Some(second) = by_id.get(&silk.id) {
                 let first = &mut silk.state;
                 first.phase = lerp(first.phase, second.state.phase, blend);
@@ -596,7 +598,7 @@ fn interpolate_spiders(
         let by_id: BTreeMap<_, _> =
             newer.silk_fragments.iter().map(|fragment| (fragment.id, fragment)).collect();
         output.silk_fragments = older.silk_fragments.clone();
-        for fragment in &mut output.silk_fragments {
+        for fragment in output.silk_fragments.iter_mut() {
             if let Some(second) = by_id.get(&fragment.id) {
                 fragment.state.start = lerp_vec(fragment.state.start, second.state.start, blend);
                 fragment.state.middle = lerp_vec(fragment.state.middle, second.state.middle, blend);
@@ -607,7 +609,7 @@ fn interpolate_spiders(
         let by_id: BTreeMap<_, _> =
             newer.spider_remains.iter().map(|remains| (remains.id, remains)).collect();
         output.spider_remains = older.spider_remains.clone();
-        for remains in &mut output.spider_remains {
+        for remains in output.spider_remains.iter_mut() {
             if let Some(second) = by_id.get(&remains.id) {
                 remains.state.life = lerp(remains.state.life, second.state.life, blend);
                 remains.state.position =

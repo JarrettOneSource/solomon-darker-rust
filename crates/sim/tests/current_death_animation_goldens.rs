@@ -103,7 +103,7 @@ fn current_retained_death_fragments_and_weapons_match_the_source_through_groundi
     }
     for case in goldens.weapons {
         let mut rng = NativeRng::new(case.seed);
-        let mut actors = vec![create_native_death_weapon_actor(
+        let mut actors = [create_native_death_weapon_actor(
             NativeDeathWeaponBirth {
                 death_epoch: 4,
                 heading_index: case.heading_index,
@@ -118,7 +118,9 @@ fn current_retained_death_fragments_and_weapons_match_the_source_through_groundi
                 weapon: PlayerWeaponAppearance { kind: NativePlayerWeaponKind::Staff, selector: 2 },
             },
             &mut rng,
-        )];
+        )]
+        .into_iter()
+        .collect::<solomon_sim::ComponentEntities<_>>();
         let mut tick = 10;
         for frame in case.frames {
             while tick < frame.tick {

@@ -2925,7 +2925,7 @@ impl Game {
                     ),
                     session.ticks,
                     &|_| 1.0,
-                    &[],
+                    &solomon_sim::ComponentEntities::default(),
                     clocks,
                     session.enhanced_effects,
                     Some(solomon_sim::spells::weld::NativeFlameLashBounds {

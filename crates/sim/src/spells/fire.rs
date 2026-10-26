@@ -235,11 +235,12 @@ pub fn spawn_native_fire_patch(
     create_native_fire_patch(options, phase, sign)
 }
 
+/// Returns retention and this tick's contact; a retiring patch can still deal damage.
 #[must_use]
 pub fn step_native_fire_patch(
-    mut patch: PrimarySpellFirePatch,
+    patch: &mut PrimarySpellFirePatch,
     global_tick: u64,
-) -> (Option<PrimarySpellFirePatch>, Option<FireRadialContact>) {
+) -> (bool, Option<FireRadialContact>) {
     patch.atlas_phase = positive_modulo(fround(patch.atlas_phase + patch.atlas_phase_step), 32.0);
     patch.life = fround(patch.life - 0.01_f32 as f64);
     patch.fade_alpha = fround(patch.fade_alpha + 0.05_f32 as f64).min(1.0);
@@ -258,7 +259,7 @@ pub fn step_native_fire_patch(
     };
     // The terminal native tick still publishes its contact before the patch retires.
     if patch.life <= 0.0 {
-        return (None, contact);
+        return (false, contact);
     }
     patch.position = Vec2::new(
         fround(patch.position.x + patch.velocity.x),
@@ -269,7 +270,7 @@ pub fn step_native_fire_patch(
         fround(patch.velocity.y * patch.velocity_multiplier.y),
     );
     patch.common.age_ticks += 1;
-    (Some(patch), contact)
+    (true, contact)
 }
 
 /// Native Badguy → Imp → GoodImp constructor order. Discarded draws remain authoritative.

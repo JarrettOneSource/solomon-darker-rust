@@ -207,7 +207,12 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
             let expected_tick = frame["tick"].as_u64().unwrap();
             while tick < expected_tick {
                 tick += 1;
-                (patch, contact) = step_native_fire_patch(patch.take().unwrap(), tick);
+                let (retained, next_contact) =
+                    step_native_fire_patch(patch.as_mut().unwrap(), tick);
+                contact = next_contact;
+                if !retained {
+                    patch = None;
+                }
             }
             compare(
                 &patch.as_ref().map(patch_row).unwrap_or(Value::Null),

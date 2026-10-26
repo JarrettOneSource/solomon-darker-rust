@@ -571,7 +571,7 @@ fn replay_contacts(fixture: &str) {
             )
             .state;
             for _ in 0..20 {
-                state = step_native_silk(state).unwrap();
+                assert!(step_native_silk(&mut state));
             }
             state.force_accumulator = 0.9;
             enemies.silks.push(EnemySilkActor {

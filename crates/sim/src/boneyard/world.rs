@@ -129,7 +129,7 @@ pub struct BoneyardWorld {
     /// that cannot be reconstructed from one cleanup rectangle. `None` keeps all targets.
     pub scenery_target_retention: Option<Arc<targets::BoneyardSceneryTargetRetention>>,
     pub enemies: EnemyWorld,
-    pub death_weapons: Vec<crate::death_animations::NativeDeathWeaponActor>,
+    pub death_weapons: crate::ComponentEntities<crate::death_animations::NativeDeathWeaponActor>,
     pub next_death_weapon_id: u64,
     pub loot: BoneyardLootStore,
     pub enemy_world_feedback: NativeEnemyWorldFeedback,
@@ -166,7 +166,7 @@ pub struct BoneyardCheckpoint {
     #[cfg_attr(feature = "persistence", serde(default, skip_serializing_if = "Option::is_none"))]
     pub scenery_target_retention: Option<Arc<targets::BoneyardSceneryTargetRetention>>,
     pub enemies: EnemyWorld,
-    pub death_weapons: Vec<crate::death_animations::NativeDeathWeaponActor>,
+    pub death_weapons: crate::ComponentEntities<crate::death_animations::NativeDeathWeaponActor>,
     pub next_death_weapon_id: u64,
     pub loot: BoneyardLootStore,
     pub enemy_world_feedback: NativeEnemyWorldFeedback,
@@ -238,7 +238,7 @@ impl BoneyardWorld {
             scenery_retained_bounds: None,
             scenery_target_retention: None,
             enemies,
-            death_weapons: Vec::new(),
+            death_weapons: crate::ComponentEntities::default(),
             next_death_weapon_id: 1,
             loot,
             enemy_world_feedback: NativeEnemyWorldFeedback::default(),

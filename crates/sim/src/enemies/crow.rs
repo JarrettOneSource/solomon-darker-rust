@@ -18,7 +18,7 @@ pub struct NativeCrowTarget<'a> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NativeCrowStep {
-    pub crow: Option<CrowState>,
+    pub retained: bool,
     pub parent_cooldown_ticks: Option<u64>,
     pub return_pitch: Option<f64>,
     pub struck_target_id: Option<String>,
@@ -56,7 +56,7 @@ pub fn create_native_crow(id: usize, rng: &mut NativeRng) -> CrowState {
 
 #[must_use]
 pub fn step_native_crow(
-    mut crow: CrowState,
+    crow: &mut CrowState,
     rng: &mut NativeRng,
     parent_position: Option<Vec2>,
     may_attack: bool,
@@ -69,37 +69,37 @@ pub fn step_native_crow(
     let mut struck_target_id = None;
     if let Some(parent) = parent_position {
         if crow.phase == CrowPhase::Orbit {
-            step_orbit(&mut crow, parent);
+            step_orbit(crow, parent);
             if may_attack && crow.speed >= crow.maximum_speed && crow.age.is_multiple_of(5) {
-                parent_cooldown_ticks = acquire_dive_target(&mut crow, rng, targets);
+                parent_cooldown_ticks = acquire_dive_target(crow, rng, targets);
             }
             crow.speed = crow.maximum_speed.min(fround(crow.speed + 0.025_000_000_372_529_03));
-            step_orbit_wings(&mut crow, rng);
+            step_orbit_wings(crow, rng);
         }
         if crow.phase == CrowPhase::Dive {
-            step_dive(&mut crow, rng, &mut return_pitch, &mut struck_target_id);
+            step_dive(crow, rng, &mut return_pitch, &mut struck_target_id);
         }
     } else {
         if crow.position.is_none() {
             return NativeCrowStep {
-                crow: None,
+                retained: false,
                 parent_cooldown_ticks,
                 return_pitch,
                 struck_target_id,
             };
         }
-        step_detached_crow(&mut crow);
+        step_detached_crow(crow);
         let position = crow.position.expect("detached crow has a root");
         if !is_visible(Vec2::new(position.x, position.y - crow.height)) {
             return NativeCrowStep {
-                crow: None,
+                retained: false,
                 parent_cooldown_ticks,
                 return_pitch,
                 struck_target_id,
             };
         }
     }
-    NativeCrowStep { crow: Some(crow), parent_cooldown_ticks, return_pitch, struck_target_id }
+    NativeCrowStep { retained: true, parent_cooldown_ticks, return_pitch, struck_target_id }
 }
 
 fn step_orbit(crow: &mut CrowState, parent: Vec2) {

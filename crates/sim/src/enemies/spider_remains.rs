@@ -27,6 +27,7 @@ pub struct DeadSpiderState {
 }
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct SpiderRemains {
     pub id: usize,
     pub spawn_tick: u64,
@@ -45,10 +46,7 @@ pub fn create_native_dead_spider(position: Vec2, heading: f64) -> DeadSpiderStat
         decal: None,
     }
 }
-pub fn step_native_dead_spider(
-    mut source: DeadSpiderState,
-    rng: &mut NativeRng,
-) -> Option<DeadSpiderState> {
+pub fn step_native_dead_spider(source: &mut DeadSpiderState, rng: &mut NativeRng) -> bool {
     let direction = direction_from_heading(source.heading_deg);
     source.position = Vec2::new(
         fround(source.position.x - direction.x * source.slide_speed.x),
@@ -86,13 +84,13 @@ pub fn step_native_dead_spider(
     }
     source.life = fround(source.life - fround(0.01));
     if source.life <= 0.0 {
-        return None;
+        return false;
     }
     source.slide_speed = Vec2::new(
         fround(source.slide_speed.x * fround(0.95)),
         fround(source.slide_speed.y * fround(0.95)),
     );
-    Some(source)
+    true
 }
 
 #[must_use]
@@ -117,15 +115,7 @@ impl EnemyWorld {
         self.next_death_effect_id += 1;
     }
     pub fn step_spider_remains(&mut self) {
-        self.spider_remains.retain_mut(|actor| {
-            if let Some(state) =
-                step_native_dead_spider(actor.state.clone(), &mut self.steering_rng)
-            {
-                actor.state = state;
-                true
-            } else {
-                false
-            }
-        });
+        self.spider_remains
+            .retain_mut(|actor| step_native_dead_spider(&mut actor.state, &mut self.steering_rng));
     }
 }

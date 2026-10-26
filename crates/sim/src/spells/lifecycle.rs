@@ -83,12 +83,12 @@ impl SpellState {
                         );
                     }
                 }
-                PrimarySpellTransient::FirePatch(patch) => {
-                    let (patch, contact) = step_native_fire_patch(patch, context.tick);
+                PrimarySpellTransient::FirePatch(mut patch) => {
+                    let (retained, contact) = step_native_fire_patch(&mut patch, context.tick);
                     if let Some(contact) = contact {
                         result.fire_actor_contacts.push(FireActorContact::Patch(contact));
                     }
-                    if let Some(patch) = patch {
+                    if retained {
                         self.transients.push(PrimarySpellTransient::FirePatch(patch));
                     }
                 }

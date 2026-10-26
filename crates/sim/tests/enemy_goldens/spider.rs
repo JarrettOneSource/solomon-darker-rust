@@ -151,8 +151,8 @@ fn spider_movement_silk_splines_force_fragments_and_webbed_status_match_the_webs
         let mut state = Some(created.state);
         let mut samples = case["samples"].as_array().unwrap().iter().peekable();
         for step in 0..=1800 {
-            if step > 0 {
-                state = state.and_then(step_native_silk);
+            if step > 0 && state.as_mut().is_some_and(|state| !step_native_silk(state)) {
+                state = None;
             }
             if let Some(expected) =
                 samples.peek().filter(|sample| sample["step"].as_u64() == Some(step))
@@ -350,8 +350,10 @@ fn spider_movement_silk_splines_force_fragments_and_webbed_status_match_the_webs
         let mut rng = solomon_sim::NativeRng::new(731);
         let mut samples = case["samples"].as_array().unwrap().iter().peekable();
         for step in 0..=2100 {
-            if step > 0 {
-                state = state.and_then(|state| step_native_dead_spider(state, &mut rng));
+            if step > 0
+                && state.as_mut().is_some_and(|state| !step_native_dead_spider(state, &mut rng))
+            {
+                state = None;
             }
             if let Some(sample) =
                 samples.peek().filter(|sample| sample["step"].as_u64() == Some(step))

@@ -20,6 +20,7 @@ pub const NATIVE_HEARTMONGER_BLIND_CHANCES: [f64; 5] = [0.0, 5.0, 10.0, 30.0, 10
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct DetachedCrow {
     pub flight: CrowState,
     pub owner_actor_id: usize,
@@ -84,8 +85,7 @@ pub fn step_native_heartmonger(
     }
     let mut cooldown =
         if context.admitted { brain.crow_cooldown_ticks.saturating_sub(1) } else { 100 };
-    let mut crows = Vec::with_capacity(brain.crows.len());
-    for crow in std::mem::take(&mut brain.crows) {
+    brain.crows.retain_mut(|crow| {
         let flight = step_native_crow(
             crow,
             rng,
@@ -101,31 +101,20 @@ pub fn step_native_heartmonger(
             step.struck_target_ids.push(target_id);
             step.sounds.push(NativeHeartmongerSound {
                 pitch: 1.0,
-                position: flight
-                    .crow
-                    .as_ref()
-                    .and_then(|crow| crow.position)
-                    .expect("a crow completing its dive has a root"),
+                position: crow.position.expect("a crow completing its dive has a root"),
                 sound: EnemySound::Crow1,
             });
         }
         if let Some(pitch) = flight.return_pitch {
             step.sounds.push(NativeHeartmongerSound {
                 pitch,
-                position: flight
-                    .crow
-                    .as_ref()
-                    .and_then(|crow| crow.position)
-                    .expect("a returning crow has a root"),
+                position: crow.position.expect("a returning crow has a root"),
                 sound: EnemySound::Wings,
             });
         }
-        if let Some(crow) = flight.crow {
-            crows.push(crow);
-        }
-    }
+        flight.retained
+    });
     brain.activated |= context.admitted && context.light_intensity > 0.400_000_005_960_464_5;
-    brain.crows = crows;
     brain.crow_cooldown_ticks = cooldown;
     step
 }
@@ -386,21 +375,22 @@ impl EnemyWorld {
     }
 
     pub fn step_detached_crows(&mut self, context: &EnemyStepContext<'_>) {
-        for source in std::mem::take(&mut self.detached_crows) {
+        self.detached_crows.retain_mut(|source| {
             let step = step_native_crow(
-                source.flight,
+                &mut source.flight,
                 &mut self.steering_rng,
                 None,
                 false,
                 &[],
                 context.projected_point_visible.unwrap_or(&|_| true),
             );
-            if let Some(mut flight) = step.crow {
+            if step.retained {
+                let flight = &mut source.flight;
                 let position = flight.position.expect("a surviving detached crow has a root");
                 flight.light_intensity =
                     context.native_visibility.map_or(1.0, |query| query(position).intensity);
-                self.detached_crows.push(DetachedCrow { flight, ..source });
             }
-        }
+            step.retained
+        });
     }
 }

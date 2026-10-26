@@ -291,17 +291,17 @@ fn project_boss_spells(
 }
 
 fn project_puppet_hits(
-    older: &[EnemyPuppetHit],
-    newer: &[EnemyPuppetHit],
+    older: &solomon_sim::ComponentEntities<EnemyPuppetHit>,
+    newer: &solomon_sim::ComponentEntities<EnemyPuppetHit>,
     blend: f64,
     tick: f64,
     clocks: &mut PresentationClocks,
-) -> Vec<EnemyPuppetHit> {
+) -> solomon_sim::ComponentEntities<EnemyPuppetHit> {
     clocks.puppet_hits.clear();
     clocks.puppet_hit_timers.clear();
     let mut previous: BTreeMap<_, _> =
         older.iter().map(|hit| (hit.target_id.as_str(), hit)).collect();
-    let mut output = Vec::new();
+    let mut output = solomon_sim::ComponentEntities::default();
     for next in newer {
         let before = previous.remove(next.target_id.as_str());
         if next.hit_tick as f64 > tick {

@@ -296,17 +296,17 @@ impl EnemyWorld {
         });
     }
     pub fn step_silks(&mut self, context: &EnemyStepContext<'_>, order: &mut WorldPainterOrder) {
-        let actors = std::mem::take(&mut self.silks);
-        for actor in actors {
+        let mut actors = std::mem::take(&mut self.silks);
+        actors.retain_mut(|actor| {
             if actor.spawn_tick == context.tick {
-                self.silks.push(actor);
-                continue;
+                return true;
             }
             let ended = actor.state.ended;
             let previous = actor.state.position;
-            let Some(state) = step_native_silk(actor.state) else {
-                continue;
-            };
+            if !step_native_silk(&mut actor.state) {
+                return false;
+            }
+            let state = &mut actor.state;
             let mut hit = false;
             if !ended && !state.age_ticks.is_multiple_of(4) {
                 for player in context.players {
@@ -354,13 +354,11 @@ impl EnemyWorld {
                     binding = self.next_native_cell_binding_order;
                     self.next_native_cell_binding_order += 1;
                 }
-                self.silks.push(EnemySilkActor {
-                    state,
-                    native_cell_binding_order: binding,
-                    ..actor
-                });
+                actor.native_cell_binding_order = binding;
             }
-        }
+            !hit
+        });
+        self.silks = actors;
     }
 }
 

@@ -305,7 +305,7 @@ pub fn step_demon_skull_spell(
             Some(spell)
         }
         BossSpellKind::GreenFire { fire, .. } => {
-            let (patch, radial) = step_native_fire_patch((**fire).clone(), context.tick);
+            let (retained, radial) = step_native_fire_patch(fire, context.tick);
             if let Some(radial) = radial {
                 for player in context.players {
                     if target_eligible(player)
@@ -329,9 +329,10 @@ pub fn step_demon_skull_spell(
                     }
                 }
             }
-            let patch = patch?;
-            spell.owner.position = patch.position;
-            **fire = patch;
+            if !retained {
+                return None;
+            }
+            spell.owner.position = fire.position;
             spell.owner.age_ticks = age;
             Some(spell)
         }

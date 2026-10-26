@@ -64,7 +64,7 @@ impl LootView {
         &mut self,
         store: &BoneyardLootStore,
         tick: f64,
-        hits: &[EnemyPuppetHit],
+        hits: &solomon_sim::ComponentEntities<EnemyPuppetHit>,
         hit_alphas: Option<&BTreeMap<String, f64>>,
         complex_lighting: bool,
         mod_catalog: &[ModConsumableCatalogEntry],

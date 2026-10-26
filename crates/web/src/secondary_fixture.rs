@@ -339,8 +339,9 @@ pub fn render_loot_fixture(input: &str) -> Result<String, JsValue> {
         .map_err(|error| JsValue::from_str(&error.to_string()))?;
     let goodies: Vec<BoneyardGoodieState> = serde_json::from_value(input["goodies"].clone())
         .map_err(|error| JsValue::from_str(&error.to_string()))?;
-    let hits: Vec<EnemyPuppetHit> = serde_json::from_value(input["hits"].clone())
-        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+    let hits: solomon_sim::ComponentEntities<EnemyPuppetHit> =
+        serde_json::from_value(input["hits"].clone())
+            .map_err(|error| JsValue::from_str(&error.to_string()))?;
     FIXTURE.with(|fixture| {
         let mut fixture = fixture.borrow_mut();
         let view = fixture.as_mut().expect("secondary_fixture_init completes before rendering");
@@ -397,10 +398,11 @@ pub fn render_harden_fixture(input: &str) -> Result<String, JsValue> {
     let spells: solomon_sim::spells::model::SpellState =
         serde_json::from_value(input["spells"].clone())
             .map_err(|error| JsValue::from_str(&error.to_string()))?;
-    let puppet_hits: Vec<EnemyPuppetHit> = match input.get("puppetHits") {
+    let puppet_hits: solomon_sim::ComponentEntities<EnemyPuppetHit> = match input.get("puppetHits")
+    {
         Some(rows) => serde_json::from_value(rows.clone())
             .map_err(|error| JsValue::from_str(&error.to_string()))?,
-        None => Vec::new(),
+        None => solomon_sim::ComponentEntities::default(),
     };
     FIXTURE.with(|fixture| {
         let mut fixture = fixture.borrow_mut();

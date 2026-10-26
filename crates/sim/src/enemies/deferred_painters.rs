@@ -88,7 +88,7 @@ impl EnemyWorld {
                 resolve(registration);
             }
         }
-        for effect in &mut self.projectile_effects {
+        for effect in self.projectile_effects.iter_mut() {
             resolve(&mut effect.state.painter_registration);
             if let Some(registration) = &mut effect.state.light_registration {
                 resolve(registration);
@@ -104,7 +104,7 @@ impl EnemyWorld {
                 }
             }
         }
-        for silk in &mut self.silks {
+        for silk in self.silks.iter_mut() {
             resolve(&mut silk.painter_registration);
         }
         for event in &mut self.events {
@@ -120,7 +120,7 @@ impl EnemyWorld {
                 resolve(registration);
             }
         }
-        for pulse in &mut self.mage_lightning_pulses {
+        for pulse in self.mage_lightning_pulses.iter_mut() {
             resolve(&mut pulse.light_registration);
             for registration in &mut pulse.painter_registrations {
                 resolve(registration);

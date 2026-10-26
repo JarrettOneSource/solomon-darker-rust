@@ -30,6 +30,7 @@ pub struct NativeSilkCreation {
 }
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[derive(bevy_ecs::component::Component)]
 pub struct EnemySilkActor {
     pub native_registration_order: usize,
     pub native_cell_binding_order: usize,
@@ -108,10 +109,10 @@ pub fn create_native_silk(
     }
 }
 
-pub fn step_native_silk(mut state: NativeSilkState) -> Option<NativeSilkState> {
+pub fn step_native_silk(state: &mut NativeSilkState) -> bool {
     state.age_ticks += 1;
     if !state.ended && state.age_ticks.is_multiple_of(4) {
-        return Some(state);
+        return true;
     }
     state.height = fround(state.height * fround(if state.ended { 0.98 } else { 0.995 }));
     if !state.ended {
@@ -125,7 +126,7 @@ pub fn step_native_silk(mut state: NativeSilkState) -> Option<NativeSilkState> {
             state.alpha = fround(state.alpha - fround(0.01));
         }
         if state.alpha <= 0.0 {
-            return None;
+            return false;
         }
         let damping = fround(if state.height <= 1.0 { 0.98 } else { 1.01 });
         state.drift_velocity = Vec2::new(
@@ -140,5 +141,5 @@ pub fn step_native_silk(mut state: NativeSilkState) -> Option<NativeSilkState> {
     if state.phase > state.wave.extent / 3.0 {
         state.wave_scale = fround(state.wave_scale * fround(0.995));
     }
-    Some(state)
+    true
 }

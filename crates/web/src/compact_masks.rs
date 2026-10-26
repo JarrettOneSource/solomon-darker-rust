@@ -80,7 +80,7 @@ impl CompactMaskView {
     pub fn special_surface_at(
         &self,
         position: Vec2,
-        remains: &[SpiderRemains],
+        remains: &solomon_sim::ComponentEntities<SpiderRemains>,
         spells: &SpellView,
     ) -> bool {
         self.surface.contains(position, remains, &|entry| {
@@ -98,7 +98,7 @@ impl CompactMaskView {
         renderer: &mut Renderer,
         spells: &SpellView,
         players: &[CompactMaskPlayer<'_>],
-        remains: &[SpiderRemains],
+        remains: &solomon_sim::ComponentEntities<SpiderRemains>,
         world_bounds: BoneyardBounds,
         presentation_frame: f64,
     ) -> Result<(), String> {

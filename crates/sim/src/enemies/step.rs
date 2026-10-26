@@ -239,16 +239,16 @@ impl EnemyWorld {
                 actor.hit_feedback.tick = tick;
             }
         }
-        for hit in &mut self.puppet_hits {
+        for hit in self.puppet_hits.iter_mut() {
             hit.feedback.tick = tick;
         }
-        for knockback in &mut self.projectile_knockbacks {
+        for knockback in self.projectile_knockbacks.iter_mut() {
             knockback.last_step_tick = tick;
         }
         for projectile in &mut self.projectiles {
             projectile.state_mut().last_step_tick = tick;
         }
-        for effect in &mut self.projectile_effects {
+        for effect in self.projectile_effects.iter_mut() {
             effect.state.last_step_tick = tick;
         }
     }

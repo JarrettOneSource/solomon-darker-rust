@@ -233,7 +233,7 @@ pub struct BoneyardFrame<'a> {
     pub presentation_frame: u64,
     pub presentation_tick: f64,
     pub stopped_world_tick: f64,
-    pub puppet_hits: &'a [EnemyPuppetHit],
+    pub puppet_hits: &'a solomon_sim::ComponentEntities<EnemyPuppetHit>,
     pub clocks: Option<&'a PresentationClocks>,
     pub tree_wobbles: &'a BTreeMap<String, f64>,
     pub cleanup_bounds: Option<BoneyardBounds>,
