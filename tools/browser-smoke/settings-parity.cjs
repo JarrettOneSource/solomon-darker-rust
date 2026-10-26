@@ -55,7 +55,8 @@ async function focusedControl(page, id) {
     await gpu.setSlider(page, 'settings-range:music', 61);
     await gpu.value(page, 'settings-range:music', '61');
     checks.push('native centered panel and actual keyboard slider');
-    await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'settings-root.png')});
+    // Cold captures on the Windows software renderer can take about a minute.
+    await page.screenshot({timeout:120000,path: path.join(process.env.OUT || '/tmp', 'settings-root.png')});
     await gpu.click(page, 'settings-page:cloud');
     await gpu.value(page, 'settings-toggle:online', 'true');
     await gpu.click(page, 'settings-toggle:global-chat');
@@ -69,7 +70,7 @@ async function focusedControl(page, id) {
     await gpu.click(page, 'settings-toggle:global-chat');
     await gpu.value(page, 'settings-toggle:activity', 'true');
     checks.push('dependent online choices retain stored values');
-    await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'settings-cloud.png')});
+    await page.screenshot({timeout:120000,path: path.join(process.env.OUT || '/tmp', 'settings-cloud.png')});
     await page.keyboard.press('Escape');
     await gpu.widget(page, 'settings-range:sound');
     await gpu.click(page, 'settings-page:controls');
@@ -119,7 +120,7 @@ async function focusedControl(page, id) {
     await page.mouse.click(belt.x, belt.y, {button: 'right'});
     await gpu.value(page, 'bind:belt-0', 'Mouse2');
     checks.push('Escape rebind swaps duplicates, Back cancels capture, F2 and mouse belt capture');
-    await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'settings-controls.png')});
+    await page.screenshot({timeout:120000,path: path.join(process.env.OUT || '/tmp', 'settings-controls.png')});
     await gpu.click(page, 'settings-back');
     await gpu.click(page, 'settings-page:performance');
     const before = (await gpu.widget(page, 'settings-toggle:lighting')).value;
@@ -130,7 +131,7 @@ async function focusedControl(page, id) {
     await gpu.value(page, 'settings-range:light-quality', '47');
     await reveal(page, 'settings-toggle:enhanced-effects');
     await gpu.widget(page, 'settings-toggle:enhanced-effects');
-    await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'settings-performance.png')});
+    await page.screenshot({timeout:120000,path: path.join(process.env.OUT || '/tmp', 'settings-performance.png')});
     checks.push('performance, quality and actual enhanced-effects authority');
     await gpu.click(page, 'settings-back');
     await gpu.click(page, 'settings-back');
@@ -148,7 +149,7 @@ async function focusedControl(page, id) {
     await gpu.nextFrame(page);
     const panel = gpu.bounds(await gpu.widget(page, 'settings-panel'));
     assert.ok(panel.x >= 0 && panel.x + panel.width <= 390);
-    await page.screenshot({path: path.join(process.env.OUT || '/tmp', 'phone-settings.png')});
+    await page.screenshot({timeout:120000,path: path.join(process.env.OUT || '/tmp', 'phone-settings.png')});
     await gpu.assertGpuOnly(page);
     await gpu.settleErrors(page);
     assert.deepEqual(errors, []);
@@ -158,7 +159,7 @@ async function focusedControl(page, id) {
   } catch (error) {
     receipt.failure = String(error.stack || error);
     if (page && !page.isClosed()) {
-      try { await page.screenshot({path: path.join(output, 'settings-failure.png')}); }
+      try { await page.screenshot({timeout:120000,path: path.join(output, 'settings-failure.png')}); }
       catch (screenshotError) { receipt.screenshotFailure = String(screenshotError); }
     }
     throw error;
