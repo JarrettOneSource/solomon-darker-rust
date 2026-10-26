@@ -58,6 +58,7 @@ LINUX_CONTROLS = {
     "panel:dialogue-choice:0": "button[name='Solomon Dark?']",
     "hud:inventory": "button[name^='Inventory,']",
     "hud:map": "button[name='Enter the Boneyard']",
+    "panel:close": "button[name='Open or close inventory']",
     "match-loading": "status[name='Loading game']",
     "settings": "button[name='Settings']",
     "settings-range:music": "slider[name='MUSIC VOL:']",
@@ -113,7 +114,6 @@ class Application:
     def __init__(self, name, profile):
         print(f"Launching {name}", flush=True)
         self.name, self.profile, self.closed = name, profile, False
-        self.sized_windows = set()
         self.log_path = EVIDENCE / f"{name}.log"
         self.log = self.log_path.open("wb")
         self.process = subprocess.Popen(
@@ -150,12 +150,17 @@ class Application:
 
     def activate(self):
         window = self.app.locator("window").first().wait_attached()
-        if PLATFORM == "linux" and window.stable_id not in self.sized_windows:
+        if PLATFORM == "linux":
             # The CI display is 1280x1024. Keep both launcher and game windows
-            # fully visible for input and screenshots.
-            window.resize_to(1180, 800)
-            window.move_to(40, 40)
-            self.sized_windows.add(window.stable_id)
+            # fully visible. AT-SPI can reuse a retired window's object path.
+            bounds = window.bounds
+            if bounds is None or (bounds.width, bounds.height) != (1180, 800):
+                window.resize_to(1180, 800)
+                self.app.locator("window").first().wait_until(
+                    lambda item: item is not None and item.bounds is not None
+                    and (item.bounds.width, item.bounds.height) == (1180, 800), timeout=10)
+            if bounds is None or (bounds.x, bounds.y) != (40, 40):
+                window.move_to(40, 40)
         elif PLATFORM == "win32" and not window.maximized:
             # The runner's desktop can be smaller than the initial game window.
             window.maximize()
@@ -208,11 +213,16 @@ class Application:
         print(f"{self.name}: capturing {name}", flush=True)
         if activate:
             self.activate()
+            # Accessibility can publish a layout before the GPU presents it.
+            # Let the compositor settle after focus/resize before reading pixels.
+            time.sleep(1)
         # A failed startup may leave a window beyond the X11 screen boundary.
         # Capture the dedicated display so failure evidence remains available.
         shot = (xa11y.screenshot() if PLATFORM == "linux" else
                 xa11y.screenshot(element=self.app.locator("window").first().wait_attached()))
         shot.save_png(EVIDENCE / f"{name}.png")
+        tree = re.sub(r"solomondarker://[^\s\"']+", "", self.app.dump())
+        (EVIDENCE / f"{name}.txt").write_text(tree)
         print(f"{self.name}: captured {name}", flush=True)
 
     def title(self, fresh=False):
@@ -490,20 +500,52 @@ def check_peers():
         return run_ids[0] if run_ids[0] == run_ids[1] else None
 
     run_id = wait(shared_boneyard, "both genuine peer Boneyard checkpoints")
-    # The checkpoint precedes local scene loading. Capture each app only once
-    # its ordinary loading surface retires and it accepts gameplay input.
+    initial_ticks = {app.name: save_record(app.profile)[1]["continuation"]["simulation"]["tick"]
+                     for app in (host, guest)}
+
+    def advancing_boneyard():
+        documents = {app.name: save_record(app.profile)[1] for app in (host, guest)}
+        if all(document["continuation"]["simulation"]["world"]["runId"] == run_id
+               and document["continuation"]["simulation"]["tick"] > initial_ticks[name] + 100
+               for name, document in documents.items()):
+            return documents
+        return None
+
+    # A saved checkpoint can arrive before the client's loading surface appears.
+    # The shared clock advances only after both renderers are ready and the resume
+    # hold ends. Observe that durable state before testing each player's input.
+    playing = wait(advancing_boneyard, "both peer clocks advancing after renderer readiness")
+    before_x = {name: player(document)["locomotions"]["position"]["x"]
+                for name, document in playing.items()}
     for app in (host, guest):
+        app.activate()
         app.control("match-loading").wait_detached(timeout=120)
-    host.capture("peer-host-boneyard")
-    guest.capture("peer-guest-boneyard")
+        app.hold("d", 1.2)
+        app.capture(f"peer-{app.name}-boneyard")
+    # Closing inventory starts the ordinary two-second shared resume hold.
+    # Exercise it after movement so the hold cannot consume either input probe.
+    host.key("i")
+    host.control("panel:close").wait_enabled()
+    host.capture("peer-host-inventory")
+    host.key("Escape")
+    host.control("panel:close").wait_detached()
     guest_save = guest.close()[1]
     host_save = host.close()[1]
     assert identity(host_save)["displayName"] == "NativeHost"
     assert identity(guest_save)["displayName"] == "NativeGuest"
     assert all(document["continuation"]["simulation"]["world"]["runId"] == run_id
                for document in (host_save, guest_save))
+    movement = {}
+    for name, document in (("host", host_save), ("guest", guest_save)):
+        after_x = player(document)["locomotions"]["position"]["x"]
+        assert after_x > before_x[name] + 10, f"{name} did not move in the shared Boneyard"
+        movement[name] = {"beforeX": before_x[name], "afterX": after_x}
     RECEIPT["peer"] = {"runId": run_id, "host": identity(host_save),
-                       "guest": identity(guest_save), "guestMatchStartDisabled": True}
+                       "guest": identity(guest_save), "guestMatchStartDisabled": True,
+                       "initialTicks": initial_ticks,
+                       "playingTicks": {name: document["continuation"]["simulation"]["tick"]
+                                        for name, document in playing.items()},
+                       "movement": movement, "hostInventoryOpened": True}
 
 
 def cleanup():
@@ -547,8 +589,6 @@ except Exception:
                 except Exception as error:
                     RECEIPT.setdefault("diagnosticErrors", []).append(str(error))
             try:
-                tree = re.sub(r"solomondarker://[^\s\"']+", "", app.app.dump())
-                (EVIDENCE / f"{app.name}-failure.txt").write_text(tree)
                 app.capture(f"{app.name}-failure", activate=False)
             except Exception as error:
                 RECEIPT.setdefault("diagnosticErrors", []).append(str(error))
