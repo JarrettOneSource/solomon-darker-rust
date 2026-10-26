@@ -81,8 +81,8 @@ pub fn gamepads() -> Result<Vec<solomon_sim::input::StandardGamepadSnapshot>, St
     })
 }
 
-/// The native event loop owns this executor. Dropping it cancels all remaining
-/// client futures, releasing their game/GPU owners before the GL window closes.
+/// The native event loop owns client futures and retained input services. Dropping
+/// this owner cancels work and releases game/GPU owners before the GL window closes.
 pub struct ClientTasks(Rc<LocalExecutor<'static>>);
 
 impl ClientTasks {
@@ -108,6 +108,8 @@ impl Drop for ClientTasks {
     fn drop(&mut self) {
         NEXT_FRAME.with_borrow_mut(Vec::clear);
         CLIPBOARD.with_borrow_mut(|clipboard| *clipboard = None);
+        // Windows must join the controller worker before process-exit TLS teardown.
+        GAMEPADS.with_borrow_mut(|gamepads| *gamepads = None);
         EXECUTOR.with_borrow_mut(|executor| *executor = Weak::new());
     }
 }

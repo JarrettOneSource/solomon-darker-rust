@@ -72,10 +72,25 @@ LINUX_CONTROLS = {
 }
 
 
+def read_ui(operation, *args, timeout=30):
+    """Retry only AXCannotComplete reads while the software renderer is busy."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            return operation(*args, timeout=max(0, deadline - time.monotonic()))
+        except xa11y.PlatformError as error:
+            if (PLATFORM != "darwin" or not str(error).startswith("Platform error (-25204):")
+                    or time.monotonic() >= deadline):
+                raise
+            RECEIPT.setdefault("accessibilityReadRetries", []).append(str(error))
+            print(f"Retrying temporary accessibility read: {error}", flush=True)
+            time.sleep(0.1)
+
+
 def wait(predicate, description, timeout=120):
     deadline = time.monotonic() + timeout
     while True:
-        result = predicate()
+        result = read_ui(lambda timeout: predicate(), timeout=max(0, deadline - time.monotonic()))
         if result:
             return result
         for app in RUNNING:
@@ -122,7 +137,7 @@ class Application:
         )
         RUNNING.append(self)
         self.app = xa11y.App.by_pid(self.process.pid, timeout=30)
-        self.control("launcher/solo").wait_enabled(timeout=60)
+        read_ui(self.control("launcher/solo").wait_enabled, timeout=60)
         self.activate()
         print(f"{name}: launcher ready", flush=True)
 
@@ -149,14 +164,14 @@ class Application:
                     f"{self.name} ready control from {identifiers}")
 
     def activate(self):
-        window = self.app.locator("window").first().wait_attached()
+        window = read_ui(self.app.locator("window").first().wait_attached)
         if PLATFORM == "linux":
             # The CI display is 1280x1024. Keep both launcher and game windows
             # fully visible. AT-SPI can reuse a retired window's object path.
             bounds = window.bounds
             if bounds is None or (bounds.width, bounds.height) != (1180, 800):
                 window.resize_to(1180, 800)
-                self.app.locator("window").first().wait_until(
+                read_ui(self.app.locator("window").first().wait_until,
                     lambda item: item is not None and item.bounds is not None
                     and (item.bounds.width, item.bounds.height) == (1180, 800), timeout=10)
             if bounds is None or (bounds.x, bounds.y) != (40, 40):
@@ -164,7 +179,7 @@ class Application:
         elif PLATFORM == "win32" and not window.maximized:
             # The runner's desktop can be smaller than the initial game window.
             window.maximize()
-            self.app.locator("window").first().wait_until(
+            read_ui(self.app.locator("window").first().wait_until,
                 lambda item: item is not None and item.maximized, timeout=10)
         window.activate()
         if PLATFORM == "darwin":
@@ -189,12 +204,12 @@ class Application:
 
     def click(self, identifier):
         print(f"{self.name}: click {identifier}", flush=True)
-        self.control(identifier).wait_enabled().press()
+        read_ui(self.control(identifier).wait_enabled).press()
 
     def fill(self, identifier, value):
         print(f"{self.name}: edit {identifier}", flush=True)
-        self.control(identifier).wait_enabled().set_value(value)
-        self.control(identifier).wait_until(
+        read_ui(self.control(identifier).wait_enabled).set_value(value)
+        read_ui(self.control(identifier).wait_until,
             lambda item: item is not None and (item.value or "") == value, timeout=10)
 
     def key(self, key):
@@ -219,7 +234,7 @@ class Application:
         # A failed startup may leave a window beyond the X11 screen boundary.
         # Capture the dedicated display so failure evidence remains available.
         shot = (xa11y.screenshot() if PLATFORM == "linux" else
-                xa11y.screenshot(element=self.app.locator("window").first().wait_attached()))
+                xa11y.screenshot(element=read_ui(self.app.locator("window").first().wait_attached)))
         shot.save_png(EVIDENCE / f"{name}.png")
         tree = re.sub(r"solomondarker://[^\s\"']+", "", self.app.dump())
         (EVIDENCE / f"{name}.txt").write_text(tree)
@@ -230,14 +245,14 @@ class Application:
         if entry.name == "NO":
             assert fresh, "an established profile must retain its tutorial preference"
             entry.press()
-            self.control("play").wait_enabled()
+            read_ui(self.control("play").wait_enabled)
 
     def continue_game(self):
         self.title()
         self.click("play")
         self.click("continue")
-        self.control("hud:inventory").wait_enabled(timeout=120)
-        self.control("match-loading").wait_detached(timeout=120)
+        read_ui(self.control("hud:inventory").wait_enabled, timeout=120)
+        read_ui(self.control("match-loading").wait_detached, timeout=120)
 
     def new_game(self, name, element):
         print(f"{self.name}: creating {name}", flush=True)
@@ -252,7 +267,7 @@ class Application:
             entry.press()
             self.click("panel:dialogue-choice:0")
             self.key("Escape")
-            self.control("panel:dialogue-next").wait_detached()
+            read_ui(self.control("panel:dialogue-next").wait_detached)
             # Walk around the Office desk's left edge, then through the south door.
             # Its authored bounds are x402.5..638.5, y644.5..741.5; the introduction
             # finishes near (420,415).
@@ -262,15 +277,15 @@ class Application:
             self.activate()
             INPUT.key_down("s")
             try:
-                self.control("create-name").wait_attached(timeout=15)
+                read_ui(self.control("create-name").wait_attached, timeout=15)
             finally:
                 INPUT.key_up("s")
         self.fill("create-name", name)
         self.click(f"element:{element}")
         self.click("discipline:arcane")
-        self.control("create-name").wait_detached()
-        self.control("hud:map").wait_attached(timeout=120)
-        self.control("match-loading").wait_detached(timeout=120)
+        read_ui(self.control("create-name").wait_detached)
+        read_ui(self.control("hud:map").wait_attached, timeout=120)
+        read_ui(self.control("match-loading").wait_detached, timeout=120)
         return wait(lambda: self.saved_as(name, element), f"saved {name}/{element}/arcane")
 
     def saved_as(self, name, element):
@@ -281,7 +296,7 @@ class Application:
         return None
 
     def request_close(self):
-        self.app.locator("window").first().wait_attached().close()
+        read_ui(self.app.locator("window").first().wait_attached).close()
 
     def exited(self):
         code = self.process.wait(timeout=30)
@@ -313,19 +328,19 @@ def settings(app, verify=False):
     slider = app.control("settings-range:music")
     if not verify:
         app.activate()
-        slider.wait_enabled().set_numeric_value(37)
-        slider.wait_until(lambda item: item is not None and item.numeric_value == 37, timeout=10)
+        read_ui(slider.wait_enabled).set_numeric_value(37)
+        read_ui(slider.wait_until, lambda item: item is not None and item.numeric_value == 37, timeout=10)
         slider.focus()
-        slider.wait_focused()
+        read_ui(slider.wait_focused)
         INPUT.press("Home")
-        slider.wait_until(lambda item: item is not None and item.numeric_value == 0, timeout=10)
+        read_ui(slider.wait_until, lambda item: item is not None and item.numeric_value == 0, timeout=10)
         INPUT.press("ArrowRight")
-    slider.wait_until(lambda item: item is not None and item.numeric_value == 1, timeout=10)
+    read_ui(slider.wait_until, lambda item: item is not None and item.numeric_value == 1, timeout=10)
     app.click("settings-page:controls")
     reverse = app.control("settings-toggle:reverse-hotbar")
     if not verify:
         app.click("settings-toggle:reverse-hotbar")
-    reverse.wait_until(lambda item: item is not None and item.checked == "on", timeout=10)
+    read_ui(reverse.wait_until, lambda item: item is not None and item.checked == "on", timeout=10)
     app.click("settings-back")
     app.click("settings-back")
 
@@ -340,11 +355,11 @@ def check_failed_close(app):
     os.replace(replacement, path)
     expected = path.read_bytes()
     app.request_close()
-    app.control("desktop/keep-playing").wait_enabled()
+    read_ui(app.control("desktop/keep-playing").wait_enabled)
     app.capture("save-conflict")
     assert path.read_bytes() == expected, "failed close overwrote the concurrent record"
     app.click("desktop/keep-playing")
-    app.control("desktop/keep-playing").wait_detached()
+    read_ui(app.control("desktop/keep-playing").wait_detached)
     assert app.process.poll() is None, "Keep playing must retain the application"
     app.request_close()
     app.click("desktop/close-unsaved")
@@ -376,14 +391,14 @@ def check_delayed_close(app):
         before = save_record(app.profile)[0]["revision"]
         app.hold("a", 0.8)
         app.request_close()
-        app.control("desktop/keep-playing").wait_enabled(timeout=35)
+        read_ui(app.control("desktop/keep-playing").wait_enabled, timeout=35)
         app.capture("save-timeout")
         app.click("desktop/keep-playing")
-        app.control("desktop/keep-playing").wait_detached()
+        read_ui(app.control("desktop/keep-playing").wait_detached)
     wait(lambda: save_record(app.profile)[0]["revision"] > before,
          "the delayed checkpoint finishing after Keep playing")
     app.key("Escape")
-    app.control("hud:inventory").wait_enabled()
+    read_ui(app.control("hud:inventory").wait_enabled)
     before_x = player(save_record(app.profile)[1])["locomotions"]["position"]["x"]
     app.hold("d", 1.2)
     final = app.close()[1]
@@ -399,9 +414,9 @@ def check_discarded_session(app):
         app.hold("a", 0.8)
         app.key("Escape")
         app.click("desktop/launcher")
-        app.control("desktop/close-unsaved").wait_enabled(timeout=35)
+        read_ui(app.control("desktop/close-unsaved").wait_enabled, timeout=35)
         app.click("desktop/close-unsaved")
-        app.control("launcher/solo").wait_enabled()
+        read_ui(app.control("launcher/solo").wait_enabled)
     # A discarded blocking write used to wake here and replace the durable slot.
     for _ in range(20):
         time.sleep(0.1)
@@ -418,7 +433,7 @@ def check_offline():
     solo.click("launcher/start-host")
     wait(lambda: solo.control("launcher/status").exists(), "host validation", 10)
     solo.click("launcher/join")
-    solo.control("launcher/status").wait_until(
+    read_ui(solo.control("launcher/status").wait_until,
         lambda item: item is not None and "invite" in (item.name or "").lower(), timeout=10)
     solo.click("launcher/solo")
     solo.title(fresh=True)
@@ -452,7 +467,7 @@ def check_offline():
     returned.continue_game()
     returned.key("Escape")
     returned.click("desktop/launcher")
-    returned.control("launcher/solo").wait_enabled(timeout=120)
+    read_ui(returned.control("launcher/solo").wait_enabled, timeout=120)
     returned.capture("returned-to-launcher")
     RECEIPT["savedReturnToLauncher"] = True
     returned.click("launcher/solo")
@@ -477,14 +492,14 @@ def check_peers():
     guest.activate()
     invite = guest.control("launcher/invite")
     invite.focus()
-    invite.wait_focused()
+    read_ui(invite.wait_focused)
     INPUT.chord("v", held=["Meta" if PLATFORM == "darwin" else "Ctrl"])
-    invite.wait_until(
+    read_ui(invite.wait_until,
         lambda item: item is not None and (item.value or "").startswith("solomondarker://"),
         timeout=10)
     guest.click("launcher/join")
     guest.new_game("NativeGuest", "fire")
-    assert not guest.control("hud:map").wait_attached().enabled, "the guest may not start the match"
+    assert not read_ui(guest.control("hud:map").wait_attached).enabled, "the guest may not start the match"
     host.activate()
     host.click("hud:map")
 
@@ -519,16 +534,16 @@ def check_peers():
                 for name, document in playing.items()}
     for app in (host, guest):
         app.activate()
-        app.control("match-loading").wait_detached(timeout=120)
+        read_ui(app.control("match-loading").wait_detached, timeout=120)
         app.hold("d", 1.2)
         app.capture(f"peer-{app.name}-boneyard")
     # Closing inventory starts the ordinary two-second shared resume hold.
     # Exercise it after movement so the hold cannot consume either input probe.
     host.key("i")
-    host.control("panel:close").wait_enabled()
+    read_ui(host.control("panel:close").wait_enabled)
     host.capture("peer-host-inventory")
     host.key("Escape")
-    host.control("panel:close").wait_detached()
+    read_ui(host.control("panel:close").wait_detached)
     guest_save = guest.close()[1]
     host_save = host.close()[1]
     assert identity(host_save)["displayName"] == "NativeHost"
@@ -550,19 +565,27 @@ def check_peers():
 
 def cleanup():
     for app in RUNNING:
+        result = {"name": app.name}
         if app.process.poll() is None:
             try:
                 app.request_close()
-                app.process.wait(timeout=5)
             except Exception as error:
-                RECEIPT["cleanup"].append({"name": app.name, "closeError": str(error)})
+                result["closeError"] = str(error)
+            try:
+                # An AX close can take effect even when its acknowledgement fails.
+                # Give save-before-close its normal window before forcing cleanup.
+                app.process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
                 app.process.terminate()
                 try:
                     app.process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     app.process.kill()
                     app.process.wait(timeout=5)
-                RECEIPT["cleanup"].append({"name": app.name, "forced": True})
+                result["forced"] = True
+        if not app.closed:
+            result["code"] = app.process.returncode
+            RECEIPT["cleanup"].append(result)
         app.closed = True
         app.log.close()
     shutil.rmtree(PROFILES)

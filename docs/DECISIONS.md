@@ -68,7 +68,11 @@ validation. Packaged paths reject traversal and symlink escape.
 
 The client has target-selected clocks, entropy, local futures and window geometry.
 The native event loop owns its local executor and cancels remaining futures before
-retiring the graphics context. `Surface` represents a real canvas or native window;
+retiring the graphics context. That client owner also releases retained clipboard
+and controller services. The Windows controller backend joins a worker, which must
+happen before process exit can terminate threads during
+[thread-local destruction](https://doc.rust-lang.org/std/thread/struct.LocalKey.html#platform-specific-behavior).
+`Surface` represents a real canvas or native window;
 it supplies drawing sizes and pointer projection rather than emulating DOM nodes.
 Source Lua display values reuse `ryu-js` and the existing ordered JSON serializer.
 
