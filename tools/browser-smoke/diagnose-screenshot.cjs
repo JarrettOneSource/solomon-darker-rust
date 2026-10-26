@@ -44,6 +44,29 @@ lifecycle.launchOwnedBrowser=async(...args)=>{
     const page=await newPage(...pageArgs);
     pages.push(page);
     page.on('crash',()=>trace({event:'page-crashed'}));
+    page.__solomonDiagnosticEarly=true;
+    const evaluate=page.evaluate.bind(page);
+    page.evaluate=async(...evaluateArgs)=>{
+      const source=String(evaluateArgs[0]);
+      const kind=source.includes('wasmBindings?.gpu_ui_state')?'gpu-ui-read'
+        :source.includes('requestAnimationFrame')?'animation-frame-wait':null;
+      if(!kind||!page.__solomonDiagnosticEarly)return evaluate(...evaluateArgs);
+      const operationStarted=performance.now();
+      trace({event:'evaluation-start',kind});
+      try {
+        const result=await evaluate(...evaluateArgs);
+        const state=kind==='gpu-ui-read'&&result?{
+          frame:result.frame,ready:result.ready,surface:result.surface,error:result.error,
+          widgets:result.widgets.filter(w=>['settings','prompt-secondary'].includes(w.id))
+            .map(w=>({id:w.id,enabled:w.enabled,rect:w.rect,z:w.z})),
+        }:undefined;
+        trace({event:'evaluation-complete',kind,durationMs:Math.round(performance.now()-operationStarted),state});
+        return result;
+      } catch(error) {
+        trace({event:'evaluation-failed',kind,durationMs:Math.round(performance.now()-operationStarted),message:error.message});
+        throw error;
+      }
+    };
     const screenshot=page.screenshot.bind(page);
     page.screenshot=async options=>{
       const captureStarted=performance.now();
@@ -79,6 +102,21 @@ lifecycle.launchOwnedBrowser=async(...args)=>{
     return result;
   };
   return owned;
+};
+const gpu=require('./gpu-ui.cjs');
+const click=gpu.click;
+gpu.click=async(page,id,...args)=>{
+  const operationStarted=performance.now();
+  trace({event:'click-start',id});
+  try {
+    const result=await click(page,id,...args);
+    trace({event:'click-complete',id,durationMs:Math.round(performance.now()-operationStarted)});
+    if(id==='settings')page.__solomonDiagnosticEarly=false;
+    return result;
+  } catch(error) {
+    trace({event:'click-failed',id,durationMs:Math.round(performance.now()-operationStarted),message:error.message});
+    throw error;
+  }
 };
 const journey=process.env.CAPTURE_JOURNEY;
 assert.ok(['smoke','settings-parity'].includes(journey));

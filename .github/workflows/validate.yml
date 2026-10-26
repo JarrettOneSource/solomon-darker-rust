@@ -10,13 +10,14 @@ permissions:
 
 jobs:
   capture:
-    name: Windows capture (${{ matrix.budget }} ms)
+    name: Windows settings trace (${{ matrix.attempt }})
     runs-on: windows-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         budget: [120000]
+        attempt: [1, 2]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -41,14 +42,10 @@ jobs:
           $env:PW = Join-Path $env:GITHUB_WORKSPACE 'node_modules/playwright-core'
           $env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'
           $env:URL = 'http://127.0.0.1:4181/'
-          $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/capture/gameplay'
+          $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/capture/settings'
           $env:CAPTURE_TIMEOUT_MS = '${{ matrix.budget }}'
           $server = Start-Process -FilePath (Get-Command python).Source -ArgumentList @('scripts/serve-client.py', '4181', '--bind', '127.0.0.1', '--directory', 'web/dist') -PassThru -RedirectStandardOutput reports/capture/server.log -RedirectStandardError reports/capture/server-error.log
           try {
-            $env:CAPTURE_JOURNEY = 'smoke'
-            node tools/browser-smoke/diagnose-screenshot.cjs
-            if ($LASTEXITCODE) { throw 'Gameplay journey failed; inspect retained timings.' }
-            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/capture/settings'
             $env:CAPTURE_JOURNEY = 'settings-parity'
             node tools/browser-smoke/diagnose-screenshot.cjs
             if ($LASTEXITCODE) { throw 'Settings journey failed; inspect retained timings.' }
@@ -60,6 +57,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: capture-${{ matrix.budget }}
+          name: settings-trace-${{ matrix.attempt }}
           path: reports/capture
           if-no-files-found: error
