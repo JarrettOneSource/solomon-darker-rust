@@ -1,15 +1,14 @@
 //! `pages/Game.tsx` native transfer controller: browser files at the edge, one save writer.
 
+use crate::platform::files::SelectedFile;
 use solomon_assets::native_save::{
     self as native_save, GameSaveImportPreview, PortableExportResult,
 };
-use wasm_bindgen::JsValue;
-use wasm_bindgen_futures::JsFuture;
 
 use super::*;
 
 pub(super) enum TransferRequest {
-    Inspect { request_id: u64, files: Vec<web_sys::File> },
+    Inspect { request_id: u64, files: Vec<SelectedFile> },
     Export { request_id: u64, document: String },
 }
 
@@ -34,19 +33,13 @@ impl TransferRequest {
     }
 }
 
-async fn inspect_files(files: Vec<web_sys::File>) -> Result<GameSaveImportPreview, String> {
+async fn inspect_files(files: Vec<SelectedFile>) -> Result<GameSaveImportPreview, String> {
     let mut contents = Vec::with_capacity(files.len());
     for file in files {
         let name = file.name();
-        let relative_path = js_sys::Reflect::get(&file, &JsValue::from_str("webkitRelativePath"))
-            .map_err(|_| format!("The path for {name} could not be read."))?
-            .as_string()
-            .filter(|path| !path.is_empty())
-            .unwrap_or_else(|| name.clone());
-        let buffer = JsFuture::from(file.array_buffer())
-            .await
-            .map_err(|_| format!("The save file {name} could not be read."))?;
-        contents.push((name, relative_path, js_sys::Uint8Array::new(&buffer).to_vec()));
+        let relative_path = file.relative_path()?;
+        let bytes = file.read(solomon_assets::website_save::MAX_SAVE_BYTES).await?;
+        contents.push((name, relative_path, bytes));
     }
     let selection = contents
         .iter()

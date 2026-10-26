@@ -10,7 +10,6 @@ use solomon_sim::observer_activity::{
 use solomon_sim::profile::PlayerSkillOffer;
 use solomon_sim::session::GameSession;
 use solomon_sim::social::GameChatMessage;
-use web_sys::Document;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObserverAction {
@@ -67,7 +66,7 @@ impl ObserverUi {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("observer/panel"))
     }
 
-    pub fn attach(_document: &Document) -> Result<Self, String> {
+    pub fn attach() -> Result<Self, String> {
         Ok(Self {
             previous: None,
             events: Vec::new(),

@@ -1,16 +1,18 @@
-//! GPU `NativeSaveTransferSettings`: native file selection and ZIP download stay
-//! browser capabilities; inspection and durable replacement stay with the host.
+//! GPU `NativeSaveTransferSettings`: platform file selection/export at the edge;
+//! inspection and durable replacement stay with the host.
 use super::{SettingsView, widgets};
 use crate::gpu_ui::UiFrame;
 use crate::menu::HostedMenuAction;
+use crate::platform::{
+    Surface,
+    files::{FilePicker, save_file},
+};
 use egui::{Rect, Ui, Vec2};
 use solomon_assets::native_save::{
     GameSaveImportPreview, GameSaveImportSource, PortableExportResult,
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use wasm_bindgen::{JsCast, closure::Closure};
-use web_sys::{Document, Event, File, HtmlAnchorElement, HtmlInputElement};
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum RequestKind {
     Inspect,
@@ -18,18 +20,18 @@ enum RequestKind {
     Replace,
 }
 pub(super) struct SaveTransferView {
-    document: Document,
-    input: HtmlInputElement,
+    surface: Surface,
+    picker: FilePicker,
+    saving: bool,
+    downloaded: Rc<RefCell<Option<Result<bool, String>>>>,
     can_export: bool,
     request: Option<(u64, RequestKind)>,
     pending: Option<GameSaveImportPreview>,
     export_pending: Option<PortableExportResult>,
     sequence: Rc<Cell<u64>>,
-    files: Rc<RefCell<Vec<Vec<File>>>>,
     actions: Vec<HostedMenuAction>,
     error: Option<String>,
     status: Option<String>,
-    change: Closure<dyn FnMut(Event)>,
 }
 impl SettingsView {
     pub fn set_save_transfer_available(&mut self, can_export: bool) -> Result<(), String> {
@@ -58,7 +60,6 @@ impl SettingsView {
         if !v.complete(id, RequestKind::Inspect) {
             return Ok(false);
         }
-        v.input.set_value("");
         match result {
             Ok(preview) => v.pending = Some(preview),
             Err(error) => v.error = Some(error),
@@ -102,53 +103,32 @@ impl SettingsView {
 }
 impl SaveTransferView {
     pub fn new(
-        document: &Document,
+        surface: &Surface,
         can_export: bool,
         sequence: Rc<Cell<u64>>,
     ) -> Result<Self, String> {
-        let input: HtmlInputElement = document
-            .create_element("input")
-            .map_err(|_| "save file picker")?
-            .dyn_into()
-            .map_err(|_| "save file picker type")?;
-        input.set_type("file");
-        input.set_accept(".zip,.json,.cfg,.sav");
-        input.set_multiple(true);
-        let files = Rc::new(RefCell::new(Vec::new()));
-        let selected = files.clone();
-        let file_input = input.clone();
-        let change = Closure::<dyn FnMut(Event)>::new(move |_| {
-            let Some(files) = file_input.files() else { return };
-            if files.length() > 0 {
-                selected
-                    .borrow_mut()
-                    .push((0..files.length()).filter_map(|i| files.item(i)).collect());
-            }
-        });
-        input
-            .add_event_listener_with_callback("change", change.as_ref().unchecked_ref())
-            .map_err(|_| "save file selection listener")?;
+        let picker = FilePicker::new(surface, &["zip", "json", "cfg", "sav"], true)?;
         Ok(Self {
-            document: document.clone(),
-            input,
+            surface: surface.clone(),
+            picker,
+            saving: false,
+            downloaded: Rc::new(RefCell::new(None)),
             can_export,
             request: None,
             pending: None,
             export_pending: None,
             sequence,
-            files,
             actions: Vec::new(),
             error: None,
             status: None,
-            change,
         })
     }
     pub fn activate(&mut self, action: &str) -> Result<bool, String> {
-        if self.request.is_some() {
+        if self.request.is_some() || self.saving {
             return Ok(action.starts_with("save-"));
         }
         match action {
-            "save-import" => self.input.click(),
+            "save-import" => self.picker.choose()?,
             "save-export" if self.can_export => {
                 self.status = None;
                 let request_id = self.begin(RequestKind::Export);
@@ -174,9 +154,21 @@ impl SaveTransferView {
         Ok(true)
     }
     fn update(&mut self) -> Result<(), String> {
-        let files = std::mem::take(&mut *self.files.borrow_mut());
+        if let Some(result) = self.downloaded.borrow_mut().take() {
+            self.saving = false;
+            match result {
+                Ok(true) => {
+                    self.status = Some(
+                        "Save archive exported, including inventory and your saved run.".into(),
+                    )
+                }
+                Ok(false) => {}
+                Err(error) => self.error = Some(error),
+            }
+        }
+        let files = self.picker.take();
         for files in files {
-            if self.request.is_some() {
+            if self.request.is_some() || self.saving {
                 continue;
             }
             self.pending = None;
@@ -210,12 +202,12 @@ impl SaveTransferView {
     ) -> Result<(), String> {
         super::flow(
             ui,
-            "Browser exports retain your inventory, equipment, and saved run. Import the ZIP to restore them. Stock-only saves import progression into the Hub.",
+            "Save archives retain your inventory, equipment, and saved run. Import the ZIP to restore them. Stock-only saves import progression into the Hub.",
             width,
             13.0,
             widgets::color(0xc8b988),
         );
-        let busy = self.request.is_some();
+        let busy = self.request.is_some() || self.saving;
         super::group(frame, ui, "IMPORT SAVE", width);
         settings.action_row(
             frame,
@@ -262,9 +254,8 @@ impl SaveTransferView {
                     preview.learned_rows, preview.hagatha_perks
                 ),
                 match preview.source {
-                    GameSaveImportSource::Browser => {
-                        "Browser save: inventory, equipment, and the saved run will be restored."
-                            .to_owned()
+                    GameSaveImportSource::Game => {
+                        "Inventory, equipment, and the saved run will be restored.".to_owned()
                     }
                     GameSaveImportSource::Stock => {
                         "Stock progression only: inventory is not imported; play starts in the Hub."
@@ -282,7 +273,7 @@ impl SaveTransferView {
             let (_, r) = ui.allocate_space(Vec2::new(width, 46.0));
             let half = (width - 10.0) / 2.0;
             for (label, id, x) in [
-                ("REPLACE BROWSER SLOT", "save-replace", r.left()),
+                ("REPLACE SAVED GAME", "save-replace", r.left()),
                 ("CANCEL", "save-cancel", r.left() + half + 10.0),
             ] {
                 if widgets::flat_button(
@@ -313,7 +304,7 @@ impl SaveTransferView {
             super::group(frame, ui, "EXPORT LIMITATIONS", width);
             super::flow(
                 ui,
-                "These limitations apply when loading in stock Solomon Dark. The browser save retains your inventory and run.",
+                "These limitations apply when loading in stock Solomon Dark. The full save retains your inventory and run.",
                 width,
                 13.0,
                 widgets::GOLD,
@@ -350,37 +341,15 @@ impl SaveTransferView {
         Ok(())
     }
     fn download(&mut self, exported: PortableExportResult) -> Result<(), String> {
-        let options = web_sys::BlobPropertyBag::new();
-        options.set_type("application/zip");
-        let parts = js_sys::Array::new();
-        parts.push(&js_sys::Uint8Array::from(exported.archive.as_slice()));
-        let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &options)
-            .map_err(|_| "The stock save could not be exported.")?;
-        let url = web_sys::Url::create_object_url_with_blob(&blob)
-            .map_err(|_| "The stock save download could not be opened.")?;
-        let anchor: HtmlAnchorElement = self
-            .document
-            .create_element("a")
-            .map_err(|_| "save download")?
-            .dyn_into()
-            .map_err(|_| "save download anchor")?;
-        anchor.set_href(&url);
-        anchor.set_download(&format!("solomon-dark-save-{}.zip", js_sys::Date::now().floor()));
-        anchor.click();
-        web_sys::Url::revoke_object_url(&url)
-            .map_err(|_| "The stock save download could not be released.")?;
-        self.status =
-            Some("Save archive downloaded, including inventory and your saved run.".to_owned());
+        self.saving = true;
+        self.status = None;
+        let surface = self.surface.clone();
+        let downloaded = self.downloaded.clone();
+        crate::platform::spawn_local(async move {
+            let name = format!("solomon-dark-save-{}.zip", crate::platform::epoch_ms().floor());
+            *downloaded.borrow_mut() =
+                Some(save_file(&surface, &name, exported.archive, "application/zip").await);
+        });
         Ok(())
-    }
-}
-impl Drop for SaveTransferView {
-    fn drop(&mut self) {
-        if let Err(error) = self
-            .input
-            .remove_event_listener_with_callback("change", self.change.as_ref().unchecked_ref())
-        {
-            web_sys::console::error_1(&error);
-        }
     }
 }

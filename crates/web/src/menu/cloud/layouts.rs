@@ -70,20 +70,16 @@ impl LayoutsView {
     pub fn activate(&mut self, action: &str, next: &mut u64) -> Result<bool, String> {
         if action == "cloud-copy-layout" {
             if let Some((_, layout)) = &self.shared {
-                let promise = web_sys::window()
-                    .ok_or("copy layout window")?
-                    .navigator()
-                    .clipboard()
-                    .write_text(&layout.code);
+                let request = crate::platform::copy_text(&layout.code);
                 let generation = self.copy_generation;
                 let result = self.copy_result.clone();
-                wasm_bindgen_futures::spawn_local(async move {
+                crate::platform::spawn_local(async move {
                     *result.borrow_mut() = Some(CopyCompletion {
                         generation,
-                        result: wasm_bindgen_futures::JsFuture::from(promise)
-                            .await
-                            .map(|_| ())
-                            .map_err(|_| "The code could not be copied.".to_owned()),
+                        result: match request {
+                            Ok(request) => request.await,
+                            Err(error) => Err(error),
+                        },
                     });
                 });
             }

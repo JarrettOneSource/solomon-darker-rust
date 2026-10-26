@@ -8,6 +8,7 @@ mod transfer;
 use super::widgets;
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use crate::mobile_editor::{MobileEditorArt, MobileEditorPlayerPreview, MobileUiEditor};
+use crate::platform::Surface;
 use egui::{Color32, Pos2, Rect, Ui, Vec2};
 use fullscreen::SettingsFullscreen;
 use solomon_protocol::hosted::{EnhancedEffectsAuthority, EnhancedEffectsScope};
@@ -16,7 +17,6 @@ use solomon_sim::mobile_ui::{MobileUiLayout, MobileUiLayoutState};
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
 use solomon_sim::settings::{GameControlAction, GameSettings, game_binding_label};
 use std::rc::Rc;
-use web_sys::Document;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsContext {
     Title,
@@ -207,7 +207,7 @@ pub(super) struct SettingsView {
     fullscreen: Option<SettingsFullscreen>,
     ui_atlas: StockAtlas,
     control_panel: StockAtlas,
-    document: Document,
+    surface: Surface,
     mobile_art: Rc<MobileEditorArt>,
     mobile_state: MobileUiLayoutState,
     mobile_preview: Option<MobileEditorPlayerPreview>,
@@ -226,7 +226,7 @@ pub(super) struct SettingsView {
     scroll_reset: bool,
 }
 impl SettingsView {
-    pub async fn new(document: &Document) -> Result<Self, String> {
+    pub async fn new(surface: &Surface) -> Result<Self, String> {
         Ok(Self {
             page: Page::Root,
             context: SettingsContext::Title,
@@ -234,10 +234,10 @@ impl SettingsView {
             enhanced_effects_authority: None,
             pending_binding: None,
             settings: GameSettings::default(),
-            fullscreen: SettingsFullscreen::new(document)?,
+            fullscreen: SettingsFullscreen::new(surface)?,
             ui_atlas: StockAtlas::load("UI").await?,
             control_panel: StockAtlas::load("ControlPanel").await?,
-            document: document.clone(),
+            surface: surface.clone(),
             mobile_art: Rc::new(MobileEditorArt::load().await?),
             mobile_state: MobileUiLayoutState::default(),
             mobile_preview: None,
@@ -411,7 +411,7 @@ impl SettingsView {
             }
             Page::SaveTransfer => {
                 self.save_transfer = Some(transfer::SaveTransferView::new(
-                    &self.document,
+                    &self.surface,
                     self.save_can_export,
                     self.save_request_sequence.clone(),
                 )?)
@@ -677,7 +677,7 @@ impl SettingsView {
                     self.action_row(
                         frame,
                         ui,
-                        "STOCK / BROWSER SAVE",
+                        "IMPORT / EXPORT SAVE",
                         "settings-page:save-transfer",
                         width,
                         true,
@@ -687,22 +687,18 @@ impl SettingsView {
                 group(frame, ui, "DEVELOPER", width);
                 self.toggle(frame, ui, ToggleSetting::Cheats, width, actions)?;
                 if self.settings.enable_cheats {
-                    flow(
-                        ui,
-                        &format!(
-                            "Debug menu: {}
-DevTools: solomonDark.lua.help()",
-                            game_binding_label(&self.settings.controls.open_cheats)
-                        ),
-                        width,
-                        12.0,
-                        widgets::color(0xb3a477),
+                    let hint = format!(
+                        "Debug menu: {}",
+                        game_binding_label(&self.settings.controls.open_cheats)
                     );
+                    #[cfg(target_arch = "wasm32")]
+                    let hint = format!("{hint}\nDevTools: solomonDark.lua.help()");
+                    flow(ui, &hint, width, 12.0, widgets::color(0xb3a477));
                 }
                 if self.context != SettingsContext::Title {
                     flow(
                         ui,
-                        "Display size follows the browser. Resolution is available automatically.",
+                        "Resolution follows the game window.",
                         width,
                         12.0,
                         widgets::color(0xb3a477),

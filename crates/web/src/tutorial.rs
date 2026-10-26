@@ -5,7 +5,6 @@ use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
 use callouts::{TutorialTargets, modal_plans};
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec};
 use solomon_sim::{Vec2, hud::HudRect};
-use web_sys::Document;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TutorialPreludeView {
     pub blend: f64,
@@ -136,7 +135,7 @@ impl TutorialUi {
         egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("tutorial-overlay"))
     }
 
-    pub async fn attach(_document: &Document) -> Result<Self, String> {
+    pub async fn attach() -> Result<Self, String> {
         Ok(Self { atlas: StockAtlas::load("UI").await?, model: None, viewport: (0, 0), now: 0.0 })
     }
     pub fn update(

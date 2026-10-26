@@ -17,7 +17,6 @@ use solomon_sim::skill_picker::{
     SkillPickerReveal, skill_picker_card, skill_picker_centers, skill_picker_close,
     skill_picker_panel, skill_picker_reveal,
 };
-use web_sys::Document;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SkillPickerAction {
     Choose(PlayerSkillChoice),
@@ -60,7 +59,7 @@ pub struct SkillPicker {
     touch: bool,
 }
 impl SkillPicker {
-    pub async fn attach(_document: &Document) -> Result<Self, String> {
+    pub async fn attach() -> Result<Self, String> {
         Ok(Self {
             ui: StockAtlas::load("UI").await?,
             skills: StockAtlas::load("Skills").await?,

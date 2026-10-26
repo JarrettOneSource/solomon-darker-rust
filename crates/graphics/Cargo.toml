@@ -1,6 +1,6 @@
 [package]
 name = "solomon-graphics"
-description = "Shared WebGL2 stock renderer and browser asset decoding"
+description = "Shared native OpenGL and WebGL2 stock renderer and asset decoding"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
@@ -11,11 +11,29 @@ crate-type = ["cdylib"]
 
 [dependencies]
 solomon-sim = { workspace = true }
+glow = "=0.18.0"
+bytemuck = "1.25"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+blocking = "1.6"
+ureq = { version = "3.4", features = ["rustls"] }
+base64 = "0.23"
+parley = "=0.11.1"
+vello_cpu = "=0.2.0"
+wuff = { version = "=0.2.9", default-features = false, features = ["brotli"] }
+skrifa = "=0.44.0"
+glifo = "=0.3.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 js-sys = { workspace = true }
 web-sys = { workspace = true, features = [
-  "Window", "Document", "HtmlElement", "Element", "Node", "Response", "HtmlImageElement", "HtmlCanvasElement", "WebGl2RenderingContext", "WebGlBuffer",
+  "Window", "Document", "HtmlElement", "Element", "Node", "Response", "HtmlImageElement", "HtmlCanvasElement", "CanvasRenderingContext2d", "CanvasPattern", "ImageData", "WebGl2RenderingContext", "WebGlBuffer",
   "WebGlFramebuffer", "WebGlProgram", "WebGlShader", "WebGlTexture", "WebGlSampler",
-  "WebGlUniformLocation", "WebGlVertexArrayObject",
+  "WebGlUniformLocation", "WebGlVertexArrayObject", "Url", "Blob", "BlobPropertyBag",
 ] }
+
+[dev-dependencies]
+futures-lite = "2.6"

@@ -15,7 +15,6 @@ impl Game {
         let [world_notices, hub_notices] = self.notifications.layer_ids();
         let mut layers = vec![
             world_notices,
-            crate::runtime_ui::layer_id(),
             self.hud.layer_id(),               // 10
             ModWorldOverlays::powerup_layer(), // 18, in actual append order
             ModWorldOverlays::shop_layer(),
@@ -83,6 +82,9 @@ impl Game {
             layers.extend(FullscreenControl::fixed_layers()); // Coarse portrait100001.
         }
         layers.push(self.match_loading_view.layer_id()); // 200000
+        // Rejected admission returns to an opaque title. Its reason must remain
+        // above that scene and the desktop controls rather than behind them.
+        layers.push(crate::runtime_ui::layer_id());
 
         // The Source native dialogs retain mount order independently of document z.
         // A content update keeps its place; closing removes it; reopening appends it.

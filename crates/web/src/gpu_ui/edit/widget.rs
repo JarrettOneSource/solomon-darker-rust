@@ -162,7 +162,7 @@ impl<'a> NativeTextEdit<'a> {
             child.disable();
         }
         let mut response = child.interact(rect, id, Sense::click_and_drag());
-        if self.request_focus && enabled {
+        if (self.request_focus || response.clicked()) && enabled {
             response.request_focus();
         }
         let has_focus = response.has_focus() && enabled;
@@ -246,6 +246,20 @@ impl<'a> NativeTextEdit<'a> {
         }
         frame.record(self.id, self.label, "textbox", &response);
         frame.record_value(self.id, self.text, None);
+        #[cfg(not(target_arch = "wasm32"))]
+        frame.ctx.accesskit_node_builder(id, |node| {
+            node.set_role(if self.multiline {
+                egui::accesskit::Role::MultilineTextInput
+            } else {
+                egui::accesskit::Role::TextInput
+            });
+            if enabled && !self.readonly {
+                node.add_action(egui::accesskit::Action::SetValue);
+                node.add_action(egui::accesskit::Action::ReplaceSelectedText);
+            } else {
+                node.set_read_only();
+            }
+        });
         NativeEditOutput { response, submitted, rejected }
     }
 

@@ -75,11 +75,7 @@ fn geometry(state: &GameplayInputState, lane: JoystickLane) -> JoystickGeometry 
 }
 
 pub(super) fn paint(input: &MovementInput, frame: &UiFrame<'_>) -> Result<(), String> {
-    let coarse = input
-        .window
-        .match_media("(hover:none) and (pointer:coarse)")
-        .map_err(|_| "joystick pointer query")?
-        .is_some_and(|query| query.matches());
+    let coarse = crate::platform::coarse_pointer();
     let (mut lanes, pointers) = {
         let mut state = input.state.borrow_mut();
         if !coarse || state.blocked {
@@ -109,7 +105,7 @@ pub(super) fn paint(input: &MovementInput, frame: &UiFrame<'_>) -> Result<(), St
             (lanes, Vec::new())
         }
     };
-    release_pointers(&input.canvas, pointers);
+    input.transport.release_pointers(pointers);
     if lanes.is_empty() {
         return Ok(());
     }

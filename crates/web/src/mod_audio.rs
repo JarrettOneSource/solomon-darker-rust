@@ -6,14 +6,14 @@ use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
+use crate::platform::spawn_local;
 use solomon_sim::audio::AudioOptions;
 use solomon_sim::modding::assets::GameModAsset;
 use solomon_sim::modding::presentation::{
     project_mod_enemies, project_mod_powerup_events, project_mod_spell_effects,
 };
 use solomon_sim::modding::{LuaObject, LuaValue};
-use wasm_bindgen::JsValue;
-use wasm_bindgen_futures::spawn_local;
+use std::sync::Arc;
 
 use crate::audio::GameAssetAudio;
 use crate::mod_content::{GameModContentLoadError, ModContentCache};
@@ -21,7 +21,7 @@ use crate::mod_content::{GameModContentLoadError, ModContentCache};
 #[derive(Clone)]
 struct ModAudioSource {
     key: String,
-    bytes: Rc<[u8]>,
+    bytes: Arc<[u8]>,
     url: String,
 }
 
@@ -41,7 +41,7 @@ impl ModAudioSources {
             if asset.kind != "audio" || sources.contains_key(&asset.sha256) {
                 continue;
             }
-            let bytes = Rc::from(cache.bytes(asset).await?);
+            let bytes = Arc::from(cache.bytes(asset).await?);
             let url = cache.content_url(asset);
             sources.insert(
                 asset.sha256.clone(),
@@ -203,6 +203,7 @@ impl ModAudioDriver {
                 self.audio.start_asset_music(
                     &wanted.owner,
                     wanted.source.url.as_str(),
+                    wanted.source.bytes.clone(),
                     wanted.volume,
                 )?;
                 self.active.borrow_mut().push(wanted);
@@ -336,5 +337,5 @@ fn integer(value: Option<&LuaValue>) -> i64 {
     if value.fract() == 0.0 && value.abs() <= 9_007_199_254_740_991.0 { value as i64 } else { 0 }
 }
 fn report(error: &str) {
-    web_sys::console::error_1(&JsValue::from_str(error));
+    crate::platform::error(error);
 }

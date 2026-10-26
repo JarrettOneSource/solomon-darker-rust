@@ -4,7 +4,6 @@
 use crate::gpu_ui::{FontRunOptions, GroupEffect, ImageShadow, UiFrame, font_run_with_options};
 use egui::{Align2, Color32, FontFamily, FontId, Id, Order, Rect, Stroke, pos2, vec2};
 use solomon_sim::menu::loading::MatchLoadingState;
-use web_sys::Document;
 
 const ART: &str = "assets/stock/menu/match-loading-background.png";
 
@@ -18,7 +17,7 @@ impl MatchLoadingView {
     pub fn layer_id(&self) -> egui::LayerId {
         egui::LayerId::new(Order::Foreground, Id::unique("match-loading"))
     }
-    pub fn attach(_document: &Document) -> Result<Self, String> {
+    pub fn attach() -> Result<Self, String> {
         Ok(Self::default())
     }
     pub fn update(

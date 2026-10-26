@@ -34,7 +34,7 @@ fn warnings_array(warnings: &[String]) -> Array {
 fn browser_preview(preview: &GameSaveImportPreview) -> Result<JsValue, JsValue> {
     let object = Object::new();
     let source = match preview.source {
-        GameSaveImportSource::Browser => "browser",
+        GameSaveImportSource::Game => "browser",
         GameSaveImportSource::Stock => "stock",
     };
     for (key, value) in [
@@ -72,7 +72,7 @@ pub async fn read_game_save_file_selection(selection: JsValue) -> Result<JsValue
         && files[0].name().to_lowercase().ends_with(".json")
         && files[0].size() > solomon_assets::website_save::MAX_SAVE_BYTES as f64
     {
-        return Err(save_error("The browser save is too large.".into()));
+        return Err(save_error("The save is too large.".into()));
     }
     let mut read_files = Vec::with_capacity(files.len());
     for file in files {

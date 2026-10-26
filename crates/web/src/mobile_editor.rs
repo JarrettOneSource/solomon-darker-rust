@@ -11,7 +11,6 @@ use solomon_sim::Vec2;
 use solomon_sim::hud::HudRect;
 use solomon_sim::mobile_ui::*;
 use std::rc::Rc;
-use web_sys::Document;
 
 pub(crate) use preview::MobileEditorPlayerPreview;
 pub(crate) struct MobileEditorArt {
@@ -153,7 +152,6 @@ pub(crate) struct MobileUiEditor {
 }
 impl MobileUiEditor {
     pub fn new(
-        _document: &Document,
         art: Rc<MobileEditorArt>,
         state: &MobileUiLayoutState,
         page: MobileUiSize,

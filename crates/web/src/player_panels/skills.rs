@@ -68,11 +68,7 @@ impl PlayerPanels {
             tint: 0x808080,
             ..NativeUiTextSpec::new(NativeUiFontName::Menu, "SKILLS", 800.0, 60.0)
         });
-        let coarse = self
-            .document
-            .default_view()
-            .and_then(|window| window.match_media("(pointer: coarse)").ok().flatten())
-            .is_some_and(|query| query.matches());
+        let coarse = crate::platform::coarse_pointer();
         for (line, y) in [
             (
                 if coarse {

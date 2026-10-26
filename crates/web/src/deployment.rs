@@ -5,13 +5,16 @@
 use std::{cell::RefCell, rc::Rc};
 
 mod state;
-use state::{DeploymentState, Publication};
+use state::DeploymentState;
+#[cfg(any(target_arch = "wasm32", test))]
+use state::Publication;
 
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen_futures::{JsFuture, spawn_local};
-use web_sys::{
-    AbortController, AbortSignal, Document, RequestCache, RequestInit, Response, Window,
-};
+#[cfg(target_arch = "wasm32")]
+use web_sys::{AbortController, AbortSignal, RequestCache, RequestInit, Response, Window};
 
 use crate::gpu_ui::UiFrame;
 use crate::hosted::WebsiteMount;
@@ -20,8 +23,10 @@ use egui::{Color32, FontFamily, FontId, Id, RichText, Stroke, vec2};
 pub struct DeploymentUpdate {
     message: Option<&'static str>,
     target_revision: Option<String>,
+    #[cfg(target_arch = "wasm32")]
     mount: WebsiteMount,
     state: Option<Rc<RefCell<DeploymentState>>>,
+    #[cfg(target_arch = "wasm32")]
     polling: Option<AbortController>,
     restarting: bool,
 }
@@ -31,25 +36,39 @@ impl DeploymentUpdate {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("deployment/update"))
     }
 
-    pub fn new(
-        document: &Document,
-        mount: WebsiteMount,
-        watch_server: bool,
-    ) -> Result<Self, String> {
-        let revision = document
+    pub fn new(mount: WebsiteMount, watch_server: bool) -> Result<Self, String> {
+        // A standalone desktop authority has no Website publication lifecycle.
+        // Native package updates belong to its application/launcher owner.
+        #[cfg(not(target_arch = "wasm32"))]
+        if watch_server {
+            return Err("Website deployment watching requires a browser page".into());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let (revision, _) = (None, mount);
+        #[cfg(target_arch = "wasm32")]
+        let revision = web_sys::window()
+            .and_then(|window| window.document())
+            .ok_or("The game has no document")?
             .query_selector("meta[name='solomon-build-revision']")
             .map_err(|_| "Could not read the game build revision")?
             .and_then(|meta| meta.get_attribute("content"))
             .and_then(|revision| watch_server.then(|| normalized_revision(&revision)).flatten());
-        let mut update = Self {
+        let update = Self {
             message: None,
             target_revision: None,
+            #[cfg(target_arch = "wasm32")]
             mount,
             state: revision.map(|revision| Rc::new(RefCell::new(DeploymentState::new(revision)))),
+            #[cfg(target_arch = "wasm32")]
             polling: None,
             restarting: false,
         };
-        update.poll_publication()?;
+        #[cfg(target_arch = "wasm32")]
+        let update = {
+            let mut update = update;
+            update.poll_publication()?;
+            update
+        };
         Ok(update)
     }
 
@@ -72,6 +91,9 @@ impl DeploymentUpdate {
         if deployment_sequence == 0 {
             return Err("The deployment publication sequence is invalid".into());
         }
+        if self.state.is_none() {
+            return Err("This session has no Website deployment lifecycle".into());
+        }
         self.restarting = true;
         self.target_revision = Some(target.clone());
         if let Some(state) = &self.state {
@@ -79,7 +101,9 @@ impl DeploymentUpdate {
         }
         self.message =
             Some("Saving your game before the update. Solomon Dark will restart automatically.");
-        self.poll_publication()
+        #[cfg(target_arch = "wasm32")]
+        self.poll_publication()?;
+        Ok(())
     }
 
     pub fn saved(&mut self) {
@@ -180,6 +204,7 @@ impl DeploymentUpdate {
         Ok(())
     }
 
+    #[cfg(target_arch = "wasm32")]
     fn poll_publication(&mut self) -> Result<(), String> {
         if let Some(previous) = self.polling.take() {
             previous.abort();
@@ -214,6 +239,7 @@ impl DeploymentUpdate {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 impl Drop for DeploymentUpdate {
     fn drop(&mut self) {
         if let Some(polling) = &self.polling {
@@ -222,6 +248,7 @@ impl Drop for DeploymentUpdate {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn wait_for_publication(
     url: &str,
     state: Rc<RefCell<DeploymentState>>,
@@ -263,6 +290,7 @@ async fn wait_for_publication(
     Ok(())
 }
 
+#[cfg(target_arch = "wasm32")]
 async fn abortable_delay(
     window: &Window,
     duration: i32,
@@ -304,6 +332,7 @@ fn normalized_deployment_id(id: &str) -> Option<String> {
     (id.len() == 32 && id.bytes().all(|byte| byte.is_ascii_hexdigit())).then_some(id)
 }
 
+#[cfg(any(target_arch = "wasm32", test))]
 fn deployment_publication(status: u16, body: &str) -> Option<Publication> {
     if !(200..300).contains(&status) {
         return None;

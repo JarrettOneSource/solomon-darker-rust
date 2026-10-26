@@ -9,6 +9,8 @@ mod batches;
 mod edit;
 mod effects;
 mod fonts;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use fonts::with_fonts;
 mod geometry;
 mod input;
 #[cfg(test)]
@@ -25,10 +27,10 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use egui::{Color32, Context, Painter, Pos2, Rect, Response, Vec2, pos2, vec2};
 use serde::Serialize;
-use web_sys::{Document, HtmlCanvasElement};
 
 use solomon_graphics::{BlendMode, ColorFilter, Renderer};
 
+pub use crate::platform::KeyStroke;
 pub use edit::{
     EditorRules, FontRunOptions, NativeEditOutput, NativeFontRun, NativeFontStroke,
     NativeLabelStyle, NativeTextEdit, OverflowWrap, TextSelection, font_run, font_run_with_options,
@@ -36,7 +38,7 @@ pub use edit::{
 };
 pub use effects::GroupEffect;
 pub use geometry::{clip_polygon_ellipse, css_bezier};
-pub use input::{BrowserKey, canvas_point, key_from_browser};
+pub use input::{canvas_point, key_from_browser};
 pub use painter::clip_scissor;
 pub use solomon_graphics::TextureSampling;
 pub use stock::{StockAtlas, message_frame, message_frame_scaled, native_text, paint_text_layout};
@@ -193,7 +195,7 @@ pub struct UiFrame<'a> {
     images: &'a painter::Images,
     widgets: &'a RefCell<BTreeMap<String, WidgetGeometry>>,
     previous_widgets: &'a BTreeMap<String, WidgetGeometry>,
-    key_codes: &'a [BrowserKey],
+    key_codes: &'a [KeyStroke],
     blend: BlendMode,
     color_filter: ColorFilter,
     announcements: &'a RefCell<Vec<accessibility::Announcement>>,
@@ -418,7 +420,7 @@ impl UiFrame<'_> {
     fn paint_position(&self, point: Pos2) -> Pos2 {
         (self.rotation * point.to_vec2() + self.translation).to_pos2()
     }
-    pub fn key_codes(&self) -> &[BrowserKey] {
+    pub fn key_codes(&self) -> &[KeyStroke] {
         self.key_codes
     }
     pub fn image(
@@ -727,6 +729,10 @@ impl UiFrame<'_> {
         if !response.visible() {
             return;
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(accessibility::role(role), response.enabled(), label)
+        });
         let rect = self
             .ctx
             .layer_transform_to_global(response.layer_id)
@@ -908,11 +914,11 @@ impl UiFrame<'_> {
 
 pub struct GpuUi {
     ctx: Context,
-    canvas: HtmlCanvasElement,
-    input: input::BrowserInput,
+    surface: crate::platform::Surface,
+    input: input::PlatformInput,
     images: painter::Images,
     painter: painter::GpuPainter,
-    _fonts: fonts::BrowserFonts,
+    _fonts: fonts::PlatformFonts,
     accessibility: accessibility::Accessibility,
     widgets: BTreeMap<String, WidgetGeometry>,
     input_diagnostics: UiDiagnostics,
@@ -982,15 +988,14 @@ impl GpuUi {
     }
 
     pub async fn load(
-        document: &Document,
-        canvas: &HtmlCanvasElement,
+        surface: &crate::platform::Surface,
         renderer: &Renderer,
     ) -> Result<Self, String> {
         let ctx = Self::new_context();
-        let fonts = fonts::load(document, &ctx).await?;
+        let fonts = fonts::load(surface, &ctx).await?;
         let images = painter::Images::default();
         images.load_stock(renderer).await?;
-        let input = match input::BrowserInput::attach(document, canvas, &ctx) {
+        let input = match input::PlatformInput::attach(surface, &ctx) {
             Ok(input) => input,
             Err(error) => {
                 images.destroy(&renderer.graphics_context());
@@ -998,7 +1003,7 @@ impl GpuUi {
             }
         };
         let painter = painter::GpuPainter::new(renderer);
-        let accessibility = match accessibility::Accessibility::attach(document) {
+        let accessibility = match accessibility::Accessibility::attach(surface) {
             Ok(accessibility) => accessibility,
             Err(error) => {
                 images.destroy(&renderer.graphics_context());
@@ -1007,7 +1012,7 @@ impl GpuUi {
         };
         Ok(Self {
             ctx,
-            canvas: canvas.clone(),
+            surface: surface.clone(),
             input,
             images,
             painter,
@@ -1054,6 +1059,29 @@ impl GpuUi {
         &self.ctx
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn window_event(&mut self, event: &winit::event::WindowEvent) -> Result<(), String> {
+        self.input.window_event(event)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn init_accesskit<T: From<egui_winit::accesskit_winit::Event> + Send>(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        proxy: winit::event_loop::EventLoopProxy<T>,
+    ) {
+        self.input.init_accesskit(event_loop, proxy);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn accesskit_action(
+        &mut self,
+        request: egui::accesskit::ActionRequest,
+    ) -> Result<(), String> {
+        self.input.accesskit_action(request)
+    }
+
+    #[cfg(target_arch = "wasm32")]
     pub fn set_native_dispatch_handler(
         &mut self,
         handler: impl Fn() -> Result<(), String> + 'static,
@@ -1122,7 +1150,7 @@ impl GpuUi {
         renderer.flush();
         self.images.upload_ready(renderer)?;
         self.images.begin_frame();
-        let physical = [self.canvas.width() as i32, self.canvas.height() as i32];
+        let physical = self.surface.physical_size();
         let pixels_per_point = physical[0] as f32 / viewport[0];
         let pending = self.input.take(viewport, pixels_per_point, time_seconds)?;
         self.input_diagnostics.frame += 1;
@@ -1142,7 +1170,7 @@ impl GpuUi {
             pending: pending.into(),
             layout_input,
             viewport,
-            physical: [self.canvas.width() as i32, self.canvas.height() as i32],
+            physical: self.surface.physical_size(),
             pixels_per_point,
             output: None,
             textures: std::mem::take(&mut self.deferred_textures),
@@ -1285,12 +1313,12 @@ impl GpuUi {
             keyboard: self.ctx.egui_wants_keyboard_input() || text_edit_focused(&self.ctx),
             text: text_edit_focused(&self.ctx),
         };
-        self.input.apply_output(&output.platform_output, capture)?;
         self.accessibility.update(
-            &output.platform_output,
+            &mut output.platform_output,
             &announcements.into_inner(),
             &self.widgets,
         )?;
+        self.input.apply_output(&output.platform_output, capture)?;
         if let Some(error) = fonts::take_error() {
             return Err(error);
         }

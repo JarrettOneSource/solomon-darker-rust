@@ -12,6 +12,7 @@ mod tree;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
+use solomon_graphics::assets::Image;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::gate::GateLeaf;
 use solomon_sim::boneyard::lighting::{
@@ -40,7 +41,6 @@ use solomon_sim::float::fround;
 use solomon_sim::hub::painter::{PainterLane, PainterLayer};
 use solomon_sim::painter::overlays::{PainterOverlayOrder, PainterOwnerOverlay};
 use solomon_sim::presentation::native_puppet_hit_tint;
-use web_sys::HtmlImageElement;
 
 use crate::courtyard::{ActorPainters, Camera};
 use crate::presentation::PresentationClocks;
@@ -964,7 +964,7 @@ enum SceneryGlyphMaterial {
 }
 
 enum PreparedImage {
-    Image(HtmlImageElement),
+    Image(Image),
     Pixels { width: u32, height: u32, pixels: Vec<u8> },
 }
 

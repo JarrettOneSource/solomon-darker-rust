@@ -2,18 +2,18 @@
 //! The browser streams through the mounted account API, then admits only the descriptor's
 //! exact length and SHA-256 to CacheStorage and the image/audio/document consumers.
 
-use std::collections::BTreeMap;
-use std::fmt::Write;
-
-use js_sys::{Array, Reflect, Uint8Array};
-use solomon_sim::modding::assets::GameModAsset;
-use wasm_bindgen::{JsCast, JsValue};
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{Blob, BlobPropertyBag, Cache, ReadableStreamDefaultReader, Response, SubtleCrypto};
-
 use crate::hosted::WebsiteApi;
-
-const CACHE_NAME: &str = "solomon-dark-game-content-v1";
+use crate::platform::http::ReadError;
+use solomon_sim::modding::assets::GameModAsset;
+use std::collections::BTreeMap;
+#[cfg(target_arch = "wasm32")]
+mod browser;
+#[cfg(not(target_arch = "wasm32"))]
+mod native;
+#[cfg(target_arch = "wasm32")]
+use browser::ContentCache;
+#[cfg(not(target_arch = "wasm32"))]
+use native::ContentCache;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GameModContentLoadError {
@@ -26,8 +26,8 @@ impl GameModContentLoadError {
         Self { mod_id: asset.mod_id.clone(), message: message.into() }
     }
 
-    fn platform(message: &str, error: JsValue) -> Self {
-        Self { mod_id: String::new(), message: format!("{message}: {}", describe(&error)) }
+    fn platform(message: &str, error: String) -> Self {
+        Self { mod_id: String::new(), message: format!("{message}: {error}") }
     }
 }
 
@@ -46,48 +46,19 @@ pub struct GameContentDownloadProgress<'a> {
     pub total_bytes: u64,
 }
 
-/// The accepted descriptors remain owned by the session. This is only their browser I/O.
+/// The accepted descriptors remain owned by the session; this owner verifies and caches their bytes.
 #[derive(Clone)]
 pub struct ModContentCache {
     api: WebsiteApi,
-    cache: Option<Cache>,
-    subtle: SubtleCrypto,
+    cache: ContentCache,
 }
 
 impl ModContentCache {
     pub async fn open(api: WebsiteApi) -> Result<Self, GameModContentLoadError> {
-        let window = web_sys::window().ok_or_else(|| GameModContentLoadError {
-            mod_id: String::new(),
-            message: "The game has no browser window".into(),
+        let cache = ContentCache::open().await.map_err(|error| {
+            GameModContentLoadError::platform("Could not open content cache", error)
         })?;
-        let cache_property =
-            Reflect::get(&window, &JsValue::from_str("caches")).map_err(|error| {
-                GameModContentLoadError::platform("Could not open content cache", error)
-            })?;
-        let cache = if cache_property.is_undefined() || cache_property.is_null() {
-            // Source permits browsers without CacheStorage; verification remains mandatory.
-            None
-        } else {
-            let storage = window.caches().map_err(|error| {
-                GameModContentLoadError::platform("Could not open content cache", error)
-            })?;
-            let value = JsFuture::from(storage.open(CACHE_NAME)).await.map_err(|error| {
-                GameModContentLoadError::platform("Could not open content cache", error)
-            })?;
-            Some(value.dyn_into::<Cache>().map_err(|error| {
-                GameModContentLoadError::platform(
-                    "The browser returned an invalid content cache",
-                    error,
-                )
-            })?)
-        };
-        let subtle = window
-            .crypto()
-            .map_err(|error| {
-                GameModContentLoadError::platform("Content verification is unavailable", error)
-            })?
-            .subtle();
-        Ok(Self { api, cache, subtle })
+        Ok(Self { api, cache })
     }
 
     pub async fn prefetch(
@@ -136,148 +107,76 @@ impl ModContentCache {
         asset: &GameModAsset,
     ) -> Result<ModContentUrl, GameModContentLoadError> {
         let bytes = self.bytes(asset).await?;
-        let parts = Array::new();
-        parts.push(&Uint8Array::from(bytes.as_slice()));
-        let options = BlobPropertyBag::new();
-        options.set_type(&asset.content_type);
-        let blob =
-            Blob::new_with_u8_array_sequence_and_options(&parts, &options).map_err(|_| {
-                GameModContentLoadError::asset(asset, "Could not prepare verified content")
-            })?;
-        let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(|_| {
-            GameModContentLoadError::asset(asset, "Could not open verified content")
-        })?;
+        let url = solomon_graphics::assets::ResourceUrl::new(bytes, &asset.content_type)
+            .map_err(|error| GameModContentLoadError::asset(asset, error))?;
         Ok(ModContentUrl { url })
     }
 
     async fn read(
         &self,
         asset: &GameModAsset,
-        mut on_chunk: impl FnMut(u64),
+        on_chunk: impl FnMut(u64),
     ) -> Result<Vec<u8>, GameModContentLoadError> {
         let url = self.content_url(asset);
-        if let Some(cache) = &self.cache {
-            let cached = JsFuture::from(cache.match_with_str(&url)).await.map_err(|_| {
-                GameModContentLoadError::asset(
-                    asset,
-                    format!("Could not read cached content for {}:{}.", asset.mod_id, asset.path),
-                )
-            })?;
-            if !cached.is_undefined() {
-                let response = cached.dyn_into::<Response>().map_err(|_| {
-                    GameModContentLoadError::asset(
-                        asset,
-                        "The browser returned invalid cached content",
-                    )
-                })?;
-                let buffer = response.array_buffer().map_err(|_| cached_read_error(asset))?;
-                let buffer = JsFuture::from(buffer).await.map_err(|_| cached_read_error(asset))?;
-                let bytes = Uint8Array::new(&buffer).to_vec();
-                if self.verified(asset, &bytes).await? {
-                    return Ok(bytes);
-                }
-                JsFuture::from(cache.delete_with_str(&url)).await.map_err(|error| {
-                    GameModContentLoadError::platform(
-                        "Could not discard invalid cached content",
-                        error,
-                    )
-                })?;
+        if let Some(bytes) = self
+            .cache
+            .read(&url, &asset.sha256, asset.byte_length)
+            .await
+            .map_err(|_| cached_read_error(asset))?
+        {
+            if let Some(bytes) = self.verified(asset, bytes).await? {
+                return Ok(bytes);
             }
+            self.cache.remove(&url, &asset.sha256).await.map_err(|error| {
+                GameModContentLoadError::platform("Could not discard invalid cached content", error)
+            })?;
         }
         let response =
             self.api.content_download(&asset.sha256).await.map_err(|_| download_error(asset))?;
-        let body = response.body().ok_or_else(|| download_error(asset))?;
-        let reader = body
-            .get_reader()
-            .dyn_into::<ReadableStreamDefaultReader>()
-            .map_err(|_| download_error(asset))?;
-        let mut bytes = Vec::new();
-        loop {
-            let next = JsFuture::from(reader.read()).await.map_err(|_| download_error(asset))?;
-            let done = Reflect::get(&next, &JsValue::from_str("done"))
-                .map_err(|_| download_error(asset))?;
-            if done.as_bool() == Some(true) {
-                break;
-            }
-            let value = Reflect::get(&next, &JsValue::from_str("value"))
-                .map_err(|_| download_error(asset))?;
-            let chunk = value.dyn_into::<Uint8Array>().map_err(|_| download_error(asset))?;
-            if bytes.len() as u64 + u64::from(chunk.length()) > asset.byte_length {
-                return Err(GameModContentLoadError::asset(
+        let bytes =
+            response.bytes(asset.byte_length, on_chunk).await.map_err(|error| match error {
+                ReadError::TooLarge => GameModContentLoadError::asset(
                     asset,
-                    format!("Downloaded content is too large: {}:{}.", asset.mod_id, asset.path,),
-                ));
-            }
-            bytes.extend(chunk.to_vec());
-            on_chunk(bytes.len() as u64);
-        }
-        reader.release_lock();
-        if !self.verified(asset, &bytes).await? {
-            return Err(GameModContentLoadError::asset(
-                asset,
-                format!("Downloaded content failed verification: {}:{}.", asset.mod_id, asset.path,),
-            ));
-        }
-        if let Some(cache) = &self.cache {
-            let response =
-                Response::new_with_opt_js_u8_array(Some(&Uint8Array::from(bytes.as_slice())))
-                    .map_err(|error| {
-                        GameModContentLoadError::platform("Could not prepare cached content", error)
-                    })?;
-            for (name, value) in [
-                ("cache-control", "public, max-age=31536000, immutable"),
-                ("content-type", asset.content_type.as_str()),
-            ] {
-                response.headers().set(name, value).map_err(|error| {
-                    GameModContentLoadError::platform("Could not prepare cached content", error)
-                })?;
-            }
-            JsFuture::from(cache.put_with_str(&url, &response)).await.map_err(|error| {
-                GameModContentLoadError::platform("Could not save verified content", error)
+                    format!("Downloaded content is too large: {}:{}.", asset.mod_id, asset.path),
+                ),
+                ReadError::Transport(_) => download_error(asset),
             })?;
-        }
+        let bytes = self.verified(asset, bytes).await?.ok_or_else(|| {
+            GameModContentLoadError::asset(
+                asset,
+                format!("Downloaded content failed verification: {}:{}.", asset.mod_id, asset.path),
+            )
+        })?;
+        self.cache.write(&url, &asset.sha256, &bytes, &asset.content_type).await.map_err(
+            |error| GameModContentLoadError::platform("Could not save verified content", error),
+        )?;
         Ok(bytes)
     }
 
     async fn verified(
         &self,
         asset: &GameModAsset,
-        bytes: &[u8],
-    ) -> Result<bool, GameModContentLoadError> {
+        bytes: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, GameModContentLoadError> {
         if bytes.len() as u64 != asset.byte_length {
-            return Ok(false);
+            return Ok(None);
         }
-        let promise =
-            self.subtle.digest_with_str_and_u8_array("SHA-256", bytes).map_err(|error| {
-                GameModContentLoadError::platform("Could not verify content", error)
-            })?;
-        let digest = JsFuture::from(promise).await.map_err(|error| {
-            GameModContentLoadError::platform("Could not verify content", error)
-        })?;
-        let mut hex = String::with_capacity(64);
-        for byte in Uint8Array::new(&digest).to_vec() {
-            write!(&mut hex, "{byte:02x}").expect("writing a digest to a String cannot fail");
-        }
-        Ok(hex == asset.sha256)
+        self.cache
+            .verify(&asset.sha256, bytes)
+            .await
+            .map_err(|error| GameModContentLoadError::platform("Could not verify content", error))
     }
 }
 
-/// A consumer retains this lease as long as its decoded image/audio source can use the URL.
+/// Retained until its decoded image/audio consumer releases the source.
 pub struct ModContentUrl {
-    url: String,
+    url: solomon_graphics::assets::ResourceUrl,
 }
 
 impl ModContentUrl {
     #[must_use]
     pub fn as_str(&self) -> &str {
-        &self.url
-    }
-}
-
-impl Drop for ModContentUrl {
-    fn drop(&mut self) {
-        // Revocation is idempotent; a browser shutdown cannot leave a live resource behind.
-        let _ = web_sys::Url::revoke_object_url(&self.url);
+        self.url.as_str()
     }
 }
 
@@ -314,16 +213,90 @@ fn download_error(asset: &GameModAsset) -> GameModContentLoadError {
     )
 }
 
-fn describe(error: &JsValue) -> String {
-    error
-        .as_string()
-        .or_else(|| Reflect::get(error, &JsValue::from_str("message")).ok()?.as_string())
-        .unwrap_or_else(|| format!("{error:?}"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn native_content_reopens_offline_and_replaces_corrupt_bytes_only_after_verification() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        let directory = std::env::temp_dir()
+            .join(format!("solomon-content-{}", crate::platform::random_uuid().unwrap()));
+        crate::storage::configure_native_storage(directory.clone()).unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        crate::storage::write_preference(&format!("sdr.token@http://{address}"), Some("test-only"))
+            .unwrap();
+        let digest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        let server = std::thread::spawn(move || {
+            for _ in 0..2 {
+                let (mut socket, _) = listener.accept().unwrap();
+                let mut request = Vec::new();
+                let mut byte = [0];
+                while !request.ends_with(b"\r\n\r\n") {
+                    socket.read_exact(&mut byte).unwrap();
+                    request.push(byte[0]);
+                }
+                let request = String::from_utf8(request).unwrap();
+                assert!(request.starts_with(&format!("GET /api/game/content/{digest} HTTP/1.1")));
+                assert!(request.to_ascii_lowercase().contains("authorization: bearer test-only"));
+                socket
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nabc",
+                    )
+                    .unwrap();
+            }
+        });
+        futures_lite::future::block_on(async {
+            let api = WebsiteApi::new(
+                &format!("http://{address}/"),
+                crate::hosted::WebsiteMount::default(),
+            )
+            .unwrap();
+            assert!(
+                WebsiteApi::new("https://elsewhere.test/", crate::hosted::WebsiteMount::default())
+                    .unwrap()
+                    .token()
+                    .unwrap()
+                    .is_none(),
+                "an account token cannot cross Website origins"
+            );
+            let cache = ModContentCache::open(api.clone()).await.unwrap();
+            let asset = GameModAsset {
+                byte_length: 3,
+                content_type: "text/plain".into(),
+                kind: "text".into(),
+                mod_id: "test.content".into(),
+                path: "test.txt".into(),
+                sha256: digest.into(),
+            };
+            let mut progress = Vec::new();
+            assert_eq!(cache.read(&asset, |read| progress.push(read)).await.unwrap(), b"abc");
+            assert_eq!(progress.last(), Some(&3));
+            let file = directory.join("content-v1").join(digest);
+            std::fs::write(&file, b"abd").unwrap();
+            assert_eq!(cache.bytes(&asset).await.unwrap(), b"abc");
+            assert_eq!(std::fs::read(&file).unwrap(), b"abc");
+            server.join().unwrap();
+            let reopened = ModContentCache::open(api).await.unwrap();
+            assert_eq!(
+                reopened.bytes(&asset).await.unwrap(),
+                b"abc",
+                "verified cache works with the server stopped"
+            );
+            let resource = reopened.object_url(&asset).await.unwrap();
+            let url = resource.as_str().to_owned();
+            assert_eq!(solomon_graphics::assets::fetch_bytes(&url).await.unwrap(), b"abc");
+            drop(resource);
+            assert!(solomon_graphics::assets::fetch_bytes(&url).await.is_err());
+            let mut invalid = asset;
+            invalid.sha256 = "../escape".into();
+            assert!(reopened.bytes(&invalid).await.is_err());
+        });
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 
     #[test]
     fn immutable_content_deduplicates_by_hash_and_rejects_conflicting_sizes() {

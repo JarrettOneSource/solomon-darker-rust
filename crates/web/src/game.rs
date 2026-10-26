@@ -7,12 +7,14 @@ use std::rc::Rc;
 
 mod cheats;
 mod desktop;
+#[cfg(target_arch = "wasm32")]
 pub(crate) mod editor_test;
 mod hosted;
 mod hosted_save;
 mod native;
 mod social;
 mod spectator;
+pub(crate) mod tasks;
 mod ui_layers;
 use native::{CommandFeedback, NativeGame};
 use solomon_protocol::{ClientMessage, GameCommand};
@@ -43,6 +45,8 @@ use solomon_sim::boneyard::lighting::NativeBoneyardLightIndex;
 use solomon_sim::economy::HubEconomyState;
 use solomon_sim::economy::{HubInventoryAction, HubItemKind, HubTraderId};
 use solomon_sim::game_run::GameRunPhase;
+#[cfg(target_arch = "wasm32")]
+use solomon_sim::hub::HUB_LOGICAL_VIEW;
 use solomon_sim::hub::depth::HubDepth;
 use solomon_sim::hub::interaction::{
     HubInteractionAvailability, HubInteractionId, hub_interaction_at_point,
@@ -50,7 +54,7 @@ use solomon_sim::hub::interaction::{
 };
 use solomon_sim::hub::painter::courtyard_player_sort_bias;
 use solomon_sim::hub::teacher::hub_teacher_draw_plan;
-use solomon_sim::hub::{HUB_CAMERA_SCALE, HUB_LOGICAL_VIEW, hub_region_camera_origin_for_view};
+use solomon_sim::hub::{HUB_CAMERA_SCALE, hub_region_camera_origin_for_view};
 use solomon_sim::hud::{HudBeltEntry, HudState};
 use solomon_sim::input::{
     GameplayAction, GameplayAim, GameplayInputSample, project_native_stick_aim,
@@ -64,7 +68,9 @@ use solomon_sim::session::{
     GameCheckpoint, GameSession, GameSessionInput, GameSessionOptions, GameSessionTickContext,
 };
 use solomon_sim::settings::GameSettings;
-use wasm_bindgen::{JsCast, JsValue};
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsCast;
+#[cfg(target_arch = "wasm32")]
 use web_sys::HtmlCanvasElement;
 
 use crate::audio::GameAudio;
@@ -108,7 +114,7 @@ struct GameUiSnapshot {
 }
 
 pub struct Game {
-    canvas: HtmlCanvasElement,
+    surface: crate::platform::Surface,
     renderer: Renderer,
     gpu_ui: GpuUi,
     ui_ready: bool,
@@ -120,6 +126,7 @@ pub struct Game {
     teacher_view: TeacherView,
     spell_view: SpellView,
     world_overlays: WorldOverlaysView,
+    world_overlay_diagnostics: crate::world_overlays::WorldOverlayDiagnostics,
     notifications: crate::loot::WorldNotifications,
     world_screen_feedback: WorldScreenFeedback,
     npc_view: NpcView,
@@ -127,9 +134,9 @@ pub struct Game {
     local_player_id: String,
     native: Option<NativeGame>,
     hosted: Option<hosted::HostedGame>,
+    #[cfg(target_arch = "wasm32")]
     editor_test: Option<editor_test::EditorTestPhase>,
     desktop_bridge: Option<crate::desktop::DesktopBridge>,
-    desktop_close_callback: Option<wasm_bindgen::closure::Closure<dyn FnMut() -> js_sys::Promise>>,
     desktop_close: Option<desktop::DesktopClose>,
     _playtime: Option<storage::PlaytimeRecorder>,
     mobile_layout_store: crate::mobile_layout::MobileUiLayoutStore,
@@ -187,6 +194,7 @@ pub struct Game {
     save_in_flight: bool,
     last_saved_tick: u64,
     save_error: Option<String>,
+    #[cfg(target_arch = "wasm32")]
     save_listeners: Vec<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::Event)>>,
 }
 
@@ -208,22 +216,10 @@ struct ActiveBattle {
 }
 
 impl Game {
-    /// Resource construction retires before saved-session parsing begins. Return
-    /// the permanent owner so callers never retain another large Game return slot.
+    /// Resource construction retires before saved-session parsing begins.
+    #[cfg(target_arch = "wasm32")]
     pub fn load() -> impl std::future::Future<Output = Result<Rc<RefCell<Self>>, String>> {
         Box::pin(async {
-            let mut game = Self::load_resources().await?;
-            game.initialize_session().await?;
-            Ok(Rc::new(RefCell::new(game)))
-        })
-    }
-
-    /// Allocate the retained resource future before polling its child loaders.
-    fn load_resources() -> impl std::future::Future<Output = Result<Self, String>> {
-        Box::pin(async {
-            crate::runtime_ui::begin(
-                GpuUi::startup_resources().into_iter().chain(GameAudio::startup_resources()),
-            )?;
             let window = web_sys::window().ok_or("no window")?;
             let document = window.document().ok_or("no document")?;
             let playtime = if editor_test::configured(&document)? {
@@ -237,6 +233,46 @@ impl Game {
                 .dyn_into()
                 .map_err(|_| "#game is not a canvas")?;
 
+            let renderer = Renderer::for_canvas(&canvas)?;
+            let surface = crate::platform::Surface::from_canvas(canvas);
+            let mut game = Self::load_resources(surface, renderer, playtime).await?;
+            game.initialize_session().await?;
+            Ok(Rc::new(RefCell::new(game)))
+        })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load_native(
+        surface: crate::platform::Surface,
+        renderer: Renderer,
+        endpoint: crate::desktop::DesktopEndpoint,
+        controls: crate::desktop::DesktopControls,
+    ) -> impl std::future::Future<Output = Result<Rc<RefCell<Self>>, String>> {
+        Box::pin(async move {
+            let playtime = Some(storage::PlaytimeRecorder::start());
+            let mut game = Self::load_resources(surface, renderer, playtime).await?;
+            game.initialize_settings()?;
+            match storage::read_hall() {
+                Ok(entries) => game.hall_entries = entries,
+                Err(error) => Self::show_storage_error(&error),
+            }
+            game.desktop_bridge = Some(crate::desktop::DesktopBridge::new(controls));
+            game.load_hosted(crate::hosted::WebsiteMount::default(), Some(endpoint)).await?;
+            crate::runtime_ui::completed(crate::runtime_ui::RUNTIME)?;
+            Ok(Rc::new(RefCell::new(game)))
+        })
+    }
+
+    /// Allocate the retained resource future before polling its child loaders.
+    fn load_resources(
+        surface: crate::platform::Surface,
+        renderer: Renderer,
+        playtime: Option<storage::PlaytimeRecorder>,
+    ) -> impl std::future::Future<Output = Result<Self, String>> {
+        Box::pin(async move {
+            crate::runtime_ui::begin(
+                GpuUi::startup_resources().into_iter().chain(GameAudio::startup_resources()),
+            )?;
             set_status("Loading stock assets…");
             let college = parse_bundle(&assets::fetch_bytes("assets/stock/College.bundle").await?)
                 .map_err(|error| format!("College.bundle: {error}"))?;
@@ -256,8 +292,7 @@ impl Game {
                 assets::load_image("assets/stock/player-character-unselected-robe-attachment.png")
                     .await?;
 
-            let renderer = Renderer::for_canvas(&canvas)?;
-            let gpu_ui = GpuUi::load(&document, &canvas, &renderer).await?;
+            let gpu_ui = GpuUi::load(&surface, &renderer).await?;
             let teacher_view = TeacherView::load(&renderer).await?;
             let spell_view = SpellView::load(&renderer).await?;
             let college_texture = renderer.upload(&college_image)?;
@@ -272,7 +307,8 @@ impl Game {
             )?;
             let scene = CourtyardScene::new(college, college_texture)?;
             let rooms = PrivateRoomScenes::load(&renderer).await?;
-            let economy = HubEconomyState::new(js_sys::Date::now() as i64, WizardElement::Ether);
+            let economy =
+                HubEconomyState::new(crate::platform::epoch_ms() as i64, WizardElement::Ether);
             let [primary_tint, secondary_tint] = economy
                 .equipment
                 .hat
@@ -290,25 +326,25 @@ impl Game {
                 renderer.upload(&robe_attachment)?,
                 &renderer,
             )?;
-            let hotbar = HotbarSelection::attach(&window)?;
-            let input = MovementInput::attach(&window, hotbar.clone())?;
+            let hotbar = HotbarSelection::attach(&surface)?;
+            let input = MovementInput::attach(&surface, hotbar.clone())?;
             input.set_blocked(true)?;
             input.set_primary_casting_enabled(false)?;
-            let mut hud = Hud::attach(&document, hotbar.clone()).await?;
+            let mut hud = Hud::attach(hotbar.clone()).await?;
             hud.set_actions_enabled(true)?;
 
             hud.set_action_enabled(HudAction::Pause, true)?;
-            let menu = MenuUi::attach(&document).await?;
-            let panels = PlayerPanels::attach(&document, hotbar.clone()).await?;
-            let skill_picker = SkillPicker::attach(&document).await?;
+            let menu = MenuUi::attach(&surface).await?;
+            let panels = PlayerPanels::attach(hotbar.clone()).await?;
+            let skill_picker = SkillPicker::attach().await?;
             set_status("Loading stock audio…");
-            let audio = GameAudio::load(&document).await?;
+            let audio = GameAudio::load(&surface).await?;
             audio.set_scene(MusicScene::Title)?;
             let battle_views = BattleViews::load(&renderer, &spell_view).await?;
             let world_overlays = WorldOverlaysView::load(&renderer).await?;
-            let tutorial_ui = TutorialUi::attach(&document).await?;
-            let college_overlay = CollegeIntroOverlay::attach(&document).await?;
-            let game_over = GameOverOverlay::attach(&document)?;
+            let tutorial_ui = TutorialUi::attach().await?;
+            let college_overlay = CollegeIntroOverlay::attach().await?;
+            let game_over = GameOverOverlay::attach()?;
             let session = GameSession::new(
                 LOCAL_PLAYER_ID.to_owned(),
                 NewGameSelection {
@@ -319,7 +355,7 @@ impl Game {
                 GameSessionOptions::default(),
             );
             let game = Self {
-                canvas,
+                surface: surface.clone(),
                 renderer,
                 gpu_ui,
                 ui_ready: false,
@@ -331,6 +367,7 @@ impl Game {
                 teacher_view,
                 spell_view,
                 world_overlays,
+                world_overlay_diagnostics: Default::default(),
                 notifications: crate::loot::WorldNotifications::default(),
                 world_screen_feedback: WorldScreenFeedback::default(),
                 npc_view,
@@ -338,24 +375,20 @@ impl Game {
                 local_player_id: LOCAL_PLAYER_ID.into(),
                 native: None,
                 hosted: None,
+                #[cfg(target_arch = "wasm32")]
                 editor_test: None,
                 desktop_bridge: None,
-                desktop_close_callback: None,
                 desktop_close: None,
                 _playtime: playtime,
-                mobile_layout_store: crate::mobile_layout::MobileUiLayoutStore::new(
-                    &window,
-                    &crate::hosted::WebsiteMount::configured(&window)?
-                        .unwrap_or(crate::hosted::WebsiteMount::new("")?),
-                )?,
+                mobile_layout_store: crate::mobile_layout::MobileUiLayoutStore::new(&surface)?,
                 mod_assets: None,
                 mod_content: crate::mod_content_projection::ModContentState::default(),
-                mod_minimap: crate::mod_minimap::ModMinimapView::new(&document)?,
-                mod_panels: crate::mod_panels::ModPanelsView::new(&document)?,
-                mod_skills: crate::mod_skills::ModSkillsUi::new(&document)?,
-                mod_skill_quickbar: crate::mod_skill_quickbar::ModSkillQuickbarView::new(&window)?,
+                mod_minimap: crate::mod_minimap::ModMinimapView::new()?,
+                mod_panels: crate::mod_panels::ModPanelsView::new()?,
+                mod_skills: crate::mod_skills::ModSkillsUi::new()?,
+                mod_skill_quickbar: crate::mod_skill_quickbar::ModSkillQuickbarView::new(&surface)?,
                 mod_audio: None,
-                mod_overlays: crate::mod_world_overlays::ModWorldOverlays::new(&document)?,
+                mod_overlays: crate::mod_world_overlays::ModWorldOverlays::new()?,
                 mod_projection: None,
                 mod_viewport_size: None,
                 input_aim: None,
@@ -367,18 +400,18 @@ impl Game {
                 hud,
                 menu,
                 match_loading: None,
-                match_loading_view: crate::match_loading::MatchLoadingView::attach(&document)?,
+                match_loading_view: crate::match_loading::MatchLoadingView::attach()?,
                 panels,
                 book_feedback_scope: None,
                 skill_picker,
-                social: SocialUi::attach(&document).await?,
-                cheats: crate::cheats::CheatUi::attach(&document)?,
+                social: SocialUi::attach(&surface).await?,
+                cheats: crate::cheats::CheatUi::attach(&surface)?,
                 pending_cheat_open: false,
-                observer_ui: crate::observer::ObserverUi::attach(&document)?,
+                observer_ui: crate::observer::ObserverUi::attach()?,
                 spectator_camera: Default::default(),
-                spectator_ui: crate::spectator::SpectatorStatusView::attach(&document).await?,
-                shared_gameplay: SharedGameplayUi::attach(&document)?,
-                fullscreen: FullscreenControl::attach(&document)?,
+                spectator_ui: crate::spectator::SpectatorStatusView::attach().await?,
+                shared_gameplay: SharedGameplayUi::attach()?,
+                fullscreen: FullscreenControl::attach(&surface)?,
                 audio,
                 combat_audio: None,
                 level_up: Default::default(),
@@ -402,15 +435,14 @@ impl Game {
                 save_in_flight: false,
                 last_saved_tick: 0,
                 save_error: None,
+                #[cfg(target_arch = "wasm32")]
                 save_listeners: Vec::new(),
             };
             Ok(game)
         })
     }
 
-    async fn initialize_session(&mut self) -> Result<(), String> {
-        let window = web_sys::window().ok_or("no window")?;
-        let document = window.document().ok_or("no document")?;
+    fn initialize_settings(&mut self) -> Result<(), String> {
         set_status("");
         self.update_mobile_layout()?;
         match storage::load_settings() {
@@ -420,6 +452,14 @@ impl Game {
             }
             Err(error) => Self::show_storage_error(&error),
         }
+        Ok(())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    async fn initialize_session(&mut self) -> Result<(), String> {
+        let window = web_sys::window().ok_or("no window")?;
+        let document = window.document().ok_or("no document")?;
+        self.initialize_settings()?;
         if editor_test::configured(&document)? {
             self.load_editor_test(&window).await?;
             return Ok(());
@@ -428,17 +468,12 @@ impl Game {
             Ok(entries) => self.hall_entries = entries,
             Err(error) => Self::show_storage_error(&error),
         }
-        if let Some(endpoint) = crate::desktop::configured(&window)? {
-            self.load_hosted(&window, crate::hosted::WebsiteMount::default(), Some(endpoint))
-                .await?;
-            return Ok(());
-        }
         if let Some(mount) = crate::hosted::WebsiteMount::configured(&window)? {
-            self.load_hosted(&window, mount, None).await?;
+            self.load_hosted(mount, None).await?;
             return Ok(());
         }
-        if crate::network::native_host_requested(&window)? {
-            self.native = Some(NativeGame::inspect(&window)?);
+        if crate::network::native_host_requested()? {
+            self.native = Some(NativeGame::inspect()?);
             self.menu.show_title(false)?;
             set_status("Checking saved game…");
             return Ok(());
@@ -523,7 +558,7 @@ impl Game {
         if self.native.is_none() && !self.session.can_enter_boneyard() {
             return Err("The current run must finish before starting another".into());
         }
-        let resolution = web_sys::window().map_or(1.0, |window| window.device_pixel_ratio());
+        let resolution = self.surface.scale_factor();
         let pending_snapshot = self
             .native
             .as_ref()
@@ -634,6 +669,7 @@ impl Game {
         Ok(())
     }
 
+    #[cfg(target_arch = "wasm32")]
     pub(crate) fn attach_native_ui(
         game: &Rc<RefCell<Self>>,
         window: &web_sys::Window,
@@ -656,10 +692,11 @@ impl Game {
     /// Native clipboard and editing defaults observe the preceding UI action's
     /// committed focus. Simulation, transport polling and drawing remain on rAF.
     fn dispatch_native_ui(&mut self, time: f64) -> Result<(), String> {
-        if self.editor_test_disposed()
-            || self.canvas.client_width() <= 0
-            || self.canvas.client_height() <= 0
-        {
+        #[cfg(target_arch = "wasm32")]
+        if self.editor_test_disposed() {
+            return Ok(());
+        }
+        if self.surface.logical_width() <= 0 || self.surface.logical_height() <= 0 {
             return Ok(());
         }
         let Some(mut run) = self.gpu_ui.begin_native_dispatch(time / 1000.0)? else {
@@ -676,6 +713,7 @@ impl Game {
                     break;
                 }
                 self.commit_ui(time, menu_was_open)?;
+                #[cfg(target_arch = "wasm32")]
                 if self.editor_test_disposed() {
                     return Ok(());
                 }
@@ -689,19 +727,62 @@ impl Game {
         Ok(())
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn native_ui(&mut self) -> &mut GpuUi {
+        &mut self.gpu_ui
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn window_event(
+        &mut self,
+        event: &winit::event::WindowEvent,
+        time: f64,
+    ) -> Result<(), String> {
+        self.dispatch_native_ui(time)?;
+        self.gpu_ui.window_event(event)?;
+        self.input.window_event(event)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn accesskit_action(
+        &mut self,
+        action: egui::accesskit::ActionRequest,
+        time: f64,
+    ) -> Result<(), String> {
+        self.dispatch_native_ui(time)?;
+        self.gpu_ui.accesskit_action(action)
+    }
+
+    /// Start asynchronous work selected by the previous frame without borrowing
+    /// the game across a file, asset or network await.
+    pub fn run_pending_work(game: &Rc<RefCell<Self>>) {
+        crate::load_pending_world(game);
+        crate::write_pending_save(game);
+        crate::run_hosted_work(game);
+    }
+
     pub fn frame(&mut self, time: f64) -> Result<(), String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(playtime) = &mut self._playtime
+            && let Err(error) = playtime.tick()
+        {
+            crate::platform::error(&error);
+        }
+        #[cfg(target_arch = "wasm32")]
         if self.editor_test_disposed() {
             return Ok(());
         }
         self.poll_native(time)?;
+        #[cfg(target_arch = "wasm32")]
         self.poll_editor_test()?;
+        #[cfg(target_arch = "wasm32")]
         if self.editor_test_disposed() {
             return Ok(());
         }
         // An embedding page can hide the iframe before its queued cancel message
         // arrives. Keep admission/disposal polling alive, but never lay out a
         // zero-sized canvas. A later visible frame resumes without catch-up time.
-        if self.canvas.client_width() <= 0 || self.canvas.client_height() <= 0 {
+        if self.surface.logical_width() <= 0 || self.surface.logical_height() <= 0 {
             self.last_time = Some(time);
             return Ok(());
         }
@@ -712,11 +793,12 @@ impl Game {
         self.hud.update_diagnostics(time, self.native.as_ref().and_then(NativeGame::ping_ms))?;
         let last = self.last_time.replace(time).unwrap_or(time);
         self.commit_ui(time, self.menu.is_blocking())?;
+        #[cfg(target_arch = "wasm32")]
         if self.editor_test_disposed() {
             return Ok(());
         }
         self.fit_canvas();
-        let viewport = [self.canvas.client_width() as f32, self.canvas.client_height() as f32];
+        let viewport = [self.surface.logical_width() as f32, self.surface.logical_height() as f32];
         let mut run = self.gpu_ui.begin_frame(&mut self.renderer, viewport, time / 1000.0)?;
         if self.menu.is_blocking() || !self.has_game {
             run.defer_idle_layout();
@@ -732,6 +814,7 @@ impl Game {
                     break;
                 }
                 self.commit_ui(time, menu_was_open)?;
+                #[cfg(target_arch = "wasm32")]
                 if self.editor_test_disposed() {
                     return Ok(());
                 }
@@ -753,6 +836,7 @@ impl Game {
         // Managed textures can be allocated before a later controller/action fails.
         // Always finish the transaction, including its deferred image retirements.
         self.gpu_ui.finish_frame(&mut self.renderer, run, result)?;
+        #[cfg(target_arch = "wasm32")]
         if self.editor_test_disposed() {
             return Ok(());
         }
@@ -776,7 +860,7 @@ impl Game {
         self.update_skill_picker(time)?;
         self.update_social(time)?;
         self.update_cheats()?;
-        self.menu.update(time, self.canvas.client_width(), self.canvas.client_height())?;
+        self.menu.update(time, self.surface.logical_width(), self.surface.logical_height())?;
         if self.menu.is_create_pending() && self.match_loading.is_none() {
             self.begin_match_loading(MatchLoadingFlow::Hub, MatchLoadingStage::ConnectingTransport);
         }
@@ -786,6 +870,7 @@ impl Game {
                 self.match_loading = None;
                 return Err(error);
             }
+            #[cfg(target_arch = "wasm32")]
             if self.editor_test_disposed() {
                 return Ok(());
             }
@@ -796,7 +881,7 @@ impl Game {
             }
             match action {
                 HudAction::Pause if self.can_pause() => self.menu.show_pause()?,
-                HudAction::Map if self.session.can_enter_boneyard() => self.queue_world(false)?,
+                HudAction::Map if self.can_start_boneyard() => self.queue_world(false)?,
                 HudAction::Inventory if self.can_open_panel(PlayerPanel::Inventory) => {
                     self.panels.show(PlayerPanel::Inventory, time)?
                 }
@@ -868,8 +953,8 @@ impl Game {
                     awesomeness: self.session.participants[&self.local_player_id].score.awesomeness,
                 },
                 time,
-                self.canvas.client_width(),
-                self.canvas.client_height(),
+                self.surface.logical_width(),
+                self.surface.logical_height(),
             )?;
         }
         for action in self.panels.take_actions() {
@@ -882,9 +967,11 @@ impl Game {
             if !self.has_game || self.menu.covers_world() || self.battle.is_none() {
                 continue;
             }
+            #[cfg(target_arch = "wasm32")]
             if self.is_editor_test() {
                 return self.return_to_editor();
-            } else if self.native.is_some() {
+            }
+            if self.native.is_some() {
                 self.send_native_command(
                     GameCommand::ContinueGameOver {
                         run_id: action.run_id,
@@ -944,8 +1031,8 @@ impl Game {
         self.input.set_primary_casting_enabled(self.session.boneyard.is_some())?;
         self.configure_spectator_input();
         self.input.resize(
-            self.canvas.client_width(),
-            self.canvas.client_height(),
+            self.surface.logical_width(),
+            self.surface.logical_height(),
             self.menu.settings().ui_scale_percent,
         )?;
         let input = self.input.sample()?;
@@ -1106,7 +1193,7 @@ impl Game {
     }
 
     fn update_mobile_layout(&mut self) -> Result<(), String> {
-        if self.mobile_layout_store.take_changed() {
+        if self.mobile_layout_store.take_changed()? {
             let state = self.mobile_layout_store.read()?;
             self.hud.set_mobile_layout(&state)?;
             self.input.set_mobile_layout(&state)?;
@@ -1121,6 +1208,7 @@ impl Game {
         {
             return Ok(());
         }
+        #[cfg(target_arch = "wasm32")]
         if self.is_editor_test() && action == MenuAction::Leave {
             return self.return_to_editor();
         }
@@ -1306,6 +1394,7 @@ impl Game {
     }
 
     fn archive_completed_run(&mut self) {
+        #[cfg(target_arch = "wasm32")]
         if self.is_editor_test() {
             return;
         }
@@ -1328,7 +1417,7 @@ impl Game {
             &self.session.participants[&self.local_player_id].score,
             &self.session.participants[&self.local_player_id].player,
             world.waves.as_ref().map_or(0, |waves| waves.state.wave_ordinal),
-            js_sys::Date::new_0().to_iso_string().into(),
+            crate::platform::iso_now(),
         ) else {
             return;
         };
@@ -1368,12 +1457,7 @@ impl Game {
             return Ok(());
         }
         let mut seed = [0; 16];
-        web_sys::window()
-            .ok_or("no window")?
-            .crypto()
-            .map_err(|_| "world seed source")?
-            .get_random_values_with_u8_array(&mut seed)
-            .map_err(|_| "world seed generation")?;
+        crate::platform::random_bytes(&mut seed)?;
         let loaded = if tutorial {
             solomon_assets::boneyard::load_tutorial(seed)
         } else {
@@ -1387,6 +1471,21 @@ impl Game {
         Ok(())
     }
 
+    fn can_start_boneyard(&self) -> bool {
+        // HubScene::beginMatch admits only the host. A follower's ignored request
+        // must never create a loading screen that no accepted world can complete.
+        self.session.can_enter_boneyard()
+            && !self.session.participants[&self.local_player_id]
+                .player
+                .economy
+                .college_intro_pending
+            && self.native.as_ref().is_none_or(|native| {
+                native.host_snapshot().is_some_and(|host| {
+                    host.authority_player_id.as_deref() == Some(self.local_player_id.as_str())
+                })
+            })
+    }
+
     fn begin_match_loading(&mut self, flow: MatchLoadingFlow, stage: MatchLoadingStage) {
         if let Some(loading) = &mut self.match_loading
             && loading.flow == flow
@@ -1394,9 +1493,7 @@ impl Game {
             loading.advance(stage);
             return;
         }
-        let now = web_sys::window()
-            .and_then(|window| window.performance())
-            .map_or(0.0, |clock| clock.now());
+        let now = crate::platform::monotonic_ms();
         self.match_loading = Some(MatchLoadingState::begin(flow, stage, now));
     }
 
@@ -1592,8 +1689,8 @@ impl Game {
             },
         )?;
         let (camera, layout) = self.scene_view();
-        let width = self.canvas.client_width();
-        let height = self.canvas.client_height();
+        let width = self.surface.logical_width();
+        let height = self.surface.logical_height();
         self.hud.set_mode(if self.session.boneyard.is_some() {
             HudMode::Run
         } else {
@@ -1609,14 +1706,7 @@ impl Game {
             }
         }))?;
         self.hud.set_action_enabled(HudAction::Pause, self.can_pause())?;
-        self.hud.set_action_enabled(
-            HudAction::Map,
-            self.session.can_enter_boneyard()
-                && !self.session.participants[&self.local_player_id]
-                    .player
-                    .economy
-                    .college_intro_pending,
-        )?;
+        self.hud.set_action_enabled(HudAction::Map, self.can_start_boneyard())?;
         self.hud.set_quickbar_player(
             self.has_game.then(|| self.session.participants[&self.local_player_id].player.as_ref()),
             self.session.secondary.players.get(&self.local_player_id),
@@ -1659,8 +1749,7 @@ impl Game {
                     wizard: self.session.wizard(&self.local_player_id).expect("local participant"),
                     camera: &camera,
                     settings: self.menu.settings(),
-                    coarse_pointer: web_sys::window()
-                        .is_some_and(|window| window.navigator().max_touch_points() > 0),
+                    coarse_pointer: self.surface.touch_capable(),
                 }
             }),
             now,
@@ -1705,8 +1794,8 @@ impl Game {
             player.and_then(|player| player.progression.pending_offer.as_ref()),
             player.is_some_and(|player| player.progression.sorcerors_charm_available),
             now,
-            self.canvas.client_width(),
-            self.canvas.client_height(),
+            self.surface.logical_width(),
+            self.surface.logical_height(),
         )?;
         if self.skill_picker.is_open() && !was_open {
             self.panels.hide()?;
@@ -1861,15 +1950,7 @@ impl Game {
                 }
             }
             PlayerPanelAction::ActivateBeltSlot { slot, pointer } => {
-                let bounds = self.canvas.get_bounding_client_rect();
-                let pointer = pointer.and_then(|point| {
-                    (bounds.width() > 0.0 && bounds.height() > 0.0).then(|| {
-                        Vec2::new(
-                            (point.x - bounds.left()) / bounds.width(),
-                            (point.y - bounds.top()) / bounds.height(),
-                        )
-                    })
-                });
+                let pointer = pointer.and_then(|point| self.surface.point_fraction(point));
                 let aim = self.project_input_aim(Some(self.input.secondary_aim(pointer)));
                 return self.activate_belt_slot(slot, aim, now);
             }
@@ -1952,12 +2033,13 @@ impl Game {
         self.has_game.then(|| self.session.checkpoint())
     }
 
+    #[cfg(target_arch = "wasm32")]
     async fn restore_checkpoint(&mut self, checkpoint: GameCheckpoint) -> Result<(), String> {
         let loaded = save_document::load_boneyard(&checkpoint)?;
         let battle = if let Some(loaded) = &loaded {
             let prepared = PreparedBoneyardView::load(loaded).await?;
             let navigation = crate::navigation_data::load_navigation(loaded).await?;
-            let resolution = web_sys::window().map_or(1.0, |window| window.device_pixel_ratio());
+            let resolution = self.surface.scale_factor();
             let compact_masks = crate::compact_masks::CompactMaskView::new(&loaded.scene);
             let bounds = loaded.scene.bounds;
             let lights = NativeBoneyardLightIndex::new(Vec2::new(
@@ -2041,10 +2123,11 @@ impl Game {
     }
 
     fn show_storage_error(error: &str) {
-        web_sys::console::warn_1(&JsValue::from_str(error));
+        crate::platform::warn(error);
         crate::runtime_ui::set_error(error);
     }
 
+    #[cfg(target_arch = "wasm32")]
     pub fn retain_save_listener(
         &mut self,
         listener: wasm_bindgen::closure::Closure<dyn FnMut(web_sys::Event)>,
@@ -2118,8 +2201,8 @@ impl Game {
     fn scene_view(&self) -> (Camera, solomon_sim::viewport::GameViewport) {
         let session = self.display_session();
         let size = Vec2::new(
-            f64::from(self.canvas.client_width().max(1)),
-            f64::from(self.canvas.client_height().max(1)),
+            f64::from(self.surface.logical_width().max(1)),
+            f64::from(self.surface.logical_height().max(1)),
         );
         let native_zoom =
             if session.boneyard.is_some() { BONEYARD_CAMERA_SCALE } else { HUB_CAMERA_SCALE };
@@ -2179,8 +2262,8 @@ impl Game {
     }
 
     fn pointer_to_world(&self, point: Vec2, camera: &Camera, viewport: Vec2) -> Option<Vec2> {
-        let width = f64::from(self.canvas.client_width());
-        let height = f64::from(self.canvas.client_height());
+        let width = f64::from(self.surface.logical_width());
+        let height = f64::from(self.surface.logical_height());
         project_native_world_pointer(
             Vec2::new(point.x * width, point.y * height),
             solomon_sim::hud::HudRect::new(0.0, 0.0, width, height),
@@ -2479,12 +2562,13 @@ impl Game {
             observer_ui.paint(frame)?;
             spectator_ui.paint(frame)?;
             menu.paint(frame)?;
+            #[cfg(target_arch = "wasm32")]
             if let Some(hosted) = hosted {
                 hosted.paint_boneyard_library(menu, frame)?;
             }
             fullscreen.paint(frame)?;
             if let Some(desktop) = desktop_bridge {
-                desktop.paint(frame)?;
+                desktop.paint(frame, menu.desktop_controls_visible())?;
             }
             match_loading_view.paint(frame)?;
             if let Some(hosted) = hosted {
@@ -2495,13 +2579,20 @@ impl Game {
         }))
     }
 
-    pub(crate) fn present_failure(&mut self, time: f64) -> Result<(), String> {
+    pub fn report_failure(&mut self, error: &str) {
+        crate::runtime_ui::set_error(error);
+    }
+
+    pub fn present_failure(&mut self, time: f64) -> Result<(), String> {
         let (width, height) = self.fit_canvas();
-        let viewport = [self.canvas.client_width() as f32, self.canvas.client_height() as f32];
+        let viewport = [self.surface.logical_width() as f32, self.surface.logical_height() as f32];
         self.renderer.begin_frame(width, height, viewport);
         self.renderer.end_frame();
         self.gpu_ui.run(&mut self.renderer, viewport, time / 1000.0, |frame| {
             crate::runtime_ui::paint(frame);
+            if let Some(desktop) = &mut self.desktop_bridge {
+                desktop.paint(frame, true)?;
+            }
             Ok(())
         })?;
         if !self.ui_ready {
@@ -2531,12 +2622,13 @@ impl Game {
         });
     }
 
-    pub(crate) fn gpu_ui_snapshot(&self) -> serde_json::Value {
+    pub fn gpu_ui_snapshot(&self) -> serde_json::Value {
         let Some(snapshot) = &self.ui_snapshot else {
             return serde_json::Value::Null;
         };
         let mut value =
             self.gpu_ui.snapshot(snapshot.surface, snapshot.ready, snapshot.error.as_deref());
+        value["worldOverlays"] = serde_json::json!(self.world_overlay_diagnostics);
         value["acceptedSelection"] = serde_json::json!(snapshot.selection);
         value["draw"]["borrowedImagePaths"] = serde_json::json!(snapshot.borrowed_image_paths);
         value
@@ -2557,7 +2649,7 @@ impl Game {
             self.renderer.begin_frame(
                 width,
                 height,
-                [self.canvas.client_width() as f32, self.canvas.client_height() as f32],
+                [self.surface.logical_width() as f32, self.surface.logical_height() as f32],
             );
             self.renderer.end_frame();
             return Ok(());
@@ -2604,8 +2696,8 @@ impl Game {
         self.renderer.begin_frame(width, height, [viewport.x as f32, viewport.y as f32]);
         if self.panels.covers_world() {
             self.renderer.set_native_world_pixel_centers(false);
-            let client_width = self.canvas.client_width().max(1) as f32;
-            let client_height = self.canvas.client_height().max(1) as f32;
+            let client_width = self.surface.logical_width().max(1) as f32;
+            let client_height = self.surface.logical_height().max(1) as f32;
             self.renderer.begin_frame(width, height, [client_width, client_height]);
             self.renderer.set_saturation(1.0);
             let ratio_x = f64::from(width) / f64::from(client_width);
@@ -2801,8 +2893,7 @@ impl Game {
                     settings: self.menu.settings(),
                     screen_feedback,
                     application_time_ms: self.last_time.unwrap_or(0.0),
-                    device_resolution: web_sys::window()
-                        .map_or(1.0, |window| window.device_pixel_ratio()),
+                    device_resolution: self.surface.scale_factor(),
                 },
                 |renderer, camera| {
                     overlay_diagnostics = self.world_overlays.draw(
@@ -3105,7 +3196,9 @@ impl Game {
                 );
             }
         }
-        overlay_diagnostics.apply(&self.canvas)?;
+        #[cfg(target_arch = "wasm32")]
+        overlay_diagnostics.apply(self.surface.canvas())?;
+        self.world_overlay_diagnostics = overlay_diagnostics;
         if let Some(transition) = session.participants[&self.local_player_id].wizard.transition {
             self.renderer.draw_solid(
                 [0.0, 0.0, viewport.x as f32, viewport.y as f32],
@@ -3116,24 +3209,14 @@ impl Game {
         self.record_mod_scene_projection()?;
         self.hud.update(
             &self.hud_state,
-            self.canvas.client_width(),
-            self.canvas.client_height(),
+            self.surface.logical_width(),
+            self.surface.logical_height(),
         )?;
         Ok(())
     }
 
-    /// Matches the drawing buffer to the canvas's CSS size and device pixel ratio.
     fn fit_canvas(&self) -> (i32, i32) {
-        let ratio = web_sys::window().map_or(1.0, |window| window.device_pixel_ratio());
-        let width = (f64::from(self.canvas.client_width()) * ratio).round().max(1.0) as u32;
-        let height = (f64::from(self.canvas.client_height()) * ratio).round().max(1.0) as u32;
-        if self.canvas.width() != width {
-            self.canvas.set_width(width);
-        }
-        if self.canvas.height() != height {
-            self.canvas.set_height(height);
-        }
-        (width as i32, height as i32)
+        self.surface.fit_buffer()
     }
 }
 

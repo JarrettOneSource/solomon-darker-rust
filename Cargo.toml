@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/sim", "crates/assets", "crates/graphics", "crates/loader", "crates/web", "crates/launcher", "crates/protocol", "crates/modding", "crates/save-tools"]
+members = ["crates/sim", "crates/assets", "crates/graphics", "crates/loader", "crates/web", "crates/launcher", "crates/protocol", "crates/modding", "crates/save-tools", "crates/desktop", "crates/storage"]
 exclude = ["vendor/egui"]
 
 [patch.crates-io]
@@ -16,6 +16,7 @@ solomon-graphics = { path = "crates/graphics" }
 solomon-sim = { path = "crates/sim" }
 solomon-assets = { path = "crates/assets" }
 solomon-protocol = { path = "crates/protocol" }
+solomon-storage = { path = "crates/storage" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 wasm-bindgen = "0.2"

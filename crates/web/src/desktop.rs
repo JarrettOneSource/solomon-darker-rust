@@ -1,16 +1,10 @@
-//! Source `desktop-runtime.ts`, `game-bootstrap.ts` and `DesktopUpdateNotice.tsx`.
-//! The preload owns process/network capabilities. This module only borrows those
-//! functions and owns the update notice and subscription lifetimes.
+//! Native desktop controls and the shared in-game update notice.
+//! The OS application owns sessions and external actions; the GPU UI submits requests.
 
-pub(crate) mod launcher;
+pub mod launcher;
 
 use std::cell::RefCell;
-use std::rc::Rc;
-
-use js_sys::{Function, Promise, Reflect};
-use wasm_bindgen::{JsCast, JsValue, closure::Closure};
-use wasm_bindgen_futures::{JsFuture, spawn_local};
-use web_sys::Window;
+use std::rc::{Rc, Weak};
 
 use crate::gpu_ui::UiFrame;
 use egui::{Color32, FontFamily, FontId, RichText, Stroke, vec2};
@@ -22,136 +16,97 @@ pub struct DesktopEndpoint {
     pub credential: String,
 }
 
-pub fn configured(window: &Window) -> Result<Option<DesktopEndpoint>, String> {
-    let Some(runtime) = runtime(window)? else {
-        return Ok(None);
-    };
-    let endpoint = field(&runtime, "gameEndpoint")?;
-    if endpoint.is_undefined() || endpoint.is_null() {
-        return Ok(None);
+struct ControlState {
+    state: launcher::DesktopState,
+    pending: Vec<launcher::Action>,
+    invite: Option<String>,
+    close_error: Option<String>,
+    message: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct DesktopControls(Rc<RefCell<ControlState>>);
+
+thread_local! {
+    static CONTROLS: RefCell<Weak<RefCell<ControlState>>> = const { RefCell::new(Weak::new()) };
+}
+
+impl DesktopControls {
+    /// Install the single native application owner on its window thread.
+    pub fn install(state: launcher::DesktopState) -> Self {
+        let controls = Rc::new(RefCell::new(ControlState {
+            state,
+            pending: Vec::new(),
+            invite: None,
+            close_error: None,
+            message: None,
+        }));
+        CONTROLS.with_borrow_mut(|current| {
+            assert!(current.upgrade().is_none(), "one desktop application per window thread");
+            *current = Rc::downgrade(&controls);
+        });
+        Self(controls)
     }
-    if field(&endpoint, "kind")?.as_string().as_deref() != Some("localhost")
-        || field(&endpoint, "sessionKind")?.as_string().as_deref() != Some("standalone")
-    {
-        return Err("The desktop preload supplied an invalid game endpoint".into());
+
+    pub fn state(&self) -> launcher::DesktopState {
+        self.0.borrow().state.clone()
     }
-    let url = field(&endpoint, "url")?.as_string().ok_or("The desktop game endpoint has no URL")?;
-    let parsed = web_sys::Url::new(&url).map_err(|_| "The desktop game endpoint URL is invalid")?;
-    if parsed.protocol() != "ws:"
-        || parsed.hostname() != "127.0.0.1"
-        || parsed.pathname() != "/game"
-        || parsed.port().parse::<u16>().ok().is_none_or(|port| port == 0)
-        || !parsed.username().is_empty()
-        || !parsed.password().is_empty()
-        || !parsed.search().is_empty()
-        || !parsed.hash().is_empty()
-    {
-        return Err("The desktop game endpoint must name the loopback authority".into());
+    pub fn receive(&self, state: launcher::DesktopState) {
+        self.0.borrow_mut().state = state;
     }
-    let credential = field(&endpoint, "credential")?
-        .as_string()
-        .filter(|value| !value.is_empty())
-        .ok_or("The desktop game endpoint has no credential")?;
-    Ok(Some(DesktopEndpoint { url, credential }))
+    pub fn request(&self, action: launcher::Action) {
+        self.0.borrow_mut().pending.push(action);
+    }
+    pub fn take_actions(&self) -> Vec<launcher::Action> {
+        std::mem::take(&mut self.0.borrow_mut().pending)
+    }
+    pub fn set_invite(&self, invite: Option<String>) {
+        self.0.borrow_mut().invite = invite;
+    }
+    pub fn invite(&self) -> Option<String> {
+        self.0.borrow().invite.clone()
+    }
+    pub fn set_message(&self, message: Option<String>) {
+        self.0.borrow_mut().message = message;
+    }
+    pub fn set_close_error(&self, error: Option<String>) {
+        self.0.borrow_mut().close_error = error;
+    }
+}
+
+pub fn request(action: launcher::Action) -> Result<(), String> {
+    CONTROLS.with_borrow(|controls| {
+        let controls = controls.upgrade().ok_or("The desktop application is unavailable")?;
+        controls.borrow_mut().pending.push(action);
+        Ok(())
+    })
 }
 
 struct Notice {
     current_revision: Option<String>,
     dismissed_revision: Option<String>,
-    active: bool,
 }
 
 impl Notice {
-    fn receive(&mut self, value: &JsValue) -> Result<(), String> {
-        let update = field(value, "update")?;
-        self.current_revision = if update.is_null() || update.is_undefined() {
-            None
-        } else {
-            Some(
-                field(&update, "revision")?
-                    .as_string()
-                    .ok_or("The desktop update revision is invalid")?,
-            )
-        };
-        Ok(())
-    }
-
     fn visible(&self) -> bool {
-        self.active
-            && self.current_revision.is_some()
-            && self.current_revision != self.dismissed_revision
+        self.current_revision.is_some() && self.current_revision != self.dismissed_revision
     }
 }
 
 pub struct DesktopBridge {
-    notice: Rc<RefCell<Notice>>,
-    desktop: JsValue,
-    download_update: Function,
-    on_state: Closure<dyn FnMut(JsValue)>,
-    remove_state: Option<Function>,
-    remove_before_close: Option<Function>,
+    controls: DesktopControls,
+    notice: Notice,
+    close_prompt_visible: bool,
 }
 
-pub fn attach(window: &Window, before_close: &Function) -> Result<Option<DesktopBridge>, String> {
-    let Some(desktop) = desktop(window)? else {
-        return Ok(None);
-    };
-    let get_state = method(&desktop, "getState")?;
-    let subscribe_state = method(&desktop, "onState")?;
-    let subscribe_close = method(&desktop, "onBeforeClose")?;
-    let download_update = method(&desktop, "downloadUpdate")?;
-    let notice = Rc::new(RefCell::new(Notice {
-        current_revision: None,
-        dismissed_revision: None,
-        active: true,
-    }));
-    let state_notice = Rc::clone(&notice);
-    let on_state = Closure::<dyn FnMut(JsValue)>::new(move |value: JsValue| {
-        let mut notice = state_notice.borrow_mut();
-        if notice.active
-            && let Err(error) = notice.receive(&value)
-        {
-            report(error);
+impl DesktopBridge {
+    pub fn new(controls: DesktopControls) -> Self {
+        Self {
+            controls,
+            notice: Notice { current_revision: None, dismissed_revision: None },
+            close_prompt_visible: false,
         }
-    });
-    let mut bridge = DesktopBridge {
-        notice,
-        desktop: desktop.clone(),
-        download_update,
-        on_state,
-        remove_state: None,
-        remove_before_close: None,
-    };
-    // Keep partial registration under the same Drop path if the preload throws.
-    bridge.remove_before_close = Some(unsubscribe(
-        subscribe_close.call1(&desktop, before_close.as_ref()).map_err(describe)?,
-        "onBeforeClose",
-    )?);
-    bridge.remove_state = Some(unsubscribe(
-        subscribe_state.call1(&desktop, bridge.on_state.as_ref()).map_err(describe)?,
-        "onState",
-    )?);
-    let pending = get_state.call0(&desktop);
-    let initial_notice = Rc::downgrade(&bridge.notice);
-    spawn_local(async move {
-        let result = settle(pending).await;
-        let Some(notice) = initial_notice.upgrade() else {
-            return;
-        };
-        let mut notice = notice.borrow_mut();
-        if !notice.active {
-            return;
-        }
-        match result {
-            Ok(value) => {
-                if let Err(error) = notice.receive(&value) {
-                    report(error);
-                }
-            }
-            Err(error) => report(error),
-        }
-    });
-    Ok(Some(bridge))
+    }
 }
 
 impl DesktopBridge {
@@ -159,8 +114,19 @@ impl DesktopBridge {
         egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("desktop/update"))
     }
 
-    pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
-        if !self.notice.borrow().visible() {
+    pub fn paint(&mut self, frame: &mut UiFrame<'_>, show_controls: bool) -> Result<(), String> {
+        let close_error = self.controls.0.borrow().close_error.clone();
+        if let Some(error) = close_error {
+            self.paint_close_error(frame, &error);
+            self.close_prompt_visible = true;
+            return Ok(());
+        }
+        self.close_prompt_visible = false;
+        if show_controls {
+            self.paint_controls(frame);
+        }
+        self.notice.current_revision = self.controls.state().update.map(|update| update.revision);
+        if !self.notice.visible() {
             return Ok(());
         }
         let ctx = frame.ctx.clone();
@@ -212,120 +178,116 @@ impl DesktopBridge {
         );
         match action {
             Some("later") => {
-                let mut notice = self.notice.borrow_mut();
+                let notice = &mut self.notice;
                 notice.dismissed_revision = notice.current_revision.clone();
             }
             Some("download") => {
-                let result = self.download_update.call0(&self.desktop);
-                spawn_local(async move {
-                    if let Err(error) = settle(result).await {
-                        report(error);
-                    }
-                });
+                self.controls.request(launcher::Action::Download);
             }
             _ => {}
         }
         Ok(())
     }
-}
 
-pub async fn open_website(window: &Window) -> Result<(), String> {
-    invoke(window, "openWebsite").await
-}
+    fn paint_controls(&self, frame: &UiFrame<'_>) {
+        let ctx = frame.ctx.clone();
+        egui::Area::new(egui::Id::unique("desktop/controls"))
+            .order(egui::Order::Foreground)
+            .fade_in(false)
+            .anchor(egui::Align2::LEFT_BOTTOM, vec2(12.0, -12.0))
+            .show(&ctx, |ui| {
+                egui::Frame::new().fill(Color32::from_rgb(24, 20, 28)).inner_margin(8).show(
+                    ui,
+                    |ui| {
+                        ui.horizontal(|ui| {
+                            for (id, label, action, enabled) in [
+                                (
+                                    "launcher",
+                                    "Save and return to launcher",
+                                    launcher::Action::Launcher,
+                                    true,
+                                ),
+                                (
+                                    "copy-invite",
+                                    "Copy multiplayer invite",
+                                    launcher::Action::CopyInvite,
+                                    self.controls.invite().is_some(),
+                                ),
+                                ("check", "Check for updates", launcher::Action::Check, true),
+                            ] {
+                                let response = ui.add_enabled(
+                                    enabled,
+                                    egui::Button::new(RichText::new(label).font(FontId::new(
+                                        13.0,
+                                        FontFamily::Name("Georgia".into()),
+                                    ))),
+                                );
+                                frame.record(&format!("desktop/{id}"), label, "button", &response);
+                                if response.clicked() {
+                                    self.controls.request(action);
+                                }
+                            }
+                        });
+                        if let Some(message) = &self.controls.0.borrow().message {
+                            let response = ui.label(message);
+                            frame.record_rect(
+                                "desktop/message",
+                                message,
+                                "status",
+                                response.rect,
+                                true,
+                            );
+                            frame.announce("desktop/message", message);
+                        }
+                    },
+                );
+            });
+    }
 
-pub async fn return_to_launcher(window: &Window) -> Result<(), String> {
-    invoke(window, "returnToLauncher").await
-}
-
-impl Drop for DesktopBridge {
-    fn drop(&mut self) {
-        self.notice.borrow_mut().active = false;
-        for remove in [&self.remove_state, &self.remove_before_close].into_iter().flatten() {
-            if let Err(error) = remove.call0(&JsValue::UNDEFINED) {
-                report(describe(error));
-            }
+    fn paint_close_error(&self, frame: &UiFrame<'_>, error: &str) {
+        let ctx = frame.ctx.clone();
+        let layer =
+            egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("desktop/close-failed"));
+        frame.input_scope("desktop/close-failed", layer);
+        egui::Area::new(layer.id)
+            .order(layer.order)
+            .fade_in(false)
+            .anchor(egui::Align2::CENTER_CENTER, vec2(0.0, 0.0))
+            .show(&ctx, |ui| {
+                ui.memory_mut(|memory| memory.set_modal_layer(layer));
+                egui::Frame::new()
+                    .fill(Color32::from_rgb(24, 20, 28))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(181, 152, 86)))
+                    .inner_margin(24)
+                    .show(ui, |ui| {
+                        ui.set_max_width((ctx.content_rect().width() - 96.0).clamp(120.0, 520.0));
+                        ui.heading("The latest progress could not be saved");
+                        ui.add_space(12.0);
+                        ui.label(error);
+                        ui.add_space(18.0);
+                        ui.horizontal(|ui| {
+                            for (id, label, action) in [
+                                ("keep-playing", "Keep playing", launcher::Action::KeepPlaying),
+                                (
+                                    "close-unsaved",
+                                    "Close without saving",
+                                    launcher::Action::CloseWithoutSaving,
+                                ),
+                            ] {
+                                let response = ui.button(label);
+                                frame.record(&format!("desktop/{id}"), label, "button", &response);
+                                if !self.close_prompt_visible && id == "keep-playing" {
+                                    response.request_focus();
+                                }
+                                if response.clicked() {
+                                    self.controls.request(action);
+                                }
+                            }
+                        });
+                    });
+            });
+        if frame.key_codes().iter().any(|key| key.pressed && key.code == "Escape") {
+            self.controls.request(launcher::Action::KeepPlaying);
         }
-    }
-}
-
-async fn invoke(window: &Window, name: &str) -> Result<(), String> {
-    let desktop = desktop(window)?.ok_or("This action requires the desktop preload")?;
-    settle(method(&desktop, name)?.call0(&desktop)).await?;
-    Ok(())
-}
-
-async fn settle(value: Result<JsValue, JsValue>) -> Result<JsValue, String> {
-    let value = value.map_err(describe)?;
-    JsFuture::from(Promise::resolve(&value)).await.map_err(describe)
-}
-
-fn runtime(window: &Window) -> Result<Option<JsValue>, String> {
-    let value = field(window.as_ref(), "solomonDarkRuntime")?;
-    if value.is_undefined() || value.is_null() {
-        Ok(None)
-    } else if value.is_object() {
-        Ok(Some(value))
-    } else {
-        Err("The desktop preload runtime is invalid".into())
-    }
-}
-
-fn desktop(window: &Window) -> Result<Option<JsValue>, String> {
-    let Some(runtime) = runtime(window)? else {
-        return Ok(None);
-    };
-    let value = field(&runtime, "desktop")?;
-    if value.is_undefined() || value.is_null() {
-        Ok(None)
-    } else if value.is_object() {
-        Ok(Some(value))
-    } else {
-        Err("The desktop preload interface is invalid".into())
-    }
-}
-
-fn field(value: &JsValue, name: &str) -> Result<JsValue, String> {
-    Reflect::get(value, &JsValue::from_str(name)).map_err(describe)
-}
-
-fn method(value: &JsValue, name: &str) -> Result<Function, String> {
-    field(value, name)?
-        .dyn_into::<Function>()
-        .map_err(|_| format!("The desktop preload does not provide {name}"))
-}
-
-fn unsubscribe(value: JsValue, name: &str) -> Result<Function, String> {
-    value
-        .dyn_into::<Function>()
-        .map_err(|_| format!("The desktop {name} subscription has no removal function"))
-}
-
-fn describe(error: JsValue) -> String {
-    error
-        .as_string()
-        .or_else(|| error.dyn_ref::<js_sys::Error>().map(|error| error.message().into()))
-        .unwrap_or_else(|| "The desktop preload operation failed".into())
-}
-
-fn report(error: String) {
-    web_sys::console::error_1(&JsValue::from_str(&error));
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Notice;
-
-    #[test]
-    fn later_dismisses_only_the_displayed_update_and_unmounting_retires_the_notice() {
-        let mut notice = Notice { current_revision: None, dismissed_revision: None, active: true };
-        assert!(!notice.visible());
-        notice.current_revision = Some("first".into());
-        assert!(notice.visible());
-        notice.dismissed_revision = notice.current_revision.clone();
-        assert!(!notice.visible());
-        notice.current_revision = Some("second".into());
-        assert!(notice.visible());
-        notice.active = false;
-        assert!(!notice.visible());
     }
 }

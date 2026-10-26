@@ -8,7 +8,6 @@ use egui::{Color32, FontFamily, FontId, Id, Order, Rect, Stroke, pos2, vec2};
 use solomon_protocol::hosted::ModAction;
 use solomon_sim::modding::presentation::{mod_scene_color, mod_scene_number, project_mod_scene};
 use solomon_sim::modding::{LuaObject, LuaValue};
-use web_sys::Document;
 
 pub struct ModViewAction {
     pub action: ModAction,
@@ -53,7 +52,7 @@ pub struct ModSceneOverlay {
     actions: Vec<ModViewAction>,
 }
 impl ModSceneOverlay {
-    pub(super) fn new(_document: &Document) -> Result<Self, String> {
+    pub(super) fn new() -> Result<Self, String> {
         Ok(Self { room: None, actions: Vec::new() })
     }
     pub fn reset(&mut self) {

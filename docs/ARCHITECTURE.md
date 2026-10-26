@@ -27,6 +27,11 @@ solomon-web ──▶ solomon-sim     kernels: rules, tables, stepped state
   world with Rust GPU menus, HUD and overlays. Controllers read explicit simulation state
   and return typed actions. `gpu_ui` owns egui interaction/layout, stock bitmap text,
   licensed browser font rasterization and GPU resources. `web/` is the Trunk root.
+- **`solomon-storage`** (`crates/storage`): native atomic document replacement and OS
+  locks, shared by client slots/preferences and host checkpoints. It performs no
+  gameplay parsing; the existing asset codecs retain that contract.
+- **`solomon-desktop`** (`crates/desktop`): the native OS window and OpenGL context
+  foundation. The full session/package cutover is tracked in `NATIVE-DESKTOP.md`.
 - **`solomon-protocol`** (`crates/protocol`): the native host and browser's versioned messages.
   Inputs, commands and snapshots reuse canonical simulation types. A borrowed host snapshot
   and an owned browser checkpoint have the same serialized shape. Its ordered snapshot

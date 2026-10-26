@@ -79,7 +79,21 @@ impl InputUiState {
 #[derive(Default)]
 pub(super) struct PointerOutcome {
     pub owned: bool,
+    #[cfg_attr(
+        all(not(target_arch = "wasm32"), not(test)),
+        expect(
+            dead_code,
+            reason = "DOM adapters request explicit capture; native OS pointer capture is implicit"
+        )
+    )]
     pub capture: bool,
+    #[cfg_attr(
+        all(not(target_arch = "wasm32"), not(test)),
+        expect(
+            dead_code,
+            reason = "DOM adapters request explicit capture; native OS pointer capture is implicit"
+        )
+    )]
     pub release: bool,
 }
 impl GameplayInputState {

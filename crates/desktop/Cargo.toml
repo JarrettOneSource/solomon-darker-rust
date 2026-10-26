@@ -1,0 +1,47 @@
+[package]
+name = "solomon-desktop"
+description = "Native desktop window and platform operations for the shared Rust game"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "solomon-darker-app"
+path = "src/main.rs"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+solomon-graphics = { workspace = true }
+solomon-web = { path = "../web" }
+solomon-launcher = { path = "../launcher" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+solomon-storage = { workspace = true }
+url = "2.5"
+blocking = "1.7.0"
+futures-lite = "2.6"
+ureq = { version = "3.4", default-features = false, features = ["rustls", "gzip"] }
+rfd = { version = "=0.17.2", features = ["common-controls-v6"] }
+webbrowser = "1.2.5"
+if-addrs = "0.15"
+openssl = { version = "0.10.81", features = ["vendored"] }
+tokio = { version = "1.54", features = ["rt", "net", "time", "sync", "macros", "io-util"] }
+tokio-openssl = "0.6.5"
+base64 = "0.23"
+getrandom = "0.4.3"
+glow = "=0.18.0"
+glutin = "=0.32.3"
+glutin-winit = "=0.5.0"
+winit = "=0.30.13"
+raw-window-handle = "0.6"
+egui = { version = "=0.37.0", default-features = false, features = ["default_fonts"] }
+egui-winit = { version = "=0.37.0", features = ["accesskit"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+solomon-sim = { workspace = true }
+image = { version = "0.25", default-features = false, features = ["png"] }
+futures-lite = "2.6"
+serde_json = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSApplication", "NSResponder"] }

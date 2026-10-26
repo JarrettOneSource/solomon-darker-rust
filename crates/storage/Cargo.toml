@@ -1,0 +1,6 @@
+[package]
+name = "solomon-storage"
+description = "Locked atomic documents for native client saves and host checkpoints"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true

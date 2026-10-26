@@ -7,7 +7,6 @@ use solomon_sim::menu::native_pause_menu_reveal;
 use solomon_sim::menu::shared::{
     GameplayPausePresentation, gameplay_pause_presentation, gameplay_resume_grace_progress,
 };
-use web_sys::Document;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SharedPauseView<'a> {
@@ -62,7 +61,7 @@ pub struct SharedGameplayUi {
     size: (i32, i32),
 }
 impl SharedGameplayUi {
-    pub fn attach(_document: &Document) -> Result<Self, String> {
+    pub fn attach() -> Result<Self, String> {
         Ok(Self {
             pause_key: None,
             pause_received_at: 0.0,

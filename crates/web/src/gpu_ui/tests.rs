@@ -11,7 +11,7 @@ fn frame(
 fn frame_codes(
     ctx: &Context,
     events: Vec<egui::Event>,
-    codes: &[BrowserKey],
+    codes: &[KeyStroke],
     paint: impl FnMut(&mut UiFrame<'_>),
 ) -> BTreeMap<String, WidgetGeometry> {
     frame_native(ctx, events, codes, &[], None, paint)
@@ -20,7 +20,7 @@ fn frame_codes(
 fn frame_native(
     ctx: &Context,
     events: Vec<egui::Event>,
-    codes: &[BrowserKey],
+    codes: &[KeyStroke],
     receipts: &[edit::model::Receipt],
     click_count: Option<u32>,
     paint: impl FnMut(&mut UiFrame<'_>),
@@ -399,8 +399,8 @@ fn gpu_group_tessellation_keeps_offscreen_source_and_applies_parent_material_onc
     assert_eq!(style.effect.opacity, 0.0);
 }
 
-fn browser_key(code: &str, key: &str) -> BrowserKey {
-    BrowserKey {
+fn browser_key(code: &str, key: &str) -> KeyStroke {
+    KeyStroke {
         code: code.to_owned(),
         key: key.to_owned(),
         pressed: true,

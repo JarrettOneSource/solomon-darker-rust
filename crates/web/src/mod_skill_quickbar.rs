@@ -2,6 +2,7 @@
 
 use crate::gpu_ui::UiFrame;
 use crate::mod_presentation_assets::ModPresentationAssets;
+use crate::platform::{KeyboardEffect, KeyboardListener, Surface};
 use egui::{Color32, FontFamily, FontId, Stroke, vec2};
 use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::assets::GameModAsset;
@@ -11,14 +12,6 @@ use solomon_sim::modding::skill_quickbar::{
 };
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasm_bindgen::{JsCast, prelude::*};
-use web_sys::{KeyboardEvent, Window};
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_name = Number)]
-    fn javascript_number(value: &str) -> f64;
-}
 
 struct QuickbarBinding {
     slot: i64,
@@ -38,54 +31,26 @@ struct QuickbarButton {
     image_url: Option<String>,
 }
 pub struct ModSkillQuickbarView {
-    window: Window,
+    surface: Surface,
     buttons: Vec<QuickbarButton>,
     current: Rc<RefCell<QuickbarState>>,
     actions: Rc<RefCell<Vec<ModCastAction>>>,
-    key_down: Closure<dyn FnMut(KeyboardEvent)>,
+    keyboard: Option<KeyboardListener>,
     session_id: Option<u64>,
-    listening: bool,
 }
 impl ModSkillQuickbarView {
     pub fn layer_id(&self) -> egui::LayerId {
         egui::LayerId::new(egui::Order::Middle, egui::Id::unique("mod/quickbar"))
     }
 
-    pub fn new(window: &Window) -> Result<Self, String> {
-        let current = Rc::new(RefCell::new(QuickbarState::default()));
-        let actions = Rc::new(RefCell::new(Vec::new()));
-        let keyboard_state = current.clone();
-        let keyboard_actions = actions.clone();
-        let key_down = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
-            let key = ModSkillQuickbarKey {
-                number: javascript_number(&event.key()),
-                shift: event.shift_key(),
-                control: event.ctrl_key(),
-                alt: event.alt_key(),
-                meta: event.meta_key(),
-                repeat: event.repeat(),
-            };
-            let Some(slot) = mod_skill_quickbar_keyboard_slot(key) else { return };
-            let state = keyboard_state.borrow();
-            let Some(binding) = state.bindings.iter().find(|binding| binding.slot == slot) else {
-                return;
-            };
-            // The Source handler acts even in an input, or after another handler
-            // prevented default. A bound row prevents default even without a player.
-            event.prevent_default();
-            if let Some(action) = cast_mod_skill_quickbar_spell(&binding.content_id, state.player) {
-                keyboard_actions.borrow_mut().push(action);
-            }
-        });
-
+    pub fn new(surface: &Surface) -> Result<Self, String> {
         Ok(Self {
-            window: window.clone(),
+            surface: surface.clone(),
             buttons: Vec::new(),
-            current,
-            actions,
-            key_down,
+            current: Rc::new(RefCell::new(QuickbarState::default())),
+            actions: Rc::new(RefCell::new(Vec::new())),
+            keyboard: None,
             session_id: None,
-            listening: false,
         })
     }
     pub fn update(
@@ -255,28 +220,44 @@ impl ModSkillQuickbarView {
         Ok(())
     }
     fn set_listening(&mut self, listening: bool) -> Result<(), String> {
-        if self.listening == listening {
+        if self.keyboard.is_some() == listening {
             return Ok(());
         }
-        let callback = self.key_down.as_ref().unchecked_ref();
-        if listening {
-            self.window
-                .add_event_listener_with_callback_and_bool("keydown", callback, true)
-                .map_err(|_| "Could not attach the mod quickbar keyboard")?;
+        self.keyboard = if listening {
+            let current = self.current.clone();
+            let actions = self.actions.clone();
+            Some(KeyboardListener::attach(&self.surface, move |event| {
+                let key = event.stroke;
+                if !key.pressed {
+                    return KeyboardEffect::Pass;
+                }
+                let key = ModSkillQuickbarKey {
+                    number: crate::ui::parse_javascript_number(&key.key),
+                    shift: key.shift,
+                    control: key.ctrl,
+                    alt: key.alt,
+                    meta: key.meta,
+                    repeat: key.repeat,
+                };
+                let Some(slot) = mod_skill_quickbar_keyboard_slot(key) else {
+                    return KeyboardEffect::Pass;
+                };
+                let state = current.borrow();
+                let Some(binding) = state.bindings.iter().find(|binding| binding.slot == slot)
+                else {
+                    return KeyboardEffect::Pass;
+                };
+                // Source also handles editable or previously prevented key events.
+                if let Some(action) =
+                    cast_mod_skill_quickbar_spell(&binding.content_id, state.player)
+                {
+                    actions.borrow_mut().push(action);
+                }
+                KeyboardEffect::PreventDefault
+            })?)
         } else {
-            self.window
-                .remove_event_listener_with_callback_and_bool("keydown", callback, true)
-                .map_err(|_| "Could not remove the mod quickbar keyboard")?;
-        }
-        self.listening = listening;
+            None
+        };
         Ok(())
-    }
-}
-
-impl Drop for ModSkillQuickbarView {
-    fn drop(&mut self) {
-        if let Err(error) = self.set_listening(false) {
-            web_sys::console::error_1(&JsValue::from_str(&error));
-        }
     }
 }

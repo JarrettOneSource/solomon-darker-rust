@@ -1,13 +1,12 @@
-//! The two actual Canvas2D scenery consumers from `editor/render.ts`:
+//! The generated scenery consumers from `editor/render.ts`:
 //! post-road Terrain tiles and the generated three-stroke Wall image.
 
 use super::{BoundsDocument, PreparedImage};
-use js_sys::{Function, Object, Reflect};
+pub(super) use crate::platform::next_frame;
+use solomon_graphics::raster::{Paint, Raster};
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::{BoneyardBounds, BoneyardFence, BoneyardScene};
 use std::collections::{BTreeMap, BTreeSet};
-use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
 pub(super) struct PaintedCanvas {
     pub bounds: BoundsDocument,
@@ -31,8 +30,7 @@ pub(super) async fn terrain_tiles(
         while x < bounds.x + bounds.width + 256.0 {
             let width = 1024.0_f64.min(bounds.x + bounds.width + 256.0 - x).ceil();
             let height = 1024.0_f64.min(bounds.y + bounds.height + 256.0 - y).ceil();
-            let (canvas, context) = canvas(width as u32, height as u32)?;
-            context.set_image_smoothing_enabled(false);
+            let mut raster = Raster::new(width as u32, height as u32)?;
             let center = Vec2::new(x + width / 2.0, y + height / 2.0);
             for terrain in &scene.terrain {
                 if retired.contains(&format!("terrain:{}", terrain.eid)) {
@@ -55,48 +53,39 @@ pub(super) async fn terrain_tiles(
                         unreachable!("surface catalog textures are decoded images")
                     }
                 };
-                let pattern = context
-                    .create_pattern_with_html_image_element(image, "repeat")
-                    .map_err(error)?
-                    .ok_or("Could not create the native terrain pattern")?;
-                // web-sys still declares the obsolete SVGMatrix overload. The browser
-                // accepts the current DOMMatrix2DInit contract used by Source.
-                let transform = Object::new();
-                for (name, value) in [
-                    ("a", 1.0),
-                    ("b", 0.0),
-                    ("c", 0.0),
-                    ("d", 1.0),
-                    ("e", -center.x + width / 2.0),
-                    ("f", -center.y + height / 2.0),
-                ] {
-                    Reflect::set(&transform, &JsValue::from_str(name), &JsValue::from_f64(value))
-                        .map_err(error)?;
-                }
-                let set_transform: Function =
-                    Reflect::get(pattern.as_ref(), &JsValue::from_str("setTransform"))
-                        .map_err(error)?
-                        .dyn_into()
-                        .map_err(error)?;
-                set_transform.call1(pattern.as_ref(), &transform).map_err(error)?;
-                let width = if style == 0 { 96.0 } else { 64.0 };
-                context.save();
-                context.set_line_join("round");
-                context.set_line_cap("round");
-                context.set_stroke_style_str("rgba(0,0,0,0.5)");
-                context.set_line_width(width + 5.0);
-                stroke(&context, points, center, canvas.width() as f64, canvas.height() as f64);
-                context.set_stroke_style_canvas_pattern(&pattern);
-                context.set_line_width(width);
-                stroke(&context, points, center, canvas.width() as f64, canvas.height() as f64);
+                let points: Vec<_> = points
+                    .iter()
+                    .map(|point| {
+                        Vec2::new(
+                            point.x - center.x + width / 2.0,
+                            point.y - center.y + height / 2.0,
+                        )
+                    })
+                    .collect();
+                let origin = Vec2::new(-center.x + width / 2.0, -center.y + height / 2.0);
+                let stroke_width = if style == 0 { 96.0 } else { 64.0 };
+                raster.stroke(
+                    &points,
+                    stroke_width + 5.0,
+                    true,
+                    Paint::Color { rgb: [0, 0, 0], alpha: 0.5 },
+                )?;
+                raster.stroke(
+                    &points,
+                    stroke_width,
+                    true,
+                    Paint::RepeatingImage { image, origin },
+                )?;
                 if style == 0 {
-                    context.set_stroke_style_str("rgba(65,227,255,0.12)");
-                    context.set_line_width(width * 0.45);
-                    stroke(&context, points, center, canvas.width() as f64, canvas.height() as f64);
+                    raster.stroke(
+                        &points,
+                        stroke_width * 0.45,
+                        true,
+                        Paint::Color { rgb: [65, 227, 255], alpha: 0.12 },
+                    )?;
                 }
-                context.restore();
             }
-            if let Some(paint) = consume(canvas, context, x, y)? {
+            if let Some(paint) = consume(raster, width as usize, height as usize, x, y)? {
                 output.push((index, paint));
             }
             index += 1;
@@ -117,74 +106,35 @@ pub(super) fn wall(fence: &BoneyardFence) -> Result<Option<PaintedCanvas>, Strin
     let y = (extent.y - 256.0).floor();
     let width = (extent.x + extent.width + 256.0).ceil() - x;
     let height = (extent.y + extent.height + 256.0).ceil() - y;
-    let (canvas, context) = canvas(width.max(1.0) as u32, height.max(1.0) as u32)?;
-    context.set_image_smoothing_enabled(true);
-    context.set_line_cap("butt");
-    let center = Vec2::new(x + width / 2.0, y + height / 2.0);
-    for (color, width) in [("#101014", 26.0), ("#3a3a42", 20.0), ("#55555e", 8.0)] {
-        context.set_stroke_style_str(color);
-        context.set_line_width(width);
-        stroke(&context, &fence.points[..2], center, canvas.width() as f64, canvas.height() as f64);
+    let width = width.max(1.0) as usize;
+    let height = height.max(1.0) as usize;
+    let mut raster = Raster::new(width as u32, height as u32)?;
+    let center = Vec2::new(x + width as f64 / 2.0, y + height as f64 / 2.0);
+    let points: Vec<_> = fence.points[..2]
+        .iter()
+        .map(|point| {
+            Vec2::new(
+                point.x - center.x + width as f64 / 2.0,
+                point.y - center.y + height as f64 / 2.0,
+            )
+        })
+        .collect();
+    for (rgb, width) in [([16, 16, 20], 26.0), ([58, 58, 66], 20.0), ([85, 85, 94], 8.0)] {
+        raster.stroke(&points, width, false, Paint::Color { rgb, alpha: 1.0 })?;
     }
-    consume(canvas, context, x, y)
-}
-
-fn canvas(
-    width: u32,
-    height: u32,
-) -> Result<(HtmlCanvasElement, CanvasRenderingContext2d), String> {
-    let document =
-        web_sys::window().and_then(|window| window.document()).ok_or("No canvas document")?;
-    let canvas: HtmlCanvasElement = document
-        .create_element("canvas")
-        .map_err(error)?
-        .dyn_into()
-        .map_err(|value: web_sys::Element| error(value.into()))?;
-    canvas.set_width(width);
-    canvas.set_height(height);
-    let context: CanvasRenderingContext2d = canvas
-        .get_context("2d")
-        .map_err(error)?
-        .ok_or("Boneyard scenery requires Canvas2D")?
-        .dyn_into()
-        .map_err(|value: js_sys::Object| error(value.into()))?;
-    Ok((canvas, context))
-}
-
-fn stroke(
-    context: &CanvasRenderingContext2d,
-    points: &[Vec2],
-    center: Vec2,
-    width: f64,
-    height: f64,
-) {
-    context.begin_path();
-    for (index, point) in points.iter().enumerate() {
-        let x = point.x - center.x + width / 2.0;
-        let y = point.y - center.y + height / 2.0;
-        if index == 0 {
-            context.move_to(x, y);
-        } else {
-            context.line_to(x, y);
-        }
-    }
-    context.stroke();
+    consume(raster, width, height, x, y)
 }
 
 fn consume(
-    canvas: HtmlCanvasElement,
-    context: CanvasRenderingContext2d,
+    raster: Raster,
+    width: usize,
+    height: usize,
     x: f64,
     y: f64,
 ) -> Result<Option<PaintedCanvas>, String> {
-    let width = canvas.width() as usize;
-    let height = canvas.height() as usize;
-    let pixels =
-        context.get_image_data(0.0, 0.0, width as f64, height as f64).map_err(error)?.data().0;
+    let pixels = raster.into_rgba()?;
     // Source crops only nonzero alpha; transparent RGB stays untouched inside
     // the retained rectangle, and the scratch canvas is released immediately.
-    canvas.set_width(0);
-    canvas.set_height(0);
     let mut left = width;
     let mut top = height;
     let mut right = 0;
@@ -225,20 +175,4 @@ fn consume(
             pixels: cropped,
         },
     }))
-}
-
-fn error(value: JsValue) -> String {
-    format!("Native scenery canvas: {value:?}")
-}
-
-/// Match Source's one-frame yield between native static tiles and painter batches.
-pub(super) async fn next_frame() -> Result<(), String> {
-    let window = web_sys::window().ok_or("No scenery animation frame owner")?;
-    let promise = js_sys::Promise::new(&mut |resolve, reject| {
-        if let Err(value) = window.request_animation_frame(&resolve) {
-            let _ = reject.call1(&JsValue::UNDEFINED, &value);
-        }
-    });
-    wasm_bindgen_futures::JsFuture::from(promise).await.map_err(error)?;
-    Ok(())
 }

@@ -23,7 +23,7 @@ pub(crate) struct BeltPullOffBurst {
 }
 impl BeltPullOffBurst {
     pub fn new(now: f64) -> Self {
-        let step = if js_sys::Math::random() < 0.5 {
+        let step = if crate::platform::random_unit() < 0.5 {
             NativeBeltPullOffStep::Degrees90
         } else {
             NativeBeltPullOffStep::Degrees120
@@ -35,12 +35,8 @@ impl BeltPullOffBurst {
                 sequence
             }),
             started_at: now,
-            reduced_motion: web_sys::window()
-                .and_then(|window| {
-                    window.match_media("(prefers-reduced-motion: reduce)").ok().flatten()
-                })
-                .is_some_and(|query| query.matches()),
-            members: native_belt_pull_off_burst_members(step, &mut js_sys::Math::random),
+            reduced_motion: crate::platform::reduced_motion(),
+            members: native_belt_pull_off_burst_members(step, &mut crate::platform::random_unit),
         }
     }
     pub fn sequence(&self) -> u64 {

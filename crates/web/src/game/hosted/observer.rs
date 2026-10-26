@@ -138,7 +138,7 @@ impl Game {
         if observer.deadline.is_some_and(|deadline| now >= deadline) {
             return self.native_disconnected("The observer handshake timed out.");
         }
-        self.menu.update(now, self.canvas.client_width(), self.canvas.client_height())?;
+        self.menu.update(now, self.surface.logical_width(), self.surface.logical_height())?;
         if self.has_game && self.menu.is_blocking() {
             return self.exit_hosted_observer();
         }
@@ -155,8 +155,8 @@ impl Game {
     pub(in crate::game) fn frame_hosted_observer(&mut self, now: f64) -> Result<(), String> {
         self.input.sample()?;
         self.input.resize(
-            self.canvas.client_width(),
-            self.canvas.client_height(),
+            self.surface.logical_width(),
+            self.surface.logical_height(),
             self.menu.settings().ui_scale_percent,
         )?;
         if !self.has_game || self.world_loading {

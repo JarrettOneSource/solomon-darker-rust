@@ -204,11 +204,7 @@ impl ModDetailView {
                 if self.account.is_none() {
                     return Ok(true);
                 }
-                let body = self.body.clone();
-                let body = js_sys::JsString::from(body)
-                    .trim()
-                    .as_string()
-                    .ok_or("comment body is not text")?;
+                let body = crate::ui::trim_javascript(&self.body).to_owned();
                 if body.is_empty() {
                     return Ok(true);
                 }

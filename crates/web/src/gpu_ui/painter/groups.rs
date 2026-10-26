@@ -1,10 +1,10 @@
 //! Reused GPU-only group targets and nested composition. Nothing is read back.
 
 use egui::{Rect, Vec2, pos2, vec2};
+use solomon_graphics::GraphicsContext;
 use solomon_graphics::{
     BlendMode, ColorFilter, RenderTarget, Renderer, ShadowOutput, Texture, TextureColorMode, Vertex,
 };
-use web_sys::WebGl2RenderingContext;
 
 use super::{GpuPainter, Images, clip_scissor};
 use crate::gpu_ui::{
@@ -84,7 +84,7 @@ impl Targets {
             })
             .sum()
     }
-    pub fn destroy(&mut self, gl: &WebGl2RenderingContext) {
+    pub fn destroy(&mut self, gl: &GraphicsContext) {
         for slot in self.slots.drain(..) {
             for target in
                 [slot.source, slot.composite, slot.horizontal, slot.vertical].into_iter().flatten()
@@ -104,13 +104,7 @@ impl Targets {
         let max = match self.max_size {
             Some(value) => value,
             None => {
-                let value = renderer
-                    .graphics_context()
-                    .get_parameter(WebGl2RenderingContext::MAX_TEXTURE_SIZE)
-                    .map_err(|error| format!("GPU group texture limit: {error:?}"))?
-                    .as_f64()
-                    .ok_or("GPU group texture limit is unavailable")?
-                    as u32;
+                let value = renderer.maximum_texture_size()?;
                 self.max_size = Some(value);
                 value
             }

@@ -1,8 +1,8 @@
 //! Nonvisual screen-reader announcements for GPU controls and Tutorial narration.
 
+#[cfg(target_arch = "wasm32")]
 use solomon_graphics::announcements::ScreenReader;
 use std::collections::{BTreeMap, btree_map::Entry};
-use web_sys::Document;
 
 use super::WidgetGeometry;
 
@@ -77,22 +77,41 @@ impl AnnouncementState {
 }
 
 pub(super) struct Accessibility {
+    #[cfg(target_arch = "wasm32")]
     reader: ScreenReader,
+    #[cfg(not(target_arch = "wasm32"))]
+    surface: crate::platform::Surface,
+    #[cfg(not(target_arch = "wasm32"))]
+    spoken: (u64, String),
     state: AnnouncementState,
 }
 
 impl Accessibility {
-    pub fn attach(document: &Document) -> Result<Self, String> {
-        Ok(Self { reader: ScreenReader::attach(document)?, state: AnnouncementState::default() })
+    pub fn attach(surface: &crate::platform::Surface) -> Result<Self, String> {
+        Ok(Self {
+            #[cfg(target_arch = "wasm32")]
+            reader: ScreenReader::attach(
+                &surface.canvas().owner_document().ok_or("No accessibility document")?,
+            )?,
+            #[cfg(not(target_arch = "wasm32"))]
+            surface: surface.clone(),
+            #[cfg(not(target_arch = "wasm32"))]
+            spoken: (0, String::new()),
+            state: AnnouncementState::default(),
+        })
     }
 
     pub fn update(
         &mut self,
-        output: &egui::PlatformOutput,
+        output: &mut egui::PlatformOutput,
         narration: &[Announcement],
         widgets: &BTreeMap<String, WidgetGeometry>,
     ) -> Result<(), String> {
-        if !self.reader.is_foreground()? {
+        #[cfg(target_arch = "wasm32")]
+        let foreground = self.reader.is_foreground()?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let foreground = self.surface.window().has_focus();
+        if !foreground {
             return Ok(());
         }
         let mut messages = self.state.messages(narration, widgets);
@@ -101,9 +120,88 @@ impl Accessibility {
             messages.push(description);
         }
         if !messages.is_empty() {
+            #[cfg(target_arch = "wasm32")]
             self.reader.announce_batch(&messages)?;
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                self.spoken.0 = self.spoken.0.wrapping_add(1);
+                self.spoken.1 = messages.join(". ");
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(update) = &mut output.accesskit_update {
+            update_native_tree(update, widgets, &self.spoken);
         }
         Ok(())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn role(name: &str) -> egui::accesskit::Role {
+    use egui::accesskit::Role;
+    match name {
+        "button" => Role::Button,
+        "textbox" | "input" | "text-entry" => Role::TextInput,
+        "password" => Role::PasswordInput,
+        "slider" => Role::Slider,
+        "checkbox" => Role::CheckBox,
+        "switch" => Role::Switch,
+        "combobox" => Role::ComboBox,
+        "radio" => Role::RadioButton,
+        "tab" => Role::Tab,
+        "menuitem" => Role::MenuItem,
+        _ => Role::Label,
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn update_native_tree(
+    update: &mut egui::accesskit::TreeUpdate,
+    widgets: &BTreeMap<String, WidgetGeometry>,
+    spoken: &(u64, String),
+) {
+    use egui::accesskit::{Live, Node, Role, Toggled};
+    for widget in widgets.values() {
+        let Some(id) = widget.egui_id else { continue };
+        let Some((_, node)) =
+            update.nodes.iter_mut().find(|(node_id, _)| *node_id == id.accesskit_id())
+        else {
+            continue;
+        };
+        let role = role(&widget.role);
+        if !(role == Role::TextInput && node.role() == Role::MultilineTextInput) {
+            node.set_role(role);
+        }
+        node.set_label(&widget.label);
+        node.set_author_id(&widget.id);
+        if !widget.enabled {
+            node.set_disabled();
+        }
+        if widget.role != "password"
+            && let Some(value) = &widget.value
+        {
+            node.set_value(value);
+        }
+        if let Some(selected) = widget.selected {
+            if matches!(role, Role::CheckBox | Role::Switch) {
+                node.set_toggled(if selected { Toggled::True } else { Toggled::False });
+            } else {
+                node.set_selected(selected);
+            }
+        }
+    }
+    if spoken.1.is_empty() {
+        return;
+    }
+    let Some(tree) = &update.tree else { return };
+    let id = egui::Id::unique(("solomon-narration", spoken.0)).accesskit_id();
+    if let Some((_, root)) = update.nodes.iter_mut().find(|(id, _)| *id == tree.root) {
+        root.push_child(id);
+        let mut status = Node::new(Role::Status);
+        status.set_live(Live::Polite);
+        status.set_live_atomic();
+        status.set_label(&spoken.1);
+        update.nodes.push((id, status));
     }
 }
 

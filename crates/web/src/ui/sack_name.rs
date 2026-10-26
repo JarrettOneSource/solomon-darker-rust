@@ -1,16 +1,13 @@
 //! Source `renderer/hub-inventory/sack-name.ts` typography and Pixi wrapping.
-//! The native browser shapes each complete font run; egui owns its GPU texture.
+//! Each platform shapes complete font runs; egui owns their GPU textures.
 use crate::gpu_ui::UiFrame;
-use js_sys::{Array, Intl, Object, Reflect};
 use solomon_sim::Vec2;
 use solomon_sim::native_ui_text::{NativeUiFontName, native_ui_font};
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
 #[derive(Clone)]
-pub(crate) struct BrowserSackName {
+pub(crate) struct SackName {
     pub size: Vec2,
     pub baseline_offset: f64,
     pub lines: Vec<String>,
@@ -18,7 +15,7 @@ pub(crate) struct BrowserSackName {
     pixels: egui::Vec2,
     scale: f32,
 }
-impl BrowserSackName {
+impl SackName {
     pub fn paint(&self, painter: &egui::Painter, origin: egui::Pos2, scale: f32) -> egui::Rect {
         let destination = egui::Rect::from_min_size(origin, self.pixels * self.scale * scale);
         painter.image(
@@ -38,10 +35,28 @@ struct NameKey {
     wrap: bool,
 }
 #[derive(Clone, Default)]
-struct NameCache(VecDeque<(NameKey, BrowserSackName)>);
-struct FontCanvas {
-    canvas: HtmlCanvasElement,
-    context: CanvasRenderingContext2d,
+struct NameCache(VecDeque<(NameKey, SackName)>);
+#[cfg(target_arch = "wasm32")]
+mod browser;
+#[cfg(not(target_arch = "wasm32"))]
+mod native;
+#[cfg(target_arch = "wasm32")]
+use browser::{FontCanvas, graphemes};
+#[cfg(not(target_arch = "wasm32"))]
+use native::{FontCanvas, graphemes};
+
+struct Metrics {
+    advance: f64,
+    left: f64,
+    right: f64,
+    ascent: f64,
+    descent: f64,
+}
+struct TextLayout {
+    width: u32,
+    height: u32,
+    baseline: f64,
+    line_height: f64,
 }
 thread_local! { static FONT_CANVAS: RefCell<Option<FontCanvas>> = const { RefCell::new(None) }; }
 
@@ -51,7 +66,7 @@ pub(crate) fn gpu_sack_name(
     tint: u32,
     max_width: f64,
     wrap: bool,
-) -> Result<BrowserSackName, String> {
+) -> Result<SackName, String> {
     let key = NameKey { text: text.to_owned(), tint, max_width: max_width.to_bits(), wrap };
     let cache_id = egui::Id::unique("source-sack-font-runs");
     let cached = frame.ctx.data_mut(|data| {
@@ -67,30 +82,14 @@ pub(crate) fn gpu_sack_name(
     }
     let (image, size, baseline_offset, scale, lines) = FONT_CANVAS.with(|slot| {
         let mut slot = slot.borrow_mut();
-        if slot.is_none() {
-            let document = web_sys::window()
-                .and_then(|window| window.document())
-                .ok_or("Sack font document")?;
-            let canvas: HtmlCanvasElement = document
-                .create_element("canvas")
-                .map_err(|_| "Sack font canvas")?
-                .dyn_into()
-                .map_err(|_| "Sack font canvas type")?;
-            let context: CanvasRenderingContext2d = canvas
-                .get_context("2d")
-                .map_err(|_| "Sack font rasterizer")?
-                .ok_or("Sack font rasterizer")?
-                .dyn_into()
-                .map_err(|_| "Sack font rasterizer type")?;
-            *slot = Some(FontCanvas { canvas, context });
-        }
-        let FontCanvas { canvas, context } = slot.as_ref().expect("initialized font canvas");
         let font_size = native_ui_font(NativeUiFontName::Menu).metrics[0];
-        let font = format!("normal normal normal {font_size}px \"Arial\",sans-serif");
-        context.set_font(&font);
-        let probe = context.measure_text("|ÉqÅM").map_err(|_| "Sack font probe")?;
-        let mut ascent = probe.actual_bounding_box_ascent();
-        let mut font_height = ascent + probe.actual_bounding_box_descent();
+        if slot.is_none() {
+            *slot = Some(FontCanvas::new(font_size)?);
+        }
+        let canvas = slot.as_ref().expect("initialized font canvas");
+        let probe = canvas.metrics("|ÉqÅM")?;
+        let mut ascent = probe.ascent;
+        let mut font_height = ascent + probe.descent;
         if font_height == 0.0 {
             ascent = font_size;
             font_height = font_size;
@@ -99,12 +98,7 @@ pub(crate) fn gpu_sack_name(
             wrap_name(
                 text,
                 max_width,
-                |token| {
-                    context
-                        .measure_text(token)
-                        .map(|metrics| metrics.width())
-                        .map_err(|_| "Sack font advance".into())
-                },
+                |token| canvas.metrics(token).map(|metrics| metrics.advance),
                 graphemes,
             )?
         } else {
@@ -112,37 +106,26 @@ pub(crate) fn gpu_sack_name(
         };
         let mut width = 0.0_f64;
         for line in &lines {
-            let metrics = context.measure_text(line).map_err(|_| "Sack font line")?;
-            width = width.max(
-                metrics
-                    .width()
-                    .max(metrics.actual_bounding_box_left() + metrics.actual_bounding_box_right()),
-            );
+            let metrics = canvas.metrics(line)?;
+            width = width.max(metrics.advance.max(metrics.left + metrics.right));
         }
         let height = font_size.max(font_height) + lines.len().saturating_sub(1) as f64 * font_size;
         let scale = if !wrap && width > max_width { max_width / width } else { 1.0 };
         let pixel_width = width.max(1.0).ceil() as u32;
         let pixel_height = height.max(1.0).ceil() as u32;
-        canvas.set_width(pixel_width);
-        canvas.set_height(pixel_height);
-        context.set_font(&font);
-        context.set_text_baseline("alphabetic");
-        context.set_fill_style_str(&format!("#{tint:06x}"));
         let line_shift = ((font_size - font_height) / 2.0).max(0.0);
-        for (index, line) in lines.iter().enumerate() {
-            context
-                .fill_text(line, 0.0, ascent + line_shift + index as f64 * font_size)
-                .map_err(|_| "Sack font run")?;
-        }
-        let data = context
-            .get_image_data(0.0, 0.0, pixel_width as f64, pixel_height as f64)
-            .map_err(|_| "Sack font pixels")?
-            .data();
+        let image = canvas.paint(
+            &lines,
+            tint,
+            TextLayout {
+                width: pixel_width,
+                height: pixel_height,
+                baseline: ascent + line_shift,
+                line_height: font_size,
+            },
+        )?;
         Ok::<_, String>((
-            egui::ColorImage::from_rgba_unmultiplied(
-                [pixel_width as usize, pixel_height as usize],
-                &data.0,
-            ),
+            image,
             Vec2::new(width * scale, height * scale),
             ascent * scale,
             scale as f32,
@@ -152,7 +135,7 @@ pub(crate) fn gpu_sack_name(
     let pixels = egui::vec2(image.width() as f32, image.height() as f32);
     let texture =
         frame.ctx.load_texture("Source Sack font run", image, egui::TextureOptions::LINEAR);
-    let name = BrowserSackName { texture, size, baseline_offset, scale, pixels, lines };
+    let name = SackName { texture, size, baseline_offset, scale, pixels, lines };
     frame.ctx.data_mut(|data| {
         let cache = data.get_temp_mut_or_default::<NameCache>(cache_id);
         cache.0.push_back((key, name.clone()));
@@ -269,32 +252,6 @@ fn tokens(text: &str) -> Vec<String> {
         tokens.push(token);
     }
     tokens
-}
-
-fn graphemes(text: &str) -> Result<Vec<String>, String> {
-    let intl = Reflect::get(&js_sys::global(), &JsValue::from_str("Intl"))
-        .map_err(|_| "Sack name Intl")?;
-    let constructor =
-        Reflect::get(&intl, &JsValue::from_str("Segmenter")).map_err(|_| "Sack name Segmenter")?;
-    if !constructor.is_function() {
-        // Source uses code points on browsers without Intl.Segmenter.
-        return Ok(text.chars().map(|character| character.to_string()).collect());
-    }
-    let segmenter = Intl::Segmenter::new(&Array::new(), &Object::new());
-    let segments = segmenter.segment(text);
-    let iterator = js_sys::try_iter(&segments)
-        .map_err(|_| "Sack name grapheme iterator")?
-        .ok_or("Sack name grapheme iterator")?;
-    let mut graphemes = Vec::new();
-    for segment in iterator {
-        let segment = segment.map_err(|_| "Sack name grapheme")?;
-        let value = Reflect::get(&segment, &JsValue::from_str("segment"))
-            .map_err(|_| "Sack name grapheme value")?
-            .as_string()
-            .ok_or("Sack name grapheme value")?;
-        graphemes.push(value);
-    }
-    Ok(graphemes)
 }
 
 #[cfg(test)]

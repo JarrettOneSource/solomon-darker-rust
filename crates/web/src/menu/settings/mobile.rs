@@ -85,18 +85,13 @@ impl SettingsView {
         Ok(())
     }
     pub(super) fn build_mobile_editor(&mut self) -> Result<(), String> {
-        let window = self.document.default_view().ok_or("mobile editor window")?;
-        self.mobile_fullscreen = window
-            .match_media("(hover: none) and (pointer: coarse)")
-            .map_err(|_| "mobile editor pointer media")?
-            .is_some_and(|q| q.matches());
+        self.mobile_fullscreen = self.surface.coarse_without_hover()?;
         let page = mobile_ui_editor_page_size(
             f64::from(self.viewport.x),
             f64::from(self.viewport.y),
             self.mobile_fullscreen,
         );
         let mut editor = MobileUiEditor::new(
-            &self.document,
             self.mobile_art.clone(),
             &self.mobile_state,
             page,

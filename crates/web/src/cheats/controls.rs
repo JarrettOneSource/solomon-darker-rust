@@ -8,8 +8,6 @@ use solomon_sim::menu::cheats::{
     CHEAT_MENU_SPAWN_COUNT_MAX, CheatMenuAction, CheatMenuCatalogs,
 };
 use solomon_sim::profile::{WizardDiscipline, WizardElement};
-use wasm_bindgen::JsValue;
-use web_sys::Document;
 
 pub(super) struct CheatControls {
     target: String,
@@ -45,7 +43,7 @@ impl Default for DeveloperControls {
     }
 }
 impl CheatControls {
-    pub fn new(_document: &Document, frame: &CheatFrame) -> Result<Self, String> {
+    pub fn new(frame: &CheatFrame) -> Result<Self, String> {
         let mut controls = Self {
             target: String::new(),
             selected_target: String::new(),
@@ -89,11 +87,7 @@ impl CheatControls {
         }
         Ok(())
     }
-    pub fn set_catalogs(
-        &mut self,
-        _document: &Document,
-        catalogs: &CheatMenuCatalogs,
-    ) -> Result<(), String> {
+    pub fn set_catalogs(&mut self, catalogs: &CheatMenuCatalogs) -> Result<(), String> {
         self.set_catalogs_values(catalogs);
         Ok(())
     }
@@ -484,9 +478,10 @@ fn skill_maximum(catalogs: &CheatMenuCatalogs, id: &str) -> i64 {
 
 fn integer_input(value: &str, label: &str, minimum: f64, maximum: f64) -> Result<f64, String> {
     // Number(value), including the source's empty-string-to-zero conversion.
-    let parsed = value.parse::<js_sys::Number>().unwrap_or_else(|never| match never {});
-    let number = parsed.value_of();
-    if !js_sys::Number::is_safe_integer(&JsValue::from_f64(number))
+    let number = crate::ui::parse_javascript_number(value);
+    if !number.is_finite()
+        || number.fract() != 0.0
+        || number.abs() > 9_007_199_254_740_991.0
         || number < minimum
         || number > maximum
     {

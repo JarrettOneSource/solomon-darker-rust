@@ -85,16 +85,13 @@ impl SettingsLayoutPublication {
             return Ok(false);
         }
         let Some(code) = &self.code else { return Ok(true) };
-        let promise =
-            web_sys::window().ok_or("clipboard window")?.navigator().clipboard().write_text(code);
+        let request = crate::platform::copy_text(code);
         let result = self.copy_result.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            *result.borrow_mut() = Some(
-                wasm_bindgen_futures::JsFuture::from(promise)
-                    .await
-                    .map(|_| ())
-                    .map_err(|_| "The code could not be copied.".to_owned()),
-            );
+        crate::platform::spawn_local(async move {
+            *result.borrow_mut() = Some(match request {
+                Ok(request) => request.await,
+                Err(error) => Err(error),
+            });
         });
         Ok(true)
     }

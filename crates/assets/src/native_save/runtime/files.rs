@@ -1,4 +1,4 @@
-//! Pure file-selection routing from `save/game-save-files.ts`; browser I/O stays outside.
+//! Pure file-selection routing from `save/game-save-files.ts`; platform I/O stays outside.
 
 use solomon_sim::profile::{WizardDiscipline, WizardElement};
 
@@ -20,7 +20,7 @@ pub struct GameSaveInputFile<'a> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameSaveImportSource {
-    Browser,
+    Game,
     Stock,
 }
 
@@ -74,9 +74,9 @@ fn preview_save(
     let player = &restored.session.participants[&restored.player_id].player;
     let mut metadata = restored.metadata;
     metadata.integrity = SaveIntegrity::LocalOnly;
-    // A raw browser JSON import starts a new local lineage. An embedded support
+    // A raw game JSON import starts a new local lineage. An embedded support
     // document instead receives the ZIP's current, byte-verified native files.
-    if source == GameSaveImportSource::Browser {
+    if source == GameSaveImportSource::Game {
         metadata.native_source = native_source;
     }
     Ok(GameSaveImportPreview {
@@ -112,14 +112,9 @@ pub fn read_game_save_file_selection(
     }
     if files.len() == 1 && files[0].name.to_lowercase().ends_with(".json") {
         if files[0].bytes.len() > website_save::MAX_SAVE_BYTES {
-            return Err("The browser save is too large.".into());
+            return Err("The save is too large.".into());
         }
-        return preview_save(
-            utf8(files[0].bytes)?,
-            GameSaveImportSource::Browser,
-            Vec::new(),
-            None,
-        );
+        return preview_save(utf8(files[0].bytes)?, GameSaveImportSource::Game, Vec::new(), None);
     }
     if files.len() == 1 && files[0].name.to_lowercase().ends_with(".zip") {
         let entries = read_zip(files[0].bytes)?;
@@ -136,7 +131,7 @@ pub fn read_game_save_file_selection(
                 let source = create_native_game_save_source(&save)?;
                 return preview_save(
                     utf8(&support)?,
-                    GameSaveImportSource::Browser,
+                    GameSaveImportSource::Game,
                     Vec::new(),
                     Some(source),
                 );
@@ -168,7 +163,7 @@ pub fn read_game_save_file_selection(
         )?);
     }
     if files.len() != 2 || darkdata.is_none() || gamestate.is_none() {
-        return Err("Choose a browser save JSON, a save ZIP, one gamestate.sav, or darkdata.cfg and gamestate.sav together.".into());
+        return Err("Choose a game save JSON, a save ZIP, one gamestate.sav, or darkdata.cfg and gamestate.sav together.".into());
     }
     let darkdata = darkdata.expect("the native pair contains darkdata.cfg");
     let gamestate = gamestate.expect("the native pair contains gamestate.sav");

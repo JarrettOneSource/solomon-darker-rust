@@ -18,13 +18,7 @@ pub(super) const DYE_MODAL_SCOPE: &str = "fabric-dye";
 
 impl PlayerPanels {
     pub(super) fn open_dye(&mut self, dye_item_id: u64, now: f64) -> Result<(), String> {
-        let session_id = self
-            .document
-            .default_view()
-            .ok_or("Fabric Dye window")?
-            .crypto()
-            .map_err(|_| "Fabric Dye session source")?
-            .random_uuid();
+        let session_id = crate::platform::random_uuid()?;
         self.sound(solomon_sim::audio::AudioCue::Click);
         self.notice = None;
         self.dye = Some(DyeSelection {
