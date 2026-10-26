@@ -610,6 +610,7 @@ impl ApplicationHandler<AccessibilityEvent> for App {
                         if self.failure.is_none() {
                             let result = game.borrow_mut().frame(now);
                             if let Err(error) = result {
+                                solomon_web::platform::error(&error);
                                 game.borrow_mut().report_failure(&error);
                                 self.failure = Some(error);
                             }
