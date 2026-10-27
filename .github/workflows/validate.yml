@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   capture:
+    if: false
     name: Windows settings trace (${{ matrix.attempt }})
     runs-on: windows-latest
     timeout-minutes: 15
@@ -81,7 +82,6 @@ jobs:
           if-no-files-found: error
 
   hosted-transfer:
-    if: false
     name: Windows exact checkpoint test validation
     runs-on: windows-latest
     timeout-minutes: 20
@@ -127,9 +127,9 @@ jobs:
           replacement='    fn until(&mut self, accept: impl Fn(&ServerMessage<Value>) -> bool) -> ServerMessage<Value> {\n        self.until_with_timeout(Duration::from_secs(8), accept)\n    }\n\n    #[track_caller]\n    fn until_with_timeout(\n        &mut self,\n        timeout: Duration,\n        accept: impl Fn(&ServerMessage<Value>) -> bool,\n    ) -> ServerMessage<Value> {\n        if let Some(index) = self.pending.iter().position(&accept) {'
           assert text.count(needle)==1
           text=text.replace(needle,replacement)
-          needle='        let deadline = Instant::now() + Duration::from_secs(8);'
+          needle='        let progress_before = self.save_progress;\n        let deadline = Instant::now() + Duration::from_secs(8);'
           assert text.count(needle)==1
-          text=text.replace(needle,'        let deadline = Instant::now() + timeout;')
+          text=text.replace(needle,'        let progress_before = self.save_progress;\n        let deadline = Instant::now() + timeout;')
           needle='    let ServerMessage::BoneyardLoaded { boneyard: party_world } = message else { unreachable!() };\n    let message = h2.until(|message| {'
           replacement='    let ServerMessage::BoneyardLoaded { boneyard: party_world } = message else { unreachable!() };\n    // This acknowledged Boneyard transfer measured 8.4 seconds in Windows debug CI.\n    let message = h2.until_with_timeout(Duration::from_secs(30), |message| {'
           assert text.count(needle)==1
