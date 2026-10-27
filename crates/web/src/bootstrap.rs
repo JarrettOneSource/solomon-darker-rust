@@ -110,7 +110,9 @@ fn schedule_frames(window: Window, game: Rc<RefCell<Game>>) {
         let result = game.borrow_mut().frame(time);
         if let Err(message) = result {
             web_sys::console::error_1(&JsValue::from_str(&message));
-            runtime_ui::set_error(&message);
+            if let Err(error) = game.borrow_mut().report_failure(&message) {
+                web_sys::console::error_1(&JsValue::from_str(&error));
+            }
             if let Err(error) = game.borrow_mut().present_failure(time) {
                 web_sys::console::error_1(&JsValue::from_str(&error));
             }

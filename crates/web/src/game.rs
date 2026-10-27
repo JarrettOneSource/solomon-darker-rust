@@ -2582,8 +2582,13 @@ impl Game {
         }))
     }
 
-    pub fn report_failure(&mut self, error: &str) {
+    pub fn report_failure(&mut self, error: &str) -> Result<(), String> {
         crate::runtime_ui::set_error(error);
+        self.input.set_blocked(true)?;
+        if let Some(native) = &mut self.native {
+            native.release_input(self.session.ticks)?;
+        }
+        Ok(())
     }
 
     pub fn present_failure(&mut self, time: f64) -> Result<(), String> {

@@ -72,8 +72,8 @@ LINUX_CONTROLS = {
 }
 
 
-def read_ui(operation, *args, timeout=30):
-    """Retry only AXCannotComplete reads while the software renderer is busy."""
+def retry_ui(operation, *args, timeout=30):
+    """Retry transient AXCannotComplete reads or idempotent focus operations."""
     deadline = time.monotonic() + timeout
     while True:
         try:
@@ -82,15 +82,15 @@ def read_ui(operation, *args, timeout=30):
             if (PLATFORM != "darwin" or not str(error).startswith("Platform error (-25204):")
                     or time.monotonic() >= deadline):
                 raise
-            RECEIPT.setdefault("accessibilityReadRetries", []).append(str(error))
-            print(f"Retrying temporary accessibility read: {error}", flush=True)
+            RECEIPT.setdefault("accessibilityRetries", []).append(str(error))
+            print(f"Retrying temporary accessibility call: {error}", flush=True)
             time.sleep(0.1)
 
 
 def wait(predicate, description, timeout=120):
     deadline = time.monotonic() + timeout
     while True:
-        result = read_ui(lambda timeout: predicate(), timeout=max(0, deadline - time.monotonic()))
+        result = retry_ui(lambda timeout: predicate(), timeout=max(0, deadline - time.monotonic()))
         if result:
             return result
         for app in RUNNING:
@@ -137,7 +137,7 @@ class Application:
         )
         RUNNING.append(self)
         self.app = xa11y.App.by_pid(self.process.pid, timeout=30)
-        read_ui(self.control("launcher/solo").wait_enabled, timeout=60)
+        retry_ui(self.control("launcher/solo").wait_enabled, timeout=60)
         self.activate()
         print(f"{name}: launcher ready", flush=True)
 
@@ -164,14 +164,14 @@ class Application:
                     f"{self.name} ready control from {identifiers}")
 
     def activate(self):
-        window = read_ui(self.app.locator("window").first().wait_attached)
+        window = retry_ui(self.app.locator("window").first().wait_attached)
         if PLATFORM == "linux":
             # The CI display is 1280x1024. Keep both launcher and game windows
             # fully visible. AT-SPI can reuse a retired window's object path.
             bounds = window.bounds
             if bounds is None or (bounds.width, bounds.height) != (1180, 800):
                 window.resize_to(1180, 800)
-                read_ui(self.app.locator("window").first().wait_until,
+                retry_ui(self.app.locator("window").first().wait_until,
                     lambda item: item is not None and item.bounds is not None
                     and (item.bounds.width, item.bounds.height) == (1180, 800), timeout=10)
             if bounds is None or (bounds.x, bounds.y) != (40, 40):
@@ -179,9 +179,9 @@ class Application:
         elif PLATFORM == "win32" and not window.maximized:
             # The runner's desktop can be smaller than the initial game window.
             window.maximize()
-            read_ui(self.app.locator("window").first().wait_until,
+            retry_ui(self.app.locator("window").first().wait_until,
                 lambda item: item is not None and item.maximized, timeout=10)
-        window.activate()
+        retry_ui(lambda timeout: window.activate())
         if PLATFORM == "darwin":
             # macOS runners can expose the window tree while the system-wide
             # AXFocusedApplication is empty. Claim and verify the native process
@@ -204,12 +204,12 @@ class Application:
 
     def click(self, identifier):
         print(f"{self.name}: click {identifier}", flush=True)
-        read_ui(self.control(identifier).wait_enabled).press()
+        retry_ui(self.control(identifier).wait_enabled).press()
 
     def fill(self, identifier, value):
         print(f"{self.name}: edit {identifier}", flush=True)
-        read_ui(self.control(identifier).wait_enabled).set_value(value)
-        read_ui(self.control(identifier).wait_until,
+        retry_ui(self.control(identifier).wait_enabled).set_value(value)
+        retry_ui(self.control(identifier).wait_until,
             lambda item: item is not None and (item.value or "") == value, timeout=10)
 
     def key(self, key):
@@ -234,9 +234,9 @@ class Application:
         # A failed startup may leave a window beyond the X11 screen boundary.
         # Capture the dedicated display so failure evidence remains available.
         shot = (xa11y.screenshot() if PLATFORM == "linux" else
-                xa11y.screenshot(element=read_ui(self.app.locator("window").first().wait_attached)))
+                xa11y.screenshot(element=retry_ui(self.app.locator("window").first().wait_attached)))
         shot.save_png(EVIDENCE / f"{name}.png")
-        tree = re.sub(r"solomondarker://[^\s\"']+", "", self.app.dump())
+        tree = re.sub(r"solomondarker://[^\s\"']+", "", retry_ui(lambda timeout: self.app.dump()))
         (EVIDENCE / f"{name}.txt").write_text(tree)
         print(f"{self.name}: captured {name}", flush=True)
 
@@ -245,14 +245,14 @@ class Application:
         if entry.name == "NO":
             assert fresh, "an established profile must retain its tutorial preference"
             entry.press()
-            read_ui(self.control("play").wait_enabled)
+            retry_ui(self.control("play").wait_enabled)
 
     def continue_game(self):
         self.title()
         self.click("play")
         self.click("continue")
-        read_ui(self.control("hud:inventory").wait_enabled, timeout=120)
-        read_ui(self.control("match-loading").wait_detached, timeout=120)
+        retry_ui(self.control("hud:inventory").wait_enabled, timeout=120)
+        retry_ui(self.control("match-loading").wait_detached, timeout=120)
 
     def new_game(self, name, element):
         print(f"{self.name}: creating {name}", flush=True)
@@ -267,7 +267,7 @@ class Application:
             entry.press()
             self.click("panel:dialogue-choice:0")
             self.key("Escape")
-            read_ui(self.control("panel:dialogue-next").wait_detached)
+            retry_ui(self.control("panel:dialogue-next").wait_detached)
             # Walk around the Office desk's left edge, then through the south door.
             # Its authored bounds are x402.5..638.5, y644.5..741.5; the introduction
             # finishes near (420,415).
@@ -277,15 +277,15 @@ class Application:
             self.activate()
             INPUT.key_down("s")
             try:
-                read_ui(self.control("create-name").wait_attached, timeout=15)
+                retry_ui(self.control("create-name").wait_attached, timeout=15)
             finally:
                 INPUT.key_up("s")
         self.fill("create-name", name)
         self.click(f"element:{element}")
         self.click("discipline:arcane")
-        read_ui(self.control("create-name").wait_detached)
-        read_ui(self.control("hud:map").wait_attached, timeout=120)
-        read_ui(self.control("match-loading").wait_detached, timeout=120)
+        retry_ui(self.control("create-name").wait_detached)
+        retry_ui(self.control("hud:map").wait_attached, timeout=120)
+        retry_ui(self.control("match-loading").wait_detached, timeout=120)
         return wait(lambda: self.saved_as(name, element), f"saved {name}/{element}/arcane")
 
     def saved_as(self, name, element):
@@ -296,7 +296,18 @@ class Application:
         return None
 
     def request_close(self):
-        read_ui(self.app.locator("window").first().wait_attached).close()
+        window = retry_ui(self.app.locator("window").first().wait_attached)
+        try:
+            window.close()
+        except xa11y.PlatformError as error:
+            if (PLATFORM != "darwin" or not str(error).startswith("Platform error (-25204):")):
+                raise
+            # The close may already be delivered. Callers verify the actual exit
+            # or save-failure surface; replaying the action could affect that prompt.
+            RECEIPT.setdefault("unacknowledgedCloses", []).append({
+                "name": self.name, "error": str(error),
+            })
+            print(f"{self.name}: close acknowledgement unavailable: {error}", flush=True)
 
     def exited(self):
         code = self.process.wait(timeout=30)
@@ -328,19 +339,19 @@ def settings(app, verify=False):
     slider = app.control("settings-range:music")
     if not verify:
         app.activate()
-        read_ui(slider.wait_enabled).set_numeric_value(37)
-        read_ui(slider.wait_until, lambda item: item is not None and item.numeric_value == 37, timeout=10)
+        retry_ui(slider.wait_enabled).set_numeric_value(37)
+        retry_ui(slider.wait_until, lambda item: item is not None and item.numeric_value == 37, timeout=10)
         slider.focus()
-        read_ui(slider.wait_focused)
+        retry_ui(slider.wait_focused)
         INPUT.press("Home")
-        read_ui(slider.wait_until, lambda item: item is not None and item.numeric_value == 0, timeout=10)
+        retry_ui(slider.wait_until, lambda item: item is not None and item.numeric_value == 0, timeout=10)
         INPUT.press("ArrowRight")
-    read_ui(slider.wait_until, lambda item: item is not None and item.numeric_value == 1, timeout=10)
+    retry_ui(slider.wait_until, lambda item: item is not None and item.numeric_value == 1, timeout=10)
     app.click("settings-page:controls")
     reverse = app.control("settings-toggle:reverse-hotbar")
     if not verify:
         app.click("settings-toggle:reverse-hotbar")
-    read_ui(reverse.wait_until, lambda item: item is not None and item.checked == "on", timeout=10)
+    retry_ui(reverse.wait_until, lambda item: item is not None and item.checked == "on", timeout=10)
     app.click("settings-back")
     app.click("settings-back")
 
@@ -355,11 +366,11 @@ def check_failed_close(app):
     os.replace(replacement, path)
     expected = path.read_bytes()
     app.request_close()
-    read_ui(app.control("desktop/keep-playing").wait_enabled)
+    retry_ui(app.control("desktop/keep-playing").wait_enabled)
     app.capture("save-conflict")
     assert path.read_bytes() == expected, "failed close overwrote the concurrent record"
     app.click("desktop/keep-playing")
-    read_ui(app.control("desktop/keep-playing").wait_detached)
+    retry_ui(app.control("desktop/keep-playing").wait_detached)
     assert app.process.poll() is None, "Keep playing must retain the application"
     app.request_close()
     app.click("desktop/close-unsaved")
@@ -391,14 +402,14 @@ def check_delayed_close(app):
         before = save_record(app.profile)[0]["revision"]
         app.hold("a", 0.8)
         app.request_close()
-        read_ui(app.control("desktop/keep-playing").wait_enabled, timeout=35)
+        retry_ui(app.control("desktop/keep-playing").wait_enabled, timeout=35)
         app.capture("save-timeout")
         app.click("desktop/keep-playing")
-        read_ui(app.control("desktop/keep-playing").wait_detached)
+        retry_ui(app.control("desktop/keep-playing").wait_detached)
     wait(lambda: save_record(app.profile)[0]["revision"] > before,
          "the delayed checkpoint finishing after Keep playing")
     app.key("Escape")
-    read_ui(app.control("hud:inventory").wait_enabled)
+    retry_ui(app.control("hud:inventory").wait_enabled)
     before_x = player(save_record(app.profile)[1])["locomotions"]["position"]["x"]
     app.hold("d", 1.2)
     final = app.close()[1]
@@ -414,9 +425,9 @@ def check_discarded_session(app):
         app.hold("a", 0.8)
         app.key("Escape")
         app.click("desktop/launcher")
-        read_ui(app.control("desktop/close-unsaved").wait_enabled, timeout=35)
+        retry_ui(app.control("desktop/close-unsaved").wait_enabled, timeout=35)
         app.click("desktop/close-unsaved")
-        read_ui(app.control("launcher/solo").wait_enabled)
+        retry_ui(app.control("launcher/solo").wait_enabled)
     # A discarded blocking write used to wake here and replace the durable slot.
     for _ in range(20):
         time.sleep(0.1)
@@ -433,7 +444,7 @@ def check_offline():
     solo.click("launcher/start-host")
     wait(lambda: solo.control("launcher/status").exists(), "host validation", 10)
     solo.click("launcher/join")
-    read_ui(solo.control("launcher/status").wait_until,
+    retry_ui(solo.control("launcher/status").wait_until,
         lambda item: item is not None and "invite" in (item.name or "").lower(), timeout=10)
     solo.click("launcher/solo")
     solo.title(fresh=True)
@@ -467,7 +478,7 @@ def check_offline():
     returned.continue_game()
     returned.key("Escape")
     returned.click("desktop/launcher")
-    read_ui(returned.control("launcher/solo").wait_enabled, timeout=120)
+    retry_ui(returned.control("launcher/solo").wait_enabled, timeout=120)
     returned.capture("returned-to-launcher")
     RECEIPT["savedReturnToLauncher"] = True
     returned.click("launcher/solo")
@@ -492,14 +503,14 @@ def check_peers():
     guest.activate()
     invite = guest.control("launcher/invite")
     invite.focus()
-    read_ui(invite.wait_focused)
+    retry_ui(invite.wait_focused)
     INPUT.chord("v", held=["Meta" if PLATFORM == "darwin" else "Ctrl"])
-    read_ui(invite.wait_until,
+    retry_ui(invite.wait_until,
         lambda item: item is not None and (item.value or "").startswith("solomondarker://"),
         timeout=10)
     guest.click("launcher/join")
     guest.new_game("NativeGuest", "fire")
-    assert not read_ui(guest.control("hud:map").wait_attached).enabled, "the guest may not start the match"
+    assert not retry_ui(guest.control("hud:map").wait_attached).enabled, "the guest may not start the match"
     host.activate()
     host.click("hud:map")
 
@@ -534,16 +545,18 @@ def check_peers():
                 for name, document in playing.items()}
     for app in (host, guest):
         app.activate()
-        read_ui(app.control("match-loading").wait_detached, timeout=120)
-        app.hold("d", 1.2)
+        retry_ui(app.control("match-loading").wait_detached, timeout=120)
+        # Two software-rendered peers can exceed two seconds per frame.
+        # Keep the key held long enough for gameplay to sample it.
+        app.hold("d", 3)
         app.capture(f"peer-{app.name}-boneyard")
     # Closing inventory starts the ordinary two-second shared resume hold.
     # Exercise it after movement so the hold cannot consume either input probe.
     host.key("i")
-    read_ui(host.control("panel:close").wait_enabled)
+    retry_ui(host.control("panel:close").wait_enabled)
     host.capture("peer-host-inventory")
     host.key("Escape")
-    read_ui(host.control("panel:close").wait_detached)
+    retry_ui(host.control("panel:close").wait_detached)
     guest_save = guest.close()[1]
     host_save = host.close()[1]
     assert identity(host_save)["displayName"] == "NativeHost"
@@ -564,7 +577,8 @@ def check_peers():
 
 
 def cleanup():
-    for app in RUNNING:
+    # Guests need their host alive to finish saving.
+    for app in reversed(RUNNING):
         result = {"name": app.name}
         if app.process.poll() is None:
             try:

@@ -68,6 +68,12 @@ and the GPU context. A failed save or twenty-second deadline keeps the game aliv
 and offers **Keep playing** or **Close without saving**. The latter preserves the
 preceding durable document. Keep playing also cancels pending Cocoa termination.
 
+A fatal client error replaces gameplay with a recovery screen. It receives native
+input and accessibility actions directly, so the inactive game UI cannot consume
+them. The shared Game clears local input and sends a neutral input to the authority.
+If the connection rejects that release, its error is logged and the original
+failure stays visible. Save and return uses the same persistence coordinator.
+
 The previous Electron profile stays intact. To migrate, use the previous app's
 Settings → Online and account → Stock / browser save → Download save archive.
 In the native app choose Play offline, then Settings → Online and account →

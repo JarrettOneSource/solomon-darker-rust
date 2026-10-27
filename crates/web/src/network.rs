@@ -119,10 +119,8 @@ impl NativeSession {
         input: GameSessionInput,
         held: bool,
     ) -> Result<(), String> {
-        if let Some(message) = self.input.queue_input(snapshot_tick, input, held)? {
-            self.send(&message)?;
-        }
-        Ok(())
+        let connection = &self.connection;
+        self.input.send_input(snapshot_tick, input, held, |message| connection.send(message))
     }
 
     pub fn acknowledge_snapshot(

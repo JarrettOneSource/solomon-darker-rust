@@ -125,6 +125,64 @@ fn native_admission_starts_before_the_renderer_polls() {
 }
 
 #[test]
+fn rejected_input_release_remains_unsent_until_transport_admits_it() {
+    use solomon_sim::{Vec2, session::GameSessionInput};
+
+    let (sent, received) = sync::channel();
+    let (endpoint, server) = server(move |mut socket| {
+        assert!(matches!(command(&mut socket), ClientMessage::InspectSession { resume: None }));
+        loop {
+            match socket.read().unwrap() {
+                Message::Text(text) => {
+                    sent.send(serde_json::from_str::<ClientMessage>(&text).unwrap()).unwrap();
+                }
+                Message::Close(_) => break,
+                message => panic!("unexpected game message: {message:?}"),
+            }
+        }
+    });
+    crate::platform::configure_native_location("http://native.test/game/", None).unwrap();
+    let mut session =
+        NativeSession::connect_to(&endpoint, ClientMessage::InspectSession { resume: None })
+            .unwrap();
+    wait_for(|| session.is_open());
+    let active = GameSessionInput {
+        movement: Vec2::new(1.0, 0.0),
+        primary: true,
+        quickbar: Some(3),
+        ..GameSessionInput::default()
+    };
+    session.send_input(10, active, false).unwrap();
+    assert!(matches!(
+        received.recv_timeout(Duration::from_secs(3)).unwrap(),
+        ClientMessage::Input { sequence: 1, target_tick: 11, input } if input == active
+    ));
+    wait_for(|| session.connection.pending_bytes.load(Ordering::Relaxed) == 0);
+
+    // Force the real transport's admission boundary without a timing-dependent flood.
+    session.connection.pending_bytes.store(MAX_PENDING_SEND_BYTES + 1, Ordering::Relaxed);
+    let release = session.send_input(10, GameSessionInput::default(), false);
+    let fatal_release = session.send_input(10, GameSessionInput::default(), true);
+    session.connection.pending_bytes.store(0, Ordering::Relaxed);
+    session.send_input(10, GameSessionInput::default(), true).unwrap();
+    let delivered = received.recv_timeout(Duration::from_secs(3));
+    drop(session);
+    server.join().unwrap();
+
+    assert_eq!(release.unwrap_err(), "The game connection is not accepting input");
+    assert_eq!(
+        fatal_release,
+        Err("The game connection is not accepting input".into()),
+        "a rejected release must not suppress a later release"
+    );
+    assert!(matches!(
+        delivered.unwrap(),
+        ClientMessage::Input { sequence: 2, target_tick: 12, input }
+            if input == GameSessionInput::default()
+    ));
+}
+
+#[test]
 fn actual_session_sends_admission_and_retains_the_server_close_reason() {
     let (endpoint, server) = server(|mut socket| {
         assert!(matches!(command(&mut socket), ClientMessage::InspectSession { resume: None }));
