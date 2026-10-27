@@ -1,0 +1,62 @@
+name: Diagnose hosted checkpoint transfer
+on:
+  push:
+    branches: [diagnostic/ecs-hosted-checkpoint-20261026]
+permissions:
+  contents: read
+jobs:
+  checkpoint:
+    name: Windows checkpoint (${{ matrix.wait }} seconds)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        wait: [8, 20]
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      RUST_BACKTRACE: '1'
+      CHECKPOINT_DIAGNOSTIC_WAIT_SECONDS: ${{ matrix.wait }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install pinned Rust
+        shell: bash
+        run: rustup show
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-10f8aa7c7bfec6818de19edde26543b3be8bae23
+          restore-keys: |
+            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+      - name: Measure three complete hosted-supervisor suites
+        shell: python
+        run: |
+          import json, os, pathlib, subprocess, time
+          output = pathlib.Path('reports/checkpoint')
+          output.mkdir(parents=True)
+          command = ['cargo', 'test', '--locked', '--workspace', '--all-features', '--test', 'hosted_supervisor']
+          with (output / 'build.log').open('w') as log:
+              subprocess.run(command + ['--no-run'], stdout=log, stderr=subprocess.STDOUT, check=True)
+          results = []
+          for attempt in range(1, 4):
+              started = time.monotonic()
+              with (output / f'suite-{attempt}.log').open('w') as log:
+                  result = subprocess.run(command + ['--', '--nocapture'], stdout=log, stderr=subprocess.STDOUT, timeout=180)
+              row = {'attempt': attempt, 'exitCode': result.returncode, 'elapsedSeconds': time.monotonic() - started}
+              results.append(row)
+              print(json.dumps(row), flush=True)
+              (output / 'receipt.json').write_text(json.dumps({'diagnosticOnly': True, 'revision': os.environ['GITHUB_SHA'], 'waitSeconds': int(os.environ['CHECKPOINT_DIAGNOSTIC_WAIT_SECONDS']), 'runs': results}, indent=2))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checkpoint-${{ matrix.wait }}
+          path: reports/checkpoint
+          if-no-files-found: error

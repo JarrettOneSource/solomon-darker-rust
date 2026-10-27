@@ -198,6 +198,8 @@ fn drive_client(
     observations: &Sender<ClientObservation>,
 ) -> Result<(), String> {
     use solomon_protocol::transfer::{GameStringChunk, GameStringReceiver};
+    let diagnostic_started = Instant::now();
+    let diagnostic_peer = socket.get_ref().local_addr().unwrap();
     let mut snapshots = solomon_protocol::snapshot::SnapshotReader::default();
     let mut welcome = GameStringReceiver::new(
         solomon_protocol::GAME_WEBSOCKET_MAX_PAYLOAD_BYTES,
@@ -239,9 +241,20 @@ fn drive_client(
                 }
             }
         }
+        let diagnostic_read = Instant::now();
         match socket.read() {
             Ok(Message::Text(text)) => {
+                let diagnostic_decode = Instant::now();
                 let mut message = snapshots.decode::<Value>(&text)?;
+                let diagnostic_decode_us = diagnostic_decode.elapsed().as_micros();
+                if diagnostic_decode_us > 20_000 {
+                    eprintln!(
+                        "CHECKPOINT_DIAGNOSTIC slow_decode peer={diagnostic_peer} elapsed_us={} bytes={} read_us={} decode_us={diagnostic_decode_us}",
+                        diagnostic_started.elapsed().as_micros(),
+                        text.len(),
+                        diagnostic_read.elapsed().as_micros()
+                    );
+                }
                 // The Source browser detaches its session message listener before
                 // closing. Drain in-flight observations without ACKing a closed writer.
                 if let ServerMessage::WelcomeChunk { data, offset, total_length } = message {
@@ -294,6 +307,13 @@ fn drive_client(
                 } = message
                 {
                     let next_offset = offset + data.len();
+                    if total_length > 100_000 {
+                        eprintln!(
+                            "CHECKPOINT_DIAGNOSTIC chunk peer={diagnostic_peer} elapsed_us={} sequence={sequence} received={next_offset} total={total_length} read_us={} decode_us={diagnostic_decode_us}",
+                            diagnostic_started.elapsed().as_micros(),
+                            diagnostic_decode.duration_since(diagnostic_read).as_micros()
+                        );
+                    }
                     let _ = observations.send(ClientObservation::SaveProgress {
                         sequence,
                         received: next_offset,
@@ -635,12 +655,26 @@ impl Client {
             return self.pending.remove(index).unwrap();
         }
         let progress_before = self.save_progress;
-        let deadline = Instant::now() + Duration::from_secs(8);
+        let diagnostic_started = Instant::now();
+        let diagnostic_location = std::panic::Location::caller();
+        let diagnostic_budget = std::env::var("CHECKPOINT_DIAGNOSTIC_WAIT_SECONDS")
+            .unwrap_or_else(|_| "8".into())
+            .parse::<u64>()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(diagnostic_budget);
+        eprintln!(
+            "CHECKPOINT_DIAGNOSTIC wait_begin location={diagnostic_location} budget={diagnostic_budget} progress={progress_before:?}"
+        );
         while Instant::now() < deadline {
             match self.observations.recv_timeout(deadline.saturating_duration_since(Instant::now()))
             {
                 Ok(ClientObservation::Message(message)) => {
                     if accept(&message) {
+                        eprintln!(
+                            "CHECKPOINT_DIAGNOSTIC wait_complete location={diagnostic_location} elapsed_us={} progress={:?}",
+                            diagnostic_started.elapsed().as_micros(),
+                            self.save_progress
+                        );
                         return *message;
                     }
                     // Source next() retains unmatched reliable messages. In particular,
@@ -649,6 +683,12 @@ impl Client {
                 }
                 Ok(ClientObservation::SaveProgress { sequence, received, total }) => {
                     self.save_progress = Some((sequence, received, total));
+                    if total > 100_000 {
+                        eprintln!(
+                            "CHECKPOINT_DIAGNOSTIC wait_progress location={diagnostic_location} elapsed_us={} sequence={sequence} received={received} total={total}",
+                            diagnostic_started.elapsed().as_micros()
+                        );
+                    }
                 }
                 Ok(ClientObservation::Closed) => {
                     self.closed = true;
