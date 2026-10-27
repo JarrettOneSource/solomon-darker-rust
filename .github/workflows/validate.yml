@@ -1,81 +1,88 @@
-name: Verify native focus recovery against the exact retained package
-on:
-  push:
-    branches: [diagnostic/windows-browser-capture-20261026]
-permissions:
-  contents: read
-  actions: read
-env:
-  CARGO_INCREMENTAL: '0'
-  CARGO_PROFILE_DEV_DEBUG: '0'
-  CARGO_PROFILE_TEST_DEBUG: '0'
-  RUST_BACKTRACE: '1'
-jobs:
-  native-focus-intel:
-    runs-on: macos-15-intel
-    timeout-minutes: 35
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: 09e2e9ea90a042bed6d7779bccf2f02650ea7e15
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - name: Resolve the accessibility interpreter
-        run: python -c 'import os,sys; print("TCC_CLIENT=" + os.path.realpath(sys.executable))' >> "$GITHUB_ENV"
-      - uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
-        with:
-          setup-window-manager: 'true'
-          macos-tcc-client: ${{ env.TCC_CLIENT }}
-      - run: python -m pip install -r tools/desktop-smoke-requirements.txt
-      - name: Install the verified private focus check
-        id: fixture
-        shell: python
-        run: |
-          from pathlib import Path
-          import hashlib,json,os,subprocess
-          revision=os.environ['GITHUB_SHA']
-          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          name='tools/diagnostic-native-focus.py'
-          data=subprocess.check_output(['git','show',revision+':'+name])
-          digest=hashlib.sha256(data).hexdigest()
-          assert digest=='74b535cb215ad6f1a5f64f27485f8975a995581dd038d12df015860b19f3d555'
-          Path(name).write_bytes(data)
-          out=Path('reports/native-focus');out.mkdir(parents=True,exist_ok=True)
-          (out/'source.json').write_text(json.dumps({'driverRevision':'09e2e9ea90a042bed6d7779bccf2f02650ea7e15','fixtureRevision':revision,'fixtureSha256':digest,'packageRun':40450043476,'packageArtifact':'unqualified-desktop-darwin-x64-40450043476-1'},indent=2)+'\n')
-      - uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ github.token }}
-          run-id: 40450043476
-          name: unqualified-desktop-darwin-x64-40450043476-1
-          path: retained-package
-      - name: Verify and unpack the unchanged Intel package
-        id: unpack
-        shell: python
-        run: |
-          from pathlib import Path
-          import hashlib,json,os,subprocess
-          archive=Path('retained-package/Solomon-Darker-darwin-x64.zip')
-          expected=Path(str(archive)+'.sha256').read_text().split()[0]
-          with archive.open('rb') as stream:
-              assert hashlib.file_digest(stream,'sha256').hexdigest()==expected
-          inspection=subprocess.check_output(['python','scripts/verify-desktop-archive.py',str(archive)],text=True)
-          report=json.loads(inspection)
-          assert report['revision']=='09e2e9ea90a042bed6d7779bccf2f02650ea7e15'
-          assert report['nativeSha256']=='223f96c76d9d8507c3b2a69c75e059e81457e7492a70eb1ace2a3a2194e14af7'
-          Path('reports/native-focus/archive-inspection.json').write_text(inspection)
-          subprocess.run(['ditto','-x','-k',str(archive),'retained-package/unpacked'],check=True)
-          app=Path('retained-package/unpacked/Solomon Darker-darwin-x64').resolve()
-          with open(os.environ['GITHUB_ENV'],'a') as out:
-              out.write('SDR_DESKTOP_APP='+str(app)+'\n')
-      - name: Complete native peer play after temporary AXRaise and capture-read failures
-        run: python -u tools/diagnostic-native-focus.py raise
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: native-focus-intel
-          path: reports/native-focus
-          if-no-files-found: error
+{
+  "name": "Observe held movement after native failure",
+  "on": {
+    "push": {
+      "branches": [
+        "diagnostic/windows-browser-capture-20261026"
+      ]
+    }
+  },
+  "permissions": {
+    "contents": "read",
+    "actions": "read"
+  },
+  "jobs": {
+    "native-fatal-held-input": {
+      "runs-on": "windows-latest",
+      "timeout-minutes": 20,
+      "steps": [
+        {
+          "uses": "actions/checkout@v6",
+          "with": {
+            "ref": "33ca699899158bae7d880a5fda605c92849e7eef"
+          }
+        },
+        {
+          "uses": "actions/setup-python@v6",
+          "with": {
+            "python-version": "3.12"
+          }
+        },
+        {
+          "uses": "xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d",
+          "with": {
+            "setup-window-manager": "true"
+          }
+        },
+        {
+          "run": "python -m pip install -r tools/desktop-smoke-requirements.txt"
+        },
+        {
+          "uses": "ssciwr/setup-mesa-dist-win@2dfeaebfa514f74c2b8cd8d27108c31486d33e72",
+          "with": {
+            "version": "26.0.3"
+          }
+        },
+        {
+          "uses": "actions/setup-node@v6",
+          "with": {
+            "node-version-file": ".node-version"
+          }
+        },
+        {
+          "uses": "actions/download-artifact@v4",
+          "with": {
+            "github-token": "${{ github.token }}",
+            "run-id": 40455447684,
+            "name": "native-fatal-fixture-executable",
+            "path": "retained-executable"
+          }
+        },
+        {
+          "name": "Verify retained executable and install private journey",
+          "shell": "python",
+          "run": "from pathlib import Path\nimport hashlib,json,os,subprocess\nbinaries=list(Path('retained-executable').rglob('*.exe'));assert len(binaries)==1\nbinary=binaries[0].resolve();binary_hash=hashlib.sha256(binary.read_bytes()).hexdigest()\nassert binary_hash=='e1c8ffda82a52d4ead76c9c1662c4177b143ddf7c38f1a9e69853c2b8fe67f1e'\nrevision=os.environ['GITHUB_SHA']\nsubprocess.run(['git','fetch','--depth=1','origin',revision],check=True)\nname='tools/diagnostic-fatal-held-input.py'\ndata=subprocess.check_output(['git','show',revision+':'+name])\nassert hashlib.sha256(data).hexdigest()=='e0e07a7be2db41077c86f2272537798e61b5fa6ae5fe3654e7f05a7800859d32'\nPath(name).write_bytes(data)\nwith open(os.environ['GITHUB_ENV'],'a') as out:\n    out.write('FATAL_NATIVE_APP='+str(binary)+'\\n')\nout=Path('reports/native-fatal-held-input');out.mkdir(parents=True,exist_ok=True)\n(out/'source.json').write_text(json.dumps({'base':'33ca699899158bae7d880a5fda605c92849e7eef','retainedBuildRun':40455447684,'executableSha256':binary_hash,'fixtureRevision':revision,'fixtureSha256':'e0e07a7be2db41077c86f2272537798e61b5fa6ae5fe3654e7f05a7800859d32'},indent=2)+'\\n')\n"
+        },
+        {
+          "name": "Stage unchanged executable and assets",
+          "shell": "pwsh",
+          "run": "node tools/package-desktop.mjs --platform win32 --arch x64 --native-app \"$env:FATAL_NATIVE_APP\" --release-repository \"$env:GITHUB_REPOSITORY\"\nif ($LASTEXITCODE) { throw \"Retained fixture packaging failed.\" }\n"
+        },
+        {
+          "name": "Compare immediate and delayed recovery while movement was held",
+          "shell": "pwsh",
+          "run": "python -u tools/diagnostic-fatal-held-input.py\nif ($LASTEXITCODE) { throw \"Held input failure diagnostic failed.\" }\n"
+        },
+        {
+          "uses": "actions/upload-artifact@v4",
+          "if": "always()",
+          "with": {
+            "name": "native-fatal-held-input-windows",
+            "path": "reports/native-fatal-held-input",
+            "if-no-files-found": "error"
+          }
+        }
+      ]
+    }
+  }
+}
