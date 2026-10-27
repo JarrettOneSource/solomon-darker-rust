@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 mode = sys.argv[1]
-assert mode in ("raise", "close-peer", "trace-one", "trace-two"), mode
+assert mode in ("raise", "close-peer", "trace-one", "trace-two", "hold-one", "hold-two"), mode
 original = Path("tools/smoke-desktop-runtime.py").read_bytes()
 assert hashlib.sha256(original).hexdigest() == "7a94572aaebcc84c393738aa334368aa9836d04de83d1bbbd4dc845186a914fa"
 source = original.decode()
@@ -32,6 +32,13 @@ old = '    def request_close(self):\n        retry_ui(self.app.locator("window")
 new = '    def request_close(self):\n        window = retry_ui(self.app.locator("window").first().wait_attached)\n        try:\n            window.close()\n        except xa11y.PlatformError as error:\n            if (PLATFORM != "darwin" or not str(error).startswith("Platform error (-25204):")):\n                raise\n            # The close may already be delivered. Callers verify the actual exit\n            # or save-failure surface; replaying the action could affect that prompt.\n            RECEIPT.setdefault("unacknowledgedCloses", []).append({\n                "name": self.name, "error": str(error),\n            })\n            print(f"{self.name}: close acknowledgement unavailable: {error}", flush=True)\n'
 assert source.count(old) == 1
 source = source.replace(old, new)
+if mode in ("hold-one", "hold-two"):
+    old = '        app.hold("d", 1.2)\n'
+    new = ('        # Two software-rendered peers can exceed two seconds per frame.\n'
+           '        # Keep the key held long enough for gameplay to sample it.\n'
+           '        app.hold("d", 3)\n')
+    assert source.count(old) == 1
+    source = source.replace(old, new)
 fixed_hash = hashlib.sha256(source.encode()).hexdigest()
 
 if mode in ("raise", "close-peer"):
@@ -76,8 +83,9 @@ if mode == "close-peer":
     source = source.replace(old, new)
     source = source.replace("    check_offline()\n    check_peers()\n", "    check_peers()\n")
 
-# Record the ordinary hold's exact OS-input interval, without polling a 30-second save.
-old = '        app.hold("d", 1.2)\n'
+# Record the OS-input interval without polling a 30-second save.
+hold_seconds = 3 if mode in ("hold-one", "hold-two") else 1.2
+old = f'        app.hold("d", {hold_seconds})\n'
 new = '''        app.activate()
         started = time.time()
         INPUT.key_down("d")
@@ -91,7 +99,9 @@ new = '''        app.activate()
             })
 '''
 assert source.count(old) == 1
-source = source.replace(old, new)
+source = source.replace(old, new.replace("time.sleep(1.2)", f"time.sleep({hold_seconds})"))
+if mode in ("hold-one", "hold-two"):
+    source = source.replace("    check_offline()\n    check_peers()\n", "    check_peers()\n")
 
 needle = "    shutil.rmtree(PROFILES)\n"
 assert source.count(needle) == 1
@@ -121,7 +131,7 @@ if mode in ("raise", "close-peer"):
 else:
     assert receipt["revision"] == "33ca699899158bae7d880a5fda605c92849e7eef"
 assert result.returncode == 0 and receipt["status"] == "ok", receipt
-assert len(receipt["exits"]) == (2 if mode == "close-peer" else 6)
+assert len(receipt["exits"]) == (2 if mode in ("close-peer", "hold-one", "hold-two") else 6)
 assert all(row["code"] == 0 for row in receipt["exits"])
 if mode == "close-peer":
     assert receipt["injectedCloseAcknowledgementFailures"] == 1

@@ -1,5 +1,5 @@
 {
-  "name": "Verify native close acknowledgement and fatal input release",
+  "name": "Verify held input across measured software-rendered frames",
   "permissions": {
     "contents": "read",
     "actions": "read"
@@ -11,9 +11,9 @@
     "RUST_BACKTRACE": "1"
   },
   "jobs": {
-    "native-focus-intel": {
-      "runs-on": "macos-15-intel",
-      "timeout-minutes": 25,
+    "native-input-hold-arm": {
+      "runs-on": "macos-15",
+      "timeout-minutes": 30,
       "defaults": {
         "run": {
           "shell": "bash"
@@ -23,7 +23,7 @@
         {
           "uses": "actions/checkout@v6",
           "with": {
-            "ref": "09e2e9ea90a042bed6d7779bccf2f02650ea7e15"
+            "ref": "33ca699899158bae7d880a5fda605c92849e7eef"
           }
         },
         {
@@ -47,78 +47,6 @@
           "run": "python -m pip install -r tools/desktop-smoke-requirements.txt"
         },
         {
-          "name": "Install the verified private focus check",
-          "id": "fixture",
-          "shell": "python",
-          "run": "from pathlib import Path\nimport hashlib,json,os,subprocess\nrevision=os.environ['GITHUB_SHA']\nsubprocess.run(['git','fetch','--depth=1','origin',revision],check=True)\nname='tools/diagnostic-native-focus.py'\ndata=subprocess.check_output(['git','show',revision+':'+name])\ndigest=hashlib.sha256(data).hexdigest()\nassert digest=='d7ee10cdda4c50898a0a9e9fc824f23d83966da2cdc326b01490637f7b6430de'\nPath(name).write_bytes(data)\nout=Path('reports/native-focus');out.mkdir(parents=True,exist_ok=True)\n(out/'source.json').write_text(json.dumps({'driverRevision':'09e2e9ea90a042bed6d7779bccf2f02650ea7e15','fixtureRevision':revision,'fixtureSha256':digest,'packageRun':40450043476,'packageArtifact':'unqualified-desktop-darwin-x64-40450043476-1'},indent=2)+'\\n')\n"
-        },
-        {
-          "uses": "actions/download-artifact@v4",
-          "with": {
-            "github-token": "${{ github.token }}",
-            "run-id": 40450043476,
-            "name": "unqualified-desktop-darwin-x64-40450043476-1",
-            "path": "retained-package"
-          }
-        },
-        {
-          "name": "Verify and unpack the unchanged Intel package",
-          "id": "unpack",
-          "shell": "python",
-          "run": "from pathlib import Path\nimport hashlib,json,os,subprocess\narchive=Path('retained-package/Solomon-Darker-darwin-x64.zip')\nexpected=Path(str(archive)+'.sha256').read_text().split()[0]\nwith archive.open('rb') as stream:\n    assert hashlib.file_digest(stream,'sha256').hexdigest()==expected\ninspection=subprocess.check_output(['python','scripts/verify-desktop-archive.py',str(archive)],text=True)\nreport=json.loads(inspection)\nassert report['revision']=='09e2e9ea90a042bed6d7779bccf2f02650ea7e15'\nassert report['nativeSha256']=='223f96c76d9d8507c3b2a69c75e059e81457e7492a70eb1ace2a3a2194e14af7'\nPath('reports/native-focus/archive-inspection.json').write_text(inspection)\nsubprocess.run(['ditto','-x','-k',str(archive),'retained-package/unpacked'],check=True)\napp=Path('retained-package/unpacked/Solomon Darker-darwin-x64').resolve()\nwith open(os.environ['GITHUB_ENV'],'a') as out:\n    out.write('SDR_DESKTOP_APP='+str(app)+'\\n')\n"
-        },
-        {
-          "name": "Save and close native peers after an ambiguous delivered close acknowledgement",
-          "run": "python -u tools/diagnostic-native-focus.py close-peer"
-        },
-        {
-          "uses": "actions/upload-artifact@v4",
-          "if": "always()",
-          "with": {
-            "name": "native-focus-intel",
-            "path": "reports/native-focus",
-            "if-no-files-found": "error"
-          }
-        }
-      ]
-    },
-    "native-fatal-authority": {
-      "runs-on": "windows-latest",
-      "timeout-minutes": 90,
-      "steps": [
-        {
-          "uses": "actions/checkout@v6",
-          "with": {
-            "ref": "33ca699899158bae7d880a5fda605c92849e7eef"
-          }
-        },
-        {
-          "uses": "actions/setup-python@v6",
-          "with": {
-            "python-version": "3.12"
-          }
-        },
-        {
-          "uses": "xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d",
-          "with": {
-            "setup-window-manager": "true"
-          }
-        },
-        {
-          "run": "python -m pip install -r tools/desktop-smoke-requirements.txt"
-        },
-        {
-          "uses": "ssciwr/setup-mesa-dist-win@2dfeaebfa514f74c2b8cd8d27108c31486d33e72",
-          "with": {
-            "version": "26.0.3"
-          }
-        },
-        {
-          "name": "Select native Windows Perl",
-          "shell": "pwsh",
-          "run": "$nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source\nif (!$nativePerl) { throw 'Native Perl is unavailable.' }\n\"OPENSSL_SRC_PERL=$nativePerl\" >> $env:GITHUB_ENV\n"
-        },
-        {
           "uses": "actions/setup-node@v6",
           "with": {
             "node-version-file": ".node-version",
@@ -129,69 +57,41 @@
           "run": "npm ci --no-audit --no-fund"
         },
         {
-          "run": "rustup show"
-        },
-        {
-          "uses": "actions/cache/restore@v4",
-          "with": {
-            "path": "~/.cargo/registry\n~/.cargo/git\ntarget\n",
-            "key": "fatal-input-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}",
-            "restore-keys": "fatal-input-${{ runner.os }}-${{ runner.arch }}-\nnative-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-\nnative-${{ runner.os }}-${{ runner.arch }}-\n"
-          },
-          "id": "fatal-cache"
-        },
-        {
-          "name": "Install verified private authority trace and conditional correction",
+          "name": "Install verified held-input check",
+          "id": "fixture",
           "shell": "python",
-          "run": "from pathlib import Path\nimport os,subprocess,hashlib,json\nrevision=os.environ['GITHUB_SHA']\nsubprocess.run(['git','fetch','--depth=1','origin',revision],check=True)\nhashes={'tools/diagnostic-failure-input.patch': '77627e0cf2d193fda1a02a8b0bbb10fc26f7c08e2f763b7920d21cb30f2e04b4', 'tools/diagnostic-fatal-release.patch': '55f6217205dcf7ab3c6f541092d9ef9fd180123ed3d4d4df6090a1292412e128', 'tools/diagnostic-fatal-inject.py': '91e2ecefd554356585493505d9152563c1fc2d854eb1991d3828cf5483010692', 'tools/diagnostic-fatal-authority-inject.py': '20948f10c3a70604d02855766419a9addbc36d5a053341f80d7fcb361753b6c7', 'tools/diagnostic-fatal-authority.py': '1e2698f87f5fd18dccfea5ed64e2880cf840d1f53b6dbd24dd7d80ed6c895fd6'}\nfor name,digest in hashes.items():\n    data=subprocess.check_output(['git','show',revision+':'+name])\n    assert hashlib.sha256(data).hexdigest()==digest,name\n    Path(name).write_bytes(data)\nout=Path('reports/native-fatal-authority');out.mkdir(parents=True,exist_ok=True)\n(out/'source.json').write_text(json.dumps({'base':'33ca699899158bae7d880a5fda605c92849e7eef','fixtureRevision':revision,'fixtureHashes':hashes},indent=2)+'\\n')\nsubprocess.run(['python','tools/diagnostic-fatal-authority-inject.py'],check=True)\n"
+          "run": "from pathlib import Path\nimport hashlib,json,os,subprocess\nrevision=os.environ['GITHUB_SHA']\nsubprocess.run(['git','fetch','--depth=1','origin',revision],check=True)\nname='tools/diagnostic-native-focus.py'\ndata=subprocess.check_output(['git','show',revision+':'+name])\nassert hashlib.sha256(data).hexdigest()=='17949f3279926044cb4a48e22d769c3d0ca3882add2c6389097723a2a6c1a062'\nPath(name).write_bytes(data)\nout=Path('reports/native-focus');out.mkdir(parents=True,exist_ok=True)\n(out/'source.json').write_text(json.dumps({'sourceRevision':'33ca699899158bae7d880a5fda605c92849e7eef','fixtureRevision':revision,'fixtureSha256':'17949f3279926044cb4a48e22d769c3d0ca3882add2c6389097723a2a6c1a062','executableRun':40457941650,'scope':'Unchanged private trace executable; three-second peer key hold, all movement/save checks retained'},indent=2)+'\\n')\n"
         },
         {
-          "run": "cargo fmt --all"
-        },
-        {
-          "run": "cargo fmt --all -- --check"
-        },
-        {
-          "name": "Build private traced native fixture",
-          "id": "build",
-          "shell": "pwsh",
-          "run": "node tools/package-desktop.mjs --platform win32 --arch x64 --release-repository \"$env:GITHUB_REPOSITORY\"\nif ($LASTEXITCODE) { throw \"Native authority fixture build failed.\" }\n"
-        },
-        {
-          "name": "Retain completed private build cache",
-          "if": "always() && steps.build.outcome == 'success' && steps.fatal-cache.outputs.cache-hit != 'true'",
-          "uses": "actions/cache/save@v4",
+          "uses": "actions/download-artifact@v4",
           "with": {
-            "path": "~/.cargo/registry\n~/.cargo/git\ntarget\n",
-            "key": "${{ steps.fatal-cache.outputs.cache-primary-key }}"
+            "github-token": "${{ github.token }}",
+            "run-id": 40457941650,
+            "name": "native-input-arm-executable",
+            "path": "retained-executable"
           }
         },
         {
-          "name": "Observe original held input after a fatal frame",
-          "shell": "pwsh",
-          "run": "python -u tools/diagnostic-fatal-authority.py baseline\nif ($LASTEXITCODE) { throw \"Original fatal input observation failed.\" }\n"
+          "name": "Verify and package the unchanged traced executable",
+          "id": "build",
+          "shell": "python",
+          "run": "from pathlib import Path\nimport hashlib,subprocess\np=Path('retained-executable/solomon-darker-app')\nassert hashlib.sha256(p.read_bytes()).hexdigest()=='f9119bbfefb243cb630f60a7ee3f3cd50bc20586516c18deda0a322861fed01d'\np.chmod(0o755)\nsubprocess.run(['node','tools/package-desktop.mjs','--platform','darwin','--arch','arm64','--native-app',str(p.resolve()),'--release-repository','JarrettOneSource/solomon-darker-rust'],check=True)\n"
         },
         {
-          "name": "Verify released authority input and saved recovery",
+          "name": "Sample first three-second peer hold",
+          "run": "python -u tools/diagnostic-native-focus.py hold-one"
+        },
+        {
+          "name": "Sample second three-second peer hold",
           "if": "always() && steps.build.outcome == 'success'",
-          "shell": "pwsh",
-          "run": "python -u tools/diagnostic-fatal-authority.py released\nif ($LASTEXITCODE) { throw \"Fatal input release did not pass.\" }\n"
+          "run": "python -u tools/diagnostic-native-focus.py hold-two"
         },
         {
           "uses": "actions/upload-artifact@v4",
           "if": "always()",
           "with": {
-            "name": "native-fatal-authority-windows",
-            "path": "reports/native-fatal-authority",
-            "if-no-files-found": "error"
-          }
-        },
-        {
-          "uses": "actions/upload-artifact@v4",
-          "if": "always() && steps.build.outcome == 'success'",
-          "with": {
-            "name": "native-fatal-authority-executable",
-            "path": "target/release/solomon-darker-app.exe",
+            "name": "native-input-hold-arm",
+            "path": "reports/native-focus",
             "if-no-files-found": "error"
           }
         }
