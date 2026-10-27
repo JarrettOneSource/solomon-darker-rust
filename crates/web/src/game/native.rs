@@ -221,7 +221,7 @@ impl Game {
     pub(super) fn poll_native(&mut self, now: f64) -> Result<(), String> {
         let Some(native) = &mut self.native else { return Ok(()) };
         let Some(connection) = &mut native.connection else { return Ok(()) };
-        let poll = connection.poll()?;
+        let poll = connection.poll();
         for event in poll.events {
             match event {
                 NetworkEvent::Opened => {
@@ -894,8 +894,15 @@ impl Game {
         if joining {
             native.phase = NativePhase::Playing;
         }
-        native.selection =
-            Some(self.session.participants[&self.local_player_id].player.selection.clone());
+        native.selection = Some(
+            self.session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .player
+                .selection
+                .clone(),
+        );
         native.presentation.push(
             &self.session,
             received.received_at_ms,
@@ -912,7 +919,13 @@ impl Game {
             frame.host,
             self.session.level_up_barrier.is_some(),
         )?;
-        let intro_active = self.session.participants[&self.local_player_id].college_intro.is_some();
+        let intro_active = self
+            .session
+            .participants
+            .get(&self.local_player_id)
+            .expect("participant exists")
+            .college_intro
+            .is_some();
         if !intro_active {
             native.college_ready = false;
         }
@@ -979,7 +992,14 @@ impl Game {
             match feedback {
                 CommandFeedback::CollegeIntro if receipt.accepted => {
                     native.college_ready = false;
-                    if self.session.participants[&self.local_player_id].college_intro.is_some() {
+                    if self
+                        .session
+                        .participants
+                        .get(&self.local_player_id)
+                        .expect("participant exists")
+                        .college_intro
+                        .is_some()
+                    {
                         native
                             .connection
                             .as_ref()
@@ -1107,7 +1127,12 @@ impl Game {
             connection.send(&ClientMessage::ResumeReady { sequence: grace.sequence })?;
             native.resume_ready_snapshot = Some(connection.snapshot_sequence);
         }
-        let player = &self.session.participants[&self.local_player_id].player;
+        let player = &self
+            .session
+            .participants
+            .get(&self.local_player_id)
+            .expect("participant exists")
+            .player;
         let held = connection.host.pause.is_some()
             || connection.host.resume_grace.is_some()
             || connection.host.loading_run_id.is_some()

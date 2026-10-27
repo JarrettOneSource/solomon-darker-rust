@@ -86,9 +86,14 @@ impl BrowserConnection {
 }
 
 impl NativeConnection {
-    pub fn connect_to(endpoint: &str, _origin: &str, welcome: bool) -> Result<Self, String> {
+    pub fn connect_to(
+        endpoint: &str,
+        _origin: &str,
+        first_message: ClientMessage,
+    ) -> Result<Self, String> {
         let window = web_sys::window().ok_or("no window")?;
         let socket = WebSocket::new(endpoint).map_err(|_| "Could not connect to the game host")?;
+        let welcome = !matches!(first_message, ClientMessage::InspectSession { .. });
         let delivery = Arc::new(Mutex::new(Delivery::default()));
         let state = Rc::new(RefCell::new(BrowserConnection {
             window,
@@ -116,9 +121,16 @@ impl NativeConnection {
         let mut callbacks: Vec<Closure<dyn FnMut(Event)>> = Vec::with_capacity(4);
 
         let opened = Rc::downgrade(&state);
+        let mut first_message = Some(first_message);
         let callback = Closure::<dyn FnMut(Event)>::new(move |_| {
             if let Some(state) = opened.upgrade() {
-                state.borrow_mut().core.opened();
+                let mut state = state.borrow_mut();
+                if let Some(message) = first_message.take() {
+                    match state.send(&message) {
+                        Ok(()) => state.core.opened(),
+                        Err(error) => state.fail(error),
+                    }
+                }
             }
         });
         socket.set_onopen(Some(callback.as_ref().unchecked_ref()));

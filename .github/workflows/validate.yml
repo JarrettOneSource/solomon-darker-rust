@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   capture:
+    if: false
     name: Windows settings trace (${{ matrix.attempt }})
     runs-on: windows-latest
     timeout-minutes: 30
@@ -455,4 +456,75 @@ jobs:
         with:
           name: native-admission-red
           path: reports/native-admission-red
+          if-no-files-found: error
+
+  native-admission-green:
+    name: Windows native admission fix validation
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 99a3973a394f320d8875839f61710aa12de6da1e
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Select native Windows Perl
+        shell: pwsh
+        run: |
+          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
+          if (!$nativePerl) { throw 'The runner has no Strawberry Perl installation.' }
+          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
+      - name: Restore native build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-99a3973a394f320d8875839f61710aa12de6da1e
+          restore-keys: |
+            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+      - run: rustup show
+      - name: Validate exact proposed connection owner
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess,time,json,os,hashlib
+          output=Path('reports/native-admission-green');output.mkdir(parents=True,exist_ok=True)
+          revision=os.environ['GITHUB_SHA']
+          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
+          expected={'crates/web/src/network.rs': '182790f635bebc66329bd01d41634a2cc04a95d68c57e3e8cd2ac5e9eeb62162', 'crates/web/src/network/native.rs': 'bbe1fa4cc36a9a5a16168eb5c41e523b5250913117a327daa53e7d9eb972d898', 'crates/web/src/network/browser.rs': 'c1a666848ae0993b86c78b91337b5a8a03aacfe73e00b85db127d3d7bfdd0f90', 'crates/web/src/network/native/tests.rs': 'abaaa263ffb51dc357e020f80c98ca057252faec802c2dbeb9a41dd9060fbc3c', 'crates/web/src/game/native.rs': '256d426ec56a7c98ea4d3d2a3772335c78aaf42b5730990c6d6ac507e2e1bcbd', 'crates/launcher/src/host/run_archive/store.rs': '235d5b4520e03ec2e41afc6e3492a61b5eaadf1101cba999df6e7b7e148e5e65', 'crates/launcher/tests/hosted_supervisor.rs': 'bacb64192e79084a1fbbfbd4abb2efdd39fc689dbfd60e8fe3ff8010efbdc202'}
+          for name,digest in expected.items():
+              data=subprocess.check_output(['git','show',revision+':'+name])
+              assert hashlib.sha256(data).hexdigest()==digest,name
+              Path(name).write_bytes(data)
+          commands=[
+              ['cargo','fmt','--all','--','--check'],
+              ['cargo','clippy','-p','solomon-web','--all-targets','--all-features','--','-D','warnings'],
+              ['cargo','test','-p','solomon-web','--lib','--all-features','network::','--','--nocapture'],
+              ['cargo','test','--workspace','--all-features'],
+          ]
+          receipt={'baseRevision':'99a3973a394f320d8875839f61710aa12de6da1e','proposedSource':revision,'sourceHashes':expected,'checks':[],'pass':False}
+          try:
+              for number,command in enumerate(commands,1):
+                  start=time.monotonic()
+                  with (output/f'{number}-validation.log').open('w') as log:
+                      result=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT)
+                  row={'command':command,'exit':result.returncode,'elapsedSeconds':time.monotonic()-start}
+                  receipt['checks'].append(row);print(json.dumps(row),flush=True)
+                  assert result.returncode==0,f'Check{number} failed'
+              receipt['pass']=True
+          finally:
+              (output/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
+      - name: Retain connection validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-admission-green
+          path: reports/native-admission-green
           if-no-files-found: error
