@@ -46,6 +46,8 @@ async function focusedControl(page, id) {
     await errorsReady;
     await page.goto(process.env.URL || 'http://127.0.0.1:4181/');
     await gpu.ready(page);
+    // Retain the completed title before input, including a cold software GPU draw.
+    await page.screenshot({timeout:120000,path: path.join(output, 'settings-title.png')});
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) await gpu.click(page, 'prompt-secondary');
     await gpu.click(page, 'settings');
     await gpu.focused(page, 'settings-range:sound');
@@ -89,9 +91,8 @@ async function focusedControl(page, id) {
     await gpu.installController(page);
     await gpu.controller(page);
     for(const binding of bindings){
-      await gpu.controller(page,[13]);
+      await gpu.pressController(page,13);
       await focusedControl(page,`bind:${binding}`);
-      await gpu.controller(page);
     }
     await gpu.wheel(page,'settings-content',0,-300);
     await gpu.noWidget(page,'bind:cycle-hotbar');
@@ -99,9 +100,8 @@ async function focusedControl(page, id) {
     assert.equal(gpu.findWidget(await gpu.readUi(page),'bind:cycle-hotbar'),undefined,
       'retained controller focus does not undo the user wheel');
     for(const id of [...bindings.slice(0,-1).reverse().map(binding=>`bind:${binding}`),'settings-toggle:reverse-hotbar']){
-      await gpu.controller(page,[12]);
+      await gpu.pressController(page,12);
       await focusedControl(page,id);
-      await gpu.controller(page);
     }
     checks.push('actual controller directions reveal every binding and retain wheel scrolling until focus moves');
     await gpu.click(page, 'bind:move-up');
@@ -142,6 +142,7 @@ async function focusedControl(page, id) {
     await gpu.settleErrors(page);
     await gpu.observeDocumentReplacement(page, () => page.reload());
     await gpu.ready(page);
+    await page.screenshot({timeout:120000,path: path.join(output, 'settings-reloaded-title.png')});
     if (gpu.findWidget(await gpu.readUi(page), 'prompt-secondary')) await gpu.click(page, 'prompt-secondary');
     await gpu.click(page, 'settings');
     await gpu.value(page, 'settings-range:sound', '37');

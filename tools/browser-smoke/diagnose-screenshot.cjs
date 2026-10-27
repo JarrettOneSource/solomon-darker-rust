@@ -144,11 +144,12 @@ gpu.controller=async(page,buttons=[],...args)=>{
   trace({event:'controller-complete',buttons,durationMs:Math.round(performance.now()-operationStarted)});
   return result;
 };
-const ready=gpu.ready;
-gpu.ready=async(page,...args)=>{
-  const result=await ready(page,...args);
-  await page.screenshot({timeout:budget,path:path.join(out,'ready-title.png')});
-  return result;
+const pressController=gpu.pressController;
+gpu.pressController=async(page,button)=>{
+  const operationStarted=performance.now();
+  trace({event:'press-controller-start',button});
+  await pressController(page,button);
+  trace({event:'press-controller-complete',button,durationMs:Math.round(performance.now()-operationStarted)});
 };
 const click=gpu.click;
 gpu.click=async(page,id,...args)=>{

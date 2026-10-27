@@ -12,12 +12,12 @@ jobs:
   capture:
     name: Windows settings trace (${{ matrix.attempt }})
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         budget: [120000]
-        attempt: [6]
+        attempt: [7]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -65,7 +65,7 @@ jobs:
             }
             if (!$ready) { throw "The owned server did not become ready: $lastStartupError" }
             @{ elapsedMs = $startup.ElapsedMilliseconds; status = $response.StatusCode } | ConvertTo-Json | Set-Content reports/capture/server-ready.json
-            $env:CAPTURE_JOURNEY = 'settings-controller'
+            $env:CAPTURE_JOURNEY = 'settings-parity'
             node tools/browser-smoke/diagnose-screenshot.cjs
             if ($LASTEXITCODE) { throw 'Settings journey failed; inspect retained timings.' }
           } finally {
