@@ -163,8 +163,16 @@ class Application:
         return wait(lambda: next((item for item in controls.elements() if item.enabled), None),
                     f"{self.name} ready control from {identifiers}")
 
+    def window(self):
+        if PLATFORM != "darwin":
+            return retry_ui(self.app.locator("window").first().wait_attached)
+        # xa11y's generic AXChildren search can miss a top-level Mac window.
+        # windows() uses AXWindows and avoids traversing the game's control tree.
+        return wait(lambda: next((item for item in self.app.windows() if item.role == "window"), None),
+                    f"{self.name} native window", timeout=30)
+
     def activate(self):
-        window = retry_ui(self.app.locator("window").first().wait_attached)
+        window = self.window()
         if PLATFORM == "linux":
             # The CI display is 1280x1024. Keep both launcher and game windows
             # fully visible. AT-SPI can reuse a retired window's object path.
@@ -234,7 +242,7 @@ class Application:
         # A failed startup may leave a window beyond the X11 screen boundary.
         # Capture the dedicated display so failure evidence remains available.
         shot = (xa11y.screenshot() if PLATFORM == "linux" else
-                xa11y.screenshot(element=retry_ui(self.app.locator("window").first().wait_attached)))
+                xa11y.screenshot(element=self.window()))
         shot.save_png(EVIDENCE / f"{name}.png")
         tree = re.sub(r"solomondarker://[^\s\"']+", "", retry_ui(lambda timeout: self.app.dump()))
         (EVIDENCE / f"{name}.txt").write_text(tree)
@@ -296,7 +304,7 @@ class Application:
         return None
 
     def request_close(self):
-        window = retry_ui(self.app.locator("window").first().wait_attached)
+        window = self.window()
         try:
             window.close()
         except xa11y.PlatformError as error:
