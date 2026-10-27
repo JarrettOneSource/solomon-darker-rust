@@ -2592,7 +2592,7 @@ impl Game {
         self.renderer.begin_frame(width, height, viewport);
         self.renderer.end_frame();
         self.gpu_ui.run(&mut self.renderer, viewport, time / 1000.0, |frame| {
-            crate::runtime_ui::paint(frame);
+            crate::runtime_ui::paint_failure(frame);
             if let Some(desktop) = &mut self.desktop_ui {
                 desktop.paint(frame, true)?;
             }

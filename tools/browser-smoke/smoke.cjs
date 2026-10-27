@@ -139,7 +139,7 @@ async function clickThenEscape(page,id) {
       titleGpu:titleGpu.gpu,gameplayGpu:gameplayGpu.gpu,submissions,
       problems:observed.errors,warnings:observed.warnings,checks};
     fs.writeFileSync(receiptPath,JSON.stringify(receipt,null,2));
-    console.log(JSON.stringify(receipt,null,1));
+    console.log(JSON.stringify({passed:receipt.passed,checks,receiptPath}));
     if (!receipt.passed) process.exitCode = 1;
   } catch(error) {
     const receipt={passed:false,url,step,rapid,failure:error.stack,problems:observed?.errors,

@@ -126,6 +126,24 @@ pub(crate) fn layer_id() -> egui::LayerId {
     egui::LayerId::new(Order::Tooltip, Id::unique("runtime-status"))
 }
 
+pub(crate) fn paint_failure(frame: &mut UiFrame<'_>) {
+    let Some(message) = error() else { return };
+    let painter = frame.ctx.layer_painter(layer_id());
+    let screen = frame.ctx.content_rect();
+    let color = Color32::from_rgb(255, 123, 123);
+    let text = painter.layout(
+        message.clone(),
+        FontId::new(14.0, FontFamily::Name("Arial".into())),
+        color,
+        (screen.width() - 48.0).clamp(1.0, 720.0),
+    );
+    let bounds = egui::Rect::from_center_size(screen.center(), text.size());
+    painter.galley(bounds.min, text, color);
+    frame.record_rect("runtime:status", &message, "status", bounds, true);
+    frame.record_value("runtime:status", &message, None);
+    frame.announce("runtime:status", &message);
+}
+
 pub(crate) fn paint(frame: &mut UiFrame<'_>) {
     STATUS.with(|status| {
         let status = status.borrow();

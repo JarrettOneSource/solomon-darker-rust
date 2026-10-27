@@ -196,6 +196,8 @@ If the OS reports no output device at startup, native play uses an elapsed-time
 audio clock and inactive playback controls. It creates no mixer or audio worker.
 Device initialization and decoding failures still propagate; an audio device
 connected later is picked up on the next game launch.
+CPAL buffer underruns are warnings because the backend recovers them. Device loss,
+stream invalidation and failed recovery still stop playback and report the failure.
 
 The browser audio backend owns one AudioContext. The shared director owns named
 loop sources and six resident music channels. A loop combines requests using the
