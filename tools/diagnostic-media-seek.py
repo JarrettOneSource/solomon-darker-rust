@@ -25,7 +25,7 @@ result = run('browser-support-' + phase + '.log', ['node', '--test',
     'tools/browser-smoke/browser-lifecycle.test.cjs'])
 if phase == 'red':
     assert result.returncode == 1 and '# fail 1' in result.stdout, result.stdout
-    assert re.search(r'not ok \d+ - a loaded suspended channel can complete', result.stdout), result.stdout
+    assert re.search(r'not ok \d+ - a ready channel with a completed rewind', result.stdout), result.stdout
 else:
     assert result.returncode == 0, result.stdout
 

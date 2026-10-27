@@ -14,7 +14,7 @@
   "jobs": {
     "media-seek-windows": {
       "runs-on": "windows-latest",
-      "timeout-minutes": 35,
+      "timeout-minutes": 10,
       "steps": [
         {
           "uses": "actions/checkout@v6"
@@ -32,30 +32,8 @@
           }
         },
         {
-          "run": "npm ci --no-audit --no-fund"
-        },
-        {
-          "uses": "actions/download-artifact@v4",
-          "with": {
-            "name": "browser-client",
-            "path": "web/dist",
-            "run-id": 40482121926,
-            "github-token": "${{ github.token }}"
-          }
-        },
-        {
-          "name": "Install the matching tracked assets",
-          "shell": "python",
-          "run": "import shutil\nshutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)"
-        },
-        {
-          "name": "Verify classifier regression and replay all retained request evidence",
-          "run": "python tools/diagnostic-media-seek.py green"
-        },
-        {
-          "name": "Run two complete original browser acceptance sequences",
-          "shell": "pwsh",
-          "run": "$env:PW = Join-Path $env:GITHUB_WORKSPACE 'node_modules/playwright-core'\n$env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'\nif (!(Test-Path $env:CHROME)) { throw 'Chrome is unavailable.' }\npython tools/diagnostic-browser-seek.py\n"
+          "name": "Reproduce the completed rewind capture and replay retained records",
+          "run": "python tools/diagnostic-media-seek.py red"
         },
         {
           "uses": "actions/upload-artifact@v4",

@@ -93,6 +93,19 @@ test('a loaded suspended channel can complete its captured priming rewind and pl
     documentId:123,reason:'resident channel completed a captured rewind after browser suspension'});
 });
 
+test('a ready channel with a completed rewind can later play after its cancelled preload',()=>{
+  const {failure,captured,settled}=capturedRewind();
+  const before=captured.channels[0],after=settled.channels[0];
+  after.events.splice(6);
+  after.events[3].paused=true;
+  after.events[4].paused=true;
+  before.events=structuredClone(after.events.slice(0,5));
+  Object.assign(before,{ready:3,network:2,paused:true,seeking:false});
+  Object.assign(after,{paused:false,currentTime:1.7});
+  assert.deepEqual(residentSuspension(failure,captured,settled),{cue:'death',channelId:3,
+    documentId:123,reason:'resident channel completed a captured rewind after browser suspension'});
+});
+
 for(const [name,change] of [
   ['no earlier loaded data',f=>{f.captured.channels[0].events[1].ready=1}],
   ['no earlier suspension',f=>{f.captured.channels[0].events[2].trusted=false}],
