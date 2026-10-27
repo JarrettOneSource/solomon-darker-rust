@@ -1,4 +1,4 @@
-name: Validate proposed browser resource and admission ownership
+name: Verify browser admission against real Windows Rust host
 
 on:
   push:
@@ -15,131 +15,92 @@ env:
   RUST_BACKTRACE: '1'
 
 jobs:
-  browser-build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+  browser-admission:
+    runs-on: windows-latest
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: 99a3973a394f320d8875839f61710aa12de6da1e
+          ref: b8e90930e195b8f74e8492bd0bc6f0c8486940fa
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Apply and verify exact proposed source
-        shell: python
-        run: |
-          from pathlib import Path
-          import subprocess,os,json,hashlib
-          revision=os.environ['GITHUB_SHA']
-          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          expected={'crates/graphics/src/assets/browser.rs': 'a8b369ee1c594f5abab933286dfc8191b157c53cb4f0d00538351266926013c6', 'crates/web/src/network.rs': '182790f635bebc66329bd01d41634a2cc04a95d68c57e3e8cd2ac5e9eeb62162', 'crates/web/src/network/native.rs': 'bbe1fa4cc36a9a5a16168eb5c41e523b5250913117a327daa53e7d9eb972d898', 'crates/web/src/network/browser.rs': 'c1a666848ae0993b86c78b91337b5a8a03aacfe73e00b85db127d3d7bfdd0f90', 'crates/web/src/network/native/tests.rs': 'abaaa263ffb51dc357e020f80c98ca057252faec802c2dbeb9a41dd9060fbc3c', 'crates/web/src/game/native.rs': '256d426ec56a7c98ea4d3d2a3772335c78aaf42b5730990c6d6ac507e2e1bcbd', 'crates/launcher/src/host/run_archive/store.rs': '235d5b4520e03ec2e41afc6e3492a61b5eaadf1101cba999df6e7b7e148e5e65', 'crates/launcher/tests/hosted_supervisor.rs': 'bacb64192e79084a1fbbfbd4abb2efdd39fc689dbfd60e8fe3ff8010efbdc202', 'crates/web/src/input.rs': 'e0d7c522598d27591bf24ccd82821ffcf43a37d0046205ca4bd98656e96bf22d', 'crates/sim/src/input/gameplay.rs': '4e1ca7f55b6587d0cfa381f54a778652ecccceabee37b73881a114be74e13802', 'tools/browser-smoke/gpu-ui.cjs': 'd5c623d82c19c409fd0ea0ef48acb44fb7f391af5b662729251d5bf3b72865c3', 'tools/browser-smoke/settings-parity.cjs': '69bd62ad06ac41700f8cd29be3e5baf8e1e23eded62c61d4e01e81e3f0e77e08', 'tools/browser-smoke/image-load-failure.cjs': '6343bdf1e89a4f937b410d8c585554540fa35e53dcaebb571c6e263044ae3a9f'}
-          for name,digest in expected.items():
-              data=subprocess.check_output(['git','show',revision+':'+name])
-              assert hashlib.sha256(data).hexdigest()==digest,name
-              Path(name).write_bytes(data)
-          output=Path('reports/browser-green');output.mkdir(parents=True,exist_ok=True)
-          (output/'source.json').write_text(json.dumps({'base':'99a3973a394f320d8875839f61710aa12de6da1e','proposedSource':revision,'hashes':expected},indent=2)+'\n')
       - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
           cache: npm
-      - run: rustup show
-      - name: Restore game build cache
-        uses: actions/cache/restore@v4
+      - run: npm ci --no-audit --no-fund
+      - name: Select native Windows Perl
+        shell: pwsh
+        run: |
+          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
+          if (!$nativePerl) { throw 'The runner has no Strawberry Perl installation.' }
+          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
+      - uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-99a3973a394f320d8875839f61710aa12de6da1e
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-b8e90930e195b8f74e8492bd0bc6f0c8486940fa
           restore-keys: |
-            game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-      - run: cargo install trunk --locked --version 0.22.0
-      - run: npm ci --no-audit --no-fund
-      - run: cargo fmt --all -- --check
-      - run: npm run test:browser-support
-      - run: python3 scripts/verify-client-assets.py
-      - run: cargo clippy -p solomon-web --target wasm32-unknown-unknown -- -D warnings
-      - run: cargo clippy -p solomon-loader --target wasm32-unknown-unknown -- -D warnings
-      - name: Build exact proposed browser
-        run: trunk build --config web/Trunk.toml --release
-      - uses: actions/upload-artifact@v4
-        with:
-          name: browser-client-green
-          path: |
-            web/dist/
-            !web/dist/assets/**
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: browser-green-source
-          path: reports/browser-green
-          if-no-files-found: error
-
-  browser-windows:
-    needs: browser-build
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: 99a3973a394f320d8875839f61710aa12de6da1e
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - name: Apply and verify exact proposed source
+            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+      - run: rustup show
+      - name: Build real Windows authority
+        run: cargo build --locked -p solomon-launcher --bin solomon-darker
+      - name: Wait for the already-running exact-source browser build
         shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          from pathlib import Path
-          import subprocess,os,json,hashlib
-          revision=os.environ['GITHUB_SHA']
-          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          expected={'crates/graphics/src/assets/browser.rs': 'a8b369ee1c594f5abab933286dfc8191b157c53cb4f0d00538351266926013c6', 'crates/web/src/network.rs': '182790f635bebc66329bd01d41634a2cc04a95d68c57e3e8cd2ac5e9eeb62162', 'crates/web/src/network/native.rs': 'bbe1fa4cc36a9a5a16168eb5c41e523b5250913117a327daa53e7d9eb972d898', 'crates/web/src/network/browser.rs': 'c1a666848ae0993b86c78b91337b5a8a03aacfe73e00b85db127d3d7bfdd0f90', 'crates/web/src/network/native/tests.rs': 'abaaa263ffb51dc357e020f80c98ca057252faec802c2dbeb9a41dd9060fbc3c', 'crates/web/src/game/native.rs': '256d426ec56a7c98ea4d3d2a3772335c78aaf42b5730990c6d6ac507e2e1bcbd', 'crates/launcher/src/host/run_archive/store.rs': '235d5b4520e03ec2e41afc6e3492a61b5eaadf1101cba999df6e7b7e148e5e65', 'crates/launcher/tests/hosted_supervisor.rs': 'bacb64192e79084a1fbbfbd4abb2efdd39fc689dbfd60e8fe3ff8010efbdc202', 'crates/web/src/input.rs': 'e0d7c522598d27591bf24ccd82821ffcf43a37d0046205ca4bd98656e96bf22d', 'crates/sim/src/input/gameplay.rs': '4e1ca7f55b6587d0cfa381f54a778652ecccceabee37b73881a114be74e13802', 'tools/browser-smoke/gpu-ui.cjs': 'd5c623d82c19c409fd0ea0ef48acb44fb7f391af5b662729251d5bf3b72865c3', 'tools/browser-smoke/settings-parity.cjs': '69bd62ad06ac41700f8cd29be3e5baf8e1e23eded62c61d4e01e81e3f0e77e08', 'tools/browser-smoke/image-load-failure.cjs': '6343bdf1e89a4f937b410d8c585554540fa35e53dcaebb571c6e263044ae3a9f'}
-          for name,digest in expected.items():
-              data=subprocess.check_output(['git','show',revision+':'+name])
-              assert hashlib.sha256(data).hexdigest()==digest,name
-              Path(name).write_bytes(data)
-          output=Path('reports/browser-green');output.mkdir(parents=True,exist_ok=True)
-          (output/'source.json').write_text(json.dumps({'base':'99a3973a394f320d8875839f61710aa12de6da1e','proposedSource':revision,'hashes':expected},indent=2)+'\n')
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-      - run: npm ci --no-audit --no-fund
+          import json,os,time,urllib.request
+          deadline=time.monotonic()+1200
+          while True:
+              request=urllib.request.Request('https://api.github.com/repos/'+os.environ['GITHUB_REPOSITORY']+'/actions/runs/40432773454/jobs',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(request) as response: jobs=json.load(response)['jobs']
+              job=next(j for j in jobs if j['name']=='browser-build')
+              if job['status']=='completed':
+                  assert job['conclusion']=='success',job['conclusion']
+                  print('Exact-source browser build complete.');break
+              assert time.monotonic()<deadline,'Browser build did not complete within20minutes'
+              time.sleep(15)
       - uses: actions/download-artifact@v4
         with:
           name: browser-client-green
           path: web/dist
-      - name: Verify failure cleanup, full settings and gameplay on Windows
-        shell: pwsh
+          run-id: 40432773454
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: browser-green-source
+          path: reports/browser-admission/browser-source
+          run-id: 40432773454
+          github-token: ${{ github.token }}
+      - name: Verify browser source and install private ordinary-input fixture
+        shell: python
         run: |
-          Copy-Item web/assets -Destination web/dist -Recurse
-          $env:PW = Join-Path $env:GITHUB_WORKSPACE 'node_modules/playwright-core'
-          $env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'
-          if (!(Test-Path $env:CHROME)) { throw 'The Windows runner has no installed Chrome.' }
-          $env:URL = 'http://127.0.0.1:4181/'
-          $server = Start-Process -FilePath (Get-Command python).Source -ArgumentList @('scripts/serve-client.py', '4181', '--bind', '127.0.0.1', '--directory', 'web/dist') -PassThru -RedirectStandardOutput reports/browser-green/server.log -RedirectStandardError reports/browser-green/server-error.log
-          try {
-            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser-green/image-load-failure'
-            node tools/browser-smoke/image-load-failure.cjs
-            if ($LASTEXITCODE) { throw 'Browser asset failure cleanup failed.' }
-            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser-green/settings'
-            node tools/browser-smoke/settings-parity.cjs
-            if ($LASTEXITCODE) { throw 'Browser settings failed.' }
-            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser-green/gameplay'
-            node tools/browser-smoke/smoke.cjs
-            if ($LASTEXITCODE) { throw 'Browser gameplay failed.' }
-          } finally {
-            $server.Refresh()
-            @{ pid = $server.Id; exitedBeforeCleanup = $server.HasExited; exitCode = $(if ($server.HasExited) { $server.ExitCode } else { $null }) } | ConvertTo-Json | Set-Content reports/browser-green/server-final.json
-            if (!$server.HasExited) { Stop-Process -Id $server.Id }
-            if (!$server.WaitForExit(10000)) { throw 'The owned browser test server did not exit.' }
-          }
-      - name: Retain exact-source Windows browser evidence
+          from pathlib import Path
+          import hashlib,json,os,subprocess,shutil
+          root=Path.cwd();output=Path('reports/browser-admission')
+          source=json.loads((output/'browser-source/source.json').read_text())
+          for name,digest in source['hashes'].items():
+              assert hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest,name
+          revision=os.environ['GITHUB_SHA']
+          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
+          fixtures={'tools/browser-smoke/native-admission-acceptance.cjs': 'f063d7ddc8ecf24e5fc0118e7f46bc6ed3ba6ac7d4f70208d6bf9d2fddb5b70e', 'tools/browser-smoke/native-admission-windows.py': 'fceae648a3aa8f3bdb1f61a10c2ed97fde09cda73eeb1570b1f1e002a1dd0489'}
+          for name,digest in fixtures.items():
+              data=subprocess.check_output(['git','show',revision+':'+name])
+              assert hashlib.sha256(data).hexdigest()==digest,name
+              Path(name).write_bytes(data)
+          shutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)
+          receipt={'hostSource':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','browserRun':40432773454,'browserSourceMatchesHostCheckout':True,'fixtureRevision':revision,'fixtureHashes':fixtures,'hostSha256':hashlib.sha256(Path('target/debug/solomon-darker.exe').read_bytes()).hexdigest()}
+          (output/'source.json').write_text(json.dumps(receipt,indent=2)+'\n')
+      - name: Exercise real browser admission, save and fresh-document continuation
+        run: python tools/browser-smoke/native-admission-windows.py
+      - name: Retain Windows browser and host evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: browser-green-windows
-          path: reports/browser-green
+          name: browser-native-admission-windows
+          path: reports/browser-admission
           if-no-files-found: error
