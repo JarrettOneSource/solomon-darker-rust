@@ -51,7 +51,7 @@ needle = "  const server=await chromium.launchServer({...options,host:'127.0.0.1
 assert original.count(needle) == 1
 disabled = '--disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion'
 expected = disabled + ',TcpPortRandomizationWin'
-configuration = "  options={...options,ignoreDefaultArgs:[" + json.dumps(disabled) + "],args:[...(options.args||[])," + json.dumps(expected) + ",`--log-net-log=${require('node:path').join(globalThis.process.env.OUT,'network.json')}`]};\n"
+configuration = "  options={...options,args:[...(options.args||[]),`--log-net-log=${require('node:path').join(globalThis.process.env.OUT,'network.json')}`]};\n"
 instrumented = original.replace(needle, configuration + needle)
 setup = "  try {await bounded(prepareSoftwareRenderer(browser,options),'software renderer setup',15000)}"
 assert instrumented.count(setup) == 1
@@ -71,7 +71,7 @@ lifecycle.write_text(instrumented, encoding='utf-8')
 provenance = {'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
               'originalLifecycleSha256': hashlib.sha256(original.encode()).hexdigest(),
               'instrumentedLifecycleSha256': hashlib.sha256(instrumented.encode()).hexdigest(),
-              'change': 'Only TcpPortRandomizationWin is appended to the pinned Playwright disabled-feature list; exact effective list is asserted through CDP. NetLog and resource sampling observe otherwise unchanged original journeys.',
+              'change': 'The canonical launcher candidate adds TcpPortRandomizationWin. Only NetLog and resource sampling are injected; the exact effective feature list is asserted through CDP.',
               'classifierSha256': hashlib.sha256(Path('tools/browser-smoke/browser-errors.cjs').read_bytes()).hexdigest(),
               'artifactRun': 40497735544,
               'browserFiles': {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(Path('web/dist').iterdir()) if p.is_file()}}

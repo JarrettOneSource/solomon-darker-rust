@@ -1,5 +1,5 @@
 {
-  "name": "Verify Windows browser port-randomization workaround",
+  "name": "Verify canonical Windows browser launcher",
   "on": {
     "push": {
       "branches": [
@@ -17,7 +17,10 @@
       "timeout-minutes": 35,
       "steps": [
         {
-          "uses": "actions/checkout@v6"
+          "uses": "actions/checkout@v6",
+          "with": {
+            "fetch-depth": 2
+          }
         },
         {
           "uses": "actions/setup-python@v6",
@@ -56,6 +59,11 @@
           "name": "Verify unchanged assets and browser support",
           "run": "python scripts/verify-client-assets.py\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\nnpm run test:browser-support",
           "shell": "pwsh"
+        },
+        {
+          "name": "Prove real browser launch fails before and passes after the correction",
+          "shell": "pwsh",
+          "run": "$env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'\npython tools/diagnostic-launch-regression.py"
         },
         {
           "name": "Run two complete original browser acceptance sequences",

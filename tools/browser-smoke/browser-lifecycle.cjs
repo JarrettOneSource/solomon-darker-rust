@@ -34,6 +34,31 @@ function releaseStdioAfterExit(child) {
 }
 
 async function launchOwnedBrowser(chromium,options={}) {
+  if(os.platform()==='win32') {
+    // SO_RANDOMIZE_PORT can make Windows connect fail with WSAENOBUFS (10055).
+    // Chromium keeps only the last --disable-features switch. Preserve the
+    // defaults from pinned Playwright 1.61.1 when adding this test-host workaround.
+    const defaults=[
+      'AvoidUnnecessaryBeforeUnloadCheckSync','BoundaryEventDispatchTracksNodeRemoval',
+      'DestroyProfileOnBrowserClose','DialMediaRouteProvider','GlobalMediaControls',
+      'HttpsUpgrades','LensOverlay','MediaRouter','PaintHolding','ThirdPartyStoragePartitioning',
+      'Translate','AutoDeElevate','RenderDocument','OptimizationHints',
+      'msForceBrowserSignIn','msEdgeUpdateLaunchServicesPreferredVersion',
+    ];
+    const prefix='--disable-features=';
+    const defaultSwitch=prefix+defaults.join(',');
+    const ignored=options.ignoreDefaultArgs;
+    const args=options.args||[];
+    const features=new Set(ignored===true||(Array.isArray(ignored)&&ignored.includes(defaultSwitch))?[]:defaults);
+    for(const arg of args)if(arg.startsWith(prefix)) {
+      for(const feature of arg.slice(prefix.length).split(','))if(feature)features.add(feature);
+    }
+    features.add('TcpPortRandomizationWin');
+    options={...options,
+      ignoreDefaultArgs:ignored===true?true:[...(ignored||[]),defaultSwitch],
+      args:[...args.filter(arg=>!arg.startsWith(prefix)),prefix+[...features].join(',')],
+    };
+  }
   const server=await chromium.launchServer({...options,host:'127.0.0.1'});
   releaseStdioAfterExit(server.process());
   let browser;
