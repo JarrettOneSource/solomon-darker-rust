@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import runpy
+import socket
+import socketserver
 import sys
 import threading
 import time
@@ -12,6 +14,10 @@ import time
 output = Path(os.environ['SERVER_OBSERVATION'])
 output.mkdir(parents=True, exist_ok=True)
 events = collections.deque()
+if os.environ.get('OBSERVE_QUEUE_SIZE') == 'system':
+    socketserver.TCPServer.request_queue_size = socket.SOMAXCONN
+events.append({'time': time.time_ns() / 1e6, 'kind': 'server-configuration',
+               'requestQueueSize': socketserver.TCPServer.request_queue_size})
 functions = {
     'get_request', 'process_request', 'process_request_thread', 'finish_request',
     'handle_one_request', 'parse_request', 'do_GET', 'do_HEAD', 'send_head',

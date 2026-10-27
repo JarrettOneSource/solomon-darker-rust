@@ -1,4 +1,4 @@
-name: Compare owned Windows GPU process priority
+name: Distinguish Windows dispatch and listen queue delays
 
 on:
   push:
@@ -43,7 +43,7 @@ jobs:
           import os,subprocess,hashlib,json
           revision=os.environ['GITHUB_SHA']
           subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          hashes={'tools/browser-smoke/observe-loading.cjs': '32152d98345751c137a89625a379e308a2b2fb543e507a74ff792eab91d5b074', 'tools/browser-smoke/observe-reload.cjs': '1a12d45b15eb1c790ae3c42d64c3d6515386b3cdbd5c185e1a798b826ae9b6a1', 'tools/browser-smoke/observe-server.py': '118cc9b822618cfe182a1ada27274f6782c6c817c6a6b6beaad74ae797dc3eb1', 'tools/browser-smoke/observe-windows-processes.py': 'f2ada154b170032db999415c117d5812af95e4d857f035f3548d5eb2a57b9118', 'tools/browser-smoke/observe-server-windows.py': '5436e54e3a17883c6235d3894978f1480d11000932356d86d016538223cab591'}
+          hashes={'tools/browser-smoke/observe-loading.cjs': '32152d98345751c137a89625a379e308a2b2fb543e507a74ff792eab91d5b074', 'tools/browser-smoke/observe-reload.cjs': '1a12d45b15eb1c790ae3c42d64c3d6515386b3cdbd5c185e1a798b826ae9b6a1', 'tools/browser-smoke/observe-server.py': '2efbcb28b5dd890f76473927e441e0e34f148b01ac829c9734e43c97fe6b792f', 'tools/browser-smoke/observe-windows-processes.py': 'f2ada154b170032db999415c117d5812af95e4d857f035f3548d5eb2a57b9118', 'tools/browser-smoke/observe-server-windows.py': '5436e54e3a17883c6235d3894978f1480d11000932356d86d016538223cab591'}
           for name,digest in hashes.items():
               data=subprocess.check_output(['git','show',revision+':'+name])
               assert hashlib.sha256(data).hexdigest()==digest,name
@@ -60,19 +60,19 @@ jobs:
               data=subprocess.check_output(['git','show','HEAD:'+name])
               assert hashlib.sha256(data).hexdigest()==digest,name
           shutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)
-      - name: Compare baseline, normal GPU priority, then baseline again
+      - name: Compare queue capacity and owned GPU priority separately
         shell: python
         run: |
           from pathlib import Path
           import json,os,subprocess
           rows=[]
-          for name,priority in [('baseline-1','baseline'),('normal','normal'),('baseline-2','baseline')]:
-              env=os.environ.copy();env['OBSERVE_GPU_PRIORITY']=priority
+          for name,priority,queue in [('normal-default','normal','default'),('normal-system','normal','system'),('baseline-system','baseline','system'),('normal-system-repeat','normal','system')]:
+              env=os.environ.copy();env['OBSERVE_GPU_PRIORITY']=priority;env['OBSERVE_QUEUE_SIZE']=queue
               env['OBSERVE_SERVER_OUT']='reports/browser-server/'+name
               result=subprocess.run(['python','tools/browser-smoke/observe-server-windows.py'],env=env)
               rows.append({'case':name,'exit':result.returncode})
               Path('reports/browser-server/comparison.json').write_text(json.dumps(rows,indent=2)+'\n')
-          assert next(row for row in rows if row['case']=='normal')['exit']==0,rows
+          assert all(row['exit']==0 for row in rows if row['case'] in ['normal-system','normal-system-repeat']),rows
       - uses: actions/upload-artifact@v4
         if: always()
         with:
