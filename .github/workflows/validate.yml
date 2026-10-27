@@ -1,5 +1,5 @@
 {
-  "name": "Verify resumed resident music observation on Windows",
+  "name": "Verify standalone disconnect ordering on Windows",
   "on": {
     "push": {
       "branches": [
@@ -8,18 +8,23 @@
     }
   },
   "permissions": {
-    "contents": "read",
-    "actions": "read"
+    "contents": "read"
+  },
+  "env": {
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "RUST_BACKTRACE": "1"
   },
   "jobs": {
-    "browser-buffer-windows": {
+    "desktop-disconnect-windows": {
       "runs-on": "windows-latest",
       "timeout-minutes": 40,
       "steps": [
         {
           "uses": "actions/checkout@v6",
           "with": {
-            "ref": "4e0701fb6d7d6517991c3112ae84c26462caeece"
+            "ref": "9d8c4dccae5d7b859c5185a98296118f0accd233"
           }
         },
         {
@@ -29,39 +34,36 @@
           }
         },
         {
-          "uses": "actions/setup-node@v6",
-          "with": {
-            "node-version": "22.17.0"
-          }
-        },
-        {
-          "run": "npm ci --no-audit --no-fund"
-        },
-        {
-          "uses": "actions/download-artifact@v4",
-          "with": {
-            "name": "browser-client",
-            "path": "web/dist",
-            "run-id": 40466361015,
-            "github-token": "${{ github.token }}"
-          }
-        },
-        {
-          "name": "Install private regression and exact trace fixture",
-          "shell": "python",
-          "run": "from pathlib import Path\nimport hashlib,os,shutil,subprocess\nrevision=os.environ['GITHUB_SHA']\nsubprocess.run(['git','fetch','--depth=1','origin',revision],check=True)\nfiles={'tools/diagnostic-browser-buffer.py': '210105288c1bb709adff05c24e88d1d77942200904375622b10acf4e8b6c2698', 'tools/diagnostic-media-resume.py': '608b193fb844083c0f167e2d79b970f48ca46f57d0aa88c61119ab14e71ce25b', 'tools/media-resume-test.patch': '8cd0a3f541fb6215a463e910f700cf11ac249511e62083d55e660d387346fd1e', 'tools/media-resume-fix.patch': 'f7a1d645acffaa2df5d46ec355f2db39b90fa46011f94305383144f1f2045c3c', 'tools/media-resume-evidence.json': 'd75c887e851135465ea1b9c53ba85bd010f7c053f435274fcd3ae74a443e8d5e'}\nfor name,expected in files.items():\n data=subprocess.check_output(['git','show',revision+':'+name])\n assert hashlib.sha256(data).hexdigest()==expected,name\n Path(name).write_bytes(data)\nshutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)\n"
-        },
-        {
-          "name": "Verify red green replay and two original acceptance sequences",
+          "name": "Select native Windows Perl",
           "shell": "pwsh",
-          "run": "$env:PW = Join-Path $env:GITHUB_WORKSPACE 'node_modules/playwright-core'\n$env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'\nif (!(Test-Path $env:CHROME)) { throw 'Chrome is unavailable.' }\npython tools/diagnostic-media-resume.py\n"
+          "run": "$nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source\nif (!$nativePerl) { throw 'The runner has no Strawberry Perl installation.' }\n\"OPENSSL_SRC_PERL=$nativePerl\" >> $env:GITHUB_ENV\n"
+        },
+        {
+          "uses": "actions/cache/restore@v4",
+          "with": {
+            "path": "~/.cargo/registry\n~/.cargo/git\ntarget",
+            "key": "native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-9d8c4dccae5d7b859c5185a98296118f0accd233",
+            "restore-keys": "native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-\n"
+          }
+        },
+        {
+          "run": "rustup show"
+        },
+        {
+          "name": "Install private condition and exact candidate test patch",
+          "shell": "python",
+          "run": "from pathlib import Path\nimport hashlib,os,subprocess\nrevision=os.environ['GITHUB_SHA']\nsubprocess.run(['git','fetch','--depth=1','origin',revision],check=True)\nfiles={'tools/diagnostic-desktop-disconnect.py': '355cb3216305f913fd2180a9cb9890f137299015d2bdfe1d4905cd787c15215f', 'tools/desktop-disconnect-test.patch': 'd1522a108472ccf828d6a05f5ff2965b00722dd4bd9fe1268e65b71b1968f284'}\nfor name,expected in files.items():\n data=subprocess.check_output(['git','show',revision+':'+name])\n assert hashlib.sha256(data).hexdigest()==expected,name\n Path(name).write_bytes(data)\n"
+        },
+        {
+          "name": "Verify controlled red green and ordinary hosted suite",
+          "run": "python tools/diagnostic-desktop-disconnect.py"
         },
         {
           "uses": "actions/upload-artifact@v4",
           "if": "always()",
           "with": {
-            "name": "browser-media-resume-windows",
-            "path": "reports/browser-buffer",
+            "name": "desktop-disconnect-windows",
+            "path": "reports/desktop-disconnect",
             "if-no-files-found": "error"
           }
         }
