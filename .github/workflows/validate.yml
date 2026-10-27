@@ -75,7 +75,7 @@
           "name": "Verify and package the unchanged traced executable",
           "id": "build",
           "shell": "python",
-          "run": "from pathlib import Path\nimport hashlib,subprocess\np=Path('retained-executable/solomon-darker-app')\nassert hashlib.sha256(p.read_bytes()).hexdigest()=='f9119bbfefb243cb630f60a7ee3f3cd50bc20586516c18deda0a322861fed01d'\np.chmod(0o755)\nsubprocess.run(['node','tools/package-desktop.mjs','--platform','darwin','--arch','arm64','--native-app',str(p.resolve()),'--release-repository','JarrettOneSource/solomon-darker-rust'],check=True)\n"
+          "run": "from pathlib import Path\nimport hashlib,json,subprocess\np=Path('retained-executable/solomon-darker-app')\nassert hashlib.sha256(p.read_bytes()).hexdigest()=='5f6f7d51b32b4750e3350d6440549b12325d6a2880f17acc4139075096906199'\np.chmod(0o755)\nsubprocess.run(['node','tools/package-desktop.mjs','--platform','darwin','--arch','arm64','--native-app',str(p.resolve()),'--release-repository','JarrettOneSource/solomon-darker-rust'],check=True)\npackage=Path('dist-desktop/Solomon Darker-darwin-arm64')\nmanifest=json.loads((package/'desktop-package-manifest.json').read_text())\nstaged=package/manifest['executable']\nassert hashlib.sha256(staged.read_bytes()).hexdigest()=='f9119bbfefb243cb630f60a7ee3f3cd50bc20586516c18deda0a322861fed01d'\n"
         },
         {
           "name": "Sample first three-second peer hold",
