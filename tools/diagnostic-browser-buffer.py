@@ -49,7 +49,7 @@ lifecycle = Path('tools/browser-smoke/browser-lifecycle.cjs')
 original = lifecycle.read_text(encoding='utf-8')
 needle = "  const server=await chromium.launchServer({...options,host:'127.0.0.1'});"
 assert original.count(needle) == 1
-instrumented = original.replace(needle, "  options={...options,args:[...(options.args||[]),`--log-net-log=${require('node:path').join(process.env.OUT,'network.json')}`]};\n" + needle)
+instrumented = original.replace(needle, "  options={...options,args:[...(options.args||[]),`--log-net-log=${require('node:path').join(globalThis.process.env.OUT,'network.json')}`]};\n" + needle)
 lifecycle.write_text(instrumented, encoding='utf-8')
 provenance = {'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
               'originalLifecycleSha256': hashlib.sha256(original.encode()).hexdigest(),

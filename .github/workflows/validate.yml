@@ -49,7 +49,7 @@
         {
           "name": "Install private observer against unchanged source",
           "shell": "python",
-          "run": "from pathlib import Path\nimport hashlib,os,shutil,subprocess\nrevision=os.environ['GITHUB_SHA']\nsubprocess.run(['git','fetch','--depth=1','origin',revision],check=True)\ndata=subprocess.check_output(['git','show',revision+':tools/diagnostic-browser-buffer.py'])\nassert hashlib.sha256(data).hexdigest()=='f1e1320697239482b5b1c9b44632a1b6a3b8a24ec2d4c28f4aee9291378ea1ce'\nPath('tools/diagnostic-browser-buffer.py').write_bytes(data)\nshutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)\n"
+          "run": "from pathlib import Path\nimport hashlib,os,shutil,subprocess\nrevision=os.environ['GITHUB_SHA']\nsubprocess.run(['git','fetch','--depth=1','origin',revision],check=True)\ndata=subprocess.check_output(['git','show',revision+':tools/diagnostic-browser-buffer.py'])\nassert hashlib.sha256(data).hexdigest()=='df3a0fde16e07dffe971c0964e35d636c54731500ac0f2a3a2fd6365c06ef095'\nPath('tools/diagnostic-browser-buffer.py').write_bytes(data)\nshutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)\n"
         },
         {
           "name": "Observe two original acceptance sequences",
