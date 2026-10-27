@@ -55,6 +55,7 @@ function observeResidentMedia() {
   let nextChannel=0;
   const describe=media=>({cue:media.dataset.audioCue||null,src:media.src,url:media.currentSrc,
     connected:media.isConnected,hidden:media.hidden,controls:media.controls,preload:media.preload,
+    paused:media.paused,currentTime:media.currentTime,seeking:media.seeking,
     ready:media.readyState,network:media.networkState,error:media.error?.code??null});
   const own=media=>{
     if(!channels.has(media))channels.set(media,{id:++nextChannel,loads:0,sources:[],events:[],retired:false});
@@ -76,7 +77,7 @@ function observeResidentMedia() {
     own(this).loads+=1;
     return Reflect.apply(load,this,args);
   };
-  for(const type of ['loadstart','loadeddata','suspend','abort','emptied','error','playing']) {
+  for(const type of ['loadstart','loadeddata','suspend','abort','emptied','error','playing','seeking','seeked']) {
     document.addEventListener(type,event=>{
       if(event.target instanceof HTMLMediaElement)own(event.target).events.push({type,
         trusted:event.isTrusted,time:performance.now(),...describe(event.target)});

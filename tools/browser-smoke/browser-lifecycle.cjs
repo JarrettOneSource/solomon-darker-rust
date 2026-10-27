@@ -1,5 +1,21 @@
 // The public Playwright server owns Chrome; the client owns only its connection.
 // Keep both close results, including a timeout, fatal even if termination succeeds.
+const os=require('node:os');
+
+async function prepareSoftwareRenderer(browser,options) {
+  if(os.platform()!=='win32'||!options.args?.includes('--use-angle=swiftshader'))return;
+  const cdp=await browser.newBrowserCDPSession();
+  try {
+    await cdp.send('SystemInfo.getInfo');
+    const {processInfo}=await cdp.send('SystemInfo.getProcessInfo');
+    const gpu=processInfo.filter(process=>process.type.toLowerCase()==='gpu');
+    if(gpu.length!==1)throw new Error('Expected one owned software GPU process');
+    // Chrome promotes its Windows GPU process above normal. SwiftShader runs
+    // on the CPU and can then starve the local server and browser driver.
+    os.setPriority(gpu[0].id,os.constants.priority.PRIORITY_NORMAL);
+  } finally {await cdp.detach()}
+}
+
 async function bounded(promise,label,milliseconds) {
   let timer;
   try {
@@ -51,6 +67,12 @@ async function launchOwnedBrowser(chromium,options) {
       error.cleanup=report;throw error;
     }
     return report;
+  }
+  try {await bounded(prepareSoftwareRenderer(browser,options),'software renderer setup',15000)}
+  catch(error) {
+    try {await close()}
+    catch(cleanupError) {throw new AggregateError([error,cleanupError],'Browser setup and cleanup failed')}
+    throw error;
   }
   return {browser,close};
 }
