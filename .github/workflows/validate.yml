@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   capture:
+    if: false
     name: Windows settings trace (${{ matrix.attempt }})
     runs-on: windows-latest
     timeout-minutes: 30
@@ -256,4 +257,98 @@ jobs:
         with:
           name: native-peer-trace
           path: reports/native-peer
+          if-no-files-found: error
+
+  native-admission:
+    name: Intel Mac admission event trace
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 99a3973a394f320d8875839f61710aa12de6da1e
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Resolve the accessibility interpreter
+        run: python -c 'import os,sys; print("TCC_CLIENT=" + os.path.realpath(sys.executable))' >> "$GITHUB_ENV"
+      - name: Prepare native accessibility
+        uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
+        with:
+          setup-window-manager: 'true'
+          macos-tcc-client: ${{ env.TCC_CLIENT }}
+      - run: python -m pip install -r tools/desktop-smoke-requirements.txt
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - run: npm ci --no-audit --no-fund
+      - name: Restore native build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-99a3973a394f320d8875839f61710aa12de6da1e
+          restore-keys: |
+            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+      - run: rustup show
+      - name: Add admission observations only
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+          output=Path('reports/native-admission')
+          output.mkdir(parents=True,exist_ok=True)
+          def replace(file,old,new):
+              p=Path(file); text=p.read_text(); assert text.count(old)==1,(file,old,text.count(old)); p.write_text(text.replace(old,new))
+          replace('crates/web/src/network.rs',
+              '        let poll = self.connection.poll();',
+              '        let poll = self.connection.poll();\n        if self.first_message.is_some() || !poll.events.is_empty() {\n            let events: Vec<_> = poll.events.iter().map(|event| match event {\n                NetworkEvent::Opened => "opened", NetworkEvent::Closed { .. } => "closed",\n                NetworkEvent::Failed(_) => "failed", NetworkEvent::Message { .. } => "message",\n            }).collect();\n            eprintln!("NATIVE_ADMISSION_DIAGNOSTIC poll ms={} first={} open={} events={events:?}", crate::platform::monotonic_ms(), self.first_message.is_some(), self.connection.is_open());\n        }')
+          replace('crates/web/src/network.rs',
+              '                self.connection.send(&message)?;',
+              '                eprintln!("NATIVE_ADMISSION_DIAGNOSTIC first-send ms={}", crate::platform::monotonic_ms());\n                self.connection.send(&message)?;')
+          replace('crates/web/src/network/connection.rs',
+              '    pub fn opened(&mut self) {',
+              '    pub fn opened(&mut self) {\n        eprintln!("NATIVE_ADMISSION_DIAGNOSTIC opened ms={} deadline={:?}", crate::platform::monotonic_ms(), self.welcome_deadline);')
+          replace('crates/web/src/network/connection.rs',
+              '    pub fn closed(&mut self, code: u16, reason: String) {',
+              '    pub fn closed(&mut self, code: u16, reason: String) {\n        eprintln!("NATIVE_ADMISSION_DIAGNOSTIC closed ms={} code={code} reason={reason}", crate::platform::monotonic_ms());')
+          replace('crates/web/src/network/connection.rs',
+              '    pub fn fail(&mut self, reason: String) {',
+              '    pub fn fail(&mut self, reason: String) {\n        eprintln!("NATIVE_ADMISSION_DIAGNOSTIC failed ms={} reason={reason}", crate::platform::monotonic_ms());')
+          replace('crates/web/src/network/connection.rs',
+              '        if let Some(message) = reception.message {',
+              '        if let Some(message) = reception.message {\n            if matches!(&message, ServerMessage::Welcome { .. }) {\n                eprintln!("NATIVE_ADMISSION_DIAGNOSTIC welcome ms={now} deadline={:?}", self.welcome_deadline);\n            }')
+          replace('crates/web/src/network/connection.rs',
+              '    pub fn accept_welcome(&mut self) -> Option<ClientMessage> {',
+              '    pub fn accept_welcome(&mut self) -> Option<ClientMessage> {\n        eprintln!("NATIVE_ADMISSION_DIAGNOSTIC accepted ms={}", crate::platform::monotonic_ms());')
+          subprocess.run(['cargo','fmt','--all'],check=True)
+          patch=subprocess.check_output(['git','diff','--','crates/web/src/network.rs','crates/web/src/network/connection.rs'],text=True)
+          (output/'source.patch').write_text(patch)
+      - name: Build private observed package
+        run: npm run package:desktop -- --platform darwin --arch x64 --release-repository "$GITHUB_REPOSITORY"
+      - name: Replay unchanged native acceptance twice
+        shell: python
+        run: |
+          from pathlib import Path
+          import json,os,subprocess,sys,time
+          rows=[]
+          for attempt in (1,2):
+              output=Path('reports/native-admission')/str(attempt)
+              output.mkdir(parents=True,exist_ok=True)
+              env=os.environ.copy(); env['SDR_DESKTOP_EVIDENCE']=str(output.resolve())
+              started=time.monotonic()
+              with (output/'driver.log').open('w') as log:
+                  result=subprocess.run([sys.executable,'-u','tools/smoke-desktop-runtime.py'],env=env,stdout=log,stderr=subprocess.STDOUT)
+              row={'attempt':attempt,'exit':result.returncode,'elapsedSeconds':time.monotonic()-started}
+              rows.append(row); print(json.dumps(row),flush=True)
+              Path('reports/native-admission/diagnostic.json').write_text(json.dumps({'baseRevision':'99a3973a394f320d8875839f61710aa12de6da1e','privateObservationBuild':True,'attempts':rows},indent=2)+'\n')
+          raise SystemExit(any(row['exit'] for row in rows))
+      - name: Retain private admission evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-admission-trace
+          path: reports/native-admission
           if-no-files-found: error
