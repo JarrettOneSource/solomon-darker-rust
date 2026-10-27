@@ -1,0 +1,60 @@
+--- a/crates/web/src/game.rs
++++ b/crates/web/src/game.rs
+@@ -2582,8 +2582,13 @@
+         }))
+     }
+ 
+-    pub fn report_failure(&mut self, error: &str) {
++    pub fn report_failure(&mut self, error: &str) -> Result<(), String> {
+         crate::runtime_ui::set_error(error);
++        self.input.set_blocked(true)?;
++        if let Some(native) = &mut self.native {
++            native.release_input(self.session.ticks)?;
++        }
++        Ok(())
+     }
+ 
+     pub fn present_failure(&mut self, time: f64) -> Result<(), String> {
+--- a/crates/web/src/game/native.rs
++++ b/crates/web/src/game/native.rs
+@@ -85,6 +85,14 @@
+     }
+     pub(super) fn is_leaving(&self) -> bool {
+         self.phase == NativePhase::Leaving
++    }
++
++    pub(super) fn release_input(&mut self, tick: u64) -> Result<(), String> {
++        // The failed renderer will not send the later key or pointer release.
++        if let Some(connection) = &mut self.connection {
++            connection.send_input(tick, GameSessionInput::default(), true)?;
++        }
++        Ok(())
+     }
+ 
+     pub(super) fn begin_deployment(&mut self) {
+--- a/crates/desktop/src/app.rs
++++ b/crates/desktop/src/app.rs
+@@ -622,7 +622,9 @@
+                             let result = game.borrow_mut().frame(now);
+                             if let Err(error) = result {
+                                 solomon_web::platform::error(&error);
+-                                game.borrow_mut().report_failure(&error);
++                                if let Err(stop_error) = game.borrow_mut().report_failure(&error) {
++                                    solomon_web::platform::error(&stop_error);
++                                }
+                                 self.failure = Some(error);
+                             }
+                         }
+--- a/crates/web/src/bootstrap.rs
++++ b/crates/web/src/bootstrap.rs
+@@ -110,7 +110,9 @@
+         let result = game.borrow_mut().frame(time);
+         if let Err(message) = result {
+             web_sys::console::error_1(&JsValue::from_str(&message));
+-            runtime_ui::set_error(&message);
++            if let Err(error) = game.borrow_mut().report_failure(&message) {
++                web_sys::console::error_1(&JsValue::from_str(&error));
++            }
+             if let Err(error) = game.borrow_mut().present_failure(time) {
+                 web_sys::console::error_1(&JsValue::from_str(&error));
+             }

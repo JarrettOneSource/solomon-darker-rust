@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 mode = sys.argv[1]
-assert mode in ("raise", "trace-one", "trace-two"), mode
+assert mode in ("raise", "close-peer", "trace-one", "trace-two"), mode
 original = Path("tools/smoke-desktop-runtime.py").read_bytes()
 assert hashlib.sha256(original).hexdigest() == "7a94572aaebcc84c393738aa334368aa9836d04de83d1bbbd4dc845186a914fa"
 source = original.decode()
@@ -28,9 +28,13 @@ old = "        window.activate()\n"
 new = "        retry_ui(lambda timeout: window.activate())\n"
 assert source.count(old) == 1
 source = source.replace(old, new)
+old = '    def request_close(self):\n        retry_ui(self.app.locator("window").first().wait_attached).close()\n'
+new = '    def request_close(self):\n        window = retry_ui(self.app.locator("window").first().wait_attached)\n        try:\n            window.close()\n        except xa11y.PlatformError as error:\n            if (PLATFORM != "darwin" or not str(error).startswith("Platform error (-25204):")):\n                raise\n            # The close may already be delivered. Callers verify the actual exit\n            # or save-failure surface; replaying the action could affect that prompt.\n            RECEIPT.setdefault("unacknowledgedCloses", []).append({\n                "name": self.name, "error": str(error),\n            })\n            print(f"{self.name}: close acknowledgement unavailable: {error}", flush=True)\n'
+assert source.count(old) == 1
+source = source.replace(old, new)
 fixed_hash = hashlib.sha256(source.encode()).hexdigest()
 
-if mode == "raise":
+if mode in ("raise", "close-peer"):
     old = "        retry_ui(lambda timeout: window.activate())\n"
     new = '''        def raise_window():
             if (self.name == "host" and any(app.name == "guest" for app in RUNNING)
@@ -64,6 +68,13 @@ class CaptureReadProbe:
     needle = "        self.app = xa11y.App.by_pid(self.process.pid, timeout=30)\n"
     assert source.count(needle) == 1
     source = source.replace(needle, needle + '        if self.name == "guest":\n            self.app = CaptureReadProbe(self.app)\n')
+
+if mode == "close-peer":
+    old = '            window.close()\n'
+    new = '            window.close()\n            if self.name == "guest" and not getattr(self, "private_close_failed", False):\n                self.private_close_failed = True\n                RECEIPT["injectedCloseAcknowledgementFailures"] = 1\n                raise xa11y.PlatformError("Platform error (-25204): AXPress failed; private delivered close check")\n'
+    assert source.count(old) == 1
+    source = source.replace(old, new)
+    source = source.replace("    check_offline()\n    check_peers()\n", "    check_peers()\n")
 
 # Record the ordinary hold's exact OS-input interval, without polling a 30-second save.
 old = '        app.hold("d", 1.2)\n'
@@ -100,7 +111,7 @@ with (out / "driver.log").open("w") as log:
     result = subprocess.run([sys.executable, "-u", str(driver)], env=env, stdout=log, stderr=subprocess.STDOUT)
 print((out / "driver.log").read_text(), flush=True)
 receipt = json.loads((out / "receipt.json").read_text())
-if mode == "raise":
+if mode in ("raise", "close-peer"):
     assert receipt["revision"] == "09e2e9ea90a042bed6d7779bccf2f02650ea7e15"
     assert receipt["executableSha256"] == "223f96c76d9d8507c3b2a69c75e059e81457e7492a70eb1ace2a3a2194e14af7"
     assert receipt["injectedWindowRaiseFailures"] == 1
@@ -110,7 +121,12 @@ if mode == "raise":
 else:
     assert receipt["revision"] == "33ca699899158bae7d880a5fda605c92849e7eef"
 assert result.returncode == 0 and receipt["status"] == "ok", receipt
-assert len(receipt["exits"]) == 6 and all(row["code"] == 0 for row in receipt["exits"])
+assert len(receipt["exits"]) == (2 if mode == "close-peer" else 6)
+assert all(row["code"] == 0 for row in receipt["exits"])
+if mode == "close-peer":
+    assert receipt["injectedCloseAcknowledgementFailures"] == 1
+    assert any("private delivered close check" in row["error"] for row in receipt["unacknowledgedCloses"])
+
 assert receipt["cleanup"] == [] and receipt["peer"]["hostInventoryOpened"]
 verification = {"mode": mode, "status": "passed", "driverExit": result.returncode,
                 "fixedDriverSha256": fixed_hash, "revision": receipt["revision"],
