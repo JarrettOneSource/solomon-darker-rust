@@ -1,14 +1,19 @@
-name: Observe native peer input while checking capture recovery
+name: Check native focus recovery and observe peer input
 on:
   push:
     branches: [diagnostic/windows-browser-capture-20261026]
 permissions:
   contents: read
   actions: read
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  RUST_BACKTRACE: '1'
 jobs:
-  native-accessibility-macos:
-    runs-on: macos-15
-    timeout-minutes: 45
+  native-focus-intel:
+    runs-on: macos-15-intel
+    timeout-minutes: 35
     defaults:
       run:
         shell: bash
@@ -26,7 +31,7 @@ jobs:
           setup-window-manager: 'true'
           macos-tcc-client: ${{ env.TCC_CLIENT }}
       - run: python -m pip install -r tools/desktop-smoke-requirements.txt
-      - name: Install the verified private driver check
+      - name: Install the verified private focus check
         id: fixture
         shell: python
         run: |
@@ -34,47 +39,117 @@ jobs:
           import hashlib,json,os,subprocess
           revision=os.environ['GITHUB_SHA']
           subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          name='tools/diagnostic-native-accessibility.py'
+          name='tools/diagnostic-native-focus.py'
           data=subprocess.check_output(['git','show',revision+':'+name])
           digest=hashlib.sha256(data).hexdigest()
-          assert digest=='eb1ce3629d6b8f33c10337d7c787c258f0ad3d4c16aafcea7d313ec99295fb46'
+          assert digest=='74b535cb215ad6f1a5f64f27485f8975a995581dd038d12df015860b19f3d555'
           Path(name).write_bytes(data)
-          out=Path('reports/native-accessibility');out.mkdir(parents=True,exist_ok=True)
-          (out/'source.json').write_text(json.dumps({'sourceRevision':'33ca699899158bae7d880a5fda605c92849e7eef','fixtureRevision':revision,'fixtureSha256':digest,'packageRun':40450038601,'packageArtifact':'unqualified-desktop-darwin-arm64-40450038601-1'},indent=2)+'\n')
+          out=Path('reports/native-focus');out.mkdir(parents=True,exist_ok=True)
+          (out/'source.json').write_text(json.dumps({'driverRevision':'33ca699899158bae7d880a5fda605c92849e7eef','fixtureRevision':revision,'fixtureSha256':digest,'packageRun':40450043476,'packageArtifact':'unqualified-desktop-darwin-x64-40450043476-1'},indent=2)+'\n')
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 40450038601
-          name: unqualified-desktop-darwin-arm64-40450038601-1
+          run-id: 40450043476
+          name: unqualified-desktop-darwin-x64-40450043476-1
           path: retained-package
-      - name: Verify and unpack the unchanged native package
+      - name: Verify and unpack the unchanged Intel package
         id: unpack
         shell: python
         run: |
           from pathlib import Path
           import hashlib,json,os,subprocess
-          archive=Path('retained-package/Solomon-Darker-darwin-arm64.zip')
+          archive=Path('retained-package/Solomon-Darker-darwin-x64.zip')
           expected=Path(str(archive)+'.sha256').read_text().split()[0]
           with archive.open('rb') as stream:
               assert hashlib.file_digest(stream,'sha256').hexdigest()==expected
           inspection=subprocess.check_output(['python','scripts/verify-desktop-archive.py',str(archive)],text=True)
           report=json.loads(inspection)
-          assert report['revision']=='33ca699899158bae7d880a5fda605c92849e7eef'
-          assert report['nativeSha256']=='a0936ba4defb005abc55299338f1d342ad771e5376d58bacfd822a0002415036'
-          Path('reports/native-accessibility/archive-inspection.json').write_text(inspection)
+          assert report['revision']=='09e2e9ea90a042bed6d7779bccf2f02650ea7e15'
+          assert report['nativeSha256']=='223f96c76d9d8507c3b2a69c75e059e81457e7492a70eb1ace2a3a2194e14af7'
+          Path('reports/native-focus/archive-inspection.json').write_text(inspection)
           subprocess.run(['ditto','-x','-k',str(archive),'retained-package/unpacked'],check=True)
-          app=Path('retained-package/unpacked/Solomon Darker-darwin-arm64').resolve()
+          app=Path('retained-package/unpacked/Solomon Darker-darwin-x64').resolve()
           with open(os.environ['GITHUB_ENV'],'a') as out:
               out.write('SDR_DESKTOP_APP='+str(app)+'\n')
-      - name: Record durable input during the original fixed-duration key hold
-        if: always() && steps.fixture.outcome == 'success' && steps.unpack.outcome == 'success'
-        run: python -u tools/diagnostic-native-accessibility.py capture
-      - name: Observe the same input until actual durable movement with a ten-second cap
-        if: always() && steps.fixture.outcome == 'success' && steps.unpack.outcome == 'success'
-        run: python -u tools/diagnostic-native-accessibility.py observed
+      - name: Complete native peer play after temporary AXRaise and capture-read failures
+        run: python -u tools/diagnostic-native-focus.py raise
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: native-accessibility-macos
-          path: reports/native-accessibility
+          name: native-focus-intel
+          path: reports/native-focus
           if-no-files-found: error
+  native-input-arm:
+    runs-on: macos-15
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 33ca699899158bae7d880a5fda605c92849e7eef
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Resolve the accessibility interpreter
+        run: python -c 'import os,sys; print("TCC_CLIENT=" + os.path.realpath(sys.executable))' >> "$GITHUB_ENV"
+      - uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
+        with:
+          setup-window-manager: 'true'
+          macos-tcc-client: ${{ env.TCC_CLIENT }}
+      - run: python -m pip install -r tools/desktop-smoke-requirements.txt
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: rustup show
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-33ca699899158bae7d880a5fda605c92849e7eef
+          restore-keys: |
+            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+            native-${{ runner.os }}-${{ runner.arch }}-
+      - name: Install verified private input observations
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib,json,os,subprocess
+          revision=os.environ['GITHUB_SHA']
+          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
+          hashes={'tools/diagnostic-native-focus.py':'74b535cb215ad6f1a5f64f27485f8975a995581dd038d12df015860b19f3d555','tools/diagnostic-native-input-inject.py':'18a330d58b2ddd8144155de1b9b32473969875e1efe4e3a7ef7d9511e71aaf94'}
+          for name,digest in hashes.items():
+              data=subprocess.check_output(['git','show',revision+':'+name])
+              assert hashlib.sha256(data).hexdigest()==digest,name
+              Path(name).write_bytes(data)
+          out=Path('reports/native-focus');out.mkdir(parents=True,exist_ok=True)
+          (out/'source.json').write_text(json.dumps({'sourceRevision':'33ca699899158bae7d880a5fda605c92849e7eef','fixtureRevision':revision,'fixtureHashes':hashes,'scope':'Read-only event and frame-input logs; ordinary 1.2-second key hold is unchanged'},indent=2)+'\n')
+          subprocess.run(['python','tools/diagnostic-native-input-inject.py'],check=True)
+      - name: Build the private input-observation package
+        id: build
+        run: |
+          cargo fmt --all
+          git diff -- crates/web/src/game.rs crates/web/src/game/desktop.rs crates/web/src/input.rs > reports/native-focus/input-observation.patch
+          node tools/package-desktop.mjs --platform darwin --arch arm64 --release-repository "$GITHUB_REPOSITORY"
+      - name: Observe the first unchanged held-input journey
+        run: python -u tools/diagnostic-native-focus.py trace-one
+      - name: Observe the second unchanged held-input journey
+        if: always() && steps.build.outcome == 'success'
+        run: python -u tools/diagnostic-native-focus.py trace-two
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-input-arm
+          path: reports/native-focus
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-input-arm-executable
+          path: target/release/solomon-darker-app
+          if-no-files-found: ignore
