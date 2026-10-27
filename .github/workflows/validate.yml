@@ -1,101 +1,83 @@
-name: Verify actual native fatal error visibility and saved return
+name: Verify native capture reads and peer cleanup on macOS
 on:
   push:
     branches: [diagnostic/windows-browser-capture-20261026]
 permissions:
   contents: read
   actions: read
-env:
-  CARGO_INCREMENTAL: '0'
-  CARGO_PROFILE_DEV_DEBUG: '0'
-  CARGO_PROFILE_TEST_DEBUG: '0'
-  RUST_BACKTRACE: '1'
 jobs:
-  native-fatal-status:
-    runs-on: windows-latest
-    timeout-minutes: 90
+  native-accessibility-macos:
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: b8e90930e195b8f74e8492bd0bc6f0c8486940fa
+          ref: 33ca699899158bae7d880a5fda605c92849e7eef
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - name: Resolve the accessibility interpreter
+        run: python -c 'import os,sys; print("TCC_CLIENT=" + os.path.realpath(sys.executable))' >> "$GITHUB_ENV"
       - uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
         with:
           setup-window-manager: 'true'
+          macos-tcc-client: ${{ env.TCC_CLIENT }}
       - run: python -m pip install -r tools/desktop-smoke-requirements.txt
-      - uses: ssciwr/setup-mesa-dist-win@2dfeaebfa514f74c2b8cd8d27108c31486d33e72
-        with:
-          version: '26.0.3'
-      - name: Select native Windows Perl
-        shell: pwsh
-        run: |
-          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
-          if (!$nativePerl) { throw 'Native Perl is unavailable.' }
-          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - run: rustup show
-      - uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: native-audio-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-ebeea4e7479e56e6847ca777af4ed7314f0b2916
-          restore-keys: |
-            native-audio-${{ runner.os }}-${{ runner.arch }}-
-            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-            native-${{ runner.os }}-${{ runner.arch }}-
-      - name: Install verified private fixture
+      - name: Install the verified private driver check
+        id: fixture
         shell: python
         run: |
           from pathlib import Path
-          import os,subprocess,hashlib,json
+          import hashlib,json,os,subprocess
           revision=os.environ['GITHUB_SHA']
           subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          hashes={'tools/diagnostic-native-audio.py': 'c92709243b717c6a9242468a7fb2d351a9a380f663c55262e6b265f3479b0987', 'tools/diagnostic-native-audio.rs': '879ce1543719f08c956c920e7969631f19ad1e0336a80994985ba57660b492ac', 'tools/diagnostic-fatal-status.patch': '4b6267403035c41a6636fec31e69ae1427d151e00fa68727dcfd3193b5ccb254', 'tools/diagnostic-fatal-status.py': '56530359c440e5a15d8f85abd07b4801acd82b5a7a26aa2eeea9d6e4c7cec321'}
-          for name,digest in hashes.items():
-              data=subprocess.check_output(['git','show',revision+':'+name])
-              assert hashlib.sha256(data).hexdigest()==digest,name
-              Path(name).write_bytes(data)
-          out=Path('reports/native-fatal-status');out.mkdir(parents=True,exist_ok=True)
-          (out/'source.json').write_text(json.dumps({'base':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','fixtureRevision':revision,'fixtureHashes':hashes},indent=2)+'\n')
-      - name: Apply the already-verified error handling and layout
-        shell: python
-        run: |
-          import subprocess
-          for script,mode in [('tools/diagnostic-native-audio.py','red'),('tools/diagnostic-native-audio.py','green'),('tools/diagnostic-fatal-status.py','red'),('tools/diagnostic-fatal-status.py','green')]:
-              subprocess.run(['python',script,mode],check=True)
-      - name: Build the private fatal-frame fixture
-        shell: pwsh
-        run: |
-          python tools/diagnostic-fatal-status.py inject
-          if ($LASTEXITCODE) { throw 'Fixture installation failed.' }
-          node tools/package-desktop.mjs --platform win32 --arch x64 --release-repository "$env:GITHUB_REPOSITORY"
-          if ($LASTEXITCODE) { throw 'Native fixture build failed.' }
-      - name: Verify actual error visibility and save before returning to launcher
+          name='tools/diagnostic-native-accessibility.py'
+          data=subprocess.check_output(['git','show',revision+':'+name])
+          digest=hashlib.sha256(data).hexdigest()
+          assert digest=='f88831a58f22aa05c446103d263836cb2f044a3a39de57037a158578afd99bc7'
+          Path(name).write_bytes(data)
+          out=Path('reports/native-accessibility');out.mkdir(parents=True,exist_ok=True)
+          (out/'source.json').write_text(json.dumps({'sourceRevision':'33ca699899158bae7d880a5fda605c92849e7eef','fixtureRevision':revision,'fixtureSha256':digest,'packageRun':40450038601,'packageArtifact':'unqualified-desktop-darwin-arm64-40450038601-1'},indent=2)+'\n')
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 40450038601
+          name: unqualified-desktop-darwin-arm64-40450038601-1
+          path: retained-package
+      - name: Verify and unpack the unchanged native package
+        id: unpack
         shell: python
         run: |
           from pathlib import Path
-          import os,subprocess
-          env=os.environ.copy();env['SDR_DESKTOP_EVIDENCE']=str(Path('reports/native-fatal-status/journey').resolve())
-          env['SDR_FATAL_STATUS_TRIGGER']=str(Path('reports/native-fatal-status/trigger').resolve())
-          subprocess.run(['python','tools/smoke-desktop-runtime.py'],env=env,check=True)
+          import hashlib,json,os,subprocess
+          archive=Path('retained-package/Solomon-Darker-darwin-arm64.zip')
+          expected=Path(str(archive)+'.sha256').read_text().split()[0]
+          with archive.open('rb') as stream:
+              assert hashlib.file_digest(stream,'sha256').hexdigest()==expected
+          inspection=subprocess.check_output(['python','scripts/verify-desktop-archive.py',str(archive)],text=True)
+          report=json.loads(inspection)
+          assert report['revision']=='33ca699899158bae7d880a5fda605c92849e7eef'
+          assert report['nativeSha256']=='a0936ba4defb005abc55299338f1d342ad771e5376d58bacfd822a0002415036'
+          Path('reports/native-accessibility/archive-inspection.json').write_text(inspection)
+          subprocess.run(['ditto','-x','-k',str(archive),'retained-package/unpacked'],check=True)
+          app=Path('retained-package/unpacked/Solomon Darker-darwin-arm64').resolve()
+          with open(os.environ['GITHUB_ENV'],'a') as out:
+              out.write('SDR_DESKTOP_APP='+str(app)+'\n')
+      - name: Complete real peer play after one captured AXCannotComplete read
+        if: always() && steps.fixture.outcome == 'success' && steps.unpack.outcome == 'success'
+        run: python -u tools/diagnostic-native-accessibility.py capture
+      - name: Save and close guests before their host after a controlled journey failure
+        if: always() && steps.fixture.outcome == 'success' && steps.unpack.outcome == 'success'
+        run: python -u tools/diagnostic-native-accessibility.py cleanup
+      - name: Complete the ordinary packaged journey without injected failure
+        if: always() && steps.fixture.outcome == 'success' && steps.unpack.outcome == 'success'
+        run: python -u tools/diagnostic-native-accessibility.py ordinary
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: native-fatal-status-windows
-          path: reports/native-fatal-status
+          name: native-accessibility-macos
+          path: reports/native-accessibility
           if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: native-fatal-fixture-executable
-          path: target/release/solomon-darker-app.exe
-          if-no-files-found: ignore
