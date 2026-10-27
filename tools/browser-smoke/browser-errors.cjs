@@ -35,16 +35,35 @@ function residentSuspension(failure,captured,settled) {
   if(!captured||!settled||captured.documentId!==settled.documentId)return null;
   const before=loadedResidentChannel(failure,captured);
   const after=loadedResidentChannel(failure,settled);
-  if(!before||!after||after.id!==before.id||after.cue!==before.cue
-    ||!suspendedResidentChannel(before))return null;
+  if(!before||!after||after.id!==before.id||after.cue!==before.cue)return null;
+  const later=after.events.slice(before.events.length);
+  const played=later.findIndex(event=>event.type==='playing'
+    &&event.trusted&&event.url===failure.url&&event.ready>=3
+    &&event.paused===false&&event.seeking===false);
   let reason='ready resident channel suspended by the browser';
-  if(!suspendedResidentChannel(after)) {
+  if(!suspendedResidentChannel(before)) {
+    // The request callback can arrive during a rewind or after it completes.
+    // Require the loaded, suspended lifetime and completed rewind before playback.
+    const loaded=before.events.findIndex(event=>event.type==='loadeddata'&&event.trusted&&event.ready>=2);
+    if(before.ready<1||![1,2].includes(before.network)||before.currentTime!==0||loaded<0
+      ||!before.events.some(event=>event.type==='suspend'&&event.trusted&&event.network===1)
+      ||played<0||![1,2].includes(after.network)
+      ||after.ready<3||after.seeking!==false)return null;
+    const beforePlayback=after.events.slice(0,before.events.length+played);
+    const seeking=beforePlayback.findLastIndex(event=>event.type==='seeking');
+    const seeked=beforePlayback.findLastIndex(event=>event.type==='seeked');
+    if(seeking<=loaded||seeked<=seeking)return null;
+    const start=beforePlayback[seeking],end=beforePlayback[seeked];
+    if(!start.trusted||start.url!==failure.url||start.currentTime!==0||start.seeking!==true
+      ||!end.trusted||end.url!==failure.url||end.ready<3||end.seeking!==false)return null;
+    const capturedRewind=before.seeking===true?seeked>=before.events.length
+      :before.seeking===false&&before.ready>=3&&seeked<before.events.length;
+    if(!capturedRewind)return null;
+    reason='resident channel completed a captured rewind after browser suspension';
+  } else if(!suspendedResidentChannel(after)) {
     // Trusted-gesture priming can resume fetching after the captured suspension.
     // Require later real playback and retained future data from the same owner.
-    const played=after.events.slice(before.events.length).some(event=>event.type==='playing'
-      &&event.trusted&&event.url===failure.url&&event.ready>=3
-      &&event.paused===false&&event.seeking===false);
-    if(after.network!==2||after.ready<3||after.seeking!==false||!played)return null;
+    if(after.network!==2||after.ready<3||after.seeking!==false||played<0)return null;
     reason='ready resident channel resumed after browser suspension';
   }
   return {cue:before.cue,channelId:before.id,documentId:captured.documentId,reason};
