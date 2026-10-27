@@ -137,6 +137,15 @@ jobs:
           tested_sha=hashlib.sha256(text.encode()).hexdigest()
           assert tested_sha=='bacb64192e79084a1fbbfbd4abb2efdd39fc689dbfd60e8fe3ff8010efbdc202'
           source.write_bytes(text.encode())
+          archive_source=root/'crates/launcher/src/host/run_archive/store.rs'
+          archive_original=archive_source.read_bytes()
+          archive_text=archive_source.read_text()
+          needle='        let mut builder = DirBuilder::new();'
+          assert archive_text.count(needle)==1
+          archive_text=archive_text.replace(needle,'        let builder = &mut DirBuilder::new();')
+          archive_sha=hashlib.sha256(archive_text.encode()).hexdigest()
+          assert archive_sha=='235d5b4520e03ec2e41afc6e3492a61b5eaadf1101cba999df6e7b7e148e5e65'
+          archive_source.write_bytes(archive_text.encode())
           commands=[
            ['cargo','fmt','--all','--','--check'],
            ['cargo','clippy','-p','solomon-launcher','--test','hosted_supervisor','--all-features','--','-D','warnings'],
@@ -155,8 +164,10 @@ jobs:
             if result.returncode: break
           finally:
            source.write_bytes(original)
+           archive_source.write_bytes(archive_original)
            assert source.read_bytes()==original
-           receipt={'baseRevision':'10f8aa7c7bfec6818de19edde26543b3be8bae23','change':'Only the exact proposed test helper and 30-second large Boneyard checkpoint wait; no instrumentation or runtime changes.','testedSourceSha256':tested_sha,'sourceRestoredSha256':hashlib.sha256(source.read_bytes()).hexdigest(),'attempts':rows,'passed':len(rows)==len(commands) and all(r['exit']==0 for r in rows)}
+           assert archive_source.read_bytes()==archive_original
+           receipt={'baseRevision':'10f8aa7c7bfec6818de19edde26543b3be8bae23','change':'Exact proposed checkpoint test patch plus the Windows directory-builder lint fix; no private instrumentation.','testedSourceSha256':tested_sha,'archiveSourceSha256':archive_sha,'sourceRestoredSha256':hashlib.sha256(source.read_bytes()).hexdigest(),'attempts':rows,'passed':len(rows)==len(commands) and all(r['exit']==0 for r in rows)}
            (output/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
            print(json.dumps(receipt),flush=True)
           raise SystemExit(not receipt['passed'])
@@ -166,4 +177,82 @@ jobs:
         with:
           name: hosted-transfer-validation-windows
           path: reports/hosted-transfer
+          if-no-files-found: error
+
+  native-peer:
+    name: Apple silicon peer input trace
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 99a3973a394f320d8875839f61710aa12de6da1e
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Resolve the accessibility interpreter
+        run: python -c 'import os,sys; print("TCC_CLIENT=" + os.path.realpath(sys.executable))' >> "$GITHUB_ENV"
+      - name: Prepare native accessibility
+        uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
+        with:
+          setup-window-manager: 'true'
+          macos-tcc-client: ${{ env.TCC_CLIENT }}
+      - run: python -m pip install -r tools/desktop-smoke-requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: unqualified-desktop-darwin-arm64-40421722520-1
+          path: diagnostic-artifact
+          run-id: 40421722520
+          github-token: ${{ github.token }}
+      - name: Check and extract the immutable package
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib,subprocess
+          root=Path('diagnostic-artifact')
+          archive=root/'Solomon-Darker-darwin-arm64.zip'
+          expected=(root/'Solomon-Darker-darwin-arm64.zip.sha256').read_text().split()[0]
+          with archive.open('rb') as f:
+              assert hashlib.file_digest(f,'sha256').hexdigest()==expected
+          subprocess.run(['ditto','-x','-k',str(archive),'dist-desktop'],check=True)
+      - name: Observe existing peer input and checkpoints
+        shell: python
+        run: |
+          from pathlib import Path
+          import ast,json,os,subprocess,sys,time
+          source=Path('tools/smoke-desktop-runtime.py')
+          original=source.read_bytes()
+          text=source.read_text()
+          needle='    for app in (host, guest):\n        app.activate()\n        read_ui(app.control("match-loading").wait_detached, timeout=120)'
+          replacement='    RECEIPT["peerStart"] = {"runId": run_id, "beforeX": before_x,\n                            "initialTicks": initial_ticks,\n                            "playing": {app.name: diagnostic_state(app) for app in (host, guest)}}\n    for app in (host, guest):\n        app.activate()\n        read_ui(app.control("match-loading").wait_detached, timeout=120)'
+          assert text.count(needle)==1
+          text=text.replace(needle,replacement)
+          needle='try:\n    check_package()\n    check_offline()\n    check_peers()'
+          replacement='\ndef diagnostic_state(app):\n    record = save_record(app.profile)\n    if record is None:\n        return None\n    document = record[1]\n    return {"revision": record[0]["revision"],\n            "tick": document["continuation"]["simulation"]["tick"],\n            "position": player(document)["locomotions"]["position"]}\n\noriginal_hold = Application.hold\ndef diagnostic_hold(app, key, seconds):\n    row = {"name": app.name, "key": key, "seconds": seconds,\n           "before": diagnostic_state(app)}\n    start = time.monotonic()\n    try:\n        return original_hold(app, key, seconds)\n    finally:\n        row["elapsedSeconds"] = time.monotonic() - start\n        row["after"] = diagnostic_state(app)\n        RECEIPT.setdefault("keyHolds", []).append(row)\n        print("NATIVE_INPUT_DIAGNOSTIC " + json.dumps(row), flush=True)\nApplication.hold = diagnostic_hold\n\noriginal_capture = Application.capture\ndef diagnostic_capture(app, name, activate=True):\n    result = original_capture(app, name, activate)\n    row = {"name": app.name, "capture": name, "after": diagnostic_state(app)}\n    RECEIPT.setdefault("captureStates", []).append(row)\n    print("NATIVE_INPUT_DIAGNOSTIC " + json.dumps(row), flush=True)\n    return result\nApplication.capture = diagnostic_capture\n\n'+'try:\n    check_package()\n    assert MANIFEST["revision"] == "99a3973a394f320d8875839f61710aa12de6da1e"\n    check_peers()'
+          assert text.count(needle)==1
+          text=text.replace(needle,replacement)
+          ast.parse(text)
+          source.write_text(text)
+          rows=[]
+          try:
+           for attempt in (1,2):
+            output=Path('reports/native-peer')/str(attempt)
+            output.mkdir(parents=True,exist_ok=True)
+            env=os.environ.copy();env['SDR_DESKTOP_EVIDENCE']=str(output.resolve())
+            started=time.monotonic()
+            with (output/'driver.log').open('w') as log:
+             result=subprocess.run([sys.executable,str(source)],env=env,stdout=log,stderr=subprocess.STDOUT)
+            row={'attempt':attempt,'exit':result.returncode,'elapsedSeconds':time.monotonic()-started}
+            rows.append(row);print(json.dumps(row),flush=True)
+          finally:
+           source.write_bytes(original)
+           assert source.read_bytes()==original
+           Path('reports/native-peer/diagnostic.json').write_text(json.dumps({'immutablePackage':'99a3973a394f320d8875839f61710aa12de6da1e','changes':'Observe unchanged 1.2-second key holds and saved positions; run only the existing peer journey twice.','attempts':rows},indent=2)+'\n')
+          raise SystemExit(any(row['exit'] for row in rows))
+      - name: Retain native peer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-peer-trace
+          path: reports/native-peer
           if-no-files-found: error
