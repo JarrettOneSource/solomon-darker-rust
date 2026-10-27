@@ -1,0 +1,31 @@
+--- a/crates/desktop/src/app.rs
++++ b/crates/desktop/src/app.rs
+@@ -560,7 +560,13 @@
+             }
+             egui_winit::accesskit_winit::WindowEvent::ActionRequested(action) => match screen {
+                 Screen::Launcher { view, .. } => view.accesskit_action(action, now),
+-                Screen::Game { game, .. } => game.borrow_mut().accesskit_action(action, now),
++                Screen::Game { game, .. } => {
++                    if self.failure.is_some() {
++                        game.borrow_mut().native_ui().accesskit_action(action)
++                    } else {
++                        game.borrow_mut().accesskit_action(action, now)
++                    }
++                }
+             },
+             egui_winit::accesskit_winit::WindowEvent::AccessibilityDeactivated => Ok(()),
+         };
+@@ -605,7 +611,12 @@
+                     }
+                 }
+                 Screen::Game { game, window, .. } => {
+-                    game.borrow_mut().window_event(&event, now)?;
++                    // A failed game accepts input only through its recovery surface.
++                    if self.failure.is_some() {
++                        game.borrow_mut().native_ui().window_event(&event)?;
++                    } else {
++                        game.borrow_mut().window_event(&event, now)?;
++                    }
+                     if matches!(event, WindowEvent::RedrawRequested) {
+                         if self.failure.is_none() {
+                             let result = game.borrow_mut().frame(now);

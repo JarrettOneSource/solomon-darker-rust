@@ -1,9 +1,11 @@
-"""Exercise the retained fatal-frame fixture without another native build."""
+"""Exercise fatal recovery through accessibility and ordinary pointer input."""
 from pathlib import Path
 import os
 import subprocess
 import sys
 
+mode = sys.argv[1]
+assert mode in ("accessibility", "pointer"), mode
 source_path = Path('tools/smoke-desktop-runtime.py')
 source = source_path.read_text()
 needle = '    check_offline()\n    check_peers()\n'
@@ -16,9 +18,9 @@ journey = '''    profile = PROFILES / "fatal-status"
     message = "Native audio output: The stream configuration is no longer valid and must be rebuilt."
     status = app.app.locator("status[name=" + json.dumps(message) + "]")
     read_ui(status.wait_attached)
+    app.capture("fatal-status-visible")
     action = read_ui(app.control("desktop/launcher").wait_enabled)
     assert action.bounds is not None
-    app.capture("fatal-status-visible")
     window = read_ui(app.app.locator("window").first().wait_attached)
     shot = xa11y.screenshot(element=window)
     shot.save_png(EVIDENCE / "fatal-status-pixels.png")
@@ -37,7 +39,11 @@ journey = '''    profile = PROFILES / "fatal-status"
     RECEIPT["fatalTextPixels"] = {"count": len(red), "bounds": [left, top, right, bottom],
                                   "imageSize": [shot.width, shot.height],
                                   "textBottom": text_bottom, "actionTop": action.bounds.y}
-    app.click("desktop/launcher")
+    RECEIPT["recoveryInput"] = RECOVERY_INPUT
+    if RECOVERY_INPUT == "accessibility":
+        app.click("desktop/launcher")
+    else:
+        INPUT.click(action)
     read_ui(app.control("launcher/solo").wait_enabled, timeout=30)
     app.capture("returned-after-failure")
     record = save_record(profile)
@@ -47,8 +53,15 @@ journey = '''    profile = PROFILES / "fatal-status"
     app.request_close()
     app.exited()
 '''
+journey = '    RECOVERY_INPUT = ' + repr(mode) + '\n' + journey
 source = source.replace(needle, journey)
-out = Path('reports/native-fatal-status')
+source = source.replace('    shutil.rmtree(PROFILES)\n', '''    for app in RUNNING:
+        record = save_record(app.profile)
+        if record:
+            write_json(EVIDENCE / f"{app.name}-cleanup-save.json", record[0])
+    shutil.rmtree(PROFILES)
+''')
+out = Path('reports/native-fatal-status') / mode
 out.mkdir(parents=True, exist_ok=True)
 driver = out / 'driver.py'
 driver.write_text(source)

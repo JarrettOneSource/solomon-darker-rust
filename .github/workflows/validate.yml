@@ -1,18 +1,23 @@
-name: Verify saved recovery from the retained native fatal fixture
+name: Verify native fatal-screen input and durable recovery
 on:
   push:
     branches: [diagnostic/windows-browser-capture-20261026]
 permissions:
   contents: read
   actions: read
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  RUST_BACKTRACE: '1'
 jobs:
   native-fatal-status:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: b8e90930e195b8f74e8492bd0bc6f0c8486940fa
+          ref: 33ca699899158bae7d880a5fda605c92849e7eef
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -23,49 +28,75 @@ jobs:
       - uses: ssciwr/setup-mesa-dist-win@2dfeaebfa514f74c2b8cd8d27108c31486d33e72
         with:
           version: '26.0.3'
+      - name: Select native Windows Perl
+        shell: pwsh
+        run: |
+          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
+          if (!$nativePerl) { throw 'Native Perl is unavailable.' }
+          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
       - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
-      - uses: actions/download-artifact@v4
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: rustup show
+      - uses: actions/cache/restore@v4
         with:
-          github-token: ${{ github.token }}
-          run-id: 40451086793
-          name: native-fatal-fixture-executable
-          path: retained-executable
-      - name: Verify retained executable and install the private journey
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-audio-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-ebeea4e7479e56e6847ca777af4ed7314f0b2916
+          restore-keys: |
+            native-audio-${{ runner.os }}-${{ runner.arch }}-
+            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+            native-${{ runner.os }}-${{ runner.arch }}-
+      - name: Install verified private fixture and recovery input correction
         shell: python
         run: |
           from pathlib import Path
-          import hashlib,json,os,subprocess
-          binaries=list(Path('retained-executable').rglob('*.exe'))
-          assert len(binaries)==1
-          binary=binaries[0].resolve()
-          executable_hash=hashlib.sha256(binary.read_bytes()).hexdigest()
-          assert executable_hash=='48c263f9cc028ed4d140de6f1eaabe8e373ef4e66cc08b94e71a22ef209e473f'
+          import os,subprocess,hashlib,json
           revision=os.environ['GITHUB_SHA']
           subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          name='tools/diagnostic-fatal-journey.py'
-          data=subprocess.check_output(['git','show',revision+':'+name])
-          fixture_hash=hashlib.sha256(data).hexdigest()
-          assert fixture_hash=='117348c7f3f4ea762d260c992b2d2797ec04a994c71c24e2f5192d5528b2c8de'
-          Path(name).write_bytes(data)
-          with open(os.environ['GITHUB_ENV'],'a') as out:
-              out.write('FATAL_NATIVE_APP='+str(binary)+'\n')
+          hashes={'tools/diagnostic-failure-input.patch': '77627e0cf2d193fda1a02a8b0bbb10fc26f7c08e2f763b7920d21cb30f2e04b4', 'tools/diagnostic-fatal-journey.py': '13df3010c6507b36e81434c821f2a8cbced11726c27a97fb483ee70214acfdfb', 'tools/diagnostic-fatal-inject.py': '91e2ecefd554356585493505d9152563c1fc2d854eb1991d3828cf5483010692'}
+          for name,digest in hashes.items():
+              data=subprocess.check_output(['git','show',revision+':'+name])
+              assert hashlib.sha256(data).hexdigest()==digest,name
+              Path(name).write_bytes(data)
+          subprocess.run(['git','apply','--check','tools/diagnostic-failure-input.patch'],check=True)
+          subprocess.run(['git','apply','tools/diagnostic-failure-input.patch'],check=True)
           out=Path('reports/native-fatal-status');out.mkdir(parents=True,exist_ok=True)
-          (out/'source.json').write_text(json.dumps({'base':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','retainedBuildRun':40451086793,'executableSha256':executable_hash,'fixtureRevision':revision,'fixtureSha256':fixture_hash},indent=2)+'\n')
-      - name: Stage the existing executable with its unchanged assets
+          (out/'source.json').write_text(json.dumps({'base':'33ca699899158bae7d880a5fda605c92849e7eef','originalFailureRun':40454448976,'fixtureRevision':revision,'fixtureHashes':hashes},indent=2)+'\n')
+          (out/'app-input.patch').write_bytes(Path('tools/diagnostic-failure-input.patch').read_bytes())
+      - run: cargo fmt --all -- --check
+      - name: Build the private fatal-frame fixture
+        id: build
         shell: pwsh
         run: |
-          node tools/package-desktop.mjs --platform win32 --arch x64 --native-app "$env:FATAL_NATIVE_APP" --release-repository "$env:GITHUB_REPOSITORY"
-          if ($LASTEXITCODE) { throw 'Retained native fixture packaging failed.' }
-      - name: Verify actual text pixels, accessible status, durable save and launcher return
+          python tools/diagnostic-fatal-inject.py
+          if ($LASTEXITCODE) { throw 'Fixture installation failed.' }
+          node tools/package-desktop.mjs --platform win32 --arch x64 --release-repository "$env:GITHUB_REPOSITORY"
+          if ($LASTEXITCODE) { throw 'Native fixture build failed.' }
+      - name: Save and return from the fatal screen through accessibility
         shell: pwsh
         run: |
-          python -u tools/diagnostic-fatal-journey.py
-          if ($LASTEXITCODE) { throw 'Native fatal recovery journey failed.' }
+          python -u tools/diagnostic-fatal-journey.py accessibility
+          if ($LASTEXITCODE) { throw 'Accessible fatal recovery failed.' }
+      - name: Save and return from the fatal screen through ordinary mouse input
+        if: always() && steps.build.outcome == 'success'
+        shell: pwsh
+        run: |
+          python -u tools/diagnostic-fatal-journey.py pointer
+          if ($LASTEXITCODE) { throw 'Pointer fatal recovery failed.' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: native-fatal-status-windows
           path: reports/native-fatal-status
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-fatal-fixture-executable
+          path: target/release/solomon-darker-app.exe
+          if-no-files-found: ignore
