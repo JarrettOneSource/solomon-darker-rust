@@ -42,17 +42,23 @@ function residentSuspension(failure,captured,settled) {
     &&event.paused===false&&event.seeking===false);
   let reason='ready resident channel suspended by the browser';
   if(!suspendedResidentChannel(before)) {
-    // A priming rewind can briefly retain only metadata at the request callback.
-    // Its earlier preload and later native seek completion/playback must survive.
-    const seeked=later.findIndex(event=>event.type==='seeked'
-      &&event.trusted&&event.url===failure.url&&event.ready>=3
-      &&event.paused===false&&event.seeking===false);
-    if(before.ready!==1||before.network!==1||before.currentTime!==0
-      ||before.seeking!==true||before.paused!==false
-      ||!before.events.some(event=>event.type==='loadeddata'&&event.trusted&&event.ready>=2)
+    // The request callback can arrive during a rewind or after it completes.
+    // Require the loaded, suspended lifetime and completed rewind before playback.
+    const loaded=before.events.findIndex(event=>event.type==='loadeddata'&&event.trusted&&event.ready>=2);
+    if(before.ready<1||![1,2].includes(before.network)||before.currentTime!==0||loaded<0
       ||!before.events.some(event=>event.type==='suspend'&&event.trusted&&event.network===1)
-      ||seeked<0||played<=seeked||![1,2].includes(after.network)
+      ||played<0||![1,2].includes(after.network)
       ||after.ready<3||after.seeking!==false)return null;
+    const beforePlayback=after.events.slice(0,before.events.length+played);
+    const seeking=beforePlayback.findLastIndex(event=>event.type==='seeking');
+    const seeked=beforePlayback.findLastIndex(event=>event.type==='seeked');
+    if(seeking<=loaded||seeked<=seeking)return null;
+    const start=beforePlayback[seeking],end=beforePlayback[seeked];
+    if(!start.trusted||start.url!==failure.url||start.currentTime!==0||start.seeking!==true
+      ||!end.trusted||end.url!==failure.url||end.ready<3||end.seeking!==false)return null;
+    const capturedRewind=before.seeking===true?seeked>=before.events.length
+      :before.seeking===false&&before.ready>=3&&seeked<before.events.length;
+    if(!capturedRewind)return null;
     reason='resident channel completed a captured rewind after browser suspension';
   } else if(!suspendedResidentChannel(after)) {
     // Trusted-gesture priming can resume fetching after the captured suspension.

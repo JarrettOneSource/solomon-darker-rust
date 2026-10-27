@@ -112,7 +112,10 @@ for(const [name,change] of [
   ['a different captured seek',f=>{f.captured.channels[0].currentTime=12}],
   ['no captured rewind',f=>{f.captured.channels[0].seeking=false}],
   ['an unfinished seek',f=>{f.settled.channels[0].seeking=true}],
+  ['no trusted rewind start',f=>{f.settled.channels[0].events[3].trusted=false}],
+  ['a rewind to another position',f=>{f.settled.channels[0].events[3].currentTime=12}],
   ['no trusted seek completion',f=>{f.settled.channels[0].events[4].trusted=false}],
+  ['seek completion of another source',f=>{f.settled.channels[0].events[4].url+='?other'}],
   ['playback preceding seek completion',f=>{
     const events=f.settled.channels[0].events;[events[4],events[5]]=[events[5],events[4]];
   }],
