@@ -10,15 +10,14 @@ permissions:
 
 jobs:
   capture:
-    if: false
-    name: Windows settings trace (${{ matrix.attempt }})
+    name: Windows stock image cancellation RED
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         budget: [120000]
-        attempt: [8]
+        attempt: [9]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -35,41 +34,14 @@ jobs:
           path: web/dist
           run-id: 40410527545
           github-token: ${{ github.token }}
-      - name: Measure HTTP listen queue under an asset connection burst
+      - name: Provide the measured larger diagnostic listen queue
         shell: python
         run: |
-          import concurrent.futures,http.server,socket,threading,time,json
           from pathlib import Path
-          output=Path('reports/capture');output.mkdir(parents=True,exist_ok=True)
-          rows=[]
-          class Handler(http.server.BaseHTTPRequestHandler):
-              def do_HEAD(self):
-                  self.send_response(200);self.end_headers()
-              def log_message(self,*args):
-                  pass
-          for backlog in (5,128,5,128):
-              class Server(http.server.ThreadingHTTPServer):
-                  request_queue_size=backlog
-              server=Server(('127.0.0.1',0),Handler)
-              thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
-              barrier=threading.Barrier(32)
-              def request(_):
-                  barrier.wait()
-                  try:
-                      with socket.create_connection(server.server_address,timeout=3) as client:
-                          client.sendall(b'HEAD / HTTP/1.0\r\nHost: localhost\r\n\r\n')
-                          return {'status':client.recv(1024).split(b'\r\n')[0].decode()}
-                  except OSError as error:
-                      return {'error':str(error),'code':getattr(error,'winerror',None)}
-              with concurrent.futures.ThreadPoolExecutor(max_workers=32) as pool:
-                  results=list(pool.map(request,range(32)))
-              server.shutdown();server.server_close();thread.join()
-              rows.append({'backlog':backlog,'requests':len(results),'errors':[r for r in results if 'error' in r]})
-          (output/'listen-queue-probe.json').write_text(json.dumps(rows,indent=2)+'\n');print(json.dumps(rows))
-          source=Path('scripts/serve-client.py');text=source.read_text()
+          p=Path('scripts/serve-client.py');text=p.read_text()
           needle='    runpy.run_module("http.server", run_name="__main__")'
           assert text.count(needle)==1
-          source.write_text(text.replace(needle,'    import http.server\n    http.server.ThreadingHTTPServer.request_queue_size = 128\n'+needle))
+          p.write_text(text.replace(needle,'    import http.server\n    http.server.ThreadingHTTPServer.request_queue_size = 128\n'+needle))
       - name: Measure the existing browser journey
         shell: pwsh
         run: |
@@ -102,7 +74,7 @@ jobs:
             if (!$ready) { throw "The owned server did not become ready: $lastStartupError" }
             @{ elapsedMs = $startup.ElapsedMilliseconds; status = $response.StatusCode } | ConvertTo-Json | Set-Content reports/capture/server-ready.json
             $env:CAPTURE_JOURNEY = 'settings-parity'
-            node tools/browser-smoke/diagnose-screenshot.cjs
+            node tools/browser-smoke/image-load-failure.cjs
             if ($LASTEXITCODE) { throw 'Settings journey failed; inspect retained timings.' }
           } finally {
             $server.Refresh()
@@ -459,6 +431,7 @@ jobs:
           if-no-files-found: error
 
   native-admission-green:
+    if: false
     name: Windows native admission fix validation
     runs-on: windows-latest
     timeout-minutes: 40
