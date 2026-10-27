@@ -303,6 +303,10 @@ impl Game {
                         frame,
                         hosted,
                     } => {
+                        eprintln!(
+                            "ADMISSION_DIAGNOSTIC {:.3} Game received welcome (queued at {received_at_ms:.3})",
+                            crate::platform::monotonic_ms(),
+                        );
                         if let Some(loading) = &mut self.match_loading {
                             loading.advance(MatchLoadingStage::ReceivingHostCheckpoint);
                         }
@@ -330,7 +334,15 @@ impl Game {
                         #[cfg(target_arch = "wasm32")]
                         let keep_resume = keep_resume && !self.is_editor_test();
                         if keep_resume {
+                            eprintln!(
+                                "ADMISSION_DIAGNOSTIC {:.3} Game remembering resume",
+                                crate::platform::monotonic_ms(),
+                            );
                             network::remember_resume(&credentials)?;
+                            eprintln!(
+                                "ADMISSION_DIAGNOSTIC {:.3} Game remembered resume",
+                                crate::platform::monotonic_ms(),
+                            );
                         }
                         let native = self.native.as_mut().unwrap();
                         native.resume = Some(credentials.clone());

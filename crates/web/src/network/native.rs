@@ -79,6 +79,11 @@ impl NativeConnection {
         let delivery = Arc::new(Mutex::new(Delivery::default()));
         let mut core =
             ConnectionCore::new(delivery.clone(), welcome, crate::platform::monotonic_ms());
+        eprintln!(
+            "ADMISSION_DIAGNOSTIC {:.3} {:p} connecting welcome={welcome}",
+            crate::platform::monotonic_ms(),
+            Arc::as_ptr(&delivery),
+        );
         let (commands, receiver) = mpsc::channel(MAX_RELIABLE_EVENTS);
         let (stop, stopping) = watch::channel(false);
         let worker = std::thread::Builder::new()
@@ -119,6 +124,17 @@ impl NativeConnection {
 
     fn command(&self, command: Command) -> Result<(), String> {
         if !self.is_open() {
+            let kind = match &command {
+                Command::Send(_) => "send",
+                Command::AcceptWelcome => "accept_welcome",
+                Command::StartPing(_) => "start_ping",
+            };
+            eprintln!(
+                "ADMISSION_DIAGNOSTIC {:.3} {:p} rejected command={kind}\n{}",
+                crate::platform::monotonic_ms(),
+                Arc::as_ptr(&self.delivery),
+                std::backtrace::Backtrace::force_capture(),
+            );
             return Err("The game host is not connected".into());
         }
         self.commands.try_send(command).map_err(|error| match error {
@@ -131,6 +147,13 @@ impl NativeConnection {
 
     pub fn send(&self, message: &ClientMessage) -> Result<(), String> {
         if !self.is_open() {
+            eprintln!(
+                "ADMISSION_DIAGNOSTIC {:.3} {:p} rejected message={:?}\n{}",
+                crate::platform::monotonic_ms(),
+                Arc::as_ptr(&self.delivery),
+                std::mem::discriminant(message),
+                std::backtrace::Backtrace::force_capture(),
+            );
             return Err("The game host is not connected".into());
         }
         let text = encode(message)?;

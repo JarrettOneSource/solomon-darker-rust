@@ -44,12 +44,23 @@ impl ConnectionCore {
     }
 
     pub fn opened(&mut self) {
+        eprintln!(
+            "ADMISSION_DIAGNOSTIC {:.3} {:p} opened deadline={:?}",
+            crate::platform::monotonic_ms(),
+            Arc::as_ptr(&self.delivery),
+            self.welcome_deadline,
+        );
         let mut delivery = self.delivery.lock().unwrap();
         delivery.open = true;
         delivery.poll.events.push(NetworkEvent::Opened);
     }
 
     pub fn closed(&mut self, code: u16, reason: String) {
+        eprintln!(
+            "ADMISSION_DIAGNOSTIC {:.3} {:p} closed code={code} reason={reason}",
+            crate::platform::monotonic_ms(),
+            Arc::as_ptr(&self.delivery),
+        );
         self.clear();
         let mut delivery = self.delivery.lock().unwrap();
         delivery.open = false;
@@ -57,6 +68,12 @@ impl ConnectionCore {
     }
 
     pub fn fail(&mut self, reason: String) {
+        eprintln!(
+            "ADMISSION_DIAGNOSTIC {:.3} {:p} fail reason={reason} deadline={:?}",
+            crate::platform::monotonic_ms(),
+            Arc::as_ptr(&self.delivery),
+            self.welcome_deadline,
+        );
         if self.failed {
             return;
         }
@@ -87,11 +104,27 @@ impl ConnectionCore {
             .snapshots
             .decode::<Box<GameCheckpoint>>(text)
             .map_err(|error| format!("The game host sent an invalid message: {error}"))?;
+        if let ServerMessage::WelcomeChunk { offset, total_length, data } = &message {
+            eprintln!(
+                "ADMISSION_DIAGNOSTIC {:.3} {:p} welcome chunk offset={offset} length={} total={total_length}",
+                crate::platform::monotonic_ms(),
+                Arc::as_ptr(&self.delivery),
+                data.len(),
+            );
+        }
         let reception = self.receiver.receive(message)?;
         if matches!(reception.acknowledgement, Some(ClientMessage::WelcomeChunkAck { .. })) {
             self.welcome_deadline = Some(welcome_expires(now));
         }
         if let Some(message) = reception.message {
+            if matches!(&message, ServerMessage::Welcome { .. }) {
+                eprintln!(
+                    "ADMISSION_DIAGNOSTIC {:.3} {:p} welcome decoded deadline={:?}",
+                    crate::platform::monotonic_ms(),
+                    Arc::as_ptr(&self.delivery),
+                    self.welcome_deadline,
+                );
+            }
             let mut delivery = self.delivery.lock().unwrap();
             match message {
                 ServerMessage::Pong { nonce } => {
@@ -121,6 +154,12 @@ impl ConnectionCore {
     }
 
     pub fn accept_welcome(&mut self) -> Option<ClientMessage> {
+        eprintln!(
+            "ADMISSION_DIAGNOSTIC {:.3} {:p} welcome accepted deadline={:?}",
+            crate::platform::monotonic_ms(),
+            Arc::as_ptr(&self.delivery),
+            self.welcome_deadline,
+        );
         self.welcome_deadline = None;
         self.receiver
             .take_welcome_acknowledgement()
