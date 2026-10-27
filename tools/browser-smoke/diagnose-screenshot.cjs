@@ -11,7 +11,7 @@ assert.ok(Number.isFinite(budget)&&budget>0);
 globalThis.__solomonScreenshotTrace=event=>{
   const row={elapsedMs:Math.round(performance.now()-started),...event};
   fs.appendFileSync(path.join(out,'capture-timing.jsonl'),JSON.stringify(row)+'\n');
-  console.log(JSON.stringify(row));
+  if(!event.kind||event.state?.ready===true||event.durationMs>5000)console.log(JSON.stringify(row));
 };
 const trace=globalThis.__solomonScreenshotTrace;
 
@@ -135,6 +135,12 @@ gpu.controller=async(page,buttons=[],...args)=>{
   trace({event:'controller-start',buttons});
   const result=await controller(page,buttons,...args);
   trace({event:'controller-complete',buttons,durationMs:Math.round(performance.now()-operationStarted)});
+  return result;
+};
+const ready=gpu.ready;
+gpu.ready=async(page,...args)=>{
+  const result=await ready(page,...args);
+  await page.screenshot({timeout:budget,path:path.join(out,'ready-title.png')});
   return result;
 };
 const click=gpu.click;
