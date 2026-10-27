@@ -1,4 +1,4 @@
-name: Verify native failure recovery and real browser continuation
+name: Verify retired music seek and real browser continuation
 on:
   push:
     branches: [diagnostic/windows-browser-capture-20261026]
@@ -11,88 +11,6 @@ env:
   CARGO_PROFILE_TEST_DEBUG: '0'
   RUST_BACKTRACE: '1'
 jobs:
-  native-fatal-status:
-    runs-on: windows-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: b8e90930e195b8f74e8492bd0bc6f0c8486940fa
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
-        with:
-          setup-window-manager: 'true'
-      - run: python -m pip install -r tools/desktop-smoke-requirements.txt
-      - uses: ssciwr/setup-mesa-dist-win@2dfeaebfa514f74c2b8cd8d27108c31486d33e72
-        with:
-          version: '26.0.3'
-      - name: Select native Windows Perl
-        shell: pwsh
-        run: |
-          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
-          if (!$nativePerl) { throw 'Native Perl is unavailable.' }
-          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - run: rustup show
-      - uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: native-audio-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-ebeea4e7479e56e6847ca777af4ed7314f0b2916
-          restore-keys: |
-            native-audio-${{ runner.os }}-${{ runner.arch }}-
-            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-            native-${{ runner.os }}-${{ runner.arch }}-
-      - name: Install verified private fixture
-        shell: python
-        run: |
-          from pathlib import Path
-          import os,subprocess,hashlib,json
-          revision=os.environ['GITHUB_SHA']
-          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          hashes={'tools/diagnostic-native-audio.py': 'c92709243b717c6a9242468a7fb2d351a9a380f663c55262e6b265f3479b0987', 'tools/diagnostic-native-audio.rs': '879ce1543719f08c956c920e7969631f19ad1e0336a80994985ba57660b492ac', 'tools/diagnostic-fatal-status.patch': '4b6267403035c41a6636fec31e69ae1427d151e00fa68727dcfd3193b5ccb254', 'tools/diagnostic-fatal-status.py': '1b5682c3fa277d27158b44c36a3cdb170df78faf1605637c3ab58b7d71dc6e9b'}
-          for name,digest in hashes.items():
-              data=subprocess.check_output(['git','show',revision+':'+name])
-              assert hashlib.sha256(data).hexdigest()==digest,name
-              Path(name).write_bytes(data)
-          out=Path('reports/native-fatal-status');out.mkdir(parents=True,exist_ok=True)
-          (out/'source.json').write_text(json.dumps({'base':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','fixtureRevision':revision,'fixtureHashes':hashes},indent=2)+'\n')
-      - name: Apply the already-verified error handling and layout
-        shell: python
-        run: |
-          import subprocess
-          for script,mode in [('tools/diagnostic-native-audio.py','red'),('tools/diagnostic-native-audio.py','green'),('tools/diagnostic-fatal-status.py','red'),('tools/diagnostic-fatal-status.py','green')]:
-              subprocess.run(['python',script,mode],check=True)
-      - name: Build the private fatal-frame fixture
-        shell: pwsh
-        run: |
-          python tools/diagnostic-fatal-status.py inject
-          if ($LASTEXITCODE) { throw 'Fixture installation failed.' }
-          node tools/package-desktop.mjs --platform win32 --arch x64 --release-repository "$env:GITHUB_REPOSITORY"
-          if ($LASTEXITCODE) { throw 'Native fixture build failed.' }
-      - name: Verify actual error visibility and save before returning to launcher
-        shell: python
-        run: |
-          from pathlib import Path
-          import os,subprocess
-          env=os.environ.copy();env['SDR_DESKTOP_EVIDENCE']=str(Path('reports/native-fatal-status/journey').resolve())
-          env['SDR_FATAL_STATUS_TRIGGER']=str(Path('reports/native-fatal-status/trigger').resolve())
-          subprocess.run(['python','tools/smoke-desktop-runtime.py'],env=env,check=True)
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: native-fatal-status-windows
-          path: reports/native-fatal-status
-          if-no-files-found: error
-
   browser-admission:
     runs-on: windows-latest
     timeout-minutes: 50
@@ -153,7 +71,7 @@ jobs:
           (output/'checkout-verification.json').write_text(json.dumps({'canonicalSourceHashesMatch':True,'onlyLineEndingsDiffer':line_endings},indent=2)+'\n')
           revision=os.environ['GITHUB_SHA']
           subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          fixtures={'tools/browser-smoke/native-admission-acceptance.cjs': 'addd82bc3d024c44921d06b3550896edad22fe2d8366f5ab33110d8472111d86', 'tools/browser-smoke/native-admission-windows.py': 'fceae648a3aa8f3bdb1f61a10c2ed97fde09cda73eeb1570b1f1e002a1dd0489', 'tools/browser-smoke/browser-lifecycle.cjs': '5612c45de33878934cf2af94890296669565e407afb5777778e92a482e55642b', 'tools/browser-smoke/browser-errors.cjs': '14bddcb38b05ac5b9d932af6d5d69c6990ee04b54ab90d5b37e266c2cbee3ab0'}
+          fixtures={'tools/browser-smoke/native-admission-acceptance.cjs': 'addd82bc3d024c44921d06b3550896edad22fe2d8366f5ab33110d8472111d86', 'tools/browser-smoke/native-admission-windows.py': 'fceae648a3aa8f3bdb1f61a10c2ed97fde09cda73eeb1570b1f1e002a1dd0489', 'tools/browser-smoke/browser-lifecycle.cjs': '5612c45de33878934cf2af94890296669565e407afb5777778e92a482e55642b', 'tools/browser-smoke/browser-errors.cjs': '14bddcb38b05ac5b9d932af6d5d69c6990ee04b54ab90d5b37e266c2cbee3ab0', 'tools/browser-smoke/browser-errors.test.cjs': 'a184b49a7d58a4a865be331b5317a26cb7bf7ab9c6f4ca82c4c4298c6af3e52a', 'tools/browser-smoke/diagnostic-browser-errors-green.cjs': '19e152ae17d7587f76da6b81652dfffc2c9ea7627330167091dabcd27f942e0d', 'tools/browser-smoke/diagnostic-retired-rewind.json': 'd3050c5bb86f496a2b364155e851ca3782ce0d1daa1171d44dd342fd3e25a086'}
           for name,digest in fixtures.items():
               data=subprocess.check_output(['git','show',revision+':'+name])
               assert hashlib.sha256(data).hexdigest()==digest,name
@@ -161,6 +79,28 @@ jobs:
           shutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)
           receipt={'hostSource':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','browserRun':40432773454,'browserSourceMatchesHostCheckout':True,'fixtureRevision':revision,'fixtureHashes':fixtures}
           (output/'source.json').write_text(json.dumps(receipt,indent=2)+'\n')
+      - name: Prove the captured rewind is rejected before the correction
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess
+          result=subprocess.run(['node','--test','tools/browser-smoke/browser-errors.test.cjs'],capture_output=True,text=True)
+          Path('reports/browser-admission/red.log').write_text(result.stdout+result.stderr)
+          print(result.stdout+result.stderr)
+          assert result.returncode!=0,'The original classifier unexpectedly passed'
+          assert 'not ok' in result.stdout and 'replacement retires a loaded channel whose paused rewind is still seeking' in result.stdout
+      - name: Verify corrected classification, strict rejection cases and captured evidence
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess,shutil
+          shutil.copyfile('tools/browser-smoke/diagnostic-browser-errors-green.cjs','tools/browser-smoke/browser-errors.cjs')
+          result=subprocess.run(['npm.cmd','run','test:browser-support'],capture_output=True,text=True)
+          Path('reports/browser-admission/green.log').write_text(result.stdout+result.stderr)
+          print(result.stdout+result.stderr)
+          assert result.returncode==0,'Browser support regression failed'
+          script="const fs=require('node:fs'),assert=require('node:assert/strict');const {documentRetirement,residentSuspension}=require('./tools/browser-smoke/browser-errors.cjs');const {row}=require('./tools/browser-smoke/diagnostic-retired-rewind.json');const f={...row.failure,status:row.status,errorText:row.failure.failure.errorText};assert.equal(residentSuspension(f,row.retirement.before,row.retirement.before),null);const result=documentRetirement(f,row.retirement);assert.equal(result?.reason,'loaded resident channel rewinding during the observed document replacement');fs.writeFileSync('reports/browser-admission/captured-rewind.json',JSON.stringify(result,null,2)+'\n');"
+          subprocess.run(['node','-e',script],check=True)
       - name: Build the unchanged real Windows authority
         run: cargo build --locked -p solomon-launcher --bin solomon-darker
       - name: Record the real host executable

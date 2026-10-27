@@ -101,6 +101,40 @@ test('an exact pending request retired by a proved replacement keeps its old cha
     'ready resident channel retired by the observed document replacement');
 });
 
+function rewindingRetirement() {
+  const {failure,captured}=evidence();
+  failure.status=206;
+  const channel=captured.channels[0];
+  Object.assign(channel,{paused:true,currentTime:0,seeking:true,ready:1,network:2});
+  channel.events.push({type:'seeking',trusted:true,paused:true,currentTime:0,seeking:true});
+  return {failure,retirement:{kind:'document-replacement',pendingRequest:true,
+    completed:true,before:captured,beforeTargetId:123,afterTargetId:124}};
+}
+
+test('replacement retires a loaded channel whose paused rewind is still seeking',()=>{
+  const {failure,retirement}=rewindingRetirement();
+  assert.deepEqual(documentRetirement(failure,retirement),{cue:'death',channelId:3,
+    documentId:123,reason:'loaded resident channel rewinding during the observed document replacement'});
+  // An unfinished seek in the current document is not an idle suspension.
+  assert.equal(residentSuspension(failure,retirement.before,retirement.before),null);
+});
+
+for(const [name,change] of [
+  ['an unfinished replacement',f=>{f.retirement.completed=false}],
+  ['a request outside the pending set',f=>{f.retirement.pendingRequest=false}],
+  ['a real network failure',f=>{f.failure.errorText='net::ERR_CONNECTION_RESET'}],
+  ['a failed HTTP response',f=>{f.failure.status=503}],
+  ['a channel that never loaded',f=>{f.retirement.before.channels[0].events.splice(1,1)}],
+  ['an unobserved seek',f=>{f.retirement.before.channels[0].events.pop()}],
+  ['a fabricated seek',f=>{f.retirement.before.channels[0].events.at(-1).trusted=false}],
+  ['a completed seek',f=>{f.retirement.before.channels[0].events.push({type:'seeked',trusted:true})}],
+  ['a media error',f=>{f.retirement.before.channels[0].error=3}],
+  ['a media abort',f=>{f.retirement.before.channels[0].events.push({type:'abort',trusted:true})}],
+])test(`a retired rewind does not excuse ${name}`,()=>{
+  const fixture=rewindingRetirement();change(fixture);
+  assert.equal(documentRetirement(fixture.failure,fixture.retirement),null);
+});
+
 for(const [name,change] of [
   ['failed navigation',r=>{r.completed=false}],
   ['same-document navigation',r=>{r.afterTargetId=r.beforeTargetId}],
