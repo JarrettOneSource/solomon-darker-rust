@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   capture:
+    if: false
     name: Windows settings trace (${{ matrix.attempt }})
     runs-on: windows-latest
     timeout-minutes: 15
@@ -78,4 +79,111 @@ jobs:
         with:
           name: settings-trace-${{ matrix.attempt }}
           path: reports/capture
+          if-no-files-found: error
+
+  hosted-transfer:
+    name: Windows checkpoint transfer trace
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      RUST_BACKTRACE: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 10f8aa7c7bfec6818de19edde26543b3be8bae23
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Select native Windows Perl
+        shell: pwsh
+        run: |
+          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
+          if (!$nativePerl) { throw 'The runner has no Strawberry Perl installation.' }
+          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
+      - name: Restore exact main native build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-10f8aa7c7bfec6818de19edde26543b3be8bae23
+      - run: rustup show
+      - name: Measure checkpoint progress and acknowledgement work
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib,os,subprocess,time,json
+          root=Path.cwd()
+          output=root/'reports/hosted-transfer'
+          output.mkdir(parents=True,exist_ok=True)
+          source=root/'crates/launcher/tests/hosted_supervisor.rs'
+          original=source.read_bytes()
+          text=source.read_text()
+          needle='        let progress_before = self.save_progress;\n        let deadline = Instant::now() + Duration::from_secs(8);'
+          replacement='''        let progress_before = self.save_progress;
+                  let diagnostic_start = Instant::now();
+                  let diagnostic_id = self as *const Self as usize;
+                  let deadline = diagnostic_start + Duration::from_secs(30);
+                  eprintln!("TRANSFER_DIAGNOSTIC wait client={diagnostic_id} progress={progress_before:?}");'''
+          assert text.count(needle)==1
+          text=text.replace(needle,replacement)
+          needle='                    self.save_progress = Some((sequence, received, total));'
+          replacement=needle+'\n                    eprintln!("TRANSFER_DIAGNOSTIC progress client={diagnostic_id} ms={} sequence={sequence} received={received} total={total}", diagnostic_start.elapsed().as_millis());'
+          assert text.count(needle)==1
+          text=text.replace(needle,replacement)
+          needle='                    if accept(&message) {\n                        return *message;\n                    }'
+          replacement='''                    if accept(&message) {
+                                  if matches!(&*message, ServerMessage::Hosted { message: HostedServerMessage::SaveCheckpoint { .. } }) {
+                                      eprintln!("TRANSFER_DIAGNOSTIC complete client={diagnostic_id} ms={} progress={:?}", diagnostic_start.elapsed().as_millis(), self.save_progress);
+                                  }
+                                  return *message;
+                              }'''
+          assert text.count(needle)==1
+          text=text.replace(needle,replacement)
+          needle='''                    let next_offset = offset + data.len();
+                              let _ = observations.send(ClientObservation::SaveProgress'''
+          replacement='''                    let diagnostic_received = Instant::now();
+                              let next_offset = offset + data.len();
+                              let _ = observations.send(ClientObservation::SaveProgress'''
+          assert text.count(needle)==1
+          text=text.replace(needle,replacement)
+          needle='''                    let Some(complete) = complete else {
+                                  continue;
+                              };
+                              saved = sequence;'''
+          replacement='''                    eprintln!("TRANSFER_DIAGNOSTIC acknowledged sequence={sequence} offset={offset} total={total_length} micros={}", diagnostic_received.elapsed().as_micros());
+                              let Some(complete) = complete else {
+                                  continue;
+                              };
+                              saved = sequence;'''
+          assert text.count(needle)==1
+          text=text.replace(needle,replacement)
+          source.write_text(text)
+          base=['cargo','test','-p','solomon-launcher','--test','hosted_supervisor','--all-features']
+          rows=[]
+          try:
+           for index,mode in enumerate(['suite','isolated','suite'],1):
+            cmd=base+(['supervisor_replays_source_http_colleges_broker_and_party_membership','--','--exact','--nocapture'] if mode=='isolated' else ['--','--nocapture'])
+            started=time.monotonic();log=output/f'{index}-{mode}.log'
+            with log.open('w') as out:
+             result=subprocess.run(cmd,cwd=root,stdout=out,stderr=subprocess.STDOUT)
+            row={'attempt':index,'mode':mode,'exit':result.returncode,'elapsedSeconds':round(time.monotonic()-started,3),'log':log.name}
+            rows.append(row);print(json.dumps(row),flush=True)
+          finally:
+           source.write_bytes(original)
+           assert source.read_bytes()==original
+           receipt={'privateDiagnostic':True,'revision':'10f8aa7c7bfec6818de19edde26543b3be8bae23','changes':'Only test observation deadline 8 to30 seconds and progress/ACK timing; production runtime unchanged.','sourceRestoredSha256':hashlib.sha256(source.read_bytes()).hexdigest(),'attempts':rows,'cpuCount':os.cpu_count()}
+           (output/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
+           print('Original test source restored',flush=True)
+          raise SystemExit(any(r['exit'] for r in rows))
+      - name: Retain transfer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-transfer-windows
+          path: reports/hosted-transfer
           if-no-files-found: error
