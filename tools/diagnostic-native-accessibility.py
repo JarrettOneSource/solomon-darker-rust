@@ -7,7 +7,7 @@ import subprocess
 import sys
 
 mode = sys.argv[1]
-assert mode in ("capture", "cleanup", "ordinary"), mode
+assert mode in ("capture", "cleanup", "ordinary", "observed"), mode
 original = Path("tools/smoke-desktop-runtime.py").read_bytes()
 assert hashlib.sha256(original).hexdigest() == "7a94572aaebcc84c393738aa334368aa9836d04de83d1bbbd4dc845186a914fa"
 source = original.decode()
@@ -21,7 +21,7 @@ assert source.count(old) == 1
 source = source.replace(old, new)
 fixed_hash = hashlib.sha256(source.encode()).hexdigest()
 
-if mode == "capture":
+if mode in ("capture", "observed"):
     proxy = '''
 class CaptureReadProbe:
     def __init__(self, app):
@@ -47,6 +47,43 @@ elif mode == "cleanup":
     needle = "    # Closing inventory starts the ordinary two-second shared resume hold.\n"
     assert source.count(needle) == 1
     source = source.replace(needle, '    raise RuntimeError("PRIVATE_DIAGNOSTIC_PEER_CAPTURE_FAILURE")\n' + needle)
+
+if mode in ("capture", "observed"):
+    probe = """
+def peer_input_probe(app, baseline_x):
+    app.activate()
+    started = time.monotonic()
+    samples = []
+    row = {"name": app.name, "baselineX": baseline_x, "mode": PEER_INPUT_MODE,
+           "samples": samples}
+    RECEIPT.setdefault("peerInputProbe", []).append(row)
+    INPUT.key_down("d")
+    try:
+        while True:
+            document = save_record(app.profile)[1]
+            location = player(document)["locomotions"]
+            elapsed = time.monotonic() - started
+            samples.append({"elapsed": elapsed,
+                            "tick": document["continuation"]["simulation"]["tick"],
+                            "position": location["position"],
+                            "heading": location["headingDegrees"],
+                            "gait": location["gaitDegrees"]})
+            if PEER_INPUT_MODE == "capture" and elapsed >= 1.2:
+                break
+            if PEER_INPUT_MODE == "observed" and location["position"]["x"] > baseline_x + 10:
+                break
+            if elapsed >= 10:
+                raise TimeoutError(f"No durable movement for {app.name} during the held key")
+            time.sleep(0.1)
+    finally:
+        INPUT.key_up("d")
+        row["heldSeconds"] = time.monotonic() - started
+
+"""
+    source = source.replace("class Application:\n", "PEER_INPUT_MODE = " + repr(mode) + "\n" + probe + "class Application:\n", 1)
+    needle = '        app.hold("d", 1.2)\n'
+    assert source.count(needle) == 1
+    source = source.replace(needle, '        peer_input_probe(app, before_x[app.name])\n')
 
 # Keep the final durable records before the ordinary driver removes its profiles.
 needle = "    shutil.rmtree(PROFILES)\n"
@@ -89,7 +126,7 @@ else:
     assert len(receipt["exits"]) == 6 and receipt["cleanup"] == [], receipt
     assert receipt["peer"]["hostInventoryOpened"]
     assert (out / "peer-guest-boneyard.txt").is_file()
-    if mode == "capture":
+    if mode in ("capture", "observed"):
         assert receipt["injectedCaptureReadFailures"] == 1, receipt
         assert any("private one-shot capture check" in row for row in receipt["accessibilityReadRetries"]), receipt
 verification = {"mode": mode, "status": "passed", "driverExit": result.returncode,

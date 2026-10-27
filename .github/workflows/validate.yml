@@ -1,19 +1,17 @@
-name: Verify native fatal-screen input and durable recovery
+name: Observe native peer input while checking capture recovery
 on:
   push:
     branches: [diagnostic/windows-browser-capture-20261026]
 permissions:
   contents: read
   actions: read
-env:
-  CARGO_INCREMENTAL: '0'
-  CARGO_PROFILE_DEV_DEBUG: '0'
-  CARGO_PROFILE_TEST_DEBUG: '0'
-  RUST_BACKTRACE: '1'
 jobs:
-  native-fatal-status:
-    runs-on: windows-latest
-    timeout-minutes: 90
+  native-accessibility-macos:
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v6
         with:
@@ -21,82 +19,62 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - name: Resolve the accessibility interpreter
+        run: python -c 'import os,sys; print("TCC_CLIENT=" + os.path.realpath(sys.executable))' >> "$GITHUB_ENV"
       - uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
         with:
           setup-window-manager: 'true'
+          macos-tcc-client: ${{ env.TCC_CLIENT }}
       - run: python -m pip install -r tools/desktop-smoke-requirements.txt
-      - uses: ssciwr/setup-mesa-dist-win@2dfeaebfa514f74c2b8cd8d27108c31486d33e72
-        with:
-          version: '26.0.3'
-      - name: Select native Windows Perl
-        shell: pwsh
-        run: |
-          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
-          if (!$nativePerl) { throw 'Native Perl is unavailable.' }
-          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - run: rustup show
-      - uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: native-audio-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-ebeea4e7479e56e6847ca777af4ed7314f0b2916
-          restore-keys: |
-            native-audio-${{ runner.os }}-${{ runner.arch }}-
-            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-            native-${{ runner.os }}-${{ runner.arch }}-
-      - name: Install verified private fixture and recovery input correction
+      - name: Install the verified private driver check
+        id: fixture
         shell: python
         run: |
           from pathlib import Path
-          import os,subprocess,hashlib,json
+          import hashlib,json,os,subprocess
           revision=os.environ['GITHUB_SHA']
           subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          hashes={'tools/diagnostic-failure-input.patch': '77627e0cf2d193fda1a02a8b0bbb10fc26f7c08e2f763b7920d21cb30f2e04b4', 'tools/diagnostic-fatal-journey.py': '13df3010c6507b36e81434c821f2a8cbced11726c27a97fb483ee70214acfdfb', 'tools/diagnostic-fatal-inject.py': '91e2ecefd554356585493505d9152563c1fc2d854eb1991d3828cf5483010692'}
-          for name,digest in hashes.items():
-              data=subprocess.check_output(['git','show',revision+':'+name])
-              assert hashlib.sha256(data).hexdigest()==digest,name
-              Path(name).write_bytes(data)
-          subprocess.run(['git','apply','--check','tools/diagnostic-failure-input.patch'],check=True)
-          subprocess.run(['git','apply','tools/diagnostic-failure-input.patch'],check=True)
-          out=Path('reports/native-fatal-status');out.mkdir(parents=True,exist_ok=True)
-          (out/'source.json').write_text(json.dumps({'base':'33ca699899158bae7d880a5fda605c92849e7eef','originalFailureRun':40454448976,'fixtureRevision':revision,'fixtureHashes':hashes},indent=2)+'\n')
-          (out/'app-input.patch').write_bytes(Path('tools/diagnostic-failure-input.patch').read_bytes())
-      - run: cargo fmt --all -- --check
-      - name: Build the private fatal-frame fixture
-        id: build
-        shell: pwsh
+          name='tools/diagnostic-native-accessibility.py'
+          data=subprocess.check_output(['git','show',revision+':'+name])
+          digest=hashlib.sha256(data).hexdigest()
+          assert digest=='eb1ce3629d6b8f33c10337d7c787c258f0ad3d4c16aafcea7d313ec99295fb46'
+          Path(name).write_bytes(data)
+          out=Path('reports/native-accessibility');out.mkdir(parents=True,exist_ok=True)
+          (out/'source.json').write_text(json.dumps({'sourceRevision':'33ca699899158bae7d880a5fda605c92849e7eef','fixtureRevision':revision,'fixtureSha256':digest,'packageRun':40450038601,'packageArtifact':'unqualified-desktop-darwin-arm64-40450038601-1'},indent=2)+'\n')
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 40450038601
+          name: unqualified-desktop-darwin-arm64-40450038601-1
+          path: retained-package
+      - name: Verify and unpack the unchanged native package
+        id: unpack
+        shell: python
         run: |
-          python tools/diagnostic-fatal-inject.py
-          if ($LASTEXITCODE) { throw 'Fixture installation failed.' }
-          node tools/package-desktop.mjs --platform win32 --arch x64 --release-repository "$env:GITHUB_REPOSITORY"
-          if ($LASTEXITCODE) { throw 'Native fixture build failed.' }
-      - name: Save and return from the fatal screen through accessibility
-        shell: pwsh
-        run: |
-          python -u tools/diagnostic-fatal-journey.py accessibility
-          if ($LASTEXITCODE) { throw 'Accessible fatal recovery failed.' }
-      - name: Save and return from the fatal screen through ordinary mouse input
-        if: always() && steps.build.outcome == 'success'
-        shell: pwsh
-        run: |
-          python -u tools/diagnostic-fatal-journey.py pointer
-          if ($LASTEXITCODE) { throw 'Pointer fatal recovery failed.' }
+          from pathlib import Path
+          import hashlib,json,os,subprocess
+          archive=Path('retained-package/Solomon-Darker-darwin-arm64.zip')
+          expected=Path(str(archive)+'.sha256').read_text().split()[0]
+          with archive.open('rb') as stream:
+              assert hashlib.file_digest(stream,'sha256').hexdigest()==expected
+          inspection=subprocess.check_output(['python','scripts/verify-desktop-archive.py',str(archive)],text=True)
+          report=json.loads(inspection)
+          assert report['revision']=='33ca699899158bae7d880a5fda605c92849e7eef'
+          assert report['nativeSha256']=='a0936ba4defb005abc55299338f1d342ad771e5376d58bacfd822a0002415036'
+          Path('reports/native-accessibility/archive-inspection.json').write_text(inspection)
+          subprocess.run(['ditto','-x','-k',str(archive),'retained-package/unpacked'],check=True)
+          app=Path('retained-package/unpacked/Solomon Darker-darwin-arm64').resolve()
+          with open(os.environ['GITHUB_ENV'],'a') as out:
+              out.write('SDR_DESKTOP_APP='+str(app)+'\n')
+      - name: Record durable input during the original fixed-duration key hold
+        if: always() && steps.fixture.outcome == 'success' && steps.unpack.outcome == 'success'
+        run: python -u tools/diagnostic-native-accessibility.py capture
+      - name: Observe the same input until actual durable movement with a ten-second cap
+        if: always() && steps.fixture.outcome == 'success' && steps.unpack.outcome == 'success'
+        run: python -u tools/diagnostic-native-accessibility.py observed
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: native-fatal-status-windows
-          path: reports/native-fatal-status
+          name: native-accessibility-macos
+          path: reports/native-accessibility
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: native-fatal-fixture-executable
-          path: target/release/solomon-darker-app.exe
-          if-no-files-found: ignore
