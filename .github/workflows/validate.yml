@@ -1,4 +1,4 @@
-name: Diagnose Windows browser capture
+name: Validate proposed browser resource and admission ownership
 
 on:
   push:
@@ -8,21 +8,100 @@ permissions:
   contents: read
   actions: read
 
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  RUST_BACKTRACE: '1'
+
 jobs:
-  capture:
-    name: Windows stock image cancellation RED
-    runs-on: windows-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        budget: [120000]
-        attempt: [9]
+  browser-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: 99a3973a394f320d8875839f61710aa12de6da1e
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - name: Apply and verify exact proposed source
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess,os,json,hashlib
+          revision=os.environ['GITHUB_SHA']
+          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
+          expected={'crates/graphics/src/assets/browser.rs': 'a8b369ee1c594f5abab933286dfc8191b157c53cb4f0d00538351266926013c6', 'crates/web/src/network.rs': '182790f635bebc66329bd01d41634a2cc04a95d68c57e3e8cd2ac5e9eeb62162', 'crates/web/src/network/native.rs': 'bbe1fa4cc36a9a5a16168eb5c41e523b5250913117a327daa53e7d9eb972d898', 'crates/web/src/network/browser.rs': 'c1a666848ae0993b86c78b91337b5a8a03aacfe73e00b85db127d3d7bfdd0f90', 'crates/web/src/network/native/tests.rs': 'abaaa263ffb51dc357e020f80c98ca057252faec802c2dbeb9a41dd9060fbc3c', 'crates/web/src/game/native.rs': '256d426ec56a7c98ea4d3d2a3772335c78aaf42b5730990c6d6ac507e2e1bcbd', 'crates/launcher/src/host/run_archive/store.rs': '235d5b4520e03ec2e41afc6e3492a61b5eaadf1101cba999df6e7b7e148e5e65', 'crates/launcher/tests/hosted_supervisor.rs': 'bacb64192e79084a1fbbfbd4abb2efdd39fc689dbfd60e8fe3ff8010efbdc202', 'crates/web/src/input.rs': 'e0d7c522598d27591bf24ccd82821ffcf43a37d0046205ca4bd98656e96bf22d', 'crates/sim/src/input/gameplay.rs': '4e1ca7f55b6587d0cfa381f54a778652ecccceabee37b73881a114be74e13802', 'tools/browser-smoke/gpu-ui.cjs': 'd5c623d82c19c409fd0ea0ef48acb44fb7f391af5b662729251d5bf3b72865c3', 'tools/browser-smoke/settings-parity.cjs': '69bd62ad06ac41700f8cd29be3e5baf8e1e23eded62c61d4e01e81e3f0e77e08', 'tools/browser-smoke/image-load-failure.cjs': '6343bdf1e89a4f937b410d8c585554540fa35e53dcaebb571c6e263044ae3a9f'}
+          for name,digest in expected.items():
+              data=subprocess.check_output(['git','show',revision+':'+name])
+              assert hashlib.sha256(data).hexdigest()==digest,name
+              Path(name).write_bytes(data)
+          output=Path('reports/browser-green');output.mkdir(parents=True,exist_ok=True)
+          (output/'source.json').write_text(json.dumps({'base':'99a3973a394f320d8875839f61710aa12de6da1e','proposedSource':revision,'hashes':expected},indent=2)+'\n')
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: rustup show
+      - name: Restore game build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-99a3973a394f320d8875839f61710aa12de6da1e
+          restore-keys: |
+            game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+      - run: cargo install trunk --locked --version 0.22.0
+      - run: npm ci --no-audit --no-fund
+      - run: cargo fmt --all -- --check
+      - run: npm run test:browser-support
+      - run: python3 scripts/verify-client-assets.py
+      - run: cargo clippy -p solomon-web --target wasm32-unknown-unknown -- -D warnings
+      - run: cargo clippy -p solomon-loader --target wasm32-unknown-unknown -- -D warnings
+      - name: Build exact proposed browser
+        run: trunk build --config web/Trunk.toml --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-client-green
+          path: |
+            web/dist/
+            !web/dist/assets/**
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-green-source
+          path: reports/browser-green
+          if-no-files-found: error
+
+  browser-windows:
+    needs: browser-build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 99a3973a394f320d8875839f61710aa12de6da1e
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Apply and verify exact proposed source
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess,os,json,hashlib
+          revision=os.environ['GITHUB_SHA']
+          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
+          expected={'crates/graphics/src/assets/browser.rs': 'a8b369ee1c594f5abab933286dfc8191b157c53cb4f0d00538351266926013c6', 'crates/web/src/network.rs': '182790f635bebc66329bd01d41634a2cc04a95d68c57e3e8cd2ac5e9eeb62162', 'crates/web/src/network/native.rs': 'bbe1fa4cc36a9a5a16168eb5c41e523b5250913117a327daa53e7d9eb972d898', 'crates/web/src/network/browser.rs': 'c1a666848ae0993b86c78b91337b5a8a03aacfe73e00b85db127d3d7bfdd0f90', 'crates/web/src/network/native/tests.rs': 'abaaa263ffb51dc357e020f80c98ca057252faec802c2dbeb9a41dd9060fbc3c', 'crates/web/src/game/native.rs': '256d426ec56a7c98ea4d3d2a3772335c78aaf42b5730990c6d6ac507e2e1bcbd', 'crates/launcher/src/host/run_archive/store.rs': '235d5b4520e03ec2e41afc6e3492a61b5eaadf1101cba999df6e7b7e148e5e65', 'crates/launcher/tests/hosted_supervisor.rs': 'bacb64192e79084a1fbbfbd4abb2efdd39fc689dbfd60e8fe3ff8010efbdc202', 'crates/web/src/input.rs': 'e0d7c522598d27591bf24ccd82821ffcf43a37d0046205ca4bd98656e96bf22d', 'crates/sim/src/input/gameplay.rs': '4e1ca7f55b6587d0cfa381f54a778652ecccceabee37b73881a114be74e13802', 'tools/browser-smoke/gpu-ui.cjs': 'd5c623d82c19c409fd0ea0ef48acb44fb7f391af5b662729251d5bf3b72865c3', 'tools/browser-smoke/settings-parity.cjs': '69bd62ad06ac41700f8cd29be3e5baf8e1e23eded62c61d4e01e81e3f0e77e08', 'tools/browser-smoke/image-load-failure.cjs': '6343bdf1e89a4f937b410d8c585554540fa35e53dcaebb571c6e263044ae3a9f'}
+          for name,digest in expected.items():
+              data=subprocess.check_output(['git','show',revision+':'+name])
+              assert hashlib.sha256(data).hexdigest()==digest,name
+              Path(name).write_bytes(data)
+          output=Path('reports/browser-green');output.mkdir(parents=True,exist_ok=True)
+          (output/'source.json').write_text(json.dumps({'base':'99a3973a394f320d8875839f61710aa12de6da1e','proposedSource':revision,'hashes':expected},indent=2)+'\n')
       - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
@@ -30,474 +109,37 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - uses: actions/download-artifact@v4
         with:
-          name: browser-client
+          name: browser-client-green
           path: web/dist
-          run-id: 40410527545
-          github-token: ${{ github.token }}
-      - name: Provide the measured larger diagnostic listen queue
-        shell: python
-        run: |
-          from pathlib import Path
-          p=Path('scripts/serve-client.py');text=p.read_text()
-          needle='    runpy.run_module("http.server", run_name="__main__")'
-          assert text.count(needle)==1
-          p.write_text(text.replace(needle,'    import http.server\n    http.server.ThreadingHTTPServer.request_queue_size = 128\n'+needle))
-      - name: Measure the existing browser journey
+      - name: Verify failure cleanup, full settings and gameplay on Windows
         shell: pwsh
         run: |
           Copy-Item web/assets -Destination web/dist -Recurse
-          New-Item -ItemType Directory -Force reports/capture | Out-Null
           $env:PW = Join-Path $env:GITHUB_WORKSPACE 'node_modules/playwright-core'
           $env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'
+          if (!(Test-Path $env:CHROME)) { throw 'The Windows runner has no installed Chrome.' }
           $env:URL = 'http://127.0.0.1:4181/'
-          $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/capture/settings'
-          $env:CAPTURE_TIMEOUT_MS = '${{ matrix.budget }}'
-          $server = Start-Process -FilePath (Get-Command python).Source -ArgumentList @('scripts/serve-client.py', '4181', '--bind', '127.0.0.1', '--directory', 'web/dist') -PassThru -RedirectStandardOutput reports/capture/server.log -RedirectStandardError reports/capture/server-error.log
+          $server = Start-Process -FilePath (Get-Command python).Source -ArgumentList @('scripts/serve-client.py', '4181', '--bind', '127.0.0.1', '--directory', 'web/dist') -PassThru -RedirectStandardOutput reports/browser-green/server.log -RedirectStandardError reports/browser-green/server-error.log
           try {
-            $startup = [Diagnostics.Stopwatch]::StartNew()
-            $ready = $false
-            while (!$ready -and $startup.Elapsed.TotalSeconds -lt 60) {
-              if ($server.HasExited) { throw "The owned server exited before listening (code $($server.ExitCode))." }
-              $response = $null
-              try {
-                $response = Invoke-WebRequest -Uri $env:URL -Method Head -TimeoutSec 2 -NoProxy -ErrorAction Stop
-              } catch {
-                if ($_.Exception.Response) { throw }
-                $lastStartupError = $_.Exception.Message
-              }
-              if ($response) {
-                if ($response.StatusCode -ne 200) { throw "Unexpected startup status: $($response.StatusCode)" }
-                $ready = $true
-              }
-              if (!$ready) { Start-Sleep -Milliseconds 200 }
-            }
-            if (!$ready) { throw "The owned server did not become ready: $lastStartupError" }
-            @{ elapsedMs = $startup.ElapsedMilliseconds; status = $response.StatusCode } | ConvertTo-Json | Set-Content reports/capture/server-ready.json
-            $env:CAPTURE_JOURNEY = 'settings-parity'
+            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser-green/image-load-failure'
             node tools/browser-smoke/image-load-failure.cjs
-            if ($LASTEXITCODE) { throw 'Settings journey failed; inspect retained timings.' }
+            if ($LASTEXITCODE) { throw 'Browser asset failure cleanup failed.' }
+            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser-green/settings'
+            node tools/browser-smoke/settings-parity.cjs
+            if ($LASTEXITCODE) { throw 'Browser settings failed.' }
+            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser-green/gameplay'
+            node tools/browser-smoke/smoke.cjs
+            if ($LASTEXITCODE) { throw 'Browser gameplay failed.' }
           } finally {
             $server.Refresh()
-            @{ pid = $server.Id; exitedBeforeCleanup = $server.HasExited; exitCode = $(if ($server.HasExited) { $server.ExitCode } else { $null }) } | ConvertTo-Json | Set-Content reports/capture/server-final.json
+            @{ pid = $server.Id; exitedBeforeCleanup = $server.HasExited; exitCode = $(if ($server.HasExited) { $server.ExitCode } else { $null }) } | ConvertTo-Json | Set-Content reports/browser-green/server-final.json
             if (!$server.HasExited) { Stop-Process -Id $server.Id }
-            if (!$server.WaitForExit(10000)) { throw 'The owned diagnostic server did not exit.' }
+            if (!$server.WaitForExit(10000)) { throw 'The owned browser test server did not exit.' }
           }
-      - name: Retain diagnostic evidence
+      - name: Retain exact-source Windows browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: settings-trace-${{ matrix.attempt }}
-          path: reports/capture
-          if-no-files-found: error
-
-  hosted-transfer:
-    if: false
-    name: Windows exact checkpoint test validation
-    runs-on: windows-latest
-    timeout-minutes: 20
-    env:
-      CARGO_INCREMENTAL: '0'
-      CARGO_PROFILE_DEV_DEBUG: '0'
-      CARGO_PROFILE_TEST_DEBUG: '0'
-      RUST_BACKTRACE: '1'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: 10f8aa7c7bfec6818de19edde26543b3be8bae23
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - name: Select native Windows Perl
-        shell: pwsh
-        run: |
-          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
-          if (!$nativePerl) { throw 'The runner has no Strawberry Perl installation.' }
-          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
-      - name: Restore exact main native build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-10f8aa7c7bfec6818de19edde26543b3be8bae23
-      - run: rustup show
-      - name: Validate exact checkpoint test patch
-        shell: python
-        run: |
-          from pathlib import Path
-          import hashlib,subprocess,time,json
-          root=Path.cwd()
-          output=root/'reports/hosted-transfer'
-          output.mkdir(parents=True,exist_ok=True)
-          source=root/'crates/launcher/tests/hosted_supervisor.rs'
-          original=source.read_bytes()
-          text=source.read_text()
-          needle='    fn until(&mut self, accept: impl Fn(&ServerMessage<Value>) -> bool) -> ServerMessage<Value> {\n        if let Some(index) = self.pending.iter().position(&accept) {'
-          replacement='    fn until(&mut self, accept: impl Fn(&ServerMessage<Value>) -> bool) -> ServerMessage<Value> {\n        self.until_with_timeout(Duration::from_secs(8), accept)\n    }\n\n    #[track_caller]\n    fn until_with_timeout(\n        &mut self,\n        timeout: Duration,\n        accept: impl Fn(&ServerMessage<Value>) -> bool,\n    ) -> ServerMessage<Value> {\n        if let Some(index) = self.pending.iter().position(&accept) {'
-          assert text.count(needle)==1
-          text=text.replace(needle,replacement)
-          needle='        let progress_before = self.save_progress;\n        let deadline = Instant::now() + Duration::from_secs(8);'
-          assert text.count(needle)==1
-          text=text.replace(needle,'        let progress_before = self.save_progress;\n        let deadline = Instant::now() + timeout;')
-          needle='    let ServerMessage::BoneyardLoaded { boneyard: party_world } = message else { unreachable!() };\n    let message = h2.until(|message| {'
-          replacement='    let ServerMessage::BoneyardLoaded { boneyard: party_world } = message else { unreachable!() };\n    // This acknowledged Boneyard transfer measured 8.4 seconds in Windows debug CI.\n    let message = h2.until_with_timeout(Duration::from_secs(30), |message| {'
-          assert text.count(needle)==1
-          text=text.replace(needle,replacement)
-          tested_sha=hashlib.sha256(text.encode()).hexdigest()
-          assert tested_sha=='bacb64192e79084a1fbbfbd4abb2efdd39fc689dbfd60e8fe3ff8010efbdc202'
-          source.write_bytes(text.encode())
-          archive_source=root/'crates/launcher/src/host/run_archive/store.rs'
-          archive_original=archive_source.read_bytes()
-          archive_text=archive_source.read_text()
-          needle='        let mut builder = DirBuilder::new();'
-          assert archive_text.count(needle)==1
-          archive_text=archive_text.replace(needle,'        let builder = &mut DirBuilder::new();')
-          archive_sha=hashlib.sha256(archive_text.encode()).hexdigest()
-          assert archive_sha=='235d5b4520e03ec2e41afc6e3492a61b5eaadf1101cba999df6e7b7e148e5e65'
-          archive_source.write_bytes(archive_text.encode())
-          commands=[
-           ['cargo','fmt','--all','--','--check'],
-           ['cargo','clippy','-p','solomon-launcher','--test','hosted_supervisor','--all-features','--','-D','warnings'],
-           ['cargo','test','--workspace','--all-features'],
-           ['cargo','test','-p','solomon-launcher','--test','hosted_supervisor','--all-features'],
-           ['cargo','test','-p','solomon-launcher','--test','hosted_supervisor','--all-features'],
-          ]
-          rows=[]
-          try:
-           for index,cmd in enumerate(commands,1):
-            started=time.monotonic();log=output/f'{index}-validation.log'
-            with log.open('w') as out:
-             result=subprocess.run(cmd,cwd=root,stdout=out,stderr=subprocess.STDOUT)
-            row={'attempt':index,'command':cmd,'exit':result.returncode,'elapsedSeconds':round(time.monotonic()-started,3),'log':log.name}
-            rows.append(row);print(json.dumps(row),flush=True)
-            if result.returncode: break
-          finally:
-           source.write_bytes(original)
-           archive_source.write_bytes(archive_original)
-           assert source.read_bytes()==original
-           assert archive_source.read_bytes()==archive_original
-           receipt={'baseRevision':'10f8aa7c7bfec6818de19edde26543b3be8bae23','change':'Exact proposed checkpoint test patch plus the Windows directory-builder lint fix; no private instrumentation.','testedSourceSha256':tested_sha,'archiveSourceSha256':archive_sha,'sourceRestoredSha256':hashlib.sha256(source.read_bytes()).hexdigest(),'attempts':rows,'passed':len(rows)==len(commands) and all(r['exit']==0 for r in rows)}
-           (output/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
-           print(json.dumps(receipt),flush=True)
-          raise SystemExit(not receipt['passed'])
-      - name: Retain transfer evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: hosted-transfer-validation-windows
-          path: reports/hosted-transfer
-          if-no-files-found: error
-
-  native-peer:
-    if: false
-    name: Apple silicon peer input trace
-    runs-on: macos-15
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: 99a3973a394f320d8875839f61710aa12de6da1e
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - name: Resolve the accessibility interpreter
-        run: python -c 'import os,sys; print("TCC_CLIENT=" + os.path.realpath(sys.executable))' >> "$GITHUB_ENV"
-      - name: Prepare native accessibility
-        uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
-        with:
-          setup-window-manager: 'true'
-          macos-tcc-client: ${{ env.TCC_CLIENT }}
-      - run: python -m pip install -r tools/desktop-smoke-requirements.txt
-      - uses: actions/download-artifact@v4
-        with:
-          name: unqualified-desktop-darwin-arm64-40421722520-1
-          path: diagnostic-artifact
-          run-id: 40421722520
-          github-token: ${{ github.token }}
-      - name: Check and extract the immutable package
-        shell: python
-        run: |
-          from pathlib import Path
-          import hashlib,subprocess
-          root=Path('diagnostic-artifact')
-          archive=root/'Solomon-Darker-darwin-arm64.zip'
-          expected=(root/'Solomon-Darker-darwin-arm64.zip.sha256').read_text().split()[0]
-          with archive.open('rb') as f:
-              assert hashlib.file_digest(f,'sha256').hexdigest()==expected
-          subprocess.run(['ditto','-x','-k',str(archive),'dist-desktop'],check=True)
-      - name: Observe existing peer input and checkpoints
-        shell: python
-        run: |
-          from pathlib import Path
-          import ast,json,os,subprocess,sys,time
-          source=Path('tools/smoke-desktop-runtime.py')
-          original=source.read_bytes()
-          text=source.read_text()
-          needle='    for app in (host, guest):\n        app.activate()\n        read_ui(app.control("match-loading").wait_detached, timeout=120)'
-          replacement='    RECEIPT["peerStart"] = {"runId": run_id, "beforeX": before_x,\n                            "initialTicks": initial_ticks,\n                            "playing": {app.name: diagnostic_state(app) for app in (host, guest)}}\n    for app in (host, guest):\n        app.activate()\n        read_ui(app.control("match-loading").wait_detached, timeout=120)'
-          assert text.count(needle)==1
-          text=text.replace(needle,replacement)
-          needle='try:\n    check_package()\n    check_offline()\n    check_peers()'
-          replacement='\ndef diagnostic_state(app):\n    record = save_record(app.profile)\n    if record is None:\n        return None\n    document = record[1]\n    return {"revision": record[0]["revision"],\n            "tick": document["continuation"]["simulation"]["tick"],\n            "position": player(document)["locomotions"]["position"]}\n\noriginal_hold = Application.hold\ndef diagnostic_hold(app, key, seconds):\n    row = {"name": app.name, "key": key, "seconds": seconds,\n           "before": diagnostic_state(app)}\n    start = time.monotonic()\n    try:\n        return original_hold(app, key, seconds)\n    finally:\n        row["elapsedSeconds"] = time.monotonic() - start\n        row["after"] = diagnostic_state(app)\n        RECEIPT.setdefault("keyHolds", []).append(row)\n        print("NATIVE_INPUT_DIAGNOSTIC " + json.dumps(row), flush=True)\nApplication.hold = diagnostic_hold\n\noriginal_capture = Application.capture\ndef diagnostic_capture(app, name, activate=True):\n    result = original_capture(app, name, activate)\n    row = {"name": app.name, "capture": name, "after": diagnostic_state(app)}\n    RECEIPT.setdefault("captureStates", []).append(row)\n    print("NATIVE_INPUT_DIAGNOSTIC " + json.dumps(row), flush=True)\n    return result\nApplication.capture = diagnostic_capture\n\n'+'try:\n    check_package()\n    assert MANIFEST["revision"] == "99a3973a394f320d8875839f61710aa12de6da1e"\n    check_peers()'
-          assert text.count(needle)==1
-          text=text.replace(needle,replacement)
-          ast.parse(text)
-          source.write_text(text)
-          rows=[]
-          try:
-           for attempt in (1,2):
-            output=Path('reports/native-peer')/str(attempt)
-            output.mkdir(parents=True,exist_ok=True)
-            env=os.environ.copy();env['SDR_DESKTOP_EVIDENCE']=str(output.resolve())
-            started=time.monotonic()
-            with (output/'driver.log').open('w') as log:
-             result=subprocess.run([sys.executable,str(source)],env=env,stdout=log,stderr=subprocess.STDOUT)
-            row={'attempt':attempt,'exit':result.returncode,'elapsedSeconds':time.monotonic()-started}
-            rows.append(row);print(json.dumps(row),flush=True)
-          finally:
-           source.write_bytes(original)
-           assert source.read_bytes()==original
-           Path('reports/native-peer/diagnostic.json').write_text(json.dumps({'immutablePackage':'99a3973a394f320d8875839f61710aa12de6da1e','changes':'Observe unchanged 1.2-second key holds and saved positions; run only the existing peer journey twice.','attempts':rows},indent=2)+'\n')
-          raise SystemExit(any(row['exit'] for row in rows))
-      - name: Retain native peer evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-peer-trace
-          path: reports/native-peer
-          if-no-files-found: error
-
-  native-admission:
-    if: false
-    name: Intel Mac admission event trace
-    runs-on: macos-15-intel
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: 99a3973a394f320d8875839f61710aa12de6da1e
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - name: Resolve the accessibility interpreter
-        run: python -c 'import os,sys; print("TCC_CLIENT=" + os.path.realpath(sys.executable))' >> "$GITHUB_ENV"
-      - name: Prepare native accessibility
-        uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
-        with:
-          setup-window-manager: 'true'
-          macos-tcc-client: ${{ env.TCC_CLIENT }}
-      - run: python -m pip install -r tools/desktop-smoke-requirements.txt
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-      - run: npm ci --no-audit --no-fund
-      - name: Restore native build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-99a3973a394f320d8875839f61710aa12de6da1e
-          restore-keys: |
-            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-      - run: rustup show
-      - name: Add admission observations only
-        shell: python
-        run: |
-          from pathlib import Path
-          import subprocess
-          output=Path('reports/native-admission')
-          output.mkdir(parents=True,exist_ok=True)
-          def replace(file,old,new):
-              p=Path(file); text=p.read_text(); assert text.count(old)==1,(file,old,text.count(old)); p.write_text(text.replace(old,new))
-          replace('crates/web/src/network.rs',
-              '        let poll = self.connection.poll();',
-              '        let poll = self.connection.poll();\n        if self.first_message.is_some() || !poll.events.is_empty() {\n            let events: Vec<_> = poll.events.iter().map(|event| match event {\n                NetworkEvent::Opened => "opened", NetworkEvent::Closed { .. } => "closed",\n                NetworkEvent::Failed(_) => "failed", NetworkEvent::Message { .. } => "message",\n            }).collect();\n            eprintln!("NATIVE_ADMISSION_DIAGNOSTIC poll ms={} first={} open={} events={events:?}", crate::platform::monotonic_ms(), self.first_message.is_some(), self.connection.is_open());\n        }')
-          replace('crates/web/src/network.rs',
-              '                self.connection.send(&message)?;',
-              '                eprintln!("NATIVE_ADMISSION_DIAGNOSTIC first-send ms={}", crate::platform::monotonic_ms());\n                self.connection.send(&message)?;')
-          replace('crates/web/src/network/connection.rs',
-              '    pub fn opened(&mut self) {',
-              '    pub fn opened(&mut self) {\n        eprintln!("NATIVE_ADMISSION_DIAGNOSTIC opened ms={} deadline={:?}", crate::platform::monotonic_ms(), self.welcome_deadline);')
-          replace('crates/web/src/network/connection.rs',
-              '    pub fn closed(&mut self, code: u16, reason: String) {',
-              '    pub fn closed(&mut self, code: u16, reason: String) {\n        eprintln!("NATIVE_ADMISSION_DIAGNOSTIC closed ms={} code={code} reason={reason}", crate::platform::monotonic_ms());')
-          replace('crates/web/src/network/connection.rs',
-              '    pub fn fail(&mut self, reason: String) {',
-              '    pub fn fail(&mut self, reason: String) {\n        eprintln!("NATIVE_ADMISSION_DIAGNOSTIC failed ms={} reason={reason}", crate::platform::monotonic_ms());')
-          replace('crates/web/src/network/connection.rs',
-              '        if let Some(message) = reception.message {',
-              '        if let Some(message) = reception.message {\n            if matches!(&message, ServerMessage::Welcome { .. }) {\n                eprintln!("NATIVE_ADMISSION_DIAGNOSTIC welcome ms={now} deadline={:?}", self.welcome_deadline);\n            }')
-          replace('crates/web/src/network/connection.rs',
-              '    pub fn accept_welcome(&mut self) -> Option<ClientMessage> {',
-              '    pub fn accept_welcome(&mut self) -> Option<ClientMessage> {\n        eprintln!("NATIVE_ADMISSION_DIAGNOSTIC accepted ms={}", crate::platform::monotonic_ms());')
-          subprocess.run(['cargo','fmt','--all'],check=True)
-          patch=subprocess.check_output(['git','diff','--','crates/web/src/network.rs','crates/web/src/network/connection.rs'],text=True)
-          (output/'source.patch').write_text(patch)
-      - name: Build private observed package
-        run: npm run package:desktop -- --platform darwin --arch x64 --release-repository "$GITHUB_REPOSITORY"
-      - name: Replay unchanged native acceptance twice
-        shell: python
-        run: |
-          from pathlib import Path
-          import json,os,subprocess,sys,time
-          rows=[]
-          for attempt in (1,2):
-              output=Path('reports/native-admission')/str(attempt)
-              output.mkdir(parents=True,exist_ok=True)
-              env=os.environ.copy(); env['SDR_DESKTOP_EVIDENCE']=str(output.resolve())
-              started=time.monotonic()
-              with (output/'driver.log').open('w') as log:
-                  result=subprocess.run([sys.executable,'-u','tools/smoke-desktop-runtime.py'],env=env,stdout=log,stderr=subprocess.STDOUT)
-              row={'attempt':attempt,'exit':result.returncode,'elapsedSeconds':time.monotonic()-started}
-              rows.append(row); print(json.dumps(row),flush=True)
-              Path('reports/native-admission/diagnostic.json').write_text(json.dumps({'baseRevision':'99a3973a394f320d8875839f61710aa12de6da1e','privateObservationBuild':True,'attempts':rows},indent=2)+'\n')
-          raise SystemExit(any(row['exit'] for row in rows))
-      - name: Retain private admission evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-admission-trace
-          path: reports/native-admission
-          if-no-files-found: error
-
-  native-admission-red:
-    if: false
-    name: Windows native admission regression RED
-    runs-on: windows-latest
-    timeout-minutes: 30
-    env:
-      CARGO_INCREMENTAL: '0'
-      CARGO_PROFILE_DEV_DEBUG: '0'
-      CARGO_PROFILE_TEST_DEBUG: '0'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: 99a3973a394f320d8875839f61710aa12de6da1e
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - name: Select native Windows Perl
-        shell: pwsh
-        run: |
-          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
-          if (!$nativePerl) { throw 'The runner has no Strawberry Perl installation.' }
-          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
-      - name: Restore native build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-99a3973a394f320d8875839f61710aa12de6da1e
-          restore-keys: |
-            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-      - run: rustup show
-      - name: Observe proposed admission regression against unchanged runtime
-        shell: python
-        run: |
-          from pathlib import Path
-          import subprocess,time,json
-          output=Path('reports/native-admission-red')
-          output.mkdir(parents=True,exist_ok=True)
-          source=Path('crates/web/src/network/native/tests.rs')
-          original=source.read_bytes()
-          text=source.read_text()
-          needle='#[test]\nfn actual_session_sends_admission_and_retains_the_server_close_reason()'
-          assert text.count(needle)==1
-          regression='#[test]\nfn native_admission_starts_before_the_renderer_polls() {\n    let (admitted, received) = sync::channel();\n    let (endpoint, server) = server(move |mut socket| {\n        let message = socket.read().unwrap();\n        if let Message::Text(text) = message {\n            assert!(matches!(\n                serde_json::from_str::<ClientMessage>(&text).unwrap(),\n                ClientMessage::InspectSession { resume: None }\n            ));\n            admitted.send(()).unwrap();\n            assert!(matches!(socket.read().unwrap(), Message::Close(_)));\n        }\n    });\n    crate::platform::configure_native_location("http://native.test/game/", None).unwrap();\n    let session =\n        NativeSession::connect_to(&endpoint, ClientMessage::InspectSession { resume: None })\n            .unwrap();\n    // The native transport keeps running while an expensive frame occupies the UI.\n    let admission = received.recv_timeout(Duration::from_secs(3));\n    drop(session);\n    server.join().unwrap();\n    assert!(admission.is_ok(), "native admission waited for the renderer to poll");\n}\n\n'
-          source.write_text(text.replace(needle,regression+needle))
-          command=['cargo','test','-p','solomon-web','--lib','--all-features','native_admission_starts_before_the_renderer_polls','--','--nocapture']
-          started=time.monotonic()
-          try:
-              with (output/'regression.log').open('w') as log:
-                  result=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT)
-              log=(output/'regression.log').read_text()
-              expected='native admission waited for the renderer to poll' in log and result.returncode!=0
-              row={'baseRevision':'99a3973a394f320d8875839f61710aa12de6da1e','runtimeUnchanged':True,'command':command,'exit':result.returncode,'expectedFailure':expected,'elapsedSeconds':time.monotonic()-started}
-              (output/'receipt.json').write_text(json.dumps(row,indent=2)+'\n');print(json.dumps(row))
-              assert expected,'Inspect regression.log; the proposed isolated cause was not established.'
-          finally:
-              source.write_bytes(original)
-      - name: Retain regression evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-admission-red
-          path: reports/native-admission-red
-          if-no-files-found: error
-
-  native-admission-green:
-    if: false
-    name: Windows native admission fix validation
-    runs-on: windows-latest
-    timeout-minutes: 40
-    env:
-      CARGO_INCREMENTAL: '0'
-      CARGO_PROFILE_DEV_DEBUG: '0'
-      CARGO_PROFILE_TEST_DEBUG: '0'
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: 99a3973a394f320d8875839f61710aa12de6da1e
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - name: Select native Windows Perl
-        shell: pwsh
-        run: |
-          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
-          if (!$nativePerl) { throw 'The runner has no Strawberry Perl installation.' }
-          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
-      - name: Restore native build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-99a3973a394f320d8875839f61710aa12de6da1e
-          restore-keys: |
-            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-      - run: rustup show
-      - name: Validate exact proposed connection owner
-        shell: python
-        run: |
-          from pathlib import Path
-          import subprocess,time,json,os,hashlib
-          output=Path('reports/native-admission-green');output.mkdir(parents=True,exist_ok=True)
-          revision=os.environ['GITHUB_SHA']
-          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          expected={'crates/web/src/network.rs': '182790f635bebc66329bd01d41634a2cc04a95d68c57e3e8cd2ac5e9eeb62162', 'crates/web/src/network/native.rs': 'bbe1fa4cc36a9a5a16168eb5c41e523b5250913117a327daa53e7d9eb972d898', 'crates/web/src/network/browser.rs': 'c1a666848ae0993b86c78b91337b5a8a03aacfe73e00b85db127d3d7bfdd0f90', 'crates/web/src/network/native/tests.rs': 'abaaa263ffb51dc357e020f80c98ca057252faec802c2dbeb9a41dd9060fbc3c', 'crates/web/src/game/native.rs': '256d426ec56a7c98ea4d3d2a3772335c78aaf42b5730990c6d6ac507e2e1bcbd', 'crates/launcher/src/host/run_archive/store.rs': '235d5b4520e03ec2e41afc6e3492a61b5eaadf1101cba999df6e7b7e148e5e65', 'crates/launcher/tests/hosted_supervisor.rs': 'bacb64192e79084a1fbbfbd4abb2efdd39fc689dbfd60e8fe3ff8010efbdc202'}
-          for name,digest in expected.items():
-              data=subprocess.check_output(['git','show',revision+':'+name])
-              assert hashlib.sha256(data).hexdigest()==digest,name
-              Path(name).write_bytes(data)
-          commands=[
-              ['cargo','fmt','--all','--','--check'],
-              ['cargo','clippy','-p','solomon-web','--all-targets','--all-features','--','-D','warnings'],
-              ['cargo','test','-p','solomon-web','--lib','--all-features','network::','--','--nocapture'],
-              ['cargo','test','--workspace','--all-features'],
-          ]
-          receipt={'baseRevision':'99a3973a394f320d8875839f61710aa12de6da1e','proposedSource':revision,'sourceHashes':expected,'checks':[],'pass':False}
-          try:
-              for number,command in enumerate(commands,1):
-                  start=time.monotonic()
-                  with (output/f'{number}-validation.log').open('w') as log:
-                      result=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT)
-                  row={'command':command,'exit':result.returncode,'elapsedSeconds':time.monotonic()-start}
-                  receipt['checks'].append(row);print(json.dumps(row),flush=True)
-                  assert result.returncode==0,f'Check{number} failed'
-              receipt['pass']=True
-          finally:
-              (output/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
-      - name: Retain connection validation evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-admission-green
-          path: reports/native-admission-green
+          name: browser-green-windows
+          path: reports/browser-green
           if-no-files-found: error
