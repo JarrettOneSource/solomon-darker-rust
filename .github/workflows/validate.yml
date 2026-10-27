@@ -83,8 +83,14 @@ jobs:
           import hashlib,json,os,subprocess,shutil
           root=Path.cwd();output=Path('reports/browser-admission')
           source=json.loads((output/'browser-source/source.json').read_text())
+          line_endings=[]
           for name,digest in source['hashes'].items():
-              assert hashlib.sha256(Path(name).read_bytes()).hexdigest()==digest,name
+              canonical=subprocess.check_output(['git','show','HEAD:'+name])
+              actual=Path(name).read_bytes()
+              assert hashlib.sha256(canonical).hexdigest()==digest,name
+              assert actual.replace(b'\r\n',b'\n')==canonical,name
+              if actual!=canonical: line_endings.append(name)
+          (output/'checkout-verification.json').write_text(json.dumps({'canonicalSourceHashesMatch':True,'onlyLineEndingsDiffer':line_endings},indent=2)+'\n')
           revision=os.environ['GITHUB_SHA']
           subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
           fixtures={'tools/browser-smoke/native-admission-acceptance.cjs': 'f063d7ddc8ecf24e5fc0118e7f46bc6ed3ba6ac7d4f70208d6bf9d2fddb5b70e', 'tools/browser-smoke/native-admission-windows.py': 'fceae648a3aa8f3bdb1f61a10c2ed97fde09cda73eeb1570b1f1e002a1dd0489'}
