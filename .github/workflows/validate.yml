@@ -1,17 +1,19 @@
-name: Distinguish Windows dispatch and listen queue delays
-
+name: Verify native audio underrun recovery
 on:
   push:
     branches: [diagnostic/windows-browser-capture-20261026]
-
 permissions:
   contents: read
   actions: read
-
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  RUST_BACKTRACE: '1'
 jobs:
-  browser-server:
+  windows-audio:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
         with:
@@ -19,63 +21,163 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v6
+      - name: Select native Windows Perl
+        shell: pwsh
+        run: |
+          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
+          if (!$nativePerl) { throw 'Native Perl is unavailable.' }
+          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
+      - run: rustup show
+      - uses: actions/cache/restore@v4
         with:
-          node-version-file: .node-version
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - uses: actions/download-artifact@v4
-        with:
-          name: browser-client-green
-          path: web/dist
-          run-id: 40432773454
-          github-token: ${{ github.token }}
-      - uses: actions/download-artifact@v4
-        with:
-          name: browser-green-source
-          path: reports/browser-server/browser-source
-          run-id: 40432773454
-          github-token: ${{ github.token }}
-      - name: Install verified private observation fixture
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-b8e90930e195b8f74e8492bd0bc6f0c8486940fa
+          restore-keys: |
+            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+            native-${{ runner.os }}-${{ runner.arch }}-
+      - name: Install verified audio regression fixture
         shell: python
         run: |
           from pathlib import Path
           import os,subprocess,hashlib,json
           revision=os.environ['GITHUB_SHA']
           subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          hashes={'tools/browser-smoke/observe-loading.cjs': '32152d98345751c137a89625a379e308a2b2fb543e507a74ff792eab91d5b074', 'tools/browser-smoke/observe-reload.cjs': '1a12d45b15eb1c790ae3c42d64c3d6515386b3cdbd5c185e1a798b826ae9b6a1', 'tools/browser-smoke/observe-server.py': '2efbcb28b5dd890f76473927e441e0e34f148b01ac829c9734e43c97fe6b792f', 'tools/browser-smoke/observe-windows-processes.py': 'f2ada154b170032db999415c117d5812af95e4d857f035f3548d5eb2a57b9118', 'tools/browser-smoke/observe-server-windows.py': '5436e54e3a17883c6235d3894978f1480d11000932356d86d016538223cab591'}
+          hashes={'tools/diagnostic-native-audio.rs': '879ce1543719f08c956c920e7969631f19ad1e0336a80994985ba57660b492ac', 'tools/diagnostic-native-audio.py': 'c92709243b717c6a9242468a7fb2d351a9a380f663c55262e6b265f3479b0987'}
           for name,digest in hashes.items():
               data=subprocess.check_output(['git','show',revision+':'+name])
               assert hashlib.sha256(data).hexdigest()==digest,name
               Path(name).write_bytes(data)
-          out=Path('reports/browser-server');out.mkdir(parents=True,exist_ok=True)
-          (out/'source.json').write_text(json.dumps({'base':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','observationRevision':revision,'fixtureHashes':hashes},indent=2)+'\n')
-      - name: Verify exact runtime sources and prepare tracked assets
+          out=Path('reports/native-audio');out.mkdir(parents=True,exist_ok=True)
+          (out/'source.json').write_text(json.dumps({'base':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','fixtureRevision':revision,'fixtureHashes':hashes},indent=2)+'\n')
+      - name: Reproduce the audio contract failure before the fix
         shell: python
         run: |
           from pathlib import Path
-          import json,hashlib,subprocess,shutil
-          source=json.loads(Path('reports/browser-server/browser-source/source.json').read_text())
-          for name,digest in source['hashes'].items():
-              data=subprocess.check_output(['git','show','HEAD:'+name])
-              assert hashlib.sha256(data).hexdigest()==digest,name
-          shutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)
-      - name: Compare queue capacity and owned GPU priority separately
+          import subprocess
+          subprocess.run(['python','tools/diagnostic-native-audio.py','red'],check=True)
+          result=subprocess.run(['cargo','test','-p','solomon-web','--all-features','audio::native::tests::output_','--','--nocapture'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+          Path('reports/native-audio/red.log').write_text(result.stdout)
+          print(result.stdout[-6000:])
+          assert result.returncode != 0
+          assert '2 failed' in result.stdout
+          assert 'output_underrun_keeps_audio_available ... FAILED' in result.stdout
+          assert 'output_failures_remain_reported_after_an_underrun ... FAILED' in result.stdout
+      - name: Verify the focused fix and native web tests
         shell: python
         run: |
           from pathlib import Path
-          import json,os,subprocess
-          rows=[]
-          for name,priority,queue in [('normal-default','normal','default'),('normal-system','normal','system'),('baseline-system','baseline','system'),('normal-system-repeat','normal','system')]:
-              env=os.environ.copy();env['OBSERVE_GPU_PRIORITY']=priority;env['OBSERVE_QUEUE_SIZE']=queue
-              env['OBSERVE_SERVER_OUT']='reports/browser-server/'+name
-              result=subprocess.run(['python','tools/browser-smoke/observe-server-windows.py'],env=env)
-              rows.append({'case':name,'exit':result.returncode})
-              Path('reports/browser-server/comparison.json').write_text(json.dumps(rows,indent=2)+'\n')
-          assert all(row['exit']==0 for row in rows if row['case'] in ['normal-system','normal-system-repeat']),rows
+          import subprocess,hashlib,json
+          subprocess.run(['python','tools/diagnostic-native-audio.py','green'],check=True)
+          result=subprocess.run(['cargo','test','-p','solomon-web','--all-features'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+          Path('reports/native-audio/green.log').write_text(result.stdout)
+          source=Path('crates/web/src/audio/native.rs').read_bytes()
+          Path('reports/native-audio/fixed-source.json').write_text(json.dumps({'audioSha256':hashlib.sha256(source).hexdigest(),'exit':result.returncode},indent=2)+'\n')
+          print(result.stdout[-6000:])
+          assert result.returncode == 0
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-audio-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: browser-server-windows
-          path: reports/browser-server
+          name: native-audio-windows
+          path: reports/native-audio
+          if-no-files-found: error
+
+  linux-audio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: b8e90930e195b8f74e8492bd0bc6f0c8486940fa
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Prepare native accessibility and display
+        uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
+        with:
+          setup-window-manager: 'true'
+          extra-packages: libasound2-dev libasound2-plugins libudev-dev libfontconfig1-dev libclang-dev cmake libgl1-mesa-dev pulseaudio
+      - run: python -m pip install -r tools/desktop-smoke-requirements.txt
+      - name: Provide the regular Linux audio output
+        run: |
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=acceptance
+          pactl set-default-sink acceptance
+          printf 'pcm.!default { type pulse }\nctl.!default { type pulse }\n' > ~/.asoundrc
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: rustup show
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-b8e90930e195b8f74e8492bd0bc6f0c8486940fa
+          restore-keys: |
+            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+            native-${{ runner.os }}-${{ runner.arch }}-
+      - name: Install verified audio regression fixture
+        shell: python
+        run: |
+          from pathlib import Path
+          import os,subprocess,hashlib,json
+          revision=os.environ['GITHUB_SHA']
+          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
+          hashes={'tools/diagnostic-native-audio.rs': '879ce1543719f08c956c920e7969631f19ad1e0336a80994985ba57660b492ac', 'tools/diagnostic-native-audio.py': 'c92709243b717c6a9242468a7fb2d351a9a380f663c55262e6b265f3479b0987'}
+          for name,digest in hashes.items():
+              data=subprocess.check_output(['git','show',revision+':'+name])
+              assert hashlib.sha256(data).hexdigest()==digest,name
+              Path(name).write_bytes(data)
+          out=Path('reports/native-audio');out.mkdir(parents=True,exist_ok=True)
+          (out/'source.json').write_text(json.dumps({'base':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','fixtureRevision':revision,'fixtureHashes':hashes},indent=2)+'\n')
+      - name: Apply the focused underrun fix
+        run: |
+          python tools/diagnostic-native-audio.py red
+          python tools/diagnostic-native-audio.py green
+      - name: Build the native app with the audio fix
+        run: npm run package:desktop -- --platform linux --arch x64 --release-repository "$GITHUB_REPOSITORY"
+      - uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-audio-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
+      - name: Run full acceptance and repeat ordinary peer play twice
+        shell: python
+        run: |
+          from pathlib import Path
+          import os,subprocess,json
+          rows=[]
+          for attempt in range(1,4):
+              if attempt == 2:
+                  driver=Path('tools/smoke-desktop-runtime.py');source=driver.read_text()
+                  assert source.count('    check_offline()\n')==1
+                  driver.write_text(source.replace('    check_offline()\n',''))
+              out=Path('reports/native-audio')/str(attempt);out.mkdir(parents=True)
+              env=os.environ.copy();env['SDR_DESKTOP_EVIDENCE']=str(out.resolve())
+              with (out/'driver.log').open('w') as log:
+                  result=subprocess.run(['python','tools/smoke-desktop-runtime.py'],env=env,stdout=log,stderr=subprocess.STDOUT)
+              rows.append({'attempt':attempt,'exit':result.returncode})
+          Path('reports/native-audio/attempts.json').write_text(json.dumps(rows,indent=2)+'\n')
+          assert not any(row['exit'] for row in rows),rows
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-audio-linux
+          path: reports/native-audio
           if-no-files-found: error
