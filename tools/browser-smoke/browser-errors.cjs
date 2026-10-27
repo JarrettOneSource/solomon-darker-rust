@@ -7,31 +7,36 @@ const musicPaths=new Map([...catalog.matchAll(/id: "([^"]+)",\s*path: "([^"]+)",
 const observers=new WeakMap();
 let nextObserver=0;
 
-function residentSuspension(failure,captured,settled) {
+function loadedResidentChannel(failure,snapshot) {
   if(failure.errorText!=='net::ERR_ABORTED'||failure.method!=='GET'
-    ||failure.resourceType!=='media'||![200,206].includes(failure.status)
-    ||!captured||!settled||captured.documentId!==settled.documentId)return null;
-  const matches=captured.channels.filter(channel=>channel.url===failure.url);
+    ||failure.resourceType!=='media'||![200,206].includes(failure.status)||!snapshot)return null;
+  const matches=snapshot.channels.filter(channel=>channel.url===failure.url);
   if(matches.length!==1)return null;
-  const before=matches[0];
-  const remaining=settled.channels.filter(channel=>channel.url===failure.url);
-  if(remaining.length!==1)return null;
-  const after=remaining[0];
-  if(after.id!==before.id)return null;
-  const stock=musicPaths.get(before.cue);
-  if(!stock||new URL(`assets/stock/audio/${stock}`,captured.baseUrl??captured.documentUrl).href!==failure.url)return null;
-  for(const channel of [before,after]) {
-    if(!channel||channel.cue!==before.cue||channel.url!==failure.url||channel.src!==failure.url
-      ||!channel.connected||!channel.hidden||channel.controls||channel.preload!=='auto'
-      ||channel.retired||channel.loads!==1||channel.sources.length!==1
-      ||channel.sources[0]!==failure.url||channel.error!==null||channel.ready<2||channel.network!==1)return null;
-    const events=channel.events;
-    const loaded=events.findIndex(event=>event.type==='loadeddata'&&event.trusted);
-    if(loaded<0||events.filter(event=>event.type==='loadstart').length!==1
-      ||!events.some(event=>event.type==='suspend'&&event.trusted&&event.network===1)
-      ||events.some((event,index)=>['error','abort'].includes(event.type)
-        ||(event.type==='emptied'&&index>loaded)))return null;
-  }
+  const channel=matches[0];
+  const stock=musicPaths.get(channel.cue);
+  if(!stock||new URL(`assets/stock/audio/${stock}`,snapshot.baseUrl??snapshot.documentUrl).href!==failure.url)return null;
+  if(channel.src!==failure.url||!channel.connected||!channel.hidden||channel.controls
+    ||channel.preload!=='auto'||channel.retired||channel.loads!==1||channel.sources.length!==1
+    ||channel.sources[0]!==failure.url||channel.error!==null)return null;
+  const events=channel.events;
+  const loaded=events.findIndex(event=>event.type==='loadeddata'&&event.trusted);
+  if(loaded<0||events.filter(event=>event.type==='loadstart').length!==1
+    ||events.some((event,index)=>['error','abort'].includes(event.type)
+      ||(event.type==='emptied'&&index>loaded)))return null;
+  return channel;
+}
+
+function suspendedResidentChannel(channel) {
+  return channel.ready>=2&&channel.network===1
+    &&channel.events.some(event=>event.type==='suspend'&&event.trusted&&event.network===1);
+}
+
+function residentSuspension(failure,captured,settled) {
+  if(!captured||!settled||captured.documentId!==settled.documentId)return null;
+  const before=loadedResidentChannel(failure,captured);
+  const after=loadedResidentChannel(failure,settled);
+  if(!before||!after||after.id!==before.id||after.cue!==before.cue
+    ||![before,after].every(suspendedResidentChannel))return null;
   return {cue:before.cue,channelId:before.id,documentId:captured.documentId,
     reason:'ready resident channel suspended by the browser'};
 }
@@ -42,10 +47,23 @@ function documentRetirement(failure,retirement) {
   if(removal) {
     if(!retirement.detached||retirement.detachedTargetId!==retirement.beforeTargetId)return null;
   } else if(retirement.beforeTargetId===retirement.afterTargetId)return null;
-  const owner=residentSuspension(failure,retirement.before,retirement.before);
-  const reason=removal?'ready resident channel retired by the observed frame removal'
-    :'ready resident channel retired by the observed document replacement';
-  return owner?{...owner,reason}:null;
+  const channel=loadedResidentChannel(failure,retirement.before);
+  if(!channel)return null;
+  const action=removal?'frame removal':'document replacement';
+  let reason=`ready resident channel retired by the observed ${action}`;
+  if(!suspendedResidentChannel(channel)) {
+    // Rewinding a loaded, paused song can temporarily leave only metadata while
+    // its range request is pending. Only the observed document retirement owns
+    // that cancellation; the same state in a live document remains a failure.
+    const loaded=channel.events.findIndex(event=>event.type==='loadeddata'&&event.trusted);
+    const lastSeek=channel.events.findLastIndex(event=>['seeking','seeked'].includes(event.type));
+    const seek=channel.events[lastSeek];
+    if(!channel.paused||channel.currentTime!==0||!channel.seeking||channel.ready<1
+      ||![1,2].includes(channel.network)||lastSeek<=loaded||seek.type!=='seeking'
+      ||!seek.trusted||!seek.paused||seek.currentTime!==0||!seek.seeking)return null;
+    reason=`loaded resident channel rewinding during the observed ${action}`;
+  }
+  return {cue:channel.cue,channelId:channel.id,documentId:retirement.before.documentId,reason};
 }
 
 // All wrappers forward the original native call unchanged. There are no setters

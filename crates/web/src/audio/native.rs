@@ -345,7 +345,9 @@ mod tests {
             rodio::cpal::StreamError::DeviceNotAvailable,
             rodio::cpal::StreamError::StreamInvalidated,
             rodio::cpal::StreamError::BackendSpecific {
-                err: rodio::cpal::BackendSpecificError { description: "device recovery failed".into() },
+                err: rodio::cpal::BackendSpecificError {
+                    description: "device recovery failed".into(),
+                },
             },
         ] {
             let engine = AudioEngine::from_device(Err(rodio::DeviceSinkError::NoDevice)).unwrap();
