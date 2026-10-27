@@ -1,5 +1,5 @@
 {
-  "name": "Probe Windows raw socket port randomization",
+  "name": "Verify Windows browser port-randomization workaround",
   "on": {
     "push": {
       "branches": [
@@ -12,9 +12,9 @@
     "actions": "read"
   },
   "jobs": {
-    "winsock-windows": {
+    "browser-network-windows": {
       "runs-on": "windows-latest",
-      "timeout-minutes": 15,
+      "timeout-minutes": 35,
       "steps": [
         {
           "uses": "actions/checkout@v6"
@@ -26,19 +26,48 @@
           }
         },
         {
-          "name": "Validate private Winsock probe syntax",
-          "run": "python -m py_compile tools/diagnostic-winsock.py"
+          "uses": "actions/setup-node@v6",
+          "with": {
+            "node-version": "22.17.0"
+          }
         },
         {
-          "name": "Measure randomized, unset and restored Windows sockets",
-          "run": "python tools/diagnostic-winsock.py"
+          "run": "npm ci --no-audit --no-fund"
+        },
+        {
+          "uses": "actions/download-artifact@v4",
+          "with": {
+            "name": "browser-client",
+            "path": "web/dist",
+            "run-id": 40497735544,
+            "github-token": "${{ github.token }}"
+          }
+        },
+        {
+          "name": "Install the matching tracked assets",
+          "shell": "python",
+          "run": "import shutil\nshutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)"
+        },
+        {
+          "name": "Validate private probe syntax",
+          "run": "python -m py_compile tools/diagnostic-browser-network.py"
+        },
+        {
+          "name": "Verify unchanged assets and browser support",
+          "run": "python scripts/verify-client-assets.py\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\nnpm run test:browser-support",
+          "shell": "pwsh"
+        },
+        {
+          "name": "Run two complete original browser acceptance sequences",
+          "shell": "pwsh",
+          "run": "$env:PW = Join-Path $env:GITHUB_WORKSPACE 'node_modules/playwright-core'\n$env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'\nif (!(Test-Path $env:CHROME)) { throw 'Chrome is unavailable.' }\npython tools/diagnostic-browser-network.py\n"
         },
         {
           "uses": "actions/upload-artifact@v4",
           "if": "always()",
           "with": {
-            "name": "windows-winsock",
-            "path": "reports/winsock",
+            "name": "browser-network-windows",
+            "path": "reports/browser-network",
             "if-no-files-found": "error"
           }
         }
