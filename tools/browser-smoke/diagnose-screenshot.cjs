@@ -85,6 +85,8 @@ lifecycle.launchOwnedBrowser=async(...args)=>{
   const close=owned.close.bind(owned);
   owned.close=async()=>{
     for(const page of pages)if(!page.isClosed()) {
+      const focusHistory=await page.evaluate(()=>window.__solomonControllerFocus||[]);
+      fs.writeFileSync(path.join(out,'controller-focus.json'),JSON.stringify(focusHistory,null,2)+'\n');
       let timer;
       try {
         await Promise.race([
@@ -104,6 +106,37 @@ lifecycle.launchOwnedBrowser=async(...args)=>{
   return owned;
 };
 const gpu=require('./gpu-ui.cjs');
+const installController=gpu.installController;
+gpu.installController=async page=>{
+  await installController(page);
+  await page.evaluate(()=>{
+    window.__solomonControllerFocus=[];
+    let previous;
+    const observe=()=>{
+      const read=window.wasmBindings?.gpu_ui_state;
+      if(read&&window.gpuTestPad){
+        const state=JSON.parse(read());
+        const focused=state.widgets.filter(w=>w.focused).map(w=>({id:w.id,rect:w.rect,paintRect:w.paintRect}));
+        const buttons=[...window.gpuTestPad.buttons];
+        const identity=JSON.stringify([focused,buttons]);
+        if(identity!==previous){
+          previous=identity;
+          window.__solomonControllerFocus.push({atMs:Math.round(performance.now()),frame:state.frame,focused,buttons,reads:window.gpuTestPad.reads});
+        }
+      }
+      requestAnimationFrame(observe);
+    };
+    requestAnimationFrame(observe);
+  });
+};
+const controller=gpu.controller;
+gpu.controller=async(page,buttons=[],...args)=>{
+  const operationStarted=performance.now();
+  trace({event:'controller-start',buttons});
+  const result=await controller(page,buttons,...args);
+  trace({event:'controller-complete',buttons,durationMs:Math.round(performance.now()-operationStarted)});
+  return result;
+};
 const click=gpu.click;
 gpu.click=async(page,id,...args)=>{
   const operationStarted=performance.now();
