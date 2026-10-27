@@ -54,7 +54,8 @@ lifecycle.write_text(instrumented, encoding='utf-8')
 provenance = {'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
               'originalLifecycleSha256': hashlib.sha256(original.encode()).hexdigest(),
               'instrumentedLifecycleSha256': hashlib.sha256(instrumented.encode()).hexdigest(),
-              'change': 'Add default-mode Chromium network logging only; no application, priority, server, assertions or input changes.',
+              'change': 'Observe the resident-media classifier correction with default-mode Chromium network logging; application, priority, server and input remain unchanged.',
+              'classifierSha256': hashlib.sha256(Path('tools/browser-smoke/browser-errors.cjs').read_bytes()).hexdigest(),
               'artifactRun': 40466361015,
               'browserFiles': {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(Path('web/dist').iterdir()) if p.is_file()}}
 (out / 'source.json').write_text(json.dumps(provenance, indent=2) + '\n')
