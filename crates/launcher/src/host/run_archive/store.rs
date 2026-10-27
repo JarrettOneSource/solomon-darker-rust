@@ -170,7 +170,7 @@ fn temporary_directory(directory: &Path) -> Result<PathBuf, String> {
             })
             .collect();
         let path = directory.join(format!(".writing-{suffix}"));
-        let mut builder = DirBuilder::new();
+        let builder = &mut DirBuilder::new();
         #[cfg(unix)]
         {
             use std::os::unix::fs::DirBuilderExt;

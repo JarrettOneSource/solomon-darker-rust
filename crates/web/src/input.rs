@@ -1,5 +1,5 @@
-//! Browser gameplay input, sampled once per frame. Website `input/gameplay-input.ts`,
-//! `standard-gamepad.ts` and `TouchJoystick.tsx` own levels, aim and cancellation.
+//! Shared gameplay input, sampled once per frame. Platform adapters feed keyboard,
+//! pointer, touch and controller state into the same movement, aim and action rules.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};

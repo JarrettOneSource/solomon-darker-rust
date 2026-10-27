@@ -178,8 +178,8 @@ Paths below are relative to `crates/web/src/`; journeys live in
 
 | Surface | Main owner | Checks |
 | --- | --- | --- |
-| Splash and resource failure | `runtime_ui.rs`, separate loader crate | `startup.cjs` |
-| Title, Create, Pause, settings | `menu/` | `menus.cjs`, `menu-input.cjs`, `match-loading.cjs` |
+| Splash and resource failure | `runtime_ui.rs`, separate loader crate | `startup.cjs`, `image-load-failure.cjs` |
+| Title, Create, Pause, settings | `menu/` | `menus.cjs`, `menu-input.cjs`, `match-loading.cjs`, `settings-parity.cjs` |
 | Desktop launch settings | `desktop/` | Packaged desktop journey |
 | HUD, belt, skill selection | `hud/`, input and picker owners | `hud-input.cjs`, `gameplay-input.cjs`, belt/input unit tests |
 | Inventory, Skillbook, services | `player_panels/` | `player-panels.cjs`, `hub-services.cjs` |

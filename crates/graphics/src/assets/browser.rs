@@ -49,12 +49,37 @@ pub async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
     Ok(js_sys::Uint8Array::new(&buffer).to_vec())
 }
 
+struct LoadingImage {
+    image: HtmlImageElement,
+    settle: Option<js_sys::Function>,
+    _on_load: Option<Closure<dyn FnMut()>>,
+    _on_error: Option<Closure<dyn FnMut()>>,
+}
+
+impl Drop for LoadingImage {
+    fn drop(&mut self) {
+        // A rejected sibling can cancel this future before its image event arrives.
+        // Detach both handlers before dropping the Rust closures they reference.
+        self.image.set_onload(None);
+        self.image.set_onerror(None);
+        // JsFuture retains its callback state until settlement, even after cancellation.
+        // Resolving an already settled Promise has no effect.
+        if let Some(settle) = &self.settle {
+            let _ = settle.call0(&JsValue::UNDEFINED);
+        }
+    }
+}
+
 /// Loads and fully decodes an image so the texture upload never sees a partial bitmap.
 pub async fn load_image(url: &str) -> Result<HtmlImageElement, String> {
-    let image = HtmlImageElement::new().map_err(|error| describe(url, &error))?;
-    let mut on_load: Option<Closure<dyn FnMut()>> = None;
-    let mut on_error: Option<Closure<dyn FnMut()>> = None;
+    let mut loading = LoadingImage {
+        image: HtmlImageElement::new().map_err(|error| describe(url, &error))?,
+        settle: None,
+        _on_load: None,
+        _on_error: None,
+    };
     let loaded = js_sys::Promise::new(&mut |resolve, reject| {
+        loading.settle = Some(resolve.clone());
         let resolve = resolve.clone();
         let reject = reject.clone();
         let success = Closure::<dyn FnMut()>::new(move || {
@@ -65,19 +90,18 @@ pub async fn load_image(url: &str) -> Result<HtmlImageElement, String> {
             let _ =
                 reject.call1(&JsValue::UNDEFINED, &JsValue::from_str("could not load game asset"));
         });
-        image.set_onload(Some(success.as_ref().unchecked_ref()));
-        image.set_onerror(Some(failure.as_ref().unchecked_ref()));
-        on_load = Some(success);
-        on_error = Some(failure);
+        loading.image.set_onload(Some(success.as_ref().unchecked_ref()));
+        loading.image.set_onerror(Some(failure.as_ref().unchecked_ref()));
+        loading._on_load = Some(success);
+        loading._on_error = Some(failure);
     });
-    image.set_src(url);
+    loading.image.set_src(url);
     let result = JsFuture::from(loaded).await;
-    image.set_onload(None);
-    image.set_onerror(None);
-    drop((on_load, on_error));
+    let image = loading.image.clone();
+    drop(loading);
     result.map_err(|error| describe(url, &error))?;
-    // `game-assets.ts::loadGameImage`: onload is authoritative. Chromium may reject
-    // decode after discarding an already decoded image in a memory-constrained session.
+    // The load event is authoritative. Chromium may reject decode after discarding
+    // an already decoded image in a memory-constrained session.
     let _ = JsFuture::from(image.decode()).await;
     Ok(image)
 }

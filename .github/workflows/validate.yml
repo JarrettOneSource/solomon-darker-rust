@@ -99,7 +99,7 @@ jobs:
         with:
           name: browser-client
           path: web/dist
-      - name: Verify browser gameplay and settings with ordinary input
+      - name: Verify browser gameplay, settings and asset failure cleanup
         shell: pwsh
         run: |
           Copy-Item web/assets -Destination web/dist -Recurse
@@ -116,6 +116,9 @@ jobs:
             $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser/settings'
             node tools/browser-smoke/settings-parity.cjs
             if ($LASTEXITCODE) { throw 'Browser settings failed.' }
+            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser/image-load-failure'
+            node tools/browser-smoke/image-load-failure.cjs
+            if ($LASTEXITCODE) { throw 'Browser asset failure cleanup failed.' }
           } finally {
             if (!$server.HasExited) { Stop-Process -Id $server.Id }
             if (!$server.WaitForExit(10000)) { throw 'The owned browser test server did not exit.' }

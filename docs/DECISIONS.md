@@ -460,6 +460,12 @@ bounded, snapshots coalesce after decoding, and queued sends retain byte credits
 until sent or dropped. Dropping the native connection cancels and joins its owner
 without waiting indefinitely for a stalled handshake or DNS worker.
 
+Each transport sends its admission message as soon as the socket opens, before
+publishing the Opened event. Admission must progress while a slow frame occupies
+the renderer; the socket's independent Welcome deadline cannot depend on frame
+polling to begin the exchange. The Game still validates and accepts Welcome before
+acknowledging it, preserving the durable reconnect credential contract.
+
 The native desktop authority embeds the established standalone supervisor on an
 owned thread, with an ephemeral loopback listener and private generated credential.
 Its accepted Origin remains `solomon-darker://app` for compatibility with the

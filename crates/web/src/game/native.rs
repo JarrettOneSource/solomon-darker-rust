@@ -221,7 +221,7 @@ impl Game {
     pub(super) fn poll_native(&mut self, now: f64) -> Result<(), String> {
         let Some(native) = &mut self.native else { return Ok(()) };
         let Some(connection) = &mut native.connection else { return Ok(()) };
-        let poll = connection.poll()?;
+        let poll = connection.poll();
         for event in poll.events {
             match event {
                 NetworkEvent::Opened => {

@@ -54,7 +54,6 @@ pub struct NetworkPoll {
 
 pub struct NativeSession {
     connection: NativeConnection,
-    first_message: Option<ClientMessage>,
     input: ClientInputSequence,
     command_sequence: u64,
     pub credentials: Option<ResumeCredentials>,
@@ -71,11 +70,10 @@ impl NativeSession {
         let connection = NativeConnection::connect_to(
             endpoint,
             &crate::platform::network_origin()?,
-            !matches!(first_message, ClientMessage::InspectSession { .. }),
+            first_message,
         )?;
         Ok(Self {
             connection,
-            first_message: Some(first_message),
             input: ClientInputSequence::default(),
             command_sequence: 0,
             credentials: None,
@@ -84,16 +82,8 @@ impl NativeSession {
         })
     }
 
-    pub fn poll(&mut self) -> Result<NetworkPoll, String> {
-        let poll = self.connection.poll();
-        for event in &poll.events {
-            if matches!(event, NetworkEvent::Opened)
-                && let Some(message) = self.first_message.take()
-            {
-                self.connection.send(&message)?;
-            }
-        }
-        Ok(poll)
+    pub fn poll(&self) -> NetworkPoll {
+        self.connection.poll()
     }
 
     pub fn send(&self, message: &ClientMessage) -> Result<(), String> {
