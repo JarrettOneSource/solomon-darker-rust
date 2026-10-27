@@ -212,6 +212,82 @@ mod tests {
     use super::*;
 
     #[test]
+    fn complete_welcome_waits_for_game_acceptance_without_a_receive_timeout() {
+        use solomon_protocol::{ResumeCredentials, SnapshotFrame};
+        use solomon_sim::session::{GameSession, GameSessionOptions};
+
+        let message = ServerMessage::Welcome {
+            version: solomon_protocol::PROTOCOL_VERSION,
+            credentials: ResumeCredentials { player_id: "wizard".into(), token: "resume".into() },
+            tick_rate: solomon_protocol::GAME_TICK_RATE,
+            snapshot_rate: solomon_protocol::SNAPSHOT_RATE,
+            hosted: None,
+            frame: SnapshotFrame {
+                sequence: 1,
+                flame_presentation: None,
+                input_acknowledgements: Default::default(),
+                host: Default::default(),
+                snapshot: Box::new(
+                    GameSession::new_participants(Vec::new(), GameSessionOptions::default())
+                        .unwrap()
+                        .checkpoint(),
+                ),
+            },
+        };
+        let text = serde_json::to_string(&message).unwrap();
+        let data: Vec<u16> = text.encode_utf16().collect();
+        for chunked in [false, true] {
+            let delivery = Arc::new(Mutex::new(Delivery::default()));
+            let mut core = ConnectionCore::new(delivery.clone(), true, 100.0);
+            core.opened();
+            if chunked {
+                let size = solomon_protocol::transfer::GAME_STRING_CHUNK_CHARACTERS;
+                for (index, chunk) in data.chunks(size).enumerate() {
+                    let offset = index * size;
+                    let next_offset = offset + chunk.len();
+                    let message: ServerMessage<Box<GameCheckpoint>> =
+                        ServerMessage::WelcomeChunk {
+                            data: chunk.to_vec(),
+                            offset,
+                            total_length: data.len(),
+                        };
+                    let reply =
+                        core.receive(&serde_json::to_string(&message).unwrap(), 4_000.0).unwrap();
+                    if next_offset < data.len() {
+                        assert!(matches!(
+                            reply,
+                            Some(ClientMessage::WelcomeChunkAck { next_offset: received })
+                                if received == next_offset
+                        ));
+                    } else {
+                        assert!(reply.is_none(), "receipt cannot acknowledge game acceptance");
+                    }
+                }
+            } else {
+                assert!(core.receive(&text, 4_000.0).unwrap().is_none());
+            }
+            let poll = std::mem::take(&mut delivery.lock().unwrap().poll);
+            assert!(poll.events.iter().any(|event| matches!(
+                event,
+                NetworkEvent::Message { message, .. }
+                    if matches!(message.as_ref(), ServerMessage::Welcome { .. })
+            )));
+            // Local validation or durable credential storage may outlive receipt.
+            assert!(core.tick(20_000.0).unwrap().is_none());
+            assert!(delivery.lock().unwrap().open);
+            let acknowledgement = core.accept_welcome();
+            if chunked {
+                assert!(matches!(
+                    acknowledgement,
+                    Some(ClientMessage::WelcomeChunkAck { next_offset }) if next_offset == data.len()
+                ));
+            } else {
+                assert!(acknowledgement.is_none());
+            }
+        }
+    }
+
+    #[test]
     fn welcome_progress_extends_the_deadline_until_game_acceptance() {
         let delivery = Arc::new(Mutex::new(Delivery::default()));
         let mut core = ConnectionCore::new(delivery, true, 100.0);

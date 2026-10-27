@@ -378,6 +378,7 @@ fn binary_and_invalid_json_fail_once_and_close_the_socket() {
         let connection = connect(&endpoint, false);
         send_payload.send(()).unwrap();
         wait_for(|| !connection.is_open());
+        let rejected_admission = connection.accept_welcome();
         let failures: Vec<_> = connection
             .poll()
             .events
@@ -389,8 +390,13 @@ fn binary_and_invalid_json_fail_once_and_close_the_socket() {
             .collect();
         assert_eq!(failures.len(), 1);
         assert!(failures[0].contains(expected), "{}", failures[0]);
+        let rejected_ping = connection.start_ping(false);
+        let rejected_send = connection.send(&ClientMessage::Ping { nonce: 1 });
         drop(connection);
         server.join().unwrap();
+        assert_eq!(rejected_admission.unwrap_err(), failures[0]);
+        assert_eq!(rejected_ping.unwrap_err(), failures[0]);
+        assert_eq!(rejected_send.unwrap_err(), failures[0]);
     }
 }
 
