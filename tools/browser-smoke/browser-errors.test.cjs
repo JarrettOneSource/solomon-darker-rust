@@ -68,6 +68,56 @@ test('a suspended preload remains owned when its resident channel later plays an
     documentId:123,reason:'ready resident channel resumed after browser suspension'});
 });
 
+function capturedRewind() {
+  const fixture=evidence();
+  const before=fixture.captured.channels[0];
+  // Windows Chrome captured the priming rewind before delivering its seeking
+  // event. The retained preload and later native events establish its lifetime.
+  Object.assign(before,{ready:1,network:1,paused:false,currentTime:0,seeking:true});
+  Object.assign(before.events[1],{ready:4});
+  const after=structuredClone(before);
+  Object.assign(after,{ready:4,paused:true,seeking:false});
+  after.events.push(
+    {type:'seeking',trusted:true,url:after.url,ready:1,paused:false,seeking:true,currentTime:0},
+    {type:'seeked',trusted:true,url:after.url,ready:3,paused:false,seeking:false},
+    {type:'playing',trusted:true,url:after.url,ready:3,paused:false,seeking:false},
+    {type:'seeking',trusted:true,url:after.url,ready:1,paused:true,seeking:true,currentTime:0},
+    {type:'seeked',trusted:true,url:after.url,ready:4,paused:true,seeking:false});
+  fixture.settled.channels=[after];
+  return fixture;
+}
+
+test('a loaded suspended channel can complete its captured priming rewind and play',()=>{
+  const {failure,captured,settled}=capturedRewind();
+  assert.deepEqual(residentSuspension(failure,captured,settled),{cue:'death',channelId:3,
+    documentId:123,reason:'resident channel completed a captured rewind after browser suspension'});
+});
+
+for(const [name,change] of [
+  ['no earlier loaded data',f=>{f.captured.channels[0].events[1].ready=1}],
+  ['no earlier suspension',f=>{f.captured.channels[0].events[2].trusted=false}],
+  ['a different captured seek',f=>{f.captured.channels[0].currentTime=12}],
+  ['no captured rewind',f=>{f.captured.channels[0].seeking=false}],
+  ['an unfinished seek',f=>{f.settled.channels[0].seeking=true}],
+  ['no trusted seek completion',f=>{f.settled.channels[0].events[4].trusted=false}],
+  ['playback preceding seek completion',f=>{
+    const events=f.settled.channels[0].events;[events[4],events[5]]=[events[5],events[4]];
+  }],
+  ['no trusted playback',f=>{f.settled.channels[0].events[5].trusted=false}],
+  ['playback of another source',f=>{f.settled.channels[0].events[5].url+='?other'}],
+  ['lost future data',f=>{f.settled.channels[0].ready=2}],
+  ['an empty network state',f=>{f.settled.channels[0].network=0}],
+  ['a later media error',f=>{f.settled.channels[0].error=3}],
+  ['a media abort',f=>{f.settled.channels[0].events.push({type:'abort',trusted:true})}],
+  ['a replaced source',f=>{f.settled.channels[0].sources.push('https://example.com/other.mp3')}],
+  ['a replaced owner',f=>{f.settled.channels[0].id=4}],
+  ['a replaced document',f=>{f.settled.documentId=124}],
+  ['an actual network failure',f=>{f.failure.errorText='net::ERR_CONNECTION_RESET'}],
+])test(`a captured rewind does not excuse ${name}`,()=>{
+  const fixture=capturedRewind();change(fixture);
+  assert.equal(residentSuspension(fixture.failure,fixture.captured,fixture.settled),null);
+});
+
 for(const [name,change] of [
   ['no later playback',f=>{f.settled.channels[0].events.splice(3,1)}],
   ['playback only before capture',f=>{
