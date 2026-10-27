@@ -1,4 +1,4 @@
-name: Verify native capture reads and peer cleanup on macOS
+name: Verify saved recovery from the retained native fatal fixture
 on:
   push:
     branches: [diagnostic/windows-browser-capture-20261026]
@@ -6,78 +6,66 @@ permissions:
   contents: read
   actions: read
 jobs:
-  native-accessibility-macos:
-    runs-on: macos-15
-    timeout-minutes: 45
-    defaults:
-      run:
-        shell: bash
+  native-fatal-status:
+    runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: 33ca699899158bae7d880a5fda605c92849e7eef
+          ref: b8e90930e195b8f74e8492bd0bc6f0c8486940fa
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Resolve the accessibility interpreter
-        run: python -c 'import os,sys; print("TCC_CLIENT=" + os.path.realpath(sys.executable))' >> "$GITHUB_ENV"
       - uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
         with:
           setup-window-manager: 'true'
-          macos-tcc-client: ${{ env.TCC_CLIENT }}
       - run: python -m pip install -r tools/desktop-smoke-requirements.txt
-      - name: Install the verified private driver check
-        id: fixture
-        shell: python
-        run: |
-          from pathlib import Path
-          import hashlib,json,os,subprocess
-          revision=os.environ['GITHUB_SHA']
-          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          name='tools/diagnostic-native-accessibility.py'
-          data=subprocess.check_output(['git','show',revision+':'+name])
-          digest=hashlib.sha256(data).hexdigest()
-          assert digest=='f88831a58f22aa05c446103d263836cb2f044a3a39de57037a158578afd99bc7'
-          Path(name).write_bytes(data)
-          out=Path('reports/native-accessibility');out.mkdir(parents=True,exist_ok=True)
-          (out/'source.json').write_text(json.dumps({'sourceRevision':'33ca699899158bae7d880a5fda605c92849e7eef','fixtureRevision':revision,'fixtureSha256':digest,'packageRun':40450038601,'packageArtifact':'unqualified-desktop-darwin-arm64-40450038601-1'},indent=2)+'\n')
+      - uses: ssciwr/setup-mesa-dist-win@2dfeaebfa514f74c2b8cd8d27108c31486d33e72
+        with:
+          version: '26.0.3'
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 40450038601
-          name: unqualified-desktop-darwin-arm64-40450038601-1
-          path: retained-package
-      - name: Verify and unpack the unchanged native package
-        id: unpack
+          run-id: 40451086793
+          name: native-fatal-fixture-executable
+          path: retained-executable
+      - name: Verify retained executable and install the private journey
         shell: python
         run: |
           from pathlib import Path
           import hashlib,json,os,subprocess
-          archive=Path('retained-package/Solomon-Darker-darwin-arm64.zip')
-          expected=Path(str(archive)+'.sha256').read_text().split()[0]
-          with archive.open('rb') as stream:
-              assert hashlib.file_digest(stream,'sha256').hexdigest()==expected
-          inspection=subprocess.check_output(['python','scripts/verify-desktop-archive.py',str(archive)],text=True)
-          report=json.loads(inspection)
-          assert report['revision']=='33ca699899158bae7d880a5fda605c92849e7eef'
-          assert report['nativeSha256']=='a0936ba4defb005abc55299338f1d342ad771e5376d58bacfd822a0002415036'
-          Path('reports/native-accessibility/archive-inspection.json').write_text(inspection)
-          subprocess.run(['ditto','-x','-k',str(archive),'retained-package/unpacked'],check=True)
-          app=Path('retained-package/unpacked/Solomon Darker-darwin-arm64').resolve()
+          binaries=list(Path('retained-executable').rglob('*.exe'))
+          assert len(binaries)==1
+          binary=binaries[0].resolve()
+          executable_hash=hashlib.sha256(binary.read_bytes()).hexdigest()
+          assert executable_hash=='48c263f9cc028ed4d140de6f1eaabe8e373ef4e66cc08b94e71a22ef209e473f'
+          revision=os.environ['GITHUB_SHA']
+          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
+          name='tools/diagnostic-fatal-journey.py'
+          data=subprocess.check_output(['git','show',revision+':'+name])
+          fixture_hash=hashlib.sha256(data).hexdigest()
+          assert fixture_hash=='117348c7f3f4ea762d260c992b2d2797ec04a994c71c24e2f5192d5528b2c8de'
+          Path(name).write_bytes(data)
           with open(os.environ['GITHUB_ENV'],'a') as out:
-              out.write('SDR_DESKTOP_APP='+str(app)+'\n')
-      - name: Complete real peer play after one captured AXCannotComplete read
-        if: always() && steps.fixture.outcome == 'success' && steps.unpack.outcome == 'success'
-        run: python -u tools/diagnostic-native-accessibility.py capture
-      - name: Save and close guests before their host after a controlled journey failure
-        if: always() && steps.fixture.outcome == 'success' && steps.unpack.outcome == 'success'
-        run: python -u tools/diagnostic-native-accessibility.py cleanup
-      - name: Complete the ordinary packaged journey without injected failure
-        if: always() && steps.fixture.outcome == 'success' && steps.unpack.outcome == 'success'
-        run: python -u tools/diagnostic-native-accessibility.py ordinary
+              out.write('FATAL_NATIVE_APP='+str(binary)+'\n')
+          out=Path('reports/native-fatal-status');out.mkdir(parents=True,exist_ok=True)
+          (out/'source.json').write_text(json.dumps({'base':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','retainedBuildRun':40451086793,'executableSha256':executable_hash,'fixtureRevision':revision,'fixtureSha256':fixture_hash},indent=2)+'\n')
+      - name: Stage the existing executable with its unchanged assets
+        shell: pwsh
+        run: |
+          node tools/package-desktop.mjs --platform win32 --arch x64 --native-app "$env:FATAL_NATIVE_APP" --release-repository "$env:GITHUB_REPOSITORY"
+          if ($LASTEXITCODE) { throw 'Retained native fixture packaging failed.' }
+      - name: Verify actual text pixels, accessible status, durable save and launcher return
+        shell: pwsh
+        run: |
+          python -u tools/diagnostic-fatal-journey.py
+          if ($LASTEXITCODE) { throw 'Native fatal recovery journey failed.' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: native-accessibility-macos
-          path: reports/native-accessibility
+          name: native-fatal-status-windows
+          path: reports/native-fatal-status
           if-no-files-found: error
