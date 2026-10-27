@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   capture:
-    if: false
     name: Windows settings trace (${{ matrix.attempt }})
     runs-on: windows-latest
     timeout-minutes: 15
@@ -18,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         budget: [120000]
-        attempt: [5]
+        attempt: [6]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -66,7 +65,7 @@ jobs:
             }
             if (!$ready) { throw "The owned server did not become ready: $lastStartupError" }
             @{ elapsedMs = $startup.ElapsedMilliseconds; status = $response.StatusCode } | ConvertTo-Json | Set-Content reports/capture/server-ready.json
-            $env:CAPTURE_JOURNEY = 'settings-parity'
+            $env:CAPTURE_JOURNEY = 'settings-controller'
             node tools/browser-smoke/diagnose-screenshot.cjs
             if ($LASTEXITCODE) { throw 'Settings journey failed; inspect retained timings.' }
           } finally {
@@ -82,6 +81,7 @@ jobs:
           if-no-files-found: error
 
   hosted-transfer:
+    if: false
     name: Windows exact checkpoint test validation
     runs-on: windows-latest
     timeout-minutes: 20
@@ -180,6 +180,7 @@ jobs:
           if-no-files-found: error
 
   native-peer:
+    if: false
     name: Apple silicon peer input trace
     runs-on: macos-15
     timeout-minutes: 30

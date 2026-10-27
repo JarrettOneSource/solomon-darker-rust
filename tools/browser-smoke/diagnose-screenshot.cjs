@@ -44,6 +44,11 @@ lifecycle.launchOwnedBrowser=async(...args)=>{
     const page=await newPage(...pageArgs);
     pages.push(page);
     page.on('crash',()=>trace({event:'page-crashed'}));
+    page.on('console',message=>{
+      const text=message.text();
+      const prefix='SOLOMON_CONTROLLER_TRACE ';
+      if(text.startsWith(prefix))trace({event:'controller-focus',...JSON.parse(text.slice(prefix.length))});
+    });
     page.__solomonDiagnosticEarly=true;
     const evaluate=page.evaluate.bind(page);
     page.evaluate=async(...evaluateArgs)=>{
@@ -121,7 +126,9 @@ gpu.installController=async page=>{
         const identity=JSON.stringify([focused,buttons]);
         if(identity!==previous){
           previous=identity;
-          window.__solomonControllerFocus.push({atMs:Math.round(performance.now()),frame:state.frame,focused,buttons,reads:window.gpuTestPad.reads});
+          const row={atMs:Math.round(performance.now()),frame:state.frame,focused,buttons,reads:window.gpuTestPad.reads};
+          window.__solomonControllerFocus.push(row);
+          console.debug('SOLOMON_CONTROLLER_TRACE '+JSON.stringify(row));
         }
       }
       requestAnimationFrame(observe);
@@ -158,5 +165,5 @@ gpu.click=async(page,id,...args)=>{
   }
 };
 const journey=process.env.CAPTURE_JOURNEY;
-assert.ok(['smoke','settings-parity'].includes(journey));
+assert.ok(['smoke','settings-parity','settings-controller'].includes(journey));
 require(`./${journey}.cjs`);
