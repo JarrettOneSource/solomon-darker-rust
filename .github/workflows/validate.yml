@@ -1,8 +1,14 @@
 {
-  "name": "Verify held input across measured software-rendered frames",
+  "name": "Verify rejected native input and fatal release",
+  "on": {
+    "push": {
+      "branches": [
+        "diagnostic/windows-browser-capture-20261026"
+      ]
+    }
+  },
   "permissions": {
-    "contents": "read",
-    "actions": "read"
+    "contents": "read"
   },
   "env": {
     "CARGO_INCREMENTAL": "0",
@@ -11,14 +17,9 @@
     "RUST_BACKTRACE": "1"
   },
   "jobs": {
-    "native-input-hold-arm": {
-      "runs-on": "macos-15",
-      "timeout-minutes": 30,
-      "defaults": {
-        "run": {
-          "shell": "bash"
-        }
-      },
+    "input-admission-windows": {
+      "runs-on": "windows-latest",
+      "timeout-minutes": 60,
       "steps": [
         {
           "uses": "actions/checkout@v6",
@@ -33,75 +34,56 @@
           }
         },
         {
-          "name": "Resolve the accessibility interpreter",
-          "run": "python -c 'import os,sys; print(\"TCC_CLIENT=\" + os.path.realpath(sys.executable))' >> \"$GITHUB_ENV\""
+          "name": "Select native Windows Perl",
+          "shell": "pwsh",
+          "run": "$nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source\nif (!$nativePerl) { throw 'Native Perl is unavailable.' }\n\"OPENSSL_SRC_PERL=$nativePerl\" >> $env:GITHUB_ENV\n"
         },
         {
-          "uses": "xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d",
+          "run": "rustup show"
+        },
+        {
+          "uses": "actions/cache/restore@v4",
+          "id": "cache",
           "with": {
-            "setup-window-manager": "true",
-            "macos-tcc-client": "${{ env.TCC_CLIENT }}"
+            "path": "~/.cargo/registry\n~/.cargo/git\ntarget\n",
+            "key": "input-admission-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}",
+            "restore-keys": "input-admission-${{ runner.os }}-${{ runner.arch }}-\nnative-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-\nnative-${{ runner.os }}-${{ runner.arch }}-\nfatal-input-${{ runner.os }}-${{ runner.arch }}-\n"
           }
         },
         {
-          "run": "python -m pip install -r tools/desktop-smoke-requirements.txt"
-        },
-        {
-          "uses": "actions/setup-node@v6",
-          "with": {
-            "node-version-file": ".node-version",
-            "cache": "npm"
-          }
-        },
-        {
-          "run": "npm ci --no-audit --no-fund"
-        },
-        {
-          "name": "Install verified held-input check",
-          "id": "fixture",
+          "name": "Install verified regression fixture",
           "shell": "python",
-          "run": "from pathlib import Path\nimport hashlib,json,os,subprocess\nrevision=os.environ['GITHUB_SHA']\nsubprocess.run(['git','fetch','--depth=1','origin',revision],check=True)\nname='tools/diagnostic-native-focus.py'\ndata=subprocess.check_output(['git','show',revision+':'+name])\nassert hashlib.sha256(data).hexdigest()=='17949f3279926044cb4a48e22d769c3d0ca3882add2c6389097723a2a6c1a062'\nPath(name).write_bytes(data)\nout=Path('reports/native-focus');out.mkdir(parents=True,exist_ok=True)\n(out/'source.json').write_text(json.dumps({'sourceRevision':'33ca699899158bae7d880a5fda605c92849e7eef','fixtureRevision':revision,'fixtureSha256':'17949f3279926044cb4a48e22d769c3d0ca3882add2c6389097723a2a6c1a062','executableRun':40457941650,'scope':'Unchanged private trace executable; three-second peer key hold, all movement/save checks retained'},indent=2)+'\\n')\n"
+          "run": "from pathlib import Path\nimport hashlib,json,os,subprocess\nrevision=os.environ['GITHUB_SHA']\nsubprocess.run(['git','fetch','--depth=1','origin',revision],check=True)\nhashes={'tools/diagnostic-input-rejection-test.patch': '2e94a860396b3820d4ab191b044dfa2b1dbb7a2a500c99981f4a9259a17ccf7c', 'tools/diagnostic-input-admission.patch': '88b533acfcf9b9bcbbccffc82c5cdadeddfd00e5ddf9f67ac1204e80e2dbe327', 'tools/diagnostic-fatal-release.patch': '55f6217205dcf7ab3c6f541092d9ef9fd180123ed3d4d4df6090a1292412e128', 'tools/diagnostic-failure-input.patch': '77627e0cf2d193fda1a02a8b0bbb10fc26f7c08e2f763b7920d21cb30f2e04b4'}\nout=Path('reports/input-admission');out.mkdir(parents=True,exist_ok=True)\nfor name,digest in hashes.items():\n    data=subprocess.check_output(['git','show',revision+':'+name])\n    assert hashlib.sha256(data).hexdigest()==digest,name\n    Path(name).write_bytes(data)\n    (out/Path(name).name).write_bytes(data)\n(out/'source.json').write_text(json.dumps({'source':'33ca699899158bae7d880a5fda605c92849e7eef','fixtureRevision':revision,'hashes':hashes},indent=2)+'\\n')\nsubprocess.run(['git','apply','tools/diagnostic-input-rejection-test.patch'],check=True)\n"
         },
         {
-          "uses": "actions/download-artifact@v4",
-          "with": {
-            "github-token": "${{ github.token }}",
-            "run-id": 40457941650,
-            "name": "native-input-arm-executable",
-            "path": "retained-executable"
-          }
-        },
-        {
-          "name": "Verify and package the unchanged traced executable",
-          "id": "build",
+          "name": "Reproduce the rejected release being recorded as sent",
+          "id": "red",
           "shell": "python",
-          "run": "from pathlib import Path\nimport hashlib,json,subprocess\np=Path('retained-executable/solomon-darker-app')\nassert hashlib.sha256(p.read_bytes()).hexdigest()=='5f6f7d51b32b4750e3350d6440549b12325d6a2880f17acc4139075096906199'\np.chmod(0o755)\nsubprocess.run(['node','tools/package-desktop.mjs','--platform','darwin','--arch','arm64','--native-app',str(p.resolve()),'--release-repository','JarrettOneSource/solomon-darker-rust'],check=True)\npackage=Path('dist-desktop/Solomon Darker-darwin-arm64')\nmanifest=json.loads((package/'desktop-package-manifest.json').read_text())\nstaged=package/manifest['executable']\nassert hashlib.sha256(staged.read_bytes()).hexdigest()=='f9119bbfefb243cb630f60a7ee3f3cd50bc20586516c18deda0a322861fed01d'\n"
+          "run": "from pathlib import Path\nimport json,subprocess\ncommand=['cargo','test','-p','solomon-web','--lib','rejected_input_release_remains_unsent_until_transport_admits_it','--','--nocapture']\nresult=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf-8',errors='replace')\nPath('reports/input-admission/red.log').write_text(result.stdout,encoding='utf-8')\nprint(result.stdout[-14000:])\nassert result.returncode==101,result.returncode\nassert 'a rejected release must not suppress a later release' in result.stdout\nassert 'test result: FAILED. 0 passed; 1 failed;' in result.stdout\nPath('reports/input-admission/red.json').write_text(json.dumps({'command':command,'exit':result.returncode,'status':'expected regression failure'},indent=2)+'\\n')\n"
         },
         {
-          "name": "Sample first three-second peer hold",
-          "run": "python -u tools/diagnostic-native-focus.py hold-one"
+          "name": "Verify admission commit and composed fatal release",
+          "id": "green",
+          "shell": "python",
+          "run": "from pathlib import Path\nimport subprocess,json\nfor name in ['tools/diagnostic-input-admission.patch','tools/diagnostic-failure-input.patch','tools/diagnostic-fatal-release.patch']:\n    subprocess.run(['git','apply',name],check=True)\nsubprocess.run(['cargo','fmt','--all'],check=True)\nPath('reports/input-admission/verified-source.patch').write_bytes(subprocess.check_output(['git','diff','--','crates']))\ncommands=[['cargo','fmt','--all','--','--check'],['cargo','test','-p','solomon-protocol','--lib'],['cargo','test','-p','solomon-web','--lib'],['cargo','clippy','-p','solomon-protocol','-p','solomon-web','--all-targets','--all-features','--','-D','warnings']]\nresults=[]\nfor i,command in enumerate(commands):\n    result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf-8',errors='replace')\n    Path(f'reports/input-admission/green-{i}.log').write_text(result.stdout,encoding='utf-8')\n    print(result.stdout[-12000:])\n    results.append({'command':command,'exit':result.returncode})\n    Path('reports/input-admission/green.json').write_text(json.dumps(results,indent=2)+'\\n')\n    assert result.returncode==0,command\n"
         },
         {
-          "name": "Sample second three-second peer hold",
-          "if": "always() && steps.build.outcome == 'success'",
-          "run": "python -u tools/diagnostic-native-focus.py hold-two"
+          "uses": "actions/cache/save@v4",
+          "if": "always() && steps.green.outcome == 'success' && steps.cache.outputs.cache-hit != 'true'",
+          "with": {
+            "path": "~/.cargo/registry\n~/.cargo/git\ntarget\n",
+            "key": "${{ steps.cache.outputs.cache-primary-key }}"
+          }
         },
         {
           "uses": "actions/upload-artifact@v4",
           "if": "always()",
           "with": {
-            "name": "native-input-hold-arm",
-            "path": "reports/native-focus",
+            "name": "native-input-admission-windows",
+            "path": "reports/input-admission",
             "if-no-files-found": "error"
           }
         }
-      ]
-    }
-  },
-  "on": {
-    "push": {
-      "branches": [
-        "diagnostic/windows-browser-capture-20261026"
       ]
     }
   }

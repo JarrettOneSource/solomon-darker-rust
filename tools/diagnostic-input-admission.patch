@@ -1,0 +1,153 @@
+diff --git a/crates/protocol/src/client_input.rs b/crates/protocol/src/client_input.rs
+index 475cbc6c..c54c9695 100644
+--- a/crates/protocol/src/client_input.rs
++++ b/crates/protocol/src/client_input.rs
+@@ -26,27 +26,31 @@ pub struct ClientInputSequence {
+ impl ClientInputSequence {
+     /// Call after a Welcome and against the latest accepted snapshot tick. Holds include
+     /// authority pause/grace, a level-up barrier, the local offer/death and GameOver.
+-    pub fn queue_input(
++    /// Sequence and edge state advance only after the transport admits the message.
++    pub fn send_input(
+         &mut self,
+         snapshot_tick: u64,
+         requested: GameSessionInput,
+         held: bool,
+-    ) -> Result<Option<ClientMessage>, &'static str> {
++        send: impl FnOnce(&ClientMessage) -> Result<(), String>,
++    ) -> Result<(), String> {
+         let mut input = if held { GameSessionInput::default() } else { requested };
+         if !input.movement.x.is_finite() || !input.movement.y.is_finite() {
+-            return Err("game input must contain finite movement coordinates");
++            return Err("game input must contain finite movement coordinates".into());
+         }
+         if input.aim.is_some_and(|aim| !aim.x.is_finite() || !aim.y.is_finite()) {
+-            return Err("game input must contain finite aim coordinates");
++            return Err("game input must contain finite aim coordinates".into());
+         }
+         if input.quickbar.is_some_and(|slot| slot >= PLAYER_BELT_SLOT_COUNT) {
+-            return Err("game input must contain a primary level and native skill quickbar slot");
++            return Err(
++                "game input must contain a primary level and native skill quickbar slot".into(),
++            );
+         }
+         if !input.viewport.x.is_finite() || input.viewport.x < 1.0 {
+-            return Err("game input must contain a positive finite viewport width");
++            return Err("game input must contain a positive finite viewport width".into());
+         }
+         if !input.viewport.y.is_finite() || input.viewport.y < 1.0 {
+-            return Err("game input must contain a positive finite viewport height");
++            return Err("game input must contain a positive finite viewport height".into());
+         }
+         let length = hypot(input.movement.x, input.movement.y);
+         if length > 1.0 {
+@@ -54,13 +58,12 @@ impl ClientInputSequence {
+             input.movement.y /= length;
+         }
+         if input == self.sent {
+-            return Ok(None);
++            return Ok(());
+         }
+ 
+         let cast_transition =
+             input.primary != self.sent.primary || input.quickbar != self.sent.quickbar;
+-        self.sent = input;
+-        self.sequence += 1;
++        let sequence = self.sequence + 1;
+         let next_tick = snapshot_tick + 1;
+         let target_tick = self
+             .pending
+@@ -69,7 +72,11 @@ impl ClientInputSequence {
+             .map_or(next_tick, |entry| {
+                 next_tick.max(entry.target_tick + u64::from(cast_transition))
+             });
+-        let pending = PendingInput { sequence: self.sequence, target_tick };
++        // Rejected input must remain unsent so a later release cannot be deduplicated.
++        send(&ClientMessage::Input { sequence, target_tick, input })?;
++        self.sent = input;
++        self.sequence = sequence;
++        let pending = PendingInput { sequence, target_tick };
+         if let Some(existing) =
+             self.pending.iter_mut().find(|entry| entry.target_tick == target_tick)
+         {
+@@ -77,7 +84,7 @@ impl ClientInputSequence {
+         } else {
+             self.pending.push(pending);
+         }
+-        Ok(Some(ClientMessage::Input { sequence: self.sequence, target_tick, input }))
++        Ok(())
+     }
+ 
+     pub fn acknowledge(&mut self, sequence: u64) {
+@@ -97,19 +104,33 @@ mod tests {
+     use super::*;
+     use serde::Deserialize;
+ 
++    fn queue_input(
++        client: &mut ClientInputSequence,
++        tick: u64,
++        input: GameSessionInput,
++        held: bool,
++    ) -> Result<Option<ClientMessage>, String> {
++        let mut message = None;
++        client.send_input(tick, input, held, |input| {
++            message = Some(input.clone());
++            Ok(())
++        })?;
++        Ok(message)
++    }
++
+     #[test]
+     fn all_three_hotbars_preserve_press_release_edges() {
+         for slot in [0, 7, 8, 15, 16, 23] {
+             let mut client = ClientInputSequence::default();
+             let press = GameSessionInput { quickbar: Some(slot), ..GameSessionInput::default() };
+             let Some(ClientMessage::Input { sequence: 1, target_tick: 11, input }) =
+-                client.queue_input(10, press, false).unwrap()
++                queue_input(&mut client, 10, press, false).unwrap()
+             else {
+                 panic!("the selected hotbar slot must publish its press");
+             };
+             assert_eq!(input.quickbar, Some(slot));
+             let Some(ClientMessage::Input { sequence: 2, target_tick: 12, input }) =
+-                client.queue_input(10, GameSessionInput::default(), false).unwrap()
++                queue_input(&mut client, 10, GameSessionInput::default(), false).unwrap()
+             else {
+                 panic!("the release must occupy a separate tick");
+             };
+@@ -118,7 +139,7 @@ mod tests {
+         for slot in [24, usize::MAX] {
+             let mut client = ClientInputSequence::default();
+             let invalid = GameSessionInput { quickbar: Some(slot), ..GameSessionInput::default() };
+-            assert!(client.queue_input(10, invalid, false).is_err());
++            assert!(queue_input(&mut client, 10, invalid, false).is_err());
+             assert_eq!(client.sequence, 0);
+         }
+     }
+@@ -230,7 +251,8 @@ mod tests {
+             for (index, step) in scenario.steps.into_iter().enumerate() {
+                 let actual = match step.action {
+                     Action::Send { input, tick, pause, grace, barrier, offer, dead, game_over } => {
+-                        client.queue_input(
++                        queue_input(
++                            &mut client,
+                             tick,
+                             input.into(),
+                             pause || grace || barrier || offer || dead || game_over,
+diff --git a/crates/web/src/network.rs b/crates/web/src/network.rs
+index 81314333..5a43fae5 100644
+--- a/crates/web/src/network.rs
++++ b/crates/web/src/network.rs
+@@ -119,10 +119,8 @@ impl NativeSession {
+         input: GameSessionInput,
+         held: bool,
+     ) -> Result<(), String> {
+-        if let Some(message) = self.input.queue_input(snapshot_tick, input, held)? {
+-            self.send(&message)?;
+-        }
+-        Ok(())
++        let connection = &self.connection;
++        self.input.send_input(snapshot_tick, input, held, |message| connection.send(message))
+     }
+ 
+     pub fn acknowledge_snapshot(
