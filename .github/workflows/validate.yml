@@ -1,5 +1,5 @@
 {
-  "name": "Verify captured media rewind on Windows",
+  "name": "Probe Windows loopback port randomization",
   "on": {
     "push": {
       "branches": [
@@ -12,9 +12,9 @@
     "actions": "read"
   },
   "jobs": {
-    "media-seek-windows": {
+    "socket-buffer-windows": {
       "runs-on": "windows-latest",
-      "timeout-minutes": 35,
+      "timeout-minutes": 40,
       "steps": [
         {
           "uses": "actions/checkout@v6"
@@ -35,34 +35,20 @@
           "run": "npm ci --no-audit --no-fund"
         },
         {
-          "uses": "actions/download-artifact@v4",
-          "with": {
-            "name": "browser-client",
-            "path": "web/dist",
-            "run-id": 40482121926,
-            "github-token": "${{ github.token }}"
-          }
+          "name": "Validate the private probe syntax",
+          "run": "node --check tools/diagnostic-socket-buffer.cjs\npython -m py_compile tools/diagnostic-socket-buffer.py"
         },
         {
-          "name": "Install the matching tracked assets",
-          "shell": "python",
-          "run": "import shutil\nshutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)"
-        },
-        {
-          "name": "Verify classifier regression and replay all retained request evidence",
-          "run": "python tools/diagnostic-media-seek.py green"
-        },
-        {
-          "name": "Run two complete original browser acceptance sequences",
+          "name": "Measure default, disabled and restored port randomization",
           "shell": "pwsh",
-          "run": "$env:PW = Join-Path $env:GITHUB_WORKSPACE 'node_modules/playwright-core'\n$env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'\nif (!(Test-Path $env:CHROME)) { throw 'Chrome is unavailable.' }\npython tools/diagnostic-browser-seek.py\n"
+          "run": "$env:PW = Join-Path $env:GITHUB_WORKSPACE 'node_modules/playwright-core'\n$env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'\nif (!(Test-Path $env:CHROME)) { throw 'Chrome is unavailable.' }\npython tools/diagnostic-socket-buffer.py\n"
         },
         {
           "uses": "actions/upload-artifact@v4",
           "if": "always()",
           "with": {
-            "name": "browser-media-seek-windows",
-            "path": "reports/media-seek",
+            "name": "windows-socket-buffer",
+            "path": "reports/socket-buffer",
             "if-no-files-found": "error"
           }
         }
