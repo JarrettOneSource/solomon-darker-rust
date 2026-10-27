@@ -35,16 +35,29 @@ function residentSuspension(failure,captured,settled) {
   if(!captured||!settled||captured.documentId!==settled.documentId)return null;
   const before=loadedResidentChannel(failure,captured);
   const after=loadedResidentChannel(failure,settled);
-  if(!before||!after||after.id!==before.id||after.cue!==before.cue
-    ||!suspendedResidentChannel(before))return null;
+  if(!before||!after||after.id!==before.id||after.cue!==before.cue)return null;
+  const later=after.events.slice(before.events.length);
+  const played=later.findIndex(event=>event.type==='playing'
+    &&event.trusted&&event.url===failure.url&&event.ready>=3
+    &&event.paused===false&&event.seeking===false);
   let reason='ready resident channel suspended by the browser';
-  if(!suspendedResidentChannel(after)) {
-    // Trusted-gesture priming can resume fetching after the captured suspension.
-    // Require later real playback and retained future data from the same owner.
-    const played=after.events.slice(before.events.length).some(event=>event.type==='playing'
+  if(!suspendedResidentChannel(before)) {
+    // A priming rewind can briefly retain only metadata at the request callback.
+    // Its earlier preload and later native seek completion/playback must survive.
+    const seeked=later.findIndex(event=>event.type==='seeked'
       &&event.trusted&&event.url===failure.url&&event.ready>=3
       &&event.paused===false&&event.seeking===false);
-    if(after.network!==2||after.ready<3||after.seeking!==false||!played)return null;
+    if(before.ready!==1||before.network!==1||before.currentTime!==0
+      ||before.seeking!==true||before.paused!==false
+      ||!before.events.some(event=>event.type==='loadeddata'&&event.trusted&&event.ready>=2)
+      ||!before.events.some(event=>event.type==='suspend'&&event.trusted&&event.network===1)
+      ||seeked<0||played<=seeked||![1,2].includes(after.network)
+      ||after.ready<3||after.seeking!==false)return null;
+    reason='resident channel completed a captured rewind after browser suspension';
+  } else if(!suspendedResidentChannel(after)) {
+    // Trusted-gesture priming can resume fetching after the captured suspension.
+    // Require later real playback and retained future data from the same owner.
+    if(after.network!==2||after.ready<3||after.seeking!==false||played<0)return null;
     reason='ready resident channel resumed after browser suspension';
   }
   return {cue:before.cue,channelId:before.id,documentId:captured.documentId,reason};
