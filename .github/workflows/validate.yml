@@ -260,6 +260,7 @@ jobs:
           if-no-files-found: error
 
   native-admission:
+    if: false
     name: Intel Mac admission event trace
     runs-on: macos-15-intel
     timeout-minutes: 45
@@ -351,4 +352,70 @@ jobs:
         with:
           name: native-admission-trace
           path: reports/native-admission
+          if-no-files-found: error
+
+  native-admission-red:
+    name: Windows native admission regression RED
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: 99a3973a394f320d8875839f61710aa12de6da1e
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Select native Windows Perl
+        shell: pwsh
+        run: |
+          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
+          if (!$nativePerl) { throw 'The runner has no Strawberry Perl installation.' }
+          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
+      - name: Restore native build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-99a3973a394f320d8875839f61710aa12de6da1e
+          restore-keys: |
+            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+      - run: rustup show
+      - name: Observe proposed admission regression against unchanged runtime
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess,time,json
+          output=Path('reports/native-admission-red')
+          output.mkdir(parents=True,exist_ok=True)
+          source=Path('crates/web/src/network/native/tests.rs')
+          original=source.read_bytes()
+          text=source.read_text()
+          needle='#[test]\nfn actual_session_sends_admission_and_retains_the_server_close_reason()'
+          assert text.count(needle)==1
+          regression='#[test]\nfn native_admission_starts_before_the_renderer_polls() {\n    let (admitted, received) = sync::channel();\n    let (endpoint, server) = server(move |mut socket| {\n        let message = socket.read().unwrap();\n        if let Message::Text(text) = message {\n            assert!(matches!(\n                serde_json::from_str::<ClientMessage>(&text).unwrap(),\n                ClientMessage::InspectSession { resume: None }\n            ));\n            admitted.send(()).unwrap();\n            assert!(matches!(socket.read().unwrap(), Message::Close(_)));\n        }\n    });\n    crate::platform::configure_native_location("http://native.test/game/", None).unwrap();\n    let session =\n        NativeSession::connect_to(&endpoint, ClientMessage::InspectSession { resume: None })\n            .unwrap();\n    // The native transport keeps running while an expensive frame occupies the UI.\n    let admission = received.recv_timeout(Duration::from_secs(3));\n    drop(session);\n    server.join().unwrap();\n    assert!(admission.is_ok(), "native admission waited for the renderer to poll");\n}\n\n'
+          source.write_text(text.replace(needle,regression+needle))
+          command=['cargo','test','-p','solomon-web','--lib','--all-features','native_admission_starts_before_the_renderer_polls','--','--nocapture']
+          started=time.monotonic()
+          try:
+              with (output/'regression.log').open('w') as log:
+                  result=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT)
+              log=(output/'regression.log').read_text()
+              expected='native admission waited for the renderer to poll' in log and result.returncode!=0
+              row={'baseRevision':'99a3973a394f320d8875839f61710aa12de6da1e','runtimeUnchanged':True,'command':command,'exit':result.returncode,'expectedFailure':expected,'elapsedSeconds':time.monotonic()-started}
+              (output/'receipt.json').write_text(json.dumps(row,indent=2)+'\n');print(json.dumps(row))
+              assert expected,'Inspect regression.log; the proposed isolated cause was not established.'
+          finally:
+              source.write_bytes(original)
+      - name: Retain regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-admission-red
+          path: reports/native-admission-red
           if-no-files-found: error
