@@ -1,5 +1,5 @@
 {
-  "name": "Trace native save admission on Intel Mac",
+  "name": "Probe native admission during preferences contention",
   "on": {
     "push": {
       "branches": [
@@ -8,7 +8,8 @@
     }
   },
   "permissions": {
-    "contents": "read"
+    "contents": "read",
+    "actions": "read"
   },
   "env": {
     "CARGO_INCREMENTAL": "0",
@@ -19,7 +20,7 @@
   "jobs": {
     "native-admission": {
       "runs-on": "macos-15-intel",
-      "timeout-minutes": 90,
+      "timeout-minutes": 25,
       "steps": [
         {
           "uses": "actions/checkout@v6"
@@ -44,60 +45,29 @@
           "run": "python3 -m pip install -r tools/desktop-smoke-requirements.txt"
         },
         {
-          "uses": "actions/setup-node@v6",
+          "uses": "actions/download-artifact@v4",
           "with": {
-            "node-version-file": ".node-version",
-            "cache": "npm"
+            "name": "unqualified-native-admission-package",
+            "run-id": "40527892687",
+            "github-token": "${{ secrets.GITHUB_TOKEN }}",
+            "repository": "${{ github.repository }}",
+            "path": "diagnostic-package"
           }
         },
         {
-          "run": "npm install --global npm@10.9.2"
+          "run": "python3 -m py_compile tools/diagnostic-native-admission.py"
         },
         {
-          "run": "npm ci --no-audit --no-fund"
-        },
-        {
-          "run": "rustup show"
-        },
-        {
-          "run": "python3 scripts/verify-client-assets.py\npython3 -m py_compile tools/diagnostic-native-admission.py"
-        },
-        {
-          "uses": "actions/cache/restore@v4",
-          "with": {
-            "path": "~/.cargo/registry\n~/.cargo/git\ntarget",
-            "key": "native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}",
-            "restore-keys": "native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-\nnative-${{ runner.os }}-${{ runner.arch }}-"
-          }
-        },
-        {
-          "name": "Build the traced native app",
-          "run": "npm run package:desktop -- --platform darwin --arch x64 --release-repository \"$GITHUB_REPOSITORY\""
-        },
-        {
-          "name": "Archive the diagnostic package",
-          "run": "node tools/archive-desktop.mjs"
-        },
-        {
-          "name": "Observe ordinary offline recovery and eight fresh-process continuations",
-          "timeout-minutes": 40,
+          "name": "Observe contention and recovery with the reviewed executable",
+          "timeout-minutes": 20,
           "run": "python3 tools/diagnostic-native-admission.py"
         },
         {
           "uses": "actions/upload-artifact@v4",
           "if": "always()",
           "with": {
-            "name": "native-admission-diagnostic",
+            "name": "native-admission-contention",
             "path": "reports/desktop-smoke",
-            "if-no-files-found": "warn"
-          }
-        },
-        {
-          "uses": "actions/upload-artifact@v4",
-          "if": "always()",
-          "with": {
-            "name": "unqualified-native-admission-package",
-            "path": "dist-desktop/*.zip\ndist-desktop/*.sha256\ndist-desktop/desktop-release.json",
             "if-no-files-found": "warn"
           }
         }
