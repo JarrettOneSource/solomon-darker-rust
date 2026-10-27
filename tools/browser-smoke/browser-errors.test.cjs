@@ -49,6 +49,41 @@ test('a ready resident channel with directly witnessed browser suspension owns i
     documentId:123,reason:'ready resident channel suspended by the browser'});
 });
 
+function resumedSuspension() {
+  const fixture=evidence();
+  const channel=fixture.settled.channels[0];
+  // Windows Chrome resumed fetching after trusted-gesture music priming. The
+  // cancelled preload was already loaded and suspended before this playback.
+  Object.assign(channel,{ready:3,network:2,paused:true,seeking:false});
+  channel.events.push(
+    {type:'playing',trusted:true,url:channel.url,ready:3,paused:false,seeking:false},
+    {type:'seeking',trusted:true,paused:true,seeking:true},
+    {type:'seeked',trusted:true,paused:true,seeking:false});
+  return fixture;
+}
+
+test('a suspended preload remains owned when its resident channel later plays and resumes fetching',()=>{
+  const {failure,captured,settled}=resumedSuspension();
+  assert.deepEqual(residentSuspension(failure,captured,settled),{cue:'death',channelId:3,
+    documentId:123,reason:'ready resident channel resumed after browser suspension'});
+});
+
+for(const [name,change] of [
+  ['no later playback',f=>{f.settled.channels[0].events.splice(3,1)}],
+  ['playback only before capture',f=>{
+    f.captured=structuredClone(f.settled);f.captured.channels[0].network=1;
+  }],
+  ['a fabricated playing event',f=>{f.settled.channels[0].events[3].trusted=false}],
+  ['playback of another resource',f=>{f.settled.channels[0].events[3].url+='?other'}],
+  ['an unfinished seek',f=>{f.settled.channels[0].seeking=true}],
+  ['lost future data',f=>{f.settled.channels[0].ready=2}],
+  ['a later media error',f=>{f.settled.channels[0].error=3}],
+  ['a changed source',f=>{f.settled.channels[0].sources.push('https://example.com/other.mp3')}],
+])test(`resumed fetching does not excuse ${name}`,()=>{
+  const fixture=resumedSuspension();change(fixture);
+  assert.equal(residentSuspension(fixture.failure,fixture.captured,fixture.settled),null);
+});
+
 test('URL and ERR_ABORTED alone never classify a failed request',()=>{
   const {failure}=evidence();
   assert.equal(residentSuspension(failure,null,null),null);

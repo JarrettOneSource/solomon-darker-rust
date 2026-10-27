@@ -36,9 +36,18 @@ function residentSuspension(failure,captured,settled) {
   const before=loadedResidentChannel(failure,captured);
   const after=loadedResidentChannel(failure,settled);
   if(!before||!after||after.id!==before.id||after.cue!==before.cue
-    ||![before,after].every(suspendedResidentChannel))return null;
-  return {cue:before.cue,channelId:before.id,documentId:captured.documentId,
-    reason:'ready resident channel suspended by the browser'};
+    ||!suspendedResidentChannel(before))return null;
+  let reason='ready resident channel suspended by the browser';
+  if(!suspendedResidentChannel(after)) {
+    // Trusted-gesture priming can resume fetching after the captured suspension.
+    // Require later real playback and retained future data from the same owner.
+    const played=after.events.slice(before.events.length).some(event=>event.type==='playing'
+      &&event.trusted&&event.url===failure.url&&event.ready>=3
+      &&event.paused===false&&event.seeking===false);
+    if(after.network!==2||after.ready<3||after.seeking!==false||!played)return null;
+    reason='ready resident channel resumed after browser suspension';
+  }
+  return {cue:before.cue,channelId:before.id,documentId:captured.documentId,reason};
 }
 
 function documentRetirement(failure,retirement) {

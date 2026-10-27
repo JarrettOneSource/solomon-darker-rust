@@ -212,10 +212,13 @@ Wait for the actual accepted model and released loading scope before interacting
 a background widget record alone does not prove that a control is exposed.
 
 Expected resource cancellation needs evidence of the owning navigation, disposal,
-or media suspension. A truncated response or content-length mismatch remains a
-failure. Mark controlled prerequisites, such as Console-granted funds or imported
-inventory, separately from naturally earned outcomes. Browser IME emulation and
-read-only announcement observation also retain their actual scope.
+or media suspension. A suspended resident song can resume fetching after trusted
+playback; the observer requires the same loaded owner and source, later native
+playback, retained future data and no media error. A truncated response or
+content-length mismatch remains a failure. Mark controlled prerequisites, such as
+Console-granted funds or imported inventory, separately from naturally earned
+outcomes. Browser IME emulation and read-only announcement observation also retain
+their actual scope.
 
 Run cold/warm startup, delayed and failed required resources, resize, input-device
 changes, modal replacement, save/Continue, and the affected feature's failure paths.
