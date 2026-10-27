@@ -1,4 +1,4 @@
-name: Observe native frames and Windows browser loading
+name: Observe Windows fresh-document admission
 
 on:
   push:
@@ -46,8 +46,6 @@ jobs:
           restore-keys: |
             native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
       - run: rustup show
-      - name: Build real Windows authority
-        run: cargo build --locked -p solomon-launcher --bin solomon-darker
       - name: Wait for the already-running exact-source browser build
         shell: python
         env:
@@ -93,14 +91,27 @@ jobs:
           (output/'checkout-verification.json').write_text(json.dumps({'canonicalSourceHashesMatch':True,'onlyLineEndingsDiffer':line_endings},indent=2)+'\n')
           revision=os.environ['GITHUB_SHA']
           subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          fixtures={'tools/browser-smoke/native-admission-acceptance.cjs': 'addd82bc3d024c44921d06b3550896edad22fe2d8366f5ab33110d8472111d86', 'tools/browser-smoke/native-admission-windows.py': 'fceae648a3aa8f3bdb1f61a10c2ed97fde09cda73eeb1570b1f1e002a1dd0489'}
+          fixtures={'tools/browser-smoke/native-admission-acceptance.cjs': '189908c42aeb5ba0a4e8abaace5ce990c8054eb3770845f8dbdcccbfe87a1940', 'tools/browser-smoke/native-admission-windows.py': 'fceae648a3aa8f3bdb1f61a10c2ed97fde09cda73eeb1570b1f1e002a1dd0489', 'tools/browser-smoke/observe-admission.cjs': '3b00b008fdab8c6b381369eedff3d309beb7effa641689af9e89b204f2cd05c9', 'tools/diagnostic-host-admission.py': 'b959af000067d9b2bc24e847702a7d4c2b103b3490f88ce2a3e7182cdcf89972'}
           for name,digest in fixtures.items():
               data=subprocess.check_output(['git','show',revision+':'+name])
               assert hashlib.sha256(data).hexdigest()==digest,name
               Path(name).write_bytes(data)
           shutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)
-          receipt={'hostSource':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','browserRun':40432773454,'browserSourceMatchesHostCheckout':True,'fixtureRevision':revision,'fixtureHashes':fixtures,'hostSha256':hashlib.sha256(Path('target/debug/solomon-darker.exe').read_bytes()).hexdigest()}
+          receipt={'hostSource':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','browserRun':40432773454,'browserSourceMatchesHostCheckout':True,'fixtureRevision':revision,'fixtureHashes':fixtures}
           (output/'source.json').write_text(json.dumps(receipt,indent=2)+'\n')
+      - name: Add private host timestamp observations
+        run: python tools/diagnostic-host-admission.py
+      - name: Build observed real Windows authority
+        run: cargo build --locked -p solomon-launcher --bin solomon-darker
+      - name: Record observed host executable
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib,json
+          p=Path('reports/browser-admission/source.json');s=json.loads(p.read_text())
+          s['hostSha256']=hashlib.sha256(Path('target/debug/solomon-darker.exe').read_bytes()).hexdigest()
+          s['hostObservationsOnly']=True
+          p.write_text(json.dumps(s,indent=2)+'\n')
       - name: Exercise real browser admission, save and fresh-document continuation
         run: python tools/browser-smoke/native-admission-windows.py
       - name: Retain Windows browser and host evidence
@@ -109,140 +120,4 @@ jobs:
         with:
           name: browser-native-admission-windows
           path: reports/browser-admission
-          if-no-files-found: error
-
-  native-frame:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: b8e90930e195b8f74e8492bd0bc6f0c8486940fa
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - name: Prepare native accessibility and display
-        uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
-        with:
-          setup-window-manager: 'true'
-          extra-packages: libasound2-dev libasound2-plugins libudev-dev libfontconfig1-dev libclang-dev cmake libgl1-mesa-dev pulseaudio
-      - run: python -m pip install -r tools/desktop-smoke-requirements.txt
-      - name: Provide the regular Linux audio output
-        run: |
-          pulseaudio --start --exit-idle-time=-1
-          pactl load-module module-null-sink sink_name=acceptance
-          pactl set-default-sink acceptance
-          printf 'pcm.!default { type pulse }\nctl.!default { type pulse }\n' > ~/.asoundrc
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - run: rustup show
-      - uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-b8e90930e195b8f74e8492bd0bc6f0c8486940fa
-          restore-keys: |
-            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-      - name: Install verified private observation fixture
-        shell: python
-        run: |
-          from pathlib import Path
-          import os,subprocess,hashlib,json
-          revision=os.environ['GITHUB_SHA']
-          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          hashes={'tools/diagnostic-native-frame.py': '5cfcfd12fade5b4e90e2c6fb4f349734b00e0b535482754bbed7109b67019deb'}
-          for name,digest in hashes.items():
-              data=subprocess.check_output(['git','show',revision+':'+name])
-              assert hashlib.sha256(data).hexdigest()==digest,name
-              Path(name).write_bytes(data)
-          out=Path('reports/native-frame');out.mkdir(parents=True,exist_ok=True)
-          (out/'source.json').write_text(json.dumps({'base':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','observationRevision':revision,'fixtureHashes':hashes},indent=2)+'\n')
-      - name: Add state and focus observations only
-        run: python tools/diagnostic-native-frame.py
-      - name: Build observed native app
-        run: npm run package:desktop -- --platform linux --arch x64 --release-repository "$GITHUB_REPOSITORY"
-      - name: Run three bounded ordinary peer journeys
-        shell: python
-        run: |
-          from pathlib import Path
-          import os,subprocess,json
-          rows=[]
-          for attempt in range(1,4):
-              out=Path('reports/native-frame')/str(attempt);out.mkdir(parents=True)
-              env=os.environ.copy();env['SDR_DESKTOP_EVIDENCE']=str(out.resolve())
-              with (out/'driver.log').open('w') as log:
-                  result=subprocess.run(['python','tools/smoke-desktop-runtime.py'],env=env,stdout=log,stderr=subprocess.STDOUT)
-              rows.append({'attempt':attempt,'exit':result.returncode})
-          Path('reports/native-frame/attempts.json').write_text(json.dumps(rows,indent=2)+'\n')
-          assert not any(row['exit'] for row in rows),rows
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: native-frame-linux
-          path: reports/native-frame
-          if-no-files-found: error
-
-  browser-loading:
-    runs-on: windows-latest
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: b8e90930e195b8f74e8492bd0bc6f0c8486940fa
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - uses: actions/download-artifact@v4
-        with:
-          name: browser-client-green
-          path: web/dist
-          run-id: 40432773454
-          github-token: ${{ github.token }}
-      - uses: actions/download-artifact@v4
-        with:
-          name: browser-green-source
-          path: reports/browser-loading/browser-source
-          run-id: 40432773454
-          github-token: ${{ github.token }}
-      - name: Install verified private observation fixture
-        shell: python
-        run: |
-          from pathlib import Path
-          import os,subprocess,hashlib,json
-          revision=os.environ['GITHUB_SHA']
-          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          hashes={'tools/browser-smoke/observe-loading.cjs': 'ddb332d801bd6619b047b9657d9ccae340098d1e1cf69cd3cc0e37a0cdeb70a6', 'tools/browser-smoke/observe-loading-windows.py': '3e2f297715515981a495f6efe0cb321a33bb7aef21a81b014932c4768339b76d'}
-          for name,digest in hashes.items():
-              data=subprocess.check_output(['git','show',revision+':'+name])
-              assert hashlib.sha256(data).hexdigest()==digest,name
-              Path(name).write_bytes(data)
-          out=Path('reports/browser-loading');out.mkdir(parents=True,exist_ok=True)
-          (out/'source.json').write_text(json.dumps({'base':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','observationRevision':revision,'fixtureHashes':hashes},indent=2)+'\n')
-      - name: Verify exact runtime sources and prepare tracked assets
-        shell: python
-        run: |
-          from pathlib import Path
-          import json,hashlib,subprocess,shutil
-          source=json.loads(Path('reports/browser-loading/browser-source/source.json').read_text())
-          for name,digest in source['hashes'].items():
-              data=subprocess.check_output(['git','show','HEAD:'+name])
-              assert hashlib.sha256(data).hexdigest()==digest,name
-          shutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)
-      - name: Observe canonical settings and reload
-        run: python tools/browser-smoke/observe-loading-windows.py
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: browser-loading-windows
-          path: reports/browser-loading
           if-no-files-found: error

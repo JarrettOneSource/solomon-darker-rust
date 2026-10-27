@@ -18,6 +18,7 @@ const receipt = {pass:false, checks:[], admissions:[], saves:0};
     page = await owner.browser.newPage({viewport:{width:1600,height:900}});
     observed = ui.watchErrors(page);
     await observed.ready;
+    await require('./observe-admission.cjs').install(page,output);
     let statusCount = 0;
     page.on('websocket', socket => {
       const read = createNativeMessageReader();
