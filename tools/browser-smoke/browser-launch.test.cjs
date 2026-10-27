@@ -23,16 +23,16 @@ test('the owned browser preserves launch features and disables Windows port rand
   const owned=await launchOwnedBrowser(chromium,options);
   try {
     const cdp=await owned.browser.newBrowserCDPSession();
-    let args;
-    try {({arguments:args}=await cdp.send('Browser.getBrowserCommandLine'))}
+    let commandLine;
+    try {({commandLine}=await cdp.send('SystemInfo.getInfo'))}
     finally {await cdp.detach()}
     const prefix='--disable-features=';
-    const switches=args.filter(arg=>arg.startsWith(prefix));
+    const switches=commandLine.match(/--disable-features=[^"\s]+/g)||[];
     assert.equal(switches.length,1,'the effective command line has one feature list');
     const expected=new Set(defaults);
     if(process.platform==='win32')expected.add('TcpPortRandomizationWin');
     assert.deepEqual(new Set(switches[0].slice(prefix.length).split(',')),expected);
-    assert.ok(args.includes('--window-size=800,600'),'caller arguments survive');
+    assert.ok(commandLine.includes('--window-size=800,600'),'caller arguments survive');
   } finally {
     const cleanup=await owned.close();
     assert.equal(cleanup.mode,'graceful');
