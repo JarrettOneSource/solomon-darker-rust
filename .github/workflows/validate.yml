@@ -1,5 +1,5 @@
 {
-  "name": "Verify canonical Windows browser launcher",
+  "name": "Verify direct Mac window lookup",
   "on": {
     "push": {
       "branches": [
@@ -12,15 +12,12 @@
     "actions": "read"
   },
   "jobs": {
-    "browser-network-windows": {
-      "runs-on": "windows-latest",
-      "timeout-minutes": 35,
+    "mac-window-diagnostic": {
+      "runs-on": "macos-15-intel",
+      "timeout-minutes": 40,
       "steps": [
         {
-          "uses": "actions/checkout@v6",
-          "with": {
-            "fetch-depth": 3
-          }
+          "uses": "actions/checkout@v6"
         },
         {
           "uses": "actions/setup-python@v6",
@@ -29,53 +26,50 @@
           }
         },
         {
-          "uses": "actions/setup-node@v6",
+          "name": "Resolve accessibility interpreter",
+          "run": "python3 -c 'import os,sys; print(\"TCC_CLIENT=\" + os.path.realpath(sys.executable))' >> \"$GITHUB_ENV\""
+        },
+        {
+          "uses": "xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d",
           "with": {
-            "node-version": "22.17.0"
+            "macos-tcc-client": "${{ env.TCC_CLIENT }}"
           }
         },
         {
-          "run": "npm ci --no-audit --no-fund"
+          "run": "python3 -m pip install -r tools/desktop-smoke-requirements.txt"
         },
         {
           "uses": "actions/download-artifact@v4",
           "with": {
-            "name": "browser-client",
-            "path": "web/dist",
+            "name": "desktop-darwin-x64",
+            "path": "reports/package-download",
             "run-id": 40497735544,
             "github-token": "${{ github.token }}"
           }
         },
         {
-          "name": "Install the matching tracked assets",
-          "shell": "python",
-          "run": "import shutil\nshutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)"
+          "name": "Verify and extract the published ordinary package",
+          "shell": "bash",
+          "run": "(cd reports/package-download && shasum -a 256 -c Solomon-Darker-darwin-x64.zip.sha256)\nditto -xk reports/package-download/Solomon-Darker-darwin-x64.zip reports/package"
         },
         {
-          "name": "Validate private probe syntax",
-          "run": "python -m py_compile tools/diagnostic-browser-network.py"
+          "name": "Validate the unchanged assets and diagnostic syntax",
+          "run": "python3 scripts/verify-client-assets.py\npython3 -m py_compile tools/smoke-desktop-runtime.py tools/diagnostic-mac-windows.py"
         },
         {
-          "name": "Verify unchanged assets and browser support",
-          "run": "python scripts/verify-client-assets.py\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\nnpm run test:browser-support",
-          "shell": "pwsh"
-        },
-        {
-          "name": "Prove real browser launch fails before and passes after the correction",
-          "shell": "pwsh",
-          "run": "$env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'\npython tools/diagnostic-launch-regression.py"
-        },
-        {
-          "name": "Run two complete original browser acceptance sequences",
-          "shell": "pwsh",
-          "run": "$env:PW = Join-Path $env:GITHUB_WORKSPACE 'node_modules/playwright-core'\n$env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'\nif (!(Test-Path $env:CHROME)) { throw 'Chrome is unavailable.' }\npython tools/diagnostic-browser-network.py\n"
+          "name": "Compare both native window discovery paths during the complete journey",
+          "env": {
+            "SDR_DESKTOP_APP": "reports/package/Solomon Darker-darwin-x64",
+            "SDR_DESKTOP_EVIDENCE": "reports/desktop-smoke"
+          },
+          "run": "python3 tools/diagnostic-mac-windows.py"
         },
         {
           "uses": "actions/upload-artifact@v4",
           "if": "always()",
           "with": {
-            "name": "browser-network-windows",
-            "path": "reports/browser-network",
+            "name": "mac-window-diagnostic",
+            "path": "reports/desktop-smoke",
             "if-no-files-found": "error"
           }
         }
