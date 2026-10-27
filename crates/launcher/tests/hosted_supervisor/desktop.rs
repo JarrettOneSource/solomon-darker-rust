@@ -1,14 +1,17 @@
 //! Real standalone desktop scope replay over its public /game WebSocket.
 
+use super::runtime_event_tests::OperatorEndpoint;
 use super::*;
+use solomon_launcher::host::runtime_events::RuntimeEventConfig;
 use solomon_protocol::HostErrorCode;
 
 const DESKTOP_ORIGIN: &str = "solomon-darker://app";
 const DESKTOP_CREDENTIAL: &str = "desktop-authority-public-test-credential";
 
-fn start_desktop() -> Host {
+fn start_desktop(events: RuntimeEventConfig) -> Host {
     let assets = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../web");
-    let config = HostedSupervisorConfig::new(assets, DESKTOP_CREDENTIAL.into(), "a".repeat(40));
+    let mut config = HostedSupervisorConfig::new(assets, DESKTOP_CREDENTIAL.into(), "a".repeat(40));
+    config.runtime_events = Some(events);
     let server = NativeServer::start_hosted(
         TcpListener::bind(("127.0.0.1", 0)).unwrap(),
         TransportConfig {
@@ -91,7 +94,8 @@ fn desktop_authority_retains_source_bootstrap_console_save_and_owner_lifetimes()
         "../../../sim/tests/fixtures/website/desktop-authority-goldens.json"
     ))
     .unwrap();
-    let mut host = start_desktop();
+    let mut events = OperatorEndpoint::new();
+    let mut host = start_desktop(events.config());
     let mut invalid = connect_desktop(&host, "Rejected", "wrong", None);
     let error = invalid.until(|message| matches!(message, ServerMessage::Error { .. }));
     assert!(matches!(error, ServerMessage::Error { code: HostErrorCode::InvalidCredentials, .. }));
@@ -155,10 +159,14 @@ fn desktop_authority_retains_source_bootstrap_console_save_and_owner_lifetimes()
         "result":execute_lua(&mut guest,2,"return counter == nil, 23")}));
     guest.close();
     guest.finish_close();
+    // The recorded Source journey waits for an empty host after the last close.
+    // A socket close alone does not acknowledge authority membership removal.
+    events.until_empty_after_disconnect("Guest");
     let mut fresh = connect_desktop(&host, "Fresh", DESKTOP_CREDENTIAL, None);
     rows.push(welcome_row(&mut fresh, "last-human-resets-owner"));
     fresh.close();
     fresh.finish_close();
+    events.until_empty_after_disconnect("Fresh");
     let mut resumed = connect_desktop(&host, "Owner", DESKTOP_CREDENTIAL, Some(save));
     rows.push(welcome_row(&mut resumed, "source-save-resumes-on-fresh-owner"));
     resumed.close();

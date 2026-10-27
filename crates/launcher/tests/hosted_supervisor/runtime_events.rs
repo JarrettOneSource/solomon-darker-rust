@@ -9,7 +9,7 @@ use solomon_sim::social::PartyVisibility;
 
 use super::*;
 
-struct OperatorEndpoint {
+pub(super) struct OperatorEndpoint {
     address: SocketAddr,
     incoming: Receiver<Value>,
     rows: Vec<Value>,
@@ -18,7 +18,7 @@ struct OperatorEndpoint {
 }
 
 impl OperatorEndpoint {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let mut server = NativeServer::start_hosted(
             TcpListener::bind(("127.0.0.1", 0)).unwrap(),
             TransportConfig::default(),
@@ -49,15 +49,31 @@ impl OperatorEndpoint {
         Self { address, incoming, rows: Vec::new(), stop, worker: Some(worker) }
     }
 
-    fn config(&self) -> RuntimeEventConfig {
+    pub(super) fn config(&self) -> RuntimeEventConfig {
         RuntimeEventConfig::new(&format!("http://{}/runtime-events", self.address), SECRET.into())
             .unwrap()
     }
 
     #[track_caller]
     fn until(&mut self, event: &str, count: usize) {
+        self.wait_for(|rows| rows.iter().filter(|row| row["event"] == event).count() >= count);
+    }
+
+    #[track_caller]
+    pub(super) fn until_empty_after_disconnect(&mut self, display_name: &str) {
+        self.wait_for(|rows| {
+            rows.iter().any(|row| {
+                row["event"] == "player.disconnected"
+                    && row["details"]["displayName"] == display_name
+                    && row["details"]["playerCount"] == 0
+            })
+        });
+    }
+
+    #[track_caller]
+    fn wait_for(&mut self, accept: impl Fn(&[Value]) -> bool) {
         let end = Instant::now() + Duration::from_secs(8);
-        while self.rows.iter().filter(|row| row["event"] == event).count() < count {
+        while !accept(&self.rows) {
             self.rows.push(
                 self.incoming.recv_timeout(end.saturating_duration_since(Instant::now())).unwrap(),
             );
