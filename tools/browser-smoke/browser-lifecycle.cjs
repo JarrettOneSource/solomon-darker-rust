@@ -33,7 +33,7 @@ function releaseStdioAfterExit(child) {
   else child.once('exit',release);
 }
 
-async function launchOwnedBrowser(chromium,options) {
+async function launchOwnedBrowser(chromium,options={}) {
   const server=await chromium.launchServer({...options,host:'127.0.0.1'});
   releaseStdioAfterExit(server.process());
   let browser;

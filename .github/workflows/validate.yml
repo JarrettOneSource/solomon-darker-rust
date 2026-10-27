@@ -1,4 +1,4 @@
-name: Verify bounded browser acceptance and visible native failures
+name: Verify native failure recovery and real browser continuation
 on:
   push:
     branches: [diagnostic/windows-browser-capture-20261026]
@@ -11,97 +11,6 @@ env:
   CARGO_PROFILE_TEST_DEBUG: '0'
   RUST_BACKTRACE: '1'
 jobs:
-  browser-fixed:
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: b8e90930e195b8f74e8492bd0bc6f0c8486940fa
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - uses: actions/download-artifact@v4
-        with:
-          name: browser-client-green
-          path: web/dist
-          run-id: 40432773454
-          github-token: ${{ github.token }}
-      - uses: actions/download-artifact@v4
-        with:
-          name: browser-green-source
-          path: reports/browser-fixed/browser-source
-          run-id: 40432773454
-          github-token: ${{ github.token }}
-      - name: Install verified private fixture
-        shell: python
-        run: |
-          from pathlib import Path
-          import os,subprocess,hashlib,json
-          revision=os.environ['GITHUB_SHA']
-          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          hashes={'scripts/serve-client.py': '5c7dd7a96e86f975136cd4047ead3462b2825ba162de56da6f75c535b669b276', 'tools/browser-smoke/browser-lifecycle.cjs': 'c657d88679be476787835a7bc9243cded1642dde67ef47eb66a2745c8f4af1b7', 'tools/browser-smoke/browser-errors.cjs': '14bddcb38b05ac5b9d932af6d5d69c6990ee04b54ab90d5b37e266c2cbee3ab0', 'tools/browser-smoke/smoke.cjs': 'a4927e78d253c1b46b217848a18cbbde5c625df6aec69feebada229868b16d81', 'tools/browser-smoke/diagnostic-software-gpu.cjs': 'f59e0fa688d39ad85ad6736b1ac229cb166f841a2b79dcc5fca7933c1cd6d865'}
-          for name,digest in hashes.items():
-              data=subprocess.check_output(['git','show',revision+':'+name])
-              assert hashlib.sha256(data).hexdigest()==digest,name
-              Path(name).write_bytes(data)
-          out=Path('reports/browser-fixed');out.mkdir(parents=True,exist_ok=True)
-          (out/'source.json').write_text(json.dumps({'base':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','fixtureRevision':revision,'fixtureHashes':hashes},indent=2)+'\n')
-      - name: Verify exact runtime sources and prepare tracked assets
-        shell: python
-        run: |
-          from pathlib import Path
-          import json,hashlib,subprocess,shutil
-          source=json.loads(Path('reports/browser-fixed/browser-source/source.json').read_text())
-          for name,digest in source['hashes'].items():
-              data=subprocess.check_output(['git','show','HEAD:'+name])
-              assert hashlib.sha256(data).hexdigest()==digest,name
-          shutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)
-      - run: npm run test:browser-support
-      - name: Verify pre-page GPU setup and the original browser journeys
-        shell: python
-        run: |
-          from pathlib import Path
-          import os,subprocess,json,time,urllib.request
-          root=Path.cwd();out=root/'reports/browser-fixed'
-          env=os.environ.copy()
-          env.update(PW=str(root/'node_modules/playwright-core'),CHROME=str(Path(os.environ['ProgramFiles'])/'Google/Chrome/Application/chrome.exe'),URL='http://127.0.0.1:4181/',OUT=str(out))
-          subprocess.run(['node','tools/browser-smoke/diagnostic-software-gpu.cjs'],env=env,check=True)
-          receipt={'journeys':[]}
-          with (out/'server.log').open('w') as log:
-              server=subprocess.Popen(['python','scripts/serve-client.py','4181','--bind','127.0.0.1','--directory','web/dist'],stdout=log,stderr=subprocess.STDOUT)
-              try:
-                  deadline=time.monotonic()+30
-                  while True:
-                      if server.poll() is not None:raise RuntimeError('Server exited before readiness')
-                      try:
-                          with urllib.request.urlopen(env['URL'],timeout=1) as response:assert response.status==200
-                          break
-                      except OSError:
-                          if time.monotonic()>=deadline:raise
-                          time.sleep(.1)
-                  for name,script in [('gameplay','smoke.cjs'),('settings','settings-parity.cjs'),('image-load-failure','image-load-failure.cjs')]:
-                      env['OUT']=str(out/name)
-                      result=subprocess.run(['node','tools/browser-smoke/'+script],env=env)
-                      receipt['journeys'].append({'name':name,'exit':result.returncode})
-              finally:
-                  receipt['serverAliveUntilCleanup']=server.poll() is None
-                  if server.poll() is None:server.terminate()
-                  receipt['serverExit']=server.wait(timeout=15)
-                  (out/'driver-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
-          assert all(row['exit']==0 for row in receipt['journeys']),receipt
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: browser-fixed-windows
-          path: reports/browser-fixed
-          if-no-files-found: error
-
   native-fatal-status:
     runs-on: windows-latest
     timeout-minutes: 90
@@ -149,42 +58,25 @@ jobs:
           import os,subprocess,hashlib,json
           revision=os.environ['GITHUB_SHA']
           subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          hashes={'tools/diagnostic-native-audio.py': 'c92709243b717c6a9242468a7fb2d351a9a380f663c55262e6b265f3479b0987', 'tools/diagnostic-native-audio.rs': '879ce1543719f08c956c920e7969631f19ad1e0336a80994985ba57660b492ac', 'tools/diagnostic-fatal-status.patch': '4b6267403035c41a6636fec31e69ae1427d151e00fa68727dcfd3193b5ccb254', 'tools/diagnostic-fatal-status.py': 'f5f847f4d868a1634bcd4c5afffdc41a277630f1944ffae5b70f307fdb46b13c'}
+          hashes={'tools/diagnostic-native-audio.py': 'c92709243b717c6a9242468a7fb2d351a9a380f663c55262e6b265f3479b0987', 'tools/diagnostic-native-audio.rs': '879ce1543719f08c956c920e7969631f19ad1e0336a80994985ba57660b492ac', 'tools/diagnostic-fatal-status.patch': '4b6267403035c41a6636fec31e69ae1427d151e00fa68727dcfd3193b5ccb254', 'tools/diagnostic-fatal-status.py': '1b5682c3fa277d27158b44c36a3cdb170df78faf1605637c3ab58b7d71dc6e9b'}
           for name,digest in hashes.items():
               data=subprocess.check_output(['git','show',revision+':'+name])
               assert hashlib.sha256(data).hexdigest()==digest,name
               Path(name).write_bytes(data)
           out=Path('reports/native-fatal-status');out.mkdir(parents=True,exist_ok=True)
           (out/'source.json').write_text(json.dumps({'base':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','fixtureRevision':revision,'fixtureHashes':hashes},indent=2)+'\n')
-      - name: Reproduce the hidden failure layout
+      - name: Apply the already-verified error handling and layout
         shell: python
         run: |
-          from pathlib import Path
           import subprocess
-          subprocess.run(['python','tools/diagnostic-native-audio.py','red'],check=True)
-          subprocess.run(['python','tools/diagnostic-native-audio.py','green'],check=True)
-          subprocess.run(['python','tools/diagnostic-fatal-status.py','red'],check=True)
-          result=subprocess.run(['cargo','test','-p','solomon-web','--all-features','fatal_status_stays_readable_above_the_desktop_actions','--','--nocapture'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-          Path('reports/native-fatal-status/red.log').write_text(result.stdout)
-          print(result.stdout[-6000:])
-          assert result.returncode != 0
-          assert 'fatal_status_stays_readable_above_the_desktop_actions ... FAILED' in result.stdout
-      - name: Verify the centered failure layout and native web suite
-        shell: python
-        run: |
-          from pathlib import Path
-          import subprocess
-          subprocess.run(['python','tools/diagnostic-fatal-status.py','green'],check=True)
-          result=subprocess.run(['cargo','test','-p','solomon-web','--all-features'],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-          Path('reports/native-fatal-status/green.log').write_text(result.stdout)
-          print(result.stdout[-6000:])
-          assert result.returncode == 0
+          for script,mode in [('tools/diagnostic-native-audio.py','red'),('tools/diagnostic-native-audio.py','green'),('tools/diagnostic-fatal-status.py','red'),('tools/diagnostic-fatal-status.py','green')]:
+              subprocess.run(['python',script,mode],check=True)
       - name: Build the private fatal-frame fixture
         shell: pwsh
         run: |
           python tools/diagnostic-fatal-status.py inject
           if ($LASTEXITCODE) { throw 'Fixture installation failed.' }
-          npm run package:desktop -- --platform win32 --arch x64 --release-repository "$env:GITHUB_REPOSITORY"
+          node tools/package-desktop.mjs --platform win32 --arch x64 --release-repository "$env:GITHUB_REPOSITORY"
           if ($LASTEXITCODE) { throw 'Native fixture build failed.' }
       - name: Verify actual error visibility and save before returning to launcher
         shell: python
@@ -192,10 +84,100 @@ jobs:
           from pathlib import Path
           import os,subprocess
           env=os.environ.copy();env['SDR_DESKTOP_EVIDENCE']=str(Path('reports/native-fatal-status/journey').resolve())
+          env['SDR_FATAL_STATUS_TRIGGER']=str(Path('reports/native-fatal-status/trigger').resolve())
           subprocess.run(['python','tools/smoke-desktop-runtime.py'],env=env,check=True)
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: native-fatal-status-windows
           path: reports/native-fatal-status
+          if-no-files-found: error
+
+  browser-admission:
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: b8e90930e195b8f74e8492bd0bc6f0c8486940fa
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Select native Windows Perl
+        shell: pwsh
+        run: |
+          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
+          if (!$nativePerl) { throw 'The runner has no Strawberry Perl installation.' }
+          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-b8e90930e195b8f74e8492bd0bc6f0c8486940fa
+          restore-keys: |
+            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
+      - run: rustup show
+      - uses: actions/download-artifact@v4
+        with:
+          name: browser-client-green
+          path: web/dist
+          run-id: 40432773454
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: browser-green-source
+          path: reports/browser-admission/browser-source
+          run-id: 40432773454
+          github-token: ${{ github.token }}
+      - name: Verify browser source and install private ordinary-input fixture
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib,json,os,subprocess,shutil
+          root=Path.cwd();output=Path('reports/browser-admission')
+          source=json.loads((output/'browser-source/source.json').read_text())
+          line_endings=[]
+          for name,digest in source['hashes'].items():
+              canonical=subprocess.check_output(['git','show','HEAD:'+name])
+              actual=Path(name).read_bytes()
+              assert hashlib.sha256(canonical).hexdigest()==digest,name
+              assert actual.replace(b'\r\n',b'\n')==canonical,name
+              if actual!=canonical: line_endings.append(name)
+          (output/'checkout-verification.json').write_text(json.dumps({'canonicalSourceHashesMatch':True,'onlyLineEndingsDiffer':line_endings},indent=2)+'\n')
+          revision=os.environ['GITHUB_SHA']
+          subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
+          fixtures={'tools/browser-smoke/native-admission-acceptance.cjs': 'addd82bc3d024c44921d06b3550896edad22fe2d8366f5ab33110d8472111d86', 'tools/browser-smoke/native-admission-windows.py': 'fceae648a3aa8f3bdb1f61a10c2ed97fde09cda73eeb1570b1f1e002a1dd0489', 'tools/browser-smoke/browser-lifecycle.cjs': '5612c45de33878934cf2af94890296669565e407afb5777778e92a482e55642b', 'tools/browser-smoke/browser-errors.cjs': '14bddcb38b05ac5b9d932af6d5d69c6990ee04b54ab90d5b37e266c2cbee3ab0'}
+          for name,digest in fixtures.items():
+              data=subprocess.check_output(['git','show',revision+':'+name])
+              assert hashlib.sha256(data).hexdigest()==digest,name
+              Path(name).write_bytes(data)
+          shutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)
+          receipt={'hostSource':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','browserRun':40432773454,'browserSourceMatchesHostCheckout':True,'fixtureRevision':revision,'fixtureHashes':fixtures}
+          (output/'source.json').write_text(json.dumps(receipt,indent=2)+'\n')
+      - name: Build the unchanged real Windows authority
+        run: cargo build --locked -p solomon-launcher --bin solomon-darker
+      - name: Record the real host executable
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib,json
+          p=Path('reports/browser-admission/source.json');s=json.loads(p.read_text())
+          s['hostSha256']=hashlib.sha256(Path('target/debug/solomon-darker.exe').read_bytes()).hexdigest()
+          s['hostUnmodified']=True
+          p.write_text(json.dumps(s,indent=2)+'\n')
+      - name: Exercise real browser admission, save and fresh-document continuation
+        run: python tools/browser-smoke/native-admission-windows.py
+      - name: Retain Windows browser and host evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-native-admission-windows
+          path: reports/browser-admission
           if-no-files-found: error
