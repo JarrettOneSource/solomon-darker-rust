@@ -26,11 +26,24 @@ def run(label,command):
     print(json.dumps(row),flush=True)
     (output/'progress.json').write_text(json.dumps(rows,indent=2)+'\n')
     return result.returncode,log.read_text(errors='replace')
+def observe_reset(label):
+    desktop=root/'crates/launcher/tests/hosted_supervisor/desktop.rs'
+    before=desktop.read_bytes()
+    original=desktop.read_text()
+    needle='    rows.push(welcome_row(&mut fresh, "last-human-resets-owner"));\n'
+    observation='    let row = rows.last().unwrap();\n    eprintln!("DISCONNECT_DIAGNOSTIC first reconnect: {row}");\n    assert!(row["id"] == "player-1" && row["players"] == 1,\n        "DISCONNECT_DIAGNOSTIC last-human-resets-owner: {row}");\n'
+    assert original.count(needle)==1
+    desktop.write_text(original.replace(needle,needle+observation))
+    (output/(label+'-observation.patch')).write_bytes(subprocess.check_output(['git','diff','--',str(desktop.relative_to(root))]))
+    try:
+        return run(label,focused)
+    finally:
+        desktop.write_bytes(before)
 try:
-    code,log=run('red-delayed-disconnect',focused)
-    assert code!=0 and 'assertion `left == right` failed: last-human-resets-owner' in log and 'DISCONNECT_DIAGNOSTIC' in log,'Expected missing-membership-wait failure was not reproduced.'
+    code,log=observe_reset('red-delayed-disconnect')
+    assert code!=0 and 'DISCONNECT_DIAGNOSTIC last-human-resets-owner:' in log and 'DISCONNECT_DIAGNOSTIC' in log,'Expected missing-membership-wait failure was not reproduced.'
     subprocess.run(['git','apply','--ignore-space-change',str(patch)],check=True)
-    code,log=run('green-delayed-disconnect',focused)
+    code,log=observe_reset('green-delayed-disconnect')
     assert code==0 and 'DISCONNECT_DIAGNOSTIC' in log,'The test correction did not pass the same delayed-disconnect scenario.'
 finally:
     source.write_bytes(original)

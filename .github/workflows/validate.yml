@@ -52,7 +52,7 @@
         {
           "name": "Install private condition and exact candidate test patch",
           "shell": "python",
-          "run": "from pathlib import Path\nimport hashlib,os,subprocess\nrevision=os.environ['GITHUB_SHA']\nsubprocess.run(['git','fetch','--depth=1','origin',revision],check=True)\nfiles={'tools/diagnostic-desktop-disconnect.py': '355cb3216305f913fd2180a9cb9890f137299015d2bdfe1d4905cd787c15215f', 'tools/desktop-disconnect-test.patch': 'd1522a108472ccf828d6a05f5ff2965b00722dd4bd9fe1268e65b71b1968f284'}\nfor name,expected in files.items():\n data=subprocess.check_output(['git','show',revision+':'+name])\n assert hashlib.sha256(data).hexdigest()==expected,name\n Path(name).write_bytes(data)\n"
+          "run": "from pathlib import Path\nimport hashlib,os,subprocess\nrevision=os.environ['GITHUB_SHA']\nsubprocess.run(['git','fetch','--depth=1','origin',revision],check=True)\nfiles={'tools/diagnostic-desktop-disconnect.py': '4df5ffb1720fff43048232ac170be0d62d655d29dd53b836e8f837ecc570af1c', 'tools/desktop-disconnect-test.patch': 'd1522a108472ccf828d6a05f5ff2965b00722dd4bd9fe1268e65b71b1968f284'}\nfor name,expected in files.items():\n data=subprocess.check_output(['git','show',revision+':'+name])\n assert hashlib.sha256(data).hexdigest()==expected,name\n Path(name).write_bytes(data)\n"
         },
         {
           "name": "Verify controlled red green and ordinary hosted suite",
