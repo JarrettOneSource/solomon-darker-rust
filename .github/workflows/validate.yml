@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   capture:
+    if: false
     name: Windows settings trace (${{ matrix.attempt }})
     runs-on: windows-latest
     timeout-minutes: 15
@@ -81,8 +82,7 @@ jobs:
           if-no-files-found: error
 
   hosted-transfer:
-    if: false
-    name: Windows checkpoint transfer trace
+    name: Windows exact checkpoint test validation
     runs-on: windows-latest
     timeout-minutes: 20
     env:
@@ -112,78 +112,58 @@ jobs:
             target
           key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-10f8aa7c7bfec6818de19edde26543b3be8bae23
       - run: rustup show
-      - name: Measure checkpoint progress and acknowledgement work
+      - name: Validate exact checkpoint test patch
         shell: python
         run: |
           from pathlib import Path
-          import hashlib,os,subprocess,time,json
+          import hashlib,subprocess,time,json
           root=Path.cwd()
           output=root/'reports/hosted-transfer'
           output.mkdir(parents=True,exist_ok=True)
           source=root/'crates/launcher/tests/hosted_supervisor.rs'
           original=source.read_bytes()
           text=source.read_text()
-          needle='        let progress_before = self.save_progress;\n        let deadline = Instant::now() + Duration::from_secs(8);'
-          replacement='''        let progress_before = self.save_progress;
-                  let diagnostic_start = Instant::now();
-                  let diagnostic_id = self as *const Self as usize;
-                  let deadline = diagnostic_start + Duration::from_secs(30);
-                  eprintln!("TRANSFER_DIAGNOSTIC wait client={diagnostic_id} progress={progress_before:?}");'''
+          needle='    fn until(&mut self, accept: impl Fn(&ServerMessage<Value>) -> bool) -> ServerMessage<Value> {\n        if let Some(index) = self.pending.iter().position(&accept) {'
+          replacement='    fn until(&mut self, accept: impl Fn(&ServerMessage<Value>) -> bool) -> ServerMessage<Value> {\n        self.until_with_timeout(Duration::from_secs(8), accept)\n    }\n\n    #[track_caller]\n    fn until_with_timeout(\n        &mut self,\n        timeout: Duration,\n        accept: impl Fn(&ServerMessage<Value>) -> bool,\n    ) -> ServerMessage<Value> {\n        if let Some(index) = self.pending.iter().position(&accept) {'
           assert text.count(needle)==1
           text=text.replace(needle,replacement)
-          needle='                    self.save_progress = Some((sequence, received, total));'
-          replacement=needle+'\n                    eprintln!("TRANSFER_DIAGNOSTIC progress client={diagnostic_id} ms={} sequence={sequence} received={received} total={total}", diagnostic_start.elapsed().as_millis());'
+          needle='        let deadline = Instant::now() + Duration::from_secs(8);'
+          assert text.count(needle)==1
+          text=text.replace(needle,'        let deadline = Instant::now() + timeout;')
+          needle='    let ServerMessage::BoneyardLoaded { boneyard: party_world } = message else { unreachable!() };\n    let message = h2.until(|message| {'
+          replacement='    let ServerMessage::BoneyardLoaded { boneyard: party_world } = message else { unreachable!() };\n    // This acknowledged Boneyard transfer measured 8.4 seconds in Windows debug CI.\n    let message = h2.until_with_timeout(Duration::from_secs(30), |message| {'
           assert text.count(needle)==1
           text=text.replace(needle,replacement)
-          needle='                    if accept(&message) {\n                        return *message;\n                    }'
-          replacement='''                    if accept(&message) {
-                                  if matches!(&*message, ServerMessage::Hosted { message: HostedServerMessage::SaveCheckpoint { .. } }) {
-                                      eprintln!("TRANSFER_DIAGNOSTIC complete client={diagnostic_id} ms={} progress={:?}", diagnostic_start.elapsed().as_millis(), self.save_progress);
-                                  }
-                                  return *message;
-                              }'''
-          assert text.count(needle)==1
-          text=text.replace(needle,replacement)
-          needle='''                    let next_offset = offset + data.len();
-                              let _ = observations.send(ClientObservation::SaveProgress'''
-          replacement='''                    let diagnostic_received = Instant::now();
-                              let next_offset = offset + data.len();
-                              let _ = observations.send(ClientObservation::SaveProgress'''
-          assert text.count(needle)==1
-          text=text.replace(needle,replacement)
-          needle='''                    let Some(complete) = complete else {
-                                  continue;
-                              };
-                              saved = sequence;'''
-          replacement='''                    eprintln!("TRANSFER_DIAGNOSTIC acknowledged sequence={sequence} offset={offset} total={total_length} micros={}", diagnostic_received.elapsed().as_micros());
-                              let Some(complete) = complete else {
-                                  continue;
-                              };
-                              saved = sequence;'''
-          assert text.count(needle)==1
-          text=text.replace(needle,replacement)
-          source.write_text(text)
-          base=['cargo','test','-p','solomon-launcher','--test','hosted_supervisor','--all-features']
+          tested_sha=hashlib.sha256(text.encode()).hexdigest()
+          assert tested_sha=='bacb64192e79084a1fbbfbd4abb2efdd39fc689dbfd60e8fe3ff8010efbdc202'
+          source.write_bytes(text.encode())
+          commands=[
+           ['cargo','fmt','--all','--','--check'],
+           ['cargo','clippy','-p','solomon-launcher','--test','hosted_supervisor','--all-features','--','-D','warnings'],
+           ['cargo','test','--workspace','--all-features'],
+           ['cargo','test','-p','solomon-launcher','--test','hosted_supervisor','--all-features'],
+           ['cargo','test','-p','solomon-launcher','--test','hosted_supervisor','--all-features'],
+          ]
           rows=[]
           try:
-           for index,mode in enumerate(['suite','isolated','suite'],1):
-            cmd=base+(['supervisor_replays_source_http_colleges_broker_and_party_membership','--','--exact','--nocapture'] if mode=='isolated' else ['--','--nocapture'])
-            started=time.monotonic();log=output/f'{index}-{mode}.log'
+           for index,cmd in enumerate(commands,1):
+            started=time.monotonic();log=output/f'{index}-validation.log'
             with log.open('w') as out:
              result=subprocess.run(cmd,cwd=root,stdout=out,stderr=subprocess.STDOUT)
-            row={'attempt':index,'mode':mode,'exit':result.returncode,'elapsedSeconds':round(time.monotonic()-started,3),'log':log.name}
+            row={'attempt':index,'command':cmd,'exit':result.returncode,'elapsedSeconds':round(time.monotonic()-started,3),'log':log.name}
             rows.append(row);print(json.dumps(row),flush=True)
+            if result.returncode: break
           finally:
            source.write_bytes(original)
            assert source.read_bytes()==original
-           receipt={'privateDiagnostic':True,'revision':'10f8aa7c7bfec6818de19edde26543b3be8bae23','changes':'Only test observation deadline 8 to30 seconds and progress/ACK timing; production runtime unchanged.','sourceRestoredSha256':hashlib.sha256(source.read_bytes()).hexdigest(),'attempts':rows,'cpuCount':os.cpu_count()}
+           receipt={'baseRevision':'10f8aa7c7bfec6818de19edde26543b3be8bae23','change':'Only the exact proposed test helper and 30-second large Boneyard checkpoint wait; no instrumentation or runtime changes.','testedSourceSha256':tested_sha,'sourceRestoredSha256':hashlib.sha256(source.read_bytes()).hexdigest(),'attempts':rows,'passed':len(rows)==len(commands) and all(r['exit']==0 for r in rows)}
            (output/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
-           print('Original test source restored',flush=True)
-          raise SystemExit(any(r['exit'] for r in rows))
+           print(json.dumps(receipt),flush=True)
+          raise SystemExit(not receipt['passed'])
       - name: Retain transfer evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: hosted-transfer-windows
+          name: hosted-transfer-validation-windows
           path: reports/hosted-transfer
           if-no-files-found: error
