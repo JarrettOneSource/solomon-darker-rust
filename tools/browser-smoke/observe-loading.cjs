@@ -1,5 +1,6 @@
 // Private read-only request and renderer measurements around the unchanged settings journey.
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const lifecycle = require('./browser-lifecycle.cjs');
 const gpu = require('./gpu-ui.cjs');
@@ -14,6 +15,18 @@ lifecycle.launchOwnedBrowser = async (...args) => {
   const samplers = [];
   owner.browser.newPage = async (...pageArgs) => {
     const page = await create(...pageArgs);
+    const browserCdp = await owner.browser.newBrowserCDPSession();
+    const processes = await browserCdp.send('SystemInfo.getProcessInfo');
+    record('browser-processes', processes);
+    const gpuProcesses = processes.processInfo.filter(process => process.type.toLowerCase() === 'gpu');
+    if (process.env.OBSERVE_GPU_PRIORITY === 'normal') {
+      if (gpuProcesses.length !== 1) throw new Error('Expected exactly one owned GPU process');
+      const pid = gpuProcesses[0].id;
+      const before = os.getPriority(pid);
+      os.setPriority(pid, os.constants.priority.PRIORITY_NORMAL);
+      record('gpu-priority', {pid, before, after: os.getPriority(pid)});
+    }
+    await browserCdp.detach();
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Performance.enable');
     for (const event of ['request','requestfinished','requestfailed']) page.on(event,request => {

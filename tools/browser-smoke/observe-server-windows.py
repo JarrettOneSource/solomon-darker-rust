@@ -9,7 +9,7 @@ import threading
 import time
 import urllib.request
 
-root = Path.cwd(); output = root / 'reports/browser-server'; output.mkdir(parents=True, exist_ok=True)
+root = Path.cwd(); output = root / os.environ.get('OBSERVE_SERVER_OUT', 'reports/browser-server'); output.mkdir(parents=True, exist_ok=True)
 stop = threading.Event()
 spec = importlib.util.spec_from_file_location('native_counters', root / 'tools/browser-smoke/observe-windows-processes.py')
 native = importlib.util.module_from_spec(spec); spec.loader.exec_module(native)

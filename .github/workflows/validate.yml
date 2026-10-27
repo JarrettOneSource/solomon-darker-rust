@@ -1,4 +1,4 @@
-name: Observe bounded Linux native frame journeys
+name: Compare owned Windows GPU process priority
 
 on:
   push:
@@ -8,16 +8,10 @@ permissions:
   contents: read
   actions: read
 
-env:
-  CARGO_INCREMENTAL: '0'
-  CARGO_PROFILE_DEV_DEBUG: '0'
-  CARGO_PROFILE_TEST_DEBUG: '0'
-  RUST_BACKTRACE: '1'
-
 jobs:
-  native-frame:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+  browser-server:
+    runs-on: windows-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
         with:
@@ -25,34 +19,23 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Prepare native accessibility and display
-        uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
-        with:
-          setup-window-manager: 'true'
-          extra-packages: libasound2-dev libasound2-plugins libudev-dev libfontconfig1-dev libclang-dev cmake libgl1-mesa-dev pulseaudio
-      - run: python -m pip install -r tools/desktop-smoke-requirements.txt
-      - name: Provide the regular Linux audio output
-        run: |
-          pulseaudio --start --exit-idle-time=-1
-          pactl load-module module-null-sink sink_name=acceptance
-          pactl set-default-sink acceptance
-          printf 'pcm.!default { type pulse }\nctl.!default { type pulse }\n' > ~/.asoundrc
       - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: rustup show
-      - uses: actions/cache/restore@v4
+      - uses: actions/download-artifact@v4
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-b8e90930e195b8f74e8492bd0bc6f0c8486940fa
-          restore-keys: |
-            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-            native-${{ runner.os }}-${{ runner.arch }}-
+          name: browser-client-green
+          path: web/dist
+          run-id: 40432773454
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: browser-green-source
+          path: reports/browser-server/browser-source
+          run-id: 40432773454
+          github-token: ${{ github.token }}
       - name: Install verified private observation fixture
         shell: python
         run: |
@@ -60,35 +43,39 @@ jobs:
           import os,subprocess,hashlib,json
           revision=os.environ['GITHUB_SHA']
           subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          hashes={'tools/diagnostic-native-frame.py': '5cfcfd12fade5b4e90e2c6fb4f349734b00e0b535482754bbed7109b67019deb'}
+          hashes={'tools/browser-smoke/observe-loading.cjs': '32152d98345751c137a89625a379e308a2b2fb543e507a74ff792eab91d5b074', 'tools/browser-smoke/observe-reload.cjs': '1a12d45b15eb1c790ae3c42d64c3d6515386b3cdbd5c185e1a798b826ae9b6a1', 'tools/browser-smoke/observe-server.py': '118cc9b822618cfe182a1ada27274f6782c6c817c6a6b6beaad74ae797dc3eb1', 'tools/browser-smoke/observe-windows-processes.py': 'f2ada154b170032db999415c117d5812af95e4d857f035f3548d5eb2a57b9118', 'tools/browser-smoke/observe-server-windows.py': '5436e54e3a17883c6235d3894978f1480d11000932356d86d016538223cab591'}
           for name,digest in hashes.items():
               data=subprocess.check_output(['git','show',revision+':'+name])
               assert hashlib.sha256(data).hexdigest()==digest,name
               Path(name).write_bytes(data)
-          out=Path('reports/native-frame');out.mkdir(parents=True,exist_ok=True)
+          out=Path('reports/browser-server');out.mkdir(parents=True,exist_ok=True)
           (out/'source.json').write_text(json.dumps({'base':'b8e90930e195b8f74e8492bd0bc6f0c8486940fa','observationRevision':revision,'fixtureHashes':hashes},indent=2)+'\n')
-      - name: Add state and focus observations only
-        run: python tools/diagnostic-native-frame.py
-      - name: Build observed native app
-        run: npm run package:desktop -- --platform linux --arch x64 --release-repository "$GITHUB_REPOSITORY"
-      - name: Run three bounded ordinary peer journeys
+      - name: Verify exact runtime sources and prepare tracked assets
         shell: python
         run: |
           from pathlib import Path
-          import os,subprocess,json
+          import json,hashlib,subprocess,shutil
+          source=json.loads(Path('reports/browser-server/browser-source/source.json').read_text())
+          for name,digest in source['hashes'].items():
+              data=subprocess.check_output(['git','show','HEAD:'+name])
+              assert hashlib.sha256(data).hexdigest()==digest,name
+          shutil.copytree('web/assets','web/dist/assets',dirs_exist_ok=True)
+      - name: Compare baseline, normal GPU priority, then baseline again
+        shell: python
+        run: |
+          from pathlib import Path
+          import json,os,subprocess
           rows=[]
-          for attempt in range(1,4):
-              out=Path('reports/native-frame')/str(attempt);out.mkdir(parents=True)
-              env=os.environ.copy();env['SDR_DESKTOP_EVIDENCE']=str(out.resolve())
-              with (out/'driver.log').open('w') as log:
-                  result=subprocess.run(['python','tools/smoke-desktop-runtime.py'],env=env,stdout=log,stderr=subprocess.STDOUT)
-              rows.append({'attempt':attempt,'exit':result.returncode})
-          Path('reports/native-frame/attempts.json').write_text(json.dumps(rows,indent=2)+'\n')
-          assert not any(row['exit'] for row in rows),rows
+          for name,priority in [('baseline-1','baseline'),('normal','normal'),('baseline-2','baseline')]:
+              env=os.environ.copy();env['OBSERVE_GPU_PRIORITY']=priority
+              env['OBSERVE_SERVER_OUT']='reports/browser-server/'+name
+              result=subprocess.run(['python','tools/browser-smoke/observe-server-windows.py'],env=env)
+              rows.append({'case':name,'exit':result.returncode})
+              Path('reports/browser-server/comparison.json').write_text(json.dumps(rows,indent=2)+'\n')
+          assert next(row for row in rows if row['case']=='normal')['exit']==0,rows
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: native-frame-linux
-          path: reports/native-frame
+          name: browser-server-windows
+          path: reports/browser-server
           if-no-files-found: error
-
