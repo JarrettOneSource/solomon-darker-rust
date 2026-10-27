@@ -56,4 +56,4 @@ gpu.ready = async (...args) => {
     throw error;
   }
 };
-require('./settings-parity.cjs');
+require(process.env.OBSERVE_LOADING_JOURNEY || './settings-parity.cjs');
