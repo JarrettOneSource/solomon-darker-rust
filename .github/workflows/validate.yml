@@ -71,7 +71,7 @@ jobs:
           (output/'checkout-verification.json').write_text(json.dumps({'canonicalSourceHashesMatch':True,'onlyLineEndingsDiffer':line_endings},indent=2)+'\n')
           revision=os.environ['GITHUB_SHA']
           subprocess.run(['git','fetch','--depth=1','origin',revision],check=True)
-          fixtures={'tools/browser-smoke/native-admission-acceptance.cjs': 'addd82bc3d024c44921d06b3550896edad22fe2d8366f5ab33110d8472111d86', 'tools/browser-smoke/native-admission-windows.py': 'fceae648a3aa8f3bdb1f61a10c2ed97fde09cda73eeb1570b1f1e002a1dd0489', 'tools/browser-smoke/browser-lifecycle.cjs': '5612c45de33878934cf2af94890296669565e407afb5777778e92a482e55642b', 'tools/browser-smoke/browser-errors.cjs': '14bddcb38b05ac5b9d932af6d5d69c6990ee04b54ab90d5b37e266c2cbee3ab0', 'tools/browser-smoke/browser-errors.test.cjs': 'a184b49a7d58a4a865be331b5317a26cb7bf7ab9c6f4ca82c4c4298c6af3e52a', 'tools/browser-smoke/diagnostic-browser-errors-green.cjs': '19e152ae17d7587f76da6b81652dfffc2c9ea7627330167091dabcd27f942e0d', 'tools/browser-smoke/diagnostic-retired-rewind.json': 'd3050c5bb86f496a2b364155e851ca3782ce0d1daa1171d44dd342fd3e25a086'}
+          fixtures={'tools/browser-smoke/native-admission-acceptance.cjs': 'addd82bc3d024c44921d06b3550896edad22fe2d8366f5ab33110d8472111d86', 'tools/browser-smoke/native-admission-windows.py': 'fceae648a3aa8f3bdb1f61a10c2ed97fde09cda73eeb1570b1f1e002a1dd0489', 'tools/browser-smoke/browser-lifecycle.cjs': '5612c45de33878934cf2af94890296669565e407afb5777778e92a482e55642b', 'tools/browser-smoke/browser-errors.cjs': '14bddcb38b05ac5b9d932af6d5d69c6990ee04b54ab90d5b37e266c2cbee3ab0', 'tools/browser-smoke/browser-errors.test.cjs': 'a184b49a7d58a4a865be331b5317a26cb7bf7ab9c6f4ca82c4c4298c6af3e52a', 'tools/browser-smoke/diagnostic-browser-errors-green.cjs': '19e152ae17d7587f76da6b81652dfffc2c9ea7627330167091dabcd27f942e0d', 'tools/browser-smoke/diagnostic-retired-rewind.json': 'd3050c5bb86f496a2b364155e851ca3782ce0d1daa1171d44dd342fd3e25a086', 'tools/browser-smoke/diagnostic-retired-rewind.cjs': '2a75132f465cbc6294f07ea03e6a749fe0b1aeaffb9c09574734f51d3da734e0'}
           for name,digest in fixtures.items():
               data=subprocess.check_output(['git','show',revision+':'+name])
               assert hashlib.sha256(data).hexdigest()==digest,name
@@ -99,8 +99,7 @@ jobs:
           Path('reports/browser-admission/green.log').write_text(result.stdout+result.stderr)
           print(result.stdout+result.stderr)
           assert result.returncode==0,'Browser support regression failed'
-          script="const fs=require('node:fs'),assert=require('node:assert/strict');const {documentRetirement,residentSuspension}=require('./tools/browser-smoke/browser-errors.cjs');const {row}=require('./tools/browser-smoke/diagnostic-retired-rewind.json');const f={...row.failure,status:row.status,errorText:row.failure.failure.errorText};assert.equal(residentSuspension(f,row.retirement.before,row.retirement.before),null);const result=documentRetirement(f,row.retirement);assert.equal(result?.reason,'loaded resident channel rewinding during the observed document replacement');fs.writeFileSync('reports/browser-admission/captured-rewind.json',JSON.stringify(result,null,2)+'\n');"
-          subprocess.run(['node','-e',script],check=True)
+          subprocess.run(['node','tools/browser-smoke/diagnostic-retired-rewind.cjs'],check=True)
       - name: Build the unchanged real Windows authority
         run: cargo build --locked -p solomon-launcher --bin solomon-darker
       - name: Record the real host executable
