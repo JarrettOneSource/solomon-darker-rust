@@ -1,5 +1,5 @@
 {
-  "name": "Verify delayed admission with retained candidate package",
+  "name": "Trace input after delayed native admission",
   "on": {
     "push": {
       "branches": [
@@ -8,8 +8,7 @@
     }
   },
   "permissions": {
-    "contents": "read",
-    "actions": "read"
+    "contents": "read"
   },
   "env": {
     "CARGO_INCREMENTAL": "0",
@@ -20,7 +19,7 @@
   "jobs": {
     "native-admission": {
       "runs-on": "macos-15-intel",
-      "timeout-minutes": 30,
+      "timeout-minutes": 90,
       "steps": [
         {
           "uses": "actions/checkout@v6"
@@ -45,17 +44,39 @@
           "run": "python3 -m pip install -r tools/desktop-smoke-requirements.txt"
         },
         {
-          "uses": "actions/download-artifact@v4",
+          "uses": "actions/setup-node@v6",
           "with": {
-            "name": "unqualified-native-admission-package",
-            "run-id": "40619144831",
-            "github-token": "${{ secrets.GITHUB_TOKEN }}",
-            "repository": "${{ github.repository }}",
-            "path": "diagnostic-package"
+            "node-version-file": ".node-version",
+            "cache": "npm"
           }
         },
         {
-          "run": "python3 -m py_compile tools/diagnostic-native-admission.py"
+          "run": "npm install --global npm@10.9.2"
+        },
+        {
+          "run": "npm ci --no-audit --no-fund"
+        },
+        {
+          "run": "rustup show"
+        },
+        {
+          "run": "python3 scripts/verify-client-assets.py\npython3 -m py_compile tools/diagnostic-native-admission.py\ncargo fmt --all -- --check"
+        },
+        {
+          "uses": "actions/cache/restore@v4",
+          "with": {
+            "path": "~/.cargo/registry\n~/.cargo/git\ntarget",
+            "key": "native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}",
+            "restore-keys": "native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-\nnative-${{ runner.os }}-${{ runner.arch }}-"
+          }
+        },
+        {
+          "name": "Build the traced native app",
+          "run": "npm run package:desktop -- --platform darwin --arch x64 --release-repository \"$GITHUB_REPOSITORY\""
+        },
+        {
+          "name": "Archive the diagnostic package",
+          "run": "node tools/archive-desktop.mjs"
         },
         {
           "name": "Verify delayed admission, movement, saving and fresh continuation",
@@ -66,8 +87,17 @@
           "uses": "actions/upload-artifact@v4",
           "if": "always()",
           "with": {
-            "name": "native-admission-contention-fixed-r3",
+            "name": "native-admission-input-trace",
             "path": "reports/desktop-smoke",
+            "if-no-files-found": "warn"
+          }
+        },
+        {
+          "uses": "actions/upload-artifact@v4",
+          "if": "always()",
+          "with": {
+            "name": "unqualified-native-admission-input-package",
+            "path": "dist-desktop/*.zip\ndist-desktop/*.sha256\ndist-desktop/desktop-release.json",
             "if-no-files-found": "warn"
           }
         }

@@ -7,21 +7,24 @@ import runpy
 import subprocess
 
 
-PACKAGE_REVISION = "de40a9ee89b876e2175ad09f6635bb537e6b4a38"
+PACKAGE_REVISION = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 CANDIDATE_REVISION = "3625b85904af56526e3ba18c3f95485e49347d0b"
 evidence = Path("reports/desktop-smoke")
 evidence.mkdir(parents=True, exist_ok=True)
-archive = Path("diagnostic-package/Solomon-Darker-darwin-x64.zip")
+archive = Path("dist-desktop/Solomon-Darker-darwin-x64.zip")
 expected, filename = Path(str(archive) + ".sha256").read_text().split()
 assert filename == archive.name
 with archive.open("rb") as stream:
     archive_hash = hashlib.file_digest(stream, "sha256").hexdigest()
-assert archive_hash == expected, "downloaded package checksum differs"
-assert archive_hash == "f82c27428f26881ae079a1f61cf45b8f23abb9fd556e34fedbcca54ae48367bd"
+assert archive_hash == expected, "built package checksum differs"
 inspector = runpy.run_path("scripts/verify-desktop-archive.py")
 inspection = inspector["verify_archive"](archive, Path.cwd(), PACKAGE_REVISION)
-assert inspection["nativeSha256"] == "5f62cff8bac999275bdb1011cc0e45bc35f630b5006886c683bfc1a64192a29c"
 subprocess.run(["ditto", "-x", "-k", str(archive), "dist-desktop"], check=True)
+package = Path("dist-desktop/Solomon Darker-darwin-x64")
+manifest = json.loads((package / "desktop-package-manifest.json").read_text())
+assert manifest["revision"] == PACKAGE_REVISION
+with (package / manifest["executable"]).open("rb") as stream:
+    assert hashlib.file_digest(stream, "sha256").hexdigest() == inspection["nativeSha256"]
 
 driver = Path("tools/smoke-desktop-runtime.py")
 source = driver.read_text()
@@ -143,6 +146,8 @@ replacement = '''    check_offline()
     contention["inputFinishedAt"] = time.monotonic()
     app.capture("contention-continued")
     continued_save = app.close()[1]
+    contention["inputTrace"] = [line for line in app.log_path.read_text().splitlines()
+                                if line.startswith("INPUT_DIAGNOSTIC ")]
     assert identity(continued_save) == identity(before), "delayed admission changed the wizard"
     before_position = player(baseline)["locomotions"]["position"]
     continued_position = player(continued_save)["locomotions"]["position"]
@@ -170,7 +175,12 @@ replacement = '''    check_offline()
 assert source.count(original) == 1
 instrumented = source.replace(original, replacement)
 paths = [driver, Path(__file__), Path("crates/web/src/network/native.rs"),
-         Path("crates/web/src/network/connection.rs"), Path("crates/web/src/game/native.rs")]
+         Path("crates/web/src/network/connection.rs"), Path("crates/web/src/game/native.rs"),
+         Path("crates/web/src/network.rs"), Path("crates/web/src/game.rs"),
+         Path("crates/web/src/input.rs"), Path("crates/web/src/input/controls.rs"),
+         Path("crates/web/src/gpu_ui/input/native.rs"),
+         Path("crates/launcher/src/host/hosted/socket.rs"),
+         Path("crates/launcher/src/host/input.rs")]
 (evidence / "source.json").write_text(json.dumps({
     "driverRevision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
     "packageRevision": PACKAGE_REVISION,
@@ -180,7 +190,7 @@ paths = [driver, Path(__file__), Path("crates/web/src/network/native.rs"),
     "files": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths},
     "executedDriverSha256": hashlib.sha256(instrumented.encode()).hexdigest(),
     "scope": "Ordinary offline actions, one 6.5-second preferences-lock hold, then normal recovery. "
-             "Candidate runtime with private traces; admission must wait for durable credentials, "
+             "Candidate runtime with private admission and input traces; admission must wait for durable credentials, "
              "then allow movement, save and fresh continuation. The original stall source remains unknown.",
 }, indent=2) + "\n")
 exec(compile(instrumented, str(driver), "exec"), {"__name__": "__main__", "__file__": str(driver)})

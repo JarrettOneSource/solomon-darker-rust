@@ -863,6 +863,23 @@ impl Game {
     }
 
     fn frame_gameplay(&mut self, time: f64, last: f64) -> Result<(), String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.input.diagnostic_key_pending() {
+            eprintln!(
+                "INPUT_DIAGNOSTIC {:.3} gameplay-gates tick={} native_held={} cheats={} social={} menu={} panels={} skills={} world_loading={} match_loading={} has_game={}",
+                crate::platform::monotonic_ms(),
+                self.session.ticks,
+                self.native_gameplay_held(),
+                self.cheats.is_open(),
+                self.social.input_active(),
+                self.menu.is_blocking(),
+                self.panels.is_open(),
+                self.skill_selection_active(),
+                self.world_loading,
+                self.match_loading.is_some(),
+                self.has_game,
+            );
+        }
         let blocked = self.native_gameplay_held()
             || self.cheats.is_open()
             || self.social.input_active()

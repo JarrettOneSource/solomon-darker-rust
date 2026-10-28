@@ -12,6 +12,20 @@ impl GameplayInputState {
     pub fn keyboard(&mut self, event: &KeyboardEvent<'_>, bank_start: usize) -> KeyboardEffect {
         let key = event.stroke;
         let pressed = key.pressed;
+        #[cfg(not(target_arch = "wasm32"))]
+        if key.code == "KeyD" && !key.repeat {
+            self.diagnostic_sample_pending = true;
+            eprintln!(
+                "INPUT_DIAGNOSTIC {:.3} gameplay-key d pressed={pressed} editing={} text={} scope={:?} blocked={} right_binding={} held_before={}",
+                crate::platform::monotonic_ms(),
+                event.editing,
+                self.ui.text,
+                self.ui.scope,
+                self.blocked,
+                self.controls.move_right,
+                self.held.contains("KeyD"),
+            );
+        }
         if pressed && event.editing {
             return KeyboardEffect::Pass;
         }

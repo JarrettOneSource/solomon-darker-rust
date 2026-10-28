@@ -120,7 +120,18 @@ impl NativeSession {
         held: bool,
     ) -> Result<(), String> {
         let connection = &self.connection;
-        self.input.send_input(snapshot_tick, input, held, |message| connection.send(message))
+        self.input.send_input(snapshot_tick, input, held, |message| {
+            let result = connection.send(message);
+            #[cfg(not(target_arch = "wasm32"))]
+            if let ClientMessage::Input { sequence, target_tick, input } = message {
+                eprintln!(
+                    "INPUT_DIAGNOSTIC {:.3} wire-input sequence={sequence} target_tick={target_tick} movement={:?} result={result:?}",
+                    crate::platform::monotonic_ms(),
+                    input.movement,
+                );
+            }
+            result
+        })
     }
 
     pub fn acknowledge_snapshot(

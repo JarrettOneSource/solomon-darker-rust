@@ -69,6 +69,8 @@ pub(super) struct NativeGame {
     leave_request: Option<u64>,
     pub(super) hosted_welcome: Option<solomon_protocol::hosted::HostedWelcome>,
     pub(super) hosted_messages: Vec<(solomon_protocol::hosted::HostedServerMessage, f64)>,
+    #[cfg(not(target_arch = "wasm32"))]
+    diagnostic_input: Option<(Vec2, bool)>,
 }
 
 impl NativeGame {
@@ -173,6 +175,8 @@ impl NativeGame {
             leave_request: None,
             hosted_welcome: None,
             hosted_messages: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            diagnostic_input: None,
         }
     }
 
@@ -732,6 +736,10 @@ impl Game {
         native.resume_ready_snapshot = None;
         native.hosted_welcome = None;
         native.hosted_messages.clear();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            native.diagnostic_input = None;
+        }
         set_status("Joining game…");
         Ok(())
     }
@@ -1163,6 +1171,26 @@ impl Game {
             || cheats_open
             || player.combat.life_state != solomon_sim::combat::PlayerLifeState::Alive
             || self.session.run.phase == GameRunPhase::GameOver;
+        #[cfg(not(target_arch = "wasm32"))]
+        if native.diagnostic_input != Some((input.movement, held)) {
+            native.diagnostic_input = Some((input.movement, held));
+            eprintln!(
+                "INPUT_DIAGNOSTIC {:.3} native-input tick={} movement={:?} held={held} host_pause={} host_grace={} host_loading={} local_pause={} barrier={} picker={} social={} cheats={} life={:?} phase={:?}",
+                crate::platform::monotonic_ms(),
+                self.session.ticks,
+                input.movement,
+                connection.host.pause.is_some(),
+                connection.host.resume_grace.is_some(),
+                connection.host.loading_run_id.is_some(),
+                pause.is_some(),
+                self.session.level_up_barrier.is_some(),
+                picker_open,
+                social_open,
+                cheats_open,
+                player.combat.life_state,
+                self.session.run.phase,
+            );
+        }
         connection.send_input(self.session.ticks, input, held)
     }
 

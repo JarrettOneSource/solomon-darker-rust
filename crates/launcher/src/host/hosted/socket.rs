@@ -38,10 +38,22 @@ impl HostedGameHost {
                         || state.level_up_barrier.is_some()
                         || participant.player.progression.pending_offer.is_some()
                         || (state.boneyard.is_none() && connection.hub_activity.is_some());
-                let result = connection
-                    .input
-                    .accept(sequence, target_tick, input, state.ticks, blocked)
-                    .map_err(|error| invalid_owned(error.to_string()))?;
+                let result =
+                    connection.input.accept(sequence, target_tick, input, state.ticks, blocked);
+                eprintln!(
+                    "INPUT_DIAGNOSTIC {now_ms:.3} host-input sequence={sequence} target_tick={target_tick} tick={} movement={:?} blocked={blocked} control={} barrier={} offer={} hub_activity={:?} position={:?} transition={} intro={} intro_pending={} result={result:?}",
+                    state.ticks,
+                    input.movement,
+                    self.controls.get(&party_id).is_some_and(|control| control.blocks_tick()),
+                    state.level_up_barrier.is_some(),
+                    participant.player.progression.pending_offer.is_some(),
+                    connection.hub_activity,
+                    participant.wizard.position,
+                    participant.wizard.transition.is_some(),
+                    participant.college_intro.is_some(),
+                    participant.player.economy.college_intro_pending,
+                );
+                let result = result.map_err(|error| invalid_owned(error.to_string()))?;
                 self.publish_dirty |= result == InputAdmission::Neutralized;
             }
             ClientMessage::SnapshotAck { sequence } => {

@@ -146,6 +146,12 @@ impl InputQueue {
             if queued.sequence <= self.acknowledged_sequence {
                 continue;
             }
+            if queued.input.movement != self.active.movement {
+                eprintln!(
+                    "INPUT_DIAGNOSTIC host-apply tick={next_tick} sequence={} movement={:?}",
+                    queued.sequence, queued.input.movement,
+                );
+            }
             self.active = queued.input;
             self.acknowledged_sequence = queued.sequence;
         }
@@ -155,6 +161,16 @@ impl InputQueue {
     /// `stopAllClientInputs`: pause/loading surfaces clear held and queued commands. The
     /// ACK cursor changes only when the source admits or applies an input.
     pub fn neutralize(&mut self) {
+        if self.active.movement != solomon_sim::Vec2::ZERO
+            || self.queued.values().any(|entry| entry.input.movement != solomon_sim::Vec2::ZERO)
+        {
+            eprintln!(
+                "INPUT_DIAGNOSTIC host-neutralize acknowledged={} active={:?} queued={}",
+                self.acknowledged_sequence,
+                self.active.movement,
+                self.queued.len(),
+            );
+        }
         self.active = GameSessionInput::default();
         self.queued.clear();
     }

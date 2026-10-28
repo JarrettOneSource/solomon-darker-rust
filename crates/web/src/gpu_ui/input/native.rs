@@ -72,6 +72,21 @@ impl NativeInput {
     /// The window owner commits the previous dispatch before calling this method.
     /// No callbacks reenter a borrowed game or its GPU resource owner.
     pub fn window_event(&mut self, event: &WindowEvent) -> Result<(), String> {
+        if let WindowEvent::KeyboardInput { event, .. } = event
+            && event.physical_key == PhysicalKey::Code(winit::keyboard::KeyCode::KeyD)
+            && !event.repeat
+        {
+            eprintln!(
+                "INPUT_DIAGNOSTIC {:.3} window-key d pressed={} window_focus={} queue_focus={} composing={} editing={} scope={:?}",
+                crate::platform::monotonic_ms(),
+                event.state == ElementState::Pressed,
+                self.window.has_focus(),
+                self.queue.focused,
+                self.queue.composing,
+                self.queue.capture.text,
+                self.queue.scope,
+            );
+        }
         if let WindowEvent::Touch(touch) = event {
             crate::platform::set_coarse_pointer(true);
             if touch.phase == winit::event::TouchPhase::Started {

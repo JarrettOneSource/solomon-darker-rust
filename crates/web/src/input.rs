@@ -87,6 +87,8 @@ struct GameplayInputState {
     secondary_at_pointer: bool,
     controls: GameControlBindings,
     mobile_layout: MobileUiLayoutState,
+    #[cfg(not(target_arch = "wasm32"))]
+    diagnostic_sample_pending: bool,
 }
 
 pub struct MovementInput {
@@ -131,6 +133,8 @@ impl GameplayInputState {
             secondary_at_pointer: true,
             controls: GameControlBindings::default(),
             mobile_layout: MobileUiLayoutState::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            diagnostic_sample_pending: false,
         }
     }
     fn world_input_blocked(&self) -> bool {
@@ -154,6 +158,10 @@ impl MovementInput {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn window_event(&self, event: &winit::event::WindowEvent) -> Result<(), String> {
         self.transport.window_event(event)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn diagnostic_key_pending(&self) -> bool {
+        self.state.borrow().diagnostic_sample_pending
     }
     pub fn set_ui_geometry(&self, diagnostics: &UiDiagnostics, belt: &[HudBeltHit]) {
         let pointers = {
@@ -274,7 +282,20 @@ impl MovementInput {
     pub fn sample(&self) -> Result<GameplayInputSample, String> {
         self.reconcile_hotbar_bank()?;
         let mut state = self.state.borrow_mut();
+        #[cfg(not(target_arch = "wasm32"))]
+        let diagnostic = std::mem::take(&mut state.diagnostic_sample_pending);
         if state.world_input_blocked() {
+            #[cfg(not(target_arch = "wasm32"))]
+            if diagnostic {
+                eprintln!(
+                    "INPUT_DIAGNOSTIC {:.3} sample blocked={} text={} scope={:?} d_held={} movement=zero",
+                    crate::platform::monotonic_ms(),
+                    state.blocked,
+                    state.ui.text,
+                    state.ui.scope,
+                    state.held.contains("KeyD"),
+                );
+            }
             return Ok(GameplayInputSample {
                 movement: Vec2::ZERO,
                 aim: None,
@@ -322,6 +343,14 @@ impl MovementInput {
             });
         let keyboard = keyboard_movement(&state);
         let movement = sample_movement(state.touch, gamepad_movement, keyboard).movement;
+        #[cfg(not(target_arch = "wasm32"))]
+        if diagnostic {
+            eprintln!(
+                "INPUT_DIAGNOSTIC {:.3} sample d_held={} keyboard={keyboard:?} movement={movement:?}",
+                crate::platform::monotonic_ms(),
+                state.held.contains("KeyD"),
+            );
+        }
         let pending_aim = state.pending_aim.take();
         let aim = if state.touch_primary != Vec2::ZERO {
             Some(GameplayAim::Direction(state.touch_primary))
@@ -439,7 +468,16 @@ fn hold_belt(state: &mut GameplayInputState, source: BeltInputSource, slot: usiz
         state.belt_pressed.push(slot);
     }
 }
+#[track_caller]
 fn clear_input(state: &mut GameplayInputState) {
+    #[cfg(not(target_arch = "wasm32"))]
+    if state.held.contains("KeyD") {
+        eprintln!(
+            "INPUT_DIAGNOSTIC {:.3} clear-held-d caller={}",
+            crate::platform::monotonic_ms(),
+            std::panic::Location::caller(),
+        );
+    }
     state.held.clear();
     state.touch = Vec2::ZERO;
     state.pointer = None;
