@@ -322,7 +322,10 @@ impl PlayerPanels {
                     selector,
                 })
             }
-            Target::OwnedPerk(selector) => {
+            Target::OwnedPerk(index) => {
+                let Some(&selector) = snapshot.economy.owned_perk_selectors.get(index) else {
+                    return Ok(());
+                };
                 gap = 25.0;
                 hub_hagatha_tooltip_lines(&HagathaTooltipOptions {
                     bundle_selectors: &[],

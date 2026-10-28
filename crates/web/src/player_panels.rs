@@ -177,7 +177,7 @@ enum Target {
     Hagatha(i32),
     Storage(u64),
     ShopCell,
-    OwnedPerk(u32),
+    OwnedPerk(usize),
     Dowse,
     HudSelectSkill(usize),
 }
@@ -1127,7 +1127,10 @@ impl PlayerPanels {
                     }
                 }
             }
-            Target::OwnedPerk(selector) => {
+            Target::OwnedPerk(index) => {
+                let Some(&selector) = snapshot.economy.owned_perk_selectors.get(index) else {
+                    return Ok(());
+                };
                 if snapshot.perk_removal_enabled && selector != 27 {
                     self.sound(AudioCue::Click);
                     self.actions.push(PlayerPanelAction::Inventory(

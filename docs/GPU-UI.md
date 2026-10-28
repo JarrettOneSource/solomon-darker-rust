@@ -34,6 +34,11 @@ player panels reserve a 48-pixel navigation bar above their scrolling body.
 Rendering, hit regions, and raw pointer/wheel admission use the same body clip,
 and an active drag retains its owner through release or cancellation outside it.
 
+Owned charm controls identify their displayed slot. A wizard may own two tonics,
+so the charm selector is not a unique UI identity. Hover and activation resolve
+the slot against accepted economy state; removal still emits the canonical charm
+selector and never removes a tonic.
+
 ## Materials and resource ownership
 
 The health meter adds a pulsing health highlight while the accepted player has Regenerate
