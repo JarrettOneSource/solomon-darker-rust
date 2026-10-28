@@ -81,7 +81,7 @@ impl SessionSecondaryWorld<'_> {
         if let Some(world) = self.boneyard.as_deref() {
             can_place_boneyard_body(
                 position,
-                world.loaded.scene.bounds,
+                world.active_bounds(),
                 &world.dynamic_collision,
                 radius,
             )
@@ -252,7 +252,7 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
             resolve_boneyard_movement(
                 origin,
                 requested,
-                world.loaded.scene.bounds,
+                world.active_bounds(),
                 &world.dynamic_collision,
                 radius,
             )
@@ -294,7 +294,7 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
         resolve_boneyard_native_teleport(
             BoneyardNativeTeleportWorld {
                 bodies: &self.teleport_bodies,
-                bounds: world.loaded.scene.bounds,
+                bounds: world.active_bounds(),
                 collision: &world.dynamic_collision,
             },
             rng,

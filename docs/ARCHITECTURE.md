@@ -72,6 +72,13 @@ borrow the actual participant bodies so a second position store cannot diverge
 from canonical players. Checkpoints retain the loaded world's identity so restore
 can rebuild immutable geometry and navigation inputs consistently.
 
+Spell-driven body placement uses the same active arena bounds as ordinary
+movement. Teleport, Phase, Golem placement, Golem movement and its foot targets
+use the full entrance while Open and the combat domain while Locking or Sealed.
+Using the full scene after closure can leave a wizard outside the domain required
+by enemy routes, making every subsequent enemy birth unreachable. The existing
+placement algorithms and strict rejection of impossible births remain unchanged.
+
 ### Runtime entity storage
 
 [`sim::ecs`](../crates/sim/src/ecs.rs) owns admission-ordered component queries.
