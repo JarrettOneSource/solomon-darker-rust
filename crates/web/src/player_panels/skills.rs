@@ -68,6 +68,24 @@ impl PlayerPanels {
             tint: 0x808080,
             ..NativeUiTextSpec::new(NativeUiFontName::Menu, "SKILLS", 800.0, 60.0)
         });
+        if !self.compact {
+            c.native_button(
+                &self.ui,
+                "boasts",
+                if self.boasts_open { "Skills" } else { "Boasts" },
+                HudRect::new(1090.0, 5.0, 220.0, 50.0),
+            )?;
+        }
+        if self.boasts_open {
+            self.draw_boasts(c, s)?;
+            c.semantic(
+                "panel:surface:skills",
+                "Boasts",
+                "dialog",
+                HudRect::new(0.0, 0.0, 1600.0, 900.0),
+            );
+            return Ok(());
+        }
         let coarse = crate::platform::coarse_pointer();
         for (line, y) in [
             (
@@ -304,7 +322,10 @@ impl PlayerPanels {
                     selector,
                 })
             }
-            Target::OwnedPerk(selector) => {
+            Target::OwnedPerk(index) => {
+                let Some(&selector) = snapshot.economy.owned_perk_selectors.get(index) else {
+                    return Ok(());
+                };
                 gap = 25.0;
                 hub_hagatha_tooltip_lines(&HagathaTooltipOptions {
                     bundle_selectors: &[],

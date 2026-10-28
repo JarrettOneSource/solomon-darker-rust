@@ -7,33 +7,66 @@ const musicPaths=new Map([...catalog.matchAll(/id: "([^"]+)",\s*path: "([^"]+)",
 const observers=new WeakMap();
 let nextObserver=0;
 
-function residentSuspension(failure,captured,settled) {
+function loadedResidentChannel(failure,snapshot) {
   if(failure.errorText!=='net::ERR_ABORTED'||failure.method!=='GET'
-    ||failure.resourceType!=='media'||![200,206].includes(failure.status)
-    ||!captured||!settled||captured.documentId!==settled.documentId)return null;
-  const matches=captured.channels.filter(channel=>channel.url===failure.url);
+    ||failure.resourceType!=='media'||![200,206].includes(failure.status)||!snapshot)return null;
+  const matches=snapshot.channels.filter(channel=>channel.url===failure.url);
   if(matches.length!==1)return null;
-  const before=matches[0];
-  const remaining=settled.channels.filter(channel=>channel.url===failure.url);
-  if(remaining.length!==1)return null;
-  const after=remaining[0];
-  if(after.id!==before.id)return null;
-  const stock=musicPaths.get(before.cue);
-  if(!stock||new URL(`assets/stock/audio/${stock}`,captured.baseUrl??captured.documentUrl).href!==failure.url)return null;
-  for(const channel of [before,after]) {
-    if(!channel||channel.cue!==before.cue||channel.url!==failure.url||channel.src!==failure.url
-      ||!channel.connected||!channel.hidden||channel.controls||channel.preload!=='auto'
-      ||channel.retired||channel.loads!==1||channel.sources.length!==1
-      ||channel.sources[0]!==failure.url||channel.error!==null||channel.ready<2||channel.network!==1)return null;
-    const events=channel.events;
-    const loaded=events.findIndex(event=>event.type==='loadeddata'&&event.trusted);
-    if(loaded<0||events.filter(event=>event.type==='loadstart').length!==1
-      ||!events.some(event=>event.type==='suspend'&&event.trusted&&event.network===1)
-      ||events.some((event,index)=>['error','abort'].includes(event.type)
-        ||(event.type==='emptied'&&index>loaded)))return null;
+  const channel=matches[0];
+  const stock=musicPaths.get(channel.cue);
+  if(!stock||new URL(`assets/stock/audio/${stock}`,snapshot.baseUrl??snapshot.documentUrl).href!==failure.url)return null;
+  if(channel.src!==failure.url||!channel.connected||!channel.hidden||channel.controls
+    ||channel.preload!=='auto'||channel.retired||channel.loads!==1||channel.sources.length!==1
+    ||channel.sources[0]!==failure.url||channel.error!==null)return null;
+  const events=channel.events;
+  const loaded=events.findIndex(event=>event.type==='loadeddata'&&event.trusted);
+  if(loaded<0||events.filter(event=>event.type==='loadstart').length!==1
+    ||events.some((event,index)=>['error','abort'].includes(event.type)
+      ||(event.type==='emptied'&&index>loaded)))return null;
+  return channel;
+}
+
+function suspendedResidentChannel(channel) {
+  return channel.ready>=2&&channel.network===1
+    &&channel.events.some(event=>event.type==='suspend'&&event.trusted&&event.network===1);
+}
+
+function residentSuspension(failure,captured,settled) {
+  if(!captured||!settled||captured.documentId!==settled.documentId)return null;
+  const before=loadedResidentChannel(failure,captured);
+  const after=loadedResidentChannel(failure,settled);
+  if(!before||!after||after.id!==before.id||after.cue!==before.cue)return null;
+  const later=after.events.slice(before.events.length);
+  const played=later.findIndex(event=>event.type==='playing'
+    &&event.trusted&&event.url===failure.url&&event.ready>=3
+    &&event.paused===false&&event.seeking===false);
+  let reason='ready resident channel suspended by the browser';
+  if(!suspendedResidentChannel(before)) {
+    // The request callback can arrive during a rewind or after it completes.
+    // Require the loaded, suspended lifetime and completed rewind before playback.
+    const loaded=before.events.findIndex(event=>event.type==='loadeddata'&&event.trusted&&event.ready>=2);
+    if(before.ready<1||![1,2].includes(before.network)||before.currentTime!==0||loaded<0
+      ||!before.events.some(event=>event.type==='suspend'&&event.trusted&&event.network===1)
+      ||played<0||![1,2].includes(after.network)
+      ||after.ready<3||after.seeking!==false)return null;
+    const beforePlayback=after.events.slice(0,before.events.length+played);
+    const seeking=beforePlayback.findLastIndex(event=>event.type==='seeking');
+    const seeked=beforePlayback.findLastIndex(event=>event.type==='seeked');
+    if(seeking<=loaded||seeked<=seeking)return null;
+    const start=beforePlayback[seeking],end=beforePlayback[seeked];
+    if(!start.trusted||start.url!==failure.url||start.currentTime!==0||start.seeking!==true
+      ||!end.trusted||end.url!==failure.url||end.ready<3||end.seeking!==false)return null;
+    const capturedRewind=before.seeking===true?seeked>=before.events.length
+      :before.seeking===false&&before.ready>=3&&seeked<before.events.length;
+    if(!capturedRewind)return null;
+    reason='resident channel completed a captured rewind after browser suspension';
+  } else if(!suspendedResidentChannel(after)) {
+    // Trusted-gesture priming can resume fetching after the captured suspension.
+    // Require later real playback and retained future data from the same owner.
+    if(after.network!==2||after.ready<3||after.seeking!==false||played<0)return null;
+    reason='ready resident channel resumed after browser suspension';
   }
-  return {cue:before.cue,channelId:before.id,documentId:captured.documentId,
-    reason:'ready resident channel suspended by the browser'};
+  return {cue:before.cue,channelId:before.id,documentId:captured.documentId,reason};
 }
 
 function documentRetirement(failure,retirement) {
@@ -42,10 +75,23 @@ function documentRetirement(failure,retirement) {
   if(removal) {
     if(!retirement.detached||retirement.detachedTargetId!==retirement.beforeTargetId)return null;
   } else if(retirement.beforeTargetId===retirement.afterTargetId)return null;
-  const owner=residentSuspension(failure,retirement.before,retirement.before);
-  const reason=removal?'ready resident channel retired by the observed frame removal'
-    :'ready resident channel retired by the observed document replacement';
-  return owner?{...owner,reason}:null;
+  const channel=loadedResidentChannel(failure,retirement.before);
+  if(!channel)return null;
+  const action=removal?'frame removal':'document replacement';
+  let reason=`ready resident channel retired by the observed ${action}`;
+  if(!suspendedResidentChannel(channel)) {
+    // Rewinding a loaded, paused song can temporarily leave only metadata while
+    // its range request is pending. Only the observed document retirement owns
+    // that cancellation; the same state in a live document remains a failure.
+    const loaded=channel.events.findIndex(event=>event.type==='loadeddata'&&event.trusted);
+    const lastSeek=channel.events.findLastIndex(event=>['seeking','seeked'].includes(event.type));
+    const seek=channel.events[lastSeek];
+    if(!channel.paused||channel.currentTime!==0||!channel.seeking||channel.ready<1
+      ||![1,2].includes(channel.network)||lastSeek<=loaded||seek.type!=='seeking'
+      ||!seek.trusted||!seek.paused||seek.currentTime!==0||!seek.seeking)return null;
+    reason=`loaded resident channel rewinding during the observed ${action}`;
+  }
+  return {cue:channel.cue,channelId:channel.id,documentId:retirement.before.documentId,reason};
 }
 
 // All wrappers forward the original native call unchanged. There are no setters
@@ -55,6 +101,7 @@ function observeResidentMedia() {
   let nextChannel=0;
   const describe=media=>({cue:media.dataset.audioCue||null,src:media.src,url:media.currentSrc,
     connected:media.isConnected,hidden:media.hidden,controls:media.controls,preload:media.preload,
+    paused:media.paused,currentTime:media.currentTime,seeking:media.seeking,
     ready:media.readyState,network:media.networkState,error:media.error?.code??null});
   const own=media=>{
     if(!channels.has(media))channels.set(media,{id:++nextChannel,loads:0,sources:[],events:[],retired:false});
@@ -76,7 +123,7 @@ function observeResidentMedia() {
     own(this).loads+=1;
     return Reflect.apply(load,this,args);
   };
-  for(const type of ['loadstart','loadeddata','suspend','abort','emptied','error','playing']) {
+  for(const type of ['loadstart','loadeddata','suspend','abort','emptied','error','playing','seeking','seeked']) {
     document.addEventListener(type,event=>{
       if(event.target instanceof HTMLMediaElement)own(event.target).events.push({type,
         trusted:event.isTrusted,time:performance.now(),...describe(event.target)});

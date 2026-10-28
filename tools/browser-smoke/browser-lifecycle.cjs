@@ -1,5 +1,21 @@
 // The public Playwright server owns Chrome; the client owns only its connection.
 // Keep both close results, including a timeout, fatal even if termination succeeds.
+const os=require('node:os');
+
+async function prepareSoftwareRenderer(browser,options) {
+  if(os.platform()!=='win32'||!options.args?.includes('--use-angle=swiftshader'))return;
+  const cdp=await browser.newBrowserCDPSession();
+  try {
+    await cdp.send('SystemInfo.getInfo');
+    const {processInfo}=await cdp.send('SystemInfo.getProcessInfo');
+    const gpu=processInfo.filter(process=>process.type.toLowerCase()==='gpu');
+    if(gpu.length!==1)throw new Error('Expected one owned software GPU process');
+    // Chrome promotes its Windows GPU process above normal. SwiftShader runs
+    // on the CPU and can then starve the local server and browser driver.
+    os.setPriority(gpu[0].id,os.constants.priority.PRIORITY_NORMAL);
+  } finally {await cdp.detach()}
+}
+
 async function bounded(promise,label,milliseconds) {
   let timer;
   try {
@@ -17,7 +33,32 @@ function releaseStdioAfterExit(child) {
   else child.once('exit',release);
 }
 
-async function launchOwnedBrowser(chromium,options) {
+async function launchOwnedBrowser(chromium,options={}) {
+  if(os.platform()==='win32') {
+    // SO_RANDOMIZE_PORT can make Windows connect fail with WSAENOBUFS (10055).
+    // Chromium keeps only the last --disable-features switch. Preserve the
+    // defaults from pinned Playwright 1.61.1 when adding this test-host workaround.
+    const defaults=[
+      'AvoidUnnecessaryBeforeUnloadCheckSync','BoundaryEventDispatchTracksNodeRemoval',
+      'DestroyProfileOnBrowserClose','DialMediaRouteProvider','GlobalMediaControls',
+      'HttpsUpgrades','LensOverlay','MediaRouter','PaintHolding','ThirdPartyStoragePartitioning',
+      'Translate','AutoDeElevate','RenderDocument','OptimizationHints',
+      'msForceBrowserSignIn','msEdgeUpdateLaunchServicesPreferredVersion',
+    ];
+    const prefix='--disable-features=';
+    const defaultSwitch=prefix+defaults.join(',');
+    const ignored=options.ignoreDefaultArgs;
+    const args=options.args||[];
+    const features=new Set(ignored===true||(Array.isArray(ignored)&&ignored.includes(defaultSwitch))?[]:defaults);
+    for(const arg of args)if(arg.startsWith(prefix)) {
+      for(const feature of arg.slice(prefix.length).split(','))if(feature)features.add(feature);
+    }
+    features.add('TcpPortRandomizationWin');
+    options={...options,
+      ignoreDefaultArgs:ignored===true?true:[...(ignored||[]),defaultSwitch],
+      args:[...args.filter(arg=>!arg.startsWith(prefix)),prefix+[...features].join(',')],
+    };
+  }
   const server=await chromium.launchServer({...options,host:'127.0.0.1'});
   releaseStdioAfterExit(server.process());
   let browser;
@@ -51,6 +92,12 @@ async function launchOwnedBrowser(chromium,options) {
       error.cleanup=report;throw error;
     }
     return report;
+  }
+  try {await bounded(prepareSoftwareRenderer(browser,options),'software renderer setup',15000)}
+  catch(error) {
+    try {await close()}
+    catch(cleanupError) {throw new AggregateError([error,cleanupError],'Browser setup and cleanup failed')}
+    throw error;
   }
   return {browser,close};
 }

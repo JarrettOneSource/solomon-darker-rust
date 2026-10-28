@@ -90,7 +90,12 @@ impl ModIntentAdapter for HostIntentAdapter<'_> {
                     continue;
                 }
                 if intent.kind == "select_skill" {
-                    select_mod_player_skill(&mut candidate, &intent.fields, context)?;
+                    select_mod_player_skill(
+                        &mut candidate,
+                        &intent.fields,
+                        context,
+                        Some(self.runtime),
+                    )?;
                     continue;
                 }
                 let applied = apply_game_intent(&mut candidate, self.runtime, intent, context)?;

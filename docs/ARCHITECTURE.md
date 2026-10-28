@@ -161,6 +161,11 @@ blend, color material, sampler, or clip change can require a flush. Nested group
 rendering restores the enclosing target and state; retained vertex/index storage
 does not permit reordering across those boundaries.
 
+Courtyard art uses source-rectangle clamping so linear filtering cannot read an
+adjacent atlas image. Its full source geometry is preserved, as if each record
+were an isolated cropped texture. The southern wall and platform bank follows
+the separate 1.25 camera scope after courtyard actors and foreground art.
+
 Game menus, HUD, overlays, and the desktop launcher are Rust GPU UI. Egui handles
 interaction/layout and tessellation. The shared graphics code submits stock sprites,
 bitmap text, shaped font runs, and meshes.
@@ -196,6 +201,8 @@ If the OS reports no output device at startup, native play uses an elapsed-time
 audio clock and inactive playback controls. It creates no mixer or audio worker.
 Device initialization and decoding failures still propagate; an audio device
 connected later is picked up on the next game launch.
+CPAL buffer underruns are warnings because the backend recovers them. Device loss,
+stream invalidation and failed recovery still stop playback and report the failure.
 
 The browser audio backend owns one AudioContext. The shared director owns named
 loop sources and six resident music channels. A loop combines requests using the
@@ -219,6 +226,12 @@ The host owns connection generations, admission credentials, input edges,
 readiness, pause/resume holds, and durable save receipts. The session owns rules.
 A checkpoint writer performs encoding and atomic synced replacement away from
 the tick deadline. Welcome and SaveCommitted wait for their required disk writes.
+
+The client Welcome receive deadline ends when the full message has been decoded.
+Local validation and durable reconnect-credential storage still precede game
+acceptance and the final chunk acknowledgement. A delayed local operation cannot
+expire a completed network transfer. Connection failures remain available after
+event polling, so rejected commands report the original failure.
 
 `GameSnapshot` borrows state for serialization; `GameCheckpoint` owns state for
 restoration. They retain the same serialized shape. Snapshot application validates

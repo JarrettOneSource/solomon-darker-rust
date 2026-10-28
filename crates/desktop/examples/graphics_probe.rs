@@ -1,6 +1,10 @@
 //! Actual native-context qualification of the shared shader and texture pipeline.
 
 #[cfg(not(target_arch = "wasm32"))]
+#[path = "../../graphics/examples/support/atlas_crop.rs"]
+mod atlas_crop;
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> Result<(), String> {
     use glow::HasContext;
     use solomon_desktop::window::NativeWindow;
@@ -56,6 +60,24 @@ fn main() -> Result<(), String> {
             let result = (|| {
                 let window = self.window.as_ref().ok_or("Native window absent")?;
                 let renderer = self.renderer.as_mut().ok_or("Shared renderer absent")?;
+                let crop: serde_json::Value = serde_json::from_str(&atlas_crop::probe(renderer)?)
+                    .map_err(|error| error.to_string())?;
+                std::fs::create_dir_all(&self.output).map_err(|error| error.to_string())?;
+                std::fs::write(
+                    self.output.join("atlas-crops.json"),
+                    serde_json::to_vec_pretty(&crop).map_err(|error| error.to_string())?,
+                )
+                .map_err(|error| error.to_string())?;
+                for case in crop.as_array().ok_or("Atlas crop cases are absent")? {
+                    if case["maximumDifference"]
+                        .as_u64()
+                        .ok_or("Atlas crop difference is absent")?
+                        > 1
+                        || case["restored"] != true
+                    {
+                        return Err(format!("Isolated atlas crop differs: {case}"));
+                    }
+                }
                 let texture = self.texture.as_ref().ok_or("Stock texture absent")?;
                 let size = window.window.inner_size();
                 renderer.begin_frame(size.width as i32, size.height as i32, [960.0, 600.0]);

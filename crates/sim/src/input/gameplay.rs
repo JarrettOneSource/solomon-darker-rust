@@ -1,4 +1,4 @@
-//! Stateful standard-controller actions from Website `input/standard-gamepad.ts`.
+//! Stateful standard-controller actions shared by native and browser gameplay.
 //! One selected pad owns movement, aim and casts until it disconnects. Modal handoffs
 //! require neutral controls, so a held confirmation/trigger cannot become a new action.
 

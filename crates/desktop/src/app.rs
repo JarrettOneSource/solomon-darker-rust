@@ -560,7 +560,13 @@ impl ApplicationHandler<AccessibilityEvent> for App {
             }
             egui_winit::accesskit_winit::WindowEvent::ActionRequested(action) => match screen {
                 Screen::Launcher { view, .. } => view.accesskit_action(action, now),
-                Screen::Game { game, .. } => game.borrow_mut().accesskit_action(action, now),
+                Screen::Game { game, .. } => {
+                    if self.failure.is_some() {
+                        game.borrow_mut().native_ui().accesskit_action(action)
+                    } else {
+                        game.borrow_mut().accesskit_action(action, now)
+                    }
+                }
             },
             egui_winit::accesskit_winit::WindowEvent::AccessibilityDeactivated => Ok(()),
         };
@@ -605,13 +611,20 @@ impl ApplicationHandler<AccessibilityEvent> for App {
                     }
                 }
                 Screen::Game { game, window, .. } => {
-                    game.borrow_mut().window_event(&event, now)?;
+                    // A failed game accepts input only through its recovery surface.
+                    if self.failure.is_some() {
+                        game.borrow_mut().native_ui().window_event(&event)?;
+                    } else {
+                        game.borrow_mut().window_event(&event, now)?;
+                    }
                     if matches!(event, WindowEvent::RedrawRequested) {
                         if self.failure.is_none() {
                             let result = game.borrow_mut().frame(now);
                             if let Err(error) = result {
                                 solomon_web::platform::error(&error);
-                                game.borrow_mut().report_failure(&error);
+                                if let Err(stop_error) = game.borrow_mut().report_failure(&error) {
+                                    solomon_web::platform::error(&stop_error);
+                                }
                                 self.failure = Some(error);
                             }
                         }

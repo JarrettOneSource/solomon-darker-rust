@@ -6,7 +6,6 @@
 
 use solomon_assets::SpriteRecord;
 use solomon_sim::Vec2;
-use solomon_sim::hub::HUB_WORLD_SIZE;
 use solomon_sim::hub::ambient::{
     HUB_FOUNTAIN_ORIGIN, HubAmbientState, HubColor, HubStatueOffsets, hub_fountain_particle_alpha,
     hub_seal_colors, hub_statue_offsets,
@@ -17,6 +16,7 @@ use solomon_sim::hub::painter::{
     HUB_COURTYARD_OBSTACLE_PAINTER_ORDINAL_BASE, HUB_COURTYARD_OBSTACLES, PainterLane,
     PainterLayer, hub_painter_order,
 };
+use solomon_sim::hub::{HUB_CAMERA_SCALE, HUB_LOGICAL_VIEW, HUB_WORLD_SIZE};
 use solomon_sim::painter::overlays::{PainterOverlayOrder, PainterOwnerOverlay};
 use std::collections::BTreeMap;
 
@@ -99,6 +99,7 @@ pub struct CourtyardScene {
     records: Vec<SpriteRecord>,
     atlas: Texture,
     overlay_order: PainterOverlayOrder,
+    southern: Vec<(usize, Vec2)>,
 }
 
 impl CourtyardScene {
@@ -113,7 +114,12 @@ impl CourtyardScene {
                 records.len()
             ));
         }
-        Ok(Self { records, atlas, overlay_order: PainterOverlayOrder::default() })
+        Ok(Self {
+            records,
+            atlas,
+            overlay_order: PainterOverlayOrder::default(),
+            southern: southern_architecture(),
+        })
     }
 
     pub fn reset_overlays(&mut self) {
@@ -224,6 +230,9 @@ impl CourtyardScene {
                         self.draw_registered(renderer, camera, index, Vec2::ZERO, WHITE);
                     }
                 }
+                CourtyardLayer::Band(HubDepth::SouthernForeground) => {
+                    self.draw_southern(renderer, camera);
+                }
                 CourtyardLayer::Band(band) => draw(renderer, CourtyardPass::Band(band)),
                 CourtyardLayer::Obstacle(obstacle) => {
                     for &index in OBSTACLE_RECORDS[obstacle] {
@@ -252,7 +261,7 @@ impl CourtyardScene {
         for particle in &ambient.fountain_particles {
             let width = f64::from(drop.width) * particle.scale;
             let height = f64::from(drop.height) * particle.scale;
-            renderer.draw(
+            renderer.draw_clamped(
                 &self.atlas,
                 Quad {
                     source: atlas_source(drop),
@@ -282,6 +291,27 @@ impl CourtyardScene {
         self.draw_registered(renderer, camera, STATUE_BODY, statue.body, WHITE);
     }
 
+    fn draw_southern(&self, renderer: &mut Renderer, camera: &Camera) {
+        let camera = southern_camera(camera, renderer.logical_size());
+        for &(index, origin) in &self.southern {
+            let record = &self.records[index];
+            renderer.draw_clamped(
+                &self.atlas,
+                Quad {
+                    source: atlas_source(record),
+                    destination: camera.project(
+                        origin.x,
+                        origin.y,
+                        f64::from(record.width),
+                        f64::from(record.height),
+                    ),
+                    tint: WHITE,
+                    blend: BlendMode::Normal,
+                },
+            );
+        }
+    }
+
     /// Tiles the floor from the world origin, clipping the last column and row to the room.
     fn draw_floor(&self, renderer: &mut Renderer, camera: &Camera) {
         let tile = &self.records[FLOOR_TILE];
@@ -292,7 +322,7 @@ impl CourtyardScene {
             let mut left = 0.0;
             while left < HUB_WORLD_SIZE.x {
                 let width = tile_width.min(HUB_WORLD_SIZE.x - left);
-                renderer.draw(
+                renderer.draw_clamped(
                     &self.atlas,
                     Quad {
                         source: [tile.x as f32, tile.y as f32, width as f32, height as f32],
@@ -329,7 +359,7 @@ impl CourtyardScene {
     ) {
         let record = &self.records[index];
         let [left, top] = registered_origin(record);
-        renderer.draw(
+        renderer.draw_clamped(
             &self.atlas,
             Quad {
                 source: atlas_source(record),
@@ -357,7 +387,7 @@ impl CourtyardScene {
     ) {
         let record = &self.records[index];
         let [left, top] = registered_origin_scaled(record, scale);
-        renderer.draw(
+        renderer.draw_clamped(
             &self.atlas,
             Quad {
                 source: atlas_source(record),
@@ -371,6 +401,48 @@ impl CourtyardScene {
                 blend: BlendMode::Add,
             },
         );
+    }
+}
+
+/// `HubWorldScene::addSouthernArchitecture` and `hub-camera-presentation.ts`.
+/// This bank uses cropped College records in a separate 1.25 camera scope.
+fn southern_architecture() -> Vec<(usize, Vec2)> {
+    let extent = Vec2::new(
+        1.25 * HUB_WORLD_SIZE.x - 0.25 * HUB_LOGICAL_VIEW.x / HUB_CAMERA_SCALE / 2.0,
+        1.25 * HUB_WORLD_SIZE.y - 0.25 * HUB_LOGICAL_VIEW.y / HUB_CAMERA_SCALE / 2.0,
+    );
+    let mut pieces = Vec::new();
+    let mut x = 90.0;
+    let mut slot = 0;
+    let mut previous_was_tower = false;
+    while x < extent.x {
+        if slot == 4 || slot == 6 {
+            pieces.push((44, Vec2::new(x, extent.y - 186.0)));
+            x += 179.0;
+            previous_was_tower = true;
+        } else {
+            let y = extent.y - 126.0 + if slot == 5 { 0.0 } else { 30.0 };
+            pieces.push((4, Vec2::new(x, y)));
+            if previous_was_tower {
+                pieces.push((3, Vec2::new(x - 1.0, y)));
+            }
+            x += 209.0;
+            previous_was_tower = false;
+        }
+        slot += 1;
+    }
+    pieces.push((7, Vec2::new(128.0 / HUB_CAMERA_SCALE, extent.y - 407.0)));
+    pieces.push((43, Vec2::new(1843.0, extent.y - 415.0)));
+    pieces
+}
+
+fn southern_camera(camera: &Camera, logical_view: [f32; 2]) -> Camera {
+    Camera {
+        origin: Vec2::new(
+            1.25 * camera.origin.x + 0.25 * f64::from(logical_view[0]) / camera.scale / 2.0,
+            1.25 * camera.origin.y + 0.25 * f64::from(logical_view[1]) / camera.scale / 2.0,
+        ),
+        scale: camera.scale,
     }
 }
 
@@ -399,4 +471,38 @@ fn atlas_source(record: &SpriteRecord) -> [f32; 4] {
 fn tint(color: HubColor) -> [f32; 4] {
     let channel = |value: f64| ((value * 255.0).round() / 255.0) as f32;
     [channel(color.red), channel(color.green), channel(color.blue), color.alpha as f32]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn southern_bank_keeps_the_central_gate_and_platforms() {
+        let pieces = southern_architecture();
+        // Authored gate: two towers flank a lowered battlement and its left seam.
+        assert_eq!(
+            &pieces[4..8],
+            &[
+                (44, Vec2::new(926.0, 1000.25)),
+                (4, Vec2::new(1105.0, 1060.25)),
+                (3, Vec2::new(1104.0, 1060.25)),
+                (44, Vec2::new(1314.0, 1000.25)),
+            ]
+        );
+        assert_eq!(pieces.last(), Some(&(43, Vec2::new(1843.0, 771.25))));
+        let west = pieces[pieces.len() - 2];
+        assert_eq!(west.0, 7);
+        assert!((west.1.x - 106.666_666_666_666_67).abs() < 1e-10);
+        assert_eq!(west.1.y, 779.25);
+    }
+
+    #[test]
+    fn southern_camera_uses_the_dynamic_view_center() {
+        let camera = Camera { origin: Vec2::new(100.0, 40.0), scale: 1.2 };
+        let southern = southern_camera(&camera, [1600.0, 1000.0]);
+        assert!((southern.origin.x - 291.666_666_666_666_7).abs() < 1e-10);
+        assert!((southern.origin.y - 154.166_666_666_666_69).abs() < 1e-10);
+        assert_eq!(southern.scale, 1.2);
+    }
 }

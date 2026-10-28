@@ -143,7 +143,8 @@ async function pauseNotice(key,text,afterAnnouncement,name,{resume=true}={}) {
     if(player().economy.owned_perk_selectors.includes(7)) {
       // Source's desktop Party chip overlaps the center of this stock cell.
       // Its visible top edge remains a real, unobstructed pointer target.
-      const target=await ui.widget(page,'panel:owned-perk:7');
+      const target=await ui.byLabel(page,'Remove CHEAT DEATH CHARM',
+        {role:'button',prefix:'panel:owned-perk:'});
       const point={x:target.rect[0]+target.rect[2]/2,y:target.rect[1]+2};
       const covers=(await ui.readUi(page)).widgets.filter(row=>row.enabled&&row.z>target.z
         &&point.x>=row.rect[0]&&point.x<row.rect[0]+row.rect[2]

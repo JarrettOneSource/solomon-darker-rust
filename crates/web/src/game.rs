@@ -2582,8 +2582,13 @@ impl Game {
         }))
     }
 
-    pub fn report_failure(&mut self, error: &str) {
+    pub fn report_failure(&mut self, error: &str) -> Result<(), String> {
         crate::runtime_ui::set_error(error);
+        self.input.set_blocked(true)?;
+        if let Some(native) = &mut self.native {
+            native.release_input(self.session.ticks)?;
+        }
+        Ok(())
     }
 
     pub fn present_failure(&mut self, time: f64) -> Result<(), String> {
@@ -2592,7 +2597,7 @@ impl Game {
         self.renderer.begin_frame(width, height, viewport);
         self.renderer.end_frame();
         self.gpu_ui.run(&mut self.renderer, viewport, time / 1000.0, |frame| {
-            crate::runtime_ui::paint(frame);
+            crate::runtime_ui::paint_failure(frame);
             if let Some(desktop) = &mut self.desktop_ui {
                 desktop.paint(frame, true)?;
             }

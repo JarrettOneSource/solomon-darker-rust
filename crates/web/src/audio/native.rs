@@ -70,8 +70,7 @@ impl AudioEngine {
         let mut device = device
             .with_buffer_size(rodio::cpal::BufferSize::Fixed(1024))
             .with_error_callback(move |error| {
-                *callback_error.lock().expect("audio error lock") =
-                    Some(format!("Native audio output: {error}"));
+                record_output_error(&callback_error, error);
             })
             .open_sink_or_fallback()
             .map_err(|error| format!("Start native audio output: {error}"))?;
@@ -140,6 +139,15 @@ impl AudioEngine {
         player.set_volume(options.volume.clamp(0.0, 1.0) as f32);
         player.append(source);
         Ok(Voice(Some(player)))
+    }
+}
+
+fn record_output_error(error: &Mutex<Option<String>>, event: rodio::cpal::StreamError) {
+    if matches!(event, rodio::cpal::StreamError::BufferUnderrun) {
+        // CPAL recovers an underrun; a failed recovery arrives as a separate backend error.
+        crate::platform::warn(&format!("Native audio output: {event}"));
+    } else {
+        *error.lock().expect("audio error lock") = Some(format!("Native audio output: {event}"));
     }
 }
 
@@ -320,6 +328,36 @@ pub(super) fn play_music(media: &Music) -> Result<(), String> {
 mod tests {
     use super::*;
     use std::num::NonZero;
+
+    #[test]
+    fn output_underrun_keeps_audio_available() {
+        let engine = AudioEngine::from_device(Err(rodio::DeviceSinkError::NoDevice)).unwrap();
+        record_output_error(&engine.0.error, rodio::cpal::StreamError::BufferUnderrun);
+        engine.check().expect("a recovered audio buffer must not stop the game");
+        let buffer =
+            decode(include_bytes!("../../tests/fixtures/audio/opus-mono.ogg").to_vec()).unwrap();
+        engine.voice(&buffer, AudioOptions::default(), false, 0.0, AudioBus::Effects).unwrap();
+    }
+
+    #[test]
+    fn output_failures_remain_reported_after_an_underrun() {
+        for failure in [
+            rodio::cpal::StreamError::DeviceNotAvailable,
+            rodio::cpal::StreamError::StreamInvalidated,
+            rodio::cpal::StreamError::BackendSpecific {
+                err: rodio::cpal::BackendSpecificError {
+                    description: "device recovery failed".into(),
+                },
+            },
+        ] {
+            let engine = AudioEngine::from_device(Err(rodio::DeviceSinkError::NoDevice)).unwrap();
+            let expected = format!("Native audio output: {failure}");
+            record_output_error(&engine.0.error, failure);
+            assert_eq!(engine.check(), Err(expected.clone()));
+            record_output_error(&engine.0.error, rodio::cpal::StreamError::BufferUnderrun);
+            assert_eq!(engine.check(), Err(expected));
+        }
+    }
 
     #[test]
     fn missing_output_device_keeps_the_audio_clock_and_controls_available() {

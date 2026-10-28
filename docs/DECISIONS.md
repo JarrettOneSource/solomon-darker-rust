@@ -105,6 +105,17 @@ batch buffer. Native and browser pixel checks compare straight and premultiplied
 textures across normal, additive and multiply blending, and verify state restoration
 when draws alternate between the programs.
 
+Courtyard records replace the reference client's independently cropped images.
+Sampling their raw atlas edges let the statue read an opaque white row from its
+neighbor. `Renderer::draw_clamped` clamps sample coordinates to the selected
+record's texel centers in both shader programs while preserving the original
+quad and UV interpolation. UVs and bounds retain high precision for large stock
+atlases. Bounds belong to each draw and therefore participate in batching;
+ordinary draws retain their existing repeating or authored UV behavior. The
+browser composition and native graphics probes compare these draws against an
+independently uploaded crop at fractional scales and positions, including state
+restoration and the color-filter path.
+
 ## One simulation
 
 Game rules live in `solomon-sim`. Browser, native, hosted, and modded play use the
@@ -300,6 +311,11 @@ with exactly converted stock thresholds. The portable parser rejects isolated
 UTF-16 surrogates, which Rust strings cannot represent, rather than substituting
 characters silently.
 
+Retained loot events use the supported interchange discriminator `type` and the
+audio owner's sound IDs, including `drop-bag-1` and `drop-bag-2`. Import also reads
+the earlier Rust spellings `eventType`, `drop-bag1` and `drop-bag2`; re-export writes
+the canonical source spellings. Native checkpoints retain their own typed fields.
+
 ## Snapshot ordering
 
 The shared protocol carries canonical session values between matched native and
@@ -460,6 +476,16 @@ bounded, snapshots coalesce after decoding, and queued sends retain byte credits
 until sent or dropped. Dropping the native connection cancels and joins its owner
 without waiting indefinitely for a stalled handshake or DNS worker.
 
+Input sequencing commits the held state, sequence and pending tick only after the
+transport admits the message. A rejected release remains eligible to send again;
+preparing a message cannot mark it as sent.
+
+Each transport sends its admission message as soon as the socket opens, before
+publishing the Opened event. Admission must progress while a slow frame occupies
+the renderer; the socket's independent Welcome deadline cannot depend on frame
+polling to begin the exchange. The Game still validates and accepts Welcome before
+acknowledging it, preserving the durable reconnect credential contract.
+
 The native desktop authority embeds the established standalone supervisor on an
 owned thread, with an ephemeral loopback listener and private generated credential.
 Its accepted Origin remains `solomon-darker://app` for compatibility with the
@@ -498,6 +524,15 @@ NSUInteger ABI. The callback only requests deferred termination; the ordinary Ru
 event loop runs the shared save coordinator and replies to Cocoa. Keep playing
 cancels the pending Cocoa termination. GPU owners and cancelled tasks retire with
 their window context current.
+
+The macOS setup removes Winit's unused Services submenu by its registered menu
+object, preserving About, Hide and Quit. The game exposes no Cocoa Services
+integration. An [Intel main-thread sample](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40637948757)
+captured Services population waiting synchronously for Shortcuts over XPC during
+a movement-key hold; the queued press and release then reached gameplay together.
+Unregistering and detaching that submenu keeps ordinary input independent of the
+external service. Gameplay sampling and the save-before-Quit path retain their
+existing behavior.
 
 ## Native Opus decoding
 

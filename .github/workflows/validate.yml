@@ -99,7 +99,7 @@ jobs:
         with:
           name: browser-client
           path: web/dist
-      - name: Verify browser gameplay and settings with ordinary input
+      - name: Verify browser gameplay, settings and asset failure cleanup
         shell: pwsh
         run: |
           Copy-Item web/assets -Destination web/dist -Recurse
@@ -107,6 +107,8 @@ jobs:
           $env:PW = Join-Path $env:GITHUB_WORKSPACE 'node_modules/playwright-core'
           $env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'
           if (!(Test-Path $env:CHROME)) { throw 'The Windows runner has no installed Chrome.' }
+          node --test tools/browser-smoke/browser-launch.test.cjs
+          if ($LASTEXITCODE) { throw 'Browser launch configuration failed.' }
           $env:URL = 'http://127.0.0.1:4181/'
           $server = Start-Process -FilePath (Get-Command python).Source -ArgumentList @('scripts/serve-client.py', '4181', '--bind', '127.0.0.1', '--directory', 'web/dist') -PassThru -RedirectStandardOutput reports/browser/server.log -RedirectStandardError reports/browser/server-error.log
           try {
@@ -116,6 +118,9 @@ jobs:
             $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser/settings'
             node tools/browser-smoke/settings-parity.cjs
             if ($LASTEXITCODE) { throw 'Browser settings failed.' }
+            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser/image-load-failure'
+            node tools/browser-smoke/image-load-failure.cjs
+            if ($LASTEXITCODE) { throw 'Browser asset failure cleanup failed.' }
           } finally {
             if (!$server.HasExited) { Stop-Process -Id $server.Id }
             if (!$server.WaitForExit(10000)) { throw 'The owned browser test server did not exit.' }

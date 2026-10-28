@@ -3,6 +3,7 @@
 
 use super::NativeFlameLashBounds;
 use crate::float::fround;
+use crate::painter::native_zanim_split_band_height;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NativeFlameLashSplitBand {
@@ -23,7 +24,7 @@ pub fn build_native_flame_lash_split_bands(
     {
         return Err("Flame split requires finite nonnegative bounds and Region view".into());
     }
-    let height = if enhanced_effects { 25.0 } else { 50.0 };
+    let height = native_zanim_split_band_height(enhanced_effects);
     let mut y = fround(region_view.map_or(bounds.y, |region| bounds.y.max(region.y)));
     let mut bands = Vec::new();
     let mut progress = bounds.y;

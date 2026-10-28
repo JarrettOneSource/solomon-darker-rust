@@ -42,6 +42,8 @@ impl Hud {
         controls: &GameControlBindings,
         in_hub: bool,
     ) -> Result<(), String> {
+        self.regenerate_active =
+            player.is_some() && secondary.is_some_and(|state| state.regenerate);
         let mut slots = std::array::from_fn(|_| None);
         if let Some(player) = player {
             let factors = player.derived_stats().offensive_factors(&player.skill_runtime);

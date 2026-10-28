@@ -34,7 +34,19 @@ player panels reserve a 48-pixel navigation bar above their scrolling body.
 Rendering, hit regions, and raw pointer/wheel admission use the same body clip,
 and an active drag retains its owner through release or cancellation outside it.
 
+Owned charm controls identify their displayed slot. A wizard may own two tonics,
+so the charm selector is not a unique UI identity. Hover and activation resolve
+the slot against accepted economy state; removal still emits the canonical charm
+selector and never removes a tonic.
+
 ## Materials and resource ownership
+
+The health meter adds a pulsing health highlight while the accepted player has Regenerate
+active. The pulse clips to the current health fill and follows the meter's scale and
+rotation. The Skills book's Boasts view shows the selected stock or authored Boast,
+its statement, and its accepted progress: gold for active, green for achieved, red
+for failed. Escape returns to Skills. These are shared native/browser UI enhancements;
+they do not change retail gameplay, mana reservation, or Boast success rules.
 
 The shared material applies saturation and brightness in sRGB on straight color,
 clamping each operation before blend premultiplication and preserving alpha.
@@ -178,8 +190,8 @@ Paths below are relative to `crates/web/src/`; journeys live in
 
 | Surface | Main owner | Checks |
 | --- | --- | --- |
-| Splash and resource failure | `runtime_ui.rs`, separate loader crate | `startup.cjs` |
-| Title, Create, Pause, settings | `menu/` | `menus.cjs`, `menu-input.cjs`, `match-loading.cjs` |
+| Splash and resource failure | `runtime_ui.rs`, separate loader crate | `startup.cjs`, `image-load-failure.cjs` |
+| Title, Create, Pause, settings | `menu/` | `menus.cjs`, `menu-input.cjs`, `match-loading.cjs`, `settings-parity.cjs` |
 | Desktop launch settings | `desktop/` | Packaged desktop journey |
 | HUD, belt, skill selection | `hud/`, input and picker owners | `hud-input.cjs`, `gameplay-input.cjs`, belt/input unit tests |
 | Inventory, Skillbook, services | `player_panels/` | `player-panels.cjs`, `hub-services.cjs` |
@@ -212,10 +224,13 @@ Wait for the actual accepted model and released loading scope before interacting
 a background widget record alone does not prove that a control is exposed.
 
 Expected resource cancellation needs evidence of the owning navigation, disposal,
-or media suspension. A truncated response or content-length mismatch remains a
-failure. Mark controlled prerequisites, such as Console-granted funds or imported
-inventory, separately from naturally earned outcomes. Browser IME emulation and
-read-only announcement observation also retain their actual scope.
+or media suspension. A suspended resident song can resume fetching after trusted
+playback; the observer requires the same loaded owner and source, later native
+playback, retained future data and no media error. A truncated response or
+content-length mismatch remains a failure. Mark controlled prerequisites, such as
+Console-granted funds or imported inventory, separately from naturally earned
+outcomes. Browser IME emulation and read-only announcement observation also retain
+their actual scope.
 
 Run cold/warm startup, delayed and failed required resources, resize, input-device
 changes, modal replacement, save/Continue, and the affected feature's failure paths.

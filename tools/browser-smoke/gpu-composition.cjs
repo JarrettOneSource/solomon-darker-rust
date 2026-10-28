@@ -49,6 +49,7 @@ const files = new Map([
       actual.indexedBatch = {...JSON.parse(module.indexed_batch_probe(gl)), draws:batchDraws};
       gl.drawArrays = drawArrays;
       actual.spritePrograms = JSON.parse(module.sprite_program_probe(gl));
+      actual.atlasCrops = JSON.parse(module.atlas_crop_probe(gl));
       actual.largeShadows = [];
       for (const scale of [1,2]) {
         const width=256*scale,height=192*scale,sigma=12*scale;
@@ -81,6 +82,10 @@ const files = new Map([
       fs.writeFileSync(path.join(process.env.OUT, 'receipt.json'), JSON.stringify(receipt, null, 2));
     }
     assert.deepEqual(errors, []);
+    for (const row of actual.atlasCrops) {
+      assert.ok(row.maximumDifference <= 1, `isolated atlas crop: ${JSON.stringify(row)}`);
+      assert.equal(row.restored, true, `atlas crop state restoration: ${JSON.stringify(row)}`);
+    }
     assert.equal(actual.spritePrograms.length, 12);
     for (const row of actual.spritePrograms) {
       assert.ok(row.maxChannelDifference <= 1, `sprite/effect equivalence: ${JSON.stringify(row)}`);

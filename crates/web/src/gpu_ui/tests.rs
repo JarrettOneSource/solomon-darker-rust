@@ -89,6 +89,51 @@ fn frame_native_output(
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn fatal_status_stays_readable_above_the_desktop_actions() {
+    use crate::desktop::launcher::{Build, DesktopState};
+    use crate::desktop::{DesktopControls, DesktopUi};
+
+    let ctx = Context::default();
+    let mut definitions = egui::FontDefinitions::default();
+    for name in ["Arial", "Georgia"] {
+        definitions.families.insert(
+            egui::FontFamily::Name(name.into()),
+            definitions.families[&egui::FontFamily::Proportional].clone(),
+        );
+    }
+    ctx.set_fonts(definitions);
+    let controls = DesktopControls::install(DesktopState {
+        build: Build { revision: "test".into() },
+        addresses: Vec::new(),
+        update: None,
+        update_error: None,
+    });
+    controls.set_message(Some("Multiplayer invite copied.".into()));
+    let mut desktop = DesktopUi::new(controls);
+    ctx.set_fixed_layer_order(&[desktop.layer_id(), crate::runtime_ui::layer_id()]);
+    let message =
+        "Native audio output: The stream configuration is no longer valid and must be rebuilt.";
+    crate::runtime_ui::set_error(message);
+    let mut paint = |frame: &mut UiFrame<'_>| {
+        crate::runtime_ui::paint_failure(frame);
+        desktop.paint(frame, true).unwrap();
+    };
+    frame(&ctx, Vec::new(), &mut paint);
+    let widgets = frame(&ctx, Vec::new(), &mut paint);
+    crate::runtime_ui::begin(std::iter::empty()).unwrap();
+    let status = &widgets["runtime:status"];
+    let action = &widgets["desktop/launcher"];
+    assert_eq!(status.value.as_deref(), Some(message));
+    assert!(status.bounds.x >= 0.0 && status.bounds.x + status.bounds.width <= 400.0);
+    assert!(
+        status.bounds.y + status.bounds.height < action.bounds.y - 8.0,
+        "the failure explanation must not overlap the desktop actions or their background"
+    );
+    assert!(action.enabled, "save and return stays available after a rendering failure");
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn native_loading_status_covers_the_transition_before_artwork_and_retires_with_it() {
     use solomon_sim::menu::loading::{MatchLoadingFlow, MatchLoadingStage, MatchLoadingState};
 

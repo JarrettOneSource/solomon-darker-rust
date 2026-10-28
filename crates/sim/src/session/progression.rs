@@ -73,14 +73,28 @@ impl GameSession {
     }
 
     pub fn choose_skill(&mut self, id: &str, choice: PlayerSkillChoice) -> bool {
-        let Some(mut participant) = self.participants.get_mut(id) else {
-            return false;
-        };
-        let previous = participant.selected_primary_id();
-        if !participant.player.choose_skill(choice, &mut self.gameplay_rng) {
-            return false;
+        self.choose_skill_with_extensions(id, choice, None)
+    }
+
+    pub fn choose_skill_with_extensions(
+        &mut self,
+        id: &str,
+        choice: PlayerSkillChoice,
+        extensions: Option<&dyn GameSimulationExtensions>,
+    ) -> bool {
+        {
+            let Some(mut participant) = self.participants.get_mut(id) else {
+                return false;
+            };
+            let previous = participant.selected_primary_id();
+            if !participant.player.choose_skill(choice, &mut self.gameplay_rng) {
+                return false;
+            }
+            participant.synchronize_primary_selection(previous);
         }
-        participant.synchronize_primary_selection(previous);
+        // One XP grant can queue several levels. Each newly opened offer belongs
+        // to the same Boast policy as the grant's first offer.
+        self.assign_automatic_skill_choices_with_extensions(&[id.into()], extensions);
         self.update_pending_barrier();
         true
     }

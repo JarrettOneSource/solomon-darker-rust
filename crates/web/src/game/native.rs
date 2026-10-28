@@ -87,6 +87,14 @@ impl NativeGame {
         self.phase == NativePhase::Leaving
     }
 
+    pub(super) fn release_input(&mut self, tick: u64) -> Result<(), String> {
+        // The failed renderer will not send the later key or pointer release.
+        if let Some(connection) = &mut self.connection {
+            connection.send_input(tick, GameSessionInput::default(), true)?;
+        }
+        Ok(())
+    }
+
     pub(super) fn begin_deployment(&mut self) {
         self.phase = NativePhase::Updating;
         self.leave_request = None;
@@ -221,7 +229,7 @@ impl Game {
     pub(super) fn poll_native(&mut self, now: f64) -> Result<(), String> {
         let Some(native) = &mut self.native else { return Ok(()) };
         let Some(connection) = &mut native.connection else { return Ok(()) };
-        let poll = connection.poll()?;
+        let poll = connection.poll();
         for event in poll.events {
             match event {
                 NetworkEvent::Opened => {

@@ -7,14 +7,17 @@ use super::{BlendMode, GraphicsContext, TextureColorMode, VERTEX_SHADER, link_pr
 
 const FRAGMENT_SHADER: &str = r"#version 300 es
 precision mediump float;
-in vec2 v_uv;
+in highp vec2 v_uv;
 in vec4 v_color;
 uniform sampler2D u_texture;
+uniform highp vec4 u_texture_bounds;
 uniform float u_premultiply_rgb;
 uniform float u_texture_premultiplied;
 out vec4 o_color;
 void main() {
-    vec4 texel = texture(u_texture, v_uv);
+    highp vec2 uv = u_texture_bounds.z >= u_texture_bounds.x
+        ? clamp(v_uv, u_texture_bounds.xy, u_texture_bounds.zw) : v_uv;
+    vec4 texel = texture(u_texture, uv);
     if (u_texture_premultiplied > 0.5 && texel.a > 0.0) {
         texel.rgb /= texel.a;
     }
@@ -31,6 +34,7 @@ pub(super) struct SpriteProgram {
     pixel_center_offset: glow::UniformLocation,
     premultiply_rgb: glow::UniformLocation,
     texture_premultiplied: glow::UniformLocation,
+    texture_bounds: glow::UniformLocation,
 }
 
 impl SpriteProgram {
@@ -51,6 +55,7 @@ impl SpriteProgram {
                     pixel_center_offset: uniform("u_pixel_center_offset")?,
                     premultiply_rgb: uniform("u_premultiply_rgb")?,
                     texture_premultiplied: uniform("u_texture_premultiplied")?,
+                    texture_bounds: uniform("u_texture_bounds")?,
                 };
                 gl.use_program(Some(program));
                 gl.uniform_1_i32(Some(&texture), 0);
@@ -69,12 +74,17 @@ impl SpriteProgram {
         offset: [f32; 2],
         blend: BlendMode,
         color_mode: TextureColorMode,
+        bounds: Option<[f32; 4]>,
     ) {
         // SAFETY: the batcher owns this program in the same live current context.
         unsafe {
             self.gl.use_program(Some(self.program));
             self.gl.uniform_2_f32_slice(Some(&self.logical_size), &logical);
             self.gl.uniform_2_f32_slice(Some(&self.pixel_center_offset), &offset);
+            self.gl.uniform_4_f32_slice(
+                Some(&self.texture_bounds),
+                &bounds.unwrap_or([1.0, 1.0, 0.0, 0.0]),
+            );
             self.gl.uniform_1_f32(
                 Some(&self.premultiply_rgb),
                 if blend == BlendMode::Multiply { 0.0 } else { 1.0 },

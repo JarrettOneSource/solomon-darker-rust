@@ -358,6 +358,36 @@ async function controller(page, buttons = [], x = 0, y = 0,
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
 }
 
+async function pressController(page, button) {
+  // Release in the browser after one actual sample. Waiting for a Node assertion
+  // before releasing can turn a single press into repeated navigation on slow CI.
+  await page.evaluate(button => new Promise((resolve, reject) => {
+    const pad = window.gpuTestPad;
+    let reads = pad.reads;
+    let released = false;
+    const timeout = setTimeout(() => {
+      cancelAnimationFrame(frame);
+      pad.buttons = [];
+      reject(new Error('The game did not sample the controller press and release.'));
+    }, 45000);
+    const sample = () => {
+      if (pad.reads > reads) {
+        if (released) {
+          clearTimeout(timeout);
+          resolve();
+          return;
+        }
+        pad.buttons = [];
+        released = true;
+        reads = pad.reads;
+      }
+      frame = requestAnimationFrame(sample);
+    };
+    pad.buttons = [button];
+    let frame = requestAnimationFrame(sample);
+  }), button);
+}
+
 async function nextFrame(page) {
   await page.evaluate(() => new Promise(resolve =>
     requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -382,7 +412,7 @@ async function useNativeFocus(...pages) {
 
 module.exports = {
   readUi, waitForUi, findWidget, widget, noWidget, byLabel, surface, ready, bounds, center, actionable, click, tap,
-  fill, value, focused, setSlider, wheel, drag, assertGpuOnly, watchErrors, installController, controller, nextFrame,
+  fill, value, focused, setSlider, wheel, drag, assertGpuOnly, watchErrors, installController, controller, pressController, nextFrame,
   observeGpu, gpuDraws, watchRequestFailures, settleErrors, observeDocumentReplacement,observeFrameRemoval,
   observeAnnouncements, announcements, announced, useNativeFocus,
 };

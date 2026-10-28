@@ -470,7 +470,7 @@ impl PlayerPanels {
                 let perk = HAGATHA_PERKS[*selector as usize];
                 let removable = s.perk_removal_enabled && *selector != 27;
                 let node = c.button(
-                    &format!("owned-perk:{selector}"),
+                    &format!("owned-perk:{index}"),
                     &format!("{} {}", if removable { "Remove" } else { "Inspect" }, perk.name),
                     HudRect::new(x - 28.8, y - 28.8, 57.6, 57.6),
                 );

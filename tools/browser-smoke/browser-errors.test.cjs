@@ -49,6 +49,107 @@ test('a ready resident channel with directly witnessed browser suspension owns i
     documentId:123,reason:'ready resident channel suspended by the browser'});
 });
 
+function resumedSuspension() {
+  const fixture=evidence();
+  const channel=fixture.settled.channels[0];
+  // Windows Chrome resumed fetching after trusted-gesture music priming. The
+  // cancelled preload was already loaded and suspended before this playback.
+  Object.assign(channel,{ready:3,network:2,paused:true,seeking:false});
+  channel.events.push(
+    {type:'playing',trusted:true,url:channel.url,ready:3,paused:false,seeking:false},
+    {type:'seeking',trusted:true,paused:true,seeking:true},
+    {type:'seeked',trusted:true,paused:true,seeking:false});
+  return fixture;
+}
+
+test('a suspended preload remains owned when its resident channel later plays and resumes fetching',()=>{
+  const {failure,captured,settled}=resumedSuspension();
+  assert.deepEqual(residentSuspension(failure,captured,settled),{cue:'death',channelId:3,
+    documentId:123,reason:'ready resident channel resumed after browser suspension'});
+});
+
+function capturedRewind() {
+  const fixture=evidence();
+  const before=fixture.captured.channels[0];
+  // Windows Chrome captured the priming rewind before delivering its seeking
+  // event. The retained preload and later native events establish its lifetime.
+  Object.assign(before,{ready:1,network:1,paused:false,currentTime:0,seeking:true});
+  Object.assign(before.events[1],{ready:4});
+  const after=structuredClone(before);
+  Object.assign(after,{ready:4,paused:true,seeking:false});
+  after.events.push(
+    {type:'seeking',trusted:true,url:after.url,ready:1,paused:false,seeking:true,currentTime:0},
+    {type:'seeked',trusted:true,url:after.url,ready:3,paused:false,seeking:false},
+    {type:'playing',trusted:true,url:after.url,ready:3,paused:false,seeking:false},
+    {type:'seeking',trusted:true,url:after.url,ready:1,paused:true,seeking:true,currentTime:0},
+    {type:'seeked',trusted:true,url:after.url,ready:4,paused:true,seeking:false});
+  fixture.settled.channels=[after];
+  return fixture;
+}
+
+test('a loaded suspended channel can complete its captured priming rewind and play',()=>{
+  const {failure,captured,settled}=capturedRewind();
+  assert.deepEqual(residentSuspension(failure,captured,settled),{cue:'death',channelId:3,
+    documentId:123,reason:'resident channel completed a captured rewind after browser suspension'});
+});
+
+test('a ready channel with a completed rewind can later play after its cancelled preload',()=>{
+  const {failure,captured,settled}=capturedRewind();
+  const before=captured.channels[0],after=settled.channels[0];
+  after.events.splice(6);
+  after.events[3].paused=true;
+  after.events[4].paused=true;
+  before.events=structuredClone(after.events.slice(0,5));
+  Object.assign(before,{ready:3,network:2,paused:true,seeking:false});
+  Object.assign(after,{paused:false,currentTime:1.7});
+  assert.deepEqual(residentSuspension(failure,captured,settled),{cue:'death',channelId:3,
+    documentId:123,reason:'resident channel completed a captured rewind after browser suspension'});
+});
+
+for(const [name,change] of [
+  ['no earlier loaded data',f=>{f.captured.channels[0].events[1].ready=1}],
+  ['no earlier suspension',f=>{f.captured.channels[0].events[2].trusted=false}],
+  ['a different captured seek',f=>{f.captured.channels[0].currentTime=12}],
+  ['no captured rewind',f=>{f.captured.channels[0].seeking=false}],
+  ['an unfinished seek',f=>{f.settled.channels[0].seeking=true}],
+  ['no trusted rewind start',f=>{f.settled.channels[0].events[3].trusted=false}],
+  ['a rewind to another position',f=>{f.settled.channels[0].events[3].currentTime=12}],
+  ['no trusted seek completion',f=>{f.settled.channels[0].events[4].trusted=false}],
+  ['seek completion of another source',f=>{f.settled.channels[0].events[4].url+='?other'}],
+  ['playback preceding seek completion',f=>{
+    const events=f.settled.channels[0].events;[events[4],events[5]]=[events[5],events[4]];
+  }],
+  ['no trusted playback',f=>{f.settled.channels[0].events[5].trusted=false}],
+  ['playback of another source',f=>{f.settled.channels[0].events[5].url+='?other'}],
+  ['lost future data',f=>{f.settled.channels[0].ready=2}],
+  ['an empty network state',f=>{f.settled.channels[0].network=0}],
+  ['a later media error',f=>{f.settled.channels[0].error=3}],
+  ['a media abort',f=>{f.settled.channels[0].events.push({type:'abort',trusted:true})}],
+  ['a replaced source',f=>{f.settled.channels[0].sources.push('https://example.com/other.mp3')}],
+  ['a replaced owner',f=>{f.settled.channels[0].id=4}],
+  ['a replaced document',f=>{f.settled.documentId=124}],
+  ['an actual network failure',f=>{f.failure.errorText='net::ERR_CONNECTION_RESET'}],
+])test(`a captured rewind does not excuse ${name}`,()=>{
+  const fixture=capturedRewind();change(fixture);
+  assert.equal(residentSuspension(fixture.failure,fixture.captured,fixture.settled),null);
+});
+
+for(const [name,change] of [
+  ['no later playback',f=>{f.settled.channels[0].events.splice(3,1)}],
+  ['playback only before capture',f=>{
+    f.captured=structuredClone(f.settled);f.captured.channels[0].network=1;
+  }],
+  ['a fabricated playing event',f=>{f.settled.channels[0].events[3].trusted=false}],
+  ['playback of another resource',f=>{f.settled.channels[0].events[3].url+='?other'}],
+  ['an unfinished seek',f=>{f.settled.channels[0].seeking=true}],
+  ['lost future data',f=>{f.settled.channels[0].ready=2}],
+  ['a later media error',f=>{f.settled.channels[0].error=3}],
+  ['a changed source',f=>{f.settled.channels[0].sources.push('https://example.com/other.mp3')}],
+])test(`resumed fetching does not excuse ${name}`,()=>{
+  const fixture=resumedSuspension();change(fixture);
+  assert.equal(residentSuspension(fixture.failure,fixture.captured,fixture.settled),null);
+});
+
 test('URL and ERR_ABORTED alone never classify a failed request',()=>{
   const {failure}=evidence();
   assert.equal(residentSuspension(failure,null,null),null);
@@ -99,6 +200,40 @@ test('an exact pending request retired by a proved replacement keeps its old cha
     beforeTargetId:123,afterTargetId:124,afterUrl:'http://127.0.0.1:4181/editor/'};
   assert.equal(documentRetirement(failure,retirement).reason,
     'ready resident channel retired by the observed document replacement');
+});
+
+function rewindingRetirement() {
+  const {failure,captured}=evidence();
+  failure.status=206;
+  const channel=captured.channels[0];
+  Object.assign(channel,{paused:true,currentTime:0,seeking:true,ready:1,network:2});
+  channel.events.push({type:'seeking',trusted:true,paused:true,currentTime:0,seeking:true});
+  return {failure,retirement:{kind:'document-replacement',pendingRequest:true,
+    completed:true,before:captured,beforeTargetId:123,afterTargetId:124}};
+}
+
+test('replacement retires a loaded channel whose paused rewind is still seeking',()=>{
+  const {failure,retirement}=rewindingRetirement();
+  assert.deepEqual(documentRetirement(failure,retirement),{cue:'death',channelId:3,
+    documentId:123,reason:'loaded resident channel rewinding during the observed document replacement'});
+  // An unfinished seek in the current document is not an idle suspension.
+  assert.equal(residentSuspension(failure,retirement.before,retirement.before),null);
+});
+
+for(const [name,change] of [
+  ['an unfinished replacement',f=>{f.retirement.completed=false}],
+  ['a request outside the pending set',f=>{f.retirement.pendingRequest=false}],
+  ['a real network failure',f=>{f.failure.errorText='net::ERR_CONNECTION_RESET'}],
+  ['a failed HTTP response',f=>{f.failure.status=503}],
+  ['a channel that never loaded',f=>{f.retirement.before.channels[0].events.splice(1,1)}],
+  ['an unobserved seek',f=>{f.retirement.before.channels[0].events.pop()}],
+  ['a fabricated seek',f=>{f.retirement.before.channels[0].events.at(-1).trusted=false}],
+  ['a completed seek',f=>{f.retirement.before.channels[0].events.push({type:'seeked',trusted:true})}],
+  ['a media error',f=>{f.retirement.before.channels[0].error=3}],
+  ['a media abort',f=>{f.retirement.before.channels[0].events.push({type:'abort',trusted:true})}],
+])test(`a retired rewind does not excuse ${name}`,()=>{
+  const fixture=rewindingRetirement();change(fixture);
+  assert.equal(documentRetirement(fixture.failure,fixture.retirement),null);
 });
 
 for(const [name,change] of [

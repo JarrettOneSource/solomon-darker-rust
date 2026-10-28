@@ -70,10 +70,116 @@ fn wait_for(mut ready: impl FnMut() -> bool) {
 }
 
 fn connect(endpoint: &str, welcome: bool) -> NativeConnection {
-    let connection =
-        NativeConnection::connect_to(endpoint, crate::platform::NATIVE_ORIGIN, welcome).unwrap();
+    let connection = NativeConnection::connect_to(
+        endpoint,
+        crate::platform::NATIVE_ORIGIN,
+        first_message(welcome),
+    )
+    .unwrap();
     wait_for(|| connection.is_open());
     connection
+}
+
+fn first_message(welcome: bool) -> ClientMessage {
+    use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
+    if !welcome {
+        return ClientMessage::InspectSession { resume: None };
+    }
+    ClientMessage::Hello {
+        version: solomon_protocol::PROTOCOL_VERSION,
+        enhanced_effects: true,
+        selection: NewGameSelection {
+            name: "Aurelia".into(),
+            element: WizardElement::Ether,
+            discipline: WizardDiscipline::Arcane,
+        },
+        resume: None,
+        initial_save: None,
+        begin_college_intro: false,
+    }
+}
+
+#[test]
+fn native_admission_starts_before_the_renderer_polls() {
+    let (admitted, received) = sync::channel();
+    let (endpoint, server) = server(move |mut socket| {
+        let message = socket.read().unwrap();
+        if let Message::Text(text) = message {
+            assert!(matches!(
+                serde_json::from_str::<ClientMessage>(&text).unwrap(),
+                ClientMessage::InspectSession { resume: None }
+            ));
+            admitted.send(()).unwrap();
+            assert!(matches!(socket.read().unwrap(), Message::Close(_)));
+        }
+    });
+    crate::platform::configure_native_location("http://native.test/game/", None).unwrap();
+    let session =
+        NativeSession::connect_to(&endpoint, ClientMessage::InspectSession { resume: None })
+            .unwrap();
+    // The native transport keeps running while an expensive frame occupies the UI.
+    let admission = received.recv_timeout(Duration::from_secs(3));
+    drop(session);
+    server.join().unwrap();
+    assert!(admission.is_ok(), "native admission waited for the renderer to poll");
+}
+
+#[test]
+fn rejected_input_release_remains_unsent_until_transport_admits_it() {
+    use solomon_sim::{Vec2, session::GameSessionInput};
+
+    let (sent, received) = sync::channel();
+    let (endpoint, server) = server(move |mut socket| {
+        assert!(matches!(command(&mut socket), ClientMessage::InspectSession { resume: None }));
+        loop {
+            match socket.read().unwrap() {
+                Message::Text(text) => {
+                    sent.send(serde_json::from_str::<ClientMessage>(&text).unwrap()).unwrap();
+                }
+                Message::Close(_) => break,
+                message => panic!("unexpected game message: {message:?}"),
+            }
+        }
+    });
+    crate::platform::configure_native_location("http://native.test/game/", None).unwrap();
+    let mut session =
+        NativeSession::connect_to(&endpoint, ClientMessage::InspectSession { resume: None })
+            .unwrap();
+    wait_for(|| session.is_open());
+    let active = GameSessionInput {
+        movement: Vec2::new(1.0, 0.0),
+        primary: true,
+        quickbar: Some(3),
+        ..GameSessionInput::default()
+    };
+    session.send_input(10, active, false).unwrap();
+    assert!(matches!(
+        received.recv_timeout(Duration::from_secs(3)).unwrap(),
+        ClientMessage::Input { sequence: 1, target_tick: 11, input } if input == active
+    ));
+    wait_for(|| session.connection.pending_bytes.load(Ordering::Relaxed) == 0);
+
+    // Force the real transport's admission boundary without a timing-dependent flood.
+    session.connection.pending_bytes.store(MAX_PENDING_SEND_BYTES + 1, Ordering::Relaxed);
+    let release = session.send_input(10, GameSessionInput::default(), false);
+    let fatal_release = session.send_input(10, GameSessionInput::default(), true);
+    session.connection.pending_bytes.store(0, Ordering::Relaxed);
+    session.send_input(10, GameSessionInput::default(), true).unwrap();
+    let delivered = received.recv_timeout(Duration::from_secs(3));
+    drop(session);
+    server.join().unwrap();
+
+    assert_eq!(release.unwrap_err(), "The game connection is not accepting input");
+    assert_eq!(
+        fatal_release,
+        Err("The game connection is not accepting input".into()),
+        "a rejected release must not suppress a later release"
+    );
+    assert!(matches!(
+        delivered.unwrap(),
+        ClientMessage::Input { sequence: 2, target_tick: 12, input }
+            if input == GameSessionInput::default()
+    ));
 }
 
 #[test]
@@ -98,13 +204,13 @@ fn actual_session_sends_admission_and_retains_the_server_close_reason() {
         let _ = socket.read();
     });
     crate::platform::configure_native_location("http://native.test/game/", None).unwrap();
-    let mut session =
+    let session =
         NativeSession::connect_to(&endpoint, ClientMessage::InspectSession { resume: None })
             .unwrap();
     let mut status = false;
     let mut closed = false;
     wait_for(|| {
-        for event in session.poll().unwrap().events {
+        for event in session.poll().events {
             match event {
                 NetworkEvent::Message { message, .. } => {
                     assert!(matches!(
@@ -133,6 +239,7 @@ fn welcome_waits_for_game_acceptance_and_background_delivery_compacts_snapshots(
     let (unacknowledged, pending) = sync::channel();
     let (save_acknowledged, delivered) = sync::channel();
     let (endpoint, server) = server(move |mut socket| {
+        assert!(matches!(command(&mut socket), ClientMessage::Hello { .. }));
         let welcome = ServerMessage::Welcome {
             version: solomon_protocol::PROTOCOL_VERSION,
             credentials: ResumeCredentials { player_id: "wizard".into(), token: "resume".into() },
@@ -233,6 +340,7 @@ fn welcome_waits_for_game_acceptance_and_background_delivery_compacts_snapshots(
 fn pings_continue_while_rendering_is_suspended() {
     let (finished, received) = sync::channel();
     let (endpoint, server) = server(move |mut socket| {
+        assert!(matches!(command(&mut socket), ClientMessage::InspectSession { .. }));
         for expected in [1, 2] {
             assert!(
                 matches!(command(&mut socket), ClientMessage::Ping { nonce } if nonce == expected)
@@ -259,6 +367,7 @@ fn binary_and_invalid_json_fail_once_and_close_the_socket() {
     ] {
         let (send_payload, ready) = sync::channel();
         let (endpoint, server) = server(move |mut socket| {
+            assert!(matches!(command(&mut socket), ClientMessage::InspectSession { .. }));
             ready.recv().unwrap();
             socket.send(payload).unwrap();
             let Message::Close(Some(frame)) = socket.read().unwrap() else {
@@ -269,6 +378,7 @@ fn binary_and_invalid_json_fail_once_and_close_the_socket() {
         let connection = connect(&endpoint, false);
         send_payload.send(()).unwrap();
         wait_for(|| !connection.is_open());
+        let rejected_admission = connection.accept_welcome();
         let failures: Vec<_> = connection
             .poll()
             .events
@@ -280,8 +390,13 @@ fn binary_and_invalid_json_fail_once_and_close_the_socket() {
             .collect();
         assert_eq!(failures.len(), 1);
         assert!(failures[0].contains(expected), "{}", failures[0]);
+        let rejected_ping = connection.start_ping(false);
+        let rejected_send = connection.send(&ClientMessage::Ping { nonce: 1 });
         drop(connection);
         server.join().unwrap();
+        assert_eq!(rejected_admission.unwrap_err(), failures[0]);
+        assert_eq!(rejected_ping.unwrap_err(), failures[0]);
+        assert_eq!(rejected_send.unwrap_err(), failures[0]);
     }
 }
 
@@ -299,8 +414,12 @@ fn dropping_a_stalled_handshake_cancels_the_socket_worker() {
         accepted.send(()).unwrap();
         assert_eq!(stream.read(&mut buffer).unwrap(), 0);
     });
-    let connection =
-        NativeConnection::connect_to(&endpoint, crate::platform::NATIVE_ORIGIN, true).unwrap();
+    let connection = NativeConnection::connect_to(
+        &endpoint,
+        crate::platform::NATIVE_ORIGIN,
+        first_message(true),
+    )
+    .unwrap();
     received.recv_timeout(Duration::from_secs(2)).unwrap();
     let start = Instant::now();
     drop(connection);

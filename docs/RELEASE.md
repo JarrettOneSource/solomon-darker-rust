@@ -56,6 +56,12 @@ controlled setup, emulated capabilities, and hardware results identifiable.
 Inspect media-channel state before classifying a cancellation as expected, and
 require owned processes to exit cleanly.
 
+The native driver retries transient macOS accessibility reads and idempotent focus
+operations within their deadlines. An unavailable close acknowledgement is recorded
+without repeating the action; the actual process exit and save, or the expected
+save-failure choices, remain required. Failure cleanup closes guests before their
+host so each can finish saving.
+
 CI creates immutable package candidates before acceptance and publishes qualified
 archives only after the required platform journeys pass. Diagnostic artifacts
 named `unqualified-desktop-*` are excluded from release selection. Confirm the

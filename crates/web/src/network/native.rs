@@ -55,7 +55,11 @@ impl Drop for PendingText {
 }
 
 impl NativeConnection {
-    pub fn connect_to(endpoint: &str, origin: &str, welcome: bool) -> Result<Self, String> {
+    pub fn connect_to(
+        endpoint: &str,
+        origin: &str,
+        first_message: ClientMessage,
+    ) -> Result<Self, String> {
         let url = url::Url::parse(endpoint).map_err(|_| "Invalid game connection URL")?;
         if !matches!(url.scheme(), "ws" | "wss")
             || !url.username().is_empty()
@@ -70,6 +74,8 @@ impl NativeConnection {
         request
             .headers_mut()
             .insert("Origin", origin.parse().map_err(|_| "Invalid game connection origin")?);
+        let welcome = !matches!(first_message, ClientMessage::InspectSession { .. });
+        let first_message = encode(&first_message)?;
         let delivery = Arc::new(Mutex::new(Delivery::default()));
         let mut core =
             ConnectionCore::new(delivery.clone(), welcome, crate::platform::monotonic_ms());
@@ -86,7 +92,7 @@ impl NativeConnection {
                             return;
                         }
                     };
-                runtime.block_on(run(request, &mut core, receiver, stopping));
+                runtime.block_on(run(request, first_message, &mut core, receiver, stopping));
                 // A cancelled OS DNS lookup may finish independently; it holds no game or
                 // window resources. Socket shutdown must not wait for that blocking pool.
                 runtime.shutdown_background();
@@ -111,21 +117,25 @@ impl NativeConnection {
         self.delivery.lock().unwrap().ping_ms
     }
 
+    fn disconnected_reason(&self) -> String {
+        self.delivery.lock().unwrap().disconnected_reason()
+    }
+
     fn command(&self, command: Command) -> Result<(), String> {
         if !self.is_open() {
-            return Err("The game host is not connected".into());
+            return Err(self.disconnected_reason());
         }
         self.commands.try_send(command).map_err(|error| match error {
             mpsc::error::TrySendError::Full(_) => {
                 "The game connection is not accepting input".into()
             }
-            mpsc::error::TrySendError::Closed(_) => "The game host is not connected".into(),
+            mpsc::error::TrySendError::Closed(_) => self.disconnected_reason(),
         })
     }
 
     pub fn send(&self, message: &ClientMessage) -> Result<(), String> {
         if !self.is_open() {
-            return Err("The game host is not connected".into());
+            return Err(self.disconnected_reason());
         }
         let text = encode(message)?;
         let length = text.len();
@@ -166,6 +176,7 @@ type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
 async fn run(
     request: tungstenite::handshake::client::Request,
+    first_message: String,
     core: &mut ConnectionCore,
     mut commands: mpsc::Receiver<Command>,
     mut stop: watch::Receiver<bool>,
@@ -189,8 +200,18 @@ async fn run(
             return;
         }
     };
-    core.opened();
-    let result = run_connected(&mut socket, core, &mut commands, &mut stop).await;
+    // Admission belongs to the socket worker, so a slow frame cannot delay it
+    // until the independently running handshake deadline has expired.
+    let result = async {
+        tokio::select! {
+            _ = stop.changed() => return Ok(()),
+            result = socket.send(Message::Text(first_message.into())) =>
+                result.map_err(|error| format!("Could not send game admission: {error}"))?,
+        }
+        core.opened();
+        run_connected(&mut socket, core, &mut commands, &mut stop).await
+    }
+    .await;
     let close = result.as_ref().err().map(|_| CloseFrame {
         code: CloseCode::Library(4003),
         reason: "invalid host delivery".into(),

@@ -1,5 +1,6 @@
 //! Stock Inventory, learned Skillbook and College interactions. Accepted snapshots
 //! enter once; GPU views emit the same typed commands as the source controllers.
+mod boasts;
 pub(crate) mod chrome;
 mod crafting;
 mod dialogue;
@@ -148,6 +149,7 @@ enum Target {
     Inventory,
     Skills,
     Back,
+    Boasts,
     StatsUp,
     StatsDown,
     Item(u64),
@@ -175,7 +177,7 @@ enum Target {
     Hagatha(i32),
     Storage(u64),
     ShopCell,
-    OwnedPerk(u32),
+    OwnedPerk(usize),
     Dowse,
     HudSelectSkill(usize),
 }
@@ -284,6 +286,7 @@ pub struct PlayerPanels {
     npc_notebox: notebox::NpcNotebox,
     boast_instruction: Option<String>,
     boast_failure_sequence: Option<u64>,
+    boasts_open: bool,
     hovered_service: Option<Target>,
     dowsing_reference_item: Option<u64>,
     dowsing_rolled: bool,
@@ -349,6 +352,7 @@ impl PlayerPanels {
             npc_notebox: notebox::NpcNotebox::new(),
             boast_instruction: None,
             boast_failure_sequence: None,
+            boasts_open: false,
             hovered_service: None,
             dowsing_reference_item: None,
             dowsing_rolled: false,
@@ -390,6 +394,7 @@ impl PlayerPanels {
         self.hovered_service = None;
         self.dowsing_reference_item = None;
         self.stats_page = 0;
+        self.boasts_open = false;
 
         self.opened_at = now;
         self.closing_at = None;
@@ -649,6 +654,9 @@ impl PlayerPanels {
             self.cancel_dye(now);
         } else if self.panel == Some(PlayerPanel::Dialogue) {
             self.back_dialogue(now)?;
+        } else if self.panel == Some(PlayerPanel::Skills) && self.boasts_open {
+            self.boasts_open = false;
+            self.navigation.release();
         } else if self.inventory_owner_active() && self.return_from_inventory_sack(now) {
             self.clear_inventory_flybys()?;
         } else {
@@ -934,6 +942,20 @@ impl PlayerPanels {
             Target::Close | Target::Back => self.back(now)?,
             Target::Inventory => self.close(now, Some(PlayerPanel::Inventory)),
             Target::Skills => self.close(now, Some(PlayerPanel::Skills)),
+            Target::Boasts => {
+                self.boasts_open = !self.boasts_open;
+                self.selected = None;
+                self.hovered_skill = None;
+                self.target_belt = None;
+                self.navigation.release();
+                if self.compact {
+                    self.scroll = Vec2::new(
+                        (800.0 * self.view_scale - self.viewport_size.0 as f64 / 2.0).max(0.0),
+                        0.0,
+                    );
+                    self.clamp_scroll();
+                }
+            }
             Target::NoticeOkay => {
                 self.notice = None;
             }
@@ -1105,7 +1127,10 @@ impl PlayerPanels {
                     }
                 }
             }
-            Target::OwnedPerk(selector) => {
+            Target::OwnedPerk(index) => {
+                let Some(&selector) = snapshot.economy.owned_perk_selectors.get(index) else {
+                    return Ok(());
+                };
                 if snapshot.perk_removal_enabled && selector != 27 {
                     self.sound(AudioCue::Click);
                     self.actions.push(PlayerPanelAction::Inventory(
@@ -1300,7 +1325,9 @@ impl PlayerPanels {
         } else {
             match panel {
                 PlayerPanel::Inventory => "inventory".to_owned(),
-                PlayerPanel::Skills => "skills".to_owned(),
+                PlayerPanel::Skills => {
+                    if self.boasts_open { "boasts" } else { "skills" }.to_owned()
+                }
                 PlayerPanel::Dialogue => {
                     let dialogue = self.dialogue.as_ref().expect("open dialogue");
                     dialogue::navigation_scope(&dialogue.content, dialogue.started_at)
@@ -1318,10 +1345,14 @@ impl PlayerPanels {
         } else {
             match panel {
                 PlayerPanel::Skills => {
-                    solomon_sim::player_panels::native_skill_book_page_placements(snapshot.book)
-                        .first()
-                        .and_then(|page| page.skills.first())
-                        .map(|id| format!("panel:skill:{id}"))
+                    if self.boasts_open {
+                        Some("panel:boasts".to_owned())
+                    } else {
+                        solomon_sim::player_panels::native_skill_book_page_placements(snapshot.book)
+                            .first()
+                            .and_then(|page| page.skills.first())
+                            .map(|id| format!("panel:skill:{id}"))
+                    }
                 }
                 PlayerPanel::Dialogue => {
                     match &self.dialogue.as_ref().expect("open dialogue").content {
@@ -1604,6 +1635,7 @@ fn target_from_action(action: &str) -> Option<Target> {
         "inventory" => Target::Inventory,
         "skills" => Target::Skills,
         "back" => Target::Back,
+        "boasts" => Target::Boasts,
         "stats-up" => Target::StatsUp,
         "stats-down" => Target::StatsDown,
         "notice-okay" => Target::NoticeOkay,

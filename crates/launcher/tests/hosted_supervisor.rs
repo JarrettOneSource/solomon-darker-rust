@@ -631,11 +631,20 @@ impl Client {
 
     #[track_caller]
     fn until(&mut self, accept: impl Fn(&ServerMessage<Value>) -> bool) -> ServerMessage<Value> {
+        self.until_with_timeout(Duration::from_secs(8), accept)
+    }
+
+    #[track_caller]
+    fn until_with_timeout(
+        &mut self,
+        timeout: Duration,
+        accept: impl Fn(&ServerMessage<Value>) -> bool,
+    ) -> ServerMessage<Value> {
         if let Some(index) = self.pending.iter().position(&accept) {
             return self.pending.remove(index).unwrap();
         }
         let progress_before = self.save_progress;
-        let deadline = Instant::now() + Duration::from_secs(8);
+        let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
             match self.observations.recv_timeout(deadline.saturating_duration_since(Instant::now()))
             {
@@ -1187,7 +1196,8 @@ fn supervisor_replays_source_http_colleges_broker_and_party_membership() {
     h1.until(|message| matches!(message, ServerMessage::BoneyardLoaded { .. }));
     let message = h2.until(|message| matches!(message, ServerMessage::BoneyardLoaded { .. }));
     let ServerMessage::BoneyardLoaded { boneyard: party_world } = message else { unreachable!() };
-    let message = h2.until(|message| {
+    // This acknowledged Boneyard transfer measured 8.4 seconds in Windows debug CI.
+    let message = h2.until_with_timeout(Duration::from_secs(30), |message| {
         matches!(message, ServerMessage::Hosted {
             message: HostedServerMessage::SaveCheckpoint { save, .. }
         } if serde_json::from_str::<Value>(save).unwrap()["continuation"]["summary"]["worldKind"]=="boneyard")

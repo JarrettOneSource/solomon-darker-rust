@@ -198,7 +198,9 @@ pub(super) fn apply_session_command_with_extensions(
         GameCommand::SelectConcentrationSlot { skill_id, slot } => {
             session.select_concentration_slot(id, skill_id, slot)
         }
-        GameCommand::ChooseSkill { choice } => session.choose_skill(id, choice),
+        GameCommand::ChooseSkill { choice } => {
+            session.choose_skill_with_extensions(id, choice, extensions)
+        }
         GameCommand::RerollSkillOffer { offer_sequence } => {
             session.reroll_skill_offer(id, offer_sequence)
         }

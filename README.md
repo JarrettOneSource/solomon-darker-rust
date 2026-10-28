@@ -184,6 +184,13 @@ Use `CHROME` to select the browser and `OUT` to retain the journey's screenshots
 and receipt. [The UI surface map](docs/GPU-UI.md#surface-map) lists focused journeys
 for menus, panels, input, social behavior, and saved continuation.
 
+The shared test-browser launcher disables Chromium's Windows TCP port
+randomization to avoid the observed Windows socket error 10055. It preserves the
+other disabled features from pinned Playwright 1.61.1. Windows CI compares the
+effective launch arguments against a real default launch before running the
+journeys; review this list when upgrading Playwright. This changes the acceptance
+browser only. Network and asset failures still fail the journey.
+
 For the native multiplayer journey, supply either a complete `PACKAGE` directory
 or the executable and client assets separately:
 
