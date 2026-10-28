@@ -8,6 +8,7 @@ use solomon_modding::intents::ModIntentExecutionContext;
 use solomon_modding::player_control::{
     ModPlayerControl, select_mod_player_skill, uses_player_control_rule,
 };
+use solomon_sim::belt::NativeBeltEntry;
 use solomon_sim::boneyard::{BoneyardSource, LoadedBoneyard};
 use solomon_sim::modding::runtime::ModIntent;
 use solomon_sim::modding::{LuaObject, LuaValue};
@@ -56,12 +57,7 @@ fn input_value(input: GameSessionInput) -> Value {
     json!({"aim":input.aim,"cast":{"primary":input.primary,"quickbar":input.quickbar},"movement":input.movement,"viewportHeight":input.viewport.y,"viewportWidth":input.viewport.x})
 }
 
-#[test]
-fn lua_controller_admission_leases_expiry_observation_and_skill_choices_match_source() {
-    let fixture: Fixture = serde_json::from_str(include_str!(
-        "../../sim/tests/fixtures/website/mod-player-control-goldens.json"
-    ))
-    .unwrap();
+fn controller_game(loaded: Loaded) -> GameSession {
     let mut game = GameSession::new(
         "local".into(),
         NewGameSelection {
@@ -77,15 +73,77 @@ fn lua_controller_admission_leases_expiry_observation_and_skill_choices_match_so
         mod_id: None,
         mod_name: None,
         name: "Controller".into(),
-        run_id: fixture.loaded.run_id,
-        seed: fixture.loaded.seed,
-        source_sha256: fixture.loaded.source_sha256,
-        geometry_sha256: fixture.loaded.geometry_sha256,
-        scene: solomon_assets::boneyard::decode_scene(&fixture.loaded.scene.to_string())
-            .unwrap()
-            .into(),
+        run_id: loaded.run_id,
+        seed: loaded.seed,
+        source_sha256: loaded.source_sha256,
+        geometry_sha256: loaded.geometry_sha256,
+        scene: solomon_assets::boneyard::decode_scene(&loaded.scene.to_string()).unwrap().into(),
     })
     .unwrap();
+    game
+}
+
+#[test]
+fn lua_controllers_accept_observed_abilities_in_every_belt_bank() {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../sim/tests/fixtures/website/mod-player-control-goldens.json"
+    ))
+    .unwrap();
+    let mut game = controller_game(fixture.loaded);
+    let belt = &mut game.participants.get_mut("local").unwrap().player.belt;
+    belt.entries.fill(None);
+    for slot in [0, 7, 8, 15, 16, 23] {
+        belt.entries[slot] = Some(NativeBeltEntry::Skill { skill_id: 21 });
+    }
+    let mut controller = ModPlayerControl::default();
+    let observation = serde_json::to_value(controller.observe(&game, "local").unwrap()).unwrap();
+    let slots: Vec<_> = observation["player"]["secondary_abilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|ability| ability["slot"].as_f64().unwrap() as usize)
+        .collect();
+    assert_eq!(slots, [0, 7, 8, 15, 16, 23]);
+    let context = serde_json::from_value(json!({
+        "context":{"participant_id":"local"},
+        "scope":{"kind":"participant-run","id":"local:controller-run"},"tick":0,
+    }))
+    .unwrap();
+    for slot in slots {
+        let intent = serde_json::from_value(json!({
+            "kind":"input","modId":"control.first","owner":"bot","sequence":1,
+            "scope":{"kind":"participant-run","id":"local:controller-run"},
+            "fields":{"movement":{"x":0,"y":0},"quickbar":slot},
+        }))
+        .unwrap();
+        controller
+            .accept(&game, &intent, &context)
+            .unwrap_or_else(|error| panic!("observed belt slot {slot} must be accepted: {error}"));
+        let mut inputs = BTreeMap::from([("local".into(), GameSessionInput::default())]);
+        controller.apply(&mut inputs);
+        assert_eq!(inputs["local"].quickbar, Some(slot));
+    }
+    for slot in [-1.0, 24.0, 1.5] {
+        let intent = serde_json::from_value(json!({
+            "kind":"input","modId":"control.first","owner":"bot","sequence":1,
+            "scope":{"kind":"participant-run","id":"local:controller-run"},
+            "fields":{"movement":{"x":0,"y":0},"quickbar":slot},
+        }))
+        .unwrap();
+        assert!(controller.accept(&game, &intent, &context).is_err(), "invalid slot {slot}");
+        let mut inputs = BTreeMap::from([("local".into(), GameSessionInput::default())]);
+        controller.apply(&mut inputs);
+        assert_eq!(inputs["local"].quickbar, Some(23), "rejection preserves the accepted lease");
+    }
+}
+
+#[test]
+fn lua_controller_admission_leases_expiry_observation_and_skill_choices_match_source() {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../sim/tests/fixtures/website/mod-player-control-goldens.json"
+    ))
+    .unwrap();
+    let mut game = controller_game(fixture.loaded);
     let mut controller = ModPlayerControl::default();
     let human = GameSessionInput {
         viewport: solomon_sim::Vec2::new(1234.0, 768.0),
@@ -93,8 +151,23 @@ fn lua_controller_admission_leases_expiry_observation_and_skill_choices_match_so
     };
     let default_context:ModIntentExecutionContext=serde_json::from_value(json!({"context":{"participant_id":"local"},"scope":{"kind":"participant-run","id":"local:controller-run"},"tick":0})).unwrap();
     let mut saved = None;
-    for (index, case) in fixture.cases.into_iter().enumerate() {
+    for (index, mut case) in fixture.cases.into_iter().enumerate() {
         let path = format!("transaction{index}");
+        // Preserve the recording while moving its obsolete first-bank rejection
+        // to the invalid boundary of the supported three-bank belt.
+        if let Input::Accept { intent, .. } = &mut case.input
+            && intent.fields.get("quickbar") == Some(&LuaValue::Number(8.0))
+            && case.error.as_deref()
+                == Some(
+                    "mod player input.cast.quickbar must be null or an integer from 0 through 7",
+                )
+        {
+            intent.fields.insert("quickbar".into(), LuaValue::Number(24.0));
+            case.error = Some(
+                "mod player input.cast.quickbar must be null or an integer from 0 through 23"
+                    .into(),
+            );
+        }
         let result: Result<Value, String> = match case.input {
             Input::Begin { now } => controller
                 .begin_frame(&game, &BTreeMap::from([("local".into(), human)]), now)

@@ -6,7 +6,7 @@ use solomon_sim::boneyard::loot::LootActorRead;
 use std::collections::BTreeMap;
 
 use solomon_sim::Vec2;
-use solomon_sim::belt::NativeBeltEntry;
+use solomon_sim::belt::{NativeBeltEntry, PLAYER_BELT_SLOT_COUNT};
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::game_run::GameRunPhase;
 use solomon_sim::loot::{NativeLootDropKind, NativeOrbKind};
@@ -453,9 +453,9 @@ fn decode_mod_player_input(fields: &LuaObject) -> Result<GameSessionInput, Strin
             if number.fract() != 0.0 {
                 return Err("mod player input.cast.quickbar must be an integer".into());
             }
-            if !(0.0..=7.0).contains(&number) {
+            if !(0.0..PLAYER_BELT_SLOT_COUNT as f64).contains(&number) {
                 return Err(
-                    "mod player input.cast.quickbar must be null or an integer from 0 through 7"
+                    "mod player input.cast.quickbar must be null or an integer from 0 through 23"
                         .into(),
                 );
             }
