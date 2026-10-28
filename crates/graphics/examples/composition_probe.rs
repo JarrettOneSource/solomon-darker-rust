@@ -2,6 +2,10 @@
 //! Run the bindgen web output with tools/browser-smoke/gpu-composition.cjs.
 
 #[cfg(target_arch = "wasm32")]
+#[path = "support/atlas_crop.rs"]
+mod atlas_crop;
+
+#[cfg(target_arch = "wasm32")]
 mod browser {
     use solomon_graphics::{
         AlphaShadow, BlendMode, ColorFilter, Renderer, ShadowOutput, Texture, TextureColorMode,
@@ -10,6 +14,12 @@ mod browser {
     use wasm_bindgen::JsCast;
     use wasm_bindgen::prelude::*;
     use web_sys::WebGl2RenderingContext as Gl;
+
+    #[wasm_bindgen]
+    pub fn atlas_crop_probe(gl: Gl) -> Result<String, JsValue> {
+        let mut renderer = Renderer::new(gl).map_err(|error| JsValue::from_str(&error))?;
+        super::atlas_crop::probe(&mut renderer).map_err(|error| JsValue::from_str(&error))
+    }
 
     #[wasm_bindgen]
     pub fn composition_probe(gl: Gl) -> Result<String, JsValue> {

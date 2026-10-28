@@ -105,6 +105,17 @@ batch buffer. Native and browser pixel checks compare straight and premultiplied
 textures across normal, additive and multiply blending, and verify state restoration
 when draws alternate between the programs.
 
+Courtyard records replace the reference client's independently cropped images.
+Sampling their raw atlas edges let the statue read an opaque white row from its
+neighbor. `Renderer::draw_clamped` clamps sample coordinates to the selected
+record's texel centers in both shader programs while preserving the original
+quad and UV interpolation. UVs and bounds retain high precision for large stock
+atlases. Bounds belong to each draw and therefore participate in batching;
+ordinary draws retain their existing repeating or authored UV behavior. The
+browser composition and native graphics probes compare these draws against an
+independently uploaded crop at fractional scales and positions, including state
+restoration and the color-filter path.
+
 ## One simulation
 
 Game rules live in `solomon-sim`. Browser, native, hosted, and modded play use the

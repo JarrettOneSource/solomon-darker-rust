@@ -46,9 +46,10 @@ void main() {
 
 const FRAGMENT_SHADER: &str = r"#version 300 es
 precision mediump float;
-in vec2 v_uv;
+in highp vec2 v_uv;
 in vec4 v_color;
 uniform sampler2D u_texture;
+uniform highp vec4 u_texture_bounds;
 uniform float u_saturation;
 uniform float u_alpha_mask;
 uniform float u_white_alpha_filter;
@@ -110,7 +111,9 @@ void main() {
         return;
     }
     bool shadow = u_shadow_sigma.x >= 0.0;
-    vec4 texel = shadow ? cropped_texture(v_uv) : texture(u_texture, v_uv);
+    highp vec2 uv = u_texture_bounds.z >= u_texture_bounds.x
+        ? clamp(v_uv, u_texture_bounds.xy, u_texture_bounds.zw) : v_uv;
+    vec4 texel = shadow ? cropped_texture(v_uv) : texture(u_texture, uv);
     if (u_texture_premultiplied > 0.5 && texel.a > 0.0) {
         texel.rgb /= texel.a;
     }
@@ -285,6 +288,19 @@ pub struct Vertex {
     pub tint: [f32; 4],
 }
 
+fn quad_vertices(
+    [x, y, width, height]: [f32; 4],
+    positions: [[f32; 2]; 4],
+    colors: [[f32; 4]; 4],
+) -> [Vertex; 6] {
+    let texels = [[x, y], [x + width, y], [x + width, y + height], [x, y + height]];
+    [0, 1, 2, 0, 2, 3].map(|index| Vertex {
+        position: positions[index],
+        texel: texels[index],
+        tint: colors[index],
+    })
+}
+
 pub struct Renderer {
     gl: GraphicsContext,
     sprite_program: sprite_program::SpriteProgram,
@@ -293,6 +309,8 @@ pub struct Renderer {
     browser_gl: Option<WebGl2RenderingContext>,
     u_logical_size: glow::UniformLocation,
     u_pixel_center_offset: glow::UniformLocation,
+    u_texture_bounds: glow::UniformLocation,
+    texture_bounds: Option<[f32; 4]>,
     u_saturation: glow::UniformLocation,
     u_alpha_mask: glow::UniformLocation,
     u_white_alpha_filter: glow::UniformLocation,
@@ -414,6 +432,9 @@ impl Renderer {
                 .ok_or("u_pixel_center_offset is missing")?;
             let u_texture =
                 gl.get_uniform_location(program, "u_texture").ok_or("u_texture is missing")?;
+            let u_texture_bounds = gl
+                .get_uniform_location(program, "u_texture_bounds")
+                .ok_or("u_texture_bounds is missing")?;
             let u_saturation = gl
                 .get_uniform_location(program, "u_saturation")
                 .ok_or("u_saturation is missing")?;
@@ -454,6 +475,7 @@ impl Renderer {
                 .get_uniform_location(program, "u_blur_sigma")
                 .ok_or("u_blur_sigma is missing")?;
             gl.uniform_1_i32(Some(&u_texture), 0);
+            gl.uniform_4_f32_slice(Some(&u_texture_bounds), &[1.0, 1.0, 0.0, 0.0]);
             gl.uniform_2_f32(Some(&u_pixel_center_offset), 0.0, 0.0);
             gl.uniform_1_f32(Some(&u_saturation), 1.0);
             gl.uniform_1_f32(Some(&u_alpha_mask), 0.0);
@@ -514,6 +536,8 @@ impl Renderer {
                 browser_gl: None,
                 u_logical_size,
                 u_pixel_center_offset,
+                u_texture_bounds,
+                texture_bounds: None,
                 u_saturation,
                 u_alpha_mask,
                 u_white_alpha_filter,
@@ -1239,10 +1263,36 @@ impl Renderer {
         ]
     }
 
+    pub fn logical_size(&self) -> [f32; 2] {
+        self.logical_size
+    }
+
     pub fn draw(&mut self, texture: &Texture, quad: Quad) {
         let [x, y, width, height] = quad.destination;
         let corners = [[x, y], [x + width, y], [x + width, y + height], [x, y + height]];
         self.draw_quad(texture, quad.source, corners, [quad.tint; 4], quad.blend);
+    }
+
+    /// Draw an isolated atlas record, matching an independently cropped image's
+    /// clamp-to-edge sampling without shrinking or shifting its source geometry.
+    pub fn draw_clamped(&mut self, texture: &Texture, quad: Quad) {
+        let [x, y, width, height] = quad.destination;
+        let positions = [[x, y], [x + width, y], [x + width, y + height], [x, y + height]];
+        let [left, top, width, height] = quad.source;
+        assert!(width >= 1.0 && height >= 1.0, "Clamped images contain at least one texel");
+        let bounds = [
+            (left + 0.5) / texture.width,
+            (top + 0.5) / texture.height,
+            (left + width - 0.5) / texture.width,
+            (top + height - 0.5) / texture.height,
+        ];
+        self.draw_vertices(
+            texture,
+            quad_vertices(quad.source, positions, [quad.tint; 4]).into_iter(),
+            quad.blend,
+            TextureColorMode::Texture,
+            Some(bounds),
+        );
     }
 
     /// Draws the native four-vertex attachment/effect quad, with colors in corner order:
@@ -1275,16 +1325,13 @@ impl Renderer {
         blend: BlendMode,
         color_mode: TextureColorMode,
     ) {
-        let [x, y, width, height] = source;
-        let texels = [[x, y], [x + width, y], [x + width, y + height], [x, y + height]];
-        let vertices: [Vertex; 4] = std::array::from_fn(|index| Vertex {
-            position: positions[index],
-            texel: texels[index],
-            tint: colors[index],
-        });
-        let triangles =
-            [[vertices[0], vertices[1], vertices[2]], [vertices[0], vertices[2], vertices[3]]];
-        self.draw_triangles_with_color_mode(texture, &triangles, blend, color_mode);
+        self.draw_vertices(
+            texture,
+            quad_vertices(source, positions, colors).into_iter(),
+            blend,
+            color_mode,
+            None,
+        );
     }
 
     /// The shared WebGL2 submission primitive. Three-vertex arrays preserve triangle shape
@@ -1305,7 +1352,7 @@ impl Renderer {
         blend: BlendMode,
         color_mode: TextureColorMode,
     ) {
-        self.draw_vertices(texture, triangles.iter().flatten().copied(), blend, color_mode);
+        self.draw_vertices(texture, triangles.iter().flatten().copied(), blend, color_mode, None);
     }
 
     /// Submit an indexed UI mesh without expanding it into a second CPU triangle buffer.
@@ -1322,6 +1369,7 @@ impl Renderer {
             indices.iter().map(|index| vertices[*index as usize]),
             blend,
             color_mode,
+            None,
         );
     }
 
@@ -1331,11 +1379,21 @@ impl Renderer {
         vertices: impl Iterator<Item = Vertex>,
         blend: BlendMode,
         color_mode: TextureColorMode,
+        texture_bounds: Option<[f32; 4]>,
     ) {
         // SAFETY: the renderer owns these handles in the live current context;
         // uploads borrow initialized slices only for the duration of each driver call.
         unsafe {
             let color_mode = self.forced_texture_color_mode.unwrap_or(color_mode);
+            if self.texture_bounds != texture_bounds {
+                self.flush();
+                self.bind_effect_program();
+                self.gl.uniform_4_f32_slice(
+                    Some(&self.u_texture_bounds),
+                    &texture_bounds.unwrap_or([1.0, 1.0, 0.0, 0.0]),
+                );
+                self.texture_bounds = texture_bounds;
+            }
             if self.bound_texture != Some(texture.id) {
                 self.flush();
                 self.gl.bind_texture(glow::TEXTURE_2D, Some(texture.handle));
@@ -1440,6 +1498,7 @@ impl Renderer {
                     self.pixel_center_offset,
                     self.blend,
                     self.texture_color_mode,
+                    self.texture_bounds,
                 );
                 self.sprite_program_active = true;
             } else {

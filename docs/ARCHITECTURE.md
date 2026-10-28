@@ -161,6 +161,11 @@ blend, color material, sampler, or clip change can require a flush. Nested group
 rendering restores the enclosing target and state; retained vertex/index storage
 does not permit reordering across those boundaries.
 
+Courtyard art uses source-rectangle clamping so linear filtering cannot read an
+adjacent atlas image. Its full source geometry is preserved, as if each record
+were an isolated cropped texture. The southern wall and platform bank follows
+the separate 1.25 camera scope after courtyard actors and foreground art.
+
 Game menus, HUD, overlays, and the desktop launcher are Rust GPU UI. Egui handles
 interaction/layout and tessellation. The shared graphics code submits stock sprites,
 bitmap text, shaped font runs, and meshes.
