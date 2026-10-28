@@ -10,7 +10,7 @@ use crate::Vec2;
 use crate::boneyard::BoneyardWorld;
 use crate::combat::PlayerLifeState;
 use crate::enemies::model::EnemyActorRead;
-use crate::enemies::model::{EnemyDeathEffectKind, EnemyLifeState};
+use crate::enemies::model::{EnemyDeathEffectKind, EnemyEventKind, EnemyLifeState};
 use crate::float::fround;
 use crate::loot::NativeLootDropKind;
 use crate::secondary::ether_drain::*;
@@ -382,13 +382,12 @@ impl GameSession {
                     lighting: participant.lighting,
                 })
                 .collect();
-        // This early Source phase accepts the mutated stores, but does not
-        // forward the ordinary enemy-contact feedback outboxes.
-        super::player_contacts::apply_player_contacts_with_extensions(
+        let world = self.boneyard.as_mut().unwrap();
+        let mut received = super::player_contacts::apply_player_contacts_with_extensions(
             super::player_contacts::PlayerContactContext {
                 enhanced_effects: self.enhanced_effects,
                 players: &mut players,
-                world: self.boneyard.as_mut().unwrap(),
+                world,
                 secondary: &mut self.secondary,
                 tick,
                 painter_order: &mut self.painter_order,
@@ -397,6 +396,16 @@ impl GameSession {
             &damage,
             extensions,
         )?;
+        // Retail Player damage 0x0052F540 publishes the rescue independently of
+        // the field's suppressed ordinary contact feedback (flags 0x10A).
+        received
+            .player_damage_sound_events
+            .retain(|event| event.kind == EnemyEventKind::PlayerCheatDeath);
+        super::rewards::retain_boneyard_enemy_events(
+            world,
+            &received.player_damage_sound_events,
+            tick,
+        );
         Ok(())
     }
 }
