@@ -300,6 +300,11 @@ with exactly converted stock thresholds. The portable parser rejects isolated
 UTF-16 surrogates, which Rust strings cannot represent, rather than substituting
 characters silently.
 
+Retained loot events use the supported interchange discriminator `type` and the
+audio owner's sound IDs, including `drop-bag-1` and `drop-bag-2`. Import also reads
+the earlier Rust spellings `eventType`, `drop-bag1` and `drop-bag2`; re-export writes
+the canonical source spellings. Native checkpoints retain their own typed fields.
+
 ## Snapshot ordering
 
 The shared protocol carries canonical session values between matched native and

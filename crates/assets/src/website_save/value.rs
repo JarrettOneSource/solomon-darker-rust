@@ -132,7 +132,12 @@ impl<'de> de::Deserializer<'de> for SourceValue {
         };
         let variant = variants
             .iter()
-            .find(|variant| source_variant(name, variant) == tag || **variant == tag)
+            .find(|variant| {
+                source_variant(name, variant) == tag
+                    || **variant == tag
+                    // Earlier Rust exports used generic kebab spelling for these sounds.
+                    || (name == "BoneyardLootSound" && kebab(variant) == tag)
+            })
             .ok_or_else(|| de::Error::custom(format!("{name} has unknown value {tag}")))?;
         visitor.visit_enum(SourceEnum { variant, payload })
     }
@@ -250,7 +255,7 @@ fn source_field(name: &str, field: &str) -> String {
         ("EnemyWorld", "head_facing_rng") => return "headFacingRngState".into(),
         ("EnemyWorld", "locomotion_rng") => return "locomotionRngState".into(),
         ("EnemyWorld", "steering_rng") => return "steeringRngState".into(),
-        ("EnemyEvent", "kind") => return "type".into(),
+        ("EnemyEvent", "kind") | ("BoneyardLootEvent", "event_type") => return "type".into(),
         ("WaveState", "rng") => return "rngState".into(),
         ("PrimarySpellProjectileBase", "registration") => return "lightRegistration".into(),
         ("BoneyardBounds", "width") => return "w".into(),
@@ -291,6 +296,12 @@ fn source_variant(name: &str, variant: &str) -> String {
             serde_json::from_value(Value::String(variant.into()))
                 .expect("Serde supplies a declared enemy sound");
         return sound.id().into();
+    }
+    if name == "BoneyardLootSound" {
+        let sound: solomon_sim::boneyard::loot::BoneyardLootSound =
+            serde_json::from_value(Value::String(variant.into()))
+                .expect("Serde supplies a declared loot sound");
+        return sound.as_str().into();
     }
     if name == "EnemyToken" {
         let token: solomon_sim::enemies::EnemyToken =
@@ -341,6 +352,15 @@ fn adapt_struct(name: &str, mut value: Value) -> Result<Value, serde_json::Error
     enemies::prepare(name, &mut value).map_err(de::Error::custom)?;
     spells::prepare(name, &mut value).map_err(de::Error::custom)?;
     match name {
+        "BoneyardLootEvent" => {
+            // Supported source saves use `type`; retain earlier Rust exports as input.
+            if value.get("type").is_none()
+                && let Some(fields) = value.as_object_mut()
+                && let Some(kind) = fields.remove("eventType")
+            {
+                fields.insert("type".into(), kind);
+            }
+        }
         "PlayerPrimaryCastState" => {
             for field in ["actionTick", "selectedPrimaryId"] {
                 if value.get(field).and_then(Value::as_f64) == Some(-1.0) {
