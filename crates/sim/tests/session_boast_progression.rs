@@ -56,12 +56,9 @@ fn random_choices_follow_offer_construction_without_changing_other_draws() {
         Some(3.into());
     automatic.grant_experience("wizard", 801.0);
     manual.grant_experience("wizard", 801.0);
-    loop {
-        let Some(expected_offer) =
-            manual.participants.get("wizard").unwrap().player.progression.pending_offer.clone()
-        else {
-            break;
-        };
+    while let Some(expected_offer) =
+        manual.participants.get("wizard").unwrap().player.progression.pending_offer.clone()
+    {
         let index = manual.gameplay_rng.draw_integer(expected_offer.options.len() as i32) as usize;
         assert!(
             manual
@@ -126,12 +123,9 @@ fn failed_and_nonrandom_boasts_leave_every_offer_interactive() {
         boast.selected = Some(id.into());
         boast.failed = failed;
         game.grant_experience("wizard", 801.0);
-        loop {
-            let Some(offer) =
-                game.participants.get("wizard").unwrap().player.progression.pending_offer.clone()
-            else {
-                break;
-            };
+        while let Some(offer) =
+            game.participants.get("wizard").unwrap().player.progression.pending_offer.clone()
+        {
             assert_eq!(offer.automatic_choice_index, None);
             assert!(game.choose_skill(
                 "wizard",
