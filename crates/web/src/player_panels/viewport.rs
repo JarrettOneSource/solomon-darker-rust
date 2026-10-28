@@ -208,10 +208,10 @@ impl PlayerPanels {
         }
         let actions: &[(&str, &str)] = match self.panel {
             Some(PlayerPanel::Skills) => &[
-                ("view-previous", "◀"),
-                ("view-next", "▶"),
+                ("view-previous", "Prev"),
+                ("view-next", "Next"),
                 ("boasts", if self.boasts_open { "Skills" } else { "Boasts" }),
-                ("inventory", "Inventory"),
+                ("inventory", "Items"),
                 ("close", "Done"),
             ],
             Some(PlayerPanel::Service(_)) => &[
