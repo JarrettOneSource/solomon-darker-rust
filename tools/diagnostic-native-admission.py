@@ -126,13 +126,33 @@ replacement = '''    check_offline()
     assert " rejected " not in trace, trace
     assert "handshake timed out" not in trace, trace
     assert "remember_resume" in (EVIDENCE / "contention-blocked.sample.txt").read_text()
-    app.hold("d", 0.6)
+    # Compare input with this live session's checkpoint. Courtyard collision can
+    # move an idle wizard while credentials and the sampled frame are pending.
+    admitted_revision = save_record(profile)[0]["revision"]
+    baseline_record, baseline = wait(
+        lambda: (record if (record := save_record(profile))[0]["revision"]
+                 > admitted_revision else None),
+        "a fresh checkpoint after delayed admission", timeout=65,
+    )
+    write_json(EVIDENCE / "contention-before-input-save.json", baseline_record)
+    app.capture("contention-before-input")
+    # Match the established software-renderer peer journey's hold duration.
+    contention["inputHoldSeconds"] = 3
+    contention["inputStartedAt"] = time.monotonic()
+    app.hold("d", contention["inputHoldSeconds"])
+    contention["inputFinishedAt"] = time.monotonic()
     app.capture("contention-continued")
     continued_save = app.close()[1]
     assert identity(continued_save) == identity(before), "delayed admission changed the wizard"
-    before_position = player(before)["locomotions"]["position"]
+    before_position = player(baseline)["locomotions"]["position"]
     continued_position = player(continued_save)["locomotions"]["position"]
     assert continued_position["x"] > before_position["x"] + 10, (before_position, continued_position)
+    assert player(continued_save)["locomotions"]["footstepTick"] > baseline["continuation"]["simulation"]["tick"], "no accepted walking after the observed baseline"
+    contention["movementBaseline"] = {
+        "position": before_position,
+        "tick": baseline["continuation"]["simulation"]["tick"],
+        "revision": baseline_record["revision"],
+    }
     contention["result"] = "admitted after delayed durable storage; movement and save succeeded"
     contention["continuedPosition"] = continued_position
 
