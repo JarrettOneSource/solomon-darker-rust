@@ -115,7 +115,9 @@ async function walkSolomonEntrance(page, {snapshot, playerId, output, plan}) {
         const crossed = !gate || (at.y - gate.y) * direction > crossedMargin;
         if (!crossed && (gate.y - at.y) * direction <= approachMargin + 10
           && Math.abs(gate.x - at.x) <= 40) {
-          target = {x: gate.x, y: gate.y + direction * crossedMargin};
+          // Place the goal beyond the strict crossing condition: navigation can
+          // stop within a movement step of a waypoint.
+          target = {x: gate.x, y: gate.y + direction * (crossedMargin + plan.bodyRadius)};
           phase = 'gate-crossing';
         } else if (!await plan.containsContact(encounter.position, at)) {
           const end = crossed ? encounter.position : {x: gate.x, y: gate.y - direction * approachMargin};
