@@ -7,18 +7,21 @@ import runpy
 import subprocess
 
 
-PACKAGE_REVISION = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+PACKAGE_REVISION = "de40a9ee89b876e2175ad09f6635bb537e6b4a38"
 CANDIDATE_REVISION = "3625b85904af56526e3ba18c3f95485e49347d0b"
 evidence = Path("reports/desktop-smoke")
 evidence.mkdir(parents=True, exist_ok=True)
-archive = Path("dist-desktop/Solomon-Darker-darwin-x64.zip")
+archive = Path("diagnostic-package/Solomon-Darker-darwin-x64.zip")
 expected, filename = Path(str(archive) + ".sha256").read_text().split()
 assert filename == archive.name
 with archive.open("rb") as stream:
     archive_hash = hashlib.file_digest(stream, "sha256").hexdigest()
 assert archive_hash == expected, "downloaded package checksum differs"
+assert archive_hash == "f82c27428f26881ae079a1f61cf45b8f23abb9fd556e34fedbcca54ae48367bd"
 inspector = runpy.run_path("scripts/verify-desktop-archive.py")
 inspection = inspector["verify_archive"](archive, Path.cwd(), PACKAGE_REVISION)
+assert inspection["nativeSha256"] == "5f62cff8bac999275bdb1011cc0e45bc35f630b5006886c683bfc1a64192a29c"
+subprocess.run(["ditto", "-x", "-k", str(archive), "dist-desktop"], check=True)
 
 driver = Path("tools/smoke-desktop-runtime.py")
 source = driver.read_text()
@@ -37,6 +40,8 @@ replacement = '''    check_offline()
     RECEIPT["contention"] = contention
 
     def hold_preferences():
+        sampler = None
+        sample_output = None
         try:
             deadline = time.monotonic() + 15
             while "connecting welcome=true" not in app.log_path.read_text():
@@ -57,26 +62,40 @@ replacement = '''    check_offline()
                     acquired = time.monotonic()
                     contention["acquiredAt"] = acquired
                     contention["logAtAcquire"] = app.log_path.read_text()
-                    time.sleep(1)
+                    while "Game remembering resume" not in app.log_path.read_text():
+                        if time.monotonic() >= acquired + 6.5:
+                            raise TimeoutError("local acceptance did not reach the held preferences lock")
+                        time.sleep(0.002)
                     sample = EVIDENCE / "contention-blocked.sample.txt"
-                    subprocess.run(
+                    sample_output = (EVIDENCE / "contention-sampler.log").open("w")
+                    sampler = subprocess.Popen(
                         ["sample", str(app.process.pid), "2", "10", "-file", str(sample)],
-                        capture_output=True, text=True, timeout=6, check=True,
+                        stdout=sample_output, stderr=subprocess.STDOUT,
                     )
                     time.sleep(max(0, acquired + 6.5 - time.monotonic()))
                     contention["logBeforeRelease"] = app.log_path.read_text()
                 finally:
                     fcntl.flock(lock, fcntl.LOCK_UN)
                     contention["releasedAt"] = time.monotonic()
+            # Symbolication can outlive collection. It must not extend the lock hold.
+            if sampler is not None:
+                contention["sampleExitCode"] = sampler.wait(timeout=30)
+                assert contention["sampleExitCode"] == 0, contention
         except Exception as error:
             contention["injectionError"] = str(error)
+        finally:
+            if sampler is not None and sampler.poll() is None:
+                sampler.kill()
+                sampler.wait(timeout=5)
+            if sample_output is not None:
+                sample_output.close()
 
     holder = threading.Thread(target=hold_preferences, name="preferences-contention")
     holder.start()
     try:
         app.click("continue")
     finally:
-        holder.join(timeout=30)
+        holder.join(timeout=60)
     assert not holder.is_alive(), "preferences lock owner did not finish"
     assert "injectionError" not in contention, contention
     contention["heldSeconds"] = contention["releasedAt"] - contention["acquiredAt"]

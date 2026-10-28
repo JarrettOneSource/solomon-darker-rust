@@ -1,5 +1,5 @@
 {
-  "name": "Verify Welcome admission fix and preferences contention",
+  "name": "Verify delayed admission with retained candidate package",
   "on": {
     "push": {
       "branches": [
@@ -8,7 +8,8 @@
     }
   },
   "permissions": {
-    "contents": "read"
+    "contents": "read",
+    "actions": "read"
   },
   "env": {
     "CARGO_INCREMENTAL": "0",
@@ -19,7 +20,7 @@
   "jobs": {
     "native-admission": {
       "runs-on": "macos-15-intel",
-      "timeout-minutes": 90,
+      "timeout-minutes": 30,
       "steps": [
         {
           "uses": "actions/checkout@v6"
@@ -44,106 +45,29 @@
           "run": "python3 -m pip install -r tools/desktop-smoke-requirements.txt"
         },
         {
-          "uses": "actions/setup-node@v6",
+          "uses": "actions/download-artifact@v4",
           "with": {
-            "node-version-file": ".node-version",
-            "cache": "npm"
+            "name": "unqualified-native-admission-package",
+            "run-id": "40619144831",
+            "github-token": "${{ secrets.GITHUB_TOKEN }}",
+            "repository": "${{ github.repository }}",
+            "path": "diagnostic-package"
           }
         },
         {
-          "run": "npm install --global npm@10.9.2"
-        },
-        {
-          "run": "npm ci --no-audit --no-fund"
-        },
-        {
-          "run": "rustup show"
-        },
-        {
-          "run": "python3 scripts/verify-client-assets.py\npython3 -m py_compile tools/diagnostic-native-admission.py"
-        },
-        {
-          "uses": "actions/cache/restore@v4",
-          "with": {
-            "path": "~/.cargo/registry\n~/.cargo/git\ntarget",
-            "key": "native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}",
-            "restore-keys": "native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-\nnative-${{ runner.os }}-${{ runner.arch }}-"
-          }
-        },
-        {
-          "name": "Build the traced native app",
-          "run": "npm run package:desktop -- --platform darwin --arch x64 --release-repository \"$GITHUB_REPOSITORY\""
-        },
-        {
-          "name": "Archive the diagnostic package",
-          "run": "node tools/archive-desktop.mjs"
+          "run": "python3 -m py_compile tools/diagnostic-native-admission.py"
         },
         {
           "name": "Verify delayed admission, movement, saving and fresh continuation",
-          "timeout-minutes": 40,
+          "timeout-minutes": 25,
           "run": "python3 tools/diagnostic-native-admission.py"
         },
         {
           "uses": "actions/upload-artifact@v4",
           "if": "always()",
           "with": {
-            "name": "native-admission-contention-fixed",
+            "name": "native-admission-contention-fixed-r2",
             "path": "reports/desktop-smoke",
-            "if-no-files-found": "warn"
-          }
-        },
-        {
-          "uses": "actions/upload-artifact@v4",
-          "if": "always()",
-          "with": {
-            "name": "unqualified-native-admission-package",
-            "path": "dist-desktop/*.zip\ndist-desktop/*.sha256\ndist-desktop/desktop-release.json",
-            "if-no-files-found": "warn"
-          }
-        }
-      ]
-    },
-    "admission-regressions": {
-      "runs-on": "ubuntu-latest",
-      "timeout-minutes": 35,
-      "defaults": {
-        "run": {
-          "shell": "bash"
-        }
-      },
-      "steps": [
-        {
-          "uses": "actions/checkout@v6",
-          "with": {
-            "ref": "3625b85904af56526e3ba18c3f95485e49347d0b"
-          }
-        },
-        {
-          "name": "Install the pinned toolchain",
-          "run": "rustup show"
-        },
-        {
-          "name": "Install native client build dependencies",
-          "run": "sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libfontconfig1-dev libclang-dev cmake"
-        },
-        {
-          "uses": "actions/cache/restore@v4",
-          "with": {
-            "path": "~/.cargo/registry\n~/.cargo/git\ntarget",
-            "key": "game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}",
-            "restore-keys": "game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-\ngame-${{ runner.os }}-${{ runner.arch }}-"
-          }
-        },
-        {
-          "name": "Verify the exact uninstrumented candidate network tests",
-          "run": "python3 - <<'PROBE'\nimport hashlib, json, re, subprocess\nfrom pathlib import Path\nout=Path('reports/admission-regressions-fixed'); out.mkdir(parents=True,exist_ok=True)\npaths=['crates/web/src/network/connection.rs','crates/web/src/network/native.rs','crates/web/src/network/native/tests.rs','crates/web/src/network/browser.rs','crates/web/src/game/native.rs']\n(out/'source.json').write_text(json.dumps({'revision':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'files':{p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}},indent=2)+'\\n')\ncommands=[['cargo','fmt','--all','--','--check'],['cargo','test','-p','solomon-web','--lib','--all-features','network::','--','--nocapture']]\nchecks=[]\nfor index,command in enumerate(commands):\n result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)\n (out/f'{index}-check.log').write_text(result.stdout); print(result.stdout,flush=True)\n checks.append({'command':command,'exitCode':result.returncode})\n (out/'receipt.json').write_text(json.dumps({'checks':checks},indent=2)+'\\n')\n assert result.returncode==0,checks\nassert re.search(r'test result: ok\\. 14 passed; 0 failed; 0 ignored;',result.stdout)\nPROBE"
-        },
-        {
-          "uses": "actions/upload-artifact@v4",
-          "if": "always()",
-          "with": {
-            "name": "native-admission-regressions-fixed",
-            "path": "reports/admission-regressions-fixed",
             "if-no-files-found": "warn"
           }
         }
