@@ -73,7 +73,7 @@ impl PlayerPanels {
                 &self.ui,
                 "boasts",
                 if self.boasts_open { "Skills" } else { "Boasts" },
-                HudRect::new(690.0, 85.0, 220.0, 50.0),
+                HudRect::new(1090.0, 5.0, 220.0, 50.0),
             )?;
         }
         if self.boasts_open {
