@@ -117,21 +117,25 @@ impl NativeConnection {
         self.delivery.lock().unwrap().ping_ms
     }
 
+    fn disconnected_reason(&self) -> String {
+        self.delivery.lock().unwrap().disconnected_reason()
+    }
+
     fn command(&self, command: Command) -> Result<(), String> {
         if !self.is_open() {
-            return Err("The game host is not connected".into());
+            return Err(self.disconnected_reason());
         }
         self.commands.try_send(command).map_err(|error| match error {
             mpsc::error::TrySendError::Full(_) => {
                 "The game connection is not accepting input".into()
             }
-            mpsc::error::TrySendError::Closed(_) => "The game host is not connected".into(),
+            mpsc::error::TrySendError::Closed(_) => self.disconnected_reason(),
         })
     }
 
     pub fn send(&self, message: &ClientMessage) -> Result<(), String> {
         if !self.is_open() {
-            return Err("The game host is not connected".into());
+            return Err(self.disconnected_reason());
         }
         let text = encode(message)?;
         let length = text.len();
