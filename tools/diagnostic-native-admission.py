@@ -7,20 +7,19 @@ import runpy
 import subprocess
 
 
-PACKAGE_REVISION = "b922d2bb281445edeb59d0aec7fed65c678f0a39"
+PACKAGE_REVISION = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 CANDIDATE_REVISION = "3625b85904af56526e3ba18c3f95485e49347d0b"
+FIX_REVISION = "279692fb0709f3435d415c0382d437e0656c7173"
 evidence = Path("reports/desktop-smoke")
 evidence.mkdir(parents=True, exist_ok=True)
-archive = Path("diagnostic-package/Solomon-Darker-darwin-x64.zip")
+archive = Path("dist-desktop/Solomon-Darker-darwin-x64.zip")
 expected, filename = Path(str(archive) + ".sha256").read_text().split()
 assert filename == archive.name
 with archive.open("rb") as stream:
     archive_hash = hashlib.file_digest(stream, "sha256").hexdigest()
-assert archive_hash == expected, "downloaded package checksum differs"
-assert archive_hash == "3389d7c10cc03fafe448b119cc21ececd4f26911522f29e886a1b068edad2616"
+assert archive_hash == expected, "built package checksum differs"
 inspector = runpy.run_path("scripts/verify-desktop-archive.py")
 inspection = inspector["verify_archive"](archive, Path.cwd(), PACKAGE_REVISION)
-assert inspection["nativeSha256"] == "235d5a9a9fd36a678c2ab30c6de2ecb25736fddcc159baf5cc6cb6b890ab94d3"
 subprocess.run(["ditto", "-x", "-k", str(archive), "dist-desktop"], check=True)
 package = Path("dist-desktop/Solomon Darker-darwin-x64")
 manifest = json.loads((package / "desktop-package-manifest.json").read_text())
@@ -31,13 +30,38 @@ with (package / manifest["executable"]).open("rb") as stream:
 driver = Path("tools/smoke-desktop-runtime.py")
 source = driver.read_text()
 original = "    check_offline()\n    check_peers()\n"
-replacement = '''    check_offline()
+replacement = '''    def check_macos_menu(app):
+        app.activate()
+        bars = wait(lambda: [surface for surface in xa11y.ShellSurface.list()
+                            if surface.kind == "menu_bar" and surface.pid == app.process.pid],
+                    "the game's macOS menu bar", timeout=30)
+        assert len(bars) == 1, bars
+        bar = bars[0]
+        quit_items = retry_ui(lambda timeout: bar.locator("menu_item[name^='Quit ']").elements())
+        assert len(quit_items) == 1, bar.dump()
+        app_menu = retry_ui(lambda timeout: quit_items[0].parent())
+        assert app_menu is not None and app_menu.role == "menu", app_menu
+        rows = [{"name": item.name or "", "enabled": item.enabled, "role": item.role}
+                for item in retry_ui(lambda timeout: app_menu.children())]
+        menu = {"pid": app.process.pid, "items": rows,
+                "tree": retry_ui(lambda timeout: app_menu.tree(max_depth=3)),
+                "inspection": "Read-only accessibility; no menu item activated"}
+        RECEIPT["macosMenu"] = menu
+        write_json(EVIDENCE / "macos-menu.json", menu)
+        assert not any(row["name"] == "Services" for row in rows), rows
+        for label in ("About ", "Hide ", "Quit "):
+            matches = [row for row in rows if row["name"].startswith(label)
+                       and row["name"] != "Hide Others"]
+            assert len(matches) == 1 and matches[0]["enabled"], (label, rows)
+
+    check_offline()
     import fcntl
     import threading
 
     profile = PROFILES / "solo"
     before = save_record(profile)[1]
     app = Application("contention", profile)
+    check_macos_menu(app)
     app.click("launcher/solo")
     app.title()
     app.click("play")
@@ -206,6 +230,48 @@ replacement = '''    check_offline()
     contention["character"] = identity(after)
     contention["beforeX"] = player(before)["locomotions"]["position"]["x"]
     contention["afterX"] = player(after)["locomotions"]["position"]["x"]
+
+    # Exercise Cocoa termination separately, after the unchanged recovery proof.
+    # The menu inspection above only reads availability; Cmd-Q here is intentional.
+    quitting = Application("cocoa-quit", profile)
+    quitting.click("launcher/solo")
+    quitting.continue_game()
+    cocoa_quit = {"trigger": "Meta+q"}
+    RECEIPT["cocoaQuit"] = cocoa_quit
+    with held_save_lock(profile):
+        quit_before = save_record(profile)[0]
+        quitting.hold("a", 0.8)
+        quitting.activate()
+        INPUT.chord("q", held=["Meta"])
+        retry_ui(quitting.control("desktop/keep-playing").wait_enabled, timeout=35)
+        quitting.capture("cocoa-quit-save-timeout")
+        assert quitting.process.poll() is None, "Cocoa Quit exited before durable saving"
+        assert save_record(profile)[0] == quit_before, "the held checkpoint changed"
+        cocoa_quit["saveTimeoutKeptProcessAlive"] = True
+        quitting.click("desktop/keep-playing")
+        retry_ui(quitting.control("desktop/keep-playing").wait_detached)
+        assert quitting.process.poll() is None, "Keep playing did not cancel Cocoa Quit"
+        cocoa_quit["keepPlayingCancelledTermination"] = True
+    wait(lambda: save_record(profile)[0]["revision"] > quit_before["revision"],
+         "the Cocoa Quit checkpoint finishing after Keep playing")
+    cocoa_quit["delayedSaveCommitted"] = True
+    quitting.key("Escape")
+    retry_ui(quitting.control("hud:inventory").wait_enabled)
+    quit_baseline, quit_document = save_record(profile)
+    quit_before_x = player(quit_document)["locomotions"]["position"]["x"]
+    quitting.hold("d", 1.2)
+    quitting.activate()
+    INPUT.chord("q", held=["Meta"])
+    quit_record, quit_saved = quitting.exited()
+    assert identity(quit_saved) == identity(before), "Cocoa Quit changed the wizard"
+    assert quit_record["revision"] > quit_baseline["revision"], "Cocoa Quit did not save"
+    quit_after_x = player(quit_saved)["locomotions"]["position"]["x"]
+    assert quit_after_x > quit_before_x + 10, "Keep playing did not restore movement after Cocoa Quit"
+    cocoa_quit.update({"secondQuitSavedAndExited": True,
+                       "beforeRevision": quit_baseline["revision"],
+                       "savedRevision": quit_record["revision"],
+                       "beforeX": quit_before_x, "afterX": quit_after_x,
+                       "character": identity(quit_saved)})
 '''
 assert source.count(original) == 1
 instrumented = source.replace(original, replacement)
@@ -215,20 +281,21 @@ paths = [driver, Path(__file__), Path("crates/web/src/network/native.rs"),
          Path("crates/web/src/input.rs"), Path("crates/web/src/input/controls.rs"),
          Path("crates/web/src/gpu_ui/input/native.rs"),
          Path("crates/launcher/src/host/hosted/socket.rs"),
-         Path("crates/launcher/src/host/input.rs")]
+         Path("crates/launcher/src/host/input.rs"),
+         Path("crates/desktop/src/app/macos.rs"), Path("crates/desktop/Cargo.toml")]
 (evidence / "source.json").write_text(json.dumps({
     "driverRevision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
     "packageRevision": PACKAGE_REVISION,
-    "packageRun": 40631239036,
-    "packageArtifact": "unqualified-native-admission-input-package",
+    "canonicalFixRevision": FIX_REVISION,
     "candidateRevision": CANDIDATE_REVISION,
     "archiveSha256": archive_hash,
     "archiveInspection": inspection,
     "files": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths},
     "executedDriverSha256": hashlib.sha256(instrumented.encode()).hexdigest(),
-    "scope": "Ordinary offline actions, one 6.5-second preferences-lock hold, then normal recovery. "
-             "Exact retained package with private admission/input traces; the driver separately timestamps activation "
-             "and key calls and samples the app during the unchanged three-second hold. Admission must wait for durable credentials, "
-             "then allow movement, save and fresh continuation. The original stall source remains unknown.",
+    "scope": "Fixed traced package with read-only macOS menu inspection, ordinary offline actions, "
+             "one 6.5-second preferences-lock hold, then unchanged three-second input and recovery assertions. "
+             "The driver separately timestamps activation and key calls and samples the app during the hold. "
+             "Admission must wait for durable credentials, then allow movement, save and fresh continuation. "
+             "A separate Cmd-Q journey checks deferred saving, Keep playing and saved exit.",
 }, indent=2) + "\n")
 exec(compile(instrumented, str(driver), "exec"), {"__name__": "__main__", "__file__": str(driver)})
