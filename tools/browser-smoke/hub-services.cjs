@@ -86,6 +86,19 @@ const rows = snapshot => snapshot.widgets.filter(widget=>widget.id.startsWith('p
     await ui.waitForUi(page,snapshot=>ui.findWidget(snapshot,'panel:dialogue-key')?.value.startsWith('ANNAL_'),'accepted annalist response');
     await ui.click(page,'panel:dialogue-next');await ui.noWidget(page,'panel:dialogue');
     assert.equal((await ui.readUi(page)).surface,'hidden','closing the conversation returns directly to play');
+    if(ui.findWidget(await ui.readUi(page),'npc:notebox')) {
+      await ui.click(page,'npc:notebox');await ui.noWidget(page,'npc:notebox');
+    }
+    await page.keyboard.press('KeyK');await ui.widget(page,'panel:surface:skills');
+    await ui.click(page,'panel:boasts');
+    assert.match((await ui.widget(page,'panel:boast-progress')).label,
+      /POTIONS ARE FOR PEASANTS!\nActive\n/);
+    await settle(page);
+    await screenshot(page,'boast-progress-rust.png');
+    await page.keyboard.press('Escape');await ui.noWidget(page,'panel:boast-progress');
+    await ui.widget(page,'panel:surface:skills');
+    await page.keyboard.press('Escape');await ui.noWidget(page,'panel:surface:skills');
+    checks.push('Skills exposes the accepted active Boast and Escape returns through its submenu');
     await ui.assertGpuOnly(page);await ui.settleErrors(page);assert.deepEqual(observed.errors,[]);
     checks.push('all5 native boasts preserve frame/text geometry and accepted dialogue lifecycle');
     receipt.passed=true;

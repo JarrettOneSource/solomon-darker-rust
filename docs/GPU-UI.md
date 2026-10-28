@@ -36,6 +36,13 @@ and an active drag retains its owner through release or cancellation outside it.
 
 ## Materials and resource ownership
 
+The health meter adds a pulsing green fill while the accepted player has Regenerate
+active. The pulse clips to the current health fill and follows the meter's scale and
+rotation. The Skills book's Boasts view shows the selected stock or authored Boast,
+its statement, and its accepted progress: gold for active, green for achieved, red
+for failed. Escape returns to Skills. These are shared native/browser UI enhancements;
+they do not change retail gameplay, mana reservation, or Boast success rules.
+
 The shared material applies saturation and brightness in sRGB on straight color,
 clamping each operation before blend premultiplication and preserving alpha.
 Brightness may exceed one, which a byte tint alone cannot express. Saturation uses

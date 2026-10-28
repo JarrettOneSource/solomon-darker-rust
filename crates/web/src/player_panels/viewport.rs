@@ -210,6 +210,7 @@ impl PlayerPanels {
             Some(PlayerPanel::Skills) => &[
                 ("view-previous", "◀"),
                 ("view-next", "▶"),
+                ("boasts", if self.boasts_open { "Skills" } else { "Boasts" }),
                 ("inventory", "Inventory"),
                 ("close", "Done"),
             ],

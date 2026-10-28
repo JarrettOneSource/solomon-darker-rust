@@ -68,6 +68,24 @@ impl PlayerPanels {
             tint: 0x808080,
             ..NativeUiTextSpec::new(NativeUiFontName::Menu, "SKILLS", 800.0, 60.0)
         });
+        if !self.compact {
+            c.native_button(
+                &self.ui,
+                "boasts",
+                if self.boasts_open { "Skills" } else { "Boasts" },
+                HudRect::new(690.0, 85.0, 220.0, 50.0),
+            )?;
+        }
+        if self.boasts_open {
+            self.draw_boasts(c, s)?;
+            c.semantic(
+                "panel:surface:skills",
+                "Boasts",
+                "dialog",
+                HudRect::new(0.0, 0.0, 1600.0, 900.0),
+            );
+            return Ok(());
+        }
         let coarse = crate::platform::coarse_pointer();
         for (line, y) in [
             (

@@ -90,6 +90,7 @@ pub struct Hud {
     mobile_layout: MobileUiLayoutState,
     mod_belt_icons: [Option<Vec<crate::ui::mod_icon::ModIconLayer>>; 8],
     quickbar: [Option<quickbar::QuickbarSlot>; 8],
+    regenerate_active: bool,
     bursts: RefCell<Vec<(usize, crate::ui::belt_pull_off::BeltPullOffBurst)>>,
     now: f64,
     bank: usize,
@@ -128,6 +129,7 @@ impl Hud {
             mobile_layout: MobileUiLayoutState::default(),
             mod_belt_icons: std::array::from_fn(|_| None),
             quickbar: std::array::from_fn(|_| None),
+            regenerate_active: false,
             bursts: RefCell::new(Vec::new()),
             now: 0.0,
             bank,
@@ -631,6 +633,30 @@ impl Hud {
                         },
                     )?;
                 }
+                if self.regenerate_active {
+                    let clip = egui::Rect::from_min_size(
+                        fill.min,
+                        egui::vec2(fill.width() * health.fill_progress as f32, fill.height()),
+                    );
+                    let alpha = 0.3 + 0.2 * (self.now / 250.0).sin() as f32;
+                    self.ui.paint_strip_clipped(
+                        &rotated,
+                        p,
+                        52,
+                        fill,
+                        clip,
+                        egui::Color32::WHITE.gamma_multiply(alpha),
+                    )?;
+                    let transform =
+                        frame.ctx.layer_transform_to_global(p.layer_id()).unwrap_or_default();
+                    frame.record_rect(
+                        "hud:regenerate",
+                        "Regenerate active",
+                        "status",
+                        transform * rotated_bounds(fill, center, rotation),
+                        false,
+                    );
+                }
             } else {
                 let clip = egui::Rect::from_min_size(
                     fill.min,
@@ -652,7 +678,11 @@ impl Hud {
             let transform = frame.ctx.layer_transform_to_global(p.layer_id()).unwrap_or_default();
             frame.record_rect(
                 id,
-                label,
+                if health_meter && self.regenerate_active {
+                    "Health, Regenerate active"
+                } else {
+                    label
+                },
                 "meter",
                 transform * rotated_bounds(r, center, rotation),
                 false,
