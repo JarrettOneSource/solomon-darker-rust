@@ -7,18 +7,20 @@ import runpy
 import subprocess
 
 
-PACKAGE_REVISION = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+PACKAGE_REVISION = "b922d2bb281445edeb59d0aec7fed65c678f0a39"
 CANDIDATE_REVISION = "3625b85904af56526e3ba18c3f95485e49347d0b"
 evidence = Path("reports/desktop-smoke")
 evidence.mkdir(parents=True, exist_ok=True)
-archive = Path("dist-desktop/Solomon-Darker-darwin-x64.zip")
+archive = Path("diagnostic-package/Solomon-Darker-darwin-x64.zip")
 expected, filename = Path(str(archive) + ".sha256").read_text().split()
 assert filename == archive.name
 with archive.open("rb") as stream:
     archive_hash = hashlib.file_digest(stream, "sha256").hexdigest()
-assert archive_hash == expected, "built package checksum differs"
+assert archive_hash == expected, "downloaded package checksum differs"
+assert archive_hash == "3389d7c10cc03fafe448b119cc21ececd4f26911522f29e886a1b068edad2616"
 inspector = runpy.run_path("scripts/verify-desktop-archive.py")
 inspection = inspector["verify_archive"](archive, Path.cwd(), PACKAGE_REVISION)
+assert inspection["nativeSha256"] == "235d5a9a9fd36a678c2ab30c6de2ecb25736fddcc159baf5cc6cb6b890ab94d3"
 subprocess.run(["ditto", "-x", "-k", str(archive), "dist-desktop"], check=True)
 package = Path("dist-desktop/Solomon Darker-darwin-x64")
 manifest = json.loads((package / "desktop-package-manifest.json").read_text())
@@ -142,8 +144,41 @@ replacement = '''    check_offline()
     # Match the established software-renderer peer journey's hold duration.
     contention["inputHoldSeconds"] = 3
     contention["inputStartedAt"] = time.monotonic()
-    app.hold("d", contention["inputHoldSeconds"])
-    contention["inputFinishedAt"] = time.monotonic()
+    input_timing = {
+        "clockReference": {"monotonicSeconds": time.monotonic(), "unixSeconds": time.time()},
+        "activationStartedAt": time.monotonic(),
+    }
+    contention["inputTiming"] = input_timing
+    app.activate()
+    input_timing["activationReturnedAt"] = time.monotonic()
+    sample = EVIDENCE / "contention-input.sample.txt"
+    with (EVIDENCE / "contention-input-sampler.log").open("w") as sample_output:
+        input_timing["samplerStartedAt"] = time.monotonic()
+        sampler = subprocess.Popen(
+            ["sample", str(app.process.pid), "3", "5", "-file", str(sample)],
+            stdout=sample_output, stderr=subprocess.STDOUT,
+        )
+        try:
+            input_timing["keyDownStartedAt"] = time.monotonic()
+            INPUT.key_down("d")
+            input_timing["keyDownReturnedAt"] = time.monotonic()
+            try:
+                time.sleep(contention["inputHoldSeconds"])
+            finally:
+                input_timing["keyUpStartedAt"] = time.monotonic()
+                INPUT.key_up("d")
+                input_timing["keyUpReturnedAt"] = time.monotonic()
+            contention["inputFinishedAt"] = time.monotonic()
+        finally:
+            # The held key is released before waiting for collection/symbolication.
+            try:
+                input_timing["sampleExitCode"] = sampler.wait(timeout=30)
+                assert input_timing["sampleExitCode"] == 0, input_timing
+            finally:
+                if sampler.poll() is None:
+                    sampler.kill()
+                    sampler.wait(timeout=5)
+                input_timing["samplerFinishedAt"] = time.monotonic()
     app.capture("contention-continued")
     continued_save = app.close()[1]
     contention["inputTrace"] = [line for line in app.log_path.read_text().splitlines()
@@ -184,13 +219,16 @@ paths = [driver, Path(__file__), Path("crates/web/src/network/native.rs"),
 (evidence / "source.json").write_text(json.dumps({
     "driverRevision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
     "packageRevision": PACKAGE_REVISION,
+    "packageRun": 40631239036,
+    "packageArtifact": "unqualified-native-admission-input-package",
     "candidateRevision": CANDIDATE_REVISION,
     "archiveSha256": archive_hash,
     "archiveInspection": inspection,
     "files": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths},
     "executedDriverSha256": hashlib.sha256(instrumented.encode()).hexdigest(),
     "scope": "Ordinary offline actions, one 6.5-second preferences-lock hold, then normal recovery. "
-             "Candidate runtime with private admission and input traces; admission must wait for durable credentials, "
+             "Exact retained package with private admission/input traces; the driver separately timestamps activation "
+             "and key calls and samples the app during the unchanged three-second hold. Admission must wait for durable credentials, "
              "then allow movement, save and fresh continuation. The original stall source remains unknown.",
 }, indent=2) + "\n")
 exec(compile(instrumented, str(driver), "exec"), {"__name__": "__main__", "__file__": str(driver)})
