@@ -514,6 +514,15 @@ event loop runs the shared save coordinator and replies to Cocoa. Keep playing
 cancels the pending Cocoa termination. GPU owners and cancelled tasks retire with
 their window context current.
 
+The macOS setup removes Winit's unused Services submenu by its registered menu
+object, preserving About, Hide and Quit. The game exposes no Cocoa Services
+integration. An [Intel main-thread sample](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40637948757)
+captured Services population waiting synchronously for Shortcuts over XPC during
+a movement-key hold; the queued press and release then reached gameplay together.
+Unregistering and detaching that submenu keeps ordinary input independent of the
+external service. Gameplay sampling and the save-before-Quit path retain their
+existing behavior.
+
 ## Native Opus decoding
 
 Browser audio accepts Ogg Opus in custom content. Rodio 0.22.2's installed

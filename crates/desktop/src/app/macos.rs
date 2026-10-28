@@ -1,6 +1,6 @@
-//! Defer Cocoa Quit (including Dock/menu/Cmd-Q) until the shared save owner decides.
-//! Winit 0.30 owns its delegate and requires that concrete class; retain that owner
-//! and supply only its absent optional applicationShouldTerminate method.
+//! Configure the native app menu and defer Cocoa Quit until the shared save owner decides.
+//! Winit 0.30 retains its delegate; supply only its absent optional
+//! applicationShouldTerminate method and remove the unused Services submenu.
 
 use objc2::{
     MainThreadMarker,
@@ -31,6 +31,22 @@ pub(super) fn install() -> Result<(), String> {
     let main =
         MainThreadMarker::new().ok_or("The macOS application must run on its main thread")?;
     let application = NSApplication::sharedApplication(main);
+    // Winit attaches Services under the application menu. This game has no
+    // Services integration, and macOS can synchronously query Shortcuts while
+    // routing ordinary keys through that menu, stalling gameplay input.
+    if let Some(services) = application.servicesMenu() {
+        application.setServicesMenu(None);
+        if let Some(menu_bar) = application.mainMenu() {
+            for item in menu_bar.itemArray() {
+                if let Some(menu) = item.submenu() {
+                    let index = menu.indexOfItemWithSubmenu(Some(&services));
+                    if index >= 0 {
+                        menu.removeItemAtIndex(index);
+                    }
+                }
+            }
+        }
+    }
     let delegate = application.delegate().ok_or("The native window delegate is missing")?;
     let object: &AnyObject = (*delegate).as_ref();
     let class = object.class();
