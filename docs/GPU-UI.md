@@ -36,7 +36,7 @@ and an active drag retains its owner through release or cancellation outside it.
 
 ## Materials and resource ownership
 
-The health meter adds a pulsing green fill while the accepted player has Regenerate
+The health meter adds a pulsing health highlight while the accepted player has Regenerate
 active. The pulse clips to the current health fill and follows the meter's scale and
 rotation. The Skills book's Boasts view shows the selected stock or authored Boast,
 its statement, and its accepted progress: gold for active, green for achieved, red

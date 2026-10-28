@@ -44,6 +44,14 @@ and learned bots resolve authored Boasts through the current world's prepared ru
 [GPU UI](GPU-UI.md) defines layer, input, text, and accessibility contracts.
 [Client presentation](CLIENT-PRESENTATION.md) defines display ownership.
 
+Air and Blizzard/channel views share deferred split-beam emission. Native
+`ZAnimSplit::Draw 0x005E0230` selects 25-unit bands with Enhanced Effects and
+50-unit bands without it; Flame uses the same selector. Air retains its existing
+spell quality flag, and channels use the existing display input. Invisible owners,
+band-bottom painter rows, mesh/branch order, and the 10,000-unit horizontal clip
+remain unchanged. The split regressions compose emitted clipped geometry with a
+crossing scenery row, preserving the native interleaving under both settings.
+
 State fixtures and composed journeys answer different questions. Enemy, primary,
 and secondary programs continue their own clocks, pools, painter identities, and
 random streams across complete lifetimes. Quality settings, departed owners,

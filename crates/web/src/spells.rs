@@ -1,14 +1,15 @@
 //! Stock primary spell sprites and lightning meshes. The simulation supplies the
 //! native draw plans and painter registrations; this view owns only GPU resources.
 
-use solomon_sim::float;
+mod split;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use solomon_assets::{SpriteRecord, parse_bundle};
 use solomon_sim::Vec2;
 use solomon_sim::element_vfx::{ElementVfxBlend, ElementVfxDraw};
 use solomon_sim::enemies::puppet_hits::EnemyPuppetHit;
-use solomon_sim::float::{fround, hypot};
+use solomon_sim::float::{self, fround, hypot};
 use solomon_sim::harden_effects::native_harden_effect_plan;
 use solomon_sim::hub::painter::PainterLayer;
 use solomon_sim::painter::PainterRegistration;
@@ -40,6 +41,8 @@ use crate::native_mesh::{
 use crate::presentation::PresentationClocks;
 use solomon_graphics::assets;
 use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
+
+use split::append_split_bands;
 
 pub struct SpellPainter {
     pub layer: PainterLayer,
@@ -671,7 +674,7 @@ impl SpellView {
         }
         if split {
             // These channel meshes retain their birth geometry. Their invisible
-            // owner admits the same 25-unit painter bands as NativeZAnimSplit.
+            // owner admits the native setting's 25/50-unit ZAnimSplit bands.
             let mut minimum = f64::INFINITY;
             let mut maximum = f64::NEG_INFINITY;
             for mesh in &plan.meshes {
@@ -680,45 +683,27 @@ impl SpellView {
                     maximum = maximum.max(point.y);
                 }
             }
-            let mut owner = registration.layer(plan.position.y + minimum, 0.0);
-            owner.visible = false;
-            self.roots.push(SpellRoot {
-                painter: SpellPainter {
-                    layer: owner,
-                    region_light_point: plan.region_light_point,
-                    overlay_owner_id: Some(overlay_owner_id.clone()),
-                    view_id: 0,
-                    view_creation_order: 0,
+            append_split_bands(
+                &mut self.roots,
+                registration,
+                plan.position,
+                [minimum, maximum],
+                enhanced_effects,
+                plan.region_light_point,
+                Some(overlay_owner_id),
+                |top, bottom| {
+                    plan.meshes
+                        .iter()
+                        .map(|mesh| SpellDraw::Mesh {
+                            record: mesh.record,
+                            triangles: clip_native_mesh(&mesh.mesh, plan.position, top, bottom),
+                            alpha: mesh.alpha,
+                            tint: mesh.tint,
+                            uv_space: mesh.uv_space,
+                        })
+                        .collect()
                 },
-                draws: Vec::new(),
-            });
-            let count = ((maximum - minimum) / 25.0).ceil() as usize;
-            for band in 0..count {
-                let top = minimum + band as f64 * 25.0;
-                let bottom = top + 25.0;
-                let mut draws = Vec::new();
-                for mesh in &plan.meshes {
-                    draws.push(SpellDraw::Mesh {
-                        record: mesh.record,
-                        triangles: clip_native_mesh(&mesh.mesh, plan.position, top, bottom),
-                        alpha: mesh.alpha,
-                        tint: mesh.tint,
-                        uv_space: mesh.uv_space,
-                    });
-                }
-                let mut layer = registration.layer(plan.position.y + bottom, 0.0);
-                layer.is_insertion = true;
-                self.roots.push(SpellRoot {
-                    painter: SpellPainter {
-                        layer,
-                        region_light_point: plan.region_light_point,
-                        overlay_owner_id: None,
-                        view_id: 0,
-                        view_creation_order: 0,
-                    },
-                    draws,
-                });
-            }
+            );
             return;
         }
         let mut draws = Vec::new();
@@ -830,54 +815,42 @@ impl SpellView {
                     }
                 }
             }
-            let count = ((maximum - minimum) / 25.0).ceil() as usize;
-            let mut owner = registrations[0].layer(spell.origin.y + minimum, 0.0);
-            owner.visible = false;
-            self.roots.push(SpellRoot {
-                painter: SpellPainter {
-                    layer: owner,
-                    region_light_point: None,
-                    overlay_owner_id: None,
-                    view_id: 0,
-                    view_creation_order: 0,
-                },
-                draws: Vec::new(),
-            });
-            for band in 0..count {
-                let top = minimum + band as f64 * 25.0;
-                let bottom = top + 25.0;
-                let mut draws = Vec::new();
-                for layer in &layers {
-                    draws.push(SpellDraw::Mesh {
-                        record: layer.texture_record,
-                        triangles: clip_native_mesh(&layer.mesh, spell.origin, top, bottom),
-                        alpha: layer.alpha,
-                        tint: layer.tint,
-                        uv_space: NativeWeldMeshUvSpace::Record,
-                    });
-                    if let Some(branch) = &layer.branch {
+            append_split_bands(
+                &mut self.roots,
+                registrations[0],
+                spell.origin,
+                [minimum, maximum],
+                spell.enhanced_effects,
+                None,
+                None,
+                |top, bottom| {
+                    let mut draws = Vec::new();
+                    for layer in &layers {
                         draws.push(SpellDraw::Mesh {
-                            record: branch.texture_record,
-                            triangles: clip_native_mesh(&branch.mesh, spell.origin, top, bottom),
+                            record: layer.texture_record,
+                            triangles: clip_native_mesh(&layer.mesh, spell.origin, top, bottom),
                             alpha: layer.alpha,
                             tint: layer.tint,
                             uv_space: NativeWeldMeshUvSpace::Record,
                         });
+                        if let Some(branch) = &layer.branch {
+                            draws.push(SpellDraw::Mesh {
+                                record: branch.texture_record,
+                                triangles: clip_native_mesh(
+                                    &branch.mesh,
+                                    spell.origin,
+                                    top,
+                                    bottom,
+                                ),
+                                alpha: layer.alpha,
+                                tint: layer.tint,
+                                uv_space: NativeWeldMeshUvSpace::Record,
+                            });
+                        }
                     }
-                }
-                let mut layer = registrations[0].layer(spell.origin.y + bottom, 0.0);
-                layer.is_insertion = true;
-                self.roots.push(SpellRoot {
-                    painter: SpellPainter {
-                        layer,
-                        region_light_point: None,
-                        overlay_owner_id: None,
-                        view_id: 0,
-                        view_creation_order: 0,
-                    },
-                    draws,
-                });
-            }
+                    draws
+                },
+            );
         }
         if let Some(corona) = plan.source_corona {
             let mut source = plan_at(Vec2::new(

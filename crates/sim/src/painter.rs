@@ -7,6 +7,13 @@ use crate::hub::painter::{PainterLane, PainterLayer};
 
 pub mod overlays;
 
+/// `ZAnimSplit::Draw 0x005E0230` selects 25-unit bands from `0x007DE968`
+/// with Enhanced Effects, or 50-unit bands from `0x00784CF8` without it.
+#[must_use]
+pub const fn native_zanim_split_band_height(enhanced_effects: bool) -> f64 {
+    if enhanced_effects { 25.0 } else { 50.0 }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum WorldManagerLane {
