@@ -25,6 +25,10 @@ in [Reference data](REFERENCE-DATA.md).
 | Learned bots | `src/ml_bot/` | Retained-model inference, observer, and action regressions |
 | Authored definitions, Lua, and mods | `src/modding/`, `solomon-modding` | Compiler/runtime fixtures, admitted content tests, and CLI checks |
 
+Random-choice Boasts assign a choice after each new offer is constructed, including
+every pending level from one experience grant. Native host commands, Lua controllers,
+and learned bots resolve authored Boasts through the current world's prepared runtime.
+
 ## Presentation and interaction
 
 | Behavior | Owner | Verification |

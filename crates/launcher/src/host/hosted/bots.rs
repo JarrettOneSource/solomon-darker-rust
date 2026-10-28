@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use solomon_modding::console::{WebLuaBotConfig, WebLuaBotResult};
+use solomon_protocol::GameCommand;
 use solomon_sim::game_run::GameRunPhase;
 use solomon_sim::ml_bot::{
     MlBotEntranceNavigationError, MlBotHostController, MlBotHostControllerContext,
@@ -319,11 +320,26 @@ impl HostedGameHost {
                     MlBotHostIntent::SelectSkill { choice_index, offer_sequence, skill_id } => {
                         self.bots.rows[index].active_input = GameSessionInput::default();
                         let before_barrier = state.level_up_barrier.is_some();
-                        if state.choose_skill(
-                            &id,
-                            PlayerSkillChoice { choice_index, offer_sequence, skill_id },
-                        ) {
-                            if before_barrier && state.level_up_barrier.is_none() {
+                        if self
+                            .apply_prepared_session_command(
+                                &id,
+                                GameCommand::ChooseSkill {
+                                    choice: PlayerSkillChoice {
+                                        choice_index,
+                                        offer_sequence,
+                                        skill_id,
+                                    },
+                                },
+                            )
+                            .map_err(|(_, reason)| reason)?
+                            .accepted
+                        {
+                            if before_barrier
+                                && self
+                                    .worlds
+                                    .state_for_player(&id)
+                                    .is_some_and(|state| state.level_up_barrier.is_none())
+                            {
                                 let party = self.party_id_for_player(&id).map(str::to_owned);
                                 if let Some(party) = party {
                                     self.neutralize_party(&party);

@@ -134,6 +134,7 @@ fn lua_controller_admission_leases_expiry_observation_and_skill_choices_match_so
                 &mut game,
                 &fields,
                 context.as_ref().unwrap_or(&default_context),
+                None,
             )
             .map(|()| Value::Null),
             Input::Uses { value } => Ok(json!(uses_player_control_rule(&value))),

@@ -12,6 +12,7 @@ use solomon_sim::game_run::GameRunPhase;
 use solomon_sim::loot::{NativeLootDropKind, NativeOrbKind};
 use solomon_sim::ml_bot::{BoneyardEntranceNavigator, MlBotEntranceNavigationError};
 use solomon_sim::modding::definition::WebLuaScopeKind;
+use solomon_sim::modding::extensions::GameSimulationExtensions;
 use solomon_sim::modding::runtime::ModIntent;
 use solomon_sim::modding::{LuaObject, LuaValue};
 use solomon_sim::profile::{NATIVE_SKILL_CATALOG, PlayerSkillChoice, native_skill_category};
@@ -161,6 +162,7 @@ pub fn select_mod_player_skill(
     game: &mut GameSession,
     fields: &LuaObject,
     context: &ModIntentExecutionContext,
+    extensions: Option<&dyn GameSimulationExtensions>,
 ) -> Result<(), String> {
     only_fields(fields, &["choice_index", "offer_sequence", "skill_id"])?;
     let id = control_participant(game, context)?.to_owned();
@@ -171,7 +173,7 @@ pub fn select_mod_player_skill(
         skill_id: usize::try_from(control_integer(fields.get("skill_id"), "skill_id")?)
             .map_err(|_| "Lua skill choice does not match the current player offer")?,
     };
-    if !game.choose_skill(&id, choice) {
+    if !game.choose_skill_with_extensions(&id, choice, extensions) {
         return Err("Lua skill choice does not match the current player offer".into());
     }
     Ok(())
