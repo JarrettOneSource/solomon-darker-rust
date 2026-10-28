@@ -401,6 +401,14 @@ system Lua installation. Execution hooks, memory limits, allowed globals, and
 accepted includes bound the VM. Filesystem, process, and module loading are not
 exposed. VM randomness does not consume gameplay RNG.
 
+Lua player input addresses all 24 belt slots, using the same `PLAYER_BELT_SLOT_COUNT`
+as ordinary network input. Controller observations can expose a learned ability in
+any bank. Restricting admission to the first bank rejected valid casts and rolled
+back the controller's entire transaction, including status refreshes; a protected
+endurance pilot consequently died at wave 28. The frozen controller recording's
+old slot-8 rejection is exercised at the current invalid boundary, slot 24, while
+an independent regression accepts observed slots across all three banks.
+
 Console API values use the same Rust-to-Lua conversion as event payloads:
 missing optional values become Lua `nil`, including fields in frame snapshots.
 The retired JavaScript bridge's null exception is not a supported contract; it
