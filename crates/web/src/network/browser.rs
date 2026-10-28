@@ -25,7 +25,7 @@ struct BrowserConnection {
 impl BrowserConnection {
     fn send(&self, message: &ClientMessage) -> Result<(), String> {
         if self.socket.ready_state() != WebSocket::OPEN {
-            return Err("The game host is not connected".into());
+            return Err(self.core.delivery.lock().unwrap().disconnected_reason());
         }
         if self.socket.buffered_amount() as usize > MAX_PENDING_SEND_BYTES {
             return Err("The game connection is not accepting input".into());

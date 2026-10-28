@@ -222,6 +222,12 @@ readiness, pause/resume holds, and durable save receipts. The session owns rules
 A checkpoint writer performs encoding and atomic synced replacement away from
 the tick deadline. Welcome and SaveCommitted wait for their required disk writes.
 
+The client Welcome receive deadline ends when the full message has been decoded.
+Local validation and durable reconnect-credential storage still precede game
+acceptance and the final chunk acknowledgement. A delayed local operation cannot
+expire a completed network transfer. Connection failures remain available after
+event polling, so rejected commands report the original failure.
+
 `GameSnapshot` borrows state for serialization; `GameCheckpoint` owns state for
 restoration. They retain the same serialized shape. Snapshot application validates
 the complete candidate before mutating the session and reuses immutable data when

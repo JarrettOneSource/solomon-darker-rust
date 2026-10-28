@@ -14,6 +14,13 @@ pub(super) struct Delivery {
     pub poll: NetworkPoll,
     pub open: bool,
     pub ping_ms: Option<f64>,
+    failure: Option<String>,
+}
+
+impl Delivery {
+    pub fn disconnected_reason(&self) -> String {
+        self.failure.clone().unwrap_or_else(|| "The game host is not connected".into())
+    }
 }
 
 pub(super) type SharedDelivery = Arc<Mutex<Delivery>>;
@@ -82,6 +89,7 @@ impl ConnectionCore {
         let mut delivery = self.delivery.lock().unwrap();
         delivery.open = false;
         delivery.poll.snapshot = None;
+        delivery.failure = Some(reason.clone());
         delivery.poll.events.push(NetworkEvent::Failed(reason));
     }
 
@@ -117,7 +125,10 @@ impl ConnectionCore {
             self.welcome_deadline = Some(welcome_expires(now));
         }
         if let Some(message) = reception.message {
-            if matches!(&message, ServerMessage::Welcome { .. }) {
+            if matches!(message, ServerMessage::Welcome { .. }) {
+                // Receipt is complete; local validation and durable credential storage
+                // still precede acceptance and the final acknowledgement.
+                self.welcome_deadline = None;
                 eprintln!(
                     "ADMISSION_DIAGNOSTIC {:.3} {:p} welcome decoded deadline={:?}",
                     crate::platform::monotonic_ms(),
@@ -160,7 +171,6 @@ impl ConnectionCore {
             Arc::as_ptr(&self.delivery),
             self.welcome_deadline,
         );
-        self.welcome_deadline = None;
         self.receiver
             .take_welcome_acknowledgement()
             .map(|next_offset| ClientMessage::WelcomeChunkAck { next_offset })
@@ -245,12 +255,11 @@ mod tests {
                 for (index, chunk) in data.chunks(size).enumerate() {
                     let offset = index * size;
                     let next_offset = offset + chunk.len();
-                    let message: ServerMessage<Box<GameCheckpoint>> =
-                        ServerMessage::WelcomeChunk {
-                            data: chunk.to_vec(),
-                            offset,
-                            total_length: data.len(),
-                        };
+                    let message: ServerMessage<Box<GameCheckpoint>> = ServerMessage::WelcomeChunk {
+                        data: chunk.to_vec(),
+                        offset,
+                        total_length: data.len(),
+                    };
                     let reply =
                         core.receive(&serde_json::to_string(&message).unwrap(), 4_000.0).unwrap();
                     if next_offset < data.len() {
@@ -288,7 +297,7 @@ mod tests {
     }
 
     #[test]
-    fn welcome_progress_extends_the_deadline_until_game_acceptance() {
+    fn incomplete_welcome_progress_extends_but_cannot_cancel_the_receive_deadline() {
         let delivery = Arc::new(Mutex::new(Delivery::default()));
         let mut core = ConnectionCore::new(delivery, true, 100.0);
         assert_eq!(core.next_deadline(), Some(5_100.0));
@@ -302,7 +311,7 @@ mod tests {
         assert!(core.tick(8_999.0).is_ok());
         assert!(core.tick(9_000.0).unwrap_err().contains("timed out"));
         core.accept_welcome();
-        assert!(core.next_deadline().is_none());
+        assert_eq!(core.next_deadline(), Some(9_000.0));
     }
 
     #[test]

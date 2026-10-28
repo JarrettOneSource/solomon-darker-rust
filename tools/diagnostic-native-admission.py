@@ -1,4 +1,4 @@
-"""Private diagnostic: hold the real preferences lock after socket startup."""
+"""Private candidate proof: complete admission after real preferences contention."""
 
 import hashlib
 import json
@@ -7,11 +7,11 @@ import runpy
 import subprocess
 
 
-PACKAGE_REVISION = "4d8069218db920701003559771177466448106fd"
-EXECUTABLE_SHA256 = "328d42ee2e59d87a92915e7b51714b48faa55da11db65a18b5a2ed4b19acbf58"
+PACKAGE_REVISION = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+CANDIDATE_REVISION = "3625b85904af56526e3ba18c3f95485e49347d0b"
 evidence = Path("reports/desktop-smoke")
 evidence.mkdir(parents=True, exist_ok=True)
-archive = Path("diagnostic-package/Solomon-Darker-darwin-x64.zip")
+archive = Path("dist-desktop/Solomon-Darker-darwin-x64.zip")
 expected, filename = Path(str(archive) + ".sha256").read_text().split()
 assert filename == archive.name
 with archive.open("rb") as stream:
@@ -19,8 +19,6 @@ with archive.open("rb") as stream:
 assert archive_hash == expected, "downloaded package checksum differs"
 inspector = runpy.run_path("scripts/verify-desktop-archive.py")
 inspection = inspector["verify_archive"](archive, Path.cwd(), PACKAGE_REVISION)
-assert inspection["nativeSha256"] == EXECUTABLE_SHA256
-subprocess.run(["ditto", "-x", "-k", str(archive), "dist-desktop"], check=True)
 
 driver = Path("tools/smoke-desktop-runtime.py")
 source = driver.read_text()
@@ -83,15 +81,16 @@ replacement = '''    check_offline()
     assert "injectionError" not in contention, contention
     contention["heldSeconds"] = contention["releasedAt"] - contention["acquiredAt"]
     assert contention["heldSeconds"] >= 6.5, contention
-    wait(lambda: "rejected command=accept_welcome" in app.log_path.read_text(),
+    retry_ui(app.control("hud:inventory").wait_enabled, timeout=120)
+    retry_ui(app.control("match-loading").wait_detached, timeout=120)
+    wait(lambda: " welcome accepted " in app.log_path.read_text(),
          "the post-contention admission result", timeout=20)
     trace = app.log_path.read_text()
     markers = {
         "decoded": " welcome decoded ",
         "remembering": " Game remembering resume",
-        "failed": " fail reason=The game server handshake timed out.",
         "remembered": " Game remembered resume",
-        "rejected": " rejected command=accept_welcome",
+        "accepted": " welcome accepted ",
     }
     timings = {}
     for name, marker in markers.items():
@@ -100,16 +99,23 @@ replacement = '''    check_offline()
         assert len(matches) == 1, (name, matches)
         timings[name] = float(matches[0].split()[1])
     contention["traceMilliseconds"] = timings
-    assert (timings["decoded"] <= timings["remembering"] < timings["failed"]
-            < timings["remembered"] <= timings["rejected"]), timings
+    assert (timings["decoded"] <= timings["remembering"]
+            < timings["remembered"] <= timings["accepted"]), timings
+    assert timings["remembered"] - timings["decoded"] > 5000, timings
     assert "Game remembered resume" not in contention["logBeforeRelease"]
-    assert "fail reason=The game server handshake timed out." in contention["logBeforeRelease"]
-    retry_ui(app.app.locator("group[name='The game host is not connected']").wait_attached,
-             timeout=30)
-    app.capture("contention-failure")
-    failed_save = app.close()[1]
-    assert identity(failed_save) == identity(before), "failed admission changed the wizard"
-    contention["result"] = "local persistence stall reproduced timeout and masked failure"
+    assert " fail reason=" not in trace, trace
+    assert " rejected " not in trace, trace
+    assert "handshake timed out" not in trace, trace
+    assert "remember_resume" in (EVIDENCE / "contention-blocked.sample.txt").read_text()
+    app.hold("d", 0.6)
+    app.capture("contention-continued")
+    continued_save = app.close()[1]
+    assert identity(continued_save) == identity(before), "delayed admission changed the wizard"
+    before_position = player(before)["locomotions"]["position"]
+    continued_position = player(continued_save)["locomotions"]["position"]
+    assert continued_position["x"] > before_position["x"] + 10, (before_position, continued_position)
+    contention["result"] = "admitted after delayed durable storage; movement and save succeeded"
+    contention["continuedPosition"] = continued_position
 
     recovered = Application("recovered", profile)
     recovered.click("launcher/solo")
@@ -129,13 +135,13 @@ paths = [driver, Path(__file__), Path("crates/web/src/network/native.rs"),
 (evidence / "source.json").write_text(json.dumps({
     "driverRevision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
     "packageRevision": PACKAGE_REVISION,
-    "packageSourceRun": 40527892687,
+    "candidateRevision": CANDIDATE_REVISION,
     "archiveSha256": archive_hash,
     "archiveInspection": inspection,
     "files": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths},
     "executedDriverSha256": hashlib.sha256(instrumented.encode()).hexdigest(),
     "scope": "Ordinary offline actions, one 6.5-second preferences-lock hold, then normal recovery. "
-             "Same reviewed executable and unchanged transport deadlines; controlled fault evidence "
-             "does not establish the cause of the original intermittent failure.",
+             "Candidate runtime with private traces; admission must wait for durable credentials, "
+             "then allow movement, save and fresh continuation. The original stall source remains unknown.",
 }, indent=2) + "\n")
 exec(compile(instrumented, str(driver), "exec"), {"__name__": "__main__", "__file__": str(driver)})

@@ -1,5 +1,5 @@
 {
-  "name": "Prove completed-Welcome and failure-reason regressions",
+  "name": "Verify Welcome admission fix and preferences contention",
   "on": {
     "push": {
       "branches": [
@@ -17,6 +17,92 @@
     "RUST_BACKTRACE": "1"
   },
   "jobs": {
+    "native-admission": {
+      "runs-on": "macos-15-intel",
+      "timeout-minutes": 90,
+      "steps": [
+        {
+          "uses": "actions/checkout@v6"
+        },
+        {
+          "uses": "actions/setup-python@v6",
+          "with": {
+            "python-version": "3.12"
+          }
+        },
+        {
+          "name": "Resolve accessibility interpreter",
+          "run": "python3 -c 'import os,sys; print(\"TCC_CLIENT=\" + os.path.realpath(sys.executable))' >> \"$GITHUB_ENV\""
+        },
+        {
+          "uses": "xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d",
+          "with": {
+            "macos-tcc-client": "${{ env.TCC_CLIENT }}"
+          }
+        },
+        {
+          "run": "python3 -m pip install -r tools/desktop-smoke-requirements.txt"
+        },
+        {
+          "uses": "actions/setup-node@v6",
+          "with": {
+            "node-version-file": ".node-version",
+            "cache": "npm"
+          }
+        },
+        {
+          "run": "npm install --global npm@10.9.2"
+        },
+        {
+          "run": "npm ci --no-audit --no-fund"
+        },
+        {
+          "run": "rustup show"
+        },
+        {
+          "run": "python3 scripts/verify-client-assets.py\npython3 -m py_compile tools/diagnostic-native-admission.py"
+        },
+        {
+          "uses": "actions/cache/restore@v4",
+          "with": {
+            "path": "~/.cargo/registry\n~/.cargo/git\ntarget",
+            "key": "native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}",
+            "restore-keys": "native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-\nnative-${{ runner.os }}-${{ runner.arch }}-"
+          }
+        },
+        {
+          "name": "Build the traced native app",
+          "run": "npm run package:desktop -- --platform darwin --arch x64 --release-repository \"$GITHUB_REPOSITORY\""
+        },
+        {
+          "name": "Archive the diagnostic package",
+          "run": "node tools/archive-desktop.mjs"
+        },
+        {
+          "name": "Verify delayed admission, movement, saving and fresh continuation",
+          "timeout-minutes": 40,
+          "run": "python3 tools/diagnostic-native-admission.py"
+        },
+        {
+          "uses": "actions/upload-artifact@v4",
+          "if": "always()",
+          "with": {
+            "name": "native-admission-contention-fixed",
+            "path": "reports/desktop-smoke",
+            "if-no-files-found": "warn"
+          }
+        },
+        {
+          "uses": "actions/upload-artifact@v4",
+          "if": "always()",
+          "with": {
+            "name": "unqualified-native-admission-package",
+            "path": "dist-desktop/*.zip\ndist-desktop/*.sha256\ndist-desktop/desktop-release.json",
+            "if-no-files-found": "warn"
+          }
+        }
+      ]
+    },
     "admission-regressions": {
       "runs-on": "ubuntu-latest",
       "timeout-minutes": 35,
@@ -27,7 +113,10 @@
       },
       "steps": [
         {
-          "uses": "actions/checkout@v6"
+          "uses": "actions/checkout@v6",
+          "with": {
+            "ref": "3625b85904af56526e3ba18c3f95485e49347d0b"
+          }
         },
         {
           "name": "Install the pinned toolchain",
@@ -46,15 +135,15 @@
           }
         },
         {
-          "name": "Verify both regressions fail against the unchanged runtime",
-          "run": "python3 - <<'PROBE'\nimport hashlib, json, re, subprocess\nfrom pathlib import Path\nout=Path('reports/admission-regressions')\nout.mkdir(parents=True,exist_ok=True)\npaths=['crates/web/src/network/connection.rs','crates/web/src/network/native.rs','crates/web/src/network/native/tests.rs','crates/web/src/network/browser.rs','crates/web/src/game/native.rs']\n(out/'source.json').write_text(json.dumps({'revision':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'unchangedRuntimeFrom':'23effab6b62fb292998b90ba4a26b38e83d028ba','files':{p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}},indent=2)+'\\n')\ncommand=['cargo','test','-p','solomon-web','--lib','network::','--','--nocapture']\nresult=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)\n(out/'network-tests.log').write_text(result.stdout)\nprint(result.stdout,flush=True)\nfailed=sorted(re.findall(r'^test (\\S+) \\.\\.\\. FAILED$',result.stdout,re.MULTILINE))\nexpected=sorted(['network::connection::tests::complete_welcome_waits_for_game_acceptance_without_a_receive_timeout','network::native::tests::binary_and_invalid_json_fail_once_and_close_the_socket'])\nreceipt={'command':command,'exitCode':result.returncode,'failedTests':failed,'expectedFailures':expected,'scope':'New behavior assertions against the unchanged traced runtime; no implementation fix'}\n(out/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\\n')\nassert result.returncode==101 and failed==expected,receipt\nassert 'The game server handshake timed out.' in result.stdout\nassert 'The game host is not connected' in result.stdout\nassert re.search(r'test result: FAILED\\. \\d+ passed; 2 failed; 0 ignored;',result.stdout)\nPROBE"
+          "name": "Verify the exact uninstrumented candidate network tests",
+          "run": "python3 - <<'PROBE'\nimport hashlib, json, re, subprocess\nfrom pathlib import Path\nout=Path('reports/admission-regressions-fixed'); out.mkdir(parents=True,exist_ok=True)\npaths=['crates/web/src/network/connection.rs','crates/web/src/network/native.rs','crates/web/src/network/native/tests.rs','crates/web/src/network/browser.rs','crates/web/src/game/native.rs']\n(out/'source.json').write_text(json.dumps({'revision':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'files':{p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}},indent=2)+'\\n')\ncommands=[['cargo','fmt','--all','--','--check'],['cargo','test','-p','solomon-web','--lib','--all-features','network::','--','--nocapture']]\nchecks=[]\nfor index,command in enumerate(commands):\n result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)\n (out/f'{index}-check.log').write_text(result.stdout); print(result.stdout,flush=True)\n checks.append({'command':command,'exitCode':result.returncode})\n (out/'receipt.json').write_text(json.dumps({'checks':checks},indent=2)+'\\n')\n assert result.returncode==0,checks\nassert re.search(r'test result: ok\\. 14 passed; 0 failed; 0 ignored;',result.stdout)\nPROBE"
         },
         {
           "uses": "actions/upload-artifact@v4",
           "if": "always()",
           "with": {
-            "name": "native-admission-regressions",
-            "path": "reports/admission-regressions",
+            "name": "native-admission-regressions-fixed",
+            "path": "reports/admission-regressions-fixed",
             "if-no-files-found": "warn"
           }
         }
