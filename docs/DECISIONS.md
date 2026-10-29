@@ -374,7 +374,8 @@ route; otherwise the query considers the components reachable by the start and
 requires a valid destination connector in the same component. It retains each
 endpoint's own footprint, every graph edge and collision check. It does not join
 disconnected meshes or relax spawn policy. The seeded wave-48 arena, a two-sided
-attachment case and three historically false null routes cover this correction.
+attachment case and recorded false-null queries in stock and imported scenes
+cover this correction while retaining the original recordings.
 
 Stock preparation warms hostile domains at 25/50 clearance and expanded escape
 bounds when the Default scene owns Solomon. A missing domain is built on its
