@@ -367,6 +367,15 @@ match. Other domains are prepared from the actual admitted geometry and gate sta
 A direct route avoids unnecessary graph construction. Restored data gets its own
 cache lifetime, so process-local cache identity never becomes a save contract.
 
+Endpoint attachment is a paired connectivity query. The nearest triangle can
+belong to a small isolated component even when the same endpoint has a clear
+connector to the main component. Connected first choices keep their original
+route; otherwise the query considers the components reachable by the start and
+requires a valid destination connector in the same component. It retains each
+endpoint's own footprint, every graph edge and collision check. It does not join
+disconnected meshes or relax spawn policy. The seeded wave-48 arena, a two-sided
+attachment case and three historically false null routes cover this correction.
+
 Stock preparation warms hostile domains at 25/50 clearance and expanded escape
 bounds when the Default scene owns Solomon. A missing domain is built on its
 first blocked query using the then-current collision, including moving gates,
