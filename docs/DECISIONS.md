@@ -356,6 +356,18 @@ an active game still observes the save and transport-retirement barrier.
 
 ## Navigation and painter registration
 
+Pike constraints pass through the active Boneyard's player-placement callback.
+The native Skeleton calculation produces the requested root; the world retains
+that point when legal and resolves a blocked request with existing movement
+collision. The wizard and Pike retain the same accepted position. This preserves
+the supported Website behavior from `ab72d149`, which the initial Rust world
+adapter omitted. A focused seeded-arena test reproduces the exact blocked root
+observed at wave 54 and the subsequent failed small-enemy spawn. Movement also
+recovers a living collision-enabled player already overlapping scenery before
+spawn reachability, so an older saved root cannot keep every new enemy unreachable.
+Standalone enemy recordings retain their direct constraints; navigation and
+enemy spawn collision requirements remain unchanged.
+
 Retained scene geometry and prepared meshes are checked by source and geometry
 identity. Other navigation domains are built from the admitted scene. Route
 selection depends on constraint sampling, triangulation, and neighbor order;

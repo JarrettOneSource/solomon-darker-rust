@@ -67,6 +67,10 @@ pub struct EnemyTargetCellBinding {
 /// spawn-placement callback exists.
 pub trait EnemyGeometry: EnemyNavigation {
     fn resolve_movement(&self, request: EnemyMovementRequest) -> Vec2;
+    /// Native constraints are direct; the composed world owns player placement.
+    fn resolve_pike_player_position(&self, _current: Vec2, requested: Vec2) -> Vec2 {
+        requested
+    }
     fn line_obstruction(&self, start: Vec2, end: Vec2, native_exclusion_mask: u32) -> Option<Vec2>;
     fn projectile_world_blocked(&self, query: EnemyProjectileWorldQuery) -> bool;
     fn on_projectile_explosion(&self, _position: Vec2) {}

@@ -235,7 +235,8 @@ pub fn step_latched_skeleton(
         detach_skeleton_pike(&mut actor.body, &mut actor.brain);
         return;
     }
-    // Native pike restraint writes the player root directly, bypassing world collision.
+    // 0x00484B90 produces a direct root constraint. The composed Boneyard owns
+    // collision-safe placement before this position is retained by either actor.
     let factor = if distance == 0.0 { 0.0 } else { fround(pike.distance / distance) };
     let position = if distance == pike.distance {
         target.position
@@ -245,6 +246,7 @@ pub fn step_latched_skeleton(
             fround(actor.position.y + fround(dy * factor)),
         )
     };
+    let position = context.geometry.resolve_pike_player_position(target.position, position);
     world.player_positions.insert(pike.player_id.clone(), position);
     let EnemyBrain::Skeleton(brain) = &mut actor.brain else { unreachable!() };
     brain.pike = Some(SkeletonPike { position, ..pike });

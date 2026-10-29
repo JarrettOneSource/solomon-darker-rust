@@ -38,7 +38,7 @@ use crate::painter::{PainterRegistration, WorldPainterOrder};
 use crate::{HubWizard, Vec2};
 
 use super::arena::{ArenaPhase, ArenaTransition};
-use super::collision::{BoneyardCollisionWorld, can_place_boneyard_body};
+use super::collision::{BoneyardCollisionWorld, boneyard_body_collides, can_place_boneyard_body};
 use super::encounter::{SolomonEncounter, SolomonPhase, SolomonPlayer};
 use super::escape::{prepare_solomon_escape_navigation, resolve_solomon_escape_movement};
 use super::feedback::NativeEnemyWorldFeedback;
@@ -382,6 +382,25 @@ impl BoneyardWorld {
                 participant.wizard.position
             };
             participant.wizard.commit(plan, position);
+            // Supported saves can contain a root from an earlier unconstrained
+            // Pike pull. Recover it before this tick uses the player as a spawn goal.
+            if participant.input.player.alive
+                && participant.input.player.collision_enabled
+                && boneyard_body_collides(
+                    participant.wizard.position,
+                    &self.dynamic_collision,
+                    PLAYER_CHARACTER_RADIUS,
+                )
+            {
+                participant.wizard.position = super::spawn::SpawnPlacement {
+                    position: participant.wizard.position,
+                    bounds: self.active_bounds(),
+                    collision: &self.dynamic_collision,
+                    radius: PLAYER_CHARACTER_RADIUS,
+                }
+                .resolve(None)
+                .expect("Boneyard has a collision-safe player placement");
+            }
             let active = participant.input.player.collision_enabled && plan.movement_active;
             let mut movement_contacts = Vec::new();
             if active {
