@@ -319,7 +319,34 @@ impl BoneyardWorld {
             plan.face = input.force_movement_facing;
             plans.push(plan);
         }
-        self.resolve_player_plans(participants, &plans, light_camera_bounds, hostile_scene_paused)
+        let movement = self.resolve_player_plans(
+            participants,
+            &plans,
+            light_camera_bounds,
+            hostile_scene_paused,
+        );
+        // Live combat recovers old blocked roots before using players as spawn
+        // goals. The movement-only recording retains the narrow-phase result.
+        for participant in participants {
+            if participant.input.player.alive
+                && participant.input.player.collision_enabled
+                && boneyard_body_collides(
+                    participant.wizard.position,
+                    &self.dynamic_collision,
+                    PLAYER_CHARACTER_RADIUS,
+                )
+            {
+                participant.wizard.position = super::spawn::SpawnPlacement {
+                    position: participant.wizard.position,
+                    bounds: self.active_bounds(),
+                    collision: &self.dynamic_collision,
+                    radius: PLAYER_CHARACTER_RADIUS,
+                }
+                .resolve(None)
+                .expect("Boneyard has a collision-safe player placement");
+            }
+        }
+        movement
     }
 
     fn resolve_player_plans(
@@ -382,25 +409,6 @@ impl BoneyardWorld {
                 participant.wizard.position
             };
             participant.wizard.commit(plan, position);
-            // Supported saves can contain a root from an earlier unconstrained
-            // Pike pull. Recover it before this tick uses the player as a spawn goal.
-            if participant.input.player.alive
-                && participant.input.player.collision_enabled
-                && boneyard_body_collides(
-                    participant.wizard.position,
-                    &self.dynamic_collision,
-                    PLAYER_CHARACTER_RADIUS,
-                )
-            {
-                participant.wizard.position = super::spawn::SpawnPlacement {
-                    position: participant.wizard.position,
-                    bounds: self.active_bounds(),
-                    collision: &self.dynamic_collision,
-                    radius: PLAYER_CHARACTER_RADIUS,
-                }
-                .resolve(None)
-                .expect("Boneyard has a collision-safe player placement");
-            }
             let active = participant.input.player.collision_enabled && plan.movement_active;
             let mut movement_contacts = Vec::new();
             if active {

@@ -365,8 +365,10 @@ adapter omitted. A focused seeded-arena test reproduces the exact blocked root
 observed at wave 54 and the subsequent failed small-enemy spawn. Movement also
 recovers a living collision-enabled player already overlapping scenery before
 spawn reachability, so an older saved root cannot keep every new enemy unreachable.
-Standalone enemy recordings retain their direct constraints; navigation and
-enemy spawn collision requirements remain unchanged.
+This live-combat recovery follows the shared movement solve; movement-only
+recordings retain the independently captured narrow-phase result. Standalone enemy
+recordings retain their direct constraints; navigation and enemy spawn collision
+requirements remain unchanged.
 
 Retained scene geometry and prepared meshes are checked by source and geometry
 identity. Other navigation domains are built from the admitted scene. Route
