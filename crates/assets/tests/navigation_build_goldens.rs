@@ -15,6 +15,7 @@ use solomon_assets::navigation::CatalogNavigation;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::collision::{
     BoneyardCollisionWorld, CollisionCircle, CollisionPolygon, CollisionSegment,
+    can_place_boneyard_body, first_boneyard_path_block_progress,
 };
 use solomon_sim::boneyard::navigation::{
     NavigationMesh, NavigationSet, RouteRequest, boneyard_world_navigation_preparations,
@@ -117,7 +118,7 @@ fn empty_navigation() -> NavigationSet {
 }
 
 #[test]
-fn accepted_scene_meshes_and_routes_match_the_complete_source_graphs() {
+fn accepted_scene_meshes_preserve_graphs_and_verified_route_corrections() {
     let fixture = fixture();
     for (index, case) in fixture["cases"].as_array().unwrap().iter().enumerate() {
         let scene = decode_scene(&case["scene"].to_string()).unwrap();
@@ -152,8 +153,37 @@ fn accepted_scene_meshes_and_routes_match_the_complete_source_graphs() {
             &[],
         );
         for (query_index, query) in case["queries"].as_array().unwrap().iter().enumerate() {
+            let actual = find_route(&navigation, &world, bounds, clearance, query);
+            if index == 2 && query_index == 0 {
+                // This recorded null selected disconnected first attachments in
+                // the imported overlapping-footprint scene. Retain the recording
+                // and independently check the newly reachable route.
+                assert_eq!(case["scene"]["name"], "overlapping authored footprints");
+                assert_eq!(clearance, 25.0);
+                assert!(query["route"].is_null());
+                let radius = query["bodyRadius"].as_f64().unwrap();
+                assert!(can_place_boneyard_body(point(&query["start"]), bounds, &world, radius));
+                assert!(can_place_boneyard_body(point(&query["end"]), bounds, &world, radius));
+                let route: Vec<_> = actual.as_array().unwrap().iter().map(point).collect();
+                assert_eq!(route[0], point(&query["start"]));
+                for pair in route.windows(2) {
+                    assert_eq!(
+                        first_boneyard_path_block_progress(
+                            pair[0],
+                            pair[1],
+                            bounds,
+                            &world,
+                            radius,
+                            &[],
+                        ),
+                        None,
+                        "the corrected imported-scene route must remain collision-safe",
+                    );
+                }
+                continue;
+            }
             support::assert_website_json(
-                &find_route(&navigation, &world, bounds, clearance, query),
+                &actual,
                 &query["route"],
                 &format!("runtime route {index}/{query_index}"),
                 &[],

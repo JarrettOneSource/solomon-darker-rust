@@ -243,20 +243,11 @@ fn route_from_mesh(
         bounds,
         clearance,
         body_radius,
-        end_body_radius,
+        end_body_radius: _,
         ignored_source_ids,
     } = request;
-    let start_triangle =
-        resolve_endpoint_triangle(mesh, start, bounds, world, body_radius, ignored_source_ids)?;
-    let end_triangle = resolve_endpoint_triangle(
-        mesh,
-        end,
-        bounds,
-        world,
-        end_body_radius.unwrap_or(body_radius),
-        ignored_source_ids,
-    )?;
-    let triangles = find_triangle_path(mesh, start_triangle, end_triangle)?;
+    let triangles = resolve_route_triangles(request, mesh, world)?;
+    let start_triangle = triangles[0];
     let mut route = vec![start];
     append_distinct(&mut route, mesh.triangles[start_triangle].center);
     for pair in triangles.windows(2) {
@@ -275,6 +266,59 @@ fn route_from_mesh(
     }
     route.push(end);
     Some(simplify_route_prefix(route, bounds, world, body_radius, ignored_source_ids))
+}
+
+fn resolve_route_triangles(
+    request: RouteRequest<'_>,
+    mesh: &NavigationMesh,
+    world: &BoneyardCollisionWorld,
+) -> Option<Vec<usize>> {
+    let attach = |point, radius, accepts_triangle: &dyn Fn(usize) -> bool| {
+        resolve_endpoint_triangle(
+            mesh,
+            point,
+            request.bounds,
+            world,
+            radius,
+            request.ignored_source_ids,
+            accepts_triangle,
+        )
+    };
+    let end_radius = request.end_body_radius.unwrap_or(request.body_radius);
+    let mut start_triangle = attach(request.start, request.body_radius, &|_| true)?;
+    let end_triangle = attach(request.end, end_radius, &|_| true)?;
+    if let Some(path) = find_triangle_path(mesh, start_triangle, end_triangle) {
+        return Some(path);
+    }
+
+    // Nearest endpoint triangles can belong to different islands even when both
+    // endpoints see a common component. Preserve every collision/graph check and
+    // the first-choice route when it connects; consider alternatives otherwise.
+    let mut visited = vec![false; mesh.triangles.len()];
+    loop {
+        let mut connected = vec![false; mesh.triangles.len()];
+        connected[start_triangle] = true;
+        let mut pending = vec![start_triangle];
+        let mut index = 0;
+        while index < pending.len() {
+            for &id in &mesh.triangles[pending[index]].neighbors {
+                if !connected[id] {
+                    connected[id] = true;
+                    pending.push(id);
+                }
+            }
+            index += 1;
+        }
+        if let Some(end) = attach(request.end, end_radius, &|id| connected[id])
+            && let Some(path) = find_triangle_path(mesh, start_triangle, end)
+        {
+            return Some(path);
+        }
+        for id in pending {
+            visited[id] = true;
+        }
+        start_triangle = attach(request.start, request.body_radius, &|id| !visited[id])?;
+    }
 }
 
 /// Clearance against the unchanged polygon, circle and capsule primitives.
@@ -343,6 +387,7 @@ fn resolve_endpoint_triangle(
     world: &BoneyardCollisionWorld,
     radius: f64,
     ignored_source_ids: &[&str],
+    accepts_triangle: impl Fn(usize) -> bool,
 ) -> Option<usize> {
     if !point_inside_bounds(point, bounds, radius) {
         return None;
@@ -350,6 +395,9 @@ fn resolve_endpoint_triangle(
     let mut containing = Vec::new();
     let mut remaining = Vec::new();
     for triangle in &mesh.triangles {
+        if !accepts_triangle(triangle.id) {
+            continue;
+        }
         let vertices = triangle.vertices.map(|vertex| mesh.points[vertex]);
         let candidate = (point_triangle_distance_squared(point, vertices), triangle.id);
         if point_in_triangle(point, vertices) {
