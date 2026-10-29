@@ -14,6 +14,7 @@ use crate::enemies::world::{
     EnemySpawnPlacementRequest,
 };
 use crate::float::fround;
+use crate::hub::PLAYER_CHARACTER_RADIUS;
 use crate::{NativeRng, Vec2};
 
 use super::BoneyardBounds;
@@ -209,6 +210,23 @@ impl EnemyNavigation for BoneyardEnemyGeometry<'_> {
 }
 
 impl EnemyGeometry for BoneyardEnemyGeometry<'_> {
+    fn resolve_pike_player_position(&self, current: Vec2, requested: Vec2) -> Vec2 {
+        let bounds = self.input.active_bounds;
+        let collision = self.input.collision;
+        if can_place_boneyard_body(requested, bounds, collision, PLAYER_CHARACTER_RADIUS) {
+            return requested;
+        }
+        let start = if can_place_boneyard_body(current, bounds, collision, PLAYER_CHARACTER_RADIUS)
+        {
+            current
+        } else {
+            SpawnPlacement { position: current, bounds, collision, radius: PLAYER_CHARACTER_RADIUS }
+                .resolve(None)
+                .expect("Boneyard has a collision-safe player placement")
+        };
+        resolve_boneyard_movement(start, requested, bounds, collision, PLAYER_CHARACTER_RADIUS)
+    }
+
     fn on_collision_recipient_cleared(&self, actor_id: usize) {
         let id = format!("enemy-{actor_id}");
         if let Some(body) = self.dynamic_bodies.borrow_mut().iter_mut().find(|body| body.id == id) {

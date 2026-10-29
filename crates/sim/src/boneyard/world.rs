@@ -38,7 +38,7 @@ use crate::painter::{PainterRegistration, WorldPainterOrder};
 use crate::{HubWizard, Vec2};
 
 use super::arena::{ArenaPhase, ArenaTransition};
-use super::collision::{BoneyardCollisionWorld, can_place_boneyard_body};
+use super::collision::{BoneyardCollisionWorld, boneyard_body_collides, can_place_boneyard_body};
 use super::encounter::{SolomonEncounter, SolomonPhase, SolomonPlayer};
 use super::escape::{prepare_solomon_escape_navigation, resolve_solomon_escape_movement};
 use super::feedback::NativeEnemyWorldFeedback;
@@ -319,7 +319,34 @@ impl BoneyardWorld {
             plan.face = input.force_movement_facing;
             plans.push(plan);
         }
-        self.resolve_player_plans(participants, &plans, light_camera_bounds, hostile_scene_paused)
+        let movement = self.resolve_player_plans(
+            participants,
+            &plans,
+            light_camera_bounds,
+            hostile_scene_paused,
+        );
+        // Live combat recovers old blocked roots before using players as spawn
+        // goals. The movement-only recording retains the narrow-phase result.
+        for participant in participants {
+            if participant.input.player.alive
+                && participant.input.player.collision_enabled
+                && boneyard_body_collides(
+                    participant.wizard.position,
+                    &self.dynamic_collision,
+                    PLAYER_CHARACTER_RADIUS,
+                )
+            {
+                participant.wizard.position = super::spawn::SpawnPlacement {
+                    position: participant.wizard.position,
+                    bounds: self.active_bounds(),
+                    collision: &self.dynamic_collision,
+                    radius: PLAYER_CHARACTER_RADIUS,
+                }
+                .resolve(None)
+                .expect("Boneyard has a collision-safe player placement");
+            }
+        }
+        movement
     }
 
     fn resolve_player_plans(
