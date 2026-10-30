@@ -57,6 +57,12 @@ without repeating the action; the actual process exit and save, or the expected
 save-failure choices, remain required. Failure cleanup closes guests before their
 host so each can finish saving.
 
+Peer movement holds ordinary keyboard input until a real checkpoint from the same
+run records eastward displacement and a later footstep tick. A software-rendered
+frame can outlast a fixed key hold. The observation uses the bounded checkpoint
+wait and always releases the key; the final saved displacement and clean process
+exits remain required.
+
 CI creates immutable package candidates before acceptance and publishes qualified
 archives only after the required platform journeys pass. Diagnostic artifacts
 named `unqualified-desktop-*` are excluded from release selection. Confirm the

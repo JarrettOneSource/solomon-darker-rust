@@ -554,9 +554,32 @@ def check_peers():
     for app in (host, guest):
         app.activate()
         retry_ui(app.control("match-loading").wait_detached, timeout=120)
-        # Two software-rendered peers can exceed two seconds per frame.
-        # Keep the key held long enough for gameplay to sample it.
-        app.hold("d", 3)
+        before_step = player(save_record(app.profile)[1])["locomotions"]["footstepTick"]
+
+        def saved_movement():
+            _, document = save_record(app.profile)
+            simulation = document["continuation"]["simulation"]
+            locomotion = player(document)["locomotions"]
+            if (simulation["world"]["runId"] == run_id
+                    and locomotion["position"]["x"] > before_x[app.name] + 10
+                    and locomotion["footstepTick"] > before_step):
+                return document
+            return None
+
+        # A software-rendered frame can outlast a fixed key hold. Keep ordinary
+        # input held until the real save records movement, within the same deadline.
+        started = time.monotonic()
+        INPUT.key_down("d")
+        try:
+            moved = wait(saved_movement, f"{app.name} saved peer movement")
+        finally:
+            INPUT.key_up("d")
+        RECEIPT.setdefault("peerMovementCheckpoints", {})[app.name] = {
+            "heldSeconds": time.monotonic() - started,
+            "tick": moved["continuation"]["simulation"]["tick"],
+            "beforeFootstepTick": before_step,
+            "locomotion": player(moved)["locomotions"],
+        }
         app.capture(f"peer-{app.name}-boneyard")
     # Closing inventory starts the ordinary two-second shared resume hold.
     # Exercise it after movement so the hold cannot consume either input probe.
