@@ -503,6 +503,236 @@ fn current_frost_missile_direct_area_and_terrain_contacts_replay_source() {
     assert_eq!(source["sourceRevision"], "fa08ae249ff5563570bdb2a653e2ef9358ce7b83");
     replay_contacts(fixture);
 }
+
+#[test]
+fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panicking() {
+    use solomon_sim::spells::weld::{
+        NativeWeldActorBirth, NativeWeldPersistentActorState, NativeWeldWorldActor, WeldWorldRef,
+        create_native_weld_persistent_actor, release_native_weld_persistent_actor,
+    };
+
+    for target_health in [1.0, 1.375, 20.0] {
+        let mut order = WorldPainterOrder::default();
+        let mut rng = NativeRng::new(17);
+        let mut enemies = EnemyWorld::new("no-bind-boulder", 50);
+        enemies.spawn(
+            &[
+                EnemySpawnIntent::new(EnemyToken::Skeleton, Vec2::ZERO, 1, 0, 31),
+                EnemySpawnIntent::new(EnemyToken::Skeleton, Vec2::new(10.0, 0.0), 2, 0, 31),
+            ],
+            EnemySpawnContext {
+                players: &[],
+                tick: 0,
+                arena_scalars: EnemyArenaScalars::default(),
+                roll_loot_seed: None,
+            },
+            &OpenGeometry,
+            Some(&mut order),
+        );
+        for mut actor in enemies.actors.iter_mut() {
+            actor.current_health = target_health;
+            actor.config.maximum_health = target_health;
+        }
+        let mut held = create_native_weld_persistent_actor(
+            NativeWeldActorBirth {
+                build_id: 1006,
+                direction: Vec2::new(1.0, 0.0),
+                id: 33,
+                origin: Vec2::ZERO,
+                owner_id: "wizard",
+                tick: 0,
+                vector: &[5.5, 15.0, 1.0, 1.0, 0.0, 1.0],
+                world_key: "boneyard:no-bind",
+            },
+            Some(&mut order),
+        );
+        let NativeWeldPersistentActorState::EtherealBoulder(actor) = &mut held else {
+            panic!("Ethereal Boulder build")
+        };
+        actor.scale = 0.5;
+        actor.shell_scale = 0.5;
+        actor.assembly_scale = 0.5;
+        let released =
+            release_native_weld_persistent_actor(held, 34, 4, &mut rng, Some(&mut order));
+        let mut spells = SpellState {
+            next_id: released.next_id,
+            transients: released
+                .actors
+                .into_iter()
+                .map(|actor| PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)))
+                .collect(),
+            ..SpellState::default()
+        };
+        let result = resolve_boneyard_spell_combat(
+            &mut enemies,
+            &mut spells,
+            BoneyardSpellCombatContext {
+                enhanced_effects: true,
+                channel_emissions: &[],
+                fire_actor_contacts: &[],
+                frost_missile_world_contacts: &[],
+                tick: 5,
+                world_key: "boneyard:no-bind",
+                first_world_contact: None,
+                damage_multiplier: &|_, _, _| 1.0,
+                primary_scenery_targets: &[],
+                resolve_enemy_movement: &mut |_, _, requested, _| requested,
+                fireball_hostile_corridor_length: &|_| 1600.0,
+                light_at: None,
+            },
+            &mut rng,
+            Some(&mut order),
+        );
+        assert_eq!(result.hits.len(), 1);
+        assert_eq!(result.hits[0].amount, if target_health == 1.0 { 1.0 } else { 1.375 });
+        assert_eq!(result.hits[0].killed, target_health <= 1.375);
+        assert_eq!(enemies.actors.get(1).unwrap().current_health, target_health);
+        assert!(!spells.transients.iter().any(|effect| effect.common().id == 33));
+        assert_eq!(
+            spells
+                .transients
+                .iter()
+                .filter(|effect| matches!(
+                    effect,
+                    PrimaryTransientRef::Weld(WeldWorldRef::BoulderDebris(_))
+                ))
+                .count(),
+            16
+        );
+        assert!(spells.transients.iter().any(|effect| matches!(
+            effect, PrimaryTransientRef::Weld(WeldWorldRef::Impact(actor))
+                if actor.common.build_id == 1006
+        )));
+        #[cfg(feature = "persistence")]
+        {
+            let encoded = serde_json::to_vec(&spells).unwrap();
+            let restored: SpellState = serde_json::from_slice(&encoded).unwrap();
+            assert_eq!(restored, spells);
+        }
+    }
+}
+
+#[test]
+fn no_bind_hail_exhausts_each_contacted_rock_and_preserves_finite_survivors() {
+    use solomon_sim::spells::weld::{
+        NativeWeldActorBirth, NativeWeldHailstoneLocalPosition, NativeWeldHailstoneRockState,
+        NativeWeldPersistentActorState, NativeWeldWorldActor, WeldPersistentRef, WeldWorldRef,
+        create_native_weld_persistent_actor,
+    };
+
+    for target_health in [4.0, 20.0] {
+        let mut order = WorldPainterOrder::default();
+        let mut rng = NativeRng::new(17);
+        let mut enemies = EnemyWorld::new("no-bind-hail", 50);
+        enemies.spawn(
+            &[
+                EnemySpawnIntent::new(EnemyToken::Skeleton, Vec2::ZERO, 1, 0, 31),
+                EnemySpawnIntent::new(EnemyToken::Skeleton, Vec2::ZERO, 2, 0, 31),
+            ],
+            EnemySpawnContext {
+                players: &[],
+                tick: 0,
+                arena_scalars: EnemyArenaScalars::default(),
+                roll_loot_seed: None,
+            },
+            &OpenGeometry,
+            Some(&mut order),
+        );
+        for mut actor in enemies.actors.iter_mut() {
+            actor.current_health = target_health;
+            actor.config.maximum_health = target_health;
+        }
+        let mut held = create_native_weld_persistent_actor(
+            NativeWeldActorBirth {
+                build_id: 1008,
+                direction: Vec2::new(1.0, 0.0),
+                id: 33,
+                origin: Vec2::ZERO,
+                owner_id: "wizard",
+                tick: 0,
+                vector: &[10.0, 2.0, 1.0, 0.0, 0.0, 0.0],
+                world_key: "boneyard:no-bind-hail",
+            },
+            Some(&mut order),
+        );
+        let NativeWeldPersistentActorState::Hailstones(actor) = &mut held else {
+            panic!("Hailstones build")
+        };
+        actor.phase = PrimarySpellProjectilePhase::Flight;
+        actor.scale = 0.5;
+        actor.collision_radius = 40.0;
+        actor.release_age_ticks = Some(1);
+        actor.release_fade_scale = Some(1.0);
+        actor.rocks = [0.0, 500.0]
+            .into_iter()
+            .enumerate()
+            .map(|(rock_id, x)| NativeWeldHailstoneRockState {
+                damage_remaining: 10.0,
+                decay: 1.0,
+                local_position: NativeWeldHailstoneLocalPosition { x, y: 0.0, z: 0.0 },
+                phase: 0.0,
+                rock_id,
+                release_offset: Some(Vec2::new(x, 0.0)),
+                sprite_record: 168,
+                visual_scale: 0.2,
+            })
+            .collect();
+        let mut spells = SpellState {
+            next_id: 34,
+            transients: vec![PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(held))]
+                .into_iter()
+                .collect(),
+            ..SpellState::default()
+        };
+        let result = resolve_boneyard_spell_combat(
+            &mut enemies,
+            &mut spells,
+            BoneyardSpellCombatContext {
+                enhanced_effects: true,
+                channel_emissions: &[],
+                fire_actor_contacts: &[],
+                frost_missile_world_contacts: &[],
+                tick: 5,
+                world_key: "boneyard:no-bind-hail",
+                first_world_contact: None,
+                damage_multiplier: &|_, _, _| 1.0,
+                primary_scenery_targets: &[],
+                resolve_enemy_movement: &mut |_, _, requested, _| requested,
+                fireball_hostile_corridor_length: &|_| 1600.0,
+                light_at: None,
+            },
+            &mut rng,
+            Some(&mut order),
+        );
+        assert_eq!(result.hits.len(), 1);
+        assert_eq!(result.hits[0].amount, target_health.min(10.0));
+        assert_eq!(result.hits[0].killed, target_health <= 10.0);
+        assert!(
+            enemies
+                .actors
+                .iter()
+                .filter(|actor| actor.id != result.hits[0].actor_id)
+                .all(|actor| actor.current_health == target_health)
+        );
+        let retained = spells.transients.iter().find(|effect| effect.common().id == 33).unwrap();
+        let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(WeldPersistentRef::Hailstones(
+            actor,
+        ))) = retained
+        else {
+            panic!("the uncontacted Hailstone keeps its carrier")
+        };
+        assert_eq!(actor.rocks.len(), 1);
+        assert_eq!(actor.rocks[0].rock_id, 1);
+        assert_eq!(actor.rocks[0].damage_remaining, 10.0);
+        #[cfg(feature = "persistence")]
+        {
+            let encoded = serde_json::to_vec(&spells).unwrap();
+            let restored: SpellState = serde_json::from_slice(&encoded).unwrap();
+            assert_eq!(restored, spells);
+        }
+    }
+}
+
 fn replay_contacts(fixture: &str) {
     let fixture: Value = serde_json::from_str(fixture).unwrap();
     for case in values(&fixture, "cases") {

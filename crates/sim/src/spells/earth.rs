@@ -81,16 +81,18 @@ pub fn native_earth_boulder_released_damage(
 pub fn consume_native_earth_boulder_contact(
     input: NativeEarthBoulderContactInput,
 ) -> NativeEarthBoulderContactResult {
-    for value in
-        [input.release_base_damage, input.release_charge, input.remaining_pool, input.target_health]
-    {
+    for value in [
+        input.release_base_damage,
+        input.release_charge,
+        input.remaining_pool,
+        input.target_health,
+        input.toughness,
+    ] {
         require_nonnegative(value);
     }
-    assert!(
-        input.toughness.is_finite() && input.toughness > 0.0,
-        "Boulder toughness is finite and positive"
-    );
     let damage = fround(input.target_health.min(input.remaining_pool));
+    // Native +0x1E8 is zero for no-Bind Ethereal Boulder. Its lethal contact
+    // spends infinity at 0x00621231; the following pool clamp exhausts the actor.
     let consumed = fround(if input.remaining_pool < input.target_health {
         damage
     } else {

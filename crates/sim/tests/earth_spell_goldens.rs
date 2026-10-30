@@ -66,6 +66,47 @@ struct Goldens {
 }
 
 #[test]
+fn no_bind_boulder_contact_exhausts_the_pool_for_lethal_and_nonlethal_targets() {
+    for (target_health, damage) in [(1.0, 1.0), (2.0, 2.0), (20.0, 2.0)] {
+        let result = consume_native_earth_boulder_contact(NativeEarthBoulderContactInput {
+            release_base_damage: 8.0,
+            release_charge: 0.5,
+            remaining_pool: 2.0,
+            target_health,
+            toughness: 0.0,
+        });
+        assert_eq!(
+            result,
+            NativeEarthBoulderContactResult {
+                charge: 0.32499998807907104,
+                continue_traversal: false,
+                damage,
+                depleted: true,
+                remaining_pool: 0.0,
+            }
+        );
+    }
+}
+
+#[test]
+fn boulder_contact_rejects_negative_and_nonfinite_toughness() {
+    for toughness in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert!(
+            std::panic::catch_unwind(|| {
+                consume_native_earth_boulder_contact(NativeEarthBoulderContactInput {
+                    release_base_damage: 8.0,
+                    release_charge: 0.5,
+                    remaining_pool: 2.0,
+                    target_health: 1.0,
+                    toughness,
+                })
+            })
+            .is_err()
+        );
+    }
+}
+
+#[test]
 fn boulder_growth_pool_orientation_and_lit_fragments_match_the_website() {
     let fixture: Goldens =
         serde_json::from_str(include_str!("fixtures/website/earth-spell-goldens.json")).unwrap();

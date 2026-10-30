@@ -5,9 +5,10 @@ WASM entry points. Native application lifetime and packaging are described in
 [Desktop runtime](DESKTOP-RUNTIME.md); [Architecture](ARCHITECTURE.md) and
 [Decisions](DECISIONS.md) own the implementation contract.
 
-The released artifact remains the qualified revision in [Release](RELEASE.md)
-until the native candidate completes these checks. Implementation is not release
-or deployment acceptance.
+Native packages are published through the workflow in [Release](RELEASE.md).
+Qualification belongs to the exact revision and artifacts exercised. The checks
+below distinguish established implementation from the review required for each
+new candidate and the broader native-completion task.
 
 ## Required acceptance
 
