@@ -611,6 +611,21 @@ impl ApplicationHandler<AccessibilityEvent> for App {
                     }
                 }
                 Screen::Game { game, window, .. } => {
+                    // Diagnostic branch only: correlate OS delivery and frame work.
+                    let trace = std::env::var_os("SDR_DIAGNOSTIC_PEER_INPUT").is_some();
+                    if trace {
+                        let relevant = matches!(
+                            event,
+                            WindowEvent::Focused(_) | WindowEvent::Occluded(_)
+                        ) || matches!(&event, WindowEvent::KeyboardInput { event, .. }
+                                if event.physical_key == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::KeyD));
+                        if relevant {
+                            eprintln!(
+                                "SDR_PEER_EVENT {} {event:?}",
+                                solomon_web::platform::epoch_ms()
+                            );
+                        }
+                    }
                     // A failed game accepts input only through its recovery surface.
                     if self.failure.is_some() {
                         game.borrow_mut().native_ui().window_event(&event)?;
@@ -618,6 +633,9 @@ impl ApplicationHandler<AccessibilityEvent> for App {
                         game.borrow_mut().window_event(&event, now)?;
                     }
                     if matches!(event, WindowEvent::RedrawRequested) {
+                        if trace {
+                            eprintln!("SDR_PEER_FRAME {} begin", solomon_web::platform::epoch_ms());
+                        }
                         if self.failure.is_none() {
                             let result = game.borrow_mut().frame(now);
                             if let Err(error) = result {
@@ -633,6 +651,9 @@ impl ApplicationHandler<AccessibilityEvent> for App {
                         }
                         Game::run_pending_work(game);
                         self.next_redraw = window.present()?;
+                        if trace {
+                            eprintln!("SDR_PEER_FRAME {} end", solomon_web::platform::epoch_ms());
+                        }
                     }
                 }
             }

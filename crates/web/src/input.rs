@@ -146,7 +146,17 @@ impl MovementInput {
         let keyed = state.clone();
         let bank = hotbar.clone();
         let keyboard = KeyboardListener::attach(surface, move |event| {
-            keyed.borrow_mut().keyboard(event, bank.start())
+            let mut state = keyed.borrow_mut();
+            #[cfg(not(target_arch = "wasm32"))]
+            if event.stroke.code == "KeyD" {
+                diagnostic_peer_input("key-before", &state);
+            }
+            let effect = state.keyboard(event, bank.start());
+            #[cfg(not(target_arch = "wasm32"))]
+            if event.stroke.code == "KeyD" {
+                diagnostic_peer_input("key-after", &state);
+            }
+            effect
         })?;
         let transport = platform::InputTransport::attach(surface, state.clone(), hotbar.clone())?;
         Ok(Self { hotbar, state, menu_requested: Cell::new(false), transport, _keyboard: keyboard })
@@ -274,6 +284,8 @@ impl MovementInput {
     pub fn sample(&self) -> Result<GameplayInputSample, String> {
         self.reconcile_hotbar_bank()?;
         let mut state = self.state.borrow_mut();
+        #[cfg(not(target_arch = "wasm32"))]
+        diagnostic_peer_input("sample", &state);
         if state.world_input_blocked() {
             return Ok(GameplayInputSample {
                 movement: Vec2::ZERO,
@@ -470,6 +482,22 @@ fn is_movement_key(code: &str, controls: &GameControlBindings) -> bool {
             .into_iter()
             .any(|key| key == code)
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+fn diagnostic_peer_input(phase: &str, state: &GameplayInputState) {
+    if std::env::var_os("SDR_DIAGNOSTIC_PEER_INPUT").is_some() {
+        eprintln!(
+            "SDR_PEER_INPUT {} {phase} d={} blocked={} text={} scope={} right_is_d={}",
+            crate::platform::epoch_ms(),
+            state.held.contains("KeyD"),
+            state.blocked,
+            state.ui.text,
+            state.ui.scope.is_some(),
+            state.controls.move_right == "KeyD",
+        );
+    }
+}
+
 impl Drop for MovementInput {
     fn drop(&mut self) {
         let pointers = self.state.borrow().captured_ui_pointers();

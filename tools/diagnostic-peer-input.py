@@ -1,4 +1,4 @@
-"""Observe one unchanged Intel package journey; never build or qualify a release."""
+"""Observe key delivery and frame sampling in a diagnostic native build."""
 
 import hashlib
 import json
@@ -9,7 +9,6 @@ import sys
 
 
 REVISION = "6baedc684382e8012a7e4455b0080b49d7b2b376"
-NATIVE_SHA256 = "364c1f50cf96601a7c4729409ba72d4a97601fdef5f74f9cc81258a2909e703d"
 EVIDENCE = Path("reports/desktop-smoke")
 driver = Path("tools/smoke-desktop-runtime.py")
 source = driver.read_text()
@@ -97,6 +96,9 @@ expanded = expanded.replace(readiness, '''    RECEIPT["peerReadiness"] = {
                          for name, document in playing.items()}}
     write_json(EVIDENCE / "receipt.json", RECEIPT)
 ''' + readiness)
+environment = "            cwd=PACKAGE, stdout=self.log, stderr=subprocess.STDOUT,"
+assert expanded.count(environment) == 1
+expanded = expanded.replace(environment, environment + "\n            env={**os.environ, **({'SDR_DIAGNOSTIC_PEER_INPUT': '1'} if name in ('host', 'guest') else {})},")
 compile(expanded, "diagnostic-expanded-driver.py", "exec")
 if sys.argv[1:] == ["--check"]:
     print("Original driver matched; expanded observational driver compiles.")
@@ -104,24 +106,24 @@ if sys.argv[1:] == ["--check"]:
 assert not sys.argv[1:]
 
 EVIDENCE.mkdir(parents=True, exist_ok=True)
-archive = Path("input/Solomon-Darker-darwin-x64.zip")
+diagnostic_revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+archive = Path("dist-desktop/Solomon-Darker-darwin-x64.zip")
 expected, filename = Path(str(archive) + ".sha256").read_text().split()
 assert filename == archive.name
 with archive.open("rb") as stream:
     archive_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
 assert archive_sha256 == expected
 inspector = runpy.run_path("scripts/verify-desktop-archive.py")
-inspection = inspector["verify_archive"](archive, Path.cwd(), REVISION)
-assert inspection["nativeSha256"] == NATIVE_SHA256
-subprocess.run(["ditto", "-x", "-k", str(archive), "dist-desktop"], check=True)
+inspection = inspector["verify_archive"](archive, Path.cwd(), diagnostic_revision)
 binding = {
-    "sourceRevision": REVISION, "sourceRun": 41114455330, "sourceAttempt": 1,
-    "sourceArtifactId": 13009232047, "archiveSha256": archive_sha256,
-    "inspection": inspection,
+    "sourceBaseRevision": REVISION, "diagnosticRevision": diagnostic_revision,
+    "priorUnchangedPackageObservationRun": 41123880578,
+    "archiveSha256": archive_sha256, "inspection": inspection,
+    "changedFiles": subprocess.check_output(["git", "diff", "--name-only", REVISION, "HEAD"], text=True).splitlines(),
     "canonicalDriverSha256": hashlib.sha256(source.encode()).hexdigest(),
     "expandedDriverSha256": hashlib.sha256(expanded.encode()).hexdigest(),
     "diagnosticDriverSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-    "experiment": "One canonical full journey on the original failed package. Only peer key timing, saved-state reads and read-only process sampling are added. The three-second hold, assertions and failure handling remain. Sampling overhead and its post-release wait are diagnostic conditions.",
+    "experiment": "One unchanged canonical full journey against a diagnostic build. Only host and guest emit KeyD/focus delivery, movement state sampling and frame boundaries. Original three-second holds and movement assertions remain, with the prior read-only samplers and timing observations. Logging, sampling and their overhead are diagnostic conditions. Never publish this package as a release.",
 }
 (EVIDENCE / "package-binding.json").write_text(json.dumps(binding, indent=2) + "\n")
 (EVIDENCE / "diagnostic-expanded-driver.py").write_text(expanded)

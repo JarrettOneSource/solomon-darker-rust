@@ -1,5 +1,5 @@
 {
-  "name": "Observe Intel peer input on the unchanged package",
+  "name": "Diagnose Intel native key delivery and frame sampling",
   "on": {
     "push": {
       "branches": [
@@ -14,12 +14,12 @@
   "jobs": {
     "observe": {
       "runs-on": "macos-15-intel",
-      "timeout-minutes": 40,
+      "timeout-minutes": 60,
       "steps": [
         {
           "uses": "actions/checkout@v6",
           "with": {
-            "fetch-depth": 2
+            "fetch-depth": 3
           }
         },
         {
@@ -42,11 +42,36 @@
           "run": "python3 -m pip install -r tools/desktop-smoke-requirements.txt"
         },
         {
-          "name": "Download the original unqualified package",
-          "env": {
-            "GH_TOKEN": "${{ github.token }}"
-          },
-          "run": "gh run download 41114455330 --repo \"$GITHUB_REPOSITORY\" --name unqualified-desktop-darwin-x64-41114455330-1 --dir input"
+          "uses": "actions/setup-node@v6",
+          "with": {
+            "node-version-file": ".node-version",
+            "cache": "npm",
+            "cache-dependency-path": "package-lock.json"
+          }
+        },
+        {
+          "run": "npm ci --no-audit --no-fund"
+        },
+        {
+          "name": "Install pinned Rust toolchain",
+          "run": "rustup show"
+        },
+        {
+          "name": "Restore existing native dependencies",
+          "uses": "actions/cache/restore@v4",
+          "with": {
+            "path": "~/.cargo/registry\n~/.cargo/git\ntarget",
+            "key": "diagnostic-peer-input-${{ github.sha }}",
+            "restore-keys": "native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-\nnative-${{ runner.os }}-${{ runner.arch }}-"
+          }
+        },
+        {
+          "name": "Check diagnostic source",
+          "run": "cargo fmt --all -- --check\ncargo clippy -p solomon-desktop --all-targets -- -D warnings"
+        },
+        {
+          "name": "Build the explicitly unqualified diagnostic package",
+          "run": "npm run package:desktop -- --platform darwin --arch x64 --release-repository \"$GITHUB_REPOSITORY\"\nnode tools/archive-desktop.mjs"
         },
         {
           "name": "Validate diagnostic source",
@@ -61,7 +86,7 @@
           "uses": "actions/upload-artifact@v4",
           "if": "always()",
           "with": {
-            "name": "intel-peer-input-observation",
+            "name": "intel-peer-input-native-trace",
             "path": "reports/desktop-smoke",
             "if-no-files-found": "error"
           }
