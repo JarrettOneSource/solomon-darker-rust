@@ -135,8 +135,9 @@ impl<'de> de::Deserializer<'de> for SourceValue {
             .find(|variant| {
                 source_variant(name, variant) == tag
                     || **variant == tag
-                    // Earlier Rust exports used generic kebab spelling for these sounds.
-                    || (name == "BoneyardLootSound" && kebab(variant) == tag)
+                    // Earlier Rust exports used generic kebab spelling at these boundaries.
+                    || (matches!(name, "BoneyardLootSound" | "ItemRarity")
+                        && kebab(variant) == tag)
             })
             .ok_or_else(|| de::Error::custom(format!("{name} has unknown value {tag}")))?;
         visitor.visit_enum(SourceEnum { variant, payload })
@@ -288,7 +289,7 @@ fn source_variant(name: &str, variant: &str) -> String {
     if let Some(kind) = spells::kind(name, variant) {
         return kind;
     }
-    if matches!(name, "EnemyEffectAtlas" | "NativeEtherDrainAtlas") {
+    if matches!(name, "EnemyEffectAtlas" | "NativeEtherDrainAtlas" | "ItemRarity") {
         return variant.into();
     }
     if name == "EnemySound" {
