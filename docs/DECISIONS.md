@@ -172,6 +172,14 @@ The fdlibm/V8 notices remain in
 [the license](third-party/v8-fdlibm-LICENSE). Native/WASM bit tests and complete
 trajectory replays protect the contract.
 
+Ethereal Boulder without Bind has toughness zero in the retail build-1006 vector.
+The shared Boulder contact kernel accepts nonnegative toughness. A lethal contact
+may spend positive infinity internally; the native nonnegative pool clamp then
+exhausts the actor. Replacing zero with one would incorrectly preserve its pool
+and allow another hit. Negative/nonfinite inputs remain invalid, and terminal
+actors must retain finite serialized state. The recovered division and clamp are
+at `0x00621231..0x006212C2` in Solomon Dark 0.72.5.
+
 Gameplay RNG, ambient xorshift state, collision fallback state, and presentation
 randomness have separate owners. Changing their consumption order changes play.
 

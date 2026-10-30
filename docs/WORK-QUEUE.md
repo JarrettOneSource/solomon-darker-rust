@@ -4,13 +4,13 @@
 
 The current source builds a native Rust window, platform services, durable saves
 and encrypted peers while sharing Game and GPU UI with the browser. Electron and
-its Node peer runtime have been removed from desktop packaging. The published
-release has not yet changed.
+its Node peer runtime have been removed from the published native packages.
 
-Remaining work is final four-platform package execution, resolution of platform
-acceptance failures, final review and publication/cleanup. The
-[qualification checklist](NATIVE-DESKTOP.md) distinguishes established behavior
-from unfinished release checks.
+Qualification remains specific to each revision. Changes require the affected
+four-platform package and browser journeys, review of any failures, and the
+publication/installation/cleanup checks in [Release](RELEASE.md). The broader
+native-completion review remains open; a successful release does not establish
+unmeasured performance, hardware coverage or long-session reliability.
 
 ## Performance
 

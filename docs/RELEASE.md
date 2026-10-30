@@ -2,24 +2,19 @@
 
 ## Qualified release
 
-The qualified game release is
-[`92e3fe4c1bd7ca1eacff871ff79e604f904dfcf1`](https://github.com/JarrettOneSource/solomon-darker-rust/releases/tag/desktop-92e3fe4c1bd7ca1eacff871ff79e604f904dfcf1).
-[Its workflow](https://github.com/JarrettOneSource/solomon-darker-rust/actions/runs/40248178185)
-passes the game gate and packaged journeys for Windows x64, Linux x64, Intel Mac,
-and Apple silicon Mac. The release contains four desktop archives, their checksums,
-the update manifest, and the Linux game artifact and checksum.
+The [published releases](https://github.com/JarrettOneSource/solomon-darker-rust/releases)
+contain the native Rust desktop archives, checksums, update manifest and Linux
+hosted-game artifact. Each revision's successful
+[workflow](https://github.com/JarrettOneSource/solomon-darker-rust/actions/workflows/validate.yml)
+identifies its source and platform qualification. Confirm that identity before
+selecting an artifact; a branch build or an unqualified diagnostic archive is
+not a release.
 
-The recorded production installation at
-[solomondarker.com/game](https://solomondarker.com/game/) uses that game through
-website `db9a9c98434aa5df56e3f9c402719209001f061b`.
-The production check verified saved checkpoints and continuation through service
-replacement. Publication polling encountered transient HTTP failures during the
-replacement.
-
-The Linux artifact SHA256 is
-`29a9a722dd0ba8d5b83ba11997a7b0fc527fdb13e75d64dda9ee37b60299ab87`.
-Its manifest SHA256 is
-`4e1a633291c1aaa8ed67806957229e11877e9248cc67ad58d04db55204870aea`.
+Production serves the Rust game at
+[solomondarker.com/game-rust](https://solomondarker.com/game-rust/) alongside the
+separate PixiJS game at `/game`. Each retains its own save namespace. Device-owned
+project guides and deployment publications record the installed revisions and
+live acceptance; a newly published release is not automatically installed.
 
 ## Ownership
 
@@ -27,9 +22,9 @@ This repository publishes the Rust game, native authority, WebAssembly client,
 save tools, mod compiler, and desktop app. The website consumes a verified artifact
 and owns accounts, cloud storage, community content, and editing.
 
-The qualified release above still uses Electron. The current source builds the
-native Rust app described in [Desktop runtime](DESKTOP-RUNTIME.md); its pending
-qualification is tracked in [Open work](WORK-QUEUE.md).
+Desktop packages use the native Rust app described in
+[Desktop runtime](DESKTOP-RUNTIME.md). Older Electron archives are historical
+releases, not runtime dependencies of the native packages.
 
 ## Qualification
 
