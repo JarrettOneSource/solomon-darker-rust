@@ -324,6 +324,12 @@ audio owner's sound IDs, including `drop-bag-1` and `drop-bag-2`. Import also re
 the earlier Rust spellings `eventType`, `drop-bag1` and `drop-bag2`; re-export writes
 the canonical source spellings. Native checkpoints retain their own typed fields.
 
+Portable item rarities retain `Epic` and `Rare`, including items inside nested
+Sacks. Earlier Rust exports wrote lowercase enum names; import accepts those
+values and re-export writes the canonical spelling. This preserves existing
+player inventories while keeping the shared schema-51 contract compatible with
+the original web client. Unknown rarities remain rejected.
+
 ## Snapshot ordering
 
 The shared protocol carries canonical session values between matched native and
