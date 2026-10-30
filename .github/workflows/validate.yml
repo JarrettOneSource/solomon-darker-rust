@@ -14,12 +14,12 @@
   "jobs": {
     "observe": {
       "runs-on": "macos-15-intel",
-      "timeout-minutes": 60,
+      "timeout-minutes": 120,
       "steps": [
         {
           "uses": "actions/checkout@v6",
           "with": {
-            "fetch-depth": 3
+            "fetch-depth": 0
           }
         },
         {
@@ -93,5 +93,11 @@
         }
       ]
     }
+  },
+  "env": {
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "RUST_BACKTRACE": "1"
   }
 }
