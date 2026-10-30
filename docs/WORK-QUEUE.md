@@ -9,8 +9,8 @@ its Node peer runtime have been removed from the published native packages.
 Qualification remains specific to each revision. Changes require the affected
 four-platform package and browser journeys, review of any failures, and the
 publication/installation/cleanup checks in [Release](RELEASE.md). The broader
-native-completion review remains open; a successful release does not establish
-unmeasured performance, hardware coverage or long-session reliability.
+performance, hardware coverage and long-session workloads below remain separate
+from those release checks.
 
 ## Performance
 
