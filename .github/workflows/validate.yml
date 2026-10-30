@@ -1,5 +1,5 @@
 {
-  "name": "Diagnose Intel native key delivery and frame sampling",
+  "name": "Check observed peer movement on the original Intel package",
   "on": {
     "push": {
       "branches": [
@@ -14,7 +14,7 @@
   "jobs": {
     "observe": {
       "runs-on": "macos-15-intel",
-      "timeout-minutes": 120,
+      "timeout-minutes": 40,
       "steps": [
         {
           "uses": "actions/checkout@v6",
@@ -42,43 +42,18 @@
           "run": "python3 -m pip install -r tools/desktop-smoke-requirements.txt"
         },
         {
-          "uses": "actions/setup-node@v6",
-          "with": {
-            "node-version-file": ".node-version",
-            "cache": "npm",
-            "cache-dependency-path": "package-lock.json"
-          }
-        },
-        {
-          "run": "npm ci --no-audit --no-fund"
-        },
-        {
-          "name": "Install pinned Rust toolchain",
-          "run": "rustup show"
-        },
-        {
-          "name": "Restore existing native dependencies",
-          "uses": "actions/cache/restore@v4",
-          "with": {
-            "path": "~/.cargo/registry\n~/.cargo/git\ntarget",
-            "key": "diagnostic-peer-input-${{ github.sha }}",
-            "restore-keys": "native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-\nnative-${{ runner.os }}-${{ runner.arch }}-"
-          }
-        },
-        {
-          "name": "Check diagnostic source",
-          "run": "cargo fmt --all -- --check\ncargo clippy -p solomon-desktop --all-targets -- -D warnings"
-        },
-        {
-          "name": "Build the explicitly unqualified diagnostic package",
-          "run": "npm run package:desktop -- --platform darwin --arch x64 --release-repository \"$GITHUB_REPOSITORY\"\nnode tools/archive-desktop.mjs"
+          "name": "Download the original unqualified package",
+          "env": {
+            "GH_TOKEN": "${{ github.token }}"
+          },
+          "run": "gh run download 41114455330 --repo \"$GITHUB_REPOSITORY\" --name unqualified-desktop-darwin-x64-41114455330-1 --dir input"
         },
         {
           "name": "Validate diagnostic source",
           "run": "python3 -m py_compile tools/diagnostic-peer-input.py\npython3 tools/diagnostic-peer-input.py --check"
         },
         {
-          "name": "Observe one full package journey",
+          "name": "Check one full journey using saved movement observations",
           "timeout-minutes": 30,
           "run": "python3 tools/diagnostic-peer-input.py"
         },
@@ -86,18 +61,12 @@
           "uses": "actions/upload-artifact@v4",
           "if": "always()",
           "with": {
-            "name": "intel-peer-input-native-trace",
+            "name": "intel-peer-movement-observed-checkpoint",
             "path": "reports/desktop-smoke",
             "if-no-files-found": "error"
           }
         }
       ]
     }
-  },
-  "env": {
-    "CARGO_INCREMENTAL": "0",
-    "CARGO_PROFILE_DEV_DEBUG": "0",
-    "CARGO_PROFILE_TEST_DEBUG": "0",
-    "RUST_BACKTRACE": "1"
   }
 }
