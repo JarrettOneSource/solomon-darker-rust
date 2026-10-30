@@ -1,325 +1,72 @@
-name: Validate and publish game
-
-on:
-  pull_request:
-  push:
-
-permissions:
-  contents: read
-
-env:
-  CARGO_INCREMENTAL: '0'
-  CARGO_PROFILE_DEV_DEBUG: '0'
-  CARGO_PROFILE_TEST_DEBUG: '0'
-  RUST_BACKTRACE: '1'
-
-jobs:
-  game:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-      - name: Install the pinned Rust and WASM toolchain
-        run: rustup show
-      - name: Install native client build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libfontconfig1-dev libclang-dev cmake
-      - name: Restore game build cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
-          restore-keys: |
-            game-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-            game-${{ runner.os }}-${{ runner.arch }}-
-      - run: cargo install trunk --locked --version 0.22.0
-      - run: npm ci --no-audit --no-fund
-      - run: npm run test:browser-support
-      - run: python3 scripts/verify-client-assets.py
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-      - run: cargo clippy -p solomon-web --target wasm32-unknown-unknown -- -D warnings
-      - run: cargo clippy -p solomon-loader --target wasm32-unknown-unknown -- -D warnings
-      - run: cargo test --workspace --all-features
-      - run: cargo build -p solomon-assets --example browser_navigation
-      - run: npm run test:browser-navigation
-      - run: cargo build -p solomon-modding --bin solomon-sdmod
-      - run: npm run test:sdmod
-        env:
-          SOLOMON_SDMOD_BINARY: ${{ github.workspace }}/target/debug/solomon-sdmod
-      - name: Build the standalone browser embedding
-        run: trunk build --config web/Trunk.toml --release
-      - name: Retain the browser embedding for Windows acceptance
-        uses: actions/upload-artifact@v4
-        with:
-          name: browser-client
-          path: |
-            web/dist/
-            !web/dist/assets/**
-          if-no-files-found: error
-      - name: Build the complete Website artifact
-        run: python3 scripts/package-hosted-game.py --output artifacts/solomon-game-linux --mount /game
-      - name: Record the immutable archive checksum
-        working-directory: artifacts
-        run: sha256sum solomon-game-linux.tar.gz > solomon-game-linux.tar.gz.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: hosted-game-linux
-          path: |
-            artifacts/solomon-game-linux.tar.gz
-            artifacts/solomon-game-linux.tar.gz.sha256
-          if-no-files-found: error
-
-  browser:
-    name: Browser (Windows)
-    needs: game
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - run: npm run test:browser-support
-      - uses: actions/download-artifact@v4
-        with:
-          name: browser-client
-          path: web/dist
-      - name: Verify browser gameplay, settings and asset failure cleanup
-        shell: pwsh
-        run: |
-          Copy-Item web/assets -Destination web/dist -Recurse
-          New-Item -ItemType Directory -Force reports/browser | Out-Null
-          $env:PW = Join-Path $env:GITHUB_WORKSPACE 'node_modules/playwright-core'
-          $env:CHROME = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'
-          if (!(Test-Path $env:CHROME)) { throw 'The Windows runner has no installed Chrome.' }
-          node --test tools/browser-smoke/browser-launch.test.cjs
-          if ($LASTEXITCODE) { throw 'Browser launch configuration failed.' }
-          $env:URL = 'http://127.0.0.1:4181/'
-          $server = Start-Process -FilePath (Get-Command python).Source -ArgumentList @('scripts/serve-client.py', '4181', '--bind', '127.0.0.1', '--directory', 'web/dist') -PassThru -RedirectStandardOutput reports/browser/server.log -RedirectStandardError reports/browser/server-error.log
-          try {
-            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser/gameplay'
-            node tools/browser-smoke/smoke.cjs
-            if ($LASTEXITCODE) { throw 'Browser gameplay failed.' }
-            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser/settings'
-            node tools/browser-smoke/settings-parity.cjs
-            if ($LASTEXITCODE) { throw 'Browser settings failed.' }
-            $env:OUT = Join-Path $env:GITHUB_WORKSPACE 'reports/browser/image-load-failure'
-            node tools/browser-smoke/image-load-failure.cjs
-            if ($LASTEXITCODE) { throw 'Browser asset failure cleanup failed.' }
-          } finally {
-            if (!$server.HasExited) { Stop-Process -Id $server.Id }
-            if (!$server.WaitForExit(10000)) { throw 'The owned browser test server did not exit.' }
+{
+  "name": "Observe Intel peer input on the unchanged package",
+  "on": {
+    "push": {
+      "branches": [
+        "diagnostic/peer-input-20261030"
+      ]
+    }
+  },
+  "permissions": {
+    "contents": "read",
+    "actions": "read"
+  },
+  "jobs": {
+    "observe": {
+      "runs-on": "macos-15-intel",
+      "timeout-minutes": 40,
+      "steps": [
+        {
+          "uses": "actions/checkout@v6",
+          "with": {
+            "fetch-depth": 2
           }
-      - name: Retain browser acceptance evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: browser-evidence-windows
-          path: reports/browser
-          if-no-files-found: error
-
-  desktop:
-    name: Desktop (${{ matrix.platform }}-${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { runner: windows-latest, platform: win32, arch: x64 }
-          - { runner: macos-15, platform: darwin, arch: arm64 }
-          - { runner: macos-15-intel, platform: darwin, arch: x64 }
-          - { runner: ubuntu-latest, platform: linux, arch: x64 }
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - name: Resolve the accessibility driver's interpreter
-        run: python -c 'import os,sys; print("TCC_CLIENT=" + os.path.realpath(sys.executable))' >> "$GITHUB_ENV"
-      - name: Prepare native accessibility and display services
-        uses: xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d
-        with:
-          setup-window-manager: 'true'
-          extra-packages: libasound2-dev libasound2-plugins libudev-dev libfontconfig1-dev libclang-dev cmake libgl1-mesa-dev pulseaudio
-          macos-tcc-client: ${{ env.TCC_CLIENT }}
-      - name: Install the native acceptance driver
-        run: python -m pip install -r tools/desktop-smoke-requirements.txt
-      - name: Provide software OpenGL on the Windows runner
-        if: ${{ runner.os == 'Windows' }}
-        uses: ssciwr/setup-mesa-dist-win@2dfeaebfa514f74c2b8cd8d27108c31486d33e72
-        with:
-          version: '26.0.3'
-      - name: Select native Windows Perl for the bundled TLS library
-        if: ${{ runner.os == 'Windows' }}
-        shell: pwsh
-        run: |
-          $nativePerl = (Get-Command perl -All | Where-Object Source -Like '*Strawberry*' | Select-Object -First 1).Source
-          if (!$nativePerl) { throw 'The runner has no Strawberry Perl installation.' }
-          & $nativePerl -MLocale::Maketext::Simple -e 1
-          if ($LASTEXITCODE) { throw 'The native Perl modules required by OpenSSL are unavailable.' }
-          "OPENSSL_SRC_PERL=$nativePerl" >> $env:GITHUB_ENV
-      - name: Provide a Linux audio output
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          pulseaudio --start --exit-idle-time=-1
-          pactl load-module module-null-sink sink_name=acceptance
-          pactl set-default-sink acceptance
-          printf 'pcm.!default { type pulse }\nctl.!default { type pulse }\n' > ~/.asoundrc
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm install --global npm@10.9.2
-      - run: npm ci --no-audit --no-fund
-      - name: Install the pinned Rust and WASM toolchain
-        run: rustup show
-      - run: python scripts/verify-client-assets.py
-      - run: npm run test:desktop
-      - name: Restore native build cache
-        id: native-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-${{ github.sha }}
-          restore-keys: |
-            native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}-
-            native-${{ runner.os }}-${{ runner.arch }}-
-      - name: Build standalone app from this revision
-        id: native-build
-        run: npm run package:desktop -- --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --release-repository "$GITHUB_REPOSITORY"
-      - name: Archive and inspect the final standalone app
-        id: native-archive
-        run: node tools/archive-desktop.mjs
-      - name: Verify the complete native workspace on Windows
-        if: ${{ runner.os == 'Windows' }}
-        run: cargo test --workspace --all-features
-      - name: Verify the Windows app needs no external VC++ runtime
-        if: ${{ runner.os == 'Windows' }}
-        run: python tools/inspect-windows-crt.py 'dist-desktop/Solomon Darker-win32-x64/solomon-darker.exe' reports/desktop-smoke/native-imports.json static
-      - name: Save completed native build cache
-        if: always() && steps.native-build.outcome == 'success' && steps.native-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ steps.native-cache.outputs.cache-primary-key }}
-      - name: Verify packaged offline save and peer gameplay
-        if: always() && steps.native-archive.outcome == 'success'
-        timeout-minutes: 30
-        run: npm run smoke:desktop
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
-          path: |
-            dist-desktop/*.zip
-            dist-desktop/*.sha256
-            dist-desktop/desktop-release.json
-          if-no-files-found: error
-      - name: Retain desktop acceptance evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-evidence-${{ matrix.platform }}-${{ matrix.arch }}
-          path: reports/desktop-smoke
-          if-no-files-found: ignore
-      - name: Retain an unqualified candidate on failure
-        if: failure() && steps.native-build.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: unqualified-desktop-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            dist-desktop/*.zip
-            dist-desktop/*.sha256
-            dist-desktop/desktop-release.json
-          if-no-files-found: ignore
-
-  desktop-release:
-    name: Publish standalone apps
-    needs: [game, browser, desktop]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    concurrency:
-      group: desktop-release
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: desktop-*
-          path: desktop-artifacts
-      - uses: actions/download-artifact@v4
-        with:
-          name: hosted-game-linux
-          path: game-artifact
-      - name: Publish the validated revision
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Older workflow runs must not replace the update feed after main advances.
-          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
-          [[ "$current_main" == "$GITHUB_SHA" ]] || exit 0
-          mkdir release
-          for target in win32-x64 darwin-arm64 darwin-x64 linux-x64; do
-            cp "desktop-artifacts/desktop-$target/Solomon-Darker-$target.zip" release/
-            cp "desktop-artifacts/desktop-$target/Solomon-Darker-$target.zip.sha256" release/
-            cmp desktop-artifacts/desktop-win32-x64/desktop-release.json "desktop-artifacts/desktop-$target/desktop-release.json"
-          done
-          cp desktop-artifacts/desktop-win32-x64/desktop-release.json release/
-          (cd release && sha256sum --check ./*.sha256)
-          python3 - <<'PY'
-          import json, os
-          with open('release/desktop-release.json') as source:
-              assert json.load(source)['revision'] == os.environ['GITHUB_SHA']
-          PY
-          cp game-artifact/solomon-game-linux.tar.gz release/
-          cp game-artifact/solomon-game-linux.tar.gz.sha256 release/
-          (cd release && sha256sum --check solomon-game-linux.tar.gz.sha256)
-          tag="desktop-$GITHUB_SHA"
-          cat > release-notes.md <<'NOTES'
-          Solomon Darker native Rust app: offline solo play, local saves, encrypted direct peer hosting and update notifications.
-
-          Extract the ZIP and run the app. Keep the entire extracted folder together. Your saves live in the app's user-data folder, separate from the download. To update, save and close the game, then replace the extracted application with the new version.
-
-          For multiplayer, choose Host game, start a game, press Escape and choose Copy multiplayer invite. Friends choose Join a friend and paste it. Internet hosts need a reachable IP or VPN address and an allowed/forwarded TCP port (default 27843). Everyone must use the same build. Keep the host running.
-
-          To move a save from the previous Electron app, export its save ZIP from Settings > Online and account > Stock / browser save. In this app choose Play offline, then Settings > Online and account > Import / export save and import the ZIP. Keep the previous app until your wizard is restored.
-
-          These builds are not publisher-signed or notarized. Windows or macOS may require an explicit first-launch confirmation. Cloud accounts and Dark Cloud content remain available in the web app.
-          NOTES
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" release/* --clobber
-            gh release edit "$tag" --draft=false --latest --notes-file release-notes.md
-          else
-            gh release create "$tag" release/* --target "$GITHUB_SHA" --latest \
-              --title "Solomon Darker ${GITHUB_SHA:0:8}" --notes-file release-notes.md
-          fi
+        },
+        {
+          "uses": "actions/setup-python@v6",
+          "with": {
+            "python-version": "3.12"
+          }
+        },
+        {
+          "name": "Resolve accessibility interpreter",
+          "run": "python3 -c 'import os,sys; print(\"TCC_CLIENT=\" + os.path.realpath(sys.executable))' >> \"$GITHUB_ENV\""
+        },
+        {
+          "uses": "xa11y/setup-a11y@0dad2b7bb4c0d4601e99e53d9b42b3195274aa3d",
+          "with": {
+            "macos-tcc-client": "${{ env.TCC_CLIENT }}"
+          }
+        },
+        {
+          "run": "python3 -m pip install -r tools/desktop-smoke-requirements.txt"
+        },
+        {
+          "name": "Download the original unqualified package",
+          "env": {
+            "GH_TOKEN": "${{ github.token }}"
+          },
+          "run": "gh run download 41114455330 --repo \"$GITHUB_REPOSITORY\" --name unqualified-desktop-darwin-x64-41114455330-1 --dir input"
+        },
+        {
+          "name": "Validate diagnostic source",
+          "run": "python3 -m py_compile tools/diagnostic-peer-input.py\npython3 tools/diagnostic-peer-input.py --check"
+        },
+        {
+          "name": "Observe one full package journey",
+          "timeout-minutes": 30,
+          "run": "python3 tools/diagnostic-peer-input.py"
+        },
+        {
+          "uses": "actions/upload-artifact@v4",
+          "if": "always()",
+          "with": {
+            "name": "intel-peer-input-observation",
+            "path": "reports/desktop-smoke",
+            "if-no-files-found": "error"
+          }
+        }
+      ]
+    }
+  }
+}
