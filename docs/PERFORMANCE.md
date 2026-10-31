@@ -1,6 +1,53 @@
 # Performance
 
-## Measured scope
+## Title and College rendering
+
+The sprite program retains its projection, pixel-center offset, crop bounds and
+two premultiplication values. Each draw uploads only the values that changed;
+program activation, batch order, geometry and shaders remain the same.
+
+Measurements on 2026-10-31 compare this change with `f4e79a9d` on an Apple M2,
+using Rust 1.98.1 release builds and Chrome 156.0.8078.74 with ANGLE/Metal. Each
+fresh browser and native authority uses a 1600×900 viewport at device scale 1.
+The title prompt is dismissed and College uses ordinary new-game admission,
+waiting for courtyard arrival. Each scene warms for five seconds and runs for
+twenty seconds. Three adjacent pairs use baseline/candidate, candidate/baseline,
+then baseline/candidate order. The table reports medians of run means and p95s.
+
+| Scene | Previous callback mean / p95, ms | Current callback mean / p95, ms | Previous / current renderer task CPU, ms/s |
+| --- | ---: | ---: | ---: |
+| Title | 0.731 / 1.50 | 0.731 / 1.40 | 56.03 / 56.47 |
+| College idle | 1.859 / 2.30 | 1.741 / 2.20 | 156.17 / 148.12 |
+
+College callback means fall by 5.3–9.8% across the three pairs, with a 6.3%
+reduction between their medians. Renderer task CPU falls by 5.2%. Title timing
+does not show a meaningful improvement. Both versions sustain approximately
+60 FPS, with no sampled frame interval above 20 ms. Draw counts remain 32 for
+title and approximately 223 for College. The unchanged authority uses about
+60 ms of CPU per second during College.
+
+Separate API-count passes record 166→6 uniform calls per title frame and
+approximately 1,297→351 per College frame. Those instrumented timings are
+excluded from the table. College's ambient actors evolve normally; the baseline
+API-count pass has two additional draws per frame, so those counts describe
+the observed workloads rather than identical frames.
+
+Callback wall time includes submission, draw/buffer instrumentation and possible
+preemption. CDP task time excludes GPU, authority and observer processes. No
+compiler or acceptance suite runs during sampling; ordinary background apps and
+OS services remain active. All runs retain raw intervals, GPU identity, actual
+input, images, error reports and graceful browser/authority exits. Separate CPU
+profiles identify redundant uniform uploads but are not timing comparisons.
+These short local samples establish neither native performance nor mobile,
+high-refresh, network or endurance behavior.
+
+The reproducible driver and exact build identities are retained in
+`~/codex-runs/solomon-title-college-20261031/`: `browser-profile.cjs`,
+`baseline-build/receipt.json`, `candidate-build/receipt.json`, the candidate
+source patch, `comparison-suite.json` and `comparison-review.json`. Native and
+browser composition probes cover projection, blend, crop and program restoration.
+
+## Broader measured scope
 
 Release `92e3fe4c` sustains approximately 60 FPS in the measured Apple M2 workloads.
 These measurements were captured on 2026-10-25; they are not production telemetry.
@@ -129,7 +176,7 @@ change numeric precision, acknowledgements, or reliable results.
 
 ## Open measurements
 
-Title and idle College browser cost, small-scene display copies, and College
+Further title and College hot paths, small-scene display copies, and College
 snapshot volume remain profiling targets. Four-player browser, mobile, high-refresh,
 constrained-network, and long-session workloads are unmeasured.
 

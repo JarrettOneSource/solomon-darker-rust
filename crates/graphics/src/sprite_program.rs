@@ -35,6 +35,16 @@ pub(super) struct SpriteProgram {
     premultiply_rgb: glow::UniformLocation,
     texture_premultiplied: glow::UniformLocation,
     texture_bounds: glow::UniformLocation,
+    uniforms: Option<Uniforms>,
+}
+
+#[derive(Clone, Copy)]
+struct Uniforms {
+    logical: [f32; 2],
+    offset: [f32; 2],
+    bounds: [f32; 4],
+    premultiply_rgb: bool,
+    texture_premultiplied: bool,
 }
 
 impl SpriteProgram {
@@ -56,6 +66,7 @@ impl SpriteProgram {
                     premultiply_rgb: uniform("u_premultiply_rgb")?,
                     texture_premultiplied: uniform("u_texture_premultiplied")?,
                     texture_bounds: uniform("u_texture_bounds")?,
+                    uniforms: None,
                 };
                 gl.use_program(Some(program));
                 gl.uniform_1_i32(Some(&texture), 0);
@@ -69,31 +80,53 @@ impl SpriteProgram {
     }
 
     pub(super) fn bind(
-        &self,
+        &mut self,
         logical: [f32; 2],
         offset: [f32; 2],
         blend: BlendMode,
         color_mode: TextureColorMode,
         bounds: Option<[f32; 4]>,
     ) {
+        let uniforms = Uniforms {
+            logical,
+            offset,
+            bounds: bounds.unwrap_or([1.0, 1.0, 0.0, 0.0]),
+            premultiply_rgb: blend != BlendMode::Multiply,
+            texture_premultiplied: color_mode == TextureColorMode::Premultiplied,
+        };
         // SAFETY: the batcher owns this program in the same live current context.
         unsafe {
             self.gl.use_program(Some(self.program));
-            self.gl.uniform_2_f32_slice(Some(&self.logical_size), &logical);
-            self.gl.uniform_2_f32_slice(Some(&self.pixel_center_offset), &offset);
-            self.gl.uniform_4_f32_slice(
-                Some(&self.texture_bounds),
-                &bounds.unwrap_or([1.0, 1.0, 0.0, 0.0]),
-            );
-            self.gl.uniform_1_f32(
-                Some(&self.premultiply_rgb),
-                if blend == BlendMode::Multiply { 0.0 } else { 1.0 },
-            );
-            self.gl.uniform_1_f32(
-                Some(&self.texture_premultiplied),
-                if color_mode == TextureColorMode::Premultiplied { 1.0 } else { 0.0 },
-            );
+            // Uniform values belong to this program and survive effect-program draws.
+            // A new projection, crop or colour mode updates only its changed values.
+            if self.uniforms.is_none_or(|previous| previous.logical != uniforms.logical) {
+                self.gl.uniform_2_f32_slice(Some(&self.logical_size), &uniforms.logical);
+            }
+            if self.uniforms.is_none_or(|previous| previous.offset != uniforms.offset) {
+                self.gl.uniform_2_f32_slice(Some(&self.pixel_center_offset), &uniforms.offset);
+            }
+            if self.uniforms.is_none_or(|previous| previous.bounds != uniforms.bounds) {
+                self.gl.uniform_4_f32_slice(Some(&self.texture_bounds), &uniforms.bounds);
+            }
+            if self
+                .uniforms
+                .is_none_or(|previous| previous.premultiply_rgb != uniforms.premultiply_rgb)
+            {
+                self.gl.uniform_1_f32(
+                    Some(&self.premultiply_rgb),
+                    f32::from(uniforms.premultiply_rgb),
+                );
+            }
+            if self.uniforms.is_none_or(|previous| {
+                previous.texture_premultiplied != uniforms.texture_premultiplied
+            }) {
+                self.gl.uniform_1_f32(
+                    Some(&self.texture_premultiplied),
+                    f32::from(uniforms.texture_premultiplied),
+                );
+            }
         }
+        self.uniforms = Some(uniforms);
     }
 }
 
