@@ -105,6 +105,11 @@ batch buffer. Native and browser pixel checks compare straight and premultiplied
 textures across normal, additive and multiply blending, and verify state restoration
 when draws alternate between the programs.
 
+Sprite uniform values stay with their owning program across effect draws. The
+sprite program retains the last uploaded values and changes only those that
+differ, avoiding repeated driver calls for unchanged projection and color state.
+Constructing a new program starts with no retained values.
+
 Courtyard records replace the reference client's independently cropped images.
 Sampling their raw atlas edges let the statue read an opaque white row from its
 neighbor. `Renderer::draw_clamped` clamps sample coordinates to the selected

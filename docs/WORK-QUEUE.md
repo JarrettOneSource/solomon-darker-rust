@@ -14,6 +14,7 @@ from those release checks.
 
 ## Performance
 
-Profile title and idle College browser cost, small-scene display copies, and College
-snapshot volume. Measure four-player, constrained-network, mobile, high-refresh,
-and long-session workloads. [Performance](PERFORMANCE.md) defines the measured scope.
+The title/College baseline and sprite-uniform savings are measured in
+[Performance](PERFORMANCE.md). Continue profiling the remaining browser hot paths,
+small-scene display copies and College snapshot volume. Measure four-player,
+constrained-network, mobile, high-refresh and long-session workloads.
