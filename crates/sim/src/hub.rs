@@ -12,6 +12,7 @@
 pub mod ambient;
 pub mod college_intro;
 pub mod depth;
+pub mod fixed_actors;
 pub mod interaction;
 pub mod memorial;
 pub mod npc;
