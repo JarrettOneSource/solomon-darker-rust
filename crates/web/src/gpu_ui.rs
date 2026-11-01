@@ -19,6 +19,11 @@ mod material;
 pub(crate) mod navigation;
 mod painter;
 mod stock;
+pub(crate) mod unforge;
+#[cfg(all(target_arch = "wasm32", feature = "browser-fixtures"))]
+mod unforge_fixture;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) use tests::record_shapes;
 #[cfg(test)]
 mod tests;
 

@@ -171,6 +171,9 @@ impl GpuPainter {
             let mut counts = (0, 0);
             for node in nodes {
                 let rendered = match node {
+                    Node::Unforge { paint, clip } => {
+                        self.draw_unforge(renderer, images, paint, *clip, view)?
+                    }
                     Node::Mesh { mesh, clip } => {
                         self.draw_mesh(renderer, images, mesh, *clip, view)?
                     }

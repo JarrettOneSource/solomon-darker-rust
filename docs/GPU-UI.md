@@ -73,6 +73,15 @@ happens after filtering so off-clip pixels can contribute to a visible shadow.
 The renderer restores framebuffer, projection, blend, and sampling state after
 the group. Targets are reused by nesting depth and destroyed with their owner.
 
+Inventory and all four College service companions submit one native Unforge
+paint operation. It scrolls UI77 twice through the UI76 multiply mask in an
+owned 256-square target, then paints that target before pulsing UI75. The phase
+comes from application time, including while the world is paused; panel reveal
+and the stage transform move both layers together. This capture alone requests
+native integer pixel centers and native per-channel alpha. Enclosing UI groups
+retain their ordinary SourceOver contract. The GPU UI painter retains and retires
+the target; the three source records borrow the existing UI atlas.
+
 Outer and inner box shadows use opaque geometry as their caster, rather than the
 visible image's alpha. An outer shadow removes the original interior; an inner
 shadow remains inside it. Spread expands the caster while retaining the original

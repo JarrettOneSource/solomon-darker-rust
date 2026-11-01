@@ -54,6 +54,14 @@ pub fn gpu_ui_state() -> String {
 #[wasm_bindgen(start)]
 pub fn start() {
     console_error_panic_hook::set_once();
+    // The isolated GPU proof initializes the same WASM module without starting
+    // a second, unrelated Game. Ordinary fixture documents still start normally.
+    #[cfg(feature = "browser-fixtures")]
+    if web_sys::window().and_then(|window| window.document()).is_some_and(|document| {
+        document.get_element_by_id("solomon-unforge-isolated-fixture").is_some()
+    }) {
+        return;
+    }
     crate::platform::spawn_local(async {
         if let Err(message) = run().await {
             web_sys::console::error_1(&JsValue::from_str(&message));
