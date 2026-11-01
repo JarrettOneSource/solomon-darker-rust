@@ -34,7 +34,12 @@ Shared states use one table entry.
 
 Metadata records runtime and protocol versions, revision, content manifest, and
 loaded geometry. `read_run_archive` decodes the private format. It is not a
-player-save import or public upload format.
+player-save import or public upload format. The reader accepts protocol versions
+1 through 3. Earlier native Boulder fields pass through the same checkpoint
+migration as standalone saves, scoped to the persisted spell queue. Missing
+historical target/turn history uses the established native defaults; it is not
+reconstructed. Current guidance stays exact. Decoding retains metadata, state-table
+indices and all unrelated checkpoint state without rewriting the original archive.
 
 I/O failures emit `run_archive.failed`.
 
