@@ -1268,3 +1268,135 @@ fn inherited_rotation_keeps_stock_and_glyph_vertices_in_one_paint_transform() {
         assert!((scaled.paint_position(pos2(110.0, 100.0)) - pos2(105.0, 100.0)).length() < 0.0001);
     });
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+fn player_card_feedback_context() -> (Context, fonts::PlatformFonts) {
+    let native_fonts = fonts::test_fonts();
+    fonts::with_fonts(|fonts| {
+        fonts.register_woff2(include_bytes!(
+            "../../../../web/assets/stock/fonts/cinzel-latin-500-normal.woff2"
+        ))?;
+        Ok(())
+    })
+    .unwrap();
+    let ctx = Context::default();
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.families.insert(
+        egui::FontFamily::Name("Cinzel".into()),
+        fonts.families[&egui::FontFamily::Proportional].clone(),
+    );
+    ctx.set_fonts(fonts);
+    (ctx, native_fonts)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn player_card_feedback_focus_and_keyboard_dismissal_release_the_real_control() {
+    use crate::social::player_card_request::PlayerCardRequests;
+
+    let (ctx, _fonts) = player_card_feedback_context();
+    let mut requests = PlayerCardRequests::default();
+    let id = requests.begin(0.0);
+    assert!(requests.complete(id, false, 10.0));
+    for _ in 0..2 {
+        frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    }
+    assert!(!requests.blocks_input(), "an unfocused notice leaves gameplay available");
+    let widgets = frame(
+        &ctx,
+        vec![egui::Event::Key {
+            key: egui::Key::Tab,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }],
+        |frame| requests.paint(frame, false).unwrap(),
+    );
+    let dismiss = &widgets["social/card-feedback-dismiss"];
+    assert!(dismiss.focused);
+    assert!(requests.blocks_input(), "real keyboard focus seals gameplay shortcuts");
+    for pressed in [true, false] {
+        frame(
+            &ctx,
+            vec![egui::Event::Key {
+                key: egui::Key::Space,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            |frame| requests.paint(frame, false).unwrap(),
+        );
+    }
+    assert_eq!(requests.message(), None);
+    assert!(!requests.blocks_input());
+    assert!(ctx.memory(|memory| memory.focused()).is_none());
+    let widgets = frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    assert!(!widgets.contains_key("social/card-feedback-dismiss"));
+    assert!(!widgets.contains_key("social/card-feedback"));
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn player_card_feedback_expiry_and_cover_release_focus_without_changing_the_deadline() {
+    use crate::social::player_card_request::PlayerCardRequests;
+
+    let (ctx, _fonts) = player_card_feedback_context();
+    let mut requests = PlayerCardRequests::default();
+    let id = requests.begin(0.0);
+    assert!(requests.complete(id, false, 10.0));
+    frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    let widgets = frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    let dismiss = widgets["social/card-feedback-dismiss"].egui_id.unwrap();
+    ctx.memory_mut(|memory| memory.request_focus(dismiss));
+    frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    assert!(requests.blocks_input());
+    requests.hide(&ctx);
+    assert!(!requests.blocks_input());
+    assert!(ctx.memory(|memory| memory.focused()).is_none());
+    requests.advance(5_009.0);
+    let widgets = frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    assert!(widgets.contains_key("social/card-feedback"));
+    ctx.memory_mut(|memory| memory.request_focus(dismiss));
+    frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    assert!(requests.blocks_input());
+    requests.advance(5_010.0);
+    assert!(!requests.blocks_input(), "expiry releases input before the next paint");
+    let widgets = frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    assert!(!widgets.contains_key("social/card-feedback-dismiss"));
+    assert!(ctx.memory(|memory| memory.focused()).is_none());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn player_card_feedback_pointer_dismissal_uses_the_painted_touch_control() {
+    use crate::social::player_card_request::PlayerCardRequests;
+
+    let (ctx, _fonts) = player_card_feedback_context();
+    let mut requests = PlayerCardRequests::default();
+    let id = requests.begin(0.0);
+    assert!(requests.complete(id, false, 10.0));
+    frame(&ctx, vec![], |frame| requests.paint(frame, true).unwrap());
+    let widgets = frame(&ctx, vec![], |frame| requests.paint(frame, true).unwrap());
+    let control = &widgets["social/card-feedback-dismiss"];
+    assert!(control.bounds.height >= 44.0);
+    let pos = control.bounds.rect().center();
+    for pressed in [true, false] {
+        frame(
+            &ctx,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            |frame| requests.paint(frame, true).unwrap(),
+        );
+    }
+    assert_eq!(requests.message(), None);
+    assert!(!requests.blocks_input());
+}

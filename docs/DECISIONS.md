@@ -750,3 +750,24 @@ destinations retain their existing rules. No protocol or save-schema change is
 needed. The real panel attach/update/action regression applies emitted commands
 through the canonical economy for all removable sinks, three inventory depths
 and Inventory plus the four trader companion panels.
+
+## Player Card lookup feedback belongs to its session
+
+Hosted Player Card lookup can legitimately return no profile after a chat author
+disconnects. The maintained Website contract in social ledger 136 treats this
+as dismissible feedback for five application seconds. Retail has no Website
+Player Card service, so this is a product UI contract rather than a recovered
+native lifetime. The lookup itself has a ten-second application deadline.
+
+One shared Rust owner keeps the latest request, its deadline and its feedback.
+Older replies cannot replace a newer pending request or result. Session replacement
+and transport retirement cancel the lookup without changing the retained world,
+and request IDs remain distinct across those boundaries. Feedback never enters a
+save. UI application time continues while gameplay ticks are paused.
+
+The real Dismiss control seals gameplay shortcuts only while focused; dismissal,
+expiry and a covering surface release that focus. Loading, leaving, routing and
+serious runtime errors retain rendering priority. College invitation failures keep
+their separate notice owner, and card expiry or dismissal cannot clear them.
+Controller and composed egui regressions protect the deadline, stale-reply,
+keyboard, pointer and focus lifetimes; actual built-game acceptance is separate.
