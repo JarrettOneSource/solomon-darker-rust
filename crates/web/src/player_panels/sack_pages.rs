@@ -164,7 +164,7 @@ impl PlayerPanels {
                 cell.fill(HudRect::new(6.0, 6.0, 60.0, 60.0), 0xd9ba70, 0.25);
                 cell.art(&self.ui, 1, [36.0, 24.0], [0.65, 0.65], 0.0, 0xffffff)?;
                 let holder = cell.at(1.0, 1.0).clip(HudRect::new(0.0, 0.0, 70.0, 67.0));
-                self.draw_item(&holder, item, 35.0, 53.0, 1)?;
+                self.draw_item(&holder, item, 35.0, 53.0, 1, snapshot.selection.element)?;
                 continue;
             }
             let slot = visible - usize::from(parent.is_some());
@@ -183,7 +183,14 @@ impl PlayerPanels {
                 0xffffff,
             )?;
             if let Some(item) = item.filter(|item| !self.inventory_item_hidden(item.id)) {
-                let bounds = self.draw_item(&cell, item, 36.0, 36.0, item.quantity as u64)?;
+                let bounds = self.draw_item(
+                    &cell,
+                    item,
+                    36.0,
+                    36.0,
+                    item.quantity as u64,
+                    snapshot.selection.element,
+                )?;
                 self.record_mod_item(&cell, item, 36.0, 36.0, bounds);
             }
             if interactive && item.is_some_and(|item| self.selected == Some(Target::Item(item.id)))

@@ -251,7 +251,7 @@ impl PlayerPanels {
                 .dowsing_reference_item
                 .and_then(|id| solomon_sim::belt::native_belt_owned_item(s.economy, id))
             {
-                self.draw_item(&mirror, item, 50.0, 74.5, 1)?;
+                self.draw_item(&mirror, item, 50.0, 74.5, 1, s.selection.element)?;
             }
             let dowse = c.native_button(
                 &self.ui,
@@ -350,7 +350,7 @@ impl PlayerPanels {
                             storage,
                         )?;
                     } else {
-                        self.draw_item(&cell, item, 36.0, 36.0, 1)?;
+                        self.draw_item(&cell, item, 36.0, 36.0, 1, s.selection.element)?;
                     }
                     if !storage {
                         self.shop_price(&cell, price, price > s.economy.gold);

@@ -5,10 +5,13 @@ use super::{
 };
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use egui::{Color32, Pos2, Rect, Vec2};
-use solomon_sim::economy::{EquipmentType, HubInventoryItem};
+use solomon_sim::economy::HubInventoryItem;
 use solomon_sim::hub::interaction::HubNpcSelectorId;
-use solomon_sim::hud::HudRect;
+use solomon_sim::hud::{
+    HudRect, native_inventory_item_icon_tints, native_inventory_item_icon_transform,
+};
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextLayout, NativeUiTextSpec};
+use solomon_sim::profile::WizardElement;
 use std::cell::RefCell;
 
 #[derive(Clone)]
@@ -533,6 +536,7 @@ impl PlayerPanels {
         x: f64,
         y: f64,
         quantity: u64,
+        element: WizardElement,
     ) -> Result<Rect, String> {
         let mut bounds = Rect::NOTHING;
         if let Some(layers) = self.mod_icons.get(&item.id) {
@@ -553,22 +557,10 @@ impl PlayerPanels {
                 1.0,
             );
         } else {
-            let (offset, rotation) = match item.equipment_type {
-                Some(EquipmentType::Amulet) => ([0.0, -5.0], 0.0),
-                Some(EquipmentType::Staff) => ([-22.94306, 32.76608], 35.0),
-                Some(EquipmentType::Wand) => ([0.0, 0.0], 45.0),
-                _ => ([0.0, 0.0], 0.0),
-            };
-            let tints = item.clothing_tints();
+            let (offset, rotation) = native_inventory_item_icon_transform(item.equipment_type);
+            let tints = native_inventory_item_icon_tints(item, element);
             for (layer, record) in item.icon_records.iter().enumerate() {
-                let tint = if matches!(
-                    item.equipment_type,
-                    Some(EquipmentType::Hat | EquipmentType::Robe)
-                ) {
-                    tints.and_then(|colors| colors.get(layer).copied()).unwrap_or(0xffffff)
-                } else {
-                    0xffffff
-                };
+                let tint = tints.get(layer).copied().unwrap_or(0xffffff);
                 bounds = bounds.union(c.art(
                     &self.inventory,
                     *record,
@@ -682,7 +674,7 @@ impl PlayerPanels {
                     _ => item.map_or(0, |item| item.quantity as u64),
                 };
                 if let Some(item) = item {
-                    self.draw_item(c, item, x, y, quantity)?;
+                    self.draw_item(c, item, x, y, quantity, snapshot.selection.element)?;
                 }
             }
             c.button(
@@ -763,7 +755,14 @@ impl PlayerPanels {
         } else if let Some(id) = press.inventory_item_id
             && let Some(item) = solomon_sim::belt::native_belt_owned_item(snapshot.economy, id)
         {
-            bounds = self.draw_item(c, item, self.pointer.x, self.pointer.y, 1)?;
+            bounds = self.draw_item(
+                c,
+                item,
+                self.pointer.x,
+                self.pointer.y,
+                1,
+                snapshot.selection.element,
+            )?;
             self.record_mod_item(c, item, self.pointer.x, self.pointer.y, bounds);
         }
         if bounds.is_positive() {

@@ -57,7 +57,7 @@ use solomon_sim::hub::interaction::{
 use solomon_sim::hub::painter::courtyard_player_sort_bias;
 use solomon_sim::hub::teacher::hub_teacher_draw_plan;
 use solomon_sim::hub::{HUB_CAMERA_SCALE, hub_region_camera_origin_for_view};
-use solomon_sim::hud::{HudBeltEntry, HudState};
+use solomon_sim::hud::{HudBeltEntry, HudItemIcon, HudState};
 use solomon_sim::input::{
     GameplayAction, GameplayAim, GameplayInputSample, project_native_stick_aim,
     project_native_world_pointer,
@@ -2441,7 +2441,7 @@ impl Game {
                 Some(entry @ NativeBeltEntry::Item { .. }) => {
                     solomon_sim::belt::native_belt_entry_item(*entry, &player.economy).map(|item| {
                         HudBeltEntry::Item {
-                            record: item.icon_records.first().copied(),
+                            icon: HudItemIcon::from_item(item, player.selection.element),
                             count: item.quantity,
                         }
                     })

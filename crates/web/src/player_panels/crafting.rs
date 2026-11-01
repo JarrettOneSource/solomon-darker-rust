@@ -454,7 +454,7 @@ impl PlayerPanels {
                         HudRect::new(0.0, 0.0, 72.0, 72.0),
                         0xffffff,
                     )?;
-                    self.draw_item(&target, entry.item, 36.0, 36.0, 1)?;
+                    self.draw_item(&target, entry.item, 36.0, 36.0, 1, s.selection.element)?;
                     if dye.target_item_id == Some(entry.item.id) {
                         target.stroke(HudRect::new(0.0, 0.0, 72.0, 72.0), 0xffffff, 2.0);
                     }
