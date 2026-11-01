@@ -120,7 +120,8 @@ pub fn spawn_native_weld_steam_actor(
         color_rise: constructor.color_rise,
         contact_damage: input.damage,
         contact_due: false,
-        contact_enabled: variant == NativeWeldSteamVariant::Normal && !input.underpowered,
+        // Retail 0x00543266 tests caster bank, not the handler's low-mana byte.
+        contact_enabled: variant == NativeWeldSteamVariant::Normal,
         contact_ticks_remaining: constructor.contact_ticks_remaining,
         life: constructor.life,
         life_loss: constructor.life_loss,
