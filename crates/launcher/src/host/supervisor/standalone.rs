@@ -44,6 +44,7 @@ impl HostedSupervisor {
         }
         Some(HostTicket {
             admission: HostedAdmission {
+                reconnect: None,
                 content: Arc::clone(&host.content),
                 developer_access: false,
                 leaderboard_user_id: None,

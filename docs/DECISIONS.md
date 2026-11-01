@@ -405,6 +405,61 @@ that publication. A later healthy sequence with the same target game revision
 can complete recovery. Idle website-only refresh uses its own publication path;
 an active game still observes the save and transport-retirement barrier.
 
+## Retained hosted authority after transport interruption
+
+An unexpected `1001`/`1006` after a playable hosted Welcome is a transport failure,
+not a saved restart. Hosted membership owns one absolute 30-second monotonic
+lease on the existing participant and world; an authenticated replacement can
+start the same deadline before the old Close arrives. The bound is an explicit
+operational policy, longer than ordinary open/Welcome progress intervals and
+shorter than an unclaimed ticket's 120-second lifetime. A large valid Welcome and
+actual renderer readiness must fit it on M2. HTTP redelivery, another reservation
+and partial transfer progress never extend it.
+
+`hosted/reconnect.rs` owns retained membership, neutral input, peer-generation
+binding and final cleanup. It keeps accepted state, action/transient history,
+RNG, party/VM/bot owners and monotonic save sequence without a second simulation.
+A recovering participant still occupies capacity; connected and recovering
+humans are counted separately, and private retirement waits. The affected
+private/party world uses existing loading/renderer holds; unrelated Hub worlds
+continue. Old peer events cannot route into the replacement generation.
+
+The Website admission owner accepts a logical Hub/private selector and resume
+capability, then forwards its current JWT subject to the configured supervisor.
+`supervisor/http.rs` checks the original anonymous/account binding, current live
+actor and capability before minting a fresh one-use reconnect-purpose ticket.
+It binds that ticket to the request and expected peer; redelivery returns the
+same pending credential, and a consumed ticket cannot replay or create an actor.
+Browser saves, content and permissions cannot replace retained authority state.
+No new WebSocket message family or save schema is needed: ordinary Hello without
+save/New Game intent receives a fresh full Welcome.
+
+`web::game::hosted::reconnect` owns at most two client attempts within that same
+absolute deadline, with one bounded one-second pause before the second. Only an
+uncertain HTTP transport response reuses its request ID; a sent Hello needs a
+new reservation. The existing native connection/presentation and hosted save
+coordinator survive, while transport input/command/replication cursors restart.
+The client keeps its last frame, stops prediction/input, and never replays an
+unacknowledged action. Full accepted Welcome plus real renderer readiness ends
+the transport lease and requests a complete current checkpoint. Existing pause,
+skill selection and resume controls still govern gameplay; solo readiness does
+not acquire a multiplayer countdown.
+
+Leave/destruction, account change, observer/editor/standalone/desktop sessions,
+authentication/protocol failure, announced deployment and host retirement are
+excluded. Expiry uses ordinary cleanup once. Deployment has priority and retains
+its checkpoint/ACK/publication barrier. An open replacement still awaiting
+renderer readiness joins that same final checkpoint and storage ACK barrier;
+only a genuinely absent peer has no browser save owner to acknowledge.
+Failure reports the original transport
+cause and preserves prior durable storage; it never imports an older checkpoint
+or falls back to provisioning. Ordinary explicit active-run rejoin remains a
+separate contract and can recover only its last complete durable checkpoint.
+
+Focused public HTTP/WebSocket regressions cover membership and tickets. Closure
+also requires actual exact-built browser journeys through a local Caddy reload
+for both maintained clients. Compilation alone is not that acceptance.
+
 ## Resume readiness and multiplayer countdown
 
 Renderer loading, resume acknowledgements, required rejoin members and mandatory
@@ -502,7 +557,8 @@ place among other actors.
 
 A disconnected private Tutorial retains its sole participant and freezes until
 resume. Removing that participant would violate the Tutorial checkpoint invariant.
-Ordinary party sessions use detach/remove/rejoin instead.
+Eligible hosted transport interruptions first use the bounded retained-authority
+lease above. Other ordinary party disconnects use detach/remove/rejoin.
 
 ## Authored content and Lua
 

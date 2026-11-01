@@ -83,6 +83,7 @@ impl WebsiteMount {
 pub struct ApiError {
     pub status: u16,
     pub message: String,
+    pub(crate) transport_unavailable: bool,
 }
 
 impl std::fmt::Display for ApiError {
@@ -95,13 +96,17 @@ impl std::error::Error for ApiError {}
 
 impl From<String> for ApiError {
     fn from(message: String) -> Self {
-        Self { status: 0, message }
+        Self { status: 0, message, transport_unavailable: false }
     }
 }
 
 impl From<crate::platform::http::ReadError> for ApiError {
     fn from(error: crate::platform::http::ReadError) -> Self {
-        error.to_string().into()
+        Self {
+            status: 0,
+            message: error.to_string(),
+            transport_unavailable: matches!(error, crate::platform::http::ReadError::Transport(_)),
+        }
     }
 }
 
@@ -254,6 +259,7 @@ impl WebsiteApi {
         if !response.ok() {
             return Err(ApiError {
                 status: response.status(),
+                transport_unavailable: false,
                 message: format!("Image request failed ({})", response.status()),
             });
         }
@@ -326,6 +332,7 @@ impl WebsiteApi {
         if !response.ok() {
             return Err(ApiError {
                 status: response.status(),
+                transport_unavailable: false,
                 message: format!("Content download failed ({})", response.status()),
             });
         }
@@ -431,6 +438,44 @@ impl WebsiteApi {
         token: &str,
     ) -> Result<PartyJoinRequestStatus, ApiError> {
         self.get(&format!("/api/game/join/requests/{}", component(token))).await
+    }
+
+    pub async fn reconnect(
+        &self,
+        endpoint: &str,
+        credentials: &solomon_protocol::ResumeCredentials,
+        request_id: &str,
+    ) -> Result<ProvisionedGameEndpoint, ApiError> {
+        let original = url::Url::parse(endpoint)
+            .map_err(|_| String::from("The original game endpoint is invalid"))?;
+        let path = original
+            .path()
+            .strip_prefix(&self.mount.prefix)
+            .ok_or_else(|| String::from("The original game endpoint belongs to another mount"))?;
+        let session_id = if path == solomon_protocol::hosted::GAME_HUB_PATH {
+            None
+        } else {
+            Some(
+                path.strip_prefix(solomon_protocol::hosted::GAME_SESSION_PATH_PREFIX)
+                    .filter(|id| {
+                        id.len() == 32
+                            && id.bytes().all(|byte| {
+                                byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')
+                            })
+                    })
+                    .ok_or_else(|| String::from("The original game endpoint is invalid"))?,
+            )
+        };
+        let response = self.send("POST", "/api/game/reconnect", Some(json!({"sessionId":session_id,
+            "playerId":credentials.player_id,"resumeToken":credentials.token,"requestId":request_id})), Some("reconnect")).await?;
+        let replacement = self.accept_endpoint(response)?;
+        if replacement.url != endpoint || replacement.observer {
+            return Err(String::from(
+                "The reconnect admission selected a different game authority",
+            )
+            .into());
+        }
+        Ok(replacement)
     }
 
     pub async fn admit(
@@ -626,7 +671,7 @@ impl WebsiteApi {
                 cache,
             )
             .await
-            .map_err(Into::into)
+            .map_err(|message| ApiError { status: 0, message, transport_unavailable: true })
     }
 }
 
@@ -652,10 +697,11 @@ fn decode_response<T: DeserializeOwned>(status: u16, text: &str) -> Result<T, Ap
         }
         let message = serde_json::from_str::<ErrorResponse>(text)
             .map_or_else(|_| format!("Request failed ({status})"), |body| body.error);
-        return Err(ApiError { status, message });
+        return Err(ApiError { status, message, transport_unavailable: false });
     }
     serde_json::from_str(if status == 204 { "null" } else { text }).map_err(|_| ApiError {
         status,
+        transport_unavailable: false,
         message: "The Website returned an invalid response".into(),
     })
 }
@@ -698,7 +744,15 @@ mod tests {
         assert_eq!(conflict.status, 409);
         assert_eq!(conflict.message, "The browser game save changed in another session.");
         assert_eq!(decode_response::<WebGameSave>(404, "not found").err().unwrap().status, 404);
-        assert!(decode_response::<WebGameSave>(200, "not json").is_err());
+        assert!(
+            !decode_response::<WebGameSave>(200, "not json").err().unwrap().transport_unavailable
+        );
+        assert!(!ApiError::from(String::from("Invalid admission")).transport_unavailable);
+        assert!(!ApiError::from(crate::platform::http::ReadError::TooLarge).transport_unavailable);
+        assert!(
+            ApiError::from(crate::platform::http::ReadError::Transport("body interrupted".into()))
+                .transport_unavailable
+        );
         assert!(decode_response::<()>(204, "").is_ok());
     }
 }

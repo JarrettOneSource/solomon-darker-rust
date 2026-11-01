@@ -164,8 +164,10 @@ impl NativeConnection {
 
         let failed = Rc::downgrade(&state);
         let callback = Closure::<dyn FnMut(Event)>::new(move |_| {
-            if let Some(state) = failed.upgrade() {
-                state.borrow_mut().fail("The game connection was interrupted".into());
+            if failed.upgrade().is_some() {
+                crate::platform::warn(
+                    "The browser reported a game transport error; awaiting its Close event",
+                );
             }
         });
         socket.set_onerror(Some(callback.as_ref().unchecked_ref()));

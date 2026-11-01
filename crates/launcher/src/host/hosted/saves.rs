@@ -159,7 +159,8 @@ impl HostedGameHost {
                 let state = self.worlds.state_for_player(&player.id)?;
                 let terminal =
                     matches!(state.run.phase, GameRunPhase::GameOver | GameRunPhase::Loadout)
-                        && player.terminal_saved_run_id != state.run.run_id;
+                        && (player.terminal_saved_run_id != state.run.run_id
+                            || player.last_save_document.is_none());
                 (terminal || autosave || self.pending_player_saves.contains(&player.id)).then(
                     || (player.id.clone(), player.peer_id, terminal, state.run.run_id.clone()),
                 )

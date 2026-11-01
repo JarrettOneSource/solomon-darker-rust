@@ -34,6 +34,8 @@ mod desktop_tests;
 mod editor_test;
 #[path = "hosted_supervisor/gameplay_control.rs"]
 mod gameplay_control_tests;
+#[path = "hosted_supervisor/reconnect.rs"]
+mod reconnect_tests;
 #[path = "hosted_supervisor/run_archives.rs"]
 mod run_archive_tests;
 #[path = "hosted_supervisor/runtime_events.rs"]
@@ -167,12 +169,13 @@ fn request_at_with_deployment(
     stream.read_to_string(&mut response).unwrap();
     let (headers, body) = response.split_once("\r\n\r\n").unwrap();
     let status = headers.split_whitespace().nth(1).unwrap().parse().unwrap();
-    (status, serde_json::from_str(body).unwrap())
+    (status, if body.is_empty() { Value::Null } else { serde_json::from_str(body).unwrap() })
 }
 
 enum ClientWrite {
     Message { message: Box<ClientMessage>, completed: Sender<Result<(), String>> },
     Close { reason: Option<String>, completed: Sender<Result<(), String>> },
+    GoingAway { completed: Sender<Result<(), String>> },
     Stop,
 }
 
@@ -200,6 +203,7 @@ fn drive_client(
     observations: &Sender<ClientObservation>,
 ) -> Result<(), String> {
     use solomon_protocol::transfer::{GameStringChunk, GameStringReceiver};
+    let connected_at = Instant::now();
     let mut snapshots = solomon_protocol::snapshot::SnapshotReader::default();
     let mut welcome = GameStringReceiver::new(
         solomon_protocol::GAME_WEBSOCKET_MAX_PAYLOAD_BYTES,
@@ -235,6 +239,16 @@ fn drive_client(
                     let _ = completed.send(result.clone());
                     result?;
                 }
+                ClientWrite::GoingAway { completed } => {
+                    let result = socket
+                        .close(Some(tungstenite::protocol::CloseFrame {
+                            code: tungstenite::protocol::frame::coding::CloseCode::Away,
+                            reason: "proxy reload".into(),
+                        }))
+                        .map_err(|error| error.to_string());
+                    let _ = completed.send(result.clone());
+                    result?;
+                }
                 ClientWrite::Stop => {
                     let _ = socket.close(None);
                     return Ok(());
@@ -247,6 +261,12 @@ fn drive_client(
                 // The Source browser detaches its session message listener before
                 // closing. Drain in-flight observations without ACKing a closed writer.
                 if let ServerMessage::WelcomeChunk { data, offset, total_length } = message {
+                    if offset == 0 {
+                        eprintln!(
+                            "hosted test Welcome begins: {total_length} UTF-16 units at {}ms",
+                            connected_at.elapsed().as_millis()
+                        );
+                    }
                     let next_offset = offset + data.len();
                     let complete =
                         welcome.accept(&GameStringChunk { data, offset, total_length })?;
@@ -255,6 +275,10 @@ fn drive_client(
                             String::from_utf16(&complete).map_err(|error| error.to_string())?;
                         message =
                             serde_json::from_str(&complete).map_err(|error| error.to_string())?;
+                        eprintln!(
+                            "hosted test Welcome decoded at {}ms",
+                            connected_at.elapsed().as_millis()
+                        );
                         if !matches!(message, ServerMessage::Welcome { .. }) {
                             return Err("The welcome transfer contains another message".into());
                         }
@@ -372,7 +396,19 @@ fn drive_client(
                     return Ok(());
                 }
             }
-            Ok(Message::Close(_)) | Err(Error::ConnectionClosed) => {
+            Ok(Message::Close(detail)) => {
+                if let Some(detail) = detail {
+                    eprintln!(
+                        "hosted test transport close: {} {} at {}ms",
+                        u16::from(detail.code),
+                        detail.reason,
+                        connected_at.elapsed().as_millis()
+                    );
+                }
+                let _ = socket.flush();
+                return Ok(());
+            }
+            Err(Error::ConnectionClosed) => {
                 let _ = socket.flush();
                 return Ok(());
             }
@@ -574,6 +610,15 @@ impl Client {
         name: &str,
         save: Option<String>,
     ) -> (Self, ServerMessage<Value>) {
+        Self::join_with_save_timeout(host, endpoint, name, save, Duration::from_secs(8))
+    }
+    fn join_with_save_timeout(
+        host: &Host,
+        endpoint: &Value,
+        name: &str,
+        save: Option<String>,
+        timeout: Duration,
+    ) -> (Self, ServerMessage<Value>) {
         let selection = if let Some(save) = &save {
             let saved = solomon_assets::website_save::restore(save).unwrap();
             saved
@@ -611,7 +656,9 @@ impl Client {
                 },
             },
         });
-        let welcome = client.until(|message| matches!(message, ServerMessage::Welcome { .. }));
+        let welcome = client.until_with_timeout(timeout, |message| {
+            matches!(message, ServerMessage::Welcome { .. })
+        });
         (client, welcome)
     }
     #[track_caller]
@@ -713,10 +760,14 @@ impl Client {
 
     #[track_caller]
     fn finish_close(&mut self) {
+        self.finish_close_with_timeout(Duration::from_secs(8));
+    }
+
+    fn finish_close_with_timeout(&mut self, timeout: Duration) {
         if self.closed {
             return;
         }
-        let deadline = Instant::now() + Duration::from_secs(8);
+        let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
             match self.observations.recv_timeout(deadline.saturating_duration_since(Instant::now()))
             {

@@ -68,6 +68,7 @@ impl HostedSupervisor {
                     crate::host::editor_test::materialize_editor_test_boneyard(&value)?;
                 Ok(PreparedAdmission {
                     admission: HostedAdmission {
+                        reconnect: None,
                         content: Arc::new(super::stock_content("0".repeat(64))),
                         developer_access: false,
                         leaderboard_user_id: None,
@@ -194,6 +195,7 @@ fn materialize_admission(request: AdmissionRequest) -> Result<HostedAdmission, S
     let content = materialize_web_session_content_value(&request.content)?;
     let content = compile_web_session_content_definitions(content)?;
     Ok(HostedAdmission {
+        reconnect: None,
         content: Arc::new(content),
         developer_access: request.developer_access,
         leaderboard_user_id: request.leaderboard_user_id.map(|id| id as u32),

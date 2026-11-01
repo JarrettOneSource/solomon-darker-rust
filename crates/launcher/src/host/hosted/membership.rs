@@ -185,7 +185,7 @@ impl HostedGameHost {
                     "runId":observer.run_id}));
             return Ok(None);
         }
-        let Some(id) = connection.player_id else { return Ok(None) };
+        let Some(id) = connection.player_id.clone() else { return Ok(None) };
         let Some(index) = self
             .players
             .iter()
@@ -194,6 +194,17 @@ impl HostedGameHost {
             // A late close from a replaced socket cannot remove its new generation.
             return Ok(None);
         };
+        if connection.planned_disconnect.is_none()
+            && !self.editor_test
+            && self.kind != solomon_sim::social::GameSessionKind::Standalone
+            && !connection.peer.welcome_timed_out()
+            && matches!(close.code, Some(1001 | 1006) | None)
+            && self.staged_rejoin_index(&id).is_none()
+        {
+            self.retain_transport_loss(connection, now_ms);
+            return Ok(None);
+        }
+        self.reconnects.remove(&id);
         self.checkpoint_run_for_player(&id);
         let player = self.players.remove(index);
         let server_tick = self.worlds.state_for_player(&id).map_or(0, |state| state.ticks);
