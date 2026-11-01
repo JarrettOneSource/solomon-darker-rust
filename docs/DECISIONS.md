@@ -663,3 +663,21 @@ checks the same error before accepting the collected PCM.
 Synthesized mono, stereo, 5.1 and multi-page fixtures exercise these contracts,
 including malformed input and errors after playback starts. The surround fixture
 also compares sampled frames against an independent FFmpeg/libopus decode.
+
+## Automatic equipment removal uses the open inventory root
+
+Double activation of removable equipment returns it to the first available slot
+of the currently open Sack. At the top-level backpack it retains ordinary
+top-level insertion. This explicitly requested convenience lets a player organize
+gear within a Sack without navigating back from the root after each removal.
+It is distinct from the recovered pointed-holder drag contract, which continues
+to preserve the exact selected destination.
+
+`PlayerPanels` supplies the current Sack ID and an absent slot through the
+existing `Unequip` command. The canonical economy retains ownership of first-hole
+insertion, item admission, capacity, feedback and persistence. Required Hat/Robe
+notices, the third Ring gate, transition input locks and all explicit drag
+destinations retain their existing rules. No protocol or save-schema change is
+needed. The real panel attach/update/action regression applies emitted commands
+through the canonical economy for all removable sinks, three inventory depths
+and Inventory plus the four trader companion panels.
