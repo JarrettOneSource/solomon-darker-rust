@@ -8,6 +8,7 @@ pub enum NativeSecondaryAtlas {
     BadGuys,
     Clothes,
     DeadHawg,
+    Demon,
     Golem,
 }
 impl NativeSecondaryAtlas {
@@ -17,6 +18,7 @@ impl NativeSecondaryAtlas {
             Self::BadGuys => "BadGuys",
             Self::Clothes => "Clothes",
             Self::DeadHawg => "DeadHawg",
+            Self::Demon => "Demon",
             Self::Golem => "Golem",
         }
     }
@@ -44,6 +46,8 @@ pub struct NativeSecondarySpriteDraw {
     pub atlas: NativeSecondaryAtlas,
     pub blend: NativeSecondaryBlend,
     pub color_mode: Option<NativeSecondaryColorMode>,
+    /// Field-local rectangle, independent of the image's offset and rotation.
+    pub clip: Option<[f64; 4]>,
     pub entry: usize,
     pub offset: Vec2,
     pub role: String,
@@ -61,6 +65,7 @@ impl NativeSecondarySpriteDraw {
             atlas,
             blend: NativeSecondaryBlend::Normal,
             color_mode: None,
+            clip: None,
             entry,
             offset: Vec2::ZERO,
             role: format!("{}-{}-{entry}", actor.kind.as_str(), atlas.as_str()),

@@ -20,6 +20,7 @@ use crate::float;
 use crate::float::{fround, hypot};
 use crate::secondary::NativeSecondaryActorKind as Kind;
 use crate::secondary::SecondaryActorRead;
+use crate::secondary::ether_drain::{NativeEtherDrainAnimation, NativeEtherDrainAtlas};
 use crate::secondary::leviathan::{
     native_leviathan_appendage_local_root, native_leviathan_appendage_record,
 };
@@ -619,6 +620,7 @@ fn spell_draw(draw: NativeSpellSprite, role: String) -> NativeSecondarySpriteDra
             SpellBlend::Add => NativeSecondaryBlend::Add,
         },
         color_mode: None,
+        clip: None,
         entry: draw.record,
         offset: draw.offset,
         role,
@@ -863,6 +865,70 @@ fn ether_drain_draws(
         pulse.scale_x = actor.slow_factor * actor.scale;
         pulse.scale_y = pulse.scale_x;
         draws.push(pulse);
+    }
+    if let Some(field) = actor.ether_drain() {
+        // Retail private-manager draw follows the parent pulse. Anim_Sucked
+        // 0x00455370 uses field opacity, unit scale and a field-local clip.
+        let private = |atlas, entry, role: &str| {
+            let mut draw = NativeSecondarySpriteDraw::new(actor, atlas, entry);
+            draw.role = role.into();
+            draw.scale_x = 1.0;
+            draw.scale_y = 1.0;
+            draw
+        };
+        for (index, animation) in field.animations.iter().enumerate() {
+            match *animation {
+                NativeEtherDrainAnimation::Debris {
+                    position, rotation_degrees, variant, ..
+                } => {
+                    let mut debris = private(
+                        NativeSecondaryAtlas::DeadHawg,
+                        177 + variant as usize,
+                        &format!("ether-drain-private-debris-{index}"),
+                    );
+                    debris.offset =
+                        Vec2::new(position.x - actor.position.x, position.y - actor.position.y);
+                    debris.rotation_radians = degrees_to_radians(rotation_degrees);
+                    draws.push(debris);
+                }
+                NativeEtherDrainAnimation::Captured {
+                    alpha,
+                    atlas,
+                    entry,
+                    tint,
+                    body_y_offset,
+                } => {
+                    if alpha < 1.0 {
+                        draws.push(private(
+                            NativeSecondaryAtlas::BadGuys,
+                            9,
+                            "ether-drain-capture-back-rim",
+                        ));
+                    }
+                    let atlas = match atlas {
+                        NativeEtherDrainAtlas::BadGuys => NativeSecondaryAtlas::BadGuys,
+                        NativeEtherDrainAtlas::Demon => NativeSecondaryAtlas::Demon,
+                    };
+                    let mut image = private(atlas, entry, "ether-drain-captured-image");
+                    image.offset.y =
+                        f64::from(body_y_offset) - 10.0 + 35.0 * (1.0 - alpha).max(0.0);
+                    image.tint = tint;
+                    if alpha < 1.0 {
+                        image.clip = Some([-100.0, -110.0, 200.0, 110.0]);
+                    }
+                    draws.push(image);
+                    if alpha < 1.0 {
+                        let mut front = private(
+                            NativeSecondaryAtlas::BadGuys,
+                            8,
+                            "ether-drain-capture-front-rim",
+                        );
+                        front.offset.y = -1.0;
+                        draws.push(front);
+                    }
+                }
+            }
+        }
     }
     draws
 }

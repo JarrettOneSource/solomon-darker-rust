@@ -5,9 +5,11 @@ use solomon_sim::float;
 use solomon_sim::presentation::multiply_native_tints;
 use solomon_sim::secondary::presentation::*;
 use solomon_sim::spells::air::{NativeAirCoronaPlan, NativeAirMesh};
+use solomon_sim::spells::weld::NativeFlameLashBounds;
 
 use super::SecondaryView;
 use crate::courtyard::Camera;
+use crate::native_mesh::clip_native_mesh_in_rect;
 use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
 
 pub(super) struct TargetDraw {
@@ -45,6 +47,7 @@ impl SecondaryView {
         let atlas = match atlas {
             NativeSecondaryAtlas::BadGuys => &self.bad_guys,
             NativeSecondaryAtlas::DeadHawg => &self.dead_hawg,
+            NativeSecondaryAtlas::Demon => &self.demon,
             NativeSecondaryAtlas::Golem => &self.golem,
             NativeSecondaryAtlas::Clothes => unreachable!(),
         };
@@ -91,6 +94,16 @@ impl SecondaryView {
             return;
         }
         let (record, vertices) = self.sprite_vertices(camera, root, draw, region_tint);
+        if let Some([x, y, width, height]) = draw.clip {
+            let clip = camera.project(root.x + x, root.y + y, width, height);
+            renderer.draw_triangles_with_color_mode(
+                record.texture,
+                &clipped_sprite_triangles(vertices, clip),
+                blend(draw.blend),
+                mode,
+            );
+            return;
+        }
         let triangles =
             [[vertices[0], vertices[1], vertices[2]], [vertices[0], vertices[2], vertices[3]]];
         renderer.draw_triangles_with_color_mode(
@@ -357,6 +370,7 @@ impl SecondaryView {
                 atlas: NativeSecondaryAtlas::BadGuys,
                 blend: NativeSecondaryBlend::Add,
                 color_mode: None,
+                clip: None,
                 entry: sprite.record,
                 offset: sprite.offset,
                 role: "storm-lightning-corona".into(),
@@ -437,5 +451,74 @@ fn blend(value: NativeSecondaryBlend) -> BlendMode {
     match value {
         NativeSecondaryBlend::Normal => BlendMode::Normal,
         NativeSecondaryBlend::Add => BlendMode::Add,
+    }
+}
+
+/// Sprite tint is uniform. The existing Region clipper retains position and UV
+/// interpolation while the sprite keeps that tint and the enclosing GPU state.
+fn clipped_sprite_triangles(vertices: [Vertex; 4], clip: [f32; 4]) -> Vec<[Vertex; 3]> {
+    let mesh = NativeAirMesh {
+        indices: vec![0, 1, 2, 0, 2, 3],
+        vertices: vertices
+            .iter()
+            .map(|vertex| Vec2::new(f64::from(vertex.position[0]), f64::from(vertex.position[1])))
+            .collect(),
+        uvs: vertices
+            .iter()
+            .map(|vertex| Vec2::new(f64::from(vertex.texel[0]), f64::from(vertex.texel[1])))
+            .collect(),
+    };
+    clip_native_mesh_in_rect(
+        &mesh,
+        Vec2::ZERO,
+        NativeFlameLashBounds {
+            x: f64::from(clip[0]),
+            y: f64::from(clip[1]),
+            width: f64::from(clip[2]),
+            height: f64::from(clip[3]),
+        },
+        None,
+    )
+    .into_iter()
+    .map(|triangle| {
+        triangle.map(|vertex| Vertex {
+            position: [vertex.position.x as f32, vertex.position.y as f32],
+            texel: [vertex.uv.x as f32, vertex.uv.y as f32],
+            tint: vertices[0].tint,
+        })
+    })
+    .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capture_clip_preserves_uvs_for_rotated_and_mirrored_geometry() {
+        for rotated in [false, true] {
+            let positions = if rotated {
+                [[20.0, -20.0], [20.0, 20.0], [-20.0, 20.0], [-20.0, -20.0]]
+            } else {
+                [[20.0, -20.0], [-20.0, -20.0], [-20.0, 20.0], [20.0, 20.0]]
+            };
+            let texels = [[0.0, 0.0], [40.0, 0.0], [40.0, 40.0], [0.0, 40.0]];
+            let tint = [0.2, 0.4, 0.6, 0.25];
+            let vertices = std::array::from_fn(|index| Vertex {
+                position: positions[index],
+                texel: texels[index],
+                tint,
+            });
+            let triangles = clipped_sprite_triangles(vertices, [-10.0, -5.0, 20.0, 10.0]);
+            assert!(!triangles.is_empty());
+            for vertex in triangles.iter().flatten() {
+                let [x, y] = vertex.position;
+                assert!((-10.0..=10.0).contains(&x) && (-5.0..=5.0).contains(&y));
+                let expected = if rotated { [y + 20.0, 20.0 - x] } else { [20.0 - x, y + 20.0] };
+                assert_eq!(vertex.texel, expected);
+                assert_eq!(vertex.tint, tint);
+            }
+            assert!(clipped_sprite_triangles(vertices, [100.0, 100.0, 10.0, 10.0]).is_empty());
+        }
     }
 }

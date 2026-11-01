@@ -983,7 +983,7 @@ impl SpellView {
     }
 }
 
-async fn load_atlas(renderer: &Renderer, name: &str) -> Result<StockAtlas, String> {
+pub(crate) async fn load_atlas(renderer: &Renderer, name: &str) -> Result<StockAtlas, String> {
     let records = parse_bundle(&assets::fetch_bytes(&format!("assets/stock/{name}.bundle")).await?)
         .map_err(|error| format!("{name}.bundle: {error}"))?;
     let image = assets::load_image(&format!("assets/stock/{name}.png")).await?;

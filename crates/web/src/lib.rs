@@ -70,6 +70,7 @@ pub mod world_screen_feedback;
 mod bootstrap;
 #[cfg(target_arch = "wasm32")]
 pub use bootstrap::*;
+pub use courtyard::Camera;
 pub use game::Game;
 pub(crate) use game::tasks::{load_pending_world, run_hosted_work, write_pending_save};
 pub(crate) use runtime_ui::set_status;
