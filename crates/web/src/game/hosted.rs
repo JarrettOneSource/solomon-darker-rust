@@ -826,7 +826,7 @@ impl Game {
             if self.is_hosted_observer() {
                 continue;
             }
-            if self.social.receive_hosted_message(&message)? {
+            if self.social.receive_hosted_message(&message, now)? {
                 continue;
             }
             if self.cheats.receive_hosted_message(&message)? {

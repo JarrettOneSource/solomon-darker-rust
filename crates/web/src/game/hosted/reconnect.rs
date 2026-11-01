@@ -57,6 +57,7 @@ impl Game {
             self.native_disconnected("The game account changed. Return to the menu to continue.")?;
             return Ok(true);
         }
+        self.social.cancel_player_card_request();
         let credentials = self.native.as_mut().unwrap().begin_reconnect()?;
         if self.world_loading {
             // Its pending frame belonged to the retired transport. A fresh Welcome

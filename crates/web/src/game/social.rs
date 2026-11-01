@@ -96,6 +96,9 @@ impl Game {
                     || self.cheats.is_open()
                     || self.menu.settings_open()
                     || host.is_some_and(|host| host.resume_grace.is_some()),
+                card_feedback_visible: self.native.as_ref().is_none_or(NativeGame::is_playing)
+                    && !self.menu.routing_active()
+                    && crate::runtime_ui::error().is_none(),
                 gold_clear_left: 0.0,
             },
             now,

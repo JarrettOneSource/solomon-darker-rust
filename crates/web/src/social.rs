@@ -11,6 +11,7 @@ mod hub_players;
 mod layer_tests;
 mod motion;
 mod party;
+pub(crate) mod player_card_request;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -33,6 +34,7 @@ pub struct SocialUiContext {
     pub visible: bool,
     pub chat_enabled: bool,
     pub input_suspended: bool,
+    pub card_feedback_visible: bool,
     pub gold_clear_left: f64,
 }
 
@@ -72,8 +74,7 @@ pub struct SocialUi {
     hub_players: Vec<hub_players::HubPlayerCard>,
     requested_card: Option<(bool, String)>,
     hosted: bool,
-    hosted_card_request: Option<u64>,
-    next_hosted_request: u64,
+    card_requests: player_card_request::PlayerCardRequests,
     hosted_actions: Vec<HostedSocialAction>,
     college_invitations: Vec<solomon_sim::social::GameCollegeInvitation>,
     resolving_college: Option<String>,
@@ -125,8 +126,7 @@ impl SocialUi {
             hub_players: Vec::new(),
             requested_card: None,
             hosted: false,
-            hosted_card_request: None,
-            next_hosted_request: 0,
+            card_requests: player_card_request::PlayerCardRequests::default(),
             hosted_actions: Vec::new(),
             college_invitations: Vec::new(),
             resolving_college: None,
@@ -154,6 +154,7 @@ impl SocialUi {
                 visible: false,
                 chat_enabled: false,
                 input_suspended: true,
+                card_feedback_visible: false,
                 gold_clear_left: 0.0,
             },
             now: 0.0,
@@ -198,6 +199,7 @@ impl SocialUi {
             && !self.context.input_suspended
             && (self.chat_open
                 || self.surface.is_some()
+                || self.context.card_feedback_visible && self.card_requests.blocks_input()
                 || self.college_visible()
                 || self.party_invitation_visible())
     }
@@ -239,6 +241,7 @@ impl SocialUi {
         height: i32,
     ) -> Result<(), String> {
         self.now = now_ms;
+        self.card_requests.advance(now_ms);
         self.context = context;
         if !context.visible {
             self.ally_motion.hide();
@@ -321,6 +324,7 @@ impl SocialUi {
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         self.clipboard.clear();
         if !self.context.visible || self.snapshot.is_none() {
+            self.card_requests.hide(frame.ctx);
             return Ok(());
         }
         if self.chat_open {
@@ -351,6 +355,7 @@ impl SocialUi {
         self.paint_party_chip(frame)?;
         self.paint_chat(frame)?;
         if self.context.input_suspended {
+            self.card_requests.hide(frame.ctx);
             return Ok(());
         }
         let modal =
@@ -408,66 +413,12 @@ impl SocialUi {
             }
         }
         if let Some(notice) = &self.hosted_notice {
-            let screen = ctx.content_rect();
-            let font_size = screen.width() * 0.015;
-            let padding = egui::vec2(screen.width() * 0.015, screen.height() * 0.007);
-            let label = crate::gpu_ui::font_run_with_options(
-                frame.ctx,
-                egui::FontId::new(font_size, egui::FontFamily::Name("Cinzel".into())),
-                Color32::from_rgb(234, 216, 170),
-                notice,
-                crate::gpu_ui::FontRunOptions {
-                    wrap_width: Some((screen.width() * 0.7 - padding.x * 2.0 - 2.0).max(1.0)),
-                    letter_spacing: Some(font_size * 0.08),
-                    ..Default::default()
-                },
-            )?;
-            let size = label.size() + padding * 2.0 + egui::vec2(2.0, 2.0);
-            egui::Area::new(Self::notice_layer().id)
-                .fade_in(false)
-                .background_interactable(false)
-                .order(Self::notice_layer().order)
-                .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -screen.height() * 0.04))
-                .show(&ctx, |ui| -> Result<(), String> {
-                    let (bounds, _) = ui.allocate_exact_size(size, egui::Sense::hover());
-                    ui.painter().rect_filled(
-                        bounds,
-                        0.0,
-                        Color32::from_rgba_unmultiplied(7, 6, 14, 224),
-                    );
-                    ui.painter().rect_stroke(
-                        bounds,
-                        0.0,
-                        egui::Stroke::new(1.0, Color32::from_rgba_unmultiplied(211, 177, 101, 153)),
-                        egui::StrokeKind::Inside,
-                    );
-                    frame.paint_group(
-                        ui.painter(),
-                        crate::gpu_ui::GroupEffect {
-                            shadows: vec![crate::gpu_ui::ImageShadow {
-                                offset: egui::vec2(0.0, 2.0),
-                                blur: 1.0,
-                                color: Color32::BLACK,
-                            }],
-                            ..Default::default()
-                        },
-                        |frame, painter| {
-                            label.paint_aligned(
-                                frame,
-                                painter,
-                                egui::Rect::from_min_size(
-                                    bounds.min + padding + egui::vec2(1.0, 1.0),
-                                    label.size(),
-                                ),
-                                egui::Align::Center,
-                                1.0,
-                            )
-                        },
-                    )?;
-                    frame.record_rect("social/notice", notice, "status", bounds, true);
-                    Ok(())
-                })
-                .inner?;
+            self.card_requests.hide(frame.ctx);
+            player_card_request::paint_notice(frame, "social/notice", notice, false, self.coarse)?;
+        } else if self.context.card_feedback_visible {
+            self.card_requests.paint(frame, self.coarse)?;
+        } else {
+            self.card_requests.hide(frame.ctx);
         }
         self.clipboard.finish_frame();
         Ok(())
@@ -478,6 +429,7 @@ impl SocialUi {
         if self.snapshot.as_ref().map(|state| &state.local_player_id)
             != snapshot.map(|state| &state.local_player_id)
         {
+            self.card_requests.dismiss();
             self.close_surfaces();
             self.reset_chat_announcements();
             self.last_sequence = snapshot
