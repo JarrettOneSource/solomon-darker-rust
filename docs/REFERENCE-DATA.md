@@ -47,3 +47,16 @@ implementation. Only those fields are superseded in the named weak cases;
 `native_steam_low_mana` and `spell_contact_rules` independently assert the recovered
 normal/weak/Over contact behavior. Every other recorded field, random word and
 presentation sample remains checked.
+
+The schema-51 `current-save-continuation-goldens` recording also remains intact.
+Its comparison expects the current export schema and the seven schema-52 Boulder
+guidance fields. The four recorded rocks retain all motion and ownership values:
+held actors use the recovered release speed, while existing flight keeps the
+recorded velocity magnitude and heading. Missing target and turn history receive
+the documented migration defaults. Current checkpoint and Website round-trip
+regressions independently verify non-default guidance state and required fields.
+
+The profile, native-save conversion and desktop-authority recordings likewise
+retain their schema-51 bytes. Comparisons qualify only newly exported game
+documents as the current schema. Source-version admission, native disk bytes,
+portable-profile bytes and all other recorded fields retain their exact checks.

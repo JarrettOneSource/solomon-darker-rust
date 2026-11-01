@@ -175,9 +175,13 @@ fn desktop_authority_retains_source_bootstrap_console_save_and_owner_lifetimes()
     assert_eq!(rows.len(), expected_rows.len());
     for (actual, expected) in rows.into_iter().zip(expected_rows) {
         let case = actual["case"].as_str().unwrap().to_owned();
+        let mut expected = expected.clone();
+        if case == "durable-source-save-before-leave" {
+            assert_eq!(expected["schemaVersion"], 51);
+            expected["schemaVersion"] = json!(solomon_assets::website_save::SCHEMA_VERSION);
+        }
         let actual: solomon_sim::modding::LuaValue = serde_json::from_value(actual).unwrap();
-        let expected: solomon_sim::modding::LuaValue =
-            serde_json::from_value(expected.clone()).unwrap();
+        let expected: solomon_sim::modding::LuaValue = serde_json::from_value(expected).unwrap();
         assert_eq!(actual, expected, "{case}");
     }
     host.finish();

@@ -26,6 +26,15 @@ fn assert_source(actual: &Value, expected: &Value, path: &str) {
     support::assert_website_json(actual, expected, path, &[]);
 }
 
+fn current_document_expectation(recorded: &Value) -> Value {
+    // Only the newly exported game document changes version; native disk bytes,
+    // portable-profile envelopes, attachments and all other recorded fields stay exact.
+    let mut expected = recorded.clone();
+    assert_eq!(expected["schemaVersion"], 51);
+    expected["schemaVersion"] = json!(solomon_assets::website_save::SCHEMA_VERSION);
+    expected
+}
+
 fn bytes(value: &Value) -> Vec<u8> {
     STANDARD.decode(value.as_str().unwrap()).unwrap()
 }
@@ -58,7 +67,9 @@ fn portable_imports_create_the_source_settled_hub_and_warnings() {
             "playerId": result.player_id,
             "warnings": result.warnings,
         });
-        assert_source(&actual, &case["output"], case["name"].as_str().unwrap());
+        let mut expected = case["output"].clone();
+        expected["document"] = current_document_expectation(&expected["document"]);
+        assert_source(&actual, &expected, case["name"].as_str().unwrap());
     }
 }
 
@@ -84,7 +95,7 @@ fn native_exports_preserve_exact_disk_bytes_and_full_browser_support_state() {
         assert_eq!(support.len(), 1, "{} support document count", case["name"]);
         assert_source(
             &serde_json::from_slice(&support[0].bytes).unwrap(),
-            &case["support"],
+            &current_document_expectation(&case["support"]),
             case["name"].as_str().unwrap(),
         );
         let others: Vec<_> = native
@@ -147,6 +158,8 @@ fn native_file_selection_admission_and_metadata_match_the_source() {
             "source": if result.source == GameSaveImportSource::Stock { "stock" } else { "browser" },
             "warnings": result.warnings,
         });
-        assert_source(&actual, &case["output"], case["name"].as_str().unwrap());
+        let mut expected = case["output"].clone();
+        expected["document"] = current_document_expectation(&expected["document"]);
+        assert_source(&actual, &expected, case["name"].as_str().unwrap());
     }
 }
