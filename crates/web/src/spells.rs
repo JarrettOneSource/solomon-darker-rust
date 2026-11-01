@@ -1,6 +1,7 @@
 //! Stock primary spell sprites and lightning meshes. The simulation supplies the
 //! native draw plans and painter registrations; this view owns only GPU resources.
 
+mod air;
 mod split;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -42,6 +43,7 @@ use crate::presentation::PresentationClocks;
 use solomon_graphics::assets;
 use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
 
+use air::append_air_body;
 use split::append_split_bands;
 
 pub struct SpellPainter {
@@ -348,7 +350,7 @@ impl SpellView {
                     });
                     self.append_plan(plan, common.painter_registrations[0]);
                 }
-                PrimaryTransientRef::Air(spell) => self.append_air(spell),
+                PrimaryTransientRef::Air(spell) => self.append_air(spell, enhanced_effects),
                 PrimaryTransientRef::Water(spell) => self.append_water(spell),
                 PrimaryTransientRef::EarthImpact(spell) => {
                     let seed = EarthImpactSeed {
@@ -782,7 +784,7 @@ impl SpellView {
         self.append_plan(plan, spell.common.painter_registrations[0]);
     }
 
-    fn append_air(&mut self, spell: &PrimarySpellAirTransient) {
+    fn append_air(&mut self, spell: &PrimarySpellAirTransient, enhanced_effects: bool) {
         let plan = build_native_air_lightning_plan(NativeAirLightningInput {
             chained: spell.chained,
             enhanced_effects: spell.enhanced_effects,
@@ -801,56 +803,7 @@ impl SpellView {
         });
         let registrations = &spell.common.painter_registrations;
         if let Some(layers) = plan.body {
-            let mut minimum = f64::INFINITY;
-            let mut maximum = f64::NEG_INFINITY;
-            for layer in &layers {
-                for point in &layer.mesh.vertices {
-                    minimum = minimum.min(point.y);
-                    maximum = maximum.max(point.y);
-                }
-                if let Some(branch) = &layer.branch {
-                    for point in &branch.mesh.vertices {
-                        minimum = minimum.min(point.y);
-                        maximum = maximum.max(point.y);
-                    }
-                }
-            }
-            append_split_bands(
-                &mut self.roots,
-                registrations[0],
-                spell.origin,
-                [minimum, maximum],
-                spell.enhanced_effects,
-                None,
-                None,
-                |top, bottom| {
-                    let mut draws = Vec::new();
-                    for layer in &layers {
-                        draws.push(SpellDraw::Mesh {
-                            record: layer.texture_record,
-                            triangles: clip_native_mesh(&layer.mesh, spell.origin, top, bottom),
-                            alpha: layer.alpha,
-                            tint: layer.tint,
-                            uv_space: NativeWeldMeshUvSpace::Record,
-                        });
-                        if let Some(branch) = &layer.branch {
-                            draws.push(SpellDraw::Mesh {
-                                record: branch.texture_record,
-                                triangles: clip_native_mesh(
-                                    &branch.mesh,
-                                    spell.origin,
-                                    top,
-                                    bottom,
-                                ),
-                                alpha: layer.alpha,
-                                tint: layer.tint,
-                                uv_space: NativeWeldMeshUvSpace::Record,
-                            });
-                        }
-                    }
-                    draws
-                },
-            );
+            append_air_body(&mut self.roots, spell, &layers, enhanced_effects);
         }
         if let Some(corona) = plan.source_corona {
             let mut source = plan_at(Vec2::new(

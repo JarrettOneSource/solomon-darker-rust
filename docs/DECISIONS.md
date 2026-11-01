@@ -477,6 +477,12 @@ route behavior. Graph, moving-gate, and catalog replacement tests cover that lif
 Painter registration belongs to the actor or transient owner. Fixed depth bands,
 row sorting, and owner overlays are explicit data.
 
+`ZAnimSplit::Draw` at retail `0x005E0233` reads the current Enhanced Effects
+setting: painter bands are 25 units On and 50 Off. Air and Faculty ribbons keep
+their immutable born-quality geometry while their wrappers follow the current
+scene setting, as do Blizzard, Flame Lash and ElectricBurn. Changing quality
+does not change the actor's registration, clock, material or gameplay state.
+
 Owner overlays are promoted after row planning, preserving their owner-relative
 position and stable ties. Insertion bands retain the owner's registration rather
 than allocating a new ordinal for each visual layer. Released Ether Boulder
