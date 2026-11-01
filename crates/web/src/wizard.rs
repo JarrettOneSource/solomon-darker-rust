@@ -31,8 +31,12 @@ use crate::mod_presentation_assets::{
 use crate::spells::SpellView;
 use solomon_graphics::{BlendMode, Quad, RenderTarget, Renderer, Texture};
 
+mod element;
 mod equipment;
 mod material;
+#[cfg(feature = "browser-fixtures")]
+pub mod material_probe;
+mod stoneskin;
 
 pub use equipment::WizardEquipment;
 
@@ -54,7 +58,7 @@ struct WeaponFrame<'a> {
     front_offset: Vec2,
     weapon: Option<&'a PlayerRenderableWeaponAppearance>,
     unselected: bool,
-    bare: bool,
+    bare_pose: Option<usize>,
     material_tint: u32,
     tick: f64,
     enchant: bool,
@@ -64,6 +68,8 @@ struct WeaponFrame<'a> {
 pub struct WizardPlayerPresentation<'a> {
     pub player: &'a PlayerState,
     pub secondary: Option<&'a NativeSecondaryPlayerState>,
+    pub stoneskin_warp: Option<&'a [f64]>,
+    pub enhanced_effects: bool,
     pub webbed: Option<WebbedState>,
     pub overlay_effect_phase: f64,
     pub staff_action_pose: Option<usize>,
@@ -82,6 +88,7 @@ struct WizardPresentationState {
     plane_active: bool,
     weld_build_id: Option<u32>,
     harden_coating: f64,
+    stoneskin: bool,
     webbed: Option<WebbedState>,
     hit_alpha: f64,
     complex_lighting: bool,
@@ -111,6 +118,7 @@ pub struct WizardView {
     material_tint: u32,
     player_presentation: WizardPresentationState,
     diffuse_capture: RenderTarget,
+    stoneskin_mesh: Option<stoneskin::StoneskinMesh>,
 }
 
 impl WizardView {
@@ -139,6 +147,7 @@ impl WizardView {
             material_tint: 0xffffff,
             player_presentation: WizardPresentationState::default(),
             diffuse_capture: renderer.create_render_target(256)?,
+            stoneskin_mesh: None,
         })
     }
 
@@ -168,6 +177,8 @@ impl WizardView {
         let WizardPlayerPresentation {
             player,
             secondary,
+            stoneskin_warp,
+            enhanced_effects,
             webbed,
             overlay_effect_phase,
             staff_action_pose,
@@ -189,7 +200,19 @@ impl WizardView {
             }
         });
         let plane_active = secondary.is_some_and(|state| state.planewalker_ticks_remaining > 0);
-        let stoneskin = secondary.is_some_and(|state| state.stoneskin_ticks_remaining > 0);
+        let stoneskin = secondary.is_some_and(|state| state.stoneskin_ticks_remaining > 0)
+            && player.combat.life_state == PlayerLifeState::Alive;
+        if stoneskin {
+            let positions = stoneskin_warp.expect("active Stoneskin has its shared birth grid");
+            if self
+                .stoneskin_mesh
+                .as_ref()
+                .is_none_or(|mesh| !mesh.matches(positions, enhanced_effects))
+            {
+                self.stoneskin_mesh =
+                    Some(stoneskin::StoneskinMesh::new(positions, enhanced_effects));
+            }
+        }
         self.player_presentation = WizardPresentationState {
             enchant_primary_skill_id: Some(if plane_active {
                 80
@@ -203,6 +226,7 @@ impl WizardView {
             plane_active,
             weld_build_id: if plane_active { None } else { player.book.weld_build_id },
             harden_coating: if stoneskin { 0.0 } else { player.skill_runtime.harden.coating },
+            stoneskin,
             webbed: if stoneskin || player.skill_runtime.harden.coating > 0.0 || plane_active {
                 None
             } else {
@@ -256,8 +280,9 @@ impl WizardView {
         tick: f64,
         spells: &SpellView,
     ) {
-        self.draw_living_layers(renderer, camera, wizard, tick, spells, WizardDrawPass::World);
+        self.draw_body_layers(renderer, camera, wizard, tick, spells, WizardDrawPass::World);
         self.draw_material_capture(renderer, camera, wizard, tick, spells);
+        self.draw_magic_shield(renderer, camera, wizard);
     }
 
     pub fn draw_ground(
@@ -324,10 +349,19 @@ impl WizardView {
             presentation.staff_action_pose,
             presentation.secondary_cast,
         );
-        let pose = if preview { 0 } else { poses.staff };
+        let pose = if preview {
+            0
+        } else if appearance.weapon.is_none() {
+            poses.bare.unwrap_or(poses.staff)
+        } else {
+            poses.staff
+        };
         let wand_pose = if preview { 0 } else { poses.wand };
         let unselected = !preview && cast.selected_primary_id.is_none();
-        let offsets = wizard_draw_plan(heading, wizard.walk_cycle_primary, wizard.gait_degrees);
+        let mut offsets = wizard_draw_plan(heading, wizard.walk_cycle_primary, wizard.gait_degrees);
+        if let Some(element) = self.equipped_element_plan(wizard) {
+            offsets.front_attachment_offset = element.attachment_offset;
+        }
         let native_robe =
             matches!(appearance.robe, Some(PlayerRenderableGarmentAppearance::Native(_)));
         let fixed_pose = if unselected && native_robe {
@@ -372,11 +406,14 @@ impl WizardView {
             front_offset: offsets.front_attachment_offset,
             weapon: appearance.weapon.as_ref(),
             unselected,
-            bare: preview || poses.bare,
+            bare_pose: if preview { Some(0) } else { poses.bare },
             material_tint: if hit { self.hit_tint(material_tint) } else { material_tint },
             tick,
             enchant: !preview && !hit,
         };
+        if !preview && !hit {
+            self.draw_back_bare_element(renderer, camera, wizard, tick, spells);
+        }
         self.draw_weapon(renderer, camera, frame, false);
         let robe_pose = if preview { 0 } else { offsets.robe_pose % 5 };
         if let Some(bank) = &self.equipment.robe {
@@ -459,48 +496,23 @@ impl WizardView {
             );
         }
         self.draw_weapon(renderer, camera, frame, true);
-        if !hit
+        if preview
             && appearance
                 .weapon
                 .as_ref()
                 .is_some_and(|weapon| weapon.kind() == NativePlayerWeaponKind::Staff)
-            && (preview || !unselected)
         {
             let socket = player_staff_attachment_offset(heading, pose);
-            let orb = if preview {
-                Vec2::new(position.x + socket.x, position.y + socket.y)
-            } else {
-                Vec2::new(
-                    position.x + socket.x + offsets.front_attachment_offset.x,
-                    position.y + socket.y + offsets.front_attachment_offset.y,
-                )
-            };
-            if preview {
-                spells.draw_element_vfx(
-                    renderer,
-                    camera,
-                    orb,
-                    &native_element_vfx_plan(self.equipment.element, 0.0, 1.0),
-                );
-            } else {
-                let passes = player_character_staff_orb_passes(
-                    heading,
-                    pose,
-                    presentation.overlay_effect_phase,
-                );
-                let scale = player_equipped_element_effect_scale(presentation.overlay_effect_phase);
-                let plan = native_selected_primary_element_vfx_plan(
-                    if presentation.plane_active { 80 } else { cast.selected_primary_id.unwrap() },
-                    tick,
-                    scale,
-                );
-                for visible in [passes.front_base, passes.front_overlay] {
-                    if visible {
-                        self.draw_damage_x4(renderer, camera, orb, tick, scale, spells);
-                        spells.draw_element_vfx(renderer, camera, orb, &plan);
-                    }
-                }
-            }
+            let orb = Vec2::new(position.x + socket.x, position.y + socket.y);
+            spells.draw_element_vfx(
+                renderer,
+                camera,
+                orb,
+                &native_element_vfx_plan(self.equipment.element, 0.0, 1.0),
+            );
+        }
+        if !preview && !hit {
+            self.draw_early_selected_element(renderer, camera, wizard, tick, spells);
         }
         if let Some(bank) = &self.equipment.hat {
             self.draw_mod_layer(
@@ -638,18 +650,26 @@ impl WizardView {
                     })
                 };
                 if let Some(plan) = enchant {
-                    self.draw_segment(
-                        renderer,
-                        camera,
-                        frame.position,
-                        5 + *selector,
-                        hand.points[1],
-                        hand.points[2],
-                        offset,
-                        frame.material_tint,
-                        BlendMode::Add,
-                    );
-                    self.draw_staff_aura(renderer, camera, frame.position, offset, plan);
+                    if presentation.stoneskin {
+                        // Native +0x223 is disabled only for the learned gradient;
+                        // Stone omits the ordinary additive shaft redraw.
+                        renderer.draw_with_texture_rgb(|renderer| {
+                            self.draw_staff_aura(renderer, camera, frame.position, offset, plan);
+                        });
+                    } else {
+                        self.draw_segment(
+                            renderer,
+                            camera,
+                            frame.position,
+                            5 + *selector,
+                            hand.points[1],
+                            hand.points[2],
+                            offset,
+                            frame.material_tint,
+                            BlendMode::Add,
+                        );
+                        self.draw_staff_aura(renderer, camera, frame.position, offset, plan);
+                    }
                 }
                 self.draw_cell_layer(
                     renderer,
@@ -704,9 +724,10 @@ impl WizardView {
                     BlendMode::Normal,
                 );
             }
-            None if frame.bare => {
+            None => {
+                let Some(pose) = frame.bare_pose else { return };
                 for base in [484, 676] {
-                    let index = base + frame.heading;
+                    let index = base + pose * HEADINGS + frame.heading;
                     if (self.records[index].points[0][1] > 0.5) == front {
                         self.draw_cell_layer(
                             renderer,
@@ -719,7 +740,6 @@ impl WizardView {
                     }
                 }
             }
-            None => {}
         }
     }
 

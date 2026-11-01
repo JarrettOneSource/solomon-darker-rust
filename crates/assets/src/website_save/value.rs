@@ -249,6 +249,7 @@ impl<'de> de::VariantAccess<'de> for SourceEnum {
 
 fn source_field(name: &str, field: &str) -> String {
     match (name, field) {
+        ("PlayerPrimaryCastState", "hand_cast") => return "handCast1".into(),
         ("NewGameSelection", "name") => return "displayName".into(),
         ("SolomonEncounter", "heading_degrees") => return "headingDeg".into(),
         ("SolomonEncounter", "rng") => return "rngState".into(),
@@ -366,6 +367,16 @@ fn adapt_struct(name: &str, mut value: Value) -> Result<Value, serde_json::Error
             for field in ["actionTick", "selectedPrimaryId"] {
                 if value.get(field).and_then(Value::as_f64) == Some(-1.0) {
                     value[field] = Value::Null;
+                }
+            }
+        }
+        "NativeSecondaryCastAction" => {
+            if let Some(pose) = value.get("handPose").cloned() {
+                let done = value.get("handDone").cloned().unwrap_or(Value::Bool(false));
+                value["hand"] = serde_json::json!({"pose":pose,"done":done});
+                if let Some(fields) = value.as_object_mut() {
+                    fields.remove("handPose");
+                    fields.remove("handDone");
                 }
             }
         }

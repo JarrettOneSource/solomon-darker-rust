@@ -4,7 +4,7 @@ use crate::NativeRng;
 use crate::float::fround;
 use crate::profile::offensive::NativeOffensiveSpellFactors;
 use crate::profile::{NativeSkillBookState, native_skill_category, native_skill_root};
-use crate::spells::casting::NativePlayerWeaponKind;
+use crate::spells::casting::{NativePlayerWeaponKind, native_forward_action_marker_crossed};
 
 use super::{
     NativeSecondaryAbilityId, effective_secondary_ability_rank_stats, effective_skill_value,
@@ -15,23 +15,120 @@ pub const NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS: f64 = 150.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "persistence", serde(try_from = "saved_cast::Document"))]
 pub struct NativeSecondaryCastAction {
     pub weapon_kind: Option<NativePlayerWeaponKind>,
     pub progress: f64,
+    #[cfg_attr(feature = "persistence", serde(default, skip_serializing_if = "Option::is_none"))]
+    pub hand: Option<NativeHandCast2>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+pub struct NativeHandCast2 {
+    pub pose: usize,
+    pub done: bool,
+}
+
+impl NativeSecondaryCastAction {
+    #[must_use]
+    pub fn new(weapon_kind: Option<NativePlayerWeaponKind>) -> Self {
+        Self {
+            weapon_kind,
+            progress: 0.0,
+            hand: weapon_kind.is_none().then_some(NativeHandCast2 { pose: 0, done: false }),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct NativeSecondaryCastStep {
+    pub action: Option<NativeSecondaryCastAction>,
+    pub marker_crossed: bool,
 }
 
 #[must_use]
 pub fn step_native_secondary_cast_action(
     action: Option<NativeSecondaryCastAction>,
     faster_caster_percent: f64,
-) -> Option<NativeSecondaryCastAction> {
-    let mut action = action?;
+    action_time_factor: f64,
+) -> NativeSecondaryCastStep {
+    let Some(mut action) = action else { return NativeSecondaryCastStep::default() };
+    let previous = action.progress;
+    if action.weapon_kind.is_none() {
+        let hand = action.hand.get_or_insert(NativeHandCast2 {
+            pose: if action.progress == 0.0 {
+                0
+            } else if action.progress < 1.0 {
+                1
+            } else {
+                3
+            },
+            done: action.progress >= 6.0,
+        });
+        if hand.done {
+            return NativeSecondaryCastStep::default();
+        }
+        // Bare Cast2 has a fixed born .095 rate. The native admission helper
+        // 0x005297D0 applies no Faster Caster construction multiplier.
+        action.progress = fround(action.progress + fround(action_time_factor) * 0.095_f32 as f64);
+        hand.pose = if action.progress < 1.0 {
+            1
+        } else if action.progress < 7.0 {
+            3
+        } else {
+            0
+        };
+        hand.done = action.progress >= 6.0;
+        return NativeSecondaryCastStep {
+            action: Some(action),
+            marker_crossed: native_forward_action_marker_crossed(previous, action.progress, 1.0),
+        };
+    }
     let staff = action.weapon_kind == Some(NativePlayerWeaponKind::Staff);
     let rate = if staff { 0.1_f32 as f64 } else { 0.095_f32 as f64 };
     let factor = fround(1.0 + faster_caster_percent / 100.0);
     action.progress = fround(action.progress + factor * rate);
     let end = if staff { 5.0 } else { 6.0 };
-    if action.progress > end { None } else { Some(action) }
+    NativeSecondaryCastStep {
+        marker_crossed: native_forward_action_marker_crossed(
+            previous,
+            action.progress,
+            if staff { 0.0 } else { 1.0 },
+        ),
+        action: (action.progress <= end).then_some(action),
+    }
+}
+
+#[cfg(feature = "persistence")]
+mod saved_cast {
+    use super::{NativeHandCast2, NativePlayerWeaponKind, NativeSecondaryCastAction};
+
+    #[derive(serde::Deserialize)]
+    #[serde(rename = "NativeSecondaryCastAction")]
+    pub(super) struct Document {
+        weapon_kind: Option<NativePlayerWeaponKind>,
+        progress: f64,
+        #[serde(default)]
+        hand: Option<NativeHandCast2>,
+    }
+
+    impl TryFrom<Document> for NativeSecondaryCastAction {
+        type Error = &'static str;
+        fn try_from(value: Document) -> Result<Self, Self::Error> {
+            if !value.progress.is_finite()
+                || value.progress < 0.0
+                || value.hand.is_some_and(|hand| {
+                    value.weapon_kind.is_some()
+                        || hand.pose > 3
+                        || hand.done != (value.progress >= 6.0)
+                })
+            {
+                return Err("secondary hand action has invalid progress, pose or terminal state");
+            }
+            Ok(Self { weapon_kind: value.weapon_kind, progress: value.progress, hand: value.hand })
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -91,7 +188,7 @@ impl Default for NativeSecondaryPlayerState {
 
 impl NativeSecondaryPlayerState {
     pub fn start_cast(&mut self, weapon_kind: Option<NativePlayerWeaponKind>) {
-        self.cast_action = Some(NativeSecondaryCastAction { weapon_kind, progress: 0.0 });
+        self.cast_action = Some(NativeSecondaryCastAction::new(weapon_kind));
     }
 
     /// Fractional recharge factors stay in doubles; the source does not narrow these timers.
@@ -100,7 +197,8 @@ impl NativeSecondaryPlayerState {
         skill_book: &NativeSkillBookState,
         secondary_recharge_factor: f64,
         offensive_factors: &NativeOffensiveSpellFactors,
-    ) {
+        action_time_factor: f64,
+    ) -> bool {
         for ability in NativeSecondaryAbilityId::ALL {
             self.cooldown_maximum_ticks_by_skill[ability.skill_id()] =
                 native_secondary_cooldown_capacity_ticks(skill_book, ability);
@@ -126,10 +224,13 @@ impl NativeSecondaryPlayerState {
         self.magic_shield_pulse_ticks = self.magic_shield_pulse_ticks.saturating_sub(1);
         self.planewalker_ticks_remaining = self.planewalker_ticks_remaining.saturating_sub(1);
         self.stoneskin_ticks_remaining = self.stoneskin_ticks_remaining.saturating_sub(1);
-        self.cast_action = step_native_secondary_cast_action(
+        let step = step_native_secondary_cast_action(
             self.cast_action,
             effective_skill_value(skill_book, 70, "mValue"),
+            action_time_factor,
         );
+        self.cast_action = step.action;
+        step.marker_crossed
     }
 
     /// Focus may leave the existing cooldown untouched after consuming its native chance draw.

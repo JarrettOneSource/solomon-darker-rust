@@ -34,6 +34,8 @@ fn cast(
                 alive: true,
                 available_mana: 1000.0,
                 cast_progress_factor: 1.0,
+                hand_cast_factor: 1.0,
+                action_time_factor: 1.0,
                 eligible: true,
                 plane_active: false,
                 primary_skill: &profile,

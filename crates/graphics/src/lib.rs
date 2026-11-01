@@ -820,6 +820,17 @@ impl Renderer {
         self.forced_texture_color_mode = previous;
     }
 
+    /// Enchant Staff temporarily restores texture RGB for its learned gradient
+    /// inside a Stone diffuse capture, then resumes the captured hand colours.
+    pub fn draw_with_texture_rgb(&mut self, draw: impl FnOnce(&mut Self)) {
+        self.flush();
+        let previous = self.forced_texture_color_mode;
+        self.forced_texture_color_mode = Some(TextureColorMode::Texture);
+        draw(self);
+        self.flush();
+        self.forced_texture_color_mode = previous;
+    }
+
     /// Native Puppet hit sprites retain diffuse red and apply their parent alpha.
     pub fn draw_diffuse_with_opacity(&mut self, opacity: f32, draw: impl FnOnce(&mut Self)) {
         self.flush();

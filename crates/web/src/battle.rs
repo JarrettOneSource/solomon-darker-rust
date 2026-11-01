@@ -825,6 +825,8 @@ impl BattleViews {
                             wizard.set_player_presentation(WizardPlayerPresentation {
                                 player,
                                 secondary: frame.secondary.players.get(participant.id),
+                                stoneskin_warp: frame.secondary.stoneskin_warp.as_deref(),
+                                enhanced_effects: frame.enhanced_effects,
                                 webbed: world.enemies.webbed_players.get(participant.id).copied(),
                                 overlay_effect_phase: participant.overlay_effect_phase,
                                 staff_action_pose: frame.spells.transients.iter().find_map(

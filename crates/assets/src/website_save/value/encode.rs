@@ -251,6 +251,12 @@ impl SerializeStruct for SourceStruct {
             self.values.extend(fields);
         }
         match self.name {
+            "NativeSecondaryCastAction" => {
+                if let Some(hand) = self.values.remove("hand") {
+                    self.values.insert("handPose".into(), hand["pose"].clone());
+                    self.values.insert("handDone".into(), hand["done"].clone());
+                }
+            }
             "PlayerPrimaryCastState" => {
                 for field in ["actionTick", "selectedPrimaryId"] {
                     if self.values.get(field).is_some_and(Value::is_null) {

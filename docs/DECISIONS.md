@@ -383,6 +383,13 @@ serde visitor avoids recursively cloning untagged intermediate values.
 Reconnect starts with a full publication. ACKs, controls, Flame history, and large
 Welcome/save transfers retain their separate sequencing contracts.
 
+Protocol version 3 requires the primary HandCast1 record and the bare secondary
+pose/terminal state. The authority owns the opening gameplay RNG draw, born rate,
+current pose and retained terminal frame; clients render those accepted values.
+An older matched-build protocol cannot silently ignore them. Existing disk saves
+without the optional fields remain readable without sampling RNG. The hosted
+deployment protocol remains version 2 because its publication contract is separate.
+
 ## Deployment identity and recovery
 
 The game recovery revision and website publication identity have separate roles.

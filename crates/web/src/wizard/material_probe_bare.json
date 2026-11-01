@@ -1,0 +1,2024 @@
+{
+  "schema": "retail-bare-selected-element-regression-v1",
+  "nativeSha256": "03a834566ce70fd8088f4cf9ee6693157130d8aec28c092cb814d6221231f1e3",
+  "clothesSha256": "69595c233b6dd61d2273bf60d13e0e2bf7f2dde5db8036ee8fd86e9aae30624b",
+  "referenceY": 15.5,
+  "rows": [
+    {
+      "pose": 0,
+      "heading": 0,
+      "firstRecord": 484,
+      "secondRecord": 676,
+      "firstPoint0": [
+        -87.0,
+        -58.0
+      ],
+      "secondPoint0": [
+        -36.5,
+        -98.5
+      ],
+      "maxHandDepthY": -58.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -5.5,
+        -25.5
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 1,
+      "firstRecord": 485,
+      "secondRecord": 677,
+      "firstPoint0": [
+        -66.5,
+        -75.0
+      ],
+      "secondPoint0": [
+        -5.0,
+        -103.0
+      ],
+      "maxHandDepthY": -75.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -2.0,
+        -26.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 2,
+      "firstRecord": 486,
+      "secondRecord": 678,
+      "firstPoint0": [
+        -41.5,
+        -87.0
+      ],
+      "secondPoint0": [
+        26.5,
+        -101.0
+      ],
+      "maxHandDepthY": -87.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        2.0,
+        -26.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 3,
+      "firstRecord": 487,
+      "secondRecord": 679,
+      "firstPoint0": [
+        -13.5,
+        -93.0
+      ],
+      "secondPoint0": [
+        56.0,
+        -91.5
+      ],
+      "maxHandDepthY": -91.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        6.0,
+        -25.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 4,
+      "firstRecord": 488,
+      "secondRecord": 680,
+      "firstPoint0": [
+        15.0,
+        -93.0
+      ],
+      "secondPoint0": [
+        82.0,
+        -76.0
+      ],
+      "maxHandDepthY": -76.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        9.5,
+        -23.5
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 5,
+      "firstRecord": 489,
+      "secondRecord": 681,
+      "firstPoint0": [
+        43.0,
+        -86.5
+      ],
+      "secondPoint0": [
+        102.5,
+        -55.5
+      ],
+      "maxHandDepthY": -55.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        12.0,
+        -21.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 6,
+      "firstRecord": 490,
+      "secondRecord": 682,
+      "firstPoint0": [
+        68.0,
+        -74.0
+      ],
+      "secondPoint0": [
+        116.0,
+        -31.0
+      ],
+      "maxHandDepthY": -31.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        14.0,
+        -18.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 7,
+      "firstRecord": 491,
+      "secondRecord": 683,
+      "firstPoint0": [
+        88.0,
+        -56.5
+      ],
+      "secondPoint0": [
+        121.5,
+        -4.5
+      ],
+      "maxHandDepthY": -4.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        15.0,
+        -15.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 8,
+      "firstRecord": 492,
+      "secondRecord": 684,
+      "firstPoint0": [
+        102.5,
+        -35.5
+      ],
+      "secondPoint0": [
+        118.5,
+        22.5
+      ],
+      "maxHandDepthY": 22.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        15.0,
+        -11.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 9,
+      "firstRecord": 493,
+      "secondRecord": 685,
+      "firstPoint0": [
+        109.5,
+        -11.5
+      ],
+      "secondPoint0": [
+        108.0,
+        47.5
+      ],
+      "maxHandDepthY": 47.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        14.0,
+        -8.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 10,
+      "firstRecord": 494,
+      "secondRecord": 686,
+      "firstPoint0": [
+        109.5,
+        13.0
+      ],
+      "secondPoint0": [
+        89.5,
+        69.5
+      ],
+      "maxHandDepthY": 69.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        12.0,
+        -5.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 11,
+      "firstRecord": 495,
+      "secondRecord": 687,
+      "firstPoint0": [
+        102.0,
+        36.5
+      ],
+      "secondPoint0": [
+        65.0,
+        87.0
+      ],
+      "maxHandDepthY": 87.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        9.0,
+        -3.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 12,
+      "firstRecord": 496,
+      "secondRecord": 688,
+      "firstPoint0": [
+        87.0,
+        58.0
+      ],
+      "secondPoint0": [
+        36.5,
+        98.5
+      ],
+      "maxHandDepthY": 98.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        5.5,
+        -1.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 13,
+      "firstRecord": 497,
+      "secondRecord": 689,
+      "firstPoint0": [
+        66.5,
+        75.0
+      ],
+      "secondPoint0": [
+        5.0,
+        103.0
+      ],
+      "maxHandDepthY": 103.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        2.0,
+        0.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 14,
+      "firstRecord": 498,
+      "secondRecord": 690,
+      "firstPoint0": [
+        41.5,
+        87.0
+      ],
+      "secondPoint0": [
+        -26.5,
+        101.0
+      ],
+      "maxHandDepthY": 101.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -2.0,
+        -0.5
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 15,
+      "firstRecord": 499,
+      "secondRecord": 691,
+      "firstPoint0": [
+        13.5,
+        93.0
+      ],
+      "secondPoint0": [
+        -56.0,
+        91.5
+      ],
+      "maxHandDepthY": 93.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -6.0,
+        -1.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 16,
+      "firstRecord": 500,
+      "secondRecord": 692,
+      "firstPoint0": [
+        -15.0,
+        93.0
+      ],
+      "secondPoint0": [
+        -82.0,
+        76.0
+      ],
+      "maxHandDepthY": 93.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -9.5,
+        -3.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 17,
+      "firstRecord": 501,
+      "secondRecord": 693,
+      "firstPoint0": [
+        -43.0,
+        86.5
+      ],
+      "secondPoint0": [
+        -102.5,
+        55.5
+      ],
+      "maxHandDepthY": 86.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -12.5,
+        -5.5
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 18,
+      "firstRecord": 502,
+      "secondRecord": 694,
+      "firstPoint0": [
+        -68.0,
+        74.0
+      ],
+      "secondPoint0": [
+        -116.0,
+        31.0
+      ],
+      "maxHandDepthY": 74.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -14.0,
+        -8.5
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 19,
+      "firstRecord": 503,
+      "secondRecord": 695,
+      "firstPoint0": [
+        -88.0,
+        56.5
+      ],
+      "secondPoint0": [
+        -121.5,
+        4.5
+      ],
+      "maxHandDepthY": 56.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -15.0,
+        -12.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 20,
+      "firstRecord": 504,
+      "secondRecord": 696,
+      "firstPoint0": [
+        -102.5,
+        35.5
+      ],
+      "secondPoint0": [
+        -119.0,
+        -22.5
+      ],
+      "maxHandDepthY": 35.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -15.0,
+        -15.0
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 21,
+      "firstRecord": 505,
+      "secondRecord": 697,
+      "firstPoint0": [
+        -109.5,
+        11.5
+      ],
+      "secondPoint0": [
+        -108.0,
+        -47.5
+      ],
+      "maxHandDepthY": 11.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -14.0,
+        -18.5
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 22,
+      "firstRecord": 506,
+      "secondRecord": 698,
+      "firstPoint0": [
+        -109.5,
+        -13.0
+      ],
+      "secondPoint0": [
+        -89.5,
+        -69.5
+      ],
+      "maxHandDepthY": -13.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -12.0,
+        -21.5
+      ]
+    },
+    {
+      "pose": 0,
+      "heading": 23,
+      "firstRecord": 507,
+      "secondRecord": 699,
+      "firstPoint0": [
+        -102.0,
+        -36.5
+      ],
+      "secondPoint0": [
+        -65.0,
+        -87.0
+      ],
+      "maxHandDepthY": -36.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -9.0,
+        -24.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 0,
+      "firstRecord": 508,
+      "secondRecord": 700,
+      "firstPoint0": [
+        -57.5,
+        -99.0
+      ],
+      "secondPoint0": [
+        -24.0,
+        -90.5
+      ],
+      "maxHandDepthY": -90.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        4.0,
+        -30.5
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 1,
+      "firstRecord": 509,
+      "secondRecord": 701,
+      "firstPoint0": [
+        -26.0,
+        -108.0
+      ],
+      "secondPoint0": [
+        4.0,
+        -92.5
+      ],
+      "maxHandDepthY": -92.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        9.0,
+        -29.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 2,
+      "firstRecord": 510,
+      "secondRecord": 702,
+      "firstPoint0": [
+        8.0,
+        -110.0
+      ],
+      "secondPoint0": [
+        32.5,
+        -88.5
+      ],
+      "maxHandDepthY": -88.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        13.0,
+        -26.5
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 3,
+      "firstRecord": 511,
+      "secondRecord": 703,
+      "firstPoint0": [
+        41.5,
+        -104.5
+      ],
+      "secondPoint0": [
+        58.5,
+        -78.5
+      ],
+      "maxHandDepthY": -78.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        16.0,
+        -23.5
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 4,
+      "firstRecord": 512,
+      "secondRecord": 704,
+      "firstPoint0": [
+        72.0,
+        -91.5
+      ],
+      "secondPoint0": [
+        80.0,
+        -63.0
+      ],
+      "maxHandDepthY": -63.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        18.0,
+        -19.5
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 5,
+      "firstRecord": 513,
+      "secondRecord": 705,
+      "firstPoint0": [
+        97.5,
+        -73.0
+      ],
+      "secondPoint0": [
+        96.5,
+        -43.0
+      ],
+      "maxHandDepthY": -43.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        19.0,
+        -15.5
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 6,
+      "firstRecord": 514,
+      "secondRecord": 706,
+      "firstPoint0": [
+        116.0,
+        -49.0
+      ],
+      "secondPoint0": [
+        107.0,
+        -20.5
+      ],
+      "maxHandDepthY": -20.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        18.5,
+        -11.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 7,
+      "firstRecord": 515,
+      "secondRecord": 707,
+      "firstPoint0": [
+        127.5,
+        -22.0
+      ],
+      "secondPoint0": [
+        109.0,
+        3.5
+      ],
+      "maxHandDepthY": 3.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        17.0,
+        -7.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 8,
+      "firstRecord": 516,
+      "secondRecord": 708,
+      "firstPoint0": [
+        129.5,
+        7.0
+      ],
+      "secondPoint0": [
+        104.0,
+        27.5
+      ],
+      "maxHandDepthY": 27.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        14.0,
+        -4.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 9,
+      "firstRecord": 517,
+      "secondRecord": 709,
+      "firstPoint0": [
+        123.0,
+        35.5
+      ],
+      "secondPoint0": [
+        92.5,
+        49.5
+      ],
+      "maxHandDepthY": 49.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        10.0,
+        -1.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 10,
+      "firstRecord": 518,
+      "secondRecord": 710,
+      "firstPoint0": [
+        108.0,
+        61.0
+      ],
+      "secondPoint0": [
+        74.0,
+        68.0
+      ],
+      "maxHandDepthY": 68.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        6.0,
+        0.5
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 11,
+      "firstRecord": 519,
+      "secondRecord": 711,
+      "firstPoint0": [
+        86.0,
+        82.5
+      ],
+      "secondPoint0": [
+        51.0,
+        82.5
+      ],
+      "maxHandDepthY": 82.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 12,
+      "firstRecord": 520,
+      "secondRecord": 712,
+      "firstPoint0": [
+        57.5,
+        99.0
+      ],
+      "secondPoint0": [
+        24.0,
+        90.5
+      ],
+      "maxHandDepthY": 99.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -4.0,
+        1.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 13,
+      "firstRecord": 521,
+      "secondRecord": 713,
+      "firstPoint0": [
+        26.0,
+        108.0
+      ],
+      "secondPoint0": [
+        -4.0,
+        92.5
+      ],
+      "maxHandDepthY": 108.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -9.0,
+        -0.5
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 14,
+      "firstRecord": 522,
+      "secondRecord": 714,
+      "firstPoint0": [
+        -8.0,
+        110.0
+      ],
+      "secondPoint0": [
+        -32.5,
+        88.5
+      ],
+      "maxHandDepthY": 110.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -13.0,
+        -3.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 15,
+      "firstRecord": 523,
+      "secondRecord": 715,
+      "firstPoint0": [
+        -41.5,
+        104.5
+      ],
+      "secondPoint0": [
+        -58.5,
+        78.5
+      ],
+      "maxHandDepthY": 104.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -16.0,
+        -6.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 16,
+      "firstRecord": 524,
+      "secondRecord": 716,
+      "firstPoint0": [
+        -72.0,
+        91.5
+      ],
+      "secondPoint0": [
+        -80.0,
+        63.0
+      ],
+      "maxHandDepthY": 91.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -18.0,
+        -10.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 17,
+      "firstRecord": 525,
+      "secondRecord": 717,
+      "firstPoint0": [
+        -97.5,
+        73.0
+      ],
+      "secondPoint0": [
+        -96.5,
+        43.0
+      ],
+      "maxHandDepthY": 73.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -19.0,
+        -14.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 18,
+      "firstRecord": 526,
+      "secondRecord": 718,
+      "firstPoint0": [
+        -116.0,
+        49.0
+      ],
+      "secondPoint0": [
+        -107.0,
+        20.5
+      ],
+      "maxHandDepthY": 49.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -18.5,
+        -18.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 19,
+      "firstRecord": 527,
+      "secondRecord": 719,
+      "firstPoint0": [
+        -127.5,
+        22.0
+      ],
+      "secondPoint0": [
+        -109.0,
+        -3.5
+      ],
+      "maxHandDepthY": 22.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -17.0,
+        -22.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 20,
+      "firstRecord": 528,
+      "secondRecord": 720,
+      "firstPoint0": [
+        -129.5,
+        -7.0
+      ],
+      "secondPoint0": [
+        -104.0,
+        -27.5
+      ],
+      "maxHandDepthY": -7.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -14.0,
+        -25.5
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 21,
+      "firstRecord": 529,
+      "secondRecord": 721,
+      "firstPoint0": [
+        -123.0,
+        -35.5
+      ],
+      "secondPoint0": [
+        -92.5,
+        -49.5
+      ],
+      "maxHandDepthY": -35.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -10.0,
+        -28.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 22,
+      "firstRecord": 530,
+      "secondRecord": 722,
+      "firstPoint0": [
+        -108.0,
+        -61.0
+      ],
+      "secondPoint0": [
+        -74.0,
+        -68.0
+      ],
+      "maxHandDepthY": -61.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -6.0,
+        -30.0
+      ]
+    },
+    {
+      "pose": 1,
+      "heading": 23,
+      "firstRecord": 531,
+      "secondRecord": 723,
+      "firstPoint0": [
+        -86.0,
+        -82.5
+      ],
+      "secondPoint0": [
+        -51.0,
+        -82.5
+      ],
+      "maxHandDepthY": -82.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -1.0,
+        -31.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 0,
+      "firstRecord": 532,
+      "secondRecord": 724,
+      "firstPoint0": [
+        -74.0,
+        -105.5
+      ],
+      "secondPoint0": [
+        -15.5,
+        -112.0
+      ],
+      "maxHandDepthY": -105.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        0.0,
+        -33.5
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 1,
+      "firstRecord": 533,
+      "secondRecord": 725,
+      "firstPoint0": [
+        -39.0,
+        -118.0
+      ],
+      "secondPoint0": [
+        19.0,
+        -111.5
+      ],
+      "maxHandDepthY": -111.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        6.0,
+        -33.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 2,
+      "firstRecord": 534,
+      "secondRecord": 726,
+      "firstPoint0": [
+        -2.0,
+        -122.5
+      ],
+      "secondPoint0": [
+        52.5,
+        -103.5
+      ],
+      "maxHandDepthY": -103.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        11.5,
+        -31.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 3,
+      "firstRecord": 535,
+      "secondRecord": 727,
+      "firstPoint0": [
+        35.5,
+        -119.0
+      ],
+      "secondPoint0": [
+        82.5,
+        -88.5
+      ],
+      "maxHandDepthY": -88.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        16.0,
+        -28.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 4,
+      "firstRecord": 536,
+      "secondRecord": 728,
+      "firstPoint0": [
+        70.5,
+        -107.0
+      ],
+      "secondPoint0": [
+        106.5,
+        -67.0
+      ],
+      "maxHandDepthY": -67.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        19.5,
+        -24.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 5,
+      "firstRecord": 537,
+      "secondRecord": 729,
+      "firstPoint0": [
+        100.5,
+        -88.0
+      ],
+      "secondPoint0": [
+        123.5,
+        -41.5
+      ],
+      "maxHandDepthY": -41.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        21.5,
+        -19.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 6,
+      "firstRecord": 538,
+      "secondRecord": 730,
+      "firstPoint0": [
+        124.0,
+        -63.0
+      ],
+      "secondPoint0": [
+        132.0,
+        -13.0
+      ],
+      "maxHandDepthY": -13.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        22.0,
+        -14.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 7,
+      "firstRecord": 539,
+      "secondRecord": 731,
+      "firstPoint0": [
+        139.0,
+        -33.5
+      ],
+      "secondPoint0": [
+        131.0,
+        16.5
+      ],
+      "maxHandDepthY": 16.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        21.5,
+        -9.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 8,
+      "firstRecord": 540,
+      "secondRecord": 732,
+      "firstPoint0": [
+        144.5,
+        -1.5
+      ],
+      "secondPoint0": [
+        122.0,
+        44.5
+      ],
+      "maxHandDepthY": 44.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        19.0,
+        -5.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 9,
+      "firstRecord": 541,
+      "secondRecord": 733,
+      "firstPoint0": [
+        140.0,
+        30.0
+      ],
+      "secondPoint0": [
+        104.0,
+        70.0
+      ],
+      "maxHandDepthY": 70.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        15.5,
+        -1.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 10,
+      "firstRecord": 542,
+      "secondRecord": 734,
+      "firstPoint0": [
+        126.0,
+        60.0
+      ],
+      "secondPoint0": [
+        79.0,
+        90.5
+      ],
+      "maxHandDepthY": 90.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        11.0,
+        2.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 11,
+      "firstRecord": 543,
+      "secondRecord": 735,
+      "firstPoint0": [
+        104.0,
+        85.5
+      ],
+      "secondPoint0": [
+        49.0,
+        104.5
+      ],
+      "maxHandDepthY": 104.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        5.5,
+        4.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 12,
+      "firstRecord": 544,
+      "secondRecord": 736,
+      "firstPoint0": [
+        74.0,
+        105.5
+      ],
+      "secondPoint0": [
+        15.5,
+        112.0
+      ],
+      "maxHandDepthY": 112.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        0.0,
+        4.5
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 13,
+      "firstRecord": 545,
+      "secondRecord": 737,
+      "firstPoint0": [
+        39.0,
+        118.0
+      ],
+      "secondPoint0": [
+        -19.0,
+        111.5
+      ],
+      "maxHandDepthY": 118.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -6.0,
+        4.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 14,
+      "firstRecord": 546,
+      "secondRecord": 738,
+      "firstPoint0": [
+        2.0,
+        122.5
+      ],
+      "secondPoint0": [
+        -52.5,
+        103.5
+      ],
+      "maxHandDepthY": 122.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -11.5,
+        2.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 15,
+      "firstRecord": 547,
+      "secondRecord": 739,
+      "firstPoint0": [
+        -35.5,
+        119.0
+      ],
+      "secondPoint0": [
+        -82.5,
+        88.5
+      ],
+      "maxHandDepthY": 119.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -16.0,
+        -1.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 16,
+      "firstRecord": 548,
+      "secondRecord": 740,
+      "firstPoint0": [
+        -70.5,
+        107.0
+      ],
+      "secondPoint0": [
+        -106.5,
+        67.0
+      ],
+      "maxHandDepthY": 107.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -19.5,
+        -5.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 17,
+      "firstRecord": 549,
+      "secondRecord": 741,
+      "firstPoint0": [
+        -100.5,
+        88.0
+      ],
+      "secondPoint0": [
+        -123.5,
+        41.5
+      ],
+      "maxHandDepthY": 88.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -21.5,
+        -10.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 18,
+      "firstRecord": 550,
+      "secondRecord": 742,
+      "firstPoint0": [
+        -124.0,
+        63.0
+      ],
+      "secondPoint0": [
+        -132.0,
+        13.0
+      ],
+      "maxHandDepthY": 63.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -22.0,
+        -15.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 19,
+      "firstRecord": 551,
+      "secondRecord": 743,
+      "firstPoint0": [
+        -139.0,
+        33.5
+      ],
+      "secondPoint0": [
+        -131.0,
+        -16.5
+      ],
+      "maxHandDepthY": 33.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -21.5,
+        -20.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 20,
+      "firstRecord": 552,
+      "secondRecord": 744,
+      "firstPoint0": [
+        -144.5,
+        1.5
+      ],
+      "secondPoint0": [
+        -122.0,
+        -44.5
+      ],
+      "maxHandDepthY": 1.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -19.0,
+        -24.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 21,
+      "firstRecord": 553,
+      "secondRecord": 745,
+      "firstPoint0": [
+        -140.0,
+        -30.0
+      ],
+      "secondPoint0": [
+        -104.0,
+        -70.0
+      ],
+      "maxHandDepthY": -30.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -15.5,
+        -28.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 22,
+      "firstRecord": 554,
+      "secondRecord": 746,
+      "firstPoint0": [
+        -126.0,
+        -60.0
+      ],
+      "secondPoint0": [
+        -79.0,
+        -90.5
+      ],
+      "maxHandDepthY": -60.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -11.0,
+        -31.0
+      ]
+    },
+    {
+      "pose": 2,
+      "heading": 23,
+      "firstRecord": 555,
+      "secondRecord": 747,
+      "firstPoint0": [
+        -104.0,
+        -85.5
+      ],
+      "secondPoint0": [
+        -49.0,
+        -104.5
+      ],
+      "maxHandDepthY": -85.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -5.5,
+        -33.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 0,
+      "firstRecord": 556,
+      "secondRecord": 748,
+      "firstPoint0": [
+        -164.0,
+        -95.0
+      ],
+      "secondPoint0": [
+        -8.5,
+        -104.0
+      ],
+      "maxHandDepthY": -95.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        0.0,
+        -37.5
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 1,
+      "firstRecord": 557,
+      "secondRecord": 749,
+      "firstPoint0": [
+        -129.0,
+        -127.5
+      ],
+      "secondPoint0": [
+        23.0,
+        -102.0
+      ],
+      "maxHandDepthY": -102.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        6.0,
+        -37.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 2,
+      "firstRecord": 558,
+      "secondRecord": 750,
+      "firstPoint0": [
+        -86.0,
+        -151.5
+      ],
+      "secondPoint0": [
+        53.5,
+        -93.5
+      ],
+      "maxHandDepthY": -93.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        11.5,
+        -35.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 3,
+      "firstRecord": 559,
+      "secondRecord": 751,
+      "firstPoint0": [
+        -37.0,
+        -165.5
+      ],
+      "secondPoint0": [
+        80.5,
+        -78.5
+      ],
+      "maxHandDepthY": -78.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        16.0,
+        -32.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 4,
+      "firstRecord": 560,
+      "secondRecord": 752,
+      "firstPoint0": [
+        14.5,
+        -168.0
+      ],
+      "secondPoint0": [
+        101.5,
+        -58.5
+      ],
+      "maxHandDepthY": -58.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        19.5,
+        -27.5
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 5,
+      "firstRecord": 561,
+      "secondRecord": 753,
+      "firstPoint0": [
+        65.5,
+        -159.0
+      ],
+      "secondPoint0": [
+        116.0,
+        -34.0
+      ],
+      "maxHandDepthY": -34.0,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        22.0,
+        -23.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 6,
+      "firstRecord": 562,
+      "secondRecord": 754,
+      "firstPoint0": [
+        111.5,
+        -139.5
+      ],
+      "secondPoint0": [
+        122.0,
+        -7.5
+      ],
+      "maxHandDepthY": -7.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        22.5,
+        -18.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 7,
+      "firstRecord": 563,
+      "secondRecord": 755,
+      "firstPoint0": [
+        150.0,
+        -110.0
+      ],
+      "secondPoint0": [
+        120.5,
+        20.0
+      ],
+      "maxHandDepthY": 20.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        21.5,
+        -13.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 8,
+      "firstRecord": 564,
+      "secondRecord": 756,
+      "firstPoint0": [
+        178.5,
+        -73.0
+      ],
+      "secondPoint0": [
+        110.0,
+        45.5
+      ],
+      "maxHandDepthY": 45.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        19.0,
+        -8.5
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 9,
+      "firstRecord": 565,
+      "secondRecord": 757,
+      "firstPoint0": [
+        194.5,
+        -31.5
+      ],
+      "secondPoint0": [
+        92.5,
+        68.5
+      ],
+      "maxHandDepthY": 68.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        15.5,
+        -5.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 10,
+      "firstRecord": 566,
+      "secondRecord": 758,
+      "firstPoint0": [
+        197.5,
+        12.5
+      ],
+      "secondPoint0": [
+        68.5,
+        86.5
+      ],
+      "maxHandDepthY": 86.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        11.0,
+        -2.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 11,
+      "firstRecord": 567,
+      "secondRecord": 759,
+      "firstPoint0": [
+        187.0,
+        55.5
+      ],
+      "secondPoint0": [
+        40.0,
+        98.5
+      ],
+      "maxHandDepthY": 98.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        5.5,
+        0.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 12,
+      "firstRecord": 568,
+      "secondRecord": 760,
+      "firstPoint0": [
+        164.0,
+        95.0
+      ],
+      "secondPoint0": [
+        8.5,
+        104.0
+      ],
+      "maxHandDepthY": 104.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        0.0,
+        0.5
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 13,
+      "firstRecord": 569,
+      "secondRecord": 761,
+      "firstPoint0": [
+        129.0,
+        127.5
+      ],
+      "secondPoint0": [
+        -23.0,
+        102.0
+      ],
+      "maxHandDepthY": 127.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -6.0,
+        0.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 14,
+      "firstRecord": 570,
+      "secondRecord": 762,
+      "firstPoint0": [
+        86.0,
+        151.5
+      ],
+      "secondPoint0": [
+        -53.5,
+        93.5
+      ],
+      "maxHandDepthY": 151.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -11.5,
+        -2.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 15,
+      "firstRecord": 571,
+      "secondRecord": 763,
+      "firstPoint0": [
+        37.0,
+        165.5
+      ],
+      "secondPoint0": [
+        -80.5,
+        78.5
+      ],
+      "maxHandDepthY": 165.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -16.0,
+        -5.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 16,
+      "firstRecord": 572,
+      "secondRecord": 764,
+      "firstPoint0": [
+        -15.0,
+        168.0
+      ],
+      "secondPoint0": [
+        -101.5,
+        58.5
+      ],
+      "maxHandDepthY": 168.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -19.5,
+        -9.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 17,
+      "firstRecord": 573,
+      "secondRecord": 765,
+      "firstPoint0": [
+        -65.5,
+        159.0
+      ],
+      "secondPoint0": [
+        -116.0,
+        34.0
+      ],
+      "maxHandDepthY": 159.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -22.0,
+        -14.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 18,
+      "firstRecord": 574,
+      "secondRecord": 766,
+      "firstPoint0": [
+        -111.5,
+        139.5
+      ],
+      "secondPoint0": [
+        -122.0,
+        7.5
+      ],
+      "maxHandDepthY": 139.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -22.5,
+        -19.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 19,
+      "firstRecord": 575,
+      "secondRecord": 767,
+      "firstPoint0": [
+        -150.0,
+        110.0
+      ],
+      "secondPoint0": [
+        -120.5,
+        -20.0
+      ],
+      "maxHandDepthY": 110.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -21.5,
+        -23.5
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 20,
+      "firstRecord": 576,
+      "secondRecord": 768,
+      "firstPoint0": [
+        -178.5,
+        73.0
+      ],
+      "secondPoint0": [
+        -110.0,
+        -45.5
+      ],
+      "maxHandDepthY": 73.0,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -19.0,
+        -28.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 21,
+      "firstRecord": 577,
+      "secondRecord": 769,
+      "firstPoint0": [
+        -194.5,
+        31.5
+      ],
+      "secondPoint0": [
+        -92.5,
+        -68.5
+      ],
+      "maxHandDepthY": 31.5,
+      "frontAdmitted": false,
+      "backAdmitted": true,
+      "effectPoint1": [
+        -16.0,
+        -32.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 22,
+      "firstRecord": 578,
+      "secondRecord": 770,
+      "firstPoint0": [
+        -197.5,
+        -12.5
+      ],
+      "secondPoint0": [
+        -68.5,
+        -86.0
+      ],
+      "maxHandDepthY": -12.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -11.0,
+        -35.0
+      ]
+    },
+    {
+      "pose": 3,
+      "heading": 23,
+      "firstRecord": 579,
+      "secondRecord": 771,
+      "firstPoint0": [
+        -187.0,
+        -55.5
+      ],
+      "secondPoint0": [
+        -40.0,
+        -98.5
+      ],
+      "maxHandDepthY": -55.5,
+      "frontAdmitted": true,
+      "backAdmitted": false,
+      "effectPoint1": [
+        -5.5,
+        -37.0
+      ]
+    }
+  ]
+}

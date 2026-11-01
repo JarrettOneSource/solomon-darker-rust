@@ -244,7 +244,6 @@ impl NativeSecondarySimulationState {
     ) -> NativeSecondaryTickResult {
         assert!(context.tick <= MAX_NATIVE_TICKS, "secondary tick is a non-negative safe integer");
         self.camera_displacements.clear();
-        let old_events = self.events.clone();
         // Source retains identity before both decay and final-tick pulses. A health
         // query cannot replace this: dying and emerging actors still own modifiers.
         self.target_effects
@@ -324,7 +323,7 @@ impl NativeSecondarySimulationState {
         for request in std::mem::take(&mut engine.electric_burns) {
             apply_electric_burn(engine.state, request);
         }
-        step_players(&mut engine, &old_events);
+        step_players(&mut engine);
         if engine.state.events.len() > 512 {
             engine.state.events.drain(..engine.state.events.len() - 512);
         }
@@ -377,28 +376,21 @@ fn apply_electric_burn(state: &mut NativeSecondarySimulationState, request: Burn
     state.spawn_actor(actor);
 }
 
-fn step_players<W: NativeSecondaryWorld>(
-    engine: &mut StepEngine<'_, '_, '_, W>,
-    old_events: &[NativeSecondaryEventState],
-) {
+fn step_players<W: NativeSecondaryWorld>(engine: &mut StepEngine<'_, '_, '_, W>) {
     let mut players = BTreeMap::new();
     for (id, authority) in engine.context.players {
         let mut player = engine.state.players.get(id).cloned().unwrap_or_default();
-        if authority.eligible
-            && player.cast_action.is_some_and(|action| action.progress == 0.0)
-            && old_events.iter().any(|event| {
-                &event.owner_id == id && Some(event.tick) == engine.context.tick.checked_sub(1)
-            })
-        {
-            engine.output.staff_cast_pulse_player_ids.push(id.clone());
-        }
         let was_planewalker = player.planewalker_ticks_remaining > 0;
         let was_stoneskin = player.stoneskin_ticks_remaining > 0;
-        player.step(
+        let cast_marker_crossed = player.step(
             authority.skill_book,
             authority.secondary_recharge_factor,
             &authority.offensive_factors,
+            authority.action_time_factor,
         );
+        if authority.eligible && cast_marker_crossed {
+            engine.output.staff_cast_pulse_player_ids.push(id.clone());
+        }
         player.reserved_mana = player.mana_reserve(authority.skill_book, authority.maximum_mana);
         for (expired, ability, kind, cue) in [
             (
