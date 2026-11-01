@@ -51,7 +51,9 @@ pub fn decode(text: &str) -> Result<GameCheckpoint, String> {
     }
     let mut value: serde_json::Value = serde_json::from_str(text)
         .map_err(|error| format!("Could not read the saved game: {error}"))?;
-    migrate_native_boulder_guidance(&mut value)?;
+    if let Some(checkpoint) = value.get_mut("checkpoint") {
+        migrate_checkpoint(checkpoint)?;
+    }
     let document: SaveDocument<GameCheckpoint> = serde_json::from_value(value)
         .map_err(|error| format!("Could not read the saved game: {error}"))?;
     let checkpoint = document.checkpoint;
@@ -65,11 +67,12 @@ pub fn decode(text: &str) -> Result<GameCheckpoint, String> {
 // Earlier checkpoints retained the trajectory but no acquired handle or turn
 // history. Native null-target defaults preserve that trajectory without inventing
 // a past query. Fresh releases use the recovered constructor/release contract.
-fn migrate_native_boulder_guidance(value: &mut serde_json::Value) -> Result<(), String> {
-    // Only this queue owns native persistent spell records. Authored/mod JSON
-    // elsewhere can use the same names and must remain byte-value equivalent.
+/// Normalize historical fields in one native GameCheckpoint before typed decoding.
+/// Save and private archive envelopes retain their own version/metadata checks.
+/// Only the persisted spell queue is visited; authored JSON is never searched.
+pub fn migrate_checkpoint(checkpoint: &mut serde_json::Value) -> Result<(), String> {
     if let Some(actors) =
-        value.pointer_mut("/checkpoint/spells/transients").and_then(serde_json::Value::as_array_mut)
+        checkpoint.pointer_mut("/spells/transients").and_then(serde_json::Value::as_array_mut)
     {
         for actor in actors {
             if let Some(fields) = actor
@@ -96,7 +99,8 @@ fn migrate_boulder_guidance_fields(
     use serde_json::{Value, json};
     let key = |snake: &'static str, camel: &'static str| if native { snake } else { camel };
     let old_clock = key("lifetime_ticks_remaining", "lifetimeTicksRemaining");
-    if !actor.contains_key(old_clock) {
+    let old_turn = key("speed_factor", "speedFactor");
+    if !actor.contains_key(old_clock) && !actor.contains_key(old_turn) {
         return Ok(());
     }
     if [
@@ -113,7 +117,6 @@ fn migrate_boulder_guidance_fields(
     {
         return Err("saved Boulder mixes legacy and guidance fields".into());
     }
-    let old_turn = key("speed_factor", "speedFactor");
     let turn = actor
         .get(old_turn)
         .and_then(Value::as_f64)
@@ -416,11 +419,13 @@ mod tests {
                 "required wire/checkpoint field {field}"
             );
         }
-        let mut mixed: serde_json::Value = serde_json::from_str(&current).unwrap();
-        mixed
-            .pointer_mut("/checkpoint/spells/transients/0/Weld/Persistent/EtherealBoulder")
-            .unwrap()["lifetime_ticks_remaining"] = serde_json::json!(1200);
-        assert!(decode(&mixed.to_string()).unwrap_err().contains("mixes legacy"));
+        for legacy in ["lifetime_ticks_remaining", "speed_factor"] {
+            let mut mixed: serde_json::Value = serde_json::from_str(&current).unwrap();
+            mixed
+                .pointer_mut("/checkpoint/spells/transients/0/Weld/Persistent/EtherealBoulder")
+                .unwrap()[legacy] = serde_json::json!(1200);
+            assert!(decode(&mixed.to_string()).unwrap_err().contains("mixes legacy"), "{legacy}");
+        }
         let mut old: serde_json::Value = serde_json::from_str(&current).unwrap();
         let path = "/checkpoint/spells/transients/0/Weld/Persistent/EtherealBoulder";
         let fields = old.pointer_mut(path).unwrap().as_object_mut().unwrap();
@@ -487,6 +492,15 @@ mod tests {
             restored.session.spells.transients.iter().next().unwrap().snapshot(),
             session.spells.transients.iter().next().unwrap().snapshot()
         );
+        for legacy in ["lifetimeTicksRemaining", "speedFactor"] {
+            let mut mixed = projected.clone();
+            mixed["schemaVersion"] = serde_json::json!(51);
+            mixed["continuation"]["simulation"]["primarySpells"]["transients"][0][legacy] =
+                serde_json::json!(1200);
+            let error = crate::website_save::restore(&mixed.to_string())
+                .expect_err("legacy Website rows cannot mix old and current guidance");
+            assert!(error.contains("mixes legacy"), "{legacy}: {error}");
+        }
         let mut old = projected;
         old["schemaVersion"] = serde_json::json!(51);
         let saved = old["continuation"]["simulation"]["primarySpells"]["transients"][0]
@@ -529,7 +543,7 @@ mod tests {
             {"Weld":{"Persistent":{"EtherealBoulder":{"common":{"direction":{"x":1,"y":0}},"velocity":{"x":3,"y":0},"phase":"Flight","lifetime_ticks_remaining":90,"speed_factor":1.5}}}},
             {"custom":custom}
         ]},"mod_state":custom},"authored":custom});
-        migrate_native_boulder_guidance(&mut document).unwrap();
+        migrate_checkpoint(&mut document["checkpoint"]).unwrap();
         assert_eq!(document["authored"], custom);
         assert_eq!(document["checkpoint"]["mod_state"], custom);
         assert_eq!(document["checkpoint"]["spells"]["transients"][1]["custom"], custom);
