@@ -176,6 +176,7 @@ enum ClientWrite {
     Message { message: Box<ClientMessage>, completed: Sender<Result<(), String>> },
     Close { reason: Option<String>, completed: Sender<Result<(), String>> },
     GoingAway { completed: Sender<Result<(), String>> },
+    DropTransport { completed: Sender<Result<(), String>> },
     Stop,
 }
 
@@ -248,6 +249,14 @@ fn drive_client(
                         .map_err(|error| error.to_string());
                     let _ = completed.send(result.clone());
                     result?;
+                }
+                ClientWrite::DropTransport { completed } => {
+                    let result = socket
+                        .get_mut()
+                        .shutdown(std::net::Shutdown::Both)
+                        .map_err(|error| error.to_string());
+                    let _ = completed.send(result.clone());
+                    return result;
                 }
                 ClientWrite::Stop => {
                     let _ = socket.close(None);
@@ -481,6 +490,7 @@ fn console_and_learned_bots_follow_the_actual_source_supervisor_lifecycle() {
     assert_eq!(health["protocol"], "solomon-game-v1");
     health.as_object_mut().unwrap().remove("protocol");
     assert_eq!(health.as_object_mut().unwrap().remove("deploymentProtocol"), Some(json!(2)));
+    assert_eq!(health.as_object_mut().unwrap().remove("recoveringPlayers"), Some(json!(0)));
     rows.push(json!({"case":"live-bot-health","health":health}));
     developer.send(ClientMessage::Command {
         sequence: 1,
@@ -1172,6 +1182,7 @@ fn supervisor_replays_source_http_colleges_broker_and_party_membership() {
     let (_, mut health) = host.request("GET", "/health", Value::Null, true);
     health.as_object_mut().unwrap().remove("protocol");
     assert_eq!(health.as_object_mut().unwrap().remove("deploymentProtocol"), Some(json!(2)));
+    assert_eq!(health.as_object_mut().unwrap().remove("recoveringPlayers"), Some(json!(0)));
     rows.push(json!({"case":"health","body":health}));
     a.send(ClientMessage::Hosted {
         command: HostedCommand::StartMatch { boneyard_id: "default-random".into() },

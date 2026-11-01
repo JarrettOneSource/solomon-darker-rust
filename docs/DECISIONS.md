@@ -447,7 +447,14 @@ not acquire a multiplayer countdown.
 
 Leave/destruction, account change, observer/editor/standalone/desktop sessions,
 authentication/protocol failure, announced deployment and host retirement are
-excluded. Expiry uses ordinary cleanup once. Deployment has priority and retains
+excluded. An accepted Close without a status is local code 1005 and uses ordinary
+cleanup, including intentional browser/native connection disposal. Only TCP loss
+without an accepted Close has no code and may retain the live actor. The transport
+replies to an empty Close with an empty frame, never a reserved 1005 wire code.
+The driver treats Tungstenite's `ResetWithoutClosingHandshake` as EOF; actual
+malformed frames remain protocol error 1002. A known close code and reason survive
+later I/O failure during that close handshake.
+Expiry uses ordinary cleanup once. Deployment has priority and retains
 its checkpoint/ACK/publication barrier. An open replacement still awaiting
 renderer readiness joins that same final checkpoint and storage ACK barrier;
 only a genuinely absent peer has no browser save owner to acknowledge.

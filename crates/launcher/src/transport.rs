@@ -96,6 +96,7 @@ impl TransportConfig {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransportClose {
     /// No close code means TCP ended without an accepted WebSocket close frame.
+    /// An accepted empty Close has local code 1005, which is never sent on the wire.
     pub code: Option<u16>,
     pub reason: String,
 }
