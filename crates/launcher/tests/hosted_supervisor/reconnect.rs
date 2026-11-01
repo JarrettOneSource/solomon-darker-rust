@@ -2,6 +2,73 @@
 use super::*;
 
 #[test]
+fn deliberate_exits_cleanup_immediately_while_transport_interruptions_retain_the_actor() {
+    for (case, interrupted) in [
+        ("empty-close", false),
+        ("normal-close", false),
+        ("disconnect-command", false),
+        ("going-away", true),
+        ("unclosed-tcp", true),
+    ] {
+        let mut host = Host::start();
+        let (_, endpoint) = host.request("POST", "/admin/sessions", content(), true);
+        let (mut client, welcome) = Client::join_with_welcome(&host, &endpoint, "Lifecycle");
+        let ServerMessage::Welcome { credentials, .. } = welcome else { unreachable!() };
+        client.send(ClientMessage::Ping { nonce: 74 });
+        client.until(|message| matches!(message, ServerMessage::Pong { nonce: 74 }));
+        match case {
+            "empty-close" => client.close(),
+            "normal-close" => client.close_with_reason(Some("finished".into())),
+            "disconnect-command" => client.send(ClientMessage::Disconnect),
+            _ => {
+                let (completed, result) = mpsc::channel();
+                let write = if interrupted && case == "going-away" {
+                    ClientWrite::GoingAway { completed }
+                } else {
+                    ClientWrite::DropTransport { completed }
+                };
+                client.writes.send(write).unwrap();
+                result.recv_timeout(Duration::from_secs(8)).unwrap().unwrap();
+            }
+        }
+        client.finish_close();
+        let deadline = Instant::now() + Duration::from_secs(8);
+        loop {
+            let (_, health) = host.request("GET", "/health", Value::Null, true);
+            if health["privatePlayers"] == 0 {
+                if interrupted {
+                    assert_eq!(health["recoveringPlayers"], 1, "{case}: {health}");
+                    assert_eq!(health["privateSessions"], 1, "{case}: {health}");
+                    let (_, presence) = host.request("GET", "/admin/presence", Value::Null, true);
+                    assert!(
+                        presence["items"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .any(|row| { row["displayName"] == "Lifecycle" }),
+                        "{case}: the same accepted actor remains present"
+                    );
+                    let (status, reserved) = reserve(&host, &endpoint, &credentials, 'g');
+                    assert_eq!(status, 201, "{case}: {reserved}");
+                    assert_eq!(reserved["path"], endpoint["path"]);
+                    break;
+                }
+                assert_eq!(health["recoveringPlayers"], 0, "{case}: {health}");
+                if health["privateSessions"] == 0 {
+                    let (_, presence) = host.request("GET", "/admin/presence", Value::Null, true);
+                    assert!(presence["items"].as_array().unwrap().is_empty(), "{case}: {presence}");
+                    assert_eq!(reserve(&host, &endpoint, &credentials, 'g').0, 404, "{case}");
+                    break;
+                }
+            }
+            assert!(Instant::now() < deadline, "{case}: cleanup did not complete: {health}");
+            thread::sleep(Duration::from_millis(5));
+        }
+        host.finish();
+    }
+}
+
+#[test]
 fn proxy_close_reattaches_same_private_actor_with_fresh_bound_one_use_ticket() {
     let mut host = Host::start();
     let mut admission = content();

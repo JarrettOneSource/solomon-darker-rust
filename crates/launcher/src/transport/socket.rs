@@ -9,6 +9,7 @@ use std::thread;
 use std::time::Instant;
 
 use solomon_protocol::WEBSOCKET_PATH;
+use tungstenite::error::ProtocolError;
 use tungstenite::handshake::server::{Callback, ErrorResponse, Request, Response};
 use tungstenite::http::StatusCode;
 use tungstenite::protocol::{CloseFrame, WebSocket, WebSocketConfig};
@@ -414,7 +415,7 @@ fn drive_peer(
                         // belongs to Tungstenite. Flush it before accepting another.
                         write_pending = true;
                     }
-                    Err(error) => return failed_connection(error),
+                    Err(error) => return failed_connection(error, closing),
                 }
             }
             if let Some(close) = &mut closing {
@@ -429,7 +430,7 @@ fn drive_peer(
                     match socket.close(Some(close_frame(&close.detail))) {
                         Ok(()) => {}
                         Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
-                        Err(error) => return failed_connection(error),
+                        Err(error) => return failed_connection(error, closing),
                     }
                     close.queued = true;
                 }
@@ -437,7 +438,7 @@ fn drive_peer(
                 match socket.send(Message::Ping(Bytes::new())) {
                     Ok(()) => {}
                     Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
-                    Err(error) => return failed_connection(error),
+                    Err(error) => return failed_connection(error, closing),
                 }
                 missed_pongs += 1;
                 last_ping = Instant::now();
@@ -472,13 +473,14 @@ fn drive_peer(
                     code: Some(1003),
                     reason: "game transport accepts text messages only".to_owned(),
                 };
-                match socket.close(Some(close_frame(&close))) {
-                    Ok(()) => {}
-                    Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
-                    Err(error) => return failed_connection(error),
-                }
+                let frame = close_frame(&close);
                 closing =
                     Some(SocketClose { started: Instant::now(), detail: close, queued: true });
+                match socket.close(Some(frame)) {
+                    Ok(()) => {}
+                    Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
+                    Err(error) => return failed_connection(error, closing),
+                }
             }
             Some(Ok(Message::Pong(_))) => missed_pongs = 0,
             Some(Ok(Message::Close(frame))) => {
@@ -488,7 +490,9 @@ fn drive_peer(
                     close.queued = true;
                 } else {
                     let detail = TransportClose {
-                        code: frame.as_ref().map(|frame| frame.code.into()),
+                        // 1005 is local no-status identity, never a transmitted code.
+                        // An accepted empty Close is distinct from EOF or I/O loss.
+                        code: Some(frame.as_ref().map_or(1005, |frame| frame.code.into())),
                         reason: frame.map_or_else(String::new, |frame| frame.reason.to_string()),
                     };
                     closing = Some(SocketClose { started: Instant::now(), detail, queued: true });
@@ -508,10 +512,14 @@ fn drive_peer(
             Some(Err(Error::Utf8(_))) => {
                 return reject_frame(&mut socket, 1007, "game text must be valid UTF-8");
             }
+            Some(Err(error @ Error::Protocol(ProtocolError::ResetWithoutClosingHandshake))) => {
+                // Tungstenite's EOF variant carries no malformed WebSocket frame.
+                return failed_connection(error, closing);
+            }
             Some(Err(Error::Protocol(_))) => {
                 return reject_frame(&mut socket, 1002, "invalid WebSocket frame");
             }
-            Some(Err(error)) => return failed_connection(error),
+            Some(Err(error)) => return failed_connection(error, closing),
         }
         // read queues automatic pong and close replies; do not replace them manually.
         write_pending = match socket.flush() {
@@ -523,7 +531,7 @@ fn drive_peer(
                     |close| close.detail,
                 );
             }
-            Err(error) => return failed_connection(error),
+            Err(error) => return failed_connection(error, closing),
         };
         if idle {
             thread::sleep(server.config.io_poll_interval);
@@ -552,8 +560,11 @@ fn close_frame(close: &TransportClose) -> CloseFrame {
         reason: close.reason.clone().into(),
     }
 }
-fn failed_connection(error: Error) -> TransportClose {
-    TransportClose { code: None, reason: error.to_string() }
+fn failed_connection(error: Error, closing: Option<SocketClose>) -> TransportClose {
+    closing.map_or_else(
+        || TransportClose { code: None, reason: error.to_string() },
+        |close| close.detail,
+    )
 }
 fn reject_frame(socket: &mut WebSocket<PrefixedStream>, code: u16, reason: &str) -> TransportClose {
     let close = TransportClose { code: Some(code), reason: reason.to_owned() };
