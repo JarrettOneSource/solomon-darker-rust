@@ -21,6 +21,9 @@ mod viewport;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod navigation_tests;
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod automatic_unequip_tests;
+
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 
@@ -1151,7 +1154,7 @@ impl PlayerPanels {
                             self.actions.push(PlayerPanelAction::Inventory(
                                 HubInventoryAction::Unequip {
                                     slot,
-                                    destination_sack_id: None,
+                                    destination_sack_id: self.sack_path.last().copied(),
                                     destination_slot: None,
                                 },
                             ));
