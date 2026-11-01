@@ -504,15 +504,14 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         r: HudRect,
     ) -> Result<Self, String> {
         let c = self.native_button_art(atlas, action, label, r)?;
-        c.text(&NativeUiTextSpec {
-            tint: 0xd9ba70,
-            ..NativeUiTextSpec::new(
-                NativeUiFontName::Menu,
-                label,
-                r.width / 2.0,
-                r.height / 2.0 + 9.0,
-            )
-        });
+        c.text(&crate::menu::widgets::stock_button_label_spec(
+            label,
+            rect(HudRect::new(0.0, 0.0, r.width, r.height)),
+            r.height as f32 / 69.0,
+            1.0,
+            false,
+            1.0,
+        ));
         Ok(c)
     }
 }

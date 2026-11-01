@@ -2,7 +2,7 @@
 
 use egui::{Color32, FontId, Id, Painter, Pos2, Rect, Response, Sense, Ui, pos2, vec2};
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec};
+use solomon_sim::native_ui_text::NativeUiTextSpec;
 
 use crate::gpu_ui::{self, StockAtlas, UiFrame};
 
@@ -69,13 +69,14 @@ pub(super) fn stock_button(
     let held = enabled && crate::menu::widgets::stock_button_pressed(ui, &response);
     crate::menu::widgets::paint_stock_button_highlight(frame, ui, bounds, scale, enabled, held);
     focus_outline(frame, ui, &response, scale);
-    let mut spec = NativeUiTextSpec::new(NativeUiFontName::Menu, label, 0.0, 0.0);
-    let pressed = if held { 6.0 * scale } else { 0.0 };
-    spec.x = f64::from(bounds.center().x + pressed);
-    spec.y = f64::from(bounds.center().y + 9.0 * scale + pressed);
-    spec.scale = f64::from(scale);
-    spec.tint = 0xd9ba70;
-    spec.alpha = if enabled { 1.0 } else { 0.4 };
+    let spec = crate::menu::widgets::stock_button_label_spec(
+        label,
+        bounds,
+        scale,
+        f64::from(scale),
+        held,
+        if enabled { 1.0 } else { 0.4 },
+    );
     gpu_ui::native_text(frame, painter, &spec);
     frame.record(&format!("social/{id}"), label, "button", &response);
     Ok(response)

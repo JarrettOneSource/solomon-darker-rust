@@ -7,6 +7,7 @@ use solomon_sim::economy::{
     HubInventoryAction, HubInventoryItem, INVENTORY_SACK_NAME_MAX_LENGTH,
     normalize_inventory_sack_name,
 };
+use solomon_sim::hud::HudRect;
 use solomon_sim::native_ui_text::{
     NativeUiFontName, NativeUiTextAlign, NativeUiTextPlacement, NativeUiTextSpec,
     layout_native_ui_text,
@@ -97,7 +98,7 @@ impl PlayerPanels {
                 &format!("Rename {}", item.name),
                 INVENTORY_SACK_RENAME_BUTTON,
             )?;
-            button.text(&NativeUiTextSpec {
+            let label = NativeUiTextSpec {
                 tint: 0xd9ba70,
                 scale: INVENTORY_SACK_RENAME_BUTTON_SCALE,
                 ..NativeUiTextSpec::new(
@@ -106,7 +107,17 @@ impl PlayerPanels {
                     INVENTORY_SACK_RENAME_BUTTON.width / 2.0,
                     42.5 * INVENTORY_SACK_RENAME_BUTTON_SCALE,
                 )
-            });
+            };
+            button.text(&solomon_sim::native_ui_text::buttons::fit_native_ui_button_label(
+                label,
+                HudRect::new(
+                    0.0,
+                    0.0,
+                    INVENTORY_SACK_RENAME_BUTTON.width,
+                    INVENTORY_SACK_RENAME_BUTTON.height,
+                ),
+                INVENTORY_SACK_RENAME_BUTTON_SCALE,
+            ));
         }
         Ok(())
     }

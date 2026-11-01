@@ -114,6 +114,20 @@ fonts use complete shaped runs, including kerning, combining marks, Arabic joins
 and emoji clusters. Painting, caret movement, selection, wrapping, composition,
 and clipping use the same layout.
 
+Stock menu-font buttons fit complete glyph ink between the visible `UI.54`
+skulls. The shared label kernel uses the source cap's measured nontransparent
+edge in the label's vertical band and reserves the six-unit press displacement.
+It scales an overlong label uniformly around the button centre and keeps that
+size while pressed; short labels, chrome, hit rectangles and accessible names
+retain their authored values. Menus, social controls and player panels consume
+the same fit. This is adaptive client presentation for bounded controls, including
+Party's `LEAVE COLLEGE`, rather than a retail Party feature.
+Chrome scale and nominal text scale remain separate for compact player-panel
+buttons whose authored font is larger than their chrome scale.
+Raw notice actions, skill-book results and Sack Rename pass their existing text
+specification through the same fit, preserving their explicit baselines. This
+also keeps narrow `UNFORGE` and `CANCEL` notice labels between their skulls.
+
 Platform adapters provide native composition, clipboard access, and file dialogs.
 Native accessibility uses AccessKit and the operating system's accessibility tree.
 Loading exposes a status node for the transition's lifetime, including its artwork
