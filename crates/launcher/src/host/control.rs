@@ -1,6 +1,8 @@
 //! Wall-clock gameplay holds from Website `host/game-host.ts:6269..6838`.
 //! The session owns skill barriers; this host owns renderer-ready and resume-ready ACKs,
 //! the pause owner and the two-second countdown while its authoritative clock is stopped.
+//! Website `e3f100ae` (Report 103) limits that optional countdown to multiplayer;
+//! solo play retains every loading, recovery and presentation-close readiness barrier.
 
 use std::collections::BTreeSet;
 
@@ -28,8 +30,17 @@ struct ResumeGrace {
 pub struct ControlContext<'a> {
     pub active_run: bool,
     pub skill_barrier: bool,
+    /// Canonical participants in this session/party's world, including bots.
     pub materialized: &'a BTreeSet<String>,
+    /// Admitted human connections; staged rejoin identities may not be materialized yet.
     pub connected: &'a BTreeSet<String>,
+}
+
+impl ControlContext<'_> {
+    fn has_multiple_humans(&self) -> bool {
+        // Bots have no human connection; detached/rejoining clients have no actor yet.
+        self.connected.intersection(self.materialized).take(2).count() == 2
+    }
 }
 
 pub struct GameplayControl {
@@ -160,6 +171,9 @@ impl GameplayControl {
         if picker_close && !context.connected.contains(player_id) {
             return;
         }
+        if !picker_close && !context.has_multiple_humans() {
+            return;
+        }
         let mut waiting = BTreeSet::new();
         if picker_close {
             waiting.insert(player_id.into());
@@ -277,7 +291,7 @@ impl GameplayControl {
         }
         let Some(grace) = &mut self.grace else { return };
         if let Some(deadline) = grace.deadline_ms {
-            if now_ms >= deadline {
+            if now_ms >= deadline || !context.has_multiple_humans() {
                 self.grace = None;
             }
             return;
@@ -299,7 +313,7 @@ impl GameplayControl {
         {
             return;
         }
-        if grace.reason == ResumeGraceReason::SkillPickerClosed {
+        if grace.reason == ResumeGraceReason::SkillPickerClosed || !context.has_multiple_humans() {
             self.grace = None;
             return;
         }
@@ -323,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    fn renderer_pause_picker_and_rejoin_holds_replay_the_pinned_host() {
+    fn pinned_host_controls_with_report103_solo_departure() {
         let fixture: Value = serde_json::from_str(include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/fixtures/website/host-control-goldens.json"
@@ -426,7 +440,18 @@ mod tests {
                     "loadingRunId":control.loading_run_id(),
                     "blocked":control.blocks_tick()
                 });
-                assert_eq!(actual, record["expected"], "{} step {index}", scenario["name"]);
+                let mut expected = record["expected"].clone();
+                if scenario["name"] == "ordinary-disconnect-removes-waiter-and-renderer"
+                    && kind == "disconnect"
+                {
+                    // Preserve the recording, but explicitly apply Report 103's later
+                    // accepted solo policy to this one superseded countdown edge.
+                    assert_eq!(expected["grace"]["remainingMs"], 2_000);
+                    assert_eq!(expected["blocked"], true);
+                    expected["grace"] = Value::Null;
+                    expected["blocked"] = json!(false);
+                }
+                assert_eq!(actual, expected, "{} step {index}", scenario["name"]);
             }
         }
     }

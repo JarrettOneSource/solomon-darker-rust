@@ -197,11 +197,22 @@ impl HostedGameHost {
         now_ms: f64,
     ) -> bool {
         self.prune_party_access(now_ms);
-        self.reservations.iter().any(|reservation| {
+        let Some(reservation_id) = reservation_id else { return false };
+        let valid = self.reservations.iter().any(|reservation| {
             reservation.party_id == party_id
-                && Some(reservation.reservation_id.as_str()) == reservation_id
+                && reservation.reservation_id == reservation_id
                 && reservation.expires_at_ms > now_ms
-        })
+        });
+        if !valid {
+            return false;
+        }
+        // Ticket preparation may precede the leader's Arena entry. Recheck the
+        // Hub-only ordinary-join contract before creating a new College actor.
+        if self.party_target(party_id).is_none_or(|target| target.status != PartyStatus::Hub) {
+            self.reservations.retain(|reservation| reservation.reservation_id != reservation_id);
+            return false;
+        }
+        true
     }
 
     pub fn cancel_party_reservation(&mut self, reservation_id: &str) {
