@@ -518,15 +518,8 @@ impl HubStudentPopulation {
             body.player_collision_enabled = !onboarding || student_start == 0;
             bodies.push(body);
         }
-        // The five fixed Courtyard bodies occur in this exact hub-world.ts order.
-        for (position, radius) in [
-            (Vec2::new(1340.0, 280.0), 15.0),
-            (Vec2::new(1397.0, 664.0), 30.0),
-            (Vec2::new(895.5, 455.5), 8.0),
-            (Vec2::new(1700.5, 449.5), 25.0),
-            (Vec2::new(576.5, 710.5), 25.0),
-        ] {
-            bodies.push(ActorBody::fixed(position, radius));
+        for actor in crate::hub::regions::HubRegion::Courtyard.fixed_actor_colliders() {
+            bodies.push(ActorBody::fixed(actor.position, actor.radius));
         }
         if let Some(position) = skorcha {
             bodies.push(ActorBody::fixed(position, 10.0));

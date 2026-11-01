@@ -216,6 +216,14 @@ Accepted session state owns commands, audio, checkpoints, and saves.
 Boneyard frames interpolate without extrapolation; College prediction is limited
 to one snapshot interval of local movement.
 
+College prediction resolves the region's permanent fixed bodies, the Office
+polisher during pending admission, and Skorcha's latest accepted position/presence
+through the same actor solver as authority. Ordinary movement retains scenery
+placement; scripted movement retains its wall exemption. Prediction does not
+advance Skorcha's appearance timer or other participants. A scenery-rejected
+full circle correction still retains the root move, as recovered in Website
+parity ledger 013; this display correction does not change the bench-pocket rule.
+
 Immutable loaded scenes, static collision primitives, skill definitions, and
 unchanged scenery target tables use `Arc` storage to avoid per-frame deep copies.
 Mutable gates and actors remain private. Authored changes use copy-on-write;

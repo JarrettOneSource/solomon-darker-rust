@@ -1,0 +1,68 @@
+//! Immovable Hub bodies shared by authority and local display prediction.
+//! Retail `0x00525800 -> 0x00526520`, Website parity ledger 013: resistance 90,
+//! strength 0, the five Courtyard NPCs and complete private-room collider tables.
+
+use crate::Vec2;
+use crate::actor_physics::ActorPhysicsBody;
+use crate::hub::regions::HubRegion;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HubFixedActorCollider {
+    pub id: &'static str,
+    pub position: Vec2,
+    pub radius: f64,
+}
+
+impl HubFixedActorCollider {
+    #[must_use]
+    pub const fn new(id: &'static str, position: Vec2, radius: f64) -> Self {
+        Self { id, position, radius }
+    }
+
+    #[must_use]
+    pub fn physics_body(self) -> ActorPhysicsBody {
+        ActorPhysicsBody {
+            collision_recipient: true,
+            id: self.id.into(),
+            position: self.position,
+            delta: Vec2::ZERO,
+            radius: self.radius,
+            push_resistance: 90.0,
+            push_strength: 0.0,
+            driven: false,
+            push_enabled: false,
+        }
+    }
+}
+
+const COURTYARD_FIXED_ACTORS: [HubFixedActorCollider; 5] = [
+    HubFixedActorCollider::new("perk-witch", Vec2::new(1340.0, 280.0), 15.0),
+    HubFixedActorCollider::new("potion-trader", Vec2::new(1397.0, 664.0), 30.0),
+    HubFixedActorCollider::new("annalist", Vec2::new(895.5, 455.5), 8.0),
+    HubFixedActorCollider::new("items-trader", Vec2::new(1700.5, 449.5), 25.0),
+    HubFixedActorCollider::new("teacher", Vec2::new(576.5, 710.5), 25.0),
+];
+
+/// Only participants whose College admission is pending collide with this body.
+pub const HUB_STORY_OFFICE_POLISHER: HubFixedActorCollider =
+    HubFixedActorCollider::new("story-office-polisher", Vec2::new(566.0, 735.0), 15.0);
+
+impl HubRegion {
+    /// Permanent bodies in native contact order. Conditional Office/Skorcha bodies
+    /// follow these registrations and retain their separate admission/presence gates.
+    pub fn fixed_actor_colliders(self) -> impl Iterator<Item = HubFixedActorCollider> {
+        COURTYARD_FIXED_ACTORS
+            .into_iter()
+            .filter(move |_| self == Self::Courtyard)
+            .chain(
+                self.room_actors().iter().map(|actor| {
+                    HubFixedActorCollider::new(actor.id, actor.position, actor.radius)
+                }),
+            )
+            .chain(
+                self.room_props()
+                    .iter()
+                    .map(|prop| HubFixedActorCollider::new(prop.id, prop.position, prop.radius)),
+            )
+    }
+}
