@@ -269,6 +269,7 @@ impl SpellState {
                     context.tick,
                     rng,
                     Some(order),
+                    context.targets,
                 );
                 self.next_id = release.next_id;
                 self.transients.retain(|effect| effect.common().id != id);
@@ -334,6 +335,7 @@ impl SpellState {
         tick: u64,
         rng: &mut NativeRng,
         order: &mut WorldPainterOrder,
+        targets: &[crate::spells::targeting::PrimarySpellTarget],
     ) {
         let releasing_hail: Vec<_> = self
             .transients
@@ -380,6 +382,7 @@ impl SpellState {
                 tick,
                 rng,
                 Some(order),
+                targets,
             );
             self.next_id = release.next_id;
             let mut actors = release.actors.into_iter();

@@ -253,7 +253,7 @@ the publication it belongs to. Checkpoint writes keep one owned pending document
 and coalesce later revisions, preserving the revision needed by a waiting receipt.
 
 Native server files use `assets::save_document` schema 2; schema 1 is rejected.
-Browser/desktop player documents use the separate schema 51 codec with its supported
+Browser/desktop player documents use the separate schema 52 codec with its supported
 migrations. [Save conversion decisions](DECISIONS.md#save-conversion) explain the
 retail container and portable-archive boundary.
 

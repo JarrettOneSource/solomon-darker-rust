@@ -789,6 +789,7 @@ impl SpellState {
                     context.tick,
                     rng,
                     order,
+                    context.targets,
                 );
             }
         }

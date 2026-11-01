@@ -8,7 +8,7 @@ behavior across native and WebAssembly builds.
 Native client saves and authority checkpoints share `solomon-storage`'s existing
 fsync/rename implementation. A separate persistent OS lock file covers every
 revision check and replacement; renaming the data file cannot release the lock.
-The client keeps complete schema51 documents and the established preference
+The client keeps complete schema52 documents and the established preference
 formats. Save I/O runs off the window thread; malformed or stale records fail
 without replacing the prior save. Browser storage still uses its original
 IndexedDB transaction. The previous Electron profile stays intact; the existing
@@ -357,8 +357,8 @@ the canonical source spellings. Native checkpoints retain their own typed fields
 Portable item rarities retain `Epic` and `Rare`, including items inside nested
 Sacks. Earlier Rust exports wrote lowercase enum names; import accepts those
 values and re-export writes the canonical spelling. This preserves existing
-player inventories while keeping the shared schema-51 contract compatible with
-the original web client. Unknown rarities remain rejected.
+player inventories while keeping the shared portable-item contract compatible with
+earlier web documents. Unknown rarities remain rejected.
 
 ## Snapshot ordering
 

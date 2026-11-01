@@ -39,6 +39,28 @@ tick `0x00625F40` supplies Fire damage. This recovered contract, including the
 weak/Over exclusion, is recorded in retained native ledger entry 123. Reduced
 damage from other primary spells does not imply a Steam damage rule.
 
+Ethereal Boulder uses the shared Earth movement/contact step before its own
+retail guidance tail (`0x00621450`). Release `0x005FA6D0` acquires independently
+at each rock's root through `0x005F28A0`; More Missiles caps the authored count at
+four. Smart Missiles scales turn input and the reacquisition window, while the
+original flight speed is `3 * .75 = 2.25`. Extra children use their constructor
+turn input with the native `.95`/`.9` template factors. A lost non-null handle
+may reacquire; a null handle never polls, and an already-hit closest target is
+rejected without a farther fallback. Resolved inactive targets supply one final
+steering sample after accepted contacts. The countdown limits steering; it does
+not retire an otherwise live rock. Terrain, exhausted contact pools, bounds and
+scene/owner teardown retain their own retirement paths.
+
+`weld::persistent` owns this state and the contact transaction commits guidance
+after real enemy acceptance. Website schema52 and native checkpoints preserve
+heading, speed, target, policy, window and accumulated turn state. Older disk
+records retain identity, pose, stored velocity and pools, defaulting the absent
+handle/accumulator to the native null target/`.01`; their unrecorded target history
+cannot be recovered. Fresh release uses the corrected owner. Gameplay protocol3
+requires the new state; deployment protocol2 is unchanged. Native ledger123 and
+`ethereal_boulder_guidance` record the authored scalar and sibling contract;
+`spell_contact_rules` exercises both funded and weak production release callers.
+
 The retained original-executable ledgers are under the Website repository's
 `docs/Game Native Parity RE/`. The Rust build uses its tracked inputs. Frozen
 fixtures retain their recorded provenance as described in

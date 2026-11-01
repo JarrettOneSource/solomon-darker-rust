@@ -22,7 +22,7 @@ pub mod hosted;
 pub mod snapshot;
 pub mod transfer;
 
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 pub const WEBSOCKET_PATH: &str = "/session";
 pub const GAME_TICK_RATE: u32 = 100;
 pub const SNAPSHOT_RATE: u32 = 20;

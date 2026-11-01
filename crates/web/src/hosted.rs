@@ -592,7 +592,7 @@ impl WebsiteApi {
         let response =
             self.request(method, path, body, session_header, CachePolicy::Default).await?;
         let status = response.status();
-        // The JSON envelope can escape every byte of an otherwise valid schema51 document.
+        // The JSON envelope can escape every byte of an otherwise valid supported player document.
         let bytes = response
             .bytes((solomon_protocol::MAX_SAVE_BYTES * 6 + 64 * 1024) as u64, |_| {})
             .await?;
