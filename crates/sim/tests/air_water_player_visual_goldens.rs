@@ -124,6 +124,8 @@ fn owner_synchronization_hail_births_bounces_and_aura_finalization_preserve_sour
                     alive: true,
                     available_mana: mana,
                     cast_progress_factor: 1.0,
+                    hand_cast_factor: 1.0,
+                    action_time_factor: 1.0,
                     eligible: true,
                     plane_active: false,
                     primary_skill: &profile,

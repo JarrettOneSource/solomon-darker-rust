@@ -43,6 +43,7 @@ pub fn read_player(value: &Value) -> NativeSecondaryPlayerState {
         cast_action: value["castAction"].as_object().map(|_| NativeSecondaryCastAction {
             weapon_kind: weapon(&value["castAction"]["weaponKind"]),
             progress: value["castAction"]["progress"].as_f64().unwrap(),
+            hand: None,
         }),
         cast_sequence: value["castSequence"].as_u64().unwrap(),
         cast_spin_ticks_remaining: value["castSpinTicksRemaining"].as_u64().unwrap(),

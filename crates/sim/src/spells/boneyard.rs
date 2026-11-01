@@ -124,6 +124,8 @@ pub fn step_boneyard_primary_cast(
         alive: player.combat.life_state == PlayerLifeState::Alive,
         available_mana: player.combat.current_mana,
         cast_progress_factor: derived.cast_progress_factor,
+        hand_cast_factor: derived.hand_cast_factor,
+        action_time_factor: player.combat.movement_scale(),
         eligible: frame.eligible
             && player.combat.can_cast()
             && player.progression.pending_offer.is_none(),

@@ -84,6 +84,8 @@ fn current_flame_cast_reserves_before_factory_and_clips_the_actual_view() {
                     alive: true,
                     available_mana: case["mana"].as_f64().unwrap(),
                     cast_progress_factor: 1.0,
+                    hand_cast_factor: 1.0,
+                    action_time_factor: 1.0,
                     eligible: true,
                     plane_active: false,
                     primary_skill: &profile,

@@ -67,6 +67,7 @@ impl GameSession {
         let mut authority = NativeSecondaryPlayerAuthority::from_snapshot_with_stat_book(
             NativeSecondaryPlayerSnapshot {
                 alive: player.combat.life_state == PlayerLifeState::Alive,
+                action_time_factor: player.combat.movement_scale(),
                 weapon_kind: player_weapon(player),
                 belt: &player.belt,
                 character: participant.wizard,
@@ -163,6 +164,7 @@ impl GameSession {
             let input = inputs[id];
             let snapshot = NativeSecondaryPlayerSnapshot {
                 alive: player.combat.life_state == PlayerLifeState::Alive,
+                action_time_factor: player.combat.movement_scale(),
                 weapon_kind: player_weapon(player),
                 belt: &player.belt,
                 character: participant.wizard,

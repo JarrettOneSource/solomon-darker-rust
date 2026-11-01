@@ -18,3 +18,10 @@ The title/College baseline and sprite-uniform savings are measured in
 [Performance](PERFORMANCE.md). Continue profiling the remaining browser hot paths,
 small-scene display copies and College snapshot volume. Measure four-player,
 constrained-network, mobile, high-refresh and long-session workloads.
+
+## Player action presentation
+
+The no-item HandCast1 owner now latches the recovered native float stores. Staff
+and Wand retain their existing cast cadence. Audit their broader construction
+rate precision separately, using fresh retail evidence and independent expected
+values rather than replacing historical replay fixtures.

@@ -59,6 +59,8 @@ fn all_ten_weld_casts_preserve_native_mana_clocks_queues_and_world_epochs() {
                     alive: true,
                     available_mana: mana,
                     cast_progress_factor: progress,
+                    hand_cast_factor: progress,
+                    action_time_factor: 1.0,
                     eligible: tick < 260,
                     plane_active: false,
                     primary_skill: &profile,

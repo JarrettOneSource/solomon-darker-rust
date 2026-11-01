@@ -5,6 +5,13 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[features]
+browser-fixtures = ["solomon-web/browser-fixtures"]
+
+[[example]]
+name = "wizard_material_probe"
+required-features = ["browser-fixtures"]
+
 [[bin]]
 name = "solomon-darker-app"
 path = "src/main.rs"
