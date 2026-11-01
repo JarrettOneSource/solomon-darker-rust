@@ -78,6 +78,11 @@ impl EnemyAtlases {
             .unwrap_or_else(|| panic!("{} is missing stock record {entry}", atlas.id()));
         (&bank.texture, record)
     }
+
+    pub(super) fn demon_atlas(&self) -> crate::spells::StockAtlas {
+        let bank = self.bank(EnemyArtAtlas::Demon);
+        crate::spells::StockAtlas { records: bank.records.clone(), texture: bank.texture.clone() }
+    }
 }
 
 impl EnemyArtPoints for EnemyAtlases {

@@ -69,11 +69,12 @@ struct PainterRoot {
     draw: PainterDraw,
 }
 
-/// Shares the primary spell atlas uploads. Golem, the two extracted Clothes
-/// cells and the repeating Ether Plane texture are the only additional images.
+/// Shares the primary spell and enemy Demon atlas uploads. Golem, the two extracted
+/// Clothes cells and the repeating Ether Plane texture are the only additional images.
 pub struct SecondaryView {
     bad_guys: StockAtlas,
     dead_hawg: StockAtlas,
+    demon: StockAtlas,
     golem: StockAtlas,
     clothes: [Texture; 2],
     ether_plane: Texture,
@@ -90,7 +91,11 @@ pub struct SecondaryView {
 }
 
 impl SecondaryView {
-    pub async fn load(renderer: &Renderer, spells: &SpellView) -> Result<Self, String> {
+    pub async fn load(
+        renderer: &Renderer,
+        spells: &SpellView,
+        demon: StockAtlas,
+    ) -> Result<Self, String> {
         let bundle = assets::fetch_bytes("assets/stock/Golem.bundle").await?;
         let records = parse_bundle(&bundle).map_err(|error| format!("Golem.bundle: {error}"))?;
         let golem = assets::load_image("assets/stock/Golem.png").await?;
@@ -100,6 +105,7 @@ impl SecondaryView {
         Ok(Self {
             bad_guys: spells.bad_guys().clone(),
             dead_hawg: spells.dead_hawg().clone(),
+            demon,
             golem: StockAtlas { records, texture: renderer.upload(&golem)? },
             clothes: [renderer.upload(&harden)?, renderer.upload(&mindblast)?],
             ether_plane: renderer.upload_with_repeat(&ether_plane, true)?,
@@ -424,6 +430,7 @@ impl SecondaryView {
             atlas: NativeSecondaryAtlas::Clothes,
             blend: NativeSecondaryBlend::Normal,
             color_mode: None,
+            clip: None,
             entry: NATIVE_PLAYER_MAGIC_SHIELD_ENTRY,
             offset: Vec2::new(0.0, NATIVE_PLAYER_MAGIC_SHIELD_OFFSET_Y),
             role: "player-magic-shield".into(),

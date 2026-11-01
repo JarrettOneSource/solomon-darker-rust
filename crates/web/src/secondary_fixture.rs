@@ -56,8 +56,12 @@ pub async fn secondary_fixture_init() -> Result<(), JsValue> {
         canvas.get_context_with_context_options("webgl2", &options)?.unwrap().dyn_into()?;
     let renderer = Renderer::new(gl.clone()).map_err(|error| JsValue::from_str(&error))?;
     let spells = SpellView::load(&renderer).await.map_err(|error| JsValue::from_str(&error))?;
-    let secondary =
-        SecondaryView::load(&renderer, &spells).await.map_err(|error| JsValue::from_str(&error))?;
+    let demon = crate::spells::load_atlas(&renderer, "Demon")
+        .await
+        .map_err(|error| JsValue::from_str(&error))?;
+    let secondary = SecondaryView::load(&renderer, &spells, demon)
+        .await
+        .map_err(|error| JsValue::from_str(&error))?;
     FIXTURE.with(|fixture| {
         *fixture.borrow_mut() = Some(FixtureView {
             canvas,

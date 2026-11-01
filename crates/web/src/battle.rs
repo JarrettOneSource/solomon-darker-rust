@@ -139,16 +139,18 @@ impl BattleViews {
     pub async fn load(renderer: &Renderer, spells: &SpellView) -> Result<Self, String> {
         let bad_guys = spells.bad_guys();
         let dead_hawg = spells.dead_hawg();
+        let enemies = EnemyView::load(
+            renderer,
+            bad_guys.records.clone(),
+            bad_guys.texture.clone(),
+            dead_hawg.records.clone(),
+            dead_hawg.texture.clone(),
+        )
+        .await?;
+        let secondary = SecondaryView::load(renderer, spells, enemies.demon_atlas()).await?;
         Ok(Self {
-            enemies: EnemyView::load(
-                renderer,
-                bad_guys.records.clone(),
-                bad_guys.texture.clone(),
-                dead_hawg.records.clone(),
-                dead_hawg.texture.clone(),
-            )
-            .await?,
-            secondary: SecondaryView::load(renderer, spells).await?,
+            enemies,
+            secondary,
             solomon: SolomonView::load(
                 renderer,
                 &bad_guys.records,
@@ -924,6 +926,7 @@ impl BattleViews {
                     atlas: NativeSecondaryAtlas::DeadHawg,
                     blend: NativeSecondaryBlend::Normal,
                     color_mode: None,
+                    clip: None,
                     entry: 1,
                     offset: Vec2::ZERO,
                     role: "crow-blindness-stamp".to_owned(),

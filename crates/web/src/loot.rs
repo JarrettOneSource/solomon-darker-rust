@@ -187,6 +187,7 @@ impl LootView {
                     SpellBlend::Add => NativeSecondaryBlend::Add,
                 },
                 color_mode: None,
+                clip: None,
                 entry: layer.entry,
                 offset: layer.offset,
                 role: layer.role.clone(),

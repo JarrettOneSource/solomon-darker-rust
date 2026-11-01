@@ -31,6 +31,17 @@ capture animations and eligible grounded world animations have their own pulse
 programs. A living player at the center does not acquire those capture semantics.
 These memberships and constants are recorded in retained native ledger entry 083.
 
+The canonical secondary presentation plan also consumes the retained private
+animation list. It draws all six Skeleton/Archer/Mage head banks, all three
+Zombie banks and Demon entries 80–97, plus DeadHawg debris 177–179. Each private
+draw inherits field opacity and keeps its own unit scale. Captured images
+descend as their timer falls; strictly below one, BadGuys 9 and 8 surround the
+image clipped to the field-local `[-100, -110, 200, 110]` rectangle. This clip
+does not move with the image offset. The web consumer shares the enemy view's
+existing Demon atlas and the native mesh rectangle clipper. Unclipped secondary
+sprites keep their original geometry. Drawing does not advance capture state,
+change its admission, or create pulses.
+
 Steam Jet has a separate low-mana contract. Handler `0x00542D20` creates weak
 normal particles at quarter alpha. Only a full-power normal particle owns the
 contact clock that installs target-owned `Mod_Steamed` through particle tick

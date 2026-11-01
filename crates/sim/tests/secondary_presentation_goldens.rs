@@ -102,6 +102,9 @@ fn sprite(value: &NativeSecondarySpriteDraw) -> Value {
             NativeSecondaryColorMode::Texture => "texture",
         });
     }
+    if let Some([x, y, width, height]) = value.clip {
+        result["clip"] = json!({"x":x,"y":y,"width":width,"height":height});
+    }
     result
 }
 fn plan(value: &NativeSecondaryPresentationPlan) -> Value {
