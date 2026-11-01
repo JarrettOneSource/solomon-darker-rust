@@ -236,7 +236,14 @@ impl PlayerPanels {
                             || alias == 0
                             || item.equipment_type != Some(EquipmentType::Wand))
                 }) {
-                    self.draw_item(&sink, item, r.width / 2.0, r.height / 2.0, 1)?;
+                    self.draw_item(
+                        &sink,
+                        item,
+                        r.width / 2.0,
+                        r.height / 2.0,
+                        1,
+                        snapshot.selection.element,
+                    )?;
                 }
                 if self.selected == Some(Target::Equipment(slot)) {
                     sink.stroke(HudRect::new(0.0, 0.0, r.width, r.height), 0x00c020, 1.0);

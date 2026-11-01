@@ -54,6 +54,14 @@ Brightness may exceed one, which a byte tint alone cannot express. Saturation us
 the .213/.715/.072 luminance matrix. `UiFrame::filtered_color` gives vector text
 and outlines the same operation as stock images and bitmap text.
 
+Stock item art retains every authored Inventory record. The gameplay belt,
+Inventory and its companion panels, and the mobile preview share the presentation
+tint and equipment-transform rules in `sim::hud`. Garment colors come from the
+item, then its recipe, then the wizard element; an absent tint lane leaves that
+texture layer white. Each layer multiplies its original RGB and preserves alpha.
+The HUD's item projection contains this art without copying Sack contents or
+inventory ownership. Equipment and quick-set activation remain session commands.
+
 Sprite shadows sample the selected atlas record's alpha and treat pixels outside
 its bounds as transparent. Neighboring records must not bleed into the blur.
 Shadow offsets and Gaussian sigma use design coordinates independently of the
