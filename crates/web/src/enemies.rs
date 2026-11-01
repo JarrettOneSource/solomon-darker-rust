@@ -49,6 +49,7 @@ pub struct EnemyViewFrame<'a> {
     pub application_tick: u64,
     pub complex_lighting: bool,
     pub complex_shadows: bool,
+    pub enhanced_effects: bool,
     pub view_height: f64,
     pub players: &'a [EnemyViewPlayer<'a>],
     pub light_at: &'a dyn Fn(Vec2) -> f64,

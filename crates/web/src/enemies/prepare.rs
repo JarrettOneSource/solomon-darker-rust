@@ -403,11 +403,12 @@ impl EnemyView {
                     solomon_sim::enemies::lightning_presentation::native_dark_lightning_body(
                         &spell,
                     );
-                self.append_lightning_body(
+                Self::append_lightning_body(
+                    &mut self.roots,
                     spell.owner.position,
                     &layers,
                     spell.owner.painter_registration,
-                    true,
+                    frame.enhanced_effects,
                 );
                 continue;
             }

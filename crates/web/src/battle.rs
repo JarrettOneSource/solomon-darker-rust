@@ -508,6 +508,7 @@ impl BattleViews {
                 application_tick: (frame.application_time_ms / 10.0).floor() as u64,
                 complex_lighting: frame.settings.complex_lighting,
                 complex_shadows: frame.settings.complex_shadows,
+                enhanced_effects: frame.enhanced_effects,
                 view_height: viewport.y,
                 players: &players,
                 light_at: &light_at,
