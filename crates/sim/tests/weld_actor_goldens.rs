@@ -93,7 +93,7 @@ fn steam_row(actor: &NativeWeldSteamActorState) -> Value {
     row
 }
 
-fn compare_steam_actor(actual: &Value, expected: &Value, path: &str) {
+fn compare_steam_actor(actual: &Value, expected: &Value, path: &str, weak: bool) {
     if expected.is_null() {
         assert_eq!(actual, expected, "{path}");
         return;
@@ -104,8 +104,23 @@ fn compare_steam_actor(actual: &Value, expected: &Value, path: &str) {
     // and random words below still use exact equality.
     assert!((actual_angle - expected_angle).abs() < 1e-9, "{path}: rotation");
     let mut expected = expected.clone();
+    let mut actual = actual.clone();
     expected["rotationDegrees"] = actual["rotationDegrees"].clone();
-    website_rows::compare(actual, &expected, path);
+    if weak {
+        // Preserve the original recording. Retail 0x00543266 supersedes only
+        // weak contact permission and its clock, independently covered by
+        // native_steam_low_mana and the real-session spell_contact_rules.
+        assert_eq!(expected["contactEnabled"], false);
+        assert_eq!(actual["contactEnabled"], true);
+        for field in ["contactEnabled", "contactDue", "contactTicksRemaining"] {
+            if field != "contactEnabled" && actual["ageTicks"] == 0 {
+                continue;
+            }
+            actual.as_object_mut().unwrap().remove(field);
+            expected.as_object_mut().unwrap().remove(field);
+        }
+    }
+    website_rows::compare(&actual, &expected, path);
 }
 
 fn steam_birth<'a>(input: &Value, values: &'a [f64]) -> NativeWeldActorBirth<'a> {
@@ -163,6 +178,7 @@ fn steam_native_update_gate_obstruction_contacts_and_private_fragment_fan_match_
                     &json!(alive.then(|| steam_row(&actor))),
                     &expected["actor"],
                     &format!("steam {} {} tick{tick}", case["seed"], case["obstruction"]),
+                    input["underpowered"].as_bool().unwrap(),
                 );
                 if let Some(sample) = weld_visual_rows::sample(case, tick) {
                     let actor = NativeWeldWorldActor::Steam(actor.clone());
@@ -228,7 +244,7 @@ fn steam_native_update_gate_obstruction_contacts_and_private_fragment_fan_match_
         let expected_fragments = expected["fragments"].as_array().unwrap();
         assert_eq!(actual_fragments.len(), expected_fragments.len());
         for (actual, expected) in actual_fragments.iter().zip(expected_fragments) {
-            compare_steam_actor(actual, expected, "Steam fragment");
+            compare_steam_actor(actual, expected, "Steam fragment", false);
         }
         actual["fragments"] = Value::Null;
         expected["fragments"] = Value::Null;

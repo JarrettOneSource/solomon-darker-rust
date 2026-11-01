@@ -267,67 +267,78 @@ fn a_living_player_at_the_center_does_not_expand_the_capture_pulse() {
 }
 
 #[test]
-fn steam_requires_funded_normal_particles_to_damage_a_mob() {
-    for funded in [false, true] {
-        let (mut session, navigation) = drain_session();
-        let player = &mut session.participants.get_mut("owner").unwrap().player;
-        player.grant_weld_build(1005, &mut session.gameplay_rng);
-        assert!(player.select_primary(52));
-        session.participants.get_mut("peer").unwrap().wizard.position = Vec2::new(90.0, 250.0);
-        let intent = EnemySpawnIntent::new(EnemyToken::Skeleton, Vec2::new(400.0, 250.0), 1, 1, 0);
-        session.step(
-            &BTreeMap::new(),
-            GameSessionTickContext {
-                navigation: Some(&navigation),
-                enemy_spawn_intents: &[intent],
-                ..Default::default()
-            },
-        );
-        let mut enemy = session.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
-        enemy.config.maximum_health = 100_000.0;
-        enemy.current_health = 100_000.0;
-        let mut emissions = 0;
-        let mut contact_particles = 0;
-        for _ in 0..180 {
-            let player = &mut session.participants.get_mut("owner").unwrap().player;
-            player.combat.set_mana(if funded { player.combat.maximum_mana } else { 0.0 });
-            let result = session.step(
-                &BTreeMap::from([(
-                    "owner".into(),
-                    GameSessionInput {
-                        aim: Some(Vec2::new(450.0, 250.0)),
-                        primary: true,
-                        ..Default::default()
-                    },
-                )]),
-                GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() {
+    for caster in ["owner", "peer"] {
+        for reserve in [Some(0.0), Some(0.000_001), None] {
+            let (mut session, navigation) = drain_session();
+            let player = &mut session.participants.get_mut(caster).unwrap().player;
+            player.grant_weld_build(1005, &mut session.gameplay_rng);
+            assert!(player.select_primary(52));
+            let other = if caster == "owner" { "peer" } else { "owner" };
+            session.participants.get_mut(other).unwrap().wizard.position = Vec2::new(90.0, 250.0);
+            let intent =
+                EnemySpawnIntent::new(EnemyToken::Skeleton, Vec2::new(400.0, 250.0), 1, 1, 0);
+            session.step(
+                &BTreeMap::new(),
+                GameSessionTickContext {
+                    navigation: Some(&navigation),
+                    enemy_spawn_intents: &[intent],
+                    ..Default::default()
+                },
             );
-            for emission in &result.primary.unwrap().channel_emissions {
-                emissions += 1;
-                assert_eq!(emission.underpowered, !funded);
+            let mut enemy = session.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
+            enemy.config.maximum_health = 100_000.0;
+            enemy.current_health = 100_000.0;
+            let mut emissions = 0;
+            let mut contact_particles = 0;
+            for _ in 0..180 {
+                let player = &mut session.participants.get_mut(caster).unwrap().player;
+                player.combat.set_mana(reserve.unwrap_or(player.combat.maximum_mana));
+                let result = session.step(
+                    &BTreeMap::from([(
+                        caster.into(),
+                        GameSessionInput {
+                            aim: Some(Vec2::new(450.0, 250.0)),
+                            primary: true,
+                            ..Default::default()
+                        },
+                    )]),
+                    GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+                );
+                for emission in &result.primary.unwrap().channel_emissions {
+                    emissions += 1;
+                    assert_eq!(emission.underpowered, reserve.is_some());
+                }
+                for actor in session.spells.transients.iter() {
+                    let PrimaryTransientRef::Weld(WeldWorldRef::Steam(particle)) = actor else {
+                        continue;
+                    };
+                    contact_particles += usize::from(particle.contact_enabled);
+                    if reserve.is_some() {
+                        assert_eq!(particle.alpha_multiplier, 0.25);
+                    }
+                }
             }
-            contact_particles += session
-                .spells
-                .transients
-                .iter()
-                .filter(|actor| {
-                    matches!(actor, PrimaryTransientRef::Weld(WeldWorldRef::Steam(particle))
-                    if particle.contact_enabled)
-                })
-                .count();
-        }
-        assert!(emissions > 100, "the held Steam cast must reach its channel");
-        let enemy = session.boneyard.as_ref().unwrap().enemies.actors.get(0).unwrap();
-        if funded {
-            assert!(contact_particles > 0);
+            assert!(emissions > 100, "the held Steam cast must reach its channel");
+            let enemy = session.boneyard.as_ref().unwrap().enemies.actors.get(0).unwrap();
             assert!(
                 enemy.current_health < enemy.config.maximum_health,
-                "funded Steam must hit the mob"
+                "{caster} {reserve:?}: retail weak normal Steam still damages a mob"
             );
-        } else {
-            // Retail 0x00542D20 / 0x0045B940: weak particles have no Mod_Steamed lane.
-            assert_eq!(contact_particles, 0);
-            assert_eq!(enemy.current_health, enemy.config.maximum_health);
+            assert!(contact_particles > 0, "{caster} {reserve:?}: normal contact remains enabled");
+            // Stop casting. Already admitted particles/modifiers retire on their own clocks.
+            for _ in 0..1100 {
+                session.step(
+                    &BTreeMap::new(),
+                    GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+                );
+            }
+            assert!(
+                !session.spells.transients.iter().any(|actor| matches!(
+                    actor,
+                    PrimaryTransientRef::Weld(WeldWorldRef::Steam(_))
+                ))
+            );
         }
     }
 }

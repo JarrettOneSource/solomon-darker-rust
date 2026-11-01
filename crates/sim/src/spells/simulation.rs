@@ -343,8 +343,16 @@ impl SpellState {
             }
             _ => matches!(element, WizardElement::Ether | WizardElement::Fire),
         };
-        let mana_cost =
-            authority.primary_skill.common().mana_cost / if one_shot { 1.0 } else { 100.0 };
+        // Steam 0x00542D20 multiplies its per-tick debit by the class cast rate.
+        let steam_cast_factor = match authority.primary_skill {
+            NativePrimarySkillProfile::Weld(profile) if profile.build_id == 1005 => {
+                authority.cast_progress_factor
+            }
+            _ => 1.0,
+        };
+        let mana_cost = authority.primary_skill.common().mana_cost
+            / if one_shot { 1.0 } else { 100.0 }
+            * steam_cast_factor;
         let mut mana = ManaDebit { remaining: authority.available_mana, ..ManaDebit::default() };
         let raw_held = input.primary && input.aim.is_some();
         let pressed = raw_held && !previous.held;

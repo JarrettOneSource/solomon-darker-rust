@@ -39,3 +39,11 @@ being tested.
 
 Compressed fixtures retain their JSON checksum where supplied. Preserve the complete
 recording and verify its decoded bytes; selecting a smaller sample changes coverage.
+
+The original `weld-actor-goldens.json` and `weld-step-goldens.json` bytes remain
+unchanged after the report133 retail correction. Their weak Steam contact
+permission and subsequent contact clock came from the earlier incorrect
+implementation. Only those fields are superseded in the named weak cases;
+`native_steam_low_mana` and `spell_contact_rules` independently assert the recovered
+normal/weak/Over contact behavior. Every other recorded field, random word and
+presentation sample remains checked.

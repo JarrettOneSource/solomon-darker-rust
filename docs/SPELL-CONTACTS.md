@@ -31,13 +31,28 @@ capture animations and eligible grounded world animations have their own pulse
 programs. A living player at the center does not acquire those capture semantics.
 These memberships and constants are recorded in retained native ledger entry 083.
 
-Steam Jet has a separate low-mana contract. Handler `0x00542D20` creates weak
-normal particles at quarter alpha. Only a full-power normal particle owns the
-contact clock that installs target-owned `Mod_Steamed` through particle tick
-`0x0045B940`; weak and Over particles have no such contact lane. The modifier's
-tick `0x00625F40` supplies Fire damage. This recovered contract, including the
-weak/Over exclusion, is recorded in retained native ledger entry 123. Reduced
-damage from other primary spells does not imply a Steam damage rule.
+Steam Jet's normal particles keep their contact lane when mana is empty or
+insufficient. Handler `0x00542D20` uses half the resolved base damage for weak
+casts and quarters alpha;
+`0x00543266` tests the caster bank before granting contact byte `+0x50`,
+independently of its low-mana local byte. Weak forces normal rather than Over.
+Only Over remains cosmetic. Particle tick `0x0045B940` installs the ten-tick
+target-owned `Mod_Steamed` while life is strictly above .5; its tick
+`0x00625F40` supplies Fire damage. Learned Fire payloads survive the weak branch;
+existing strong particles and modifiers keep their accepted payload after the
+caster's reserve changes. Retained native ledger123 and its report133 instruction
+catalog supersede the earlier weak-no-contact assertion. Independent constructor,
+clock and real held-input mob regressions protect both participant identities.
+
+Steam's per-tick mana debit and funded particle damage also use the current
+casting-rate/class factor (`0x00656580(7)`). Weak damage uses a fixed .5 multiplier
+on the already resolved damage cache; it does not multiply by casting rate.
+`0x0054A633` calls the offensive resolver before caching that base, so equipment
+and global damage boosts still apply. Independent rate/reserve/boost examples
+cover the admission threshold, accepted cost and particle damage. Staff, Wand
+and bare Constant use the shared Steam casting-rate authority; the separate bare
+one-shot hand pose rate does not apply. Reserve equal to the scaled debit leaves
+zero and selects weak, including both .5 and 2 casting rates in the native matrix.
 
 The retained original-executable ledgers are under the Website repository's
 `docs/Game Native Parity RE/`. The Rust build uses its tracked inputs. Frozen
