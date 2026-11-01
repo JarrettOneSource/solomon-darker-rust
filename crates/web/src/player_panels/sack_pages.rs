@@ -154,7 +154,12 @@ impl PlayerPanels {
             if visible == 0
                 && let Some(item) = parent
             {
-                let cell = c.admitted(interactive).button("back", "Return to parent inventory", r);
+                let label = if self.selected_backpack_item_id(snapshot).is_some() {
+                    "Move selected item to parent inventory"
+                } else {
+                    "Return to parent inventory"
+                };
+                let cell = c.admitted(interactive).button("back", label, r);
                 cell.faded(0.4).raw(
                     &self.inventory,
                     10,

@@ -65,6 +65,21 @@ impl SelectionState {
 pub struct HotbarSelection(Rc<SelectionOwner>);
 
 impl HotbarSelection {
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    pub(crate) fn for_test() -> Self {
+        Self(Rc::new(SelectionOwner {
+            state: Rc::new(SelectionState {
+                bank: Cell::new(0),
+                shortcut: RefCell::new(Shortcut {
+                    code: GameSettings::default().controls.cycle_hotbar,
+                    enabled: false,
+                    reverse: false,
+                }),
+            }),
+            _keyboard: KeyboardListener::for_test(),
+        }))
+    }
+
     pub fn attach(surface: &Surface) -> Result<Self, String> {
         let state = Rc::new(SelectionState {
             bank: Cell::new(0),
