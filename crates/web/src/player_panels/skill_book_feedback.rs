@@ -8,6 +8,7 @@ use solomon_sim::economy::{
     HubActionFeedback, NativeSkillBookFeedbackCursor, NativeSkillBookOutcome,
     native_skill_book_result_text,
 };
+use solomon_sim::hud::HudRect;
 use solomon_sim::native_ui_text::messages::{
     NativeUiMessageDataLineSpec, NativeUiSingleActionMessageLayout,
     layout_native_ui_single_action_message,
@@ -167,7 +168,7 @@ impl PlayerPanels {
                 let r = layout.action_bounds;
                 let button =
                     c.native_button_art(&panels.ui, "skill-book-result-okay", "OKAY", r)?;
-                button.text(&NativeUiTextSpec {
+                let label = NativeUiTextSpec {
                     tint: 0xd9ba70,
                     ..NativeUiTextSpec::new(
                         NativeUiFontName::Menu,
@@ -175,7 +176,12 @@ impl PlayerPanels {
                         r.width / 2.0,
                         layout.action_text_baseline_y - r.y,
                     )
-                });
+                };
+                button.text(&solomon_sim::native_ui_text::buttons::fit_native_ui_button_label(
+                    label,
+                    HudRect::new(0.0, 0.0, r.width, r.height),
+                    r.height / 69.0,
+                ));
                 Ok(())
             },
         )

@@ -2,6 +2,7 @@
 //! `native-ui/native-ui-catalog.ts`. Pens, wrapping and ink placement share the
 //! authored tables in `catalog`; browser and world painters consume the same layout.
 
+pub mod buttons;
 mod catalog;
 pub mod messages;
 

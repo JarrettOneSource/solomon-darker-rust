@@ -5,6 +5,9 @@ use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
 use egui::{
     Align2, Color32, FontId, Id, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2,
 };
+use solomon_sim::native_ui_text::buttons::{
+    NATIVE_UI_BUTTON_LABEL_Y_OFFSET, NATIVE_UI_BUTTON_PRESSED_OFFSET, fit_native_ui_button_label,
+};
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -235,28 +238,54 @@ pub(crate) fn paint_stock_button_label(
     scale: f32,
     enabled: bool,
 ) {
-    let pressed = if enabled && stock_button_pressed(ui, response) {
-        Vec2::splat(6.0 * scale)
-    } else {
-        Vec2::ZERO
-    };
     if !text.is_empty() {
         crate::gpu_ui::native_text(
             frame,
             ui.painter(),
-            &NativeUiTextSpec {
-                scale: f64::from(scale),
-                alpha: if enabled { 1.0 } else { 0.36 },
-                tint: 0xd9ba70,
-                ..NativeUiTextSpec::new(
-                    NativeUiFontName::Menu,
-                    text,
-                    f64::from(rect.center().x + pressed.x),
-                    f64::from(rect.center().y + 9.0 * scale + pressed.y),
-                )
-            },
+            &stock_button_label_spec(
+                text,
+                rect,
+                scale,
+                f64::from(scale),
+                enabled && stock_button_pressed(ui, response),
+                if enabled { 1.0 } else { 0.36 },
+            ),
         );
     }
+}
+
+pub(crate) fn stock_button_label_spec(
+    text: &str,
+    rect: Rect,
+    scale: f32,
+    text_scale: f64,
+    pressed: bool,
+    opacity: f64,
+) -> NativeUiTextSpec<'_> {
+    let mut spec = fit_native_ui_button_label(
+        NativeUiTextSpec {
+            scale: text_scale,
+            alpha: opacity,
+            tint: 0xd9ba70,
+            ..NativeUiTextSpec::new(
+                NativeUiFontName::Menu,
+                text,
+                f64::from(rect.center().x),
+                f64::from(rect.center().y) + NATIVE_UI_BUTTON_LABEL_Y_OFFSET * text_scale,
+            )
+        },
+        solomon_sim::hud::HudRect::new(
+            f64::from(rect.left()),
+            f64::from(rect.top()),
+            f64::from(rect.width()),
+            f64::from(rect.height()),
+        ),
+        f64::from(scale),
+    );
+    let press = if pressed { NATIVE_UI_BUTTON_PRESSED_OFFSET * f64::from(scale) } else { 0.0 };
+    spec.x += press;
+    spec.y = f64::from(rect.center().y) + NATIVE_UI_BUTTON_LABEL_Y_OFFSET * spec.scale + press;
+    spec
 }
 pub(crate) fn stock_button_pressed(ui: &Ui, response: &Response) -> bool {
     response.is_pointer_button_down_on()
@@ -499,21 +528,10 @@ pub(crate) fn cloud_button_with_label(
     let opacity = if enabled { 1.0 } else { 0.5 };
     let pressed = enabled && stock_button_pressed(ui, &response);
     paint_stock_button_tinted(frame, ui, rect, scale, enabled, pressed, alpha(0xffffff, opacity));
-    let press = if pressed { Vec2::splat(6.0 * scale) } else { Vec2::ZERO };
     crate::gpu_ui::native_text(
         frame,
         ui.painter(),
-        &solomon_sim::native_ui_text::NativeUiTextSpec {
-            alpha: opacity,
-            scale: f64::from(scale),
-            tint: 0xd9ba70,
-            ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
-                NativeUiFontName::Menu,
-                label,
-                f64::from(rect.center().x + press.x),
-                f64::from(rect.center().y + 9.0 * scale + press.y),
-            )
-        },
+        &stock_button_label_spec(label, rect, scale, f64::from(scale), pressed, opacity),
     );
     if !enabled {
         ui.painter().rect_filled(rect, 0.0, alpha(0x808080, 0.25));
@@ -606,6 +624,53 @@ pub(crate) fn radial_gradient(
         }
     }
     ui.painter().add(egui::Shape::mesh(mesh));
+}
+
+#[cfg(test)]
+mod button_label_tests {
+    use super::stock_button_label_spec;
+    use egui::{Rect, pos2, vec2};
+    use solomon_sim::native_ui_text::{layout_native_ui_text, native_ui_glyph_ink_bounds};
+
+    #[test]
+    fn shared_gpu_labels_fit_transformed_buttons_without_changing_text_or_press_size() {
+        for scale in [0.55_f32, 1.0, 1.6] {
+            let rect = Rect::from_min_size(pos2(100.0, 200.0), vec2(260.0, 69.0) * scale);
+            for label in ["LEAVE COLLEGE", "LEAVE PARTY"] {
+                let idle =
+                    stock_button_label_spec(label, rect, scale, f64::from(scale), false, 1.0);
+                let pressed =
+                    stock_button_label_spec(label, rect, scale, f64::from(scale), true, 1.0);
+                assert_eq!(idle.text, label);
+                assert_eq!(idle.scale, pressed.scale);
+                let press = 6.0 * f64::from(scale);
+                assert!((pressed.x - idle.x - press).abs() < 1e-9);
+                assert!((pressed.y - idle.y - press).abs() < 1e-9);
+                for spec in [idle, pressed] {
+                    let layout = layout_native_ui_text(&spec);
+                    for glyph in &layout.glyphs {
+                        let ink = native_ui_glyph_ink_bounds(glyph);
+                        let inset = 44.0 * f64::from(scale);
+                        assert!(ink.left >= f64::from(rect.left()) + inset - 1e-4);
+                        assert!(ink.left + ink.width <= f64::from(rect.right()) - inset + 1e-4);
+                    }
+                }
+            }
+            let close = stock_button_label_spec("CLOSE", rect, scale, f64::from(scale), false, 0.4);
+            assert_eq!(close.scale, f64::from(scale));
+            assert_eq!(close.alpha, 0.4);
+        }
+        let compact = stock_button_label_spec(
+            "Boasts",
+            Rect::from_min_size(pos2(0.0, 0.0), vec2(220.0, 50.0)),
+            50.0 / 69.0,
+            1.0,
+            false,
+            1.0,
+        );
+        assert_eq!(compact.scale, 1.0);
+        assert_eq!(compact.y, 34.0);
+    }
 }
 
 #[cfg(test)]
