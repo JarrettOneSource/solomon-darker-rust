@@ -331,3 +331,87 @@ fn steam_requires_funded_normal_particles_to_damage_a_mob() {
         }
     }
 }
+
+#[test]
+fn boulder_real_cast_release_acquires_and_guidance_runs_after_the_world_move() {
+    use solomon_sim::spells::weld::WeldPersistentRef;
+    for funded in [true, false] {
+        let (mut session, navigation) = drain_session();
+        let player = &mut session.participants.get_mut("owner").unwrap().player;
+        player.grant_weld_build(1006, &mut session.gameplay_rng);
+        player.grant_skill_ranks(10, 2, &mut session.gameplay_rng);
+        player.grant_skill_ranks(9, 3, &mut session.gameplay_rng);
+        assert!(player.select_primary(52));
+        session.step(
+            &BTreeMap::new(),
+            GameSessionTickContext {
+                navigation: Some(&navigation),
+                enemy_spawn_intents: &[EnemySpawnIntent::new(
+                    EnemyToken::Skeleton,
+                    Vec2::new(400.0, 100.0),
+                    1,
+                    1,
+                    0,
+                )],
+                ..Default::default()
+            },
+        );
+        {
+            let mut enemy = session.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
+            enemy.config.maximum_health = 100_000.0;
+            enemy.current_health = 100_000.0;
+        }
+        let mut birth = None;
+        let mut guided = false;
+        for tick in 0..150 {
+            let player = &mut session.participants.get_mut("owner").unwrap().player;
+            player.combat.set_mana(if funded { player.combat.maximum_mana } else { 0.0 });
+            session.step(
+                &BTreeMap::from([(
+                    "owner".into(),
+                    GameSessionInput {
+                        aim: Some(Vec2::new(450.0, 250.0)),
+                        primary: tick < 80,
+                        ..Default::default()
+                    },
+                )]),
+                GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+            );
+            for actor in session.spells.transients.iter() {
+                let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(
+                    WeldPersistentRef::EtherealBoulder(rock),
+                )) = actor
+                else {
+                    continue;
+                };
+                if rock.flight_ticks == 0
+                    && rock.phase == solomon_sim::spells::model::PrimarySpellProjectilePhase::Flight
+                {
+                    assert!(
+                        rock.target_id.is_some(),
+                        "real normal and weak release callers pass target rows"
+                    );
+                    assert_eq!(rock.reacquires_target, funded);
+                    assert_eq!(rock.flight_speed, 2.25);
+                    birth = Some((rock.common.owner.id, rock.common.origin, rock.heading_degrees));
+                    break;
+                }
+                if let Some((id, origin, heading)) = birth
+                    && rock.common.owner.id == id
+                    && rock.flight_ticks == 1
+                {
+                    assert_ne!(rock.common.origin, origin, "the admitted actor moved");
+                    assert_ne!(
+                        rock.heading_degrees, heading,
+                        "combat tail steers even without a contact"
+                    );
+                    guided = true;
+                }
+            }
+            if guided {
+                break;
+            }
+        }
+        assert!(guided, "funded={funded} reaches a released actor and its next guidance tick");
+    }
+}

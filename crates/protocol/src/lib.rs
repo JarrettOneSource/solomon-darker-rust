@@ -22,7 +22,7 @@ pub mod hosted;
 pub mod snapshot;
 pub mod transfer;
 
-// Bare action poses and their born RNG choice are authoritative render state.
+// Action poses and Boulder guidance are authoritative gameplay state.
 // Older clients must reject this host rather than silently omit those fields.
 pub const PROTOCOL_VERSION: u32 = 3;
 pub const WEBSOCKET_PATH: &str = "/session";

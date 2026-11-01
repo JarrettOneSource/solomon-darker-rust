@@ -553,7 +553,7 @@ fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panick
         actor.shell_scale = 0.5;
         actor.assembly_scale = 0.5;
         let released =
-            release_native_weld_persistent_actor(held, 34, 4, &mut rng, Some(&mut order));
+            release_native_weld_persistent_actor(held, 34, 4, &mut rng, Some(&mut order), &[]);
         let mut spells = SpellState {
             next_id: released.next_id,
             transients: released

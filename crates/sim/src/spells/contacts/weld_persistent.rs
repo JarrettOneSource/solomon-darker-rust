@@ -38,9 +38,6 @@ impl ContactWork<'_, '_> {
             .into_iter()
             .filter(|target| !actor.hit_target_ids.contains(&target.id))
             .collect();
-        if contacts.is_empty() {
-            return;
-        }
         let original = actor.clone();
         let mut scale = actor.scale;
         let mut continue_traversal = true;
@@ -80,7 +77,10 @@ impl ContactWork<'_, '_> {
         }
         let hit_ids = actor.hit_target_ids.clone();
         let remaining = actor.remaining_damage;
-        if retain_native_weld_persistent_actor_contacts(&mut actor, hit_ids, remaining, scale) {
+        if actor.hit_target_ids.len() == original.hit_target_ids.len()
+            || retain_native_weld_persistent_actor_contacts(&mut actor, hit_ids, remaining, scale)
+        {
+            finish_native_weld_ethereal_boulder_guidance(&mut actor, &self.enemies.spell_targets());
             self.updated_transients.insert(
                 actor.common.owner.id,
                 PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(

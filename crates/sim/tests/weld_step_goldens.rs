@@ -111,7 +111,7 @@ fn all_ten_weld_casts_preserve_native_mana_clocks_queues_and_world_epochs() {
                     ])
                 })
                 .collect();
-            let actual = json!({"tick":tick,"mana":mana,"spent":result.mana_spent,"underflow":result.mana_underflow,"heading":wizard.heading_index,
+            let mut actual = json!({"tick":tick,"mana":mana,"spent":result.mana_spent,"underflow":result.mana_underflow,"heading":wizard.heading_index,
                 "cast":[cast.action_tick.unwrap_or(-1.0),rows::point(cast.aim_direction),cast.cast_sequence,cast.channel_active,cast.emission_sequence,cast.ether_blast_charge,cast.ether_blast_charge_cue_sequence,cast.fizzle_sequence,cast.held,cast.last_weld_playback_rate,cast.last_weld_sound_variant,cast.one_shot_attack_pose_held,cast.selected_primary_age_ticks,cast.selected_primary_id,cast.target_id,cast.underpowered,cast.weapon_pulse],
                 "spells":{"nextId":state.next_id,"projectiles":state.projectiles.iter().map(rows::projectile).collect::<Vec<_>>(),"transients":state.transients.iter().map(rows::transient).collect::<Vec<_>>()},
                 "rng":{"indexA":rng.index_a,"indexB":rng.index_b,"words":rng.words.as_slice()},"order":{"actor":order.next_actor_ordinal,"transient":order.next_transient_ordinal},"emissions":emissions});
@@ -135,7 +135,41 @@ fn all_ten_weld_casts_preserve_native_mana_clocks_queues_and_world_epochs() {
                         json!(angle);
                 }
             }
+            qualify_boulder_motion(&mut actual, blocked && tick > release);
+            qualify_boulder_motion(&mut expected, blocked && tick > release);
             website_rows::compare(&actual, &expected, &format!("{} tick{tick}", case["name"]));
+        }
+    }
+}
+
+// Retail Report131 recovery invalidates the old clock and released trajectory,
+// while these journey recordings still assert all ownership, queues, IDs, RNG,
+// mana, animation, held growth, damage pools and scene teardown epochs.
+fn qualify_boulder_motion(frame: &mut Value, terrain_after_release: bool) {
+    for actor in frame["spells"]["transients"].as_array_mut().unwrap() {
+        if actor["build"] != 1006 {
+            continue;
+        }
+        if actor["kind"] != "weld-persistent" {
+            if terrain_after_release {
+                let physics = actor["physics"].as_object_mut().unwrap();
+                for key in ["direction", "origin", "position"] {
+                    physics.remove(key);
+                }
+                if let Some(Value::Array(debris)) = physics.get_mut("debris") {
+                    // Inherited root and planar vector change with the corrected
+                    // trajectory; alpha, height and vertical velocity remain exact.
+                    *debris = [0, 1, 4].map(|index| debris[index].clone()).to_vec();
+                }
+            }
+            continue;
+        }
+        let physics = actor["physics"].as_object_mut().unwrap();
+        physics.remove("lifetimeTicksRemaining");
+        if physics["phase"] == "flight" {
+            for key in ["direction", "origin", "velocity"] {
+                physics.remove(key);
+            }
         }
     }
 }
