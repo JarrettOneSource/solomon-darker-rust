@@ -373,6 +373,39 @@ that publication. A later healthy sequence with the same target game revision
 can complete recovery. Idle website-only refresh uses its own publication path;
 an active game still observes the save and transport-retirement barrier.
 
+## Resume readiness and multiplayer countdown
+
+Renderer loading, resume acknowledgements, required rejoin members and mandatory
+skill-picker close presentation are authority barriers. They remain required even
+for a solo run. The two-second countdown after those barriers is a separate
+reorientation policy for two or more connected materialized human participants in
+that active run. Closing solo Pause, Inventory or full Skills resumes directly.
+A pending solo loading/recovery record clears only after its existing readiness
+checks pass; an active countdown clears when a departure leaves at most one human.
+
+This preserves the accepted Website product policy from `e3f100ae` (Report 103),
+published in `850064c8`, rather than introducing a new retail timing claim.
+`GameplayControl` owns the policy for standalone and hosted authorities. The
+intersection of its borrowed connected/materialized identities excludes bots,
+observers, lobby visitors, other runs and staged rejoin actors from the audience.
+Required absent recovery identities still hold the pending record before that
+audience check. The protocol, save shapes, input neutralization and scheduler
+remain shared.
+
+Ordinary party transfers recheck the existing Hub-only destination contract at
+Hello, after ticket preparation. A party that has entered combat cannot acquire
+a new College actor through an older ticket; that would mix world ownership and
+make owner-save partitioning invalid. The matching stale reservation is consumed
+before actor creation. Active-party recovery/rejoin has a separate retained-run
+admission and remains available. Valid Hub transfers and both owners' save
+documents retain their existing behavior.
+
+Public control regressions and actual standalone/hosted socket journeys cover
+direct solo release, lobby/run isolation, restart/rejoin readiness, both departure
+phases and retained multiplayer timing. The original host-control recording stays
+unchanged; its one older disconnect countdown expectation is explicitly superseded
+in the replay by this independently tested policy.
+
 ## Navigation and painter registration
 
 Pike constraints pass through the active Boneyard's player-placement callback.

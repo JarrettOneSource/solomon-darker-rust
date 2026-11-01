@@ -32,6 +32,8 @@ mod deployment_tests;
 mod desktop_tests;
 #[path = "hosted_supervisor/editor_test.rs"]
 mod editor_test;
+#[path = "hosted_supervisor/gameplay_control.rs"]
+mod gameplay_control_tests;
 #[path = "hosted_supervisor/run_archives.rs"]
 mod run_archive_tests;
 #[path = "hosted_supervisor/runtime_events.rs"]
@@ -754,7 +756,8 @@ fn content() -> Value {
 }
 
 #[test]
-fn restored_hosted_boneyards_advance_after_the_actual_renderer_and_resume_admissions() {
+fn report103_restored_hosted_solo_boneyards_advance_after_the_actual_renderer_and_resume_admissions()
+ {
     let fixture: Value = serde_json::from_str(include_str!(
         "../../sim/tests/fixtures/website/save-document-goldens.json"
     ))
@@ -828,6 +831,17 @@ fn restored_hosted_boneyards_advance_after_the_actual_renderer_and_resume_admiss
         client.send(ClientMessage::ResumeReady {
             sequence: frame.host.resume_grace.as_ref().unwrap().sequence,
         });
+        let message = client.until(|message| {
+            matches!(message, ServerMessage::Snapshot { frame: next }
+                if next.sequence > frame.sequence && next.host.loading_run_id.is_none()
+                    && next.host.resume_grace.as_ref().is_none_or(|grace| grace.remaining_ms.is_some()))
+        });
+        let ServerMessage::Snapshot { frame } = message else { unreachable!() };
+        assert!(
+            frame.host.resume_grace.is_none(),
+            "restored solo {route} must not install a deadline: {:?}",
+            frame.host
+        );
         let message = client.until(|message| {
             matches!(message, ServerMessage::Snapshot { frame }
                 if frame.host.loading_run_id.is_none()
