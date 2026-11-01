@@ -251,6 +251,23 @@ The patch retains upstream metadata and licenses. Egui upgrades must review
 
 ## Input and text
 
+### Optional Inventory and Skills navigation
+
+Inventory's configured binding returns one open Sack at a time, then closes at
+the backpack root. Menu and Escape close the whole optional Inventory, College
+service or Skills interface through the existing close/resume lifecycle. This
+is the approved Report 22 quality-of-life policy retained in Website ledger 299
+and release `4c6a1f5c`; it deliberately differs from the recovered stock
+Inventory-binding whole-close action. It does not redefine mandatory choices.
+
+Rename, notices, confirmations and dye editing own their cancellation before
+book navigation. Sack traversal still rejects another Back until its 37 native
+ticks settle. The first-cell parent Sack returns on an unselected primary
+press, and its release cannot return again. A selected backpack item retains
+click-to-parent transfer and drag-drop ownership. Website ledger 252 records
+the recovered first-press branch at `0x0056FA6A–0x0056FA85`, the parent composite
+and the unchanged 370 ms page clock.
+
 Sample gameplay input once per frame. The selected display camera projects aim.
 Held casts and queued belt presses are different inputs; both host and client
 validate all `PLAYER_BELT_SLOT_COUNT` slots.

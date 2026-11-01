@@ -136,6 +136,16 @@ mod native {
         _subscription: Rc<Subscription>,
     }
     impl KeyboardListener {
+        #[cfg(test)]
+        pub(crate) fn for_test() -> Self {
+            Self {
+                _subscription: Rc::new(Subscription {
+                    window: WindowId::from(0),
+                    handler: RefCell::new(Box::new(|_| KeyboardEffect::Pass)),
+                }),
+            }
+        }
+
         pub fn attach(
             surface: &crate::platform::Surface,
             handler: impl FnMut(&KeyboardEvent<'_>) -> KeyboardEffect + 'static,
