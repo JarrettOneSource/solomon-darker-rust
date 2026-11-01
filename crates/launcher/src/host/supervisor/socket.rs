@@ -98,12 +98,22 @@ impl HostedSupervisor {
                                             .iter()
                                             .any(|player| &player.resume_token == token)
                                     });
-                                let id = college.host.admit_ordinary(
-                                    &mut connection,
-                                    hello,
-                                    ticket.admission,
-                                    now_ms,
-                                );
+                                let reconnecting = ticket.admission.reconnect.is_some();
+                                let id = if let Some(admission) = &ticket.admission.reconnect {
+                                    college.host.admit_reconnect(
+                                        &mut connection,
+                                        &hello,
+                                        admission,
+                                        now_ms,
+                                    )
+                                } else {
+                                    college.host.admit_ordinary(
+                                        &mut connection,
+                                        hello,
+                                        ticket.admission,
+                                        now_ms,
+                                    )
+                                };
                                 match id {
                                     Err(error) => Err(error),
                                     Ok(id) => {
@@ -112,7 +122,9 @@ impl HostedSupervisor {
                                             .host
                                             .player(&id)
                                             .expect("the actual admitted actor has metadata");
-                                        let social = if college.host.editor_test
+                                        let social = if reconnecting {
+                                            player.social_connection.clone()
+                                        } else if college.host.editor_test
                                             || self.standalone_credential.is_some()
                                         {
                                             None
@@ -204,6 +216,7 @@ impl HostedSupervisor {
         message: ClientMessage,
         now_ms: f64,
     ) -> Result<(), DispatchError> {
+        host.note_reconnect_message(id, connection.peer.id(), &message);
         if host.observers.contains_key(&connection.peer.id()) {
             return match message {
                 ClientMessage::SnapshotAck { sequence } => connection

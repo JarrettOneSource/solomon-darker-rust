@@ -49,6 +49,15 @@ waves, and rewards. Actor insertion and random consumption are part of that cont
 The native authority runs at 100 Hz and publishes snapshots at up to 20 Hz.
 Static browser mode advances the same rules locally with a 250 ms catch-up cap.
 
+Hosted transport recovery belongs to the existing authority membership and
+supervisor admission owners (`host/hosted/reconnect.rs`, `host/supervisor/http.rs`
+and `host/supervisor/socket.rs`). They keep one live participant under a bounded
+lease and mint a fresh purpose-bound ticket; they do not deserialize another
+saved world. The client hosted reconnect owner replaces only its native
+connection and preserves the shared save/presentation owners. See
+[retained hosted authority](DECISIONS.md#retained-hosted-authority-after-transport-interruption)
+for deadlines, account binding, readiness, cleanup and deployment exclusions.
+
 ### Tick ordering
 
 The [session tick](../crates/sim/src/session/tick.rs) owns the sequence across

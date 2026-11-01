@@ -8,6 +8,13 @@ use super::{CachePolicy, ReadError};
 #[derive(Clone)]
 pub(super) struct Transport(Window);
 
+struct RequestAbort(web_sys::AbortController);
+impl Drop for RequestAbort {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 impl Transport {
     pub fn new() -> Result<Self, String> {
         web_sys::window().map(Self).ok_or_else(|| "The game has no browser window".into())
@@ -21,7 +28,12 @@ impl Transport {
         body: Option<String>,
         cache: CachePolicy,
     ) -> Result<Response, String> {
+        let abort = RequestAbort(
+            web_sys::AbortController::new()
+                .map_err(|_| "Could not create the Website request cancellation")?,
+        );
         let options = RequestInit::new();
+        options.set_signal(Some(&abort.0.signal()));
         options.set_method(method);
         options.set_credentials(web_sys::RequestCredentials::SameOrigin);
         options.set_cache(match cache {
@@ -40,22 +52,25 @@ impl Transport {
             .await
             .map_err(|_| "Cannot reach the server. Check your connection.")?
             .dyn_into::<web_sys::Response>()
-            .map(Response)
+            .map(|response| Response { response, _abort: abort })
             .map_err(|_| "The Website returned an invalid response".into())
     }
 }
 
-pub struct Response(pub(super) web_sys::Response);
+pub struct Response {
+    pub(super) response: web_sys::Response,
+    _abort: RequestAbort,
+}
 
 impl Response {
     pub fn status(&self) -> u16 {
-        self.0.status()
+        self.response.status()
     }
     pub fn ok(&self) -> bool {
-        self.0.ok()
+        self.response.ok()
     }
     pub fn header(&self, name: &str) -> Option<String> {
-        self.0.headers().get(name).ok().flatten()
+        self.response.headers().get(name).ok().flatten()
     }
 
     pub async fn bytes(
@@ -63,7 +78,7 @@ impl Response {
         limit: u64,
         mut on_chunk: impl FnMut(u64),
     ) -> Result<Vec<u8>, ReadError> {
-        let Some(body) = self.0.body() else { return Ok(Vec::new()) };
+        let Some(body) = self.response.body() else { return Ok(Vec::new()) };
         let reader = body
             .get_reader()
             .dyn_into::<web_sys::ReadableStreamDefaultReader>()

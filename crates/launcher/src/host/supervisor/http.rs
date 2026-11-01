@@ -81,6 +81,16 @@ struct RestartRequest {
     target_revision: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ReconnectRequest {
+    session_id: Option<String>,
+    player_id: String,
+    resume_token: String,
+    request_id: String,
+    leaderboard_user_id: Option<u32>,
+}
+
 impl HostedSupervisor {
     pub(super) fn http(
         &mut self,
@@ -134,6 +144,9 @@ impl HostedSupervisor {
             let mut checkpoints = std::collections::BTreeMap::new();
             for college in &mut self.colleges {
                 college.tickets.clear();
+                for owner in college.host.prepare_reconnects_for_deployment(now_ms)? {
+                    self.broker.close_connection(&owner);
+                }
                 // Disposable previews close with the supervisor, but never enter
                 // its save barrier or contribute a restartable wizard count.
                 if college.host.editor_test {
@@ -194,6 +207,10 @@ impl HostedSupervisor {
             return self.prepare_rejoin_request(&request.body, respond);
         }
         let response = match (request.method.as_str(), request.path.as_str()) {
+            ("POST", "/admin/reconnect") => match decode::<ReconnectRequest>(&request.body) {
+                Ok(body) => self.reconnect_request(body, now_ms)?,
+                Err(_) => error(400, "A valid reconnect request is required."),
+            },
             ("POST", "/admin/editor-test") => {
                 if request.body.len() > 12 * 1024 * 1024 {
                     error(400, crate::host::editor_test::EDITOR_TEST_REQUEST_ERROR)
@@ -325,6 +342,57 @@ impl HostedSupervisor {
         json(200, json!({"items":items}))
     }
 
+    fn reconnect_request(
+        &mut self,
+        body: ReconnectRequest,
+        now_ms: f64,
+    ) -> Result<HostedHttpResponse, String> {
+        if body.session_id.as_ref().is_some_and(|id| id.len() != 32 || !ascii_locator(id))
+            || !(1..=128).contains(&body.player_id.len())
+            || !ascii_locator(&body.player_id)
+            || body.resume_token.len() != 43
+            || !ascii_locator(&body.resume_token)
+            || !(32..=128).contains(&body.request_id.len())
+            || !ascii_locator(&body.request_id)
+            || body.leaderboard_user_id.is_some_and(|id| id == 0 || id > 0x7fff_ffff)
+        {
+            return Ok(error(400, "A valid reconnect capability is required."));
+        }
+        let target = body.session_id.as_deref().unwrap_or("shared-hub");
+        let Some(college) = self.colleges.iter_mut().find(|college| college.host.id == target)
+        else {
+            return Ok(error(404, "The original game authority is no longer available."));
+        };
+        let Some((admission, expires_at_ms)) = college.host.reserve_reconnect(
+            &body.player_id,
+            &body.resume_token,
+            body.leaderboard_user_id,
+            &body.request_id,
+            now_ms,
+        )?
+        else {
+            return Ok(error(403, "That reconnect capability is no longer current."));
+        };
+        let key = format!("{}:{}", body.player_id, body.request_id);
+        let credential = if let Some(ticket) = college.reconnect_tickets.get(&key) {
+            ticket.credential.clone()
+        } else {
+            let credential = random_token::<32>()?;
+            college.tickets.insert(credential.clone(), HostTicket { admission, expires_at_ms });
+            college.reconnect_tickets.insert(
+                key,
+                super::ReconnectTicket { credential: credential.clone(), expires_at_ms },
+            );
+            credential
+        };
+        Ok(json(
+            201,
+            json!({"credential":credential,"path":college.path,
+            "protocol":"solomon-game-v1",
+            "sessionKind":session_kind(college.host.kind)}),
+        ))
+    }
+
     fn matches(&self) -> HostedHttpResponse {
         let mut items = Vec::new();
         for college in &self.colleges {
@@ -360,6 +428,7 @@ impl HostedSupervisor {
                     "matchId":body.match_id,"observerUserId":body.observer.user_id,
                     "observerUsername":body.observer.username,"sessionId":college.host.id});
                 let admission = HostedAdmission {
+                    reconnect: None,
                     party_recovery_seed: false,
                     content: college.host.content.clone(),
                     developer_access: true,
@@ -399,8 +468,9 @@ impl HostedSupervisor {
             "draining":self.deployment.is_some(),
             "sessions":self.colleges.len()-1+usize::from(hub.capacity_participant_count()>0),
             "privateSessions":self.colleges.len()-1,
-            "privatePlayers":self.colleges.iter().skip(1).map(|college|college.host.players.len()).sum::<usize>(),
-            "hubPlayers":hub.worlds.hub().participants.len(),"hubHumanPlayers":hub.players.len(),"bots":hub.bot_count(),
+            "privatePlayers":self.colleges.iter().skip(1).map(|college|college.host.connected_human_count()).sum::<usize>(),
+            "hubPlayers":hub.worlds.hub().participants.len(),"hubHumanPlayers":hub.connected_human_count(),
+            "recoveringPlayers":self.colleges.iter().map(|college|college.host.recovering_player_count()).sum::<usize>(),"bots":hub.bot_count(),
             "parties":hub.worlds.parties().parties.len(),
             "runs":match &hub.worlds {crate::host::hosted::HostedWorlds::Global(worlds)=>worlds.runs.len(),_=>0},
             "players":hub.capacity_participant_count()}),
@@ -465,6 +535,7 @@ impl HostedSupervisor {
             host,
             path: path.clone(),
             tickets: Default::default(),
+            reconnect_tickets: Default::default(),
             created_at_ms: now_ms,
             claimed: false,
         };
@@ -743,6 +814,7 @@ impl HostedSupervisor {
             college.host.content.clone()
         };
         let admission = HostedAdmission {
+            reconnect: None,
             party_recovery_seed: false,
             content,
             developer_access: requested.developer_access,

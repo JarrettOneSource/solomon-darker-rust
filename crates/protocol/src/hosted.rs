@@ -17,6 +17,10 @@ use solomon_sim::social::{
     PartyActionRejection, PlayerSocialProfile,
 };
 
+/// Operational bound for one retained-authority transport recovery episode.
+pub const GAME_RECONNECT_LEASE_MS: u64 = 30_000;
+pub const GAME_RECONNECT_MAX_ATTEMPTS: u8 = 2;
+
 pub const GAME_HUB_PATH: &str = "/game-hub";
 pub const GAME_SESSION_PATH_PREFIX: &str = "/game-sessions/";
 /// Publication identities are independent of the signed game recovery revision.

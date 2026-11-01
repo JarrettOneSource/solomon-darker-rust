@@ -22,6 +22,7 @@ impl HostedGameHost {
     /// Source `GameHost.close`: retained diagnostics precede bot/VM retirement,
     /// then actual close callbacks release the remaining player identities.
     pub(in crate::host) fn begin_shutdown(&mut self, failed: bool) -> Result<(), String> {
+        let _ = self.poll_reconnects(f64::INFINITY, true)?;
         self.close_run_archives(super::super::run_archive::RunArchiveEndReason::HostClosed);
         self.remove_all_ml_bots()?;
         self.reset_lua_runtime();
@@ -256,6 +257,9 @@ impl HostedGameHost {
         self.maintain_controls(now_ms);
         // The private source host returns before draining inputs during a wall-clock
         // hold. Shared worlds deliberately drain first, then hold only that party run.
+        if matches!(self.worlds, HostedWorlds::Private { .. }) && !self.reconnects.is_empty() {
+            return Ok(Vec::new());
+        }
         if let HostedWorlds::Private { parties, .. } = &self.worlds
             && parties.parties.first().is_some_and(|party| {
                 self.controls.get(&party.id).is_some_and(GameplayControl::blocks_tick)
@@ -285,7 +289,7 @@ impl HostedGameHost {
         for bot in &self.bots.rows {
             inputs.insert(bot.id.clone(), bot.active_input);
         }
-        let mut paused = BTreeSet::new();
+        let mut paused = self.reconnecting_party_ids();
         for (id, control) in &self.controls {
             if control.blocks_tick() {
                 paused.insert(id.clone());
