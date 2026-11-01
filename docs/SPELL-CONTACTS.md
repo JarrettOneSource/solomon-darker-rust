@@ -8,11 +8,20 @@ native Hagatha ledger, entry 175. An Ether Drain contact reaches that receiver
 through `0x00548150`; its flags `0x10A` suppress ordinary hit feedback, rather
 than the accepted rescue notification.
 
+The same receiver's until-hurt charm branch at `0x0052FCEA–0x0052FDEB` plays
+the loss stream and clears Reverie/Serendipity before common Actor reaction at
+`0x0052FDF1`. That reaction tests `flags & 0x08` at `0x00627FA4` to suppress the
+redraw latch; the charm-loss branch has no such gate. The retained native ledger,
+entry 299, records this distinction and the deliberate brief loss-text addition.
+
 In Rust, `session::player_contacts` applies the receiver and returns feedback
-events. Ether Drain retains its accepted `PlayerCheatDeath` event in the Boneyard
-stream while preserving its ordinary hit-feedback suppression. The shared
-notification and audio consumers use this event; the receiver separately owns
-restored health, protection, flash, and rescue wave.
+events. Ether Drain retains exactly its accepted `PlayerCharmLost` and
+`PlayerCheatDeath` events in the Boneyard stream while preserving ordinary
+Ouch/status feedback suppression. The shared notification and audio consumers
+use these events; the receiver separately owns cleared charm flags, restored
+health, protection, flash, and rescue wave. `spell_contact_rules` checks real
+caster/peer field contacts, each until-hurt charm, combined loss/rescue ordering,
+and suppression of ordinary hurt sound.
 
 Ether Drain's living-player contact is distinct from capture. Retail contact
 `0x005F8620` damages and moves the player without invoking the capture callback.

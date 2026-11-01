@@ -120,6 +120,76 @@ fn keys(notifications: &WorldNotifications) -> Vec<String> {
 }
 
 #[test]
+fn only_fresh_owner_charm_loss_creates_a_brief_notice_without_guessing_a_charm() {
+    for selectors in [&[24][..], &[25][..], &[24, 25][..]] {
+        let mut session = session();
+        let player = &mut session.participants.get_mut("local").unwrap().player;
+        player.economy.owned_perk_selectors = selectors.to_vec();
+        player.progression.hagatha_runtime.purchase(selectors);
+        session.damage_player("local", 1.0, 0);
+        let mut notifications = WorldNotifications::default();
+        notifications.update(&session, "local", true).unwrap();
+        assert!(keys(&notifications).is_empty(), "initial retained loss is historical");
+
+        session.ticks = 1;
+        session.damage_player("local", 0.0, 1);
+        session.damage_player("local", 1.0, 1);
+        notifications.update(&session, "local", true).unwrap();
+        assert!(keys(&notifications).is_empty(), "spent charms cannot lose their effect again");
+
+        session
+            .participants
+            .get_mut("local")
+            .unwrap()
+            .player
+            .progression
+            .hagatha_runtime
+            .purchase(selectors);
+        notifications.update(&session, "local", true).unwrap();
+        assert!(keys(&notifications).is_empty(), "rearming alone is not a loss");
+        session.damage_player("local", 1.0, 1);
+        notifications.update(&session, "local", true).unwrap();
+        assert_eq!(keys(&notifications), ["combat:2"]);
+        let visuals = notifications.state.as_ref().unwrap().visuals.clone();
+        assert_eq!(visuals[0].message.text, "CHARM EFFECT LOST!");
+        assert_eq!(visuals[0].message.tint, 0xffffff);
+        notifications.update(&session, "local", true).unwrap();
+        assert_eq!(notifications.state.as_ref().unwrap().visuals, visuals);
+
+        let selection = session.participants.get("local").unwrap().player.selection.clone();
+        assert!(session.add_participant("remote".into(), selection));
+        let peer = &mut session.participants.get_mut("remote").unwrap().player;
+        peer.economy.owned_perk_selectors = selectors.to_vec();
+        peer.progression.hagatha_runtime.purchase(selectors);
+        session.damage_player("remote", 1.0, 1);
+        notifications.update(&session, "local", true).unwrap();
+        assert_eq!(notifications.state.as_ref().unwrap().visuals, visuals);
+
+        notifications.reset();
+        notifications.update(&session, "local", true).unwrap();
+        assert!(keys(&notifications).is_empty(), "reconnect must seed retained losses");
+        session
+            .participants
+            .get_mut("local")
+            .unwrap()
+            .player
+            .progression
+            .hagatha_runtime
+            .purchase(selectors);
+        session.ticks = 2;
+        session.damage_player("local", 1.0, 2);
+        notifications.update(&session, "local", true).unwrap();
+        assert_eq!(keys(&notifications), ["combat:4"]);
+        session.ticks = 400;
+        notifications.update(&session, "local", true).unwrap();
+        assert!(
+            keys(&notifications).is_empty(),
+            "the existing notification clock expires loss text"
+        );
+    }
+}
+
+#[test]
 fn retained_lanes_are_seeded_and_only_new_local_receipts_are_consumed_once() {
     let mut session = session();
     let run = session.boneyard.as_ref().unwrap().loaded.run_id.clone();

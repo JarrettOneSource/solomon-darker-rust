@@ -9,7 +9,7 @@ use solomon_sim::boneyard::{
     BoneyardBounds, BoneyardScene, BoneyardSource, BoneyardSpawn, LoadedBoneyard,
 };
 use solomon_sim::combat::PlayerLifeState;
-use solomon_sim::enemies::model::EnemyEventKind;
+use solomon_sim::enemies::model::{EnemyEvent, EnemyEventKind};
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::secondary::NativeSecondaryActorKind;
@@ -138,6 +138,91 @@ fn ether_drain_retains_cheat_death_feedback_for_caster_and_peer() {
         assert_eq!(rescues.len(), 1, "{victim}: accepted rescue must reach banner/audio");
         assert_eq!(rescues[0].target_player_id.as_ref().unwrap().as_deref(), Some(victim));
         assert_eq!(rescues[0].tick, session.ticks);
+    }
+}
+
+#[test]
+fn ether_drain_retains_accepted_charm_loss_without_ordinary_hurt_feedback() {
+    for selectors in [&[24][..], &[25][..], &[24, 25][..], &[7, 24, 25][..]] {
+        for victim in ["owner", "peer"] {
+            let (mut session, navigation) = drain_session();
+            for id in ["owner", "peer"] {
+                session.participants.get_mut(id).unwrap().wizard.position =
+                    if id == victim { Vec2::new(250.0, 250.0) } else { Vec2::new(90.0, 250.0) };
+            }
+            let player = &mut session.participants.get_mut(victim).unwrap().player;
+            player.economy.owned_perk_selectors = selectors.to_vec();
+            player.progression.hagatha_runtime.purchase(selectors);
+            if selectors.contains(&7) {
+                player.combat.current_health = 0.01;
+            }
+
+            let mut feedback: Vec<EnemyEvent> = Vec::new();
+            for _ in 0..120 {
+                step_drain(&mut session, &navigation);
+                let events = &session.boneyard.as_ref().unwrap().enemy_events;
+                assert!(
+                    !events.iter().any(|event| event.kind == EnemyEventKind::PlayerDamageSound)
+                );
+                for event in events.iter().filter(|event| {
+                    matches!(
+                        event.kind,
+                        EnemyEventKind::PlayerCharmLost | EnemyEventKind::PlayerCheatDeath
+                    )
+                }) {
+                    if !feedback.iter().any(|prior| prior.event_id == event.event_id) {
+                        feedback.push(event.clone());
+                    }
+                }
+                let runtime =
+                    session.participants.get(victim).unwrap().player.progression.hagatha_runtime;
+                if !runtime.reverie_active
+                    && !runtime.serendipity_active
+                    && (!selectors.contains(&7) || runtime.cheat_death_charges == 0)
+                {
+                    break;
+                }
+            }
+            let player = &session.participants.get(victim).unwrap().player;
+            assert!(!player.progression.hagatha_runtime.reverie_active);
+            assert!(!player.progression.hagatha_runtime.serendipity_active);
+            assert_eq!(player.combat.life_state, PlayerLifeState::Alive);
+            let expected = if selectors.contains(&7) {
+                vec![EnemyEventKind::PlayerCharmLost, EnemyEventKind::PlayerCheatDeath]
+            } else {
+                vec![EnemyEventKind::PlayerCharmLost]
+            };
+            assert_eq!(
+                feedback.iter().map(|event| event.kind).collect::<Vec<_>>(),
+                expected,
+                "{victim} {selectors:?}: accepted state loss must reach notification/audio"
+            );
+            assert!(
+                feedback.iter().all(
+                    |event| event.target_player_id.as_ref().unwrap().as_deref() == Some(victim)
+                )
+            );
+            assert_eq!(feedback.last().unwrap().tick, session.ticks);
+            assert!(feedback.windows(2).all(|events| events[0].event_id < events[1].event_id
+                && events[0].tick <= events[1].tick));
+            let loss_id = feedback[0].event_id;
+
+            for _ in 0..20 {
+                step_drain(&mut session, &navigation);
+            }
+            let events = &session.boneyard.as_ref().unwrap().enemy_events;
+            assert!(
+                events
+                    .iter()
+                    .filter(|event| event.kind == EnemyEventKind::PlayerCharmLost)
+                    .all(|event| event.event_id == loss_id),
+                "spent charms must not generate repeated losses"
+            );
+            assert!(
+                !events.iter().any(|event| event.kind == EnemyEventKind::PlayerDamageSound),
+                "retaining semantic loss must not restore suppressed Ouch audio"
+            );
+        }
     }
 }
 
