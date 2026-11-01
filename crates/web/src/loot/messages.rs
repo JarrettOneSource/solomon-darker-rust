@@ -139,15 +139,20 @@ impl WorldNotifications {
             for event in &world.enemy_events {
                 if event.event_id > state.last_combat_id {
                     state.last_combat_id = event.event_id;
-                    if event.kind == EnemyEventKind::PlayerCheatDeath
-                        && event.target_player_id.as_ref().and_then(Option::as_deref)
-                            == Some(player_id)
+                    let text = match event.kind {
+                        // The accepted loss event groups the two until-hurt charms;
+                        // it does not identify which charm's effect ended.
+                        EnemyEventKind::PlayerCharmLost => "CHARM EFFECT LOST!",
+                        EnemyEventKind::PlayerCheatDeath => "CHEAT DEATH!",
+                        _ => continue,
+                    };
+                    if event.target_player_id.as_ref().and_then(Option::as_deref) == Some(player_id)
                     {
                         state.presentation.consume_text(&NativeWorldNotificationInput {
                             source: NativeWorldNotificationSource::Combat,
                             event_id: event.event_id as u64,
                             tick: event.tick,
-                            text: "CHEAT DEATH!",
+                            text,
                             tint: 0xffffff,
                         });
                     }

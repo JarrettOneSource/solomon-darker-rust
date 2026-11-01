@@ -396,11 +396,11 @@ impl GameSession {
             &damage,
             extensions,
         )?;
-        // Retail Player damage 0x0052F540 publishes the rescue independently of
-        // the field's suppressed ordinary contact feedback (flags 0x10A).
-        received
-            .player_damage_sound_events
-            .retain(|event| event.kind == EnemyEventKind::PlayerCheatDeath);
+        // Retail Player damage handles until-hurt loss (0x0052FCEA) and rescue
+        // independently of the field's ordinary hit suppression (flags 0x10A).
+        received.player_damage_sound_events.retain(|event| {
+            matches!(event.kind, EnemyEventKind::PlayerCharmLost | EnemyEventKind::PlayerCheatDeath)
+        });
         super::rewards::retain_boneyard_enemy_events(
             world,
             &received.player_damage_sound_events,

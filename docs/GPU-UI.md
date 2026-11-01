@@ -149,8 +149,11 @@ Browser announcement delivery does not by itself verify hardware screen-reader a
 
 ## Accepted feedback and world notices
 
-`WorldNotifications` consumes accepted local loot, rank-book, overload, and
-Cheat Death events. Each lane retains its own cursor and source key; equal numeric
+`WorldNotifications` consumes accepted local loot, rank-book, overload, charm-loss
+and Cheat Death events. Charm loss shows `CHARM EFFECT LOST!`: the accepted event
+groups Reverie and Serendipity without identifying which effect ended. It does
+not infer a loss from current flags or remove an owned charm. Each lane retains
+its own cursor and source key; equal numeric
 IDs from different lanes are distinct events. Restore seeds cursors after retained
 receipts. Repeated display frames cannot replay them. Player/world changes, tick
 rewind, Game Over, and return to loadout reset the presentation and its baselines.
