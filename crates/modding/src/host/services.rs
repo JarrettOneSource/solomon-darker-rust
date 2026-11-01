@@ -34,7 +34,11 @@ impl PreparedModHost {
         let checkpoint = self.runtime.skills.checkpoint();
         let chosen = (|| {
             self.runtime.skills.choose(player_id, content_id, mod_offer_sequence)?;
-            if !game.replace_skill_with_mod(player_id, native_offer_sequence) {
+            if !game.replace_skill_with_mod_with_extensions(
+                player_id,
+                native_offer_sequence,
+                Some(&self.runtime),
+            ) {
                 return Err("native skill offer is stale".into());
             }
             let progression =

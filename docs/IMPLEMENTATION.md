@@ -26,7 +26,8 @@ in [Reference data](REFERENCE-DATA.md).
 | Authored definitions, Lua, and mods | `src/modding/`, `solomon-modding` | Compiler/runtime fixtures, admitted content tests, and CLI checks |
 
 Random-choice Boasts assign a choice after each new offer is constructed, including
-every pending level from one experience grant. Native host commands, Lua controllers,
+every pending level from one experience grant and the continuation after a manual
+mod-skill replacement. Native host commands, Lua controllers, authored skill services,
 and learned bots resolve authored Boasts through the current world's prepared runtime.
 
 ## Presentation and interaction

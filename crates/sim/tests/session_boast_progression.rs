@@ -49,6 +49,55 @@ fn every_bulk_granted_level_keeps_the_active_random_boast() {
 }
 
 #[test]
+fn mod_skill_replacements_keep_the_random_boast_on_every_queued_offer() {
+    let mut game = session();
+    game.participants.get_mut("wizard").unwrap().player.economy.npc.boast.selected = Some(3.into());
+    game.grant_experience("wizard", 801.0);
+    let queued = game.participants.get("wizard").unwrap().player.progression.pending_levels.len();
+    assert!(queued >= 3);
+    for level in 0..queued {
+        let choice = pending_choice(&game);
+        assert!(game.replace_skill_with_mod("wizard", choice.offer_sequence), "offer {level}");
+    }
+    assert!(game.participants.get("wizard").unwrap().player.progression.pending_offer.is_none());
+    assert!(game.level_up_barrier.is_none());
+}
+
+#[test]
+fn stale_mod_skill_replacements_leave_the_offer_barrier_and_random_stream_unchanged() {
+    let mut game = session();
+    game.participants.get_mut("wizard").unwrap().player.economy.npc.boast.selected = Some(3.into());
+    game.grant_experience("wizard", 801.0);
+    let choice = pending_choice(&game);
+    let before = game.clone();
+    assert!(!game.replace_skill_with_mod("wizard", choice.offer_sequence + 1));
+    assert_eq!(game.gameplay_rng, before.gameplay_rng);
+    assert_eq!(
+        game.participants.get("wizard").unwrap().player.progression,
+        before.participants.get("wizard").unwrap().player.progression,
+    );
+    assert_eq!(game.level_up_barrier, before.level_up_barrier);
+}
+
+#[test]
+fn failed_and_nonrandom_boasts_keep_mod_replacement_continuations_interactive() {
+    for (id, failed) in [(0, false), (3, true)] {
+        let mut game = session();
+        let boast = &mut game.participants.get_mut("wizard").unwrap().player.economy.npc.boast;
+        boast.selected = Some(id.into());
+        boast.failed = failed;
+        game.grant_experience("wizard", 801.0);
+        while let Some(offer) =
+            game.participants.get("wizard").unwrap().player.progression.pending_offer.clone()
+        {
+            assert_eq!(offer.automatic_choice_index, None);
+            assert!(game.replace_skill_with_mod("wizard", offer.sequence));
+        }
+        assert!(game.level_up_barrier.is_none());
+    }
+}
+
+#[test]
 fn random_choices_follow_offer_construction_without_changing_other_draws() {
     let mut automatic = session();
     let mut manual = automatic.clone();
