@@ -1,5 +1,58 @@
 use super::*;
 
+/// Record actual egui shapes with real decoded stock dimensions. No GPU handle
+/// or pixel result is fabricated; these tests inspect typed paint submission.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn record_shapes(
+    ctx: &Context,
+    paths: &[&str],
+    mut paint: impl FnMut(&mut UiFrame<'_>),
+) -> Vec<egui::epaint::ClippedShape> {
+    let images = painter::Images::decoded_test_images(paths);
+    let widgets = RefCell::new(BTreeMap::new());
+    let previous_widgets = BTreeMap::new();
+    let announcements = RefCell::new(Vec::new());
+    let input_scope = RefCell::new(None);
+    let retired_images = RefCell::new(Vec::new());
+    let editors = RefCell::new(Vec::new());
+    let editor_errors = RefCell::new(Vec::new());
+    let mut shapes = Vec::new();
+    // New Areas first establish their bounds; inspect the settled paint pass.
+    for _ in 0..2 {
+        widgets.borrow_mut().clear();
+        let output = ctx.run_pass(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0))),
+                ..Default::default()
+            },
+            |ctx| {
+                paint(&mut UiFrame {
+                    ctx,
+                    images: &images,
+                    widgets: &widgets,
+                    previous_widgets: &previous_widgets,
+                    key_codes: &[],
+                    blend: BlendMode::Normal,
+                    color_filter: ColorFilter::default(),
+                    announcements: &announcements,
+                    rotation: egui::emath::Rot2::IDENTITY,
+                    translation: Vec2::ZERO,
+                    input_scope: &input_scope,
+                    retired_images: &retired_images,
+                    focus_from_keyboard: false,
+                    editor_receipts: &[],
+                    editors: &editors,
+                    editor_errors: &editor_errors,
+                    native_click_count: None,
+                })
+            },
+        );
+        shapes = output.shapes.clone();
+        output.drop_without_applying_deltas();
+    }
+    shapes
+}
+
 fn frame(
     ctx: &Context,
     events: Vec<egui::Event>,

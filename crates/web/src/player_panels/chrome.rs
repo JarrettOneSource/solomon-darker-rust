@@ -1,5 +1,7 @@
 //! Native panel painting and hit regions. This canvas is a direct GPU painter in
 //! native design coordinates; simulation actions remain in `PlayerPanels`.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod unforge_tests;
 use super::{
     PanelEvent, PlayerPanel, PlayerPanelSnapshot, PlayerPanels, Target, target_from_action,
 };
@@ -708,6 +710,9 @@ impl PlayerPanels {
             HudRect::new(48.0, 851.0, 130.0, 22.0),
             &snapshot.economy.gold.to_string(),
         );
+        if matches!(self.panel, Some(PlayerPanel::Inventory | PlayerPanel::Service(_))) {
+            c.frame.paint_unforge_target(&c.painter, &self.ui, self.now, c.alpha, c.origin)?;
+        }
         if matches!(
             self.panel,
             Some(
@@ -715,7 +720,6 @@ impl PlayerPanels {
                     | PlayerPanel::Service(solomon_sim::economy::HubTraderId::Luthacus)
             )
         ) {
-            c.art(&self.ui, 75, [1562.0, 868.0], [1.0, 1.0], 0.0, 0xffffff)?;
             c.button("unforge", "Unforge selected item", HudRect::new(1500.0, 800.0, 100.0, 100.0));
         }
         let effects = c.on_layer(belt_effects_layer_id());

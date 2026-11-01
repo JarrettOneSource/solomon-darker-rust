@@ -29,12 +29,14 @@ pub(super) struct Style {
 
 pub(super) enum Boundary {
     Begin(Style),
+    Unforge(Box<super::unforge::Paint>),
     Knockout,
     End,
 }
 
 pub(super) enum Node {
     Mesh { mesh: egui::Mesh, clip: Rect },
+    Unforge { paint: Box<super::unforge::Paint>, clip: Rect },
     Group { style: Style, clip: Rect, children: Vec<Node>, knockout: Option<Vec<Node>> },
 }
 
@@ -72,6 +74,12 @@ fn collect(
                     .downcast_ref::<Boundary>()
                     .ok_or("GPU UI does not admit external paint callbacks")?;
                 match boundary {
+                    Boundary::Unforge(paint) => {
+                        nodes.push(Node::Unforge {
+                            paint: paint.clone(),
+                            clip: primitive.clip_rect,
+                        });
+                    }
                     Boundary::Begin(style) => {
                         let (children, stop) = collect(primitives)?;
                         let knockout = if stop == Stop::Knockout {
@@ -112,6 +120,7 @@ pub(super) fn content_bounds(nodes: &[Node]) -> Rect {
     nodes.iter().fold(Rect::NOTHING, |bounds, node| {
         let painted = match node {
             Node::Mesh { mesh, clip } => mesh.calc_bounds().intersect(*clip),
+            Node::Unforge { paint, clip } => paint.bounds().intersect(*clip),
             Node::Group { style, clip, children, .. } => {
                 effect_bounds(content_bounds(children), &style.effect).intersect(*clip)
             }

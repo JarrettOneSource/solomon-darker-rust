@@ -47,6 +47,29 @@ fn path_key(path: &str) -> String {
 }
 
 impl Images {
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    pub fn decoded_test_images(paths: &[&str]) -> Self {
+        let images = Self::default();
+        let mut cache = images.0.borrow_mut();
+        for &path in paths {
+            let image = futures_lite::future::block_on(assets::load_image(path)).unwrap();
+            cache.next_id += 1;
+            let id = cache.next_id;
+            cache.paths.insert(id, path.to_owned());
+            cache.images.insert(
+                path.to_owned(),
+                ImageEntry {
+                    id,
+                    size: Some(vec2(image.natural_width() as f32, image.natural_height() as f32)),
+                    state: ImageState::Decoded(image),
+                    owned: true,
+                },
+            );
+        }
+        drop(cache);
+        images
+    }
+
     pub fn begin_frame(&self) {
         self.0.borrow_mut().materials.clear();
     }
@@ -318,11 +341,13 @@ pub fn clip_scissor(rect: Rect, physical: [i32; 2], logical: [f32; 2]) -> Option
 }
 
 mod groups;
+mod unforge;
 
 pub(super) struct GpuPainter {
     pub gl: GraphicsContext,
     textures: BTreeMap<TextureId, Texture>,
     groups: groups::Targets,
+    unforge_target: Option<solomon_graphics::RenderTarget>,
     vertices: Vec<Vertex>,
 }
 
@@ -332,12 +357,20 @@ impl GpuPainter {
             gl: renderer.graphics_context(),
             textures: BTreeMap::new(),
             groups: groups::Targets::default(),
+            unforge_target: None,
             vertices: Vec::new(),
         }
     }
 
     pub fn texture_count(&self) -> usize {
-        self.textures.len() + self.groups.texture_count()
+        self.textures.len()
+            + self.groups.texture_count()
+            + usize::from(self.unforge_target.is_some())
+    }
+
+    #[cfg(all(target_arch = "wasm32", feature = "browser-fixtures"))]
+    pub fn unforge_capture(&self) -> Option<solomon_graphics::RenderTarget> {
+        self.unforge_target.clone()
     }
 
     pub fn paint(
@@ -492,6 +525,9 @@ impl GpuPainter {
 impl Drop for GpuPainter {
     fn drop(&mut self) {
         self.groups.destroy(&self.gl);
+        if let Some(target) = self.unforge_target.take() {
+            Renderer::delete_render_target(&self.gl, &target);
+        }
         for texture in self.textures.values() {
             Renderer::delete_ui_texture(&self.gl, texture);
         }
