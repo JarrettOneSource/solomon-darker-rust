@@ -546,6 +546,11 @@ route behavior. Graph, moving-gate, and catalog replacement tests cover that lif
 Painter registration belongs to the actor or transient owner. Fixed depth bands,
 row sorting, and owner overlays are explicit data.
 
+Ether Drain world callbacks enroll their newly born flares at the capture, loot
+consumption, or corpse consumption boundary, including Game Over. These callbacks
+run after the secondary actor pass; waiting for its next tick can publish an
+unregistered flare to the renderer. Existing actors retain their ordinals.
+
 `ZAnimSplit::Draw` at retail `0x005E0233` reads the current Enhanced Effects
 setting: painter bands are 25 units On and 50 Off. Air and Faculty ribbons keep
 their immutable born-quality geometry while their wrappers follow the current

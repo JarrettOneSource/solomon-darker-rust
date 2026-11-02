@@ -291,6 +291,7 @@ impl GameSession {
 
     pub(super) fn consume_ether_drain_player_corpses(&mut self, tick: u64) {
         let Some(world) = &self.boneyard else { return };
+        let first_birth = self.secondary.next_actor_id;
         let key = format!("boneyard:{}", world.loaded.run_id);
         let fields: Vec<_> = self
             .secondary
@@ -317,6 +318,7 @@ impl GameSession {
                 }
             }
         }
+        enroll_flare_births(&mut self.secondary, &mut self.painter_order, first_birth);
     }
 }
 
@@ -343,9 +345,11 @@ impl GameSession {
         for (id, position) in moved.player_positions {
             self.participants.get_mut(&id).unwrap().wizard.position = position;
         }
+        let first_birth = self.secondary.next_actor_id;
         for id in moved.consumed_field_actor_ids {
             self.secondary.pulse_ether_drain(id, 1.0, tick, false);
         }
+        enroll_flare_births(&mut self.secondary, &mut self.painter_order, first_birth);
         let mut damage = Vec::new();
         for contact in contacts {
             if contact.amount <= 0.0 {
@@ -491,8 +495,23 @@ impl GameSession {
         }
         // Source resolves the complete ordered damage lane before captures
         // flush their private managers and consume secondary random draws.
+        let first_birth = self.secondary.next_actor_id;
         for (field, image) in captures {
             self.secondary.capture_ether_drain_image(field, image, tick);
         }
+        enroll_flare_births(&mut self.secondary, &mut self.painter_order, first_birth);
     }
+}
+
+// World callbacks run after the secondary actor pass has enrolled its births.
+// Their flares must own painters before this completed tick reaches a renderer.
+fn enroll_flare_births(
+    secondary: &mut NativeSecondarySimulationState,
+    order: &mut crate::painter::WorldPainterOrder,
+    first_id: u64,
+) {
+    crate::secondary::enroll_native_secondary_painter_owners(
+        secondary.actors.iter_mut().filter(|actor| actor.id >= first_id),
+        order,
+    );
 }
