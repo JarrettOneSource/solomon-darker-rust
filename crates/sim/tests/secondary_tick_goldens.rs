@@ -59,6 +59,7 @@ fn every_secondary_family_replays_its_ordered_website_lifetime() {
             targets: case["targets"].as_array().unwrap().iter().map(target).collect(),
         };
         let mut state = read_state(&case["initial"]);
+        let mut damage_order = solomon_sim::painter::WorldPainterOrder::default();
         let mut sample = case["samples"].as_array().unwrap().iter().peekable();
         let mode = case["mode"].as_str().unwrap();
         for tick in 1..=2200 {
@@ -88,12 +89,15 @@ fn every_secondary_family_replays_its_ordered_website_lifetime() {
             }
             if matches!(mode, "shield-break" | "shield-explode") && tick == 2 {
                 state.apply_player_damage(
-                    "player",
-                    100000.0,
-                    tick,
-                    solomon_sim::Vec2::ZERO,
-                    authority.world_key,
-                    NativeSecondaryPlayerDamagePresentation::default(),
+                    NativeSecondaryPlayerDamageInput {
+                        player_id: "player",
+                        amount: 100000.0,
+                        tick,
+                        position: solomon_sim::Vec2::ZERO,
+                        world_key: authority.world_key,
+                        presentation: NativeSecondaryPlayerDamagePresentation::default(),
+                    },
+                    &mut damage_order,
                 );
             }
             if mode == "golem-death" && tick == 450 {
@@ -217,14 +221,17 @@ fn flash_mindblast_and_script_fires_keep_source_birth_and_presentation_order() {
                         .collect(),
                     pitch: response["pitch"].as_f64().unwrap(),
                 };
-                state.materialize_player_flash_response(NativePlayerFlashResponseInput {
-                    owner_id: "player",
-                    position: Vec2::ZERO,
-                    response: &response,
-                    target_ids: &[7, 8],
-                    tick: 0,
-                    world_key: declared["worldKey"].as_str().unwrap(),
-                });
+                state.materialize_player_flash_response(
+                    NativePlayerFlashResponseInput {
+                        owner_id: "player",
+                        position: Vec2::ZERO,
+                        response: &response,
+                        target_ids: &[7, 8],
+                        tick: 0,
+                        world_key: declared["worldKey"].as_str().unwrap(),
+                    },
+                    &mut order,
+                );
                 let mut screen_flash =
                     NativeSecondaryScreenFlashState::new(1.0, 0.5, 0.25, 0.1, true, 1.0);
                 // emitNativePlayerScreenFlash preserves its supplied payload rather
@@ -290,7 +297,18 @@ fn flash_mindblast_and_script_fires_keep_source_birth_and_presentation_order() {
             }
             other => panic!("unknown feedback mode {other}"),
         }
-        assert_current(&state_snapshot(&state), &case["initial"], mode);
+        let mut initial = case["initial"].clone();
+        if mode == "flash" {
+            // Source enrolled these twelve roots on the next actor pass. A
+            // completed birth snapshot now owns the same ordinals immediately.
+            for (index, actor) in initial["actors"].as_array_mut().unwrap().iter_mut().enumerate() {
+                assert_eq!(actor["painterRegistrations"], json!([]));
+                actor["painterRegistrations"] = json!([{
+                    "managerLane": "transient", "registrationOrdinal": 20 + index,
+                }]);
+            }
+        }
+        assert_current(&state_snapshot(&state), &initial, mode);
         let mut samples = case["samples"].as_array().unwrap().iter().peekable();
         for tick in 1..=250 {
             let outbox = if mode == "mindblast-gameover" {

@@ -58,8 +58,9 @@ pub use player::{
 };
 pub use simulation::{
     NativeSecondaryCameraDisplacement, NativeSecondaryEtherBurnInput, NativeSecondaryFireBurnInput,
-    NativeSecondaryGolemDamageResult, NativeSecondaryPlayerDamagePresentation,
-    NativeSecondaryPlayerDamageResult, NativeSecondarySimulationState,
+    NativeSecondaryGolemDamageResult, NativeSecondaryPlayerDamageInput,
+    NativeSecondaryPlayerDamagePresentation, NativeSecondaryPlayerDamageResult,
+    NativeSecondarySimulationState,
 };
 pub use storage::{
     SecondaryActorMut, SecondaryActorRead, SecondaryActorRef, SecondaryActorWrite, SecondaryActors,

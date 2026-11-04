@@ -144,6 +144,17 @@ follow their retained parent, or occupy its position when it retires, and also
 wait until the next pass. These rules keep Meteor debris, spent Embers and boss
 spells from receiving an extra update on their birth tick.
 
+Flash defensive responses can also be born during the post-secondary player
+contact or poison callback. The common actor pass cannot enroll those births
+after it has returned. Flash materialization owns eight grow and four fade
+children, and each needs a distinct transient painter registration at birth,
+in that order, from the session's world painter order. The same callback owner
+registers twenty Magic Shield break children, plus an explosion and shockwave
+when the shield is explosive. The shockwave's transient painter and separate
+actor-lane light both exist at birth. Physical Stoneskin contact registers its
+chip at the damage callback. These are producer invariants; snapshot validation
+still rejects missing ownership.
+
 Tick functions run in their declared sequence. Damage accepted by one phase can
 retire a target or create an effect before the next phase runs, and several phases
 consume the same random stream. Parallel work must preserve those dependencies

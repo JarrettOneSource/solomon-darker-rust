@@ -7,6 +7,8 @@ mod native_bits;
 #[allow(dead_code)]
 mod secondary;
 
+use std::collections::HashSet;
+
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::belt::NativeBeltCommand;
@@ -18,6 +20,7 @@ use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::enemies::model::EnemyLifeState;
 use solomon_sim::enemies::{EnemyFlag, EnemySpawnIntent, EnemyToken};
 use solomon_sim::loot::{NativeLootDropKind, NativeLootDropSource, NativeLootDropSpec};
+use solomon_sim::painter::WorldManagerLane;
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::secondary::NativeSecondaryActorKind;
 use solomon_sim::secondary::SecondaryActorRead;
@@ -336,6 +339,292 @@ fn assert_born_flare(
         "the flare owns a distinct painter"
     );
     (flare.id, registration)
+}
+
+fn assert_flash_birth(state: &GameSession) {
+    let children: Vec<_> = state
+        .secondary
+        .actors
+        .iter()
+        .filter(|actor| {
+            matches!(
+                actor.kind,
+                NativeSecondaryActorKind::FlashResponseGrow
+                    | NativeSecondaryActorKind::FlashResponseFade
+            )
+        })
+        .collect();
+    let expected = [
+        vec![NativeSecondaryActorKind::FlashResponseGrow; 8],
+        vec![NativeSecondaryActorKind::FlashResponseFade; 4],
+    ]
+    .concat();
+    assert_eq!(children.iter().map(|actor| actor.kind).collect::<Vec<_>>(), expected);
+    let roots: Vec<_> = children
+        .iter()
+        .map(|actor| {
+            assert_eq!(
+                actor.painter_registrations.len(),
+                1,
+                "each Flash child needs its own root on its birth tick"
+            );
+            let root = actor.painter_registrations[0];
+            assert_eq!(root.manager_lane, WorldManagerLane::Transient);
+            root.registration_ordinal
+        })
+        .collect();
+    assert!(
+        roots.windows(2).all(|pair| pair[1] == pair[0] + 1),
+        "grow and fade children register in birth order"
+    );
+    let live_roots: Vec<_> = state
+        .secondary
+        .actors
+        .iter()
+        .flat_map(|actor| actor.painter_registrations.clone())
+        .filter(|root| root.manager_lane == WorldManagerLane::Transient)
+        .map(|root| root.registration_ordinal)
+        .collect();
+    assert_eq!(
+        HashSet::<_>::from_iter(live_roots.iter()).len(),
+        live_roots.len(),
+        "live secondary actors cannot share a transient root"
+    );
+    assert!(roots[11] < state.painter_order.next_transient_ordinal);
+    let published = serde_json::to_value(state.snapshot()).unwrap();
+    let published_actors = published["secondary"]["actors"].as_array().unwrap();
+    for child in &children {
+        let row = published_actors.iter().find(|row| row["id"] == json!(child.id)).unwrap();
+        assert_eq!(
+            row["painter_registrations"],
+            serde_json::to_value(&child.painter_registrations).unwrap()
+        );
+    }
+    let restored = GameSession::restore(state.checkpoint(), Some(loaded())).unwrap();
+    let restored_children: Vec<_> = restored
+        .secondary
+        .actors
+        .iter()
+        .filter(|actor| {
+            matches!(
+                actor.kind,
+                NativeSecondaryActorKind::FlashResponseGrow
+                    | NativeSecondaryActorKind::FlashResponseFade
+            )
+        })
+        .collect();
+    assert_eq!(
+        restored_children.iter().map(|actor| &actor.painter_registrations).collect::<Vec<_>>(),
+        children.iter().map(|actor| &actor.painter_registrations).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn flash_post_secondary_ether_drain_contact_registers_children_before_snapshot() {
+    let (mut state, navigation) = painter_session();
+    state.participants.get_mut("peer").unwrap().player.grant_skill_ranks(
+        53,
+        1,
+        &mut state.gameplay_rng,
+    );
+    let peer = state.participants.get_mut("peer").unwrap();
+    peer.wizard.position = Vec2::new(250.0, 250.0);
+    peer.player.combat.maximum_health = 100_000.0;
+    peer.player.combat.current_health = 100_000.0;
+    for _ in 0..300 {
+        state.step(
+            &Default::default(),
+            GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+        );
+        if state.secondary.events.iter().any(|event| {
+            event.skill_id == Some(53) && event.owner_id == "peer" && event.tick == state.ticks
+        }) {
+            break;
+        }
+    }
+    assert!(
+        state.secondary.events.iter().any(|event| event.skill_id == Some(53)
+            && event.owner_id == "peer"
+            && event.tick == state.ticks),
+        "the ordinary field contact must admit a peer Flash response"
+    );
+    assert!(state.participants.get("peer").unwrap().player.combat.current_health < 100_000.0);
+    assert_flash_birth(&state);
+}
+
+#[test]
+fn post_secondary_ether_drain_shield_break_registers_children_before_snapshot() {
+    let (mut state, navigation) = painter_session();
+    state.participants.get_mut("peer").unwrap().wizard.position = Vec2::new(250.0, 250.0);
+    let shield = state.secondary.players.get_mut("peer").unwrap();
+    shield.magic_shield_absorb = 1.0;
+    shield.magic_shield_maximum = 1.0;
+    shield.magic_shield_explosion_damage = 12.0;
+    for _ in 0..300 {
+        state.step(
+            &Default::default(),
+            GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+        );
+        if state.secondary.events.iter().any(|event| {
+            event.kind == solomon_sim::secondary::NativeSecondaryEventKind::ShieldBreak
+                && event.owner_id == "peer"
+                && event.tick == state.ticks
+        }) {
+            break;
+        }
+    }
+    assert!(
+        state.secondary.events.iter().any(|event| event.kind
+            == solomon_sim::secondary::NativeSecondaryEventKind::ShieldBreak
+            && event.owner_id == "peer"
+            && event.tick == state.ticks),
+        "the field must break the active shield during late magic contact"
+    );
+    let children: Vec<_> = state
+        .secondary
+        .actors
+        .iter()
+        .filter(|actor| {
+            actor.owner_id == "peer"
+                && matches!(
+                    actor.kind,
+                    NativeSecondaryActorKind::ShieldBreak
+                        | NativeSecondaryActorKind::ShieldExplosion
+                        | NativeSecondaryActorKind::Shockwave
+                )
+                && actor.skill_id == Some(54)
+        })
+        .collect();
+    assert_eq!(children.len(), 22);
+    assert!(children[..20].iter().all(|actor| actor.kind == NativeSecondaryActorKind::ShieldBreak));
+    assert_eq!(children[20].kind, NativeSecondaryActorKind::ShieldExplosion);
+    assert_eq!(children[21].kind, NativeSecondaryActorKind::Shockwave);
+    let roots: Vec<_> = children
+        .iter()
+        .map(|actor| {
+            assert_eq!(
+                actor.painter_registrations.len(),
+                1,
+                "each shield child needs its birth painter"
+            );
+            let root = actor.painter_registrations[0];
+            assert_eq!(root.manager_lane, WorldManagerLane::Transient);
+            root.registration_ordinal
+        })
+        .collect();
+    assert!(roots.windows(2).all(|pair| pair[1] == pair[0] + 1));
+    assert!(roots[21] < state.painter_order.next_transient_ordinal);
+    let wave_light = children[21].light_registration.expect("late shockwave owns a light");
+    assert_eq!(wave_light.manager_lane, WorldManagerLane::Actor);
+    assert!(wave_light.registration_ordinal < state.painter_order.next_actor_ordinal);
+    let published = serde_json::to_value(state.snapshot()).unwrap();
+    let published_actors = published["secondary"]["actors"].as_array().unwrap();
+    for child in &children {
+        let row = published_actors.iter().find(|row| row["id"] == json!(child.id)).unwrap();
+        assert_eq!(
+            row["painter_registrations"],
+            serde_json::to_value(&child.painter_registrations).unwrap()
+        );
+    }
+    let restored = GameSession::restore(state.checkpoint(), Some(loaded())).unwrap();
+    let restored_children: Vec<_> = restored
+        .secondary
+        .actors
+        .iter()
+        .filter(|actor| children.iter().any(|child| child.id == actor.id))
+        .collect();
+    assert_eq!(
+        restored_children.iter().map(|actor| &actor.painter_registrations).collect::<Vec<_>>(),
+        children.iter().map(|actor| &actor.painter_registrations).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn post_secondary_ordinary_magic_shield_break_registers_twenty_children() {
+    let (mut state, navigation) = painter_session();
+    state.participants.get_mut("peer").unwrap().wizard.position = Vec2::new(250.0, 250.0);
+    let shield = state.secondary.players.get_mut("peer").unwrap();
+    shield.magic_shield_absorb = 1.0;
+    shield.magic_shield_maximum = 1.0;
+    shield.magic_shield_explosion_damage = 0.0;
+    for _ in 0..300 {
+        state.step(
+            &Default::default(),
+            GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+        );
+        if state.secondary.events.iter().any(|event| {
+            event.kind == solomon_sim::secondary::NativeSecondaryEventKind::ShieldBreak
+                && event.owner_id == "peer"
+                && event.tick == state.ticks
+        }) {
+            break;
+        }
+    }
+    assert!(
+        state.secondary.events.iter().any(|event| event.kind
+            == solomon_sim::secondary::NativeSecondaryEventKind::ShieldBreak
+            && event.owner_id == "peer"
+            && event.tick == state.ticks)
+    );
+    let children: Vec<_> = state
+        .secondary
+        .actors
+        .iter()
+        .filter(|actor| {
+            actor.owner_id == "peer" && actor.kind == NativeSecondaryActorKind::ShieldBreak
+        })
+        .collect();
+    assert_eq!(children.len(), 20);
+    assert!(children.iter().all(|actor| actor.painter_registrations.len() == 1
+        && actor.painter_registrations[0].manager_lane == WorldManagerLane::Transient));
+    assert!(!state.secondary.actors.iter().any(|actor| actor.owner_id == "peer"
+        && matches!(
+            actor.kind,
+            NativeSecondaryActorKind::ShieldExplosion | NativeSecondaryActorKind::Shockwave
+        )
+        && actor.skill_id == Some(54)));
+}
+
+#[test]
+fn flash_post_secondary_poison_response_registers_children_before_snapshot() {
+    let selection = NewGameSelection {
+        name: "Owner".into(),
+        element: WizardElement::Ether,
+        discipline: WizardDiscipline::Arcane,
+    };
+    let mut state = GameSession::new_participants(
+        vec![("owner".into(), selection)],
+        GameSessionOptions { gameplay_rng_seed: 17, combat_rng_seed: 91, ..Default::default() },
+    )
+    .unwrap();
+    state.participants.get_mut("owner").unwrap().player.grant_skill_ranks(
+        53,
+        1,
+        &mut state.gameplay_rng,
+    );
+    state.install_boneyard(loaded()).unwrap();
+    let navigation = NavigationSet::for_scene(&state.boneyard.as_ref().unwrap().loaded);
+    let owner = state.participants.get_mut("owner").unwrap();
+    // Poison cannot kill; at zero health, positive raw poison produces no health damage.
+    owner.player.combat.current_health = 0.0;
+    owner.player.combat.poison_damage_per_tick = 1.0;
+    owner.player.combat.poison_ticks_remaining = 2;
+    state.secondary.rng = solomon_sim::NativeRng::new(18);
+    state.step(
+        &Default::default(),
+        GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+    );
+    assert!(
+        state.secondary.events.iter().any(|event| event.skill_id == Some(53)
+            && event.owner_id == "owner"
+            && event.tick == state.ticks),
+        "the zero-health poison floor must admit a real Flash response"
+    );
+    assert_eq!(
+        state.participants.get("owner").unwrap().player.combat.life_state,
+        PlayerLifeState::Alive
+    );
+    assert_flash_birth(&state);
 }
 
 #[test]

@@ -128,6 +128,7 @@ impl GameSession {
                             tick,
                             world_key: &world_key,
                         },
+                        &mut self.painter_order,
                     );
                     self.secondary.write_screen_flashes_since(first_event, &mut flashes);
                 }
