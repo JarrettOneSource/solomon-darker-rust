@@ -1,7 +1,7 @@
 //! Source transactions through actual enemy acceptance, shared RNG and painter owners.
 use serde_json::{Map, Value, json};
 use solomon_sim::enemies::config::EnemyArenaScalars;
-use solomon_sim::enemies::model::{EnemyActorRead, EnemyLifeState};
+use solomon_sim::enemies::model::EnemyLifeState;
 use solomon_sim::enemies::path::EnemyNavigation;
 use solomon_sim::enemies::projectile_emission::{SpawnEnemyProjectileOptions, spawn_projectile};
 use solomon_sim::enemies::projectiles::EnemyProjectileKind;
@@ -529,7 +529,7 @@ fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panick
             &OpenGeometry,
             Some(&mut order),
         );
-        for mut actor in enemies.actors.iter_mut() {
+        for actor in enemies.actors.iter_mut() {
             actor.current_health = target_health;
             actor.config.maximum_health = target_health;
         }
@@ -638,7 +638,7 @@ fn no_bind_hail_exhausts_each_contacted_rock_and_preserves_finite_survivors() {
             &OpenGeometry,
             Some(&mut order),
         );
-        for mut actor in enemies.actors.iter_mut() {
+        for actor in enemies.actors.iter_mut() {
             actor.current_health = target_health;
             actor.config.maximum_health = target_health;
         }
@@ -763,7 +763,7 @@ fn replay_contacts(fixture: &str) {
             &OpenGeometry,
             Some(&mut order),
         );
-        for (mut actor, spec) in enemies.actors.iter_mut().zip(values(case, "enemies")) {
+        for (actor, spec) in enemies.actors.iter_mut().zip(values(case, "enemies")) {
             if let Some(cooldown) = spec["hurricaneCooldown"].as_f64() {
                 actor.hurricane_contact_cooldown = cooldown;
             }
@@ -780,7 +780,7 @@ fn replay_contacts(fixture: &str) {
             }
         }
         if case["forces"] == true {
-            let owner = enemies.actors.get(0).unwrap().snapshot();
+            let owner = enemies.actors.first().unwrap().clone();
             spawn_projectile(
                 &mut enemies,
                 &owner,

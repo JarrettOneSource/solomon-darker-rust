@@ -216,7 +216,7 @@ pub struct EnemyWorld {
     #[cfg_attr(feature = "persistence", serde(skip))]
     pub(super) deferred_projectile_painters:
         Option<super::deferred_painters::DeferredEnemyPainterRegistrations>,
-    pub actors: super::model::EnemyActors,
+    pub actors: Vec<super::model::EnemyActor>,
     pub maggots: MaggotActors,
     pub webbed_players: crate::KeyedComponents<WebbedState>,
     pub rng_state: u32,
@@ -266,7 +266,7 @@ impl EnemyWorld {
     pub fn new(seed: &str, native_registration_base: usize) -> Self {
         Self {
             deferred_projectile_painters: None,
-            actors: super::model::EnemyActors::default(),
+            actors: Vec::new(),
             maggots: MaggotActors::default(),
             webbed_players: crate::KeyedComponents::default(),
             rng_state: seed_from_text(&format!("{seed}:enemy-actors")),

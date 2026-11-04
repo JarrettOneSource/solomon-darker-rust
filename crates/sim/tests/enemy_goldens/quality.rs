@@ -3,7 +3,6 @@
 use super::*;
 use solomon_sim::enemies::boss_spell::BossSpellKind;
 use solomon_sim::enemies::effects::{BouncerOptions, DeathEffectOwner};
-use solomon_sim::enemies::model::EnemyActorRead;
 use solomon_sim::enemies::model::{EnemyBrain, EnemyLifeState, EnemyTarget, MagePhase};
 use solomon_sim::enemies::projectile_emission::{
     SpawnEnemyProjectileOptions, spawn_projectile, step_mage_lightning_pulse,
@@ -45,7 +44,7 @@ fn current_enemy_quality_preserves_actual_births_rng_and_painter_order() {
             &UnobstructedEnemyGeometry,
             Some(&mut order),
         );
-        let mut actor = world.actors.get(0).unwrap().snapshot();
+        let mut actor = world.actors.first().unwrap().clone();
         let mut context = EnemyStepContext {
             enhanced_effects,
             tick: 10,

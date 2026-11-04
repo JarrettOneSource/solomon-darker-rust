@@ -91,7 +91,7 @@ fn ambient_world(value: &Value) -> EnemyWorld {
         Some(&mut order),
     );
     assert_eq!(world.actors.len(), 1);
-    let mut actor = world.actors.get_mut(0).unwrap();
+    let actor = world.actors.get_mut(0).unwrap();
     actor.id = input["id"].as_u64().unwrap() as usize;
     actor.life_state = if input["animation"]["state"] == "death" {
         EnemyLifeState::Dying

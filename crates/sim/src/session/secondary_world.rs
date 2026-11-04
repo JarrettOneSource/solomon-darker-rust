@@ -44,10 +44,10 @@ impl SessionSecondaryWorld<'_> {
             return bodies;
         };
         for actor in world.enemies.actors.iter() {
-            if boneyard_enemy_actor_flags(&actor) != 0 {
+            if boneyard_enemy_actor_flags(actor) != 0 {
                 bodies.push(BoneyardNativeTeleportBody {
                     position: actor.position,
-                    radius: boneyard_enemy_collision_radius(&actor),
+                    radius: boneyard_enemy_collision_radius(actor),
                 });
             }
         }

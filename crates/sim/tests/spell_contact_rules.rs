@@ -286,7 +286,7 @@ fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() 
                     ..Default::default()
                 },
             );
-            let mut enemy = session.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
+            let enemy = session.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
             enemy.config.maximum_health = 100_000.0;
             enemy.current_health = 100_000.0;
             let mut emissions = 0;
@@ -320,7 +320,7 @@ fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() 
                 }
             }
             assert!(emissions > 100, "the held Steam cast must reach its channel");
-            let enemy = session.boneyard.as_ref().unwrap().enemies.actors.get(0).unwrap();
+            let enemy = session.boneyard.as_ref().unwrap().enemies.actors.first().unwrap();
             assert!(
                 enemy.current_health < enemy.config.maximum_health,
                 "{caster} {reserve:?}: retail weak normal Steam still damages a mob"
@@ -368,7 +368,7 @@ fn boulder_real_cast_release_acquires_and_guidance_runs_after_the_world_move() {
             },
         );
         {
-            let mut enemy = session.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
+            let enemy = session.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
             enemy.config.maximum_health = 100_000.0;
             enemy.current_health = 100_000.0;
         }

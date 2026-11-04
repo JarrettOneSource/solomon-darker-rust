@@ -134,7 +134,7 @@ fn initial(case: &Value) -> GameSession {
             &OpenArena,
             Some(&mut session.painter_order),
         );
-        for mut actor in world.enemies.actors.iter_mut() {
+        for actor in world.enemies.actors.iter_mut() {
             actor.heading_deg = 180.0;
             actor.next_movement_tick = 9_007_199_254_740_991;
         }

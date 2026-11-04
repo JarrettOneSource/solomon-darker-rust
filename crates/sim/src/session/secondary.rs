@@ -445,7 +445,7 @@ impl GameSession {
         self.apply_ether_drain_enemy_contacts(&result.ether_drain_contacts, tick);
         let world = self.boneyard.as_mut().unwrap();
         for change in &result.target_heading_changes {
-            if let Some(mut actor) =
+            if let Some(actor) =
                 world.enemies.actors.iter_mut().find(|actor| actor.id == change.target_id)
             {
                 let heading = if change.mode == NativeSecondaryHeadingMode::Absolute {

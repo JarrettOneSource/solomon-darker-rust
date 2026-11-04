@@ -13,7 +13,7 @@ use solomon_sim::enemies::death_presentation::native_enemy_death_effect_plan;
 use solomon_sim::enemies::lightning_presentation::{
     native_dark_lightning_body, native_mage_lightning_pulse_plan,
 };
-use solomon_sim::enemies::model::{EnemyActorRead, MaggotRead};
+use solomon_sim::enemies::model::{EnemyActor, MaggotRead};
 use solomon_sim::enemies::projectile_presentation::native_enemy_projectile_effect_plan;
 use solomon_sim::enemies::rain_presentation::NativeRainCloud;
 use solomon_sim::enemies::tendrils::HeartmongerTendrils;
@@ -161,18 +161,12 @@ impl EnemyPresentationGoldens {
         }
     }
 
-    pub(super) fn check_actor(
-        &mut self,
-        group: &str,
-        name: &str,
-        tick: u64,
-        actor: &impl EnemyActorRead,
-    ) {
+    pub(super) fn check_actor(&mut self, group: &str, name: &str, tick: u64, actor: &EnemyActor) {
         let record_key = key(group, name, tick, actor.id);
         let Some(records) = self.actor_index.get(&record_key) else { return };
         for index in records {
             let record = &self.source["actors"][index];
-            let mut actor = actor.snapshot();
+            let mut actor = actor.clone();
             if record["hitOverride"].as_bool() == Some(true) {
                 actor.hit_feedback.receive(tick, 1.0);
             }
@@ -244,7 +238,7 @@ impl EnemyPresentationGoldens {
                     .collect::<Vec<_>>()
             );
             assert_plan(&actual, &record["underlay"], &format!("{record_key}.underlay"));
-            if let solomon_sim::enemies::model::EnemyBrain::Heartmonger(brain) = actor.brain() {
+            if let solomon_sim::enemies::model::EnemyBrain::Heartmonger(brain) = &actor.brain {
                 let state_key = format!("{group}:{name}:{}", actor.id);
                 let state = self.tendrils.entry(state_key).or_insert_with(|| {
                     let mut rng =
@@ -270,7 +264,7 @@ impl EnemyPresentationGoldens {
 
     pub(super) fn check_world(&mut self, name: &str, tick: u64, world: &EnemyWorld) {
         for actor in world.actors.iter() {
-            self.check_actor("ai", name, tick, &actor);
+            self.check_actor("ai", name, tick, actor);
         }
         for maggot in world.maggots.iter() {
             self.check_maggot(name, tick, &maggot);

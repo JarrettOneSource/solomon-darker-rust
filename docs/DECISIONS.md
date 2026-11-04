@@ -129,10 +129,11 @@ consumption retain their defined order on both targets.
 
 ## Component storage and simulation order
 
-`bevy_ecs` supplies component storage and typed queries. Domain stores own their
-entity handles, admission order, and checkpoint conversion. Enemy bodies and
-controller brains are separate components; ground loot separates its body from
-the reward collected by a player. A small particle keeps its related fields together.
+`bevy_ecs` supplies component storage and typed queries for most entity stores.
+Domain stores own their entity handles, admission order, and checkpoint conversion.
+Enemies are plain records in a `Vec`, in admission order, each holding its family's
+controller state in `brain`. Ground loot separates its body from the reward
+collected by a player. A small particle keeps its related fields together.
 
 Removing an entity can move another entity within an ECS table. The ordered
 handle index preserves survivor order, which determines contact selection, RNG
@@ -160,10 +161,10 @@ retire a target or create an effect before the next phase runs, and several phas
 consume the same random stream. Parallel work must preserve those dependencies
 and demonstrate a benefit on an equivalent workload before changing that sequence.
 
-Enemy controllers use a working record and commit its components together. Peer
-queries during the action observe the previous committed record. Mutating the
-live body throughout an action would change those queries. Read-only targeting
-and rendering borrow components; they do not need working copies. Student route
+Enemy controllers update a working copy of their record and write it back in one
+assignment. Peer queries during the action observe the previous committed record.
+Mutating the live record throughout an action would change those queries.
+Read-only targeting and rendering borrow records; they do not need working copies. Student route
 plans similarly read the preceding population before any movement commits, so
 crowd following and collision responses do not depend on table layout.
 

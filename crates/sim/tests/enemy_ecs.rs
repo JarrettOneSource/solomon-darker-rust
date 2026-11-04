@@ -322,7 +322,9 @@ fn emerging_maggots_keep_their_motion_after_capture_and_restore() {
     );
     {
         let coffin = live.actors.get_mut(0).unwrap();
-        let EnemyBrain::Coffin(brain) = coffin.brain else { panic!("Coffin has its controller") };
+        let EnemyBrain::Coffin(brain) = &mut coffin.brain else {
+            panic!("Coffin has its controller")
+        };
         brain.phase = CoffinPhase::Open;
         brain.maggot_charge = 0.0;
     }

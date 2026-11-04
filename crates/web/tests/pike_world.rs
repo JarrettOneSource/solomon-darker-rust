@@ -86,7 +86,7 @@ fn latch(game: &mut GameSession, navigation: &NavigationSet) {
         },
     );
     {
-        let mut actor = game.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
+        let actor = game.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
         actor.position = PIKEMAN;
         actor.next_movement_tick = u64::MAX;
         actor.target_player_id = Some("wizard".into());
@@ -114,7 +114,7 @@ fn pike_pull_keeps_the_wizard_and_retained_pin_outside_scenery_before_the_next_b
     let position = game.participants.get("wizard").unwrap().wizard.position;
     assert!(legal(&game, position), "Pike committed a blocked wizard root: {position:?}");
     assert_ne!(position, current, "the constraint still moves the wizard");
-    let actor = game.boneyard.as_ref().unwrap().enemies.actors.get(0).unwrap();
+    let actor = game.boneyard.as_ref().unwrap().enemies.actors.first().unwrap();
     let EnemyBrain::Skeleton(brain) = &actor.brain else { panic!("Pike skeleton") };
     assert_eq!(brain.pike.as_ref().unwrap().position, position);
     next_birth(&mut game, &navigation);
@@ -133,7 +133,7 @@ fn a_clear_pike_constraint_keeps_its_native_distance() {
     let position = game.participants.get("wizard").unwrap().wizard.position;
     assert!(legal(&game, position));
     assert_eq!(position, Vec2::new(1039.08544921875, 1954.73095703125));
-    let actor = game.boneyard.as_ref().unwrap().enemies.actors.get(0).unwrap();
+    let actor = game.boneyard.as_ref().unwrap().enemies.actors.first().unwrap();
     let EnemyBrain::Skeleton(brain) = &actor.brain else { panic!("Pike skeleton") };
     assert_eq!(brain.pike.as_ref().unwrap().position, position);
 }

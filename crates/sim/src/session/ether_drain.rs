@@ -9,7 +9,6 @@ use super::*;
 use crate::Vec2;
 use crate::boneyard::BoneyardWorld;
 use crate::combat::PlayerLifeState;
-use crate::enemies::model::EnemyActorRead;
 use crate::enemies::model::{EnemyDeathEffectKind, EnemyEventKind, EnemyLifeState};
 use crate::float::fround;
 use crate::loot::NativeLootDropKind;
@@ -436,11 +435,7 @@ impl GameSession {
                 continue;
             }
             let enemies = &self.boneyard.as_ref().unwrap().enemies;
-            let victim = enemies
-                .actors
-                .iter()
-                .find(|actor| actor.id as u64 == id)
-                .map(|actor| actor.snapshot());
+            let victim = enemies.actors.iter().find(|actor| actor.id as u64 == id).cloned();
             let position = victim.as_ref().map(|actor| actor.position).or_else(|| {
                 enemies
                     .maggots

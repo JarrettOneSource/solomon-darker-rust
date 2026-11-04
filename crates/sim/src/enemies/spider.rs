@@ -177,17 +177,14 @@ pub fn step_spider(
         radius,
         requested_position: Vec2::new(actor.position.x + delta.x, actor.position.y + delta.y),
     });
-    actor.body.path.step_recovery(
+    actor.path.step_recovery(
         &mut world.steering_rng,
         PathRecoveryRequest {
-            flanking_enabled: actor.body.config.flanking,
+            flanking_enabled: actor.config.flanking,
             requested_distance: hypot(delta.x, delta.y),
             status_factor: status,
             tick: context.tick,
-            traveled_distance: hypot(
-                position.x - actor.body.position.x,
-                position.y - actor.body.position.y,
-            ),
+            traveled_distance: hypot(position.x - actor.position.x, position.y - actor.position.y),
         },
     );
     actor.body_pose = brain.frame;
@@ -258,12 +255,12 @@ pub fn step_cocoon_actor(
     if !owner.is_some_and(|owner| owner.alive && owner.connected)
         || !web.is_some_and(|web| web.severity >= 3.0)
     {
-        actor.body.life_state = EnemyLifeState::Dying;
+        actor.life_state = EnemyLifeState::Dying;
         brain.phase = CocoonPhase::Death;
         return;
     }
     let owner = owner.unwrap();
-    actor.body.position = native_cocoon_position(owner.position, owner.heading_deg.unwrap_or(0.0));
+    actor.position = native_cocoon_position(owner.position, owner.heading_deg.unwrap_or(0.0));
     brain.owner_position = owner.position;
 }
 

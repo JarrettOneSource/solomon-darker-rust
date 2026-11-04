@@ -70,16 +70,16 @@ impl EnemyView {
             let sample = frame.presentation.and_then(|metadata| metadata.actors.get(&actor.id));
             let plan = match sample {
                 Some(sample) => {
-                    native_enemy_actor_plan_with_input(&actor, context, sample, &self.art)
+                    native_enemy_actor_plan_with_input(actor, context, sample, &self.art)
                 }
-                None => native_enemy_actor_plan(&actor, context, &self.art),
+                None => native_enemy_actor_plan(actor, context, &self.art),
             };
             let mut group = EnemyDrawGroup::at(actor.position);
             if let Some(origin) = plan.attack_effect_origin {
                 self.attack_origins.insert(actor.id, origin);
             }
             group.scale = plan.root_scale;
-            group.material_tint = Some((frame.actor_tint)(&actor));
+            group.material_tint = Some((frame.actor_tint)(actor));
             for layer in plan.layers {
                 for segment in &plan.segments {
                     if segment.before_role == layer.role {
@@ -98,10 +98,10 @@ impl EnemyView {
                 None,
                 group,
             );
-            let shadows = (frame.actor_shadows)(&actor);
+            let shadows = (frame.actor_shadows)(actor);
             let layers = match sample {
                 Some(sample) => native_enemy_underlay_plan_with_input(
-                    &actor,
+                    actor,
                     frame.tick,
                     &shadows.records,
                     shadows.light_scalar,
@@ -110,7 +110,7 @@ impl EnemyView {
                     sample,
                 ),
                 None => native_enemy_underlay_plan(
-                    &actor,
+                    actor,
                     frame.tick,
                     &shadows.records,
                     shadows.light_scalar,

@@ -100,13 +100,11 @@ impl BoneyardWorld {
             .map(|actor| (actor.id, actor.position))
             .collect();
         self.commit_enemy_positions(&bodies);
-        for mut actor in self.enemies.actors.iter_mut() {
+        for actor in self.enemies.actors.iter_mut() {
             let EnemyBrain::Demon(brain) = &mut actor.brain else { continue };
-            let before = demon_positions.iter().find(|(id, _)| *id == actor.body.id).unwrap().1;
-            let delta = Vec2::new(
-                fround(actor.body.position.x - before.x),
-                fround(actor.body.position.y - before.y),
-            );
+            let before = demon_positions.iter().find(|(id, _)| *id == actor.id).unwrap().1;
+            let delta =
+                Vec2::new(fround(actor.position.x - before.x), fround(actor.position.y - before.y));
             if delta == Vec2::ZERO {
                 continue;
             }
