@@ -3,7 +3,7 @@
 Solomon Darker is a wizard survival game written in Rust, playable in the browser
 and on Windows, Linux, and macOS.
 
-[Play in your browser](https://solomondarker.com/game/) ·
+[Play in your browser](https://solomondarker.com/game-rust/) ·
 [Download the desktop app](https://github.com/JarrettOneSource/solomon-darker-rust/releases/latest)
 
 Explore the College, build your wizard's loadout, and fight through the Boneyard.
