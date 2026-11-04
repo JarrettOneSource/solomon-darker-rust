@@ -60,3 +60,14 @@ The profile, native-save conversion and desktop-authority recordings likewise
 retain their schema-51 bytes. Comparisons qualify only newly exported game
 documents as the current schema. Source-version admission, native disk bytes,
 portable-profile bytes and all other recorded fields retain their exact checks.
+
+The two player-contact recordings retain the earlier omission of defensive-effect
+painter registrations. Their comparison supersedes only those fields in the named
+Flash, broken Magic Shield and physical Stoneskin cases: each recorded child owns
+one transient registration in birth order, and the allocator advances accordingly.
+The complete child membership and order are asserted before this expected-only
+projection. Existing actors, light ownership, gameplay, presentation, random state
+and all other recorded fields remain exact. The contact, poison and Shield
+regressions in `current_ether_drain_session_goldens`, plus the physical contact case
+in `current_stoneskin_goldens`, independently cover the producer contract, including
+callbacks after the secondary actor pass.
